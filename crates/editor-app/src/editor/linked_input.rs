@@ -285,7 +285,7 @@ impl Bridge {
         let Ok(Some(edit)) = merge_edits(&source, &edits) else {
             return false;
         };
-        let Ok(edit) = super::language_edits::native_edit(&source, edit) else {
+        let Ok(edit) = super::text_transactions::native_edit(&source, edit) else {
             return false;
         };
         let before_primary = group.ranges[..primary]
