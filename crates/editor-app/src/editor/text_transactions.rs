@@ -25,7 +25,12 @@ pub(super) fn apply_language_proposal(
         t!("editor.editing_stale")
     );
     if let Some(edit) = merged {
-        editor.apply_lsp_edits(&vec![native_edit(source, edit)?], window, cx);
+        let start = byte_at_position(source, edit.range.start)?;
+        let end = byte_at_position(source, edit.range.end)?;
+        // Base's public replace explicitly marks Atomic. A pure LSP insertion otherwise inherits
+        // Typing and can undo the user's earlier input along with the generated proposal.
+        editor.set_selected_range(start..end, cx);
+        editor.replace(edit.new_text, window, cx);
         let mut cursor = cursor.min(editor.text().len());
         let text = editor.text().to_string();
         while !text.is_char_boundary(cursor) {
@@ -85,3 +90,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod history_tests;
