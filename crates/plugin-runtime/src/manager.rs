@@ -180,9 +180,18 @@ impl Manager {
         root: PathBuf,
         environment: Environment,
         trusted: bool,
-        host_resources: crate::HostResources,
+        mut host_resources: crate::HostResources,
     ) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&root)?;
+        let canonical_root = root.canonicalize()?;
+        // Stable profile identity keeps secrets out of data copies while isolating development hosts.
+        if host_resources.secret_namespace.is_empty() {
+            use sha2::{Digest, Sha256};
+            host_resources.secret_namespace = format!(
+                "{:x}",
+                Sha256::digest(canonical_root.to_string_lossy().as_bytes())
+            );
+        }
         let installed = Self::read_registry(&root)?;
         let host_alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
         let mut manager = Self {

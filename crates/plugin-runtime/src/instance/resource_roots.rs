@@ -9,6 +9,10 @@ pub(super) enum RootKind {
     Workspace,
     Data,
     Selected,
+    Http,
+    Timer,
+    Cache,
+    Temporary,
     EditorRequest,
     ImageInput,
     ServiceReference,
@@ -140,6 +144,8 @@ impl State {
         }
         let (capability, permission, root) = match kind {
             RootKind::EditorRequest
+            | RootKind::Http
+            | RootKind::Timer
             | RootKind::Selected
             | RootKind::ImageInput
             | RootKind::ServiceReference
@@ -170,7 +176,9 @@ impl State {
                     self.workspace.as_path(),
                 )
             }
-            RootKind::Data => ("storage.private", "storage", self.data.as_path()),
+            RootKind::Data | RootKind::Cache | RootKind::Temporary => {
+                ("storage.private", "storage", self.data.as_path())
+            }
         };
         if !self.api.capabilities.contains_key(capability) {
             return Err(Failure::new(
@@ -226,6 +234,10 @@ impl State {
                     return self.read_selection(&handle, &path).map(Value::Bytes);
                 }
                 let root = self.file_authority(kind, false)?;
+                let path = self.private_relative(kind, &path)?;
+                if !matches!(kind, RootKind::Workspace) {
+                    super::private::checked(root, &path, false)?;
+                }
                 data_files::read(root, &path, &self.staged_writes).map(Value::Bytes)
             }
             api::Operation::WriteFile {
@@ -242,6 +254,7 @@ impl State {
                     ));
                 }
                 let root = self.file_authority(kind, true)?.to_path_buf();
+                let path = self.private_relative(kind, &path)?;
                 data_files::write(
                     &root,
                     &path,
@@ -264,6 +277,8 @@ impl State {
                         .map(|_| Value::Unit);
                 }
                 self.plugin_services.resources.remove(&handle.resource);
+                self.http_streams.remove(&handle.resource);
+                self.timers.remove(&handle.resource);
                 self.subscriptions.remove(&handle.resource);
                 self.preference_subscriptions.remove(&handle.resource);
                 self.image_inputs.remove(&handle.resource);
@@ -286,6 +301,10 @@ impl State {
                 Ok(Value::Unit)
             }
             api::Operation::ReadAsset { .. }
+            | api::Operation::Http { .. }
+            | api::Operation::Secrets { .. }
+            | api::Operation::Timer { .. }
+            | api::Operation::Private { .. }
             | api::Operation::Commands { .. }
             | api::Operation::DescribeSdk
             | api::Operation::Service { .. }

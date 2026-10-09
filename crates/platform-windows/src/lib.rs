@@ -12,6 +12,8 @@ mod staged;
 pub use staged::PreparedFileStore;
 mod attachments;
 pub use attachments::{NewWorkspaceFileStore, create_document_attachment};
+/// Per-plugin protected credentials, separate from document storage and history.
+pub mod credentials;
 pub mod file_picker;
 
 #[derive(Debug, Default, Clone, Copy)]

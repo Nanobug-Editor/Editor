@@ -11,6 +11,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
+mod cloud;
 mod commands;
 mod data_files;
 mod document_events;
@@ -19,6 +20,7 @@ mod file_discovery;
 mod image_inputs;
 mod plugin_services;
 mod preferences;
+mod private;
 mod process_calls;
 mod resource_roots;
 mod selected_resources;
@@ -46,6 +48,9 @@ struct State {
     image_inputs: std::collections::BTreeMap<u64, image_inputs::Input>,
     /// User-selected targets remain separate from workspace and private-data roots.
     selected_resources: std::collections::BTreeMap<u64, selected_resources::Selection>,
+    /// Pull streams and timers reuse this instance's revocable handle table.
+    http_streams: std::collections::BTreeMap<u64, crate::http::Stream>,
+    timers: std::collections::BTreeMap<u64, cloud::Timer>,
     declared_panels: BTreeSet<String>,
     /// Editor toolbar authority is confined to this package's declared workspace preview surfaces.
     declared_editor_panels: BTreeSet<String>,
@@ -101,6 +106,7 @@ pub(crate) fn safe_path(root: &Path, relative: &str, existing: bool) -> anyhow::
     anyhow::ensure!(
         !relative.is_empty()
             && !relative.contains(['\\', ':'])
+            && !relative.split('/').any(api::is_windows_device_segment)
             && Path::new(relative)
                 .components()
                 .all(|c| matches!(c, std::path::Component::Normal(_))),
@@ -328,6 +334,8 @@ impl Instance {
             editor_requests: Default::default(),
             image_inputs: Default::default(),
             selected_resources: Default::default(),
+            http_streams: Default::default(),
+            timers: Default::default(),
             subscriptions: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest
@@ -623,6 +631,9 @@ impl Instance {
     }
     /// Seal already-published work before the final snapshot, while retaining private-file access for serialization.
     pub(crate) fn quiesce(&mut self) {
+        self.store.data_mut().http_streams.clear();
+        self.store.data_mut().timers.clear();
+        self.store.data_mut().clear_temporary_data();
         self.clear_image_inputs();
         self.store.data_mut().clear_selections();
         // Native cleanup keeps its original observer before quiesce seals delegated service roots.
@@ -691,8 +702,9 @@ impl Instance {
         self.poll_editor_requests()?;
         self.poll_document_events()?;
         let preferences_changed = self.poll_preferences()?;
+        let timers_changed = self.poll_timers()?;
         let events = self.store.data_mut().poll_processes()?;
-        let changed = revoked || preferences_changed || !events.is_empty();
+        let changed = revoked || preferences_changed || timers_changed || !events.is_empty();
         for event in events {
             // Exit removes its slot, but the last callback still inherits the originating service authority.
             let context = if let api::Notification::Process { handle, .. } = &event {

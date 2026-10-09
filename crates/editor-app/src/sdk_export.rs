@@ -14,6 +14,26 @@ use std::process::Command;
 use std::{borrow::Cow, io::Write};
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    (
+        "CLOUD.md",
+        include_bytes!("../../../website/src/content/docs/en/sdk/cloud.md"),
+    ),
+    (
+        "src/http.rs",
+        include_bytes!("../../plugin-protocol/src/http.rs"),
+    ),
+    (
+        "src/secrets.rs",
+        include_bytes!("../../plugin-protocol/src/secrets.rs"),
+    ),
+    (
+        "src/timers.rs",
+        include_bytes!("../../plugin-protocol/src/timers.rs"),
+    ),
+    (
+        "src/storage.rs",
+        include_bytes!("../../plugin-protocol/src/storage.rs"),
+    ),
     // Author-facing contract pages ship with the identical independent guest interface.
     (
         "COMMANDS.md",
@@ -365,6 +385,7 @@ fn exported_bytes<'a>(relative: &str, bytes: &'a [u8]) -> Cow<'a, [u8]> {
         // Capability pages must precede the SDK root fallback to retain local exported links.
         ("commands", "COMMANDS.md"),
         ("interaction", "INTERACTION.md"),
+        ("cloud", "CLOUD.md"),
         ("packaging", "PACKAGING.md"),
         ("configurations", "CONFIGURATIONS.md"),
         ("debug", "DEBUG.md"),

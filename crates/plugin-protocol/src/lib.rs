@@ -12,16 +12,21 @@ pub mod configurations;
 pub mod debug;
 pub mod dependencies;
 pub mod execution;
+/// General HTTP streams, isolated credentials and disposable background scheduling.
+pub mod http;
 /// Native host dialogs and instance-bound user-selected file authority.
 pub mod interaction;
 pub mod language;
 pub mod process;
+pub mod secrets;
 pub mod service;
 pub mod settings;
+pub mod storage;
 /// Readonly document trees and fold ranges supplied by isolated, versioned plugin workers.
 pub mod structure;
 /// Dynamic target discovery and build preparation are provider policy, independent of execution.
 pub mod targets;
+pub mod timers;
 pub mod ui;
 
 /// Guest imports and exports use the WIT contract supplied by the building editor.

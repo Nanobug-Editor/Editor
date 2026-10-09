@@ -442,6 +442,8 @@ impl Package {
                     "workspace.read",
                     "workspace.write",
                     "network.images",
+                    "network.http",
+                    "secrets",
                     "navigation.external",
                     "storage",
                     "clipboard",
@@ -458,6 +460,10 @@ impl Package {
                     "dependencies.install"
                 ]
                 .contains(&permission.as_str())
+                    || permission
+                        .strip_prefix("network.http:")
+                        .is_some_and(|target| crate::http::origin(target)
+                            .is_ok_and(|origin| origin == target))
                     || permission
                         .strip_prefix("process.service.")
                         .is_some_and(|id| manifest.services.contains_key(id)),

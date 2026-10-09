@@ -5,7 +5,9 @@ pub use dependencies::{InstallControl, InstallStage, InstallerPrompt};
 mod data_transaction;
 mod document_events;
 mod editor_requests;
+mod http;
 mod images;
+pub use http::HttpConfiguration;
 pub use images::{ImageResource, ImageState};
 mod image_input;
 pub use image_input::{
@@ -52,6 +54,11 @@ pub use plugin_protocol;
 /// Host-owned resources travel with every candidate; guests only see negotiated descriptions.
 #[derive(Clone, Debug, Default)]
 pub struct HostResources {
+    /// General HTTP producers share a bounded host budget and host-selected proxy/TLS policy.
+    pub http: HttpConfiguration,
+    /// Trusted host-only profile override; an empty value hashes the canonical manager root.
+    /// Guests and plugin settings cannot select it; update copies never change the namespace.
+    pub secret_namespace: String,
     /// Authenticated preparation observation shared with all delegated native-process owners.
     pub preparations: native_work::PreparationRegistry,
     /// No SDK is a supported host configuration; an export failure affects only a requesting guest.

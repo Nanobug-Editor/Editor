@@ -36,6 +36,21 @@ fn package_negotiates_required_interfaces_and_ignores_unavailable_optional_ones(
 
 /// Compatibility is determined per interface, not by the unrelated package version.
 #[test]
+fn cloud_capability_versions_are_admitted_independently_from_package_version() {
+    assert!(package(json!({"base":"^1","required":{"network.http":"^1","storage.secrets":"^1","lifecycle.timers":"^1","storage.private":"^1.2"}})).is_ok());
+    let error = package(json!({"base":"^1","required":{"network.http":"^2"}}))
+        .err()
+        .unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("Required capability unavailable")
+    );
+    assert!(package(json!({"base":"^1","required":{"storage.private":"^1.2"},"optional":{"network.http":"^2"}})).is_ok());
+}
+
+/// Compatibility is determined per interface, not by the unrelated package version.
+#[test]
 fn incompatible_required_capabilities_and_base_versions_are_rejected_at_inspection() {
     for (api, explanation) in [
         (

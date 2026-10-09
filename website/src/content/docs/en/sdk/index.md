@@ -54,6 +54,9 @@ instance are described in [Private data and migration](/en/sdk/migration/). The 
 applied to guest execution, and what recovery does and does not promise, are described in
 [Execution limits and recovery](/en/sdk/faults/).
 
+General HTTP streaming, separately authorized system credentials, private directories and
+disposable refresh timers are described in [HTTP, secrets and private state](/en/sdk/cloud/).
+
 ## Service discovery and language.lsp 1.1
 
 A native service may declare `search_paths` and `check_args`. The former holds at most 32

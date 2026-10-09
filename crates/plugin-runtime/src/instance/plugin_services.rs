@@ -299,6 +299,24 @@ impl State {
             ));
         }
         let permission = match operation {
+            api::Operation::Http {
+                operation: plugin_protocol::http::Operation::Start { .. },
+            } => "network.http",
+            api::Operation::Http {
+                operation: plugin_protocol::http::Operation::Read { handle },
+            } if owned(handle) => "network.http",
+            // Secret namespaces are private even when both caller and provider have secrets consent.
+            api::Operation::Secrets { .. }
+                if context.direct_host_selection(&self.plugin_services.principal.instance) =>
+            {
+                "secrets"
+            }
+            api::Operation::Timer {
+                operation: plugin_protocol::timers::Operation::Start { .. },
+            } => return Ok(()),
+            api::Operation::Timer {
+                operation: plugin_protocol::timers::Operation::Reset { handle, .. },
+            } if owned(handle) => return Ok(()),
             api::Operation::Commands {
                 operation: plugin_protocol::commands::Operation::Reply { .. },
             } => return Ok(()),
