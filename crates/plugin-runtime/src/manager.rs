@@ -525,6 +525,8 @@ impl Manager {
             Instance::rollback_data(&originals)?;
             return Err(error);
         }
+        // Initial/re-enabled owners may mutate system secrets only after registry publication succeeds.
+        instance.commit_activation();
         self.live.insert(id.to_owned(), instance);
         Ok(())
     }

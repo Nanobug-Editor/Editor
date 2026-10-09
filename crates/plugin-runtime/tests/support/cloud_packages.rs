@@ -11,9 +11,16 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Load the delivered consumer or narrow lifecycle fixture archive, applying only the caller's manifest edits.
+/// The actual WASM always comes from an independent host-managed SDK build.
 pub fn package(id: &str, edit: impl FnOnce(&mut Value)) -> Package {
+    let version = if matches!(id, "cloud-translation" | "code-host-query") {
+        "0.1.1"
+    } else {
+        "0.1.0"
+    };
     let archive = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("../../target/cloud-api-test/{id}-0.1.0.zip"));
+        .join(format!("../../target/cloud-api-test/{id}-{version}.zip"));
     let mut files: BTreeMap<_, _> = Package::read(&archive)
         .expect("Build both cloud packages through --plugin-package")
         .files;
@@ -47,11 +54,23 @@ pub fn install(manager: &mut Manager, package: &Package) {
         .install(package, package.manifest.permissions.clone())
         .unwrap();
 }
+/// Read the guest's published result in content order, including complete scrollable Text fragments.
 pub fn text(manager: &Manager, id: &str) -> String {
-    let Kind::Text { text } = &manager.live[id].views["cloud"].root.kind else {
-        panic!("Expected public native result text")
-    };
-    text.clone()
+    fn append(node: &plugin_runtime::plugin_protocol::ui::Node, text: &mut String) {
+        match &node.kind {
+            Kind::Text { text: part } => text.push_str(part),
+            Kind::Column { children } => {
+                for child in children {
+                    append(child, text);
+                }
+            }
+            Kind::Scroll { content } => append(content, text),
+            _ => panic!("Expected public native result text"),
+        }
+    }
+    let mut text = String::new();
+    append(&manager.live[id].views["cloud"].root, &mut text);
+    text
 }
 pub fn probe(
     manager: &mut Manager,

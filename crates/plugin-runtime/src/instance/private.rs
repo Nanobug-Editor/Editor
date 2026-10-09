@@ -136,18 +136,7 @@ impl State {
                     ));
                 }
                 // Moving a whole subtree must preserve the depth limit for every descendant.
-                let canonical = self.data.canonicalize().map_err(io_failure)?;
-                let depth = target
-                    .strip_prefix(canonical)
-                    .map_err(|_| {
-                        Failure::new(
-                            ErrorCode::InvalidPath,
-                            "Private destination escapes its owner",
-                        )
-                    })?
-                    .components()
-                    .count();
-                validate_depth(&source, depth)?;
+                validate_depth(&source, root_relative_depth(&self.data, &target)?)?;
                 std::fs::rename(source, target).map_err(io_failure)?;
                 Ok(Value::Unit)
             }
@@ -348,6 +337,14 @@ pub(super) fn reserve_entries<'a>(
     let mut usage = private_usage(root, limit)?;
     let paths = paths
         .into_iter()
+        .map(|path| {
+            // Area-relative bounds omit the reserved prefix. Count from the common data owner
+            // before creating anything, so one invalid cache/temp entry cannot poison every area.
+            validate_depth(path, root_relative_depth(root, path)?)?;
+            Ok(path)
+        })
+        .collect::<Result<std::collections::BTreeSet<_>, Failure>>()?
+        .into_iter()
         .filter(|path| !path.exists())
         .collect::<std::collections::BTreeSet<_>>();
     usage.entries += paths.len();
@@ -362,6 +359,13 @@ pub(super) fn reserve_entries<'a>(
         ));
     }
     Ok(())
+}
+/// Mutations and subtree moves measure depth from the same canonical owner, including reserved areas.
+fn root_relative_depth(root: &Path, path: &Path) -> Result<usize, Failure> {
+    let canonical = root.canonicalize().map_err(io_failure)?;
+    path.strip_prefix(canonical)
+        .map(|relative| relative.components().count())
+        .map_err(|_| Failure::new(ErrorCode::InvalidPath, "Private path escapes its owner"))
 }
 fn validate_depth(path: &Path, depth: usize) -> Result<(), Failure> {
     if depth > 16 {

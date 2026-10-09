@@ -364,15 +364,36 @@ impl State {
             let _ = api::guest::close_resource(handle);
         }
     }
+    /// Keep complete replies/cache diagnostics in a scrollable set of bounded Unicode-safe Text fragments.
+    fn result_node(&self) -> ui::Node {
+        const FRAGMENT_BYTES: usize = 32 * 1024;
+        if self.text.len() <= FRAGMENT_BYTES {
+            return ui::Node::new(
+                "result",
+                ui::Kind::Text {
+                    text: self.text.clone(),
+                },
+            );
+        }
+        let mut remaining = self.text.as_str();
+        let mut children = vec![];
+        while !remaining.is_empty() {
+            // Invalid response bytes may expand threefold under lossy UTF-8. Split the rendered
+            // string on character boundaries; retain all original bytes separately in the private cache.
+            let end = remaining.floor_char_boundary(FRAGMENT_BYTES.min(remaining.len()));
+            let (part, rest) = remaining.split_at(end);
+            children.push(ui::Node::new(
+                format!("result-part-{}", children.len()),
+                ui::Kind::Text { text: part.into() },
+            ));
+            remaining = rest;
+        }
+        // Fill the panel's bounded viewport; every retained fragment stays reachable by native scrolling.
+        ui::Node::scroll("result", ui::Node::column("result-body", children)).grow()
+    }
     fn view(&mut self) -> Result<api::Output, api::Failure> {
         self.revision += 1;
-        let mut document = ui::Document::new(ui::Node::new(
-            "result",
-            ui::Kind::Text {
-                text: self.text.clone(),
-            },
-        ))
-        .revision(self.revision);
+        let mut document = ui::Document::new(self.result_node()).revision(self.revision);
         document.tools = vec![];
         Ok(api::Output {
             views: vec![api::View {

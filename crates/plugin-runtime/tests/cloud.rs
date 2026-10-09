@@ -1,8 +1,14 @@
 //! T25–T30 are observed through independently SDK-built packages and the production Manager.
+#[path = "cloud/display.rs"]
+mod display;
 #[path = "support/cloud_http.rs"]
 mod endpoint;
 #[path = "support/cloud_packages.rs"]
 mod packages;
+#[path = "cloud/private_depth.rs"]
+mod private_depth;
+#[path = "cloud/secret_publication.rs"]
+mod secret_publication;
 #[path = "cloud/security.rs"]
 mod security;
 #[path = "support/cloud_tls.rs"]

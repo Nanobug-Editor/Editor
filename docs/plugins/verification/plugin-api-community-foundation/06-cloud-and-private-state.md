@@ -2,7 +2,7 @@
 
 日期：2026-10-09。对应 [工单 06](../../tickets/plugin-api-community-foundation/06-cloud-and-private-state.md) / [#98](https://github.com/T-miracle/Nanobug/issues/98)，来源为[社区生态方案](../../specs/plugin-api-community-foundation.md)。
 
-状态：实现、最终自动验证与根代理 Windows 原生连接验收通过；固定候选独立双轴审查尚待执行，尚未将本单标记完成或关闭。本文只记录实际执行结果。
+状态：首候选的自动验证与 Windows 原生连接验收通过；固定候选 `69478ced8238e8f2e9ce67d2909e901387ac9109` 的独立审查为 Standards 0 项、Spec 4 项（最高 P1）。四项已补实际 SDK 红绿回归与修复，修复候选三 Rust 门禁及新宿主的大结果原生滚动复核通过；新的固定点双轴复审仍待根代理执行，本单尚未标记完成或关闭。本文分别保留首候选和修复候选的实际证据。
 
 ## 工作树、版本与构建入口
 
@@ -10,10 +10,10 @@
 - 实现基线：`8506cc8f1f9baee3fca030d59b7d1d21b5227763`，已交付的 02 能力；原主目录与 01/02 其他工作树未修改。
 - 工具链实际读数：rustc 1.98.1（`48a229cea`，2026-09-01）、cargo 1.98.1（`797e8a9bc`，2026-08-05）；`rust-toolchain.toml` 选择已有 stable，清单 minimum 为 1.95。已有 `x86_64-pc-windows-msvc`、`wasm32-wasip2`；Node 24.19.0、npm 11.17.0、PowerShell 7。未安装新工具或调用历史脚本。
 - 公开 SDK crate `plugin-protocol 0.2.0`，wire `protocol = 7`、`api.base = ^1`；一般 HTTP、系统密钥、计时器能力分别为稳定 1.0.0，私有目录/缓存/临时区为稳定 `storage.private 1.2.0`。
-- 两个新独立消费者首次清单版本均为 0.1.0；各自 Cargo 仅声明 `plugin-protocol = =0.2.0` 的 `guest` feature，未依赖仓库 `crates/` 或附带 SDK 源码。
+- 两个新独立消费者首次清单版本均为 0.1.0，本轮修复交付均提升为 0.1.1；各自 Cargo 仅声明 `plugin-protocol = =0.2.0` 的 `guest` feature，未依赖仓库 `crates/` 或附带 SDK 源码。协议及能力版本不变。
 - 所有 Rust 宿主命令设置 `$env:CARGO_TARGET_DIR = '../target06'`；插件 ZIP 使用宿主正式 `--plugin-package`，由内嵌 SDK 缓存编译实际 WASM。
 
-最终重建命令：
+首候选构建与十项回归命令：
 
 ```powershell
 $env:CARGO_TARGET_DIR = '../target06'
@@ -26,7 +26,7 @@ cargo test -p plugin-runtime --test cloud -- --ignored --nocapture --test-thread
 
 | 产物 | SHA-256 |
 | --- | --- |
-| 当前 `../target06/debug/editor-app.exe` | `86D4199CFE2BC73527B9260FA4B8275CEC8882F226008F9BCB05A0C2231FA54B` |
+| 首候选通用 Text 原生复核宿主 | `86D4199CFE2BC73527B9260FA4B8275CEC8882F226008F9BCB05A0C2231FA54B` |
 | 首轮原生宿主副本 | `2A3F5D8EA339E1FC6EF43D3C46F5EE96208810079EAA53A226F7DEBAACE02C36` |
 | `target/cloud-api-test/cloud-translation-0.1.0.zip` | `67C9323D22818B543670DFDBE030B23D336FBCEFCCE1B8F31FEA3393AC97FDFD` |
 | `target/cloud-api-test/code-host-query-0.1.0.zip` | `BD40C3669DF36654689FFDD91D9422405804BFEC82EF6C8BED582D9F362BC2BD` |
@@ -37,7 +37,50 @@ SDK cache key：`7923d3ec1435371c2de736686e04c423b4434fcd9201a46aa134c61811290d2
 
 完整本地日志均保留在工作树外、不会提交的 `C:/Users/Tmiracle/.codex/worktrees/plugin-api-cloud/target06/logs/`。文中日志名均相对此目录；源码与验收记录仍正常提交。历史诊断日志和最终日志分开保存。
 
-构建/包输出为 `build-host06-final.log`、`package-cloud06-final.log`；工具链、当前 EXE/两个 ZIP 与 SDK 文档 hash 的实际读数为 `fingerprints06.log`。本文的 SDK/WASM key 与 hash 来自实际构建缓存及正式产物，不以清单版本代替内容核对。
+首候选构建/包输出为 `build-host06-final.log`、`package-cloud06-final.log`；该轮工具链、EXE/两个 ZIP 与 SDK 文档 hash 的实际读数为 `fingerprints06.log`。本文的 SDK/WASM key 与 hash 来自实际构建缓存及正式产物，不以清单版本代替内容核对。
+
+## 固定候选审查与修复
+
+根代理对 `69478ced8238e8f2e9ce67d2909e901387ac9109` 完成两条独立审查轴。Standards 无发现；Spec 确认以下四项。原候选未重写，修复在当前分支追加普通提交，待根代理对新固定点复审，不把首轮的 Standards 0 项当成新候选已通过双轴。
+
+| 发现 | 可观察红灯与修复 |
+| --- | --- |
+| T29 / P2：回调内 reset 已捕获的另一 timer | 独立 `timer-callback` SDK guest 先把 A/B 都设为 due，A 的 Timer 回调公开调用 `Reset(B, 300)`。旧实现同一 poll 仍递送 B，实际事件为 `a-reset-b, b-tick`；`timer-callback06-red.log` 为 0/1、12.95 秒。现在递送前重新解析当前 owned handle、核对实例 handle 与当前 deadline，再增加序号或释放 one-shot。`timer-callback06-green.log` 为 2/0、60.11 秒，覆盖 one-shot/repeat 回调 reset 及原有 32 timer 公平性、防抖取消。 |
+| T29 / P2：cache/temp 相对深度绕过共享 root 深度 | 旧实现接受 `.cache` 下相对 16 层目录，使整个 data root 深度变成 17；`private-depth06-red.log` 为 0/1、19.21 秒。现在新增入口和必要子树在变更前统一按 canonical data owner 计深度，rename 复用相同计算。`private-depth06-green.log` 为 1/0、24.63 秒：Data 16 层、Cache/Temporary 15 层可用，下一层 CreateDirectory 与普通 WriteFile 均拒绝，原树仍可 list/write/delete。 |
+| T27/T30 / P1：candidate Snapshot 能借已 flush 的 data 状态修改 OS Token | 独立 `secret-candidate` SDK guest 在候选 Snapshot 中调用 Write/Delete，随后 Snapshot 失败或在公开 Committing barrier 取消发布。旧实现实际替换了原 Windows Generic Credential；`secret-publication06-red.log` 为 0/1、42.60 秒。增加仅可信 Manager 可打开的 committed activation 状态；prepare、Activate、commit_data、Snapshot 与 data swap 都不打开不可回滚的密钥修改。仅 durable registry/data transaction/settings publication 成功后开放，quiesce/restart 先撤销；恢复已发布版本完成重新激活后再开放。`secret-publication06-green.log` 为 1/0、165.02 秒，四种失败组合的系统键均保持原值，恢复、disable/enable、settings 更新和重新打开后正常 Write/Delete 仍可用。没有将 Token 备份到普通事务文件。 |
+| T25 / P2：合法 65,536-byte body 加状态前缀或 lossy UTF-8 膨胀超过单 Text 配额 | 旧 guest 对 65,530-byte Unicode body 已被宿主 UI 配额拒绝并退役，`response-display06-red.log` 为 0/1、40.21 秒，明确记录 `UI text quota exceeded`。两个 0.1.1 guest 按 Unicode 边界分为至多 32 KiB 的 Text，保持完整 raw cache；大结果使用公开 `Scroll(result).grow → Column(result-body) → Text(result-part-N)`。初步 Column 版本完整内容回归 1/0、44.55 秒，但新可滚动契约断言实际红灯 0/1、59.13 秒（`response-scroll06-red.log`）。最终 Scroll 版本为 1/0、59.95 秒（`response-scroll06-green.log`），两个消费者均覆盖 near 65,530、max 65,536、非 UTF-8 65,536-byte body，比较完整 Unicode 显示、SDK 读取的完整 raw 缓存、实例保持活动及随后 Cancel/资源回落。未放宽 UI 配额。 |
+
+两新增验收 guest 也通过正式宿主 `--plugin-package` 独立构建，均为 0.1.0，使用同一缓存 SDK。`timer-callback` / `secret-candidate` 的 build key 为 `00f4e484a15467cf` / `8f26becd04ca5d95`；构建输出分别保留在 `package-timer06-review.log`、`package-secret06-review.log`。先前夹具清单缺 quota、缺 Snapshot 和滚动断言缺 ui import 的准备错误分别保留在 `package-timer06-manifest-red.log`、`timer-callback06-fixture-red.log`、`response-scroll06-fixture-red.log`，没有把它们当作行为红灯。
+
+当前修复宿主 `cargo build -p editor-app` 退出 0，51.59 秒（`build-host06-review.log`）。两个正式 0.1.1 包由首候选的 86D4 宿主内嵌、未变化的 SDK 编译；最终 Scroll 包 release 构建分别 9.30 / 8.62 秒，记录在 `package-cloud06-scroll-review.log`。从正式 ZIP 直接读取 WASM 并核对的 hash 在 `package-fingerprints06-review.log`：
+
+| 当前修复产物 | SHA-256 |
+| --- | --- |
+| `../target06/debug/editor-app.exe` | `95C21C8A1D72D9C8F3DC991FB040FE607BA7C886AAD920363168F76BF0F6F86B` |
+| `target/cloud-api-test/cloud-translation-0.1.1.zip` | `70882C90C8E37F7292E6C07B762F028E1A195CC96CAC52AB85D459F22BB9EDC7` |
+| ZIP 内 `cloud-translation.wasm` | `D81BF24C22E856EEFB616B394906ECB3FCC43DB6CDD993968B434FE93911E1B4` |
+| `target/cloud-api-test/code-host-query-0.1.1.zip` | `EF05F4B947FF01F8DE024FCCE7B84FF40078354119B766C155179E54C10DCA5A` |
+| ZIP 内 `code-host-query.wasm` | `DF63441354924B653906417F293F429B449B94B07D8A07178BC72B0ED73E59AC` |
+
+SDK cache key 仍为 `7923d3ec1435371c2de736686e04c423b4434fcd9201a46aa134c61811290d2f`，两个消费者 build key 仍为 `d392df44fcad6573` / `b37b624e1acd5ac3`。本轮没有改变公开契约、SDK/网站源或通用 Text presenter；不重复未变化的完整 HTTP/TLS、Token、UI 主矩阵与 SDK/站点输出矩阵。首候选原生 86D4 结果只作为对应旧内容的证据，新的大结果/滚动连接另由根代理以实际新 EXE/WASM 验收。
+
+新宿主另执行一次 `--export-plugin-sdk ../target06/sdk06-review`，退出 0；导出的 **63 个文件**全部与 7923 SDK 缓存对应文件 hash 相同，0 差异。`CLOUD.md` SHA-256 为 `87D524154427FCF1A0B3D920A747A6FE26283A3FE052AF3D84CD08C496C98CA3`；新 EXE、正式包、SDK 全文件比较结果保留在 `fingerprints06-review.log`，出口日志为 `sdk06-review-export.log`。这次只核对未变化的实际内嵌内容，没有重复 SDK 六项/网站十七项测试。
+
+最终 Scroll 包就绪后，针对改变的消费/生命周期接缝再次执行 T29 timer 两项 **2/0，79.13 秒**（`timer-callback06-final-green.log`），共享 private depth 一项 **1/0，28.85 秒**（`private-depth06-final-green.log`），正式 0.1.1 → 合成候选 0.1.2 的失败升级一项 **1/0，52.00 秒**（`update06-review-green.log`）。后一项保持旧数据/OS Token、旧 handles 失效、候选 producer 回零及不重放 HTTP，未因正式包升版让测试退化为相同版本重装。P1 专用夹具的 165.02 秒绿色之后没有再修改对应密钥/Manager 代码，复用该结果，不重复真实系统键四种失败组合。
+
+实际追加命令如下，所有 Rust 命令仍使用 `../target06`，本节提及的 `--ignored` 均明确执行；没有把普通门禁中的跳过算作 WASM 通过：
+
+```powershell
+& ../target06/debug/editor-app.exe --plugin-package crates/plugin-runtime/tests/fixtures/timer-callback --output target/cloud-api-test
+& ../target06/debug/editor-app.exe --plugin-package crates/plugin-runtime/tests/fixtures/secret-candidate --output target/cloud-api-test
+& ../target06/debug/editor-app.exe --plugin-package plugins/cloud-translation plugins/code-host-query --output target/cloud-api-test
+cargo test -p plugin-runtime --test cloud t29_timer -- --ignored --nocapture --test-threads=1
+cargo test -p plugin-runtime --test cloud t29_private_area_depth_overflow_is_rejected_before_poisoning_shared_storage -- --ignored --nocapture --test-threads=1
+cargo test -p plugin-runtime --test cloud t27_t30_unpublished_snapshot_and_publish_failure_preserve_system_token -- --ignored --nocapture --test-threads=1
+cargo test -p plugin-runtime --test cloud t25_response_limit_and_invalid_utf8_preserve_full_display_cache_and_cancel -- --ignored --nocapture --test-threads=1
+cargo test -p plugin-runtime --test cloud t30_failed_cloud_update_retires_candidate_and_recovers_data_without_replaying_http -- --ignored --nocapture --test-threads=1
+& ../target06/debug/editor-app.exe --export-plugin-sdk ../target06/sdk06-review
+```
 
 ## 测试接缝与可观察结果
 
@@ -74,9 +117,18 @@ SDK cache key：`7923d3ec1435371c2de736686e04c423b4434fcd9201a46aa134c61811290d2
 
 ## 门禁与网站
 
-最终 Rust 三门禁均通过。`cargo fmt --check` 退出 0（`fmt06.log`）；非 UI workspace **233 通过、0 失败、209 ignored**，包含 doc-test 的 64 个结果 batch（`workspace-tests06.log`）；`cargo check --workspace` 退出 0，53.12 秒（`workspace-check06.log`）。编译输出保留已有 unused/dead-code 与 Windows 链接 warning，未把它们改报成无警告。普通 workspace 的 ignored 不算实际 WASM 通过；本单十项另以 `--ignored` 明确执行。
+首候选的 Rust 三门禁均通过。`cargo fmt --check` 退出 0（`fmt06.log`）；非 UI workspace **233 通过、0 失败、209 ignored**，包含 doc-test 的 64 个结果 batch（`workspace-tests06.log`）；`cargo check --workspace` 退出 0，53.12 秒（`workspace-check06.log`）。编译输出保留已有 unused/dead-code 与 Windows 链接 warning，未把它们改报成无警告。普通 workspace 的 ignored 不算实际 WASM 通过；本单十项另以 `--ignored` 明确执行。
 
-已执行针对性检查：协议 cloud **2/0**（`protocol-cloud06-final.log`），cloud capability admission **1/0**（`admission-cloud06-final.log`），应用 SDK 导出 **6/0，0.35 秒**（`sdk-export06.log`）。一般 HTTP/密钥/目录/timer 全部包含在导出的 SDK；后续只修改通用文本 accessibility 和测试 UUID，没有改变 SDK key、正式 ZIP 或 guest WASM。
+修复候选最终三 Rust 门禁也通过：`cargo fmt --check` 退出 0（`fmt06-review.log`），非 UI workspace **233 通过、0 失败、213 ignored，64 个结果 batch**（`workspace-tests06-review.log` / `workspace-counts06-review.log`；编译 23.32 秒），`cargo check --workspace` 退出 0、26.53 秒（`workspace-check06-review.log`）。额外四项 ignored 是本轮新增的实际 SDK timer/private-depth/secret-publication/display 回归，均已在上节明确执行得到绿色。两个正式 guest 与两个新夹具的独立 `cargo fmt --manifest-path <Cargo.toml> --check` 分别退出 0，日志为 `fmt-cloud-translation06-review.log`、`fmt-code-host-query06-review.log`、`fmt-timer-fixture06-review.log`、`fmt-secret-fixture06-review.log`。
+
+本轮全量门禁先在 examples 链接时遇到 `LNK1104 msvcrt.lib`，测试尚未开始（`workspace-tests06-review-env-red.log`）。已安装库存在；当前 PowerShell 导入 VS18 的 `Microsoft.VisualStudio.DevShell.dll` 后以 `-Arch/-HostArch` 初始化，仍在 examples 遇到同样错误（`workspace-tests06-review-vs-arch-red.log`）。仅在随后构建进程改用以下公开 cmdlet 参数，实际 test/check 得到上面的绿色；库路径读数保留在 `vs-libraries06-review-devcmd.log`。这是环境初始化差异，没有修改源码、安装工具或改变全局环境。
+
+```powershell
+Import-Module 'C:/Program Files/Microsoft Visual Studio/18/Community/Common7/Tools/Microsoft.VisualStudio.DevShell.dll'
+Enter-VsDevShell -VsInstallPath 'C:/Program Files/Microsoft Visual Studio/18/Community' -DevCmdArguments '-arch=x64 -host_arch=x64' -SkipAutomaticLocation | Out-Null
+```
+
+首候选已执行针对性检查：协议 cloud **2/0**（`protocol-cloud06-final.log`），cloud capability admission **1/0**（`admission-cloud06-final.log`），应用 SDK 导出 **6/0，0.35 秒**（`sdk-export06.log`）。一般 HTTP/密钥/目录/timer 全部包含在导出的 SDK；首候选最后的通用文本 accessibility 和测试 UUID 调整没有改变当时 SDK key、正式 ZIP 或 guest WASM；本轮两个 0.1.1 包和 hash 另见上表。
 
 两独立 guest 的 `cargo fmt --manifest-path plugins/<id>/Cargo.toml --check` 也分别退出 0；它们是 workspace 排除的正式独立项目，不能用宿主 fmt 覆盖其检查。
 
@@ -100,7 +152,9 @@ cargo test -p plugin-runtime --test cloud t27_t29_private_directories_credential
 
 ## 原生连接验收与限制
 
-根代理负责共享 Windows desktop 的顺序验收；本执行代理没有操作桌面。实际记录见[原生连接证据](native-06.md)：首轮云翻译密码遮罩/系统凭据/POST 分块/缓存/进度取消与真实 FIN/503/退出及精确凭据清理通过；86D4 宿主通用 Text 的真实 UIA Name、第二消费者 GET 两块结果和离线安全失败随后通过。所有监听器与宿主控制器正常 stop、退出 0，自有进程为空；两个明确测试键精确 API 清理读回 missing，普通 profile/控制器日志扫描无假 Token，工作区为空。固定候选双轴审查仍待根代理执行。Token 输入、进度、IME 与控件完整矩阵引用 [02 的验收记录](02-commands-and-interaction.md)，本单仅补连接与可见结果，不重复 UI 主矩阵。
+根代理负责共享 Windows desktop 的顺序验收；本执行代理没有操作桌面。首候选的实际记录见[原生连接证据](native-06.md)：首轮云翻译密码遮罩/系统凭据/POST 分块/缓存/进度取消与真实 FIN/503/退出及精确凭据清理通过；86D4 宿主通用 Text 的真实 UIA Name、第二消费者 GET 两块结果和离线安全失败随后通过。所有监听器与宿主控制器正常 stop、退出 0，自有进程为空；两个明确测试键精确 API 清理读回 missing，普通 profile/控制器日志扫描无假 Token，工作区为空。修复候选的大结果原生滚动复核及固定点双轴复审另由根代理完成，不把旧 EXE 的首候选结果记成新 hash 原生通过。Token 输入、进度、IME 与控件完整矩阵引用 [02 的验收记录](02-commands-and-interaction.md)，本单仅补连接与可见结果，不重复 UI 主矩阵。
+
+根代理已追加同一原生记录的“审查修复后”部分：**95C21 宿主 + code-host-query 0.1.1** 实际 GET 完成 65,536 bytes，滚动到末尾可见完整末尾标记，稳定 Windows UIA 三个 Text Name 包含全部首尾；正式 Read cache 后两个 Text Name 保留原始正文，菜单仍可用。实际 dev candidate `74847847fe64410687e1a09090f97d79f6283946519179fd5383bbd0f1a4ea21` 的 WASM 与正式 ZIP 内 `DF6344…` 相同；缓存严格 UTF-8、65,536 bytes，全部 bytes SHA-256 `8955d95861d723df83fcaf8be5a28f8f89e041133ef1d6895fc9e3425f19f0c3` 等于独立重建夹具。控制器/监听器正常 stop、退出 0，自有 EXE 进程和工作区条目均为 0，两个精确测试 OS 键均 missing，普通 profile/日志无假 Token。共享桌面工具的过期目标和焦点干扰按记录重新选择精确自有 EXE 后验证，未操作其他实例。这里只把新滚动接缝记为新 hash 原生通过，未重复 Token/POST/权限主矩阵；固定点双轴复审仍待执行。
 
 两个包正常命令菜单含 set-token/query/refresh/cancel/read-cache/delete-token，测试端点分别 `http://127.0.0.1:18906/translate`（POST）和 `http://127.0.0.1:18907/repositories`（GET）。假的 ASCII Token 通过密码输入，不能直接写普通设置。原生隔离运行：
 

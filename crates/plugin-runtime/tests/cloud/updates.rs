@@ -73,7 +73,8 @@ fn t30_failed_cloud_update_retires_candidate_and_recovers_data_without_replaying
     );
     let mut files = package("cloud-translation", |manifest| {
         grant(manifest, &server.origin);
-        manifest["version"] = json!("0.1.1");
+        // The delivered consumer is 0.1.1; retain a newer candidate for the failed upgrade boundary.
+        manifest["version"] = json!("0.1.2");
     })
     .files;
     files.insert(

@@ -72,6 +72,9 @@ struct State {
     data: PathBuf,
     assets: PathBuf,
     active: bool,
+    /// The trusted manager opens irreversible credential mutations only after durable publication.
+    /// Flushing staged private files is preparation work and never grants this authority.
+    activation_committed: bool,
     /// A bounded discovery invocation can read granted resources without launching native work.
     language_hook: bool,
     /// Separate stateless language workers reject every host operation, including during Prepare.
@@ -367,6 +370,7 @@ impl Instance {
             data,
             assets,
             active: false,
+            activation_committed: false,
             language_hook: false,
             language_pure: pure,
             language_completion_call: false,
@@ -618,6 +622,11 @@ impl Instance {
         }
         Ok(originals)
     }
+    /// Publish authority only after the owner manager has committed its version/configuration.
+    pub(crate) fn commit_activation(&mut self) {
+        debug_assert!(self.store.data().active && !self.store.data().roots.retired);
+        self.store.data_mut().activation_committed = true;
+    }
     /// Restore only files touched by this transaction; unrelated plugin data stays intact.
     pub(crate) fn rollback_data(originals: &[(PathBuf, Option<Vec<u8>>)]) -> anyhow::Result<()> {
         for (path, bytes) in originals.iter().rev() {
@@ -631,6 +640,7 @@ impl Instance {
     }
     /// Seal already-published work before the final snapshot, while retaining private-file access for serialization.
     pub(crate) fn quiesce(&mut self) {
+        self.store.data_mut().activation_committed = false;
         self.store.data_mut().http_streams.clear();
         self.store.data_mut().timers.clear();
         self.store.data_mut().clear_temporary_data();
@@ -670,6 +680,7 @@ impl Instance {
         mut environment: Environment,
         snapshot: Option<Snapshot>,
     ) -> anyhow::Result<()> {
+        self.store.data_mut().activation_committed = false;
         if self.store.data().roots.application {
             environment.workspace.clear();
         }
@@ -688,6 +699,8 @@ impl Instance {
         self.reapply_settings()?;
         self.activate()?;
         self.commit_data()?;
+        // Recovery resumes an already-published version, after its fresh activation completes.
+        self.commit_activation();
         Ok(())
     }
     pub fn process_ids(&self) -> Vec<u32> {

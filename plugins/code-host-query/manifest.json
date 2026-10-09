@@ -1,7 +1,7 @@
 {
   "id": "code-host-query",
   "name": "代码托管查询",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "protocol": 7,
   "api": {
     "base": "^1",

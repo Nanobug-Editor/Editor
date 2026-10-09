@@ -233,10 +233,11 @@ impl Manager {
             return Err(error);
         }
         // Only a durable successful configuration replaces runtime owners; Drop revokes the old handles.
-        for (owner, instance, active) in candidates {
+        for (owner, mut instance, active) in candidates {
             if !active {
                 continue;
             }
+            instance.commit_activation();
             let instances = if let Some(key) = owner {
                 &mut self.parked.get_mut(&key).unwrap().live
             } else {

@@ -277,3 +277,42 @@ fn t29_timers_are_fair_bounded_disposable_and_debounce_resets_delay() {
         assert_eq!(manager.resource_count(), baseline);
     }
 }
+
+/// A's due callback can postpone B even when B was already due when this host poll began.
+#[test]
+#[ignore = "build timer-callback fixture with current host --plugin-package before this test"]
+fn t29_timer_callback_reset_postpones_another_due_timer_without_releasing_it() {
+    let root = tempfile::tempdir().unwrap();
+    let mut manager = Manager::open(root.path().into(), environment(root.path())).unwrap();
+    install(&mut manager, &package("timer-callback", |_| {}));
+    let baseline = manager.resource_count();
+    for repeat in [false, true] {
+        manager
+            .invoke_command("timer-callback", "arm", json!({"repeat":repeat}))
+            .unwrap();
+        assert_eq!(manager.resource_count(), baseline + 2);
+        // Both timers are due before polling, so A must invalidate the already-due B notification.
+        std::thread::sleep(Duration::from_millis(40));
+        manager.poll();
+        let receipt: Json = serde_json::from_str(&text(&manager, "timer-callback")).unwrap();
+        assert_eq!(receipt["events"], json!(["a-reset-b"]));
+        assert!(receipt["pending_b"].is_object());
+        assert_eq!(manager.resource_count(), baseline + 1);
+        std::thread::sleep(Duration::from_millis(100));
+        manager.poll();
+        let receipt: Json = serde_json::from_str(&text(&manager, "timer-callback")).unwrap();
+        assert_eq!(receipt["events"], json!(["a-reset-b"]));
+        assert_eq!(manager.resource_count(), baseline + 1);
+        std::thread::sleep(Duration::from_millis(220));
+        manager.poll();
+        let receipt: Json = serde_json::from_str(&text(&manager, "timer-callback")).unwrap();
+        assert_eq!(receipt["events"], json!(["a-reset-b", "b-tick"]));
+        assert_eq!(manager.resource_count(), baseline + usize::from(repeat));
+        manager
+            .invoke_command("timer-callback", "release", Json::Null)
+            .unwrap();
+        assert_eq!(manager.resource_count(), baseline);
+    }
+    manager.disable("timer-callback").unwrap();
+    assert_eq!(manager.resource_count(), 0);
+}

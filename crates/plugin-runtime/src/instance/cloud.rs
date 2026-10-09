@@ -140,7 +140,7 @@ impl State {
                         "Secret value must be 1 to 2560 bytes",
                     ));
                 }
-                if self.staged_writes.is_some() {
+                if !self.activation_committed {
                     return Err(Failure::new(
                         ErrorCode::InvalidState,
                         "Secret updates require committed activation",
@@ -149,7 +149,7 @@ impl State {
                 store.write(&bytes).map(|_| Value::Unit).map_err(failed)
             }
             plugin_protocol::secrets::Operation::Delete { .. } => {
-                if self.staged_writes.is_some() {
+                if !self.activation_committed {
                     return Err(Failure::new(
                         ErrorCode::InvalidState,
                         "Secret deletion requires committed activation",
@@ -229,14 +229,22 @@ impl Instance {
             .collect::<Vec<_>>();
         for handle in &due {
             let state = self.store.data_mut();
-            // A prior callback can release any of its timers in the captured due set.
+            // An earlier callback may close or reset a later captured timer. The batch is a hint;
+            // validate its current owner and deadline before advancing sequence or releasing one-shot state.
+            if !matches!(state.roots.resolve(handle), Ok(RootKind::Timer)) {
+                continue;
+            }
             let Some(timer) = state.timers.get_mut(&handle.resource) else {
                 continue;
             };
+            let delivered_at = Instant::now();
+            if timer.handle != *handle || timer.next > delivered_at {
+                continue;
+            }
             timer.sequence = timer.sequence.saturating_add(1);
             let sequence = timer.sequence;
             let repeat = timer.repeat;
-            timer.next = now + timer.delay;
+            timer.next = delivered_at + timer.delay;
             let context = state
                 .plugin_services
                 .resources
