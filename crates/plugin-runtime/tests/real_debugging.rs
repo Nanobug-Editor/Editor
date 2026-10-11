@@ -64,7 +64,7 @@ fn paused(manager: &mut Manager, session: &str) -> plugin_runtime::DebugSession 
 
 /// A genuine target blocks on PTY stdin, then hits a PDB breakpoint; there is no ordinary-run copy.
 #[test]
-#[ignore = "build the current rust-debugger package and prepare the pinned official CodeLLDB VSIX"]
+#[ignore = "build the current unified rust package and prepare the pinned official CodeLLDB VSIX"]
 fn real_debugging_stdin_runs_one_target_and_preserves_inspection() {
     let root = tempfile::tempdir().unwrap();
     let (source, binary) = packages::interactive_program(root.path());
@@ -171,7 +171,7 @@ fn real_debugging_stdin_runs_one_target_and_preserves_inspection() {
 }
 /// Breakpoints and locals must come from the actual MSVC PDB, through a source-owned deferred call.
 #[test]
-#[ignore = "build rust-debugger through the current host SDK and download the pinned CodeLLDB VSIX first"]
+#[ignore = "build unified rust through the current host SDK and download the pinned CodeLLDB VSIX first"]
 fn real_rust_pdb_breakpoints_locals_and_step_controls_are_public() {
     let root = tempfile::tempdir().unwrap();
     let (source, binary) = packages::program(root.path());
@@ -303,7 +303,7 @@ fn real_rust_pdb_breakpoints_locals_and_step_controls_are_public() {
 
 /// The public consumer receives a bounded failure, while adapter refusal leaves its pause usable.
 #[test]
-#[ignore = "build rust-debugger through the current public SDK first"]
+#[ignore = "build unified rust through the current public SDK first"]
 fn adapter_refusal_and_oversized_inspection_finish_without_poisoning_the_pause() {
     let root = tempfile::tempdir().unwrap();
     let package = packages::fault_adapter("debug-fault-instrument", root.path());
@@ -426,7 +426,7 @@ fn actual_tree(manager: &mut Manager, directory: &std::path::Path) -> Vec<u32> {
 }
 /// Ignoring DAP disconnect cannot retain targets forever; Force and normal Stop share the EOF barrier.
 #[test]
-#[ignore = "build rust-debugger through the current public SDK first"]
+#[ignore = "build unified rust through the current public SDK first"]
 fn stop_timeout_and_force_wait_for_actual_tree_before_rerun() {
     let root = tempfile::tempdir().unwrap();
     let package = packages::stubborn_adapter("debug-stop-instrument", root.path());
@@ -512,7 +512,7 @@ fn stop_timeout_and_force_wait_for_actual_tree_before_rerun() {
 }
 
 #[test]
-#[ignore = "build rust-debugger through the current public SDK first"]
+#[ignore = "build unified rust through the current public SDK first"]
 /// Five independent protocol consumers publish decoded text and diagnostics without leaking DAP.
 fn debug_output_choices_preserve_every_active_and_ended_session() {
     let root = tempfile::tempdir().unwrap();
@@ -577,7 +577,7 @@ fn debug_output_choices_preserve_every_active_and_ended_session() {
     manager.shutdown();
 }
 #[test]
-#[ignore = "build rust-debugger through the current public SDK first"]
+#[ignore = "build unified rust through the current public SDK first"]
 /// Sealing allocations must still allow the approved disconnect write to the existing adapter.
 fn cooperative_disconnect_exits_before_force_grace() {
     let root = tempfile::tempdir().unwrap();
@@ -624,7 +624,7 @@ fn cooperative_disconnect_exits_before_force_grace() {
 
 /// An actual initialization refusal retires all three native PIDs and retains its original cause.
 #[test]
-#[ignore = "build rust-debugger through the current public SDK first"]
+#[ignore = "build unified rust through the current public SDK first"]
 fn failed_adapter_initialization_retires_its_actual_native_tree() {
     let root = tempfile::tempdir().unwrap();
     let id = "initialization-failure-instrument";

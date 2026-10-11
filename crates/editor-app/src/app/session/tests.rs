@@ -253,6 +253,7 @@ fn plugin_dock_layout_survives_delayed_startup(cx: &mut TestAppContext) {
     second_panel.id = "tasks".into();
     manifest.panels.push(second_panel);
     let installed = Installed {
+        replaced_by: None,
         grants: manifest.permissions.clone(),
         manifest,
         digest: "fixture".into(),

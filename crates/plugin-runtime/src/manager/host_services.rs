@@ -41,7 +41,8 @@ pub const SESSION_CONTRACT_VERSION: &str = "2.0.0";
 /// how it is driven, or over what transport.
 pub const DEBUG_CONTRACT: &str = "debug.session";
 /// A debug start includes building and attaching, so it is allowed the longest window here.
-pub const DEBUG_START_TIMEOUT_MS: u32 = 60_000;
+/// First use may prepare a declared dependency for up to two minutes before the target handshake.
+pub const DEBUG_START_TIMEOUT_MS: u32 = 180_000;
 /// Setting breakpoints is a state change the provider answers from its own model.
 pub const DEBUG_BREAKPOINT_TIMEOUT_MS: u32 = 15_000;
 /// Resume, pause, stop and status are short control exchanges.
@@ -862,6 +863,9 @@ pub(crate) fn session_provider(
         contracts: [(
             SESSION_CONTRACT.to_owned(),
             Contract {
+                preparation: Default::default(),
+                enabled_setting: None,
+                platforms: Vec::new(),
                 version: SESSION_CONTRACT_VERSION
                     .parse()
                     .expect("session contract version is valid"),

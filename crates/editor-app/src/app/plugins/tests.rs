@@ -115,6 +115,7 @@ fn incompatible_installed_plugin_preserves_data_without_starting(cx: &mut TestAp
     std::fs::write(old_data.join("settings.json"), "preserved settings").unwrap();
     std::fs::write(old_data.join("state-project.json"), "preserved snapshot").unwrap();
     let installed = plugin_runtime::Installed {
+        replaced_by: None,
         manifest: manifest.clone(),
         digest: "fixture".into(),
         grants: manifest.permissions.clone(),
@@ -282,6 +283,7 @@ fn project_rust_registry(workspace: &Workspace) -> PathBuf {
     )
     .unwrap();
     let installed = plugin_runtime::Installed {
+        replaced_by: None,
         manifest: crate::extensions::test_manifest(include_str!(
             "../../../../../plugins/rust/manifest.json"
         )),

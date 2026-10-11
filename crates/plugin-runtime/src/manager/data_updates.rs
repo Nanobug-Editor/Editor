@@ -11,6 +11,7 @@ pub struct PreparedInstallation {
     pub(super) root: PathBuf,
     pub(super) workspace: String,
     pub(super) previous_digest: Option<String>,
+    pub(super) replaced_records: BTreeMap<String, Installed>,
     pub(super) package: Package,
     pub(super) grants: BTreeSet<String>,
     pub(super) transaction: Transaction,
@@ -62,6 +63,7 @@ impl Manager {
         self.validate_data_update(package, &grants)?;
         control.check()?;
         let id = &package.manifest.id;
+        self.validate_replacements(&package.manifest, control)?;
         let scope = self
             .instance_data_directory(&package.manifest)
             .parent()
@@ -80,11 +82,14 @@ impl Manager {
             environment: self.environment.clone(),
             host_resources: self.host_resources.clone(),
             previous_digest: self.installed.get(id).map(|entry| entry.digest.clone()),
+            replaced_records: self.replacement_records(&package.manifest),
             package: package.clone(),
             grants,
             transaction,
             engine: self.engine.as_ref().unwrap().clone(),
-            configuration: self.saved_settings(&package.manifest)?,
+            configuration: self
+                .replacement_settings(&package.manifest)?
+                .resolve(&package.manifest, &self.environment.workspace)?,
         })
     }
 
@@ -97,6 +102,12 @@ impl Manager {
         let manifest = &prepared.package.manifest;
         let id = manifest.id.clone();
         self.validate_data_update(&prepared.package, &prepared.grants)?;
+        self.validate_replacements(manifest, control)?;
+        anyhow::ensure!(
+            serde_json::to_value(&prepared.replaced_records)?
+                == serde_json::to_value(self.replacement_records(manifest))?,
+            "Replacement state changed; prepare again"
+        );
         anyhow::ensure!(
             prepared.root == self.root
                 && prepared.workspace == self.environment.workspace
@@ -105,6 +116,14 @@ impl Manager {
             "Prepared installation is stale; prepare it again"
         );
         control.check()?;
+        // Preserve each retiring owner's latest logical state in its original private scope.
+        // No bytes or live process state cross into the replacement plugin's filesystem authority.
+        for old_id in prepared.replaced_records.keys() {
+            if let Some(instance) = self.live.get_mut(old_id) {
+                let checkpoint = instance.snapshot()?;
+                self.save_snapshot(old_id, &checkpoint)?;
+            }
+        }
         // Read the last safe fallback before retiring any owner; final snapshot failures also require recovery.
         let mut snapshot = self.load_snapshot(&id)?;
         let previous = self.installed.get(&id).cloned();
@@ -168,7 +187,11 @@ impl Manager {
             prepared
                 .next
                 .prepare_state(self.environment.clone(), migrated)?;
-            self.configure_saved_settings(&mut prepared.next, manifest)?;
+            prepared.next.configure_settings(
+                manifest,
+                self.replacement_settings(manifest)?
+                    .resolve(manifest, &self.environment.workspace)?,
+            )?;
             let values = prepared.next.configuration.clone();
             let plans = dependencies::resolve_dependency_plans(
                 &self.environment,
@@ -206,6 +229,7 @@ impl Manager {
             registry.insert(
                 id.clone(),
                 Installed {
+                    replaced_by: None,
                     manifest: manifest.clone(),
                     digest: prepared.package.digest.clone(),
                     grants: prepared.grants.clone(),
@@ -220,43 +244,64 @@ impl Manager {
                     error: None,
                 },
             );
-            prepared
-                .transaction
-                .publish(&serde_json::to_vec_pretty(&registry)?, control)?;
-            self.installed = registry;
-            Ok::<_, anyhow::Error>(())
-        })();
-        if let Err(error) = result {
-            prepared.next.stop();
-            if let Some(instance) = &mut old {
-                // Snapshot failure happens before stop; no native ownership may remain during recovery.
-                instance.stop();
+            let metadata = self.replacement_metadata(&prepared.package, &mut registry)?;
+            let bytes = serde_json::to_vec_pretty(&registry)?;
+            if metadata.files.is_empty() {
+                prepared.transaction.publish(&bytes, control)?;
+            } else {
+                prepared
+                    .transaction
+                    .publish_metadata(&bytes, &metadata.files, control)?;
             }
-            if prepared.transaction.recovery_pending() {
-                if let Some(entry) = self.installed.get_mut(&id) {
-                    entry.error = Some(format!("Recovery incomplete: {error:#}"));
+            self.installed = registry;
+            Ok::<_, anyhow::Error>(metadata.preferences)
+        })();
+        let preferences = match result {
+            Ok(preferences) => preferences,
+            Err(error) => {
+                prepared.next.stop();
+                if let Some(instance) = &mut old {
+                    // Snapshot failure happens before stop; no native ownership may remain during recovery.
+                    instance.stop();
+                }
+                if prepared.transaction.recovery_pending() {
+                    if let Some(entry) = self.installed.get_mut(&id) {
+                        entry.error = Some(format!("Recovery incomplete: {error:#}"));
+                    }
+                    self.refresh_services();
+                    return Err(error);
+                }
+                if let Some(mut old) = old {
+                    if let Err(recovery) = old.restart(self.environment.clone(), snapshot) {
+                        old.stop();
+                        let message =
+                            format!("Update failed: {error:#}; restart failed: {recovery:#}");
+                        if let Some(entry) = self.installed.get_mut(&id) {
+                            entry.error = Some(message.clone());
+                        }
+                        self.refresh_services();
+                        return Err(anyhow::anyhow!(message));
+                    }
+                    self.live.insert(id, old);
                 }
                 self.refresh_services();
                 return Err(error);
             }
-            if let Some(mut old) = old {
-                if let Err(recovery) = old.restart(self.environment.clone(), snapshot) {
-                    old.stop();
-                    let message = format!("Update failed: {error:#}; restart failed: {recovery:#}");
-                    if let Some(entry) = self.installed.get_mut(&id) {
-                        entry.error = Some(message.clone());
-                    }
-                    self.refresh_services();
-                    return Err(anyhow::anyhow!(message));
-                }
-                self.live.insert(id, old);
-            }
-            self.refresh_services();
-            return Err(error);
-        }
+        };
         prepared
             .next
             .retarget_data(self.instance_data_directory(manifest));
+        // A failed candidate leaves every replaced owner alive. Retire only after the durable commit.
+        for old_id in prepared.replaced_records.keys() {
+            self.retire_language_services(old_id);
+            if let Some(mut old) = self.live.remove(old_id) {
+                old.stop();
+            }
+        }
+        if let Some(preferences) = preferences {
+            // This typed candidate was validated before the durable commit; publication cannot fail here.
+            self.plugin_services.lock().unwrap().preferences = preferences;
+        }
         let entry = &self.installed[&id];
         if entry.enabled || entry.project_enabled_in(&self.environment.workspace) {
             self.live.insert(id.clone(), prepared.next);

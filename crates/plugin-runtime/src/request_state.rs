@@ -47,6 +47,15 @@ impl<T: Clone> Completion<T> {
             state.1 = RequestUpdate::Completed { result };
         }
     }
+    /// Background service preparation may report progress while retaining the original deadline.
+    pub(crate) fn progress(&self, message: String) {
+        self.expire(Instant::now());
+        let mut state = self.state.lock().unwrap();
+        if matches!(state.1, RequestUpdate::Progress { .. }) {
+            state.0 += 1;
+            state.1 = RequestUpdate::Progress { message };
+        }
+    }
     pub fn status(&self) -> RequestUpdate<T> {
         self.expire(Instant::now());
         self.state.lock().unwrap().1.clone()

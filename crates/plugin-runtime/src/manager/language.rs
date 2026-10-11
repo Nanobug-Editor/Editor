@@ -103,6 +103,7 @@ impl Manager {
                 .prepare_language(plugin_protocol::language::Context {
                     provider: provider.id.clone(),
                     workspace: self.environment.workspace.clone(),
+                    preparing_dependencies: false,
                     package_root: String::new(),
                     data_root: String::new(),
                     settings: settings.clone(),

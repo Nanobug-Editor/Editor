@@ -102,6 +102,10 @@ pub struct Readiness {
 pub struct Context {
     pub provider: String,
     pub workspace: String,
+    /// dependencies 1.2: installation requests dependency plans without starting language analysis.
+    /// False denotes ordinary language preparation; discovery without a download plan may be skipped.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub preparing_dependencies: bool,
     /// language.lsp 1.2: canonical assets owned by this package version, for native service configuration.
     /// This string grants no WASI filesystem access; native processes do not inherit the WASM sandbox.
     #[serde(default)]

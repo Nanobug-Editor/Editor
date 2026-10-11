@@ -364,22 +364,50 @@ impl ExtensionPanel {
             .into_any_element()
     }
 
-    /// First installs confirm all permissions; upgrades confirm only grants absent from the old record.
+    /// First installs confirm all permissions; upgrades confirm new grants and other owners to replace.
     fn confirm_market_install(
         &mut self,
         release: Release,
         generation: u64,
         upgrading: bool,
         permissions: Vec<String>,
+        replacements: std::collections::BTreeMap<String, plugin_runtime::Installed>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let owner = cx.entity().downgrade();
+        // Updating this owner or replacing another one retires its active targets only after commit.
+        // Name the same real sessions used by disable/uninstall before the user authorizes that change.
+        let impact = self
+            .parent
+            .upgrade()
+            .map(|parent| {
+                let ids = replacements
+                    .keys()
+                    .chain(std::iter::once(&release.manifest.id));
+                ids.filter_map(|id| {
+                    parent
+                        .read(cx)
+                        .run_controls
+                        .plugin_session_impact(id, None)
+                        .summary()
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+            })
+            .filter(|text| !text.is_empty());
         window.open_dialog(cx, move |dialog, _, _| {
             let release = release.clone();
             let candidate = release.clone();
             let owner = owner.clone();
             let permissions = permissions.clone();
+            let impact = impact.clone();
+            let approved_replacements = replacements.clone();
+            let replaced_versions = replacements
+                .values()
+                .map(|entry| format!("{} ({})", entry.manifest.id, entry.manifest.version))
+                .collect::<Vec<_>>()
+                .join(", ");
             let action = if upgrading {
                 t!("plugins.update").to_string()
             } else {
@@ -396,6 +424,26 @@ impl ExtensionPanel {
                             .child(release.manifest.name.clone())
                             .child(t!("plugins.consent_unsigned").to_string())
                             .child(release.url.clone())
+                            .when(!replaced_versions.is_empty(), |details| {
+                                details.child(
+                                    div()
+                                        .debug_selector(|| "market-consent-replacements".into())
+                                        .child(
+                                            t!(
+                                                "plugins.consent_replacements",
+                                                ids = replaced_versions
+                                            )
+                                            .to_string(),
+                                        ),
+                                )
+                            })
+                            .when_some(impact.clone(), |details, impact| {
+                                details.child(
+                                    div()
+                                        .debug_selector(|| "market-consent-session-impact".into())
+                                        .child(impact),
+                                )
+                            })
                             .child(
                                 t!(
                                     "plugins.market_permissions",
@@ -438,8 +486,11 @@ impl ExtensionPanel {
                 .on_ok(move |_, _, cx| {
                     owner
                         .update(cx, |this, cx| {
-                            let accepted =
-                                this.worker.install_market(candidate.clone(), generation);
+                            let accepted = this.worker.install_market(
+                                candidate.clone(),
+                                generation,
+                                approved_replacements.clone(),
+                            );
                             cx.notify();
                             accepted
                         })

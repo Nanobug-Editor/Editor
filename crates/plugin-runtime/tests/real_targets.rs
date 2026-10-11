@@ -56,9 +56,10 @@ fn project(root: &Path) {
 fn virtual_workspace_profiles_and_real_artifacts_use_the_public_provider() {
     let root = tempfile::tempdir().unwrap();
     project(root.path());
-    let package =
-        Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust.zip"))
-            .unwrap();
+    let package = Package::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust-0.6.1.zip"),
+    )
+    .unwrap();
     let mut manager = Manager::open(
         root.path().join("private-plugins"),
         Environment {
@@ -148,9 +149,10 @@ fn a_root_candidate_never_executes_a_default_members_same_named_binary() {
     ] {
         std::fs::write(root.path().join(source),format!("//! Exact package selection acceptance target.\nfn main() {{println!(\"{marker}\");}}\n")).unwrap();
     }
-    let package =
-        Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust.zip"))
-            .unwrap();
+    let package = Package::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust-0.6.1.zip"),
+    )
+    .unwrap();
     let mut manager = Manager::open(
         root.path().join("private-plugins"),
         Environment {
@@ -205,9 +207,10 @@ fn a_root_candidate_never_executes_a_default_members_same_named_binary() {
 #[ignore = "build the Rust package with the current embedded SDK first"]
 fn an_unrelated_workspace_gets_an_empty_rust_catalog_without_starting_cargo() {
     let root = tempfile::tempdir().unwrap();
-    let package =
-        Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust.zip"))
-            .unwrap();
+    let package = Package::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust-0.6.1.zip"),
+    )
+    .unwrap();
     let mut manager = Manager::open(
         root.path().join("private-plugins"),
         Environment {
@@ -249,9 +252,10 @@ fn main() {
 "#,
     )
     .unwrap();
-    let package =
-        Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust.zip"))
-            .unwrap();
+    let package = Package::read(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust-0.6.1.zip"),
+    )
+    .unwrap();
     let mut manager = Manager::open(
         root.join("private-plugins"),
         Environment {

@@ -45,6 +45,7 @@ fn native_dock_drag_preserves_canvas_viewport_and_saved_size(cx: &mut TestAppCon
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                replaced_by: None,
                 manifest: manifest.clone(),
                 digest: "fixture".into(),
                 grants: manifest.permissions.clone(),

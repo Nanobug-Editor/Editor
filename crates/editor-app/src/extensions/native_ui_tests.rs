@@ -121,6 +121,7 @@ fn plugin_hide_requests_are_scoped_and_reclaim_the_empty_dock(cx: &mut TestAppCo
                 let mut manifest = manifest.clone();
                 manifest.id = plugin.into();
                 state.entries.push(Installed {
+                    replaced_by: None,
                     grants: manifest.permissions.clone(),
                     manifest,
                     digest: "fixture".into(),
@@ -224,6 +225,7 @@ fn native_panel_clicks_are_scoped_to_the_declared_surface(cx: &mut TestAppContex
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                replaced_by: None,
                 manifest,
                 digest: "fixture".into(),
                 grants: Default::default(),
@@ -316,6 +318,7 @@ fn canvas_controls_sidebar_routes_ui_without_canvas_pointer_events(cx: &mut Test
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                replaced_by: None,
                 manifest,
                 digest: "fixture".into(),
                 grants: Default::default(),

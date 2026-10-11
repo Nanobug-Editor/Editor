@@ -1,6 +1,6 @@
 # Plugin SDK — sessions
 
-公开契约正文统一维护在双语 Markdown 文档，SDK 导出包含同一份英文正本。
+现行公开契约以源码注释及 WIT/JSON 资源为准；SDK 仅导出构建输入，不包含仓库 Markdown 文档。下列链接保留既有资料入口。
 
 - [English](../../documentation/en/sdk/sessions.md)
 - [简体中文](../../documentation/zh-cn/sdk/sessions.md)

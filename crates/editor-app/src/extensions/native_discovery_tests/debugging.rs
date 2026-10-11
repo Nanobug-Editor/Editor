@@ -1,52 +1,72 @@
-//! A native combined acceptance flow discovers/builds exact Cargo artifacts and manages two real pauses.
+//! A native combined acceptance flow builds exact Cargo artifacts and manages two real pauses.
 use super::*;
+use gpui_kit::VisualContext as _;
 #[path = "../../../../plugin-runtime/tests/support/debugger_packages.rs"]
 mod packages;
 
 /// Native controls must route to one selected configuration and preserve unrelated target lifetimes.
 #[gpui::test]
-#[ignore = "build rust/rust-debugger and verify the pinned CodeLLDB dependency first; no terminal package"]
+#[ignore = "build the unified rust package and verify the pinned CodeLLDB dependency first; no terminal package"]
 fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &mut TestAppContext) {
     let root = tempfile::tempdir().unwrap();
     rust_project(root.path(), "parallel-debug");
     let source = root.path().join("src/main.rs");
     std::fs::write(&source, PROBE).unwrap();
     let (mut manager, app, cx) = editor_for(cx, root.path());
-    let debugger = packages::debugger("parallel-debug-provider");
+    let debugger = packages::rust_package("rust");
     manager
         .install(&debugger, debugger.manifest.permissions.clone())
         .unwrap();
     let mut driver = Driver::default();
     driver.frame(&mut manager, &app, cx);
-    cx.update(|_, cx| app.update(cx, |state, cx| state.discover_run_targets(cx)));
-    driver.wait(&mut manager, &app, cx, |state| {
-        state.run_controls.discovered_targets().len() == 2
+    // Current configurations use their native provider forms. The historical discovery window's
+    // opaque bindings do not describe these validated form values; Cargo discovery has separate
+    // public-manager regressions and must not supply the retired configuration grammar here.
+    let a = configuration(
+        &mut manager,
+        &app,
+        cx,
+        "run-template-rust-debug",
+        "Cargo debug A",
+        None,
+    );
+    let b = configuration(
+        &mut manager,
+        &app,
+        cx,
+        "run-template-rust-debug",
+        "Cargo debug B",
+        None,
+    );
+    // Prepare the independent Shell through its owned dialog before entering the two inspections.
+    let c = configuration(
+        &mut manager,
+        &app,
+        cx,
+        "run-template-$nanobug.shell-PowerShell",
+        "Unrelated ordinary run",
+        Some("Start-Sleep -Seconds 60"),
+    );
+    cx.update(|_, cx| {
+        let set = app.read(cx).run_controls.configuration_set();
+        let data = &set.plugin_configurations[&c];
+        assert!(
+            matches!(data.validation, editor_core::ConfigurationValidation::Valid),
+            "ordinary Shell setup must be valid: {data:?}"
+        );
     });
-    let (a, b) = cx.update(|_, cx| {
+    cx.update(|_, cx| {
         app.update(cx, |state, _| {
-            let target = state
-                .run_controls
-                .discovered_targets()
-                .iter()
-                .find(|target| target.label.ends_with("Debug"))
-                .unwrap()
-                .id
-                .clone();
             let key = state.workspace_key();
-            let a = state.run_controls.confirm_target(&target, &key).unwrap();
-            let mut first = state.run_controls.configuration(&a).unwrap().clone();
-            first.name = "Cargo debug A".into();
-            first
-                .breakpoints
-                .insert(source.to_str().unwrap(), 12)
-                .unwrap();
-            state.run_controls.upsert(first.clone(), &key).unwrap();
-            let b = state.run_controls.generate_id(&key);
-            first.id = b.clone();
-            first.name = "Cargo debug B".into();
-            state.run_controls.upsert(first, &key).unwrap();
+            for id in [&a, &b] {
+                let mut config = state.run_controls.configuration(id).unwrap().clone();
+                config
+                    .breakpoints
+                    .insert(source.to_str().unwrap(), 12)
+                    .unwrap();
+                state.run_controls.upsert(config, &key).unwrap();
+            }
             state.run_controls.select(&a, &key);
-            (a, b)
         })
     });
     click(cx, "run-debug");
@@ -63,7 +83,9 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
     assert!(root.path().join("target/debug/parallel-debug.exe").exists());
     let first_session =
         cx.update(|_, cx| app.read(cx).run_controls.debug_provider_session().unwrap());
-    assert_eq!(manager.live["parallel-debug-provider"].process_count(), 1);
+    // Each current debugger session owns its adapter bridge and target PTY. Cargo metadata/build
+    // handles have already exited; neither may be mistaken for an additional live debug session.
+    assert_eq!(manager.live["rust"].process_count(), 2);
     // Starting B then selecting A while B connects must not steal the inspected location on B's stop.
     cx.update(|_, cx| {
         app.update(cx, |state, cx| {
@@ -73,9 +95,16 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
         })
     });
     click(cx, "run-debug");
-    driver.frame(&mut manager, &app, cx);
+    driver.wait(&mut manager, &app, cx, |state| {
+        state.run_controls.debug_session_of(&b).is_some()
+    });
     cx.update(|_, cx| {
         app.update(cx, |state, cx| {
+            // Inspection now follows the active native Run Tab. Use its ordinary locate path;
+            // changing only the historical panel selection is overwritten by tab synchronization.
+            state.terminal.update(cx, |panel, cx| {
+                assert!(panel.locate_task(&a, cx));
+            });
             assert!(state.run_controls.select_debug_session(&a));
             cx.notify();
         })
@@ -92,7 +121,7 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
                 )
             })
     });
-    assert_eq!(manager.live["parallel-debug-provider"].process_count(), 2);
+    assert_eq!(manager.live["rust"].process_count(), 4);
     assert_eq!(
         cx.update(|_, cx| app
             .read(cx)
@@ -246,32 +275,14 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
         });
         cx.run_until_parked();
         assert!(cx.debug_bounds("debug-panel-step-into").is_some());
-        assert_eq!(manager.live["parallel-debug-provider"].process_count(), 2);
+        assert_eq!(manager.live["rust"].process_count(), 4);
     }
     drop(previous_locale);
     // An unrelated ordinary terminal run must survive the debug provider's confirmed retirement.
-    let c = cx.update(|_, cx| {
-        app.update(cx, |state, cx| {
+    cx.update(|_, cx| {
+        app.update(cx, |state, _| {
             let key = state.workspace_key();
-            let mut config = state.run_controls.configuration(&a).unwrap().clone();
-            config.id = state.run_controls.generate_id(&key);
-            config.name = "Unrelated ordinary run".into();
-            config.target = editor_core::RunTarget::Program {
-                program: "powershell.exe".into(),
-                args: vec![
-                    "-NoProfile".into(),
-                    "-Command".into(),
-                    "Start-Sleep -Seconds 60".into(),
-                ],
-            };
-            config.from_target = None;
-            config.build.clear();
-            config.breakpoints = Default::default();
-            let id = config.id.clone();
-            state.run_controls.upsert(config, &key).unwrap();
-            state.run_controls.select(&id, &key);
-            cx.notify();
-            id
+            state.run_controls.select(&c, &key);
         })
     });
     click(cx, "run-start");
@@ -279,12 +290,16 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
         state.run_controls.running_for(&c).is_some()
     });
     let unrelated = driver.launches.last().unwrap().0;
+    // The market must explain these genuine provider-owned sessions before replacing their owner.
+    market_replacement_consent(&manager, &app, cx, root.path());
+    driver.frame(&mut manager, &app, cx);
+    assert_eq!(manager.live["rust"].process_count(), 4);
     let open = |app: &Entity<EditorApp>, cx: &mut gpui_kit::VisualTestContext| {
         cx.update(|window, cx| {
             let impact = app
                 .read(cx)
                 .run_controls
-                .plugin_session_impact("parallel-debug-provider", None)
+                .plugin_session_impact("rust", None)
                 .summary()
                 .unwrap();
             assert!(
@@ -292,13 +307,7 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
                 "{impact}"
             );
             app.read(cx).extensions.clone().update(cx, |owner, cx| {
-                owner.open_remove_dialog(
-                    "parallel-debug-provider".into(),
-                    false,
-                    Some(impact),
-                    window,
-                    cx,
-                )
+                owner.open_remove_dialog("rust".into(), false, Some(impact), window, cx)
             });
         })
     };
@@ -307,12 +316,12 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
     assert!(cx.debug_bounds("plugin-remove-consent").is_some());
     click(cx, "plugin-remove-cancel");
     driver.frame(&mut manager, &app, cx);
-    assert_eq!(manager.live["parallel-debug-provider"].process_count(), 2);
+    assert_eq!(manager.live["rust"].process_count(), 4);
     open(&app, cx);
     cx.run_until_parked();
     click(cx, "plugin-remove-preserve");
     driver.frame(&mut manager, &app, cx);
-    assert!(!manager.live.contains_key("parallel-debug-provider"));
+    assert!(!manager.live.contains_key("rust"));
     // Source revocation queues native retirement; only its observed exit receipt is a terminal state.
     driver.wait(&mut manager, &app, cx, |state| {
         [&a, &b].into_iter().all(|id| {
@@ -354,6 +363,165 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
         "retirement never replays a debug or ordinary target"
     );
     manager.shutdown();
+}
+
+/// Create current plugin-owned values with visible form input and the normal Save receipt.
+fn configuration(
+    manager: &mut Manager,
+    app: &Entity<EditorApp>,
+    cx: &mut gpui_kit::VisualTestContext,
+    template: &'static str,
+    name: &str,
+    script: Option<&str>,
+) -> String {
+    use super::super::native_configuration_tests::{Driver as FormDriver, click, edit, open_form};
+    let mut driver = FormDriver::default();
+    let parent = open_form(app, cx);
+    click(cx, "run-config-add");
+    driver.wait(manager, app, cx, |cx| cx.debug_bounds(template).is_some());
+    click(cx, template);
+    driver.wait(manager, app, cx, |cx| {
+        cx.debug_bounds("plugin-ui-name").is_some()
+    });
+    edit(cx, "plugin-ui-name", name);
+    driver.frame(manager, app, cx);
+    driver.frame(manager, app, cx);
+    if let Some(script) = script {
+        // Wheel input must expose the actual multiline field before its native hit target is used.
+        for _ in 0..30 {
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            let viewport = cx.debug_bounds("plugin-ui-form-scroll").unwrap();
+            let field = cx.debug_bounds("plugin-ui-script").unwrap();
+            if viewport.contains(&field.center()) {
+                break;
+            }
+            cx.simulate_event(gpui::ScrollWheelEvent {
+                position: viewport.center(),
+                delta: gpui::ScrollDelta::Lines(point(0., -3.)),
+                ..Default::default()
+            });
+            cx.run_until_parked();
+        }
+        edit(cx, "plugin-ui-script", script);
+        driver.frame(manager, app, cx);
+    }
+    let dialog = cx.window_handle();
+    *cx = gpui_kit::VisualTestContext::from_window(parent, &cx.cx);
+    // Paint and click the normal Save control once it accepts input; busy controls reject the click.
+    driver.wait(manager, app, cx, |cx| {
+        if cx.update(|_, cx| app.read(cx).run_form.is_none()) {
+            return true;
+        }
+        let mut form = gpui_kit::VisualTestContext::from_window(dialog, &cx.cx);
+        click(&mut form, "run-config-save");
+        false
+    });
+    cx.update(|_, cx| {
+        app.read(cx)
+            .run_controls
+            .configurations()
+            .iter()
+            .find(|config| config.name == name)
+            .unwrap()
+            .id
+            .clone()
+    })
+}
+
+/// Exercise the production market button while two genuine provider-owned pauses are still active.
+fn market_replacement_consent(
+    manager: &Manager,
+    app: &Entity<EditorApp>,
+    cx: &mut gpui_kit::VisualTestContext,
+    root: &Path,
+) {
+    use std::{
+        io::{Cursor, Write},
+        sync::atomic::Ordering,
+    };
+    let original = packages::debugger("combined-debug-provider");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&original.files["manifest.json"]).unwrap();
+    manifest["version"] = "0.6.2".into();
+    manifest["replaces"] = serde_json::json!([{"id":"rust", "versions":"^0.6", "contracts":["debug.session"], "enabled_setting":"debugger.enabled"}]);
+    let mut files = original.files;
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
+    // This controlled candidate has the actual guest and package digest; cancellation must prevent transfer.
+    let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, bytes) in files {
+        archive
+            .start_file(name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(&bytes).unwrap();
+    }
+    let bytes = archive.finish().unwrap().into_inner();
+    let package = Package::from_bytes(&bytes).unwrap();
+    let mut catalog: serde_json::Value = serde_json::from_slice(include_bytes!(
+        "../../../../plugin-runtime/tests/fixtures/marketplace/catalog.json"
+    ))
+    .unwrap();
+    let listing = &mut catalog["plugins"][0];
+    listing["id"] = package.manifest.id.clone().into();
+    listing["summary"] = "Controlled replacement consent candidate".into();
+    let version = &mut listing["versions"][0];
+    version["version"] = "0.6.2".into();
+    version["manifest"] = serde_json::to_value(&package.manifest).unwrap();
+    version["sha256"] = package.digest.clone().into();
+    version["readme"] = "Controlled native consent regression".into();
+    let server = super::super::market_test_server::Server::from_bytes(
+        &serde_json::to_vec(&catalog).unwrap(),
+        bytes,
+    );
+    let panel = cx.update(|_, cx| app.read(cx).extensions.clone());
+    let worker = cx.update(|_, cx| panel.read(cx).worker.clone());
+    worker.refresh_market(
+        root.join("market-consent-cache.json"),
+        format!("{}/catalog.json", server.url),
+    );
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !worker.state.lock().unwrap().market.fresh() {
+        assert!(
+            Instant::now() < deadline,
+            "controlled catalog refresh timed out"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let before = cx.update(|_, cx| cx.windows());
+    cx.update(|window, cx| {
+        let impact = app
+            .read(cx)
+            .run_controls
+            .plugin_session_impact("rust", None)
+            .summary()
+            .unwrap();
+        assert!(impact.contains("Cargo debug A") && impact.contains("Cargo debug B"));
+        panel.update(cx, |panel, cx| {
+            panel.manager_market = true;
+            panel.poll(cx);
+        });
+        app.update(cx, |app, cx| app.toggle_extensions(window, cx));
+    });
+    let handle = cx
+        .update(|_, cx| cx.windows())
+        .into_iter()
+        .find(|window| !before.contains(window))
+        .unwrap();
+    let form = gpui_kit::VisualTestContext::from_window(handle, cx).into_mut();
+    form.run_until_parked();
+    form.update(|window, cx| window.draw(cx).clear(cx));
+    click(form, "market-install");
+    assert!(form.debug_bounds("market-consent-replacements").is_some());
+    assert!(
+        form.debug_bounds("market-consent-session-impact").is_some(),
+        "the market confirmation must show active session impact"
+    );
+    click(form, "market-consent-cancel");
+    assert_eq!(server.downloads.load(Ordering::Acquire), 0);
+    assert!(manager.installed["rust"].replaced_by.is_none());
+    form.update(|window, _| window.remove_window());
 }
 
 /// Failed assertions must not leak the selected locale into another native UI test.

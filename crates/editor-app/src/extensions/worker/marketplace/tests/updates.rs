@@ -96,7 +96,7 @@ fn market_upgrades_require_fresh_review_and_exact_selected_zip_bytes() {
             worker.refresh_market(cache, format!("{}/catalog.json", server.url));
             wait(&worker, |state| state.market.error.is_some());
         }
-        let accepted = worker.install_market(candidate.clone(), generation);
+        let accepted = worker.install_market(candidate.clone(), generation, Default::default());
         assert_eq!(
             accepted,
             !matches!(scenario, "offline" | "withdrawn"),
@@ -142,7 +142,7 @@ fn market_upgrades_require_fresh_review_and_exact_selected_zip_bytes() {
             wait(&worker, |state| state.market_statistics_error.is_some());
             assert!(worker.state.lock().unwrap().market.fresh());
             assert!(
-                !worker.install_market(candidate, generation),
+                !worker.install_market(candidate, generation, Default::default()),
                 "same-version reinstall must be rejected"
             );
         }
@@ -164,7 +164,7 @@ fn market_update_dot_and_permission_delta_follow_real_native_actions(
     let catalog =
         include_bytes!("../../../../../../plugin-runtime/tests/fixtures/marketplace/catalog.json");
     for (locale, dark) in [("en", true), ("zh-CN", false)] {
-        native_update(cx, &old, catalog, false, locale, dark);
+        native_update(cx, &old, catalog, false, None, locale, dark);
     }
 }
 
@@ -176,7 +176,40 @@ fn market_wasm_update_confirms_only_new_permissions(cx: &mut gpui_kit::TestAppCo
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/marketplace-wasm");
     let old = Package::read(&fixture.join("notes.zip")).expect("export current SDK guest");
     let catalog = std::fs::read(fixture.join("catalog.json")).unwrap();
-    native_update(cx, &old, &catalog, true, "zh-CN", false);
+    native_update(cx, &old, &catalog, true, None, "zh-CN", false);
+}
+
+/// A package replacement changes another installation even when the candidate adds no permission.
+#[gpui_kit::gpui::test]
+#[ignore = "build capability-example and export target/marketplace-wasm via marketplace tests.export_wasm_fixture"]
+fn market_wasm_replacement_requires_visible_consent_without_new_grants(
+    cx: &mut gpui_kit::TestAppContext,
+) {
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/marketplace-wasm");
+    let source = Package::read(&fixture.join("notes.zip")).unwrap();
+    let mut files = source.files.clone();
+    let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
+    manifest["api"]["required"]["dependencies"] = "^1.2".into();
+    manifest["api"]["required"]["plugin.services"] = "^1.1".into();
+    manifest["plugin_services"] = serde_json::json!({"provides":{"example.service":{
+        "version":"1.0.0", "enabled_setting":"enabled",
+        "methods":{"ping":{"parameters":{"type":"null"},"result":{"type":"null"}}}
+    }}});
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
+    let old = Package::from_bytes(&zip_bytes(&files, 10)).unwrap();
+    manifest["id"] = "previous-provider".into();
+    manifest["version"] = "1.0.0".into();
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
+    let replaced = Package::from_bytes(&zip_bytes(&files, 10)).unwrap();
+    let catalog = std::fs::read(fixture.join("catalog.json")).unwrap();
+    native_update(cx, &old, &catalog, false, Some(&replaced), "en", true);
 }
 
 /// Each scenario owns real installed records and a window; no published success state is substituted.
@@ -185,6 +218,7 @@ fn native_update(
     old: &Package,
     catalog_bytes: &[u8],
     extra_permission: bool,
+    replaced: Option<&Package>,
     locale: &str,
     dark: bool,
 ) {
@@ -207,6 +241,10 @@ fn native_update(
             .as_array_mut()
             .unwrap()
             .push("workspace.write".into());
+    }
+    if let Some(replaced) = replaced {
+        manifest["replaces"] = serde_json::json!([{"id":replaced.manifest.id, "versions":"^1",
+            "contracts":["example.service"],"enabled_setting":"enabled"}]);
     }
     files.insert(
         "manifest.json".into(),
@@ -242,6 +280,16 @@ fn native_update(
     manager
         .install(old, old.manifest.permissions.clone())
         .unwrap();
+    if let Some(replaced) = replaced {
+        manager
+            .install(replaced, replaced.manifest.permissions.clone())
+            .unwrap();
+        let files =
+            Manager::persisted_data_directory(&root, &replaced.manifest, &environment.workspace)
+                .unwrap();
+        std::fs::create_dir_all(&files).unwrap();
+        std::fs::write(files.join("retain.bin"), b"original replacement owner").unwrap();
+    }
     manager.shutdown();
     drop(manager);
     let worker = Arc::new(Worker::start_background(root.clone(), environment, true));
@@ -329,8 +377,11 @@ fn native_update(
     form.simulate_click(install.center(), Default::default());
     form.run_until_parked();
     form.update(|window, cx| window.draw(cx).clear(cx));
-    if extra_permission {
+    if extra_permission || replaced.is_some() {
         assert_eq!(server.downloads.load(Ordering::Acquire), 0);
+        if replaced.is_some() {
+            assert!(form.debug_bounds("market-consent-replacements").is_some());
+        }
         let cancel = form
             .debug_bounds("market-consent-cancel")
             .expect("new grant requires consent");
@@ -341,6 +392,13 @@ fn native_update(
             Manager::read_registry(&root).unwrap()[&id].manifest.version,
             old.manifest.version
         );
+        if let Some(replaced) = replaced {
+            assert!(
+                Manager::read_registry(&root).unwrap()[&replaced.manifest.id]
+                    .replaced_by
+                    .is_none()
+            );
+        }
         let install = form.debug_bounds("market-install").unwrap();
         form.simulate_click(install.center(), Default::default());
         form.run_until_parked();
@@ -360,6 +418,23 @@ fn native_update(
         "2.0.0"
     );
     assert!(!form.update(|_, cx| panel.read(cx).has_market_updates()));
+    if let Some(replaced) = replaced {
+        let registry = Manager::read_registry(&root).unwrap();
+        assert_eq!(
+            registry[&replaced.manifest.id].replaced_by.as_deref(),
+            Some(id.as_str())
+        );
+        let files = Manager::persisted_data_directory(
+            &root,
+            &replaced.manifest,
+            &home.path().display().to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read(files.join("retain.bin")).unwrap(),
+            b"original replacement owner"
+        );
+    }
     let (tx, rx) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
     let _ = futures::executor::block_on(rx);

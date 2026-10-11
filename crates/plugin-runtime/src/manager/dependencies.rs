@@ -116,7 +116,10 @@ pub(super) fn resolve_dependency_plans(
             .language_servers
             .iter()
             .any(|provider| provider.service == *id || provider.alternatives.contains(id));
-        if !used_by_lsp && let Some(plan) = &service.installation {
+        if !used_by_lsp
+            && !service.on_demand
+            && let Some(plan) = &service.installation
+        {
             check_installer_permission(plan, manifest)?;
             plans.insert(format!("service:{id}"), plan.clone());
         }
@@ -132,6 +135,7 @@ pub(super) fn resolve_dependency_plans(
                 .prepare_language(plugin_protocol::language::Context {
                     provider: provider.id.clone(),
                     workspace: environment.workspace.clone(),
+                    preparing_dependencies: true,
                     package_root: String::new(),
                     data_root: String::new(),
                     settings: values.clone(),

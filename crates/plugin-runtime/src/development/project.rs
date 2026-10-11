@@ -34,6 +34,9 @@ impl std::error::Error for DescriptionReadError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
+    /// Optional OS/architecture filter for native resources; portable assets omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
     /// Source relative to the project, or `{build}/...` for a declared native artifact.
     pub source: String,
     /// Portable path inside the plugin package.
@@ -53,6 +56,9 @@ pub struct WasmBuild {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildStep {
+    /// Skip this native step on other platforms while keeping portable WASM/resources buildable.
+    #[serde(default)]
+    pub optional_platform: bool,
     /// Executable resolved from PATH or an explicit tool path.
     pub program: String,
     /// Independent argv entries; supports `{project}`, `{build}`, `{profile}`.

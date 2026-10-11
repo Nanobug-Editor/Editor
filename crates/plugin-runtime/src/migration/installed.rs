@@ -251,7 +251,7 @@ fn plain_directory(path: &Path) -> anyhow::Result<()> {
 }
 
 /// Imported files and their parents must remain ordinary paths under the host-owned installation root.
-pub(super) fn reject_links(path: &Path) -> anyhow::Result<()> {
+pub(crate) fn reject_links(path: &Path) -> anyhow::Result<()> {
     for ancestor in path.ancestors() {
         match fs::symlink_metadata(ancestor) {
             Ok(metadata) => anyhow::ensure!(

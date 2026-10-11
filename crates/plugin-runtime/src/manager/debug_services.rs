@@ -413,7 +413,20 @@ impl Manager {
                     .plugin_services
                     .provides
                     .get(DEBUG_CONTRACT)?;
-                let unavailable = if !installed.enabled {
+                let unavailable = if !declaration.platforms.is_empty()
+                    && !declaration
+                        .platforms
+                        .contains(&crate::development::platform())
+                {
+                    Some("当前平台不支持此提供者 / Provider is unavailable on this platform".into())
+                } else if declaration.enabled_setting.as_ref().is_some_and(|key| {
+                    self.effective_settings(&installed.manifest.id)
+                        .ok()
+                        .and_then(|settings| settings.get(key).cloned())
+                        .is_none_or(|value| value.value != Value::Bool(true))
+                }) {
+                    Some("提供者贡献已禁用 / Provider contribution is disabled".into())
+                } else if !installed.enabled {
                     Some("该插件未启用".to_owned())
                 } else if let Some(error) = installed.compatibility_error() {
                     Some(format!("与当前宿主不兼容：{error}"))

@@ -682,7 +682,9 @@ impl Worker {
                         }
                     }
                 })
-                .with_installer_prompts(),
+                .with_installer_prompts()
+                // This local-package path is queued only after native consent has shown the replacement claims.
+                .with_replacements(package.manifest.replaces.iter().map(|rule| rule.id.clone())),
             );
         }
         state.progress = Some(progress);

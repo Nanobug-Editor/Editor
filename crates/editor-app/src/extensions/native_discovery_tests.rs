@@ -99,7 +99,7 @@ fn editor_for<'a>(
     )
     .unwrap();
     // Discovery/build rules remain plugins; the terminal is provided by the native application.
-    for name in ["rust", "run-target-example"] {
+    for name in ["rust-0.6.1", "run-target-example-0.1.0"] {
         let package = Package::read(
             &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join(format!("../../dist/plugins/{name}.zip")),
@@ -117,44 +117,19 @@ fn editor_for<'a>(
         *capture.borrow_mut() = Some(app.clone());
         app.update(cx, |state, cx| {
             let key = state.workspace_key();
-            state.run_controls = crate::run::RunControls::load_with_project(
+            state.run_controls = crate::run::RunControls::load_plugin_configurations(
                 &key,
                 Some(state.workspace.root().join("private-runs")),
-                Some(state.workspace.root().into()),
             );
             cx.notify();
         });
-        let holder = cx.new(|cx| FormWindow {
-            owner: app.clone(),
-            _observe: cx.observe(&app, |_, _, cx| cx.notify()),
-        });
-        Root::new(holder, window, cx)
+        Root::new(app, window, cx)
     });
     let app = slot.borrow_mut().take().unwrap();
     cx.simulate_resize(size(px(1400.), px(900.)));
     let mut renderer = images::VectorRenderer::default();
     publish_with_launches(&mut manager, &mut renderer, &app, cx, &[]);
     (manager, app, cx)
-}
-/// The production simplified renderer repaints after asynchronous catalog and native input changes.
-struct FormWindow {
-    owner: Entity<EditorApp>,
-    _observe: Subscription,
-}
-impl Render for FormWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.owner.read(cx).run_form.is_some() {
-            crate::run::ui::render_run_config_form(
-                &self.owner.downgrade(),
-                crate::ui::controls::DialogContent::new(),
-                window,
-                cx,
-            )
-            .into_any_element()
-        } else {
-            div().child(self.owner.clone()).into_any_element()
-        }
-    }
 }
 fn form_window<'a>(
     cx: &'a mut gpui_kit::VisualTestContext,

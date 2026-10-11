@@ -67,7 +67,7 @@ fn marketplace_wasm_updates_restore_old_data_after_guest_failures() {
                 state.market.generation(),
             )
         };
-        assert!(worker.install_market(reviewed, generation));
+        assert!(worker.install_market(reviewed, generation, Default::default()));
         eprintln!("market WASM update {policy}: awaiting candidate transaction");
         wait(&worker, |state| state.progress.is_none());
         assert!(

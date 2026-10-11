@@ -36,6 +36,30 @@ fn package(version: &str, missing: &Path, optional: bool) -> Package {
     Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap()
 }
 
+/// A stricter supported capability still includes optional preparation; legacy declarations stay rejected.
+#[test]
+fn optional_language_metadata_accepts_stricter_supported_capabilities() {
+    let workspace = tempfile::tempdir().unwrap();
+    let source = package("1.0.0", &workspace.path().join("missing.exe"), true);
+    for (requirement, accepted) in [(">=1.1,<2", true), (">=1.2,<2", true), ("^1", false)] {
+        let mut files = source.files.clone();
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&files["manifest.json"]).unwrap();
+        manifest["api"]["required"]["dependencies"] = requirement.into();
+        files.insert(
+            "manifest.json".into(),
+            serde_json::to_vec(&manifest).unwrap(),
+        );
+        let result = Package::from_files(files);
+        assert_eq!(
+            result.is_ok(),
+            accepted,
+            "{requirement}: {:?}",
+            result.err()
+        );
+    }
+}
+
 /// First installation may retain its declared language, while updates preserve the old version on failure.
 #[test]
 fn optional_language_dependency_failure_keeps_resources_and_rejects_failed_update() {

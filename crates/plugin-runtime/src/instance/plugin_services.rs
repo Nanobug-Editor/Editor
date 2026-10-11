@@ -479,8 +479,52 @@ impl Instance {
                 .plugin_services
                 .declarations
                 .provides
-                .clone(),
+                .iter()
+                .filter(|(_, contract)| {
+                    (contract.platforms.is_empty()
+                        || contract.platforms.contains(&crate::development::platform()))
+                        && contract.enabled_setting.as_ref().is_none_or(|key| {
+                            self.configuration
+                                .get(key)
+                                .is_some_and(|value| value.value == serde_json::Value::Bool(true))
+                        })
+                })
+                .map(|(id, contract)| (id.clone(), contract.clone()))
+                .collect(),
         })
+    }
+    /// Resolve preparation against this exact incarnation, including a parked older package version.
+    /// The service caller never supplies a plan, executable or package path.
+    pub(crate) fn native_preparation(
+        &self,
+        call: &crate::plugin_services::Call,
+    ) -> Result<Option<(std::path::PathBuf, Vec<plugin_protocol::dependencies::Plan>)>, api::Failure>
+    {
+        let state = self.store.data();
+        let Some(ids) = state
+            .plugin_services
+            .declarations
+            .provides
+            .get(&call.reference.contract)
+            .and_then(|contract| contract.preparation.get(&call.method))
+        else {
+            return Ok(None);
+        };
+        let mut plans = Vec::new();
+        for id in ids {
+            if !state.permissions.contains("dependencies.prepare")
+                || !state.permissions.contains(&format!("process.service.{id}"))
+            {
+                return Err(api::Failure::new(
+                    api::ErrorCode::PermissionDenied,
+                    "Native preparation was not authorized",
+                ));
+            }
+            if let Some(plan) = &state.services[id].installation {
+                plans.push(plan.clone());
+            }
+        }
+        Ok(Some((state.assets.clone(), plans)))
     }
     /// Required dependencies fail before activation; optional dependencies remain discoverable fallbacks.
     pub(crate) fn connect_services(&mut self, broker: broker::Shared) -> anyhow::Result<()> {

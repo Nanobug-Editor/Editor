@@ -108,6 +108,16 @@ pub struct Method {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Contract {
+    /// dependencies 1.2: provider-owned native services prepared before invoking these methods.
+    /// This metadata changes neither method signatures nor delegated caller permissions.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub preparation: BTreeMap<String, Vec<String>>,
+    /// Optional boolean configuration gates this contribution without disabling its whole package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled_setting: Option<String>,
+    /// Empty supports every platform; unsupported contributions are omitted during packaging.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub platforms: Vec<String>,
     pub version: Version,
     pub methods: BTreeMap<String, Method>,
 }
@@ -134,6 +144,13 @@ impl Declarations {
     pub fn validate(&self) -> Result<(), String> {
         if self.provides.len() + self.requires.len() > 32 {
             return Err("Too many plugin services".into());
+        }
+        if self
+            .provides
+            .values()
+            .any(|contract| !crate::process::valid_platforms(&contract.platforms))
+        {
+            return Err("Invalid service platform selectors".into());
         }
         for (id, methods) in self
             .provides

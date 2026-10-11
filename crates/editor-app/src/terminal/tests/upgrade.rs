@@ -67,6 +67,7 @@ fn legacy_upgrade_restores_native_shell_then_resizes_without_replaying_tasks(
     }))
     .unwrap();
     let installed = Installed {
+        replaced_by: None,
         manifest: manifest.clone(),
         digest: "retired".into(),
         grants: BTreeSet::new(),

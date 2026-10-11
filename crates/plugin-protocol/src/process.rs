@@ -5,6 +5,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Service {
+    /// dependencies 1.2: defer acquisition until a provided method explicitly requires this service.
+    /// StartService reads the prepared cache; downloads never run inside a WASM callback.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub on_demand: bool,
+    /// Empty supports every platform; otherwise packaging selects only matching OS/architecture.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub platforms: Vec<String>,
     pub program: String,
     #[serde(default)]
     pub args: Vec<String>,
@@ -23,6 +30,7 @@ impl Service {
     /// Relative paths containing directories could silently select code from an untrusted project.
     pub fn valid(&self) -> bool {
         !self.program.is_empty()
+            && valid_platforms(&self.platforms)
             && self.program.len() <= 4096
             && !self.program.contains('\0')
             && (std::path::Path::new(&self.program).is_absolute()
@@ -42,6 +50,18 @@ impl Service {
                         || (std::path::Path::new(pattern).is_absolute() && !pattern.contains("${")))
             })
     }
+}
+
+/// OS/architecture selectors are bounded declaration data, never paths or command arguments.
+pub(crate) fn valid_platforms(platforms: &[String]) -> bool {
+    platforms.len() <= 16
+        && platforms.iter().all(|value| {
+            !value.is_empty()
+                && value.len() <= 64
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte))
+        })
 }
 
 /// Both startup and probe arguments share the same bounded, literal argv contract.

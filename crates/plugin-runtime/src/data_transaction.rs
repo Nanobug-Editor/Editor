@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize)]
 struct Journal {
+    /// Optional host metadata travels with registry/private-data commit and rollback.
+    #[serde(default)]
+    previous_files: std::collections::BTreeMap<PathBuf, Option<Vec<u8>>>,
     scope: PathBuf,
     had_scope: bool,
     previous_registry: Option<Vec<u8>>,
@@ -75,9 +78,39 @@ impl Transaction {
         registry: &[u8],
         control: &crate::InstallControl,
     ) -> anyhow::Result<()> {
+        self.publish_metadata(registry, &Default::default(), control)
+    }
+    /// Couple settings/provider choices with the same durable marker as the package registry.
+    /// Only bounded host metadata paths are accepted; plugin private writes still use the scope copy.
+    pub(crate) fn publish_metadata(
+        &self,
+        registry: &[u8],
+        files: &std::collections::BTreeMap<PathBuf, Vec<u8>>,
+        control: &crate::InstallControl,
+    ) -> anyhow::Result<()> {
         validate_scope(&self.root, &self.scope)?;
+        ensure!(
+            files.len() <= 16 && files.values().map(Vec::len).sum::<usize>() <= 4 * 1024 * 1024,
+            "Replacement metadata exceeds quota"
+        );
+        let mut previous_files = std::collections::BTreeMap::new();
+        let mut previous_size = 0u64;
+        for path in files.keys() {
+            validate_metadata(&self.root, path)?;
+            if let Ok(metadata) = std::fs::metadata(self.root.join(path)) {
+                previous_size = previous_size
+                    .checked_add(metadata.len())
+                    .context("Metadata quota overflow")?;
+                ensure!(
+                    previous_size <= 4 * 1024 * 1024,
+                    "Previous replacement metadata exceeds quota"
+                );
+            }
+            previous_files.insert(path.clone(), read_optional(&self.root.join(path))?);
+        }
         let target = self.root.join(&self.scope);
         let mut journal = Journal {
+            previous_files,
             scope: self.scope.clone(),
             had_scope: target.exists(),
             previous_registry: read_optional(&self.root.join("registry.json"))?,
@@ -94,6 +127,11 @@ impl Transaction {
             }
             std::fs::rename(self.candidate(), &target)?;
             control.stage(crate::InstallStage::Committing)?;
+            for (path, bytes) in files {
+                let target = self.root.join(path);
+                std::fs::create_dir_all(target.parent().unwrap())?;
+                atomic_write(&target, bytes)?;
+            }
             atomic_write(&self.root.join("registry.json"), registry)?;
             journal.committed = true;
             atomic_write(
@@ -177,6 +215,17 @@ pub(crate) fn recover(root: &Path) -> anyhow::Result<Option<std::fs::File>> {
 /// Backup/candidate existence distinguishes interruptions between a rename and its next durable write.
 fn restore(root: &Path, directory: &Path, journal: &Journal) -> anyhow::Result<()> {
     validate_scope(root, &journal.scope)?;
+    ensure!(
+        journal.previous_files.len() <= 16
+            && journal
+                .previous_files
+                .values()
+                .filter_map(Option::as_ref)
+                .map(Vec::len)
+                .sum::<usize>()
+                <= 4 * 1024 * 1024,
+        "Recovery metadata exceeds quota"
+    );
     if journal.committed {
         ensure!(
             root.join(&journal.scope).is_dir() && root.join("registry.json").is_file(),
@@ -184,6 +233,16 @@ fn restore(root: &Path, directory: &Path, journal: &Journal) -> anyhow::Result<(
         );
     }
     if !journal.committed {
+        for (path, bytes) in &journal.previous_files {
+            validate_metadata(root, path)?;
+            let target = root.join(path);
+            if let Some(bytes) = bytes {
+                std::fs::create_dir_all(target.parent().unwrap())?;
+                atomic_write(&target, bytes)?;
+            } else if target.exists() {
+                std::fs::remove_file(target)?;
+            }
+        }
         let target = root.join(&journal.scope);
         let backup = directory.join("backup");
         if backup.exists() {
@@ -208,6 +267,21 @@ fn restore(root: &Path, directory: &Path, journal: &Journal) -> anyhow::Result<(
         }
     }
     std::fs::remove_dir_all(directory)?;
+    Ok(())
+}
+
+/// Recovery journals may touch only specific host stores, never arbitrary workspace/OS paths.
+fn validate_metadata(root: &Path, path: &Path) -> anyhow::Result<()> {
+    let value = path.to_string_lossy().replace('\\', "/");
+    crate::package::validate_relative(&value)?;
+    ensure!(
+        value == "service-providers.json"
+            || ((value.starts_with("settings/") || value.starts_with("replacement-history/"))
+                && value.split('/').count() == 2
+                && value.ends_with(".json")),
+        "Invalid replacement metadata path"
+    );
+    crate::migration::reject_links(&root.join(path))?;
     Ok(())
 }
 
@@ -298,4 +372,78 @@ fn open_lock(root: &Path) -> anyhow::Result<std::fs::File> {
         .read(true)
         .write(true)
         .open(root.join("data-transactions.lock"))?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A restart observes the same version of private data, registry and replacement metadata;
+    /// only the durable commit marker decides whether partially published files survive.
+    #[test]
+    fn restart_recovers_replacement_metadata_with_its_private_scope() {
+        for committed in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let scope = PathBuf::from("data/replacement/application");
+            let target = root.path().join(&scope);
+            let directory = root.path().join("data-transactions/update-interrupted");
+            std::fs::create_dir_all(target.join("files")).unwrap();
+            std::fs::create_dir_all(directory.join("backup/files")).unwrap();
+            std::fs::write(target.join("files/private"), b"new").unwrap();
+            std::fs::write(directory.join("backup/files/private"), b"old").unwrap();
+            let files = std::collections::BTreeMap::from([
+                (
+                    PathBuf::from("settings/replacement.json"),
+                    Some(b"old".to_vec()),
+                ),
+                (
+                    PathBuf::from("service-providers.json"),
+                    Some(b"old".to_vec()),
+                ),
+                (PathBuf::from("replacement-history/version.json"), None),
+            ]);
+            for path in files.keys() {
+                let target = root.path().join(path);
+                std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+                std::fs::write(target, b"new").unwrap();
+            }
+            std::fs::write(root.path().join("registry.json"), b"new").unwrap();
+            let journal = Journal {
+                previous_files: files.clone(),
+                scope,
+                had_scope: true,
+                previous_registry: Some(b"old".to_vec()),
+                committed,
+            };
+            // Simulate process loss after publication, before cleanup. Recovery runs before the
+            // manager reads a registry or activates any guest, and must be safe to invoke again.
+            atomic_write(
+                &directory.join("journal.json"),
+                &serde_json::to_vec(&journal).unwrap(),
+            )
+            .unwrap();
+            drop(recover(root.path()).unwrap());
+            let expected = if committed { b"new" } else { b"old" };
+            assert_eq!(
+                std::fs::read(target.join("files/private")).unwrap(),
+                expected
+            );
+            assert_eq!(
+                std::fs::read(root.path().join("registry.json")).unwrap(),
+                expected
+            );
+            for (path, previous) in files {
+                assert_eq!(
+                    read_optional(&root.path().join(path)).unwrap(),
+                    if committed {
+                        Some(b"new".to_vec())
+                    } else {
+                        previous
+                    }
+                );
+            }
+            assert!(!directory.exists());
+            drop(recover(root.path()).unwrap());
+        }
+    }
 }

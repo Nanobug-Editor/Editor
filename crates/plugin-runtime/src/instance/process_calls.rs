@@ -108,6 +108,8 @@ impl State {
                     ));
                 }
                 let declaration = Service {
+                    on_demand: false,
+                    platforms: Vec::new(),
                     program: program.clone(),
                     args: vec![],
                     search_paths: vec![],
@@ -169,6 +171,8 @@ impl State {
                 }
                 self.start_process(
                     Service {
+                        on_demand: false,
+                        platforms: Vec::new(),
                         program,
                         args,
                         search_paths: Vec::new(),

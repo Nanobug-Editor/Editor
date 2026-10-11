@@ -2074,3 +2074,6 @@ transfer.discard_hint:
 transfer.confirm_discard:
   en: "Discard changes and recover"
   zh-CN: "丢弃修改并恢复"
+plugins.consent_replacements:
+  zh-CN: "本次安装将替代并停用：%{ids}。原有私有数据、备份和其他提供者选择会保留；权限不会自动转移。"
+  en: "This installation replaces and retires: %{ids}. Original private data, backups and other provider choices are retained; grants are not transferred automatically."

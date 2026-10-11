@@ -17,12 +17,14 @@ mod image_input;
 mod images;
 mod language;
 mod native_execution;
+mod service_preparation;
 mod terminal_presentations;
 pub use native_execution::NativeExecutionUpdate;
 mod plugin_services;
 mod preferences;
 mod preparation;
 mod recovery;
+mod replacements;
 mod structure;
 pub use data_updates::PreparedInstallation;
 pub use debug_services::{
@@ -52,6 +54,9 @@ pub struct Installed {
     /// Workspace paths whose plugin instance may run despite the global default.
     #[serde(default)]
     pub project_enabled: BTreeSet<String>,
+    /// A committed consolidation retires executable ownership but preserves its original data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaced_by: Option<String>,
     /// Disk-only import marker: removed UI fields require a rebuilt package before any component may run.
     /// Persisted across reopen and rollback; only a successful current package installation clears it.
     #[serde(default)]
@@ -66,12 +71,18 @@ impl Installed {
     /// Whether this manifest negotiates `id` against the current host; false includes incompatible packages.
     /// This metadata query executes no guest and grants no permission, workspace or instance authority.
     pub fn supports_capability(&self, id: &str) -> bool {
-        !self.retired_ui_contract
+        self.replaced_by.is_none()
+            && !self.retired_ui_contract
             && crate::capabilities::negotiate(&self.manifest)
                 .is_ok_and(|api| api.capabilities.contains_key(id))
     }
     /// Compatibility is derived without executing guest code or changing the user's enablement preference.
     pub fn compatibility_error(&self) -> Option<String> {
+        if let Some(id) = &self.replaced_by {
+            return Some(format!(
+                "此插件已合并到 {id} / This plugin was replaced by {id}"
+            ));
+        }
         if self.retired_ui_contract {
             return Some("插件使用已退役的 UI 契约，请使用新版 SDK 更新插件".into());
         }
@@ -120,6 +131,8 @@ pub struct Manager {
     native_executions: native_execution::Executions,
     /// Debug targets retain the provider incarnation and a distinct revocable native-resource root.
     debug_sessions: debug_services::Sessions,
+    /// Prepared dependencies remain leased until the original call is admitted or discarded.
+    service_preparations: Vec<service_preparation::Pending>,
     /// Retired with this runtime so a queued start cannot outlive the window that requested it.
     host_alive: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
@@ -221,6 +234,7 @@ impl Manager {
             host_sessions: HostSessions::new(host_alive.clone()),
             native_executions: native_execution::Executions::new(trusted),
             debug_sessions: Default::default(),
+            service_preparations: Vec::new(),
             host_alive,
         };
         if manager.installed.values().any(|entry| {
@@ -356,6 +370,7 @@ impl Manager {
         let previous = self.installed.insert(
             id.clone(),
             Installed {
+                replaced_by: None,
                 manifest: package.manifest.clone(),
                 digest: package.digest.clone(),
                 grants,
@@ -755,7 +770,9 @@ mod icon_tests {
         std::fs::write(icons.join("light.svg"), light).unwrap();
         std::fs::write(icons.join("dark.svg"), dark).unwrap();
         let installed = Installed {
+            replaced_by: None,
             manifest: Manifest {
+                replaces: Vec::new(),
                 data_format: None,
                 plugin_services: Default::default(),
                 language_servers: Default::default(),
@@ -823,6 +840,7 @@ mod scope_tests {
         std::fs::create_dir_all(contribution.parent().unwrap()).unwrap();
         std::fs::write(contribution, "").unwrap();
         let manifest = Manifest {
+            replaces: Vec::new(),
             data_format: None,
             plugin_services: Default::default(),
             language_servers: Default::default(),
@@ -848,6 +866,7 @@ mod scope_tests {
             storage_limit: 0,
         };
         let installed = Installed {
+            replaced_by: None,
             manifest,
             digest,
             grants: BTreeSet::new(),

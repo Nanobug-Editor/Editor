@@ -56,6 +56,7 @@ fn prepare_builtin_upgrade_acceptance_profile() {
     registry.insert(
         "terminal".into(),
         Installed {
+            replaced_by: None,
             manifest: manifest.clone(),
             digest: "retired-user-fixture".into(),
             grants: BTreeSet::new(),

@@ -197,8 +197,13 @@ impl ExtensionPanel {
                         })
                         .cloned()
                         .collect::<Vec<_>>();
-                    if installed.is_some() && new_permissions.is_empty() {
-                        let _ = this.worker.install_market(candidate.clone(), generation);
+                    let replacements = this.worker.market_replacements(&candidate);
+                    // Replacing another owner always needs consent, even when this upgrade adds no grants.
+                    if installed.is_some() && new_permissions.is_empty() && replacements.is_empty()
+                    {
+                        let _ =
+                            this.worker
+                                .install_market(candidate.clone(), generation, replacements);
                         cx.notify();
                     } else {
                         this.confirm_market_install(
@@ -206,6 +211,7 @@ impl ExtensionPanel {
                             generation,
                             installed.is_some(),
                             new_permissions,
+                            replacements,
                             window,
                             cx,
                         );

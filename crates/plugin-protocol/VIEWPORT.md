@@ -1,6 +1,6 @@
 # Plugin SDK — viewport
 
-公开契约正文统一维护在双语 Markdown 文档，SDK 导出包含同一份英文正本。
+现行公开契约以源码注释及 WIT/JSON 资源为准；SDK 仅导出构建输入，不包含仓库 Markdown 文档。下列链接保留既有资料入口。
 
 - [English](../../documentation/en/sdk/viewport.md)
 - [简体中文](../../documentation/zh-cn/sdk/viewport.md)
@@ -27,4 +27,4 @@ Unnegotiated capability yields CapabilityUnavailable; wrong scope/grant/owner yi
 
 Manual wheel, keyboard and pointer input retains ownership after its event is sent and after pointer release. A delayed reverse locate returns Cancelled until real input on the other side or explicit preview navigation transfers ownership. Sending a notification or acknowledging a programmatic request never transfers ownership. This also protects a small wheel notch whose source translation is smaller than one whole text row.
 
-The distributed SDK includes the request/notification types and this document. Independent guests use the same public contracts as bundled previews.
+The distributed SDK includes request/notification types and their source comments. This repository document is not exported. Independent guests use the same public contracts as existing previews.

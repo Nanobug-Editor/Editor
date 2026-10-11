@@ -49,12 +49,21 @@ pub(in crate::run::ui) fn render(
                                         .filter(|form| form.entity_id() == window_origin)
                                         .and_then(|form| form.read(cx).plugin.as_ref())
                                         .and_then(|state| state.form_origins.get(&configuration));
-                                    let host_owned = app.run_form.as_ref()
+                                    let host_owned = app
+                                        .run_form
+                                        .as_ref()
                                         .filter(|form| form.entity_id() == window_origin)
                                         .and_then(|form| form.read(cx).plugin.as_ref())
-                                        .and_then(|state| state.draft.plugin_configurations.get(&configuration))
-                                        .is_some_and(|data| data.provider == crate::plugin_development::configuration::PROVIDER);
-                                    if host_owned || (current == provider_origin.as_ref() && current.is_some()) {
+                                        .and_then(|state| {
+                                            state.draft.plugin_configurations.get(&configuration)
+                                        })
+                                        // Both built-in contributors have host authority and no guest
+                                        // incarnation; their normal input must reach the same form queue.
+                                        .is_some_and(|data| host_templates::owns(&data.provider));
+                                    if host_owned
+                                        || (current == provider_origin.as_ref()
+                                            && current.is_some())
+                                    {
                                         app.plugin_configuration_event(&configuration, event, cx)
                                     }
                                 });

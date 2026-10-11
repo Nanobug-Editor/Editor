@@ -105,6 +105,7 @@ fn svg_preview_follows_open_documents_and_unsaved_edits(cx: &mut TestAppContext)
             .unwrap();
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                replaced_by: None,
                 grants: manifest.permissions.clone(),
                 manifest,
                 digest: "fixture".into(),

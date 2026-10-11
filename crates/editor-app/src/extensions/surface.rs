@@ -185,10 +185,17 @@ impl ExtensionPanel {
         let source = package.source.clone();
         let permissions = package.manifest.permissions.clone();
         let services = package.manifest.services.clone();
+        let replacement_ids: Vec<_> = package
+            .manifest
+            .replaces
+            .iter()
+            .map(|rule| rule.id.clone())
+            .collect();
         // Updating/reinstalling retires the same original owners as disable/uninstall. Display their
         // targets in this confirmation too; preparing a failed update must leave them running.
         let impact_parent = self.parent.clone();
-        let impact_id = package.manifest.id.clone();
+        let mut impact_ids = replacement_ids.clone();
+        impact_ids.push(package.manifest.id.clone());
         let owner = cx.entity().downgrade();
         let install_owner = owner.clone();
         // First-use may ask during EditorApp::render, when the parent entity is borrowed.
@@ -198,14 +205,32 @@ impl ExtensionPanel {
                 parent
                     .read(cx)
                     .run_controls
-                    .plugin_session_impact(&impact_id, None)
-                    .summary()
+                    .debug_availability()
+                    .ok()
+                    .map(str::to_owned)
             });
+            let impact = impact_parent
+                .upgrade()
+                .map(|parent| {
+                    impact_ids
+                        .iter()
+                        .filter_map(|id| {
+                            parent
+                                .read(cx)
+                                .run_controls
+                                .plugin_session_impact(id, impact.as_deref())
+                                .summary()
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
+                .filter(|text| !text.is_empty());
             window.open_dialog(cx, move |dialog, _, cx| {
                 let source = source.clone();
                 let permissions = permissions.clone();
                 let services = services.clone();
                 let impact = impact.clone();
+                let replacement_ids = replacement_ids.clone();
                 let install_package = package.clone();
                 let install_bundle = bundled.clone();
                 let cancel_bundle = bundled.clone();
@@ -236,6 +261,19 @@ impl ExtensionPanel {
                                 div()
                                     .debug_selector(|| "plugin-install-session-impact".into())
                                     .child(impact.clone()),
+                            );
+                        }
+                        if !replacement_ids.is_empty() {
+                            details = details.child(
+                                div()
+                                    .debug_selector(|| "plugin-install-replacements".into())
+                                    .child(
+                                        t!(
+                                            "plugins.consent_replacements",
+                                            ids = replacement_ids.join(", ")
+                                        )
+                                        .to_string(),
+                                    ),
                             );
                         }
                         details = details.child(if executable {
@@ -323,8 +361,10 @@ impl ExtensionPanel {
                                 div()
                                     .id("plugin-install-cancel")
                                     .debug_selector(|| "plugin-install-cancel".into())
-                                    .child(DialogClose::new().trigger(|button| {
-                                        button.label(t!("plugins.cancel").to_string())
+                                    .child(gpui_base::DialogClose::new().trigger(|base| {
+                                        Button::new("plugin-install-cancel-button")
+                                            .with_base(base)
+                                            .label(t!("plugins.cancel").to_string())
                                     })),
                             )
                             .child(

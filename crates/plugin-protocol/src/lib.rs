@@ -1,5 +1,12 @@
 //! Versioned, platform-independent messages shared by plugins and their host.
 //! No editor, terminal-emulator or native UI implementation belongs in this crate.
+//!
+//! Independent Rust plugins declare `plugin-protocol = { version = "=0.2.0", features = ["guest"] }`.
+//! Build with the host's `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]`
+//! entry point so Cargo resolves the matching SDK cache without a repository path dependency.
+//! The `guest` feature generates component bindings from `wit/plugin.wit`; public modules
+//! document their arguments, capability negotiation and permission requirements in comments.
+//! Explicit SDK exports contain source, Cargo and protocol resources, without Markdown files.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -35,6 +42,9 @@ pub mod bindings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
+    /// Explicitly approved, finite package consolidation; it grants no cross-plugin file access.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replaces: Vec<Replacement>,
     /// Opt-in private-data format; the host never interprets the plugin's business fields.
     #[serde(default)]
     pub data_format: Option<DataFormat>,
@@ -89,6 +99,18 @@ pub struct DataFormat {
     pub version: u32,
     #[serde(default)]
     pub migration_hook: bool,
+}
+
+/// A bounded replacement of installed versions and selected public contracts.
+/// Original private data and dependency receipts are retained for recovery; no guest reads them.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Replacement {
+    pub id: String,
+    pub versions: semver::VersionReq,
+    pub contracts: Vec<String>,
+    /// Boolean setting whose user/project values preserve the old package's enablement intent.
+    pub enabled_setting: String,
 }
 
 /// Dock and file contributions declare placement; their domain controls arrive through `ui::Document`.

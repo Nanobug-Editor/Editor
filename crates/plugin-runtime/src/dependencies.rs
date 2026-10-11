@@ -15,7 +15,7 @@ use std::{
 mod cache;
 mod download;
 mod installer;
-pub(crate) use cache::{cached, collect, lock, prepare};
+pub(crate) use cache::{Prepared, cached, collect, lock, prepare};
 pub use installer::InstallerPrompt;
 
 /// Progress reports preparation honestly; only the protocol client can report language-service readiness.
@@ -36,6 +36,8 @@ pub enum InstallStage {
 /// Cancellation is owned by the UI and remains callable while the package worker is occupied.
 #[derive(Clone)]
 pub struct InstallControl {
+    /// Host-confirmed package identities; manifests cannot authorize their own replacement claims.
+    replacements: BTreeSet<String>,
     cancelled: Arc<AtomicBool>,
     report: Arc<dyn Fn(InstallStage) + Send + Sync>,
     /// Host-owned lifetime checks grant no permissions and run only at existing cancellation barriers.
@@ -51,6 +53,7 @@ impl Default for InstallControl {
 impl InstallControl {
     pub fn new(report: impl Fn(InstallStage) + Send + Sync + 'static) -> Self {
         Self {
+            replacements: Default::default(),
             cancelled: Arc::new(AtomicBool::new(false)),
             report: Arc::new(report),
             guard: None,
@@ -60,6 +63,15 @@ impl InstallControl {
     }
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Release);
+    }
+    /// Record the package identities shown in a host replacement confirmation.
+    /// This grants no file access and is consumed only by the finite installation transaction.
+    pub fn with_replacements(mut self, ids: impl IntoIterator<Item = String>) -> Self {
+        self.replacements.extend(ids);
+        self
+    }
+    pub(crate) fn replacement_approved(&self, id: &str) -> bool {
+        self.replacements.contains(id)
     }
     /// Add a host lifetime gate to preparation, dependency I/O and the final controlled commit.
     /// Returning false cancels continuation. The predicate must be cheap, thread safe and read no UI,

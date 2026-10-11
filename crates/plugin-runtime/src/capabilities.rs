@@ -67,7 +67,8 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         // 1.1 permits explicitly negotiated semantic linked ranges with different initial names.
         ("language.editing".into(), Version::new(1, 1, 0)),
         ("language.structure".into(), Version::new(1, 0, 0)),
-        ("dependencies".into(), Version::new(1, 1, 0)),
+        // 1.2 prepares declared native services asynchronously at method invocation.
+        ("dependencies".into(), Version::new(1, 2, 0)),
     ]
     .into();
     Ok(requirements

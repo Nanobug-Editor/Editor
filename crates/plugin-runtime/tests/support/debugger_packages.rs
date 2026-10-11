@@ -8,20 +8,49 @@ use std::{
 };
 
 /// Change only acquisition to the exact already verified VSIX; identity, hash and private DAG remain.
-pub fn debugger(id: &str) -> Package {
+pub fn rust_package(id: &str) -> Package {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let files = Package::read(&root.join("dist/plugins/rust-debugger.zip"))
+    let files = Package::read(&root.join("dist/plugins/rust-0.6.1.zip"))
         .unwrap()
         .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
+    manifest["replaces"] = json!([]);
     let archive = root
         .join("target/debug-adapters/codelldb-1.12.3/codelldb-win32-x64.vsix")
         .canonicalize()
         .expect("download and verify the pinned official CodeLLDB VSIX first");
     manifest["services"]["adapter"]["installation"]["artifacts"][0]["source"] =
         json!({"kind":"local","path":archive.display().to_string()});
+    let mut files = files;
+    if let Some(bytes) = files.get_mut("plugin.toml") {
+        *bytes = String::from_utf8(bytes.clone())
+            .unwrap()
+            .replace("id = \"rust\"", &format!("id = \"{id}\""))
+            .into_bytes();
+    }
     package(files, manifest)
+}
+
+/// A debug-only variant of the real unified WASM validates replacement providers independently.
+pub fn debugger(id: &str) -> Package {
+    let package = rust_package(id);
+    let mut manifest: Value = serde_json::from_slice(&package.files["manifest.json"]).unwrap();
+    manifest.as_object_mut().unwrap().remove("contributions");
+    manifest["language_servers"] = json!([]);
+    manifest["services"]
+        .as_object_mut()
+        .unwrap()
+        .remove("analysis");
+    manifest["permissions"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|permission| permission != "process.service.analysis");
+    manifest["plugin_services"]["provides"]
+        .as_object_mut()
+        .unwrap()
+        .retain(|id, _| id == "debug.session");
+    self::package(package.files, manifest)
 }
 /// Repackage literal public metadata; this never injects host callbacks or a private SDK.
 pub fn package(mut files: std::collections::BTreeMap<String, Vec<u8>>, manifest: Value) -> Package {
@@ -75,7 +104,7 @@ pub fn initialization_failure_adapter(id: &str, directory: &Path) -> Package {
 /// Package a compiled instrument as an ordinary controlled dependency, without host test hooks.
 fn instrument(id: &str, directory: &Path, instrument_source: &str) -> Package {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut files = Package::read(&root.join("dist/plugins/rust-debugger.zip"))
+    let mut files = Package::read(&root.join("dist/plugins/rust-0.6.1.zip"))
         .unwrap()
         .files;
     let source = directory.join("fault_adapter.rs");
@@ -95,6 +124,13 @@ fn instrument(id: &str, directory: &Path, instrument_source: &str) -> Package {
     let bytes = std::fs::read(&binary).unwrap();
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
+    manifest["replaces"] = json!([]);
+    manifest.as_object_mut().unwrap().remove("contributions");
+    manifest["language_servers"] = json!([]);
+    manifest["plugin_services"]["provides"]
+        .as_object_mut()
+        .unwrap()
+        .retain(|id, _| id == "debug.session");
     let digest = format!("{:x}", sha2::Sha256::digest(&bytes));
     manifest["services"]["adapter"] = json!({"program":"fault-adapter","args":[directory.join("adapter-pids").display().to_string()],"installation":{
         "artifacts":[{"id":"instrument","version":"0.1.0","platform":"windows-x86_64","sha256":digest,

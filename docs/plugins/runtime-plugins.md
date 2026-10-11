@@ -24,7 +24,7 @@ WIT 世界 `editor:plugin/plugin@0.1.0` 提供 host.request 导入与 dispatch �
 
 不再存在旧 Message/Reply/Scene、字符串宿主命令、chrome/controls 兼容字段或运行时转换。标准组件、SideTabs 与 Canvas 组成同一棵 UI 树，宿主的 gpui-base 行为和本地外观负责输入、焦点、布局、滚动、菜单及弹窗。SVG 预览接收带 DocumentVersion 的内存文本，必须回传 source，包含未保存编辑；过期结果不能覆盖新文档。
 
-详细接口见 [SDK](../../crates/plugin-protocol/README.md)、[UI](../../documentation/en/sdk/ui.md)、[语言](../../documentation/en/sdk/languages.md)、[LSP](../../documentation/en/sdk/lsp.md)、[进程](../../documentation/en/sdk/processes.md)、[服务](../../documentation/en/sdk/services.md)。读者正文维护在双语 Markdown 文档，宿主同时导出这些英文契约供独立插件使用。
+公开接口的现行说明见源码注释：[SDK](../../crates/plugin-protocol/src/lib.rs)、[UI](../../crates/plugin-protocol/src/ui.rs)、[语言](../../crates/plugin-protocol/src/language.rs)、[进程](../../crates/plugin-protocol/src/process.rs)、[服务](../../crates/plugin-protocol/src/service.rs)。宿主只导出 SDK 源码、Cargo 清单、WIT 和 JSON 协议资源；仓库 Markdown 不内嵌或随 SDK 导出。
 
 文件预览可以通过公开 `editor.presentation` 声明源码／分栏／预览三态，通过 `editor.toolbar` 提供源码顶部操作；版本化范围编辑、图片输入、导航及视口请求分别核对文档身份、revision 和来源权限。Markdown 使用这些通用接口提供实时原生预览、任务框写回、同级图片导入和双向内容块滚动；SVG 使用同一底栏三态入口。详见[Markdown 使用说明](../../plugins/markdown/README.md)、[导航](../../crates/plugin-protocol/NAVIGATION.md)、[视口](../../crates/plugin-protocol/VIEWPORT.md)和[代码块高亮](../../crates/plugin-protocol/CODE_HIGHLIGHTING.md)。新增插件仍只使用公开契约，不需要宿主按插件名称分支。
 

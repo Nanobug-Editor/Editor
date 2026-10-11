@@ -123,6 +123,7 @@ fn unsafe_sources_and_foreign_native_steps_are_rejected() {
     );
     project.description.assets.clear();
     project.description.native.push(BuildStep {
+        optional_platform: false,
         program: "rustc".into(),
         args: vec![],
         platform: "other-architecture".into(),
@@ -133,6 +134,70 @@ fn unsafe_sources_and_foreign_native_steps_are_rejected() {
             .is_err()
     );
 }
+/// Foreign optional steps and native assets disappear together, leaving portable resources usable.
+#[test]
+fn optional_native_steps_and_permissions_are_filtered_for_a_portable_package() {
+    let dir = tempfile::tempdir().unwrap();
+    fixture(dir.path());
+    let manifest_path = dir.path().join("manifest.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+    manifest["api"]["required"]["dependencies"] = serde_json::json!(">=1.2,<2");
+    manifest["api"]["required"]["language.lsp"] = serde_json::json!("^1");
+    manifest["api"]["required"]["process"] = serde_json::json!("^1");
+    manifest["permissions"] =
+        serde_json::json!(["process.service.adapter", "process.service.portable"]);
+    manifest["services"] = serde_json::json!({
+        "adapter":{"program":"missing","platforms":["foreign-os"]},
+        "portable":{"program":"portable-tool"}
+    });
+    // Removing a foreign service must also remove its provider, leaving the portable resources inspectable.
+    manifest["language_servers"] = serde_json::json!([
+        {"id":"analysis", "language":"test", "service":"adapter"},
+        {"id":"portable", "language":"test", "service":"portable", "alternatives":["adapter"]}
+    ]);
+    std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let mut project = Project::read(dir.path()).unwrap();
+    project.description.native.push(BuildStep {
+        optional_platform: true,
+        program: "must-not-run".into(),
+        args: vec![],
+        platform: "foreign-os".into(),
+    });
+    project.description.assets.push(Asset {
+        platform: Some("foreign-os".into()),
+        source: "missing-native.exe".into(),
+        destination: "native/bridge.exe".into(),
+    });
+    let package = project
+        .prepare(&BuildOptions::default(), &mut |_| {})
+        .unwrap();
+    assert_eq!(
+        package.manifest.services.keys().collect::<Vec<_>>(),
+        ["portable"]
+    );
+    assert_eq!(package.manifest.language_servers.len(), 1);
+    assert_eq!(package.manifest.language_servers[0].id, "portable");
+    assert!(package.manifest.language_servers[0].alternatives.is_empty());
+    assert_eq!(package.manifest.permissions.len(), 1);
+    assert!(
+        package
+            .manifest
+            .permissions
+            .contains("process.service.portable")
+    );
+    assert!(!package.files.contains_key("native/bridge.exe"));
+    assert!(package.files.contains_key("plugin.toml"));
+    // Platform filtering cannot hide an unrelated invalid reference in a surviving provider.
+    manifest["language_servers"][1]["alternatives"] = serde_json::json!(["unregistered"]);
+    std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    assert!(
+        project
+            .prepare(&BuildOptions::default(), &mut |_| {})
+            .is_err()
+    );
+}
+
 /// In-memory development admission rejects the same retired protocol as ZIP installation.
 #[test]
 fn development_cannot_bypass_manifest_validation() {
@@ -155,6 +220,7 @@ fn output_inside_asset_directory_remains_stable() {
     std::fs::write(dir.path().join("assets/example.txt"), "example").unwrap();
     let mut project = Project::read(dir.path()).unwrap();
     project.description.assets.push(Asset {
+        platform: None,
         source: "assets".into(),
         destination: "assets".into(),
     });

@@ -119,6 +119,9 @@ impl Project {
             files.insert(component, read_bounded(&artifact)?);
         }
         for step in &self.description.native {
+            if step.optional_platform && step.platform != platform {
+                continue;
+            }
             anyhow::ensure!(
                 step.platform == platform,
                 "Native build requires {}, selected {platform}",
@@ -140,6 +143,13 @@ impl Project {
             command(&step.program, &args, &self.root, options, log)?;
         }
         for asset in &self.description.assets {
+            if asset
+                .platform
+                .as_ref()
+                .is_some_and(|target| target != &platform)
+            {
+                continue;
+            }
             check_cancel(options)?;
             let (root, source) = if let Some(source) = asset.source.strip_prefix("{build}/") {
                 (&build, source)
@@ -159,10 +169,20 @@ impl Project {
             !files.contains_key("manifest.json"),
             "Do not include manifest.json in assets; it is generated from the declared manifest"
         );
+        // Track only intentionally omitted declarations; unknown references must still fail validation.
+        let mut omitted_native_services = std::collections::BTreeSet::new();
         if let Some(services) = manifest
             .get_mut("services")
             .and_then(serde_json::Value::as_object_mut)
         {
+            // Distribution metadata must reference only native bytes supported by this package.
+            services.retain(|id, service| {
+                let supported = supports_platform(service, &platform);
+                if !supported {
+                    omitted_native_services.insert(id.clone());
+                }
+                supported
+            });
             for service in services.values_mut() {
                 if let Some(artifacts) = service
                     .get_mut("installation")
@@ -182,6 +202,73 @@ impl Project {
                     }
                 }
             }
+        }
+        if let Some(contracts) = manifest
+            .pointer_mut("/plugin_services/provides")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            contracts.retain(|_, contract| supports_platform(contract, &platform));
+        }
+        // A portable package never requests authority for a native service that was omitted above.
+        let native_services: std::collections::BTreeSet<String> = manifest
+            .get("services")
+            .and_then(serde_json::Value::as_object)
+            .map(|services| services.keys().cloned().collect())
+            .unwrap_or_default();
+        if let Some(providers) = manifest
+            .get_mut("language_servers")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            // A provider needs its default service. Surviving providers lose only omitted alternatives.
+            providers.retain(|provider| {
+                provider["service"]
+                    .as_str()
+                    .is_none_or(|id| !omitted_native_services.contains(id))
+            });
+            for provider in providers {
+                if let Some(alternatives) = provider
+                    .get_mut("alternatives")
+                    .and_then(serde_json::Value::as_array_mut)
+                {
+                    alternatives.retain(|service| {
+                        service
+                            .as_str()
+                            .is_none_or(|id| !omitted_native_services.contains(id))
+                    });
+                }
+            }
+        }
+        if let Some(permissions) = manifest
+            .get_mut("permissions")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            permissions.retain(|permission| {
+                permission.as_str().is_none_or(|value| {
+                    value
+                        .strip_prefix("process.service.")
+                        .is_none_or(|id| native_services.contains(id))
+                })
+            });
+        }
+        // Replacement metadata references contributions, so platform-only replacements disappear too.
+        let provided: std::collections::BTreeSet<String> = manifest
+            .pointer("/plugin_services/provides")
+            .and_then(serde_json::Value::as_object)
+            .map(|contracts| contracts.keys().cloned().collect())
+            .unwrap_or_default();
+        if let Some(replacements) = manifest
+            .get_mut("replaces")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            replacements.retain(|replacement| {
+                replacement["contracts"]
+                    .as_array()
+                    .is_some_and(|contracts| {
+                        contracts.iter().all(|contract| {
+                            contract.as_str().is_some_and(|id| provided.contains(id))
+                        })
+                    })
+            });
         }
         files.insert(
             "manifest.json".into(),
@@ -229,6 +316,19 @@ impl Project {
         atomic_write(&target, &bytes)?;
         Ok(target)
     }
+}
+
+/// An absent or empty platform list denotes portable policy, independently of plugin identity.
+fn supports_platform(value: &serde_json::Value, platform: &str) -> bool {
+    value
+        .get("platforms")
+        .and_then(serde_json::Value::as_array)
+        .is_none_or(|platforms| {
+            platforms.is_empty()
+                || platforms
+                    .iter()
+                    .any(|target| target.as_str() == Some(platform))
+        })
 }
 
 /// Persist a content-addressed development directory; no ZIP is produced, even internally.

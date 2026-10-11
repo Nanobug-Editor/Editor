@@ -66,6 +66,7 @@ fn native_input_and_canvas_route_text_to_their_own_nodes_and_hide_reclaims_targe
             .unwrap();
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                replaced_by: None,
                 grants: manifest.permissions.clone(),
                 manifest,
                 digest: "composed".into(),

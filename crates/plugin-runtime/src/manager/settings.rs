@@ -3,20 +3,23 @@ use super::*;
 use plugin_protocol::settings::{Effective, EffectiveValue, Scope, Source};
 use serde_json::Value;
 
+/// Installation migration and ordinary edits must remain readable by the same settings store.
+pub(super) const MAX_SETTINGS_BYTES: usize = 1024 * 1024;
+
 /// Project choices live in host-owned settings, never in an automatically trusted repository file.
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SavedSettings {
+pub(super) struct SavedSettings {
     #[serde(default)]
-    user: BTreeMap<String, Value>,
+    pub(super) user: BTreeMap<String, Value>,
     #[serde(default)]
-    projects: BTreeMap<String, BTreeMap<String, Value>>,
+    pub(super) projects: BTreeMap<String, BTreeMap<String, Value>>,
 }
 impl SavedSettings {
-    fn read(path: &Path) -> anyhow::Result<Self> {
+    pub(super) fn read(path: &Path) -> anyhow::Result<Self> {
         match std::fs::read(path) {
             Ok(bytes) => {
-                anyhow::ensure!(bytes.len() <= 1024 * 1024, "Settings exceed 1 MiB");
+                anyhow::ensure!(bytes.len() <= MAX_SETTINGS_BYTES, "Settings exceed 1 MiB");
                 Ok(serde_json::from_slice(&bytes)?)
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
@@ -24,7 +27,11 @@ impl SavedSettings {
         }
     }
     /// Validate every explicit layer before resolving; a stronger layer cannot hide an invalid user value.
-    fn resolve(&self, manifest: &Manifest, workspace: &str) -> anyhow::Result<Effective> {
+    pub(super) fn resolve(
+        &self,
+        manifest: &Manifest,
+        workspace: &str,
+    ) -> anyhow::Result<Effective> {
         let project = self.projects.get(&scopes::workspace_key(workspace));
         for (values, scope) in [(Some(&self.user), Scope::User), (project, Scope::Project)] {
             for (key, value) in values.into_iter().flatten() {
@@ -158,7 +165,7 @@ impl Manager {
         }
         saved.resolve(manifest, &self.environment.workspace)?;
         let bytes = serde_json::to_vec_pretty(&saved)?;
-        anyhow::ensure!(bytes.len() <= 1024 * 1024, "Settings exceed 1 MiB");
+        anyhow::ensure!(bytes.len() <= MAX_SETTINGS_BYTES, "Settings exceed 1 MiB");
         // Prepare all affected owners first; one rejected workspace leaves every prior owner alive.
         let mut candidates = Vec::new();
         if let Some(component) = &manifest.component {

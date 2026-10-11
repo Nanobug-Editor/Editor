@@ -9,6 +9,7 @@ pub struct InstallationPreparation {
     /// Background preparation cannot substitute different native SDK inputs for the owner manager.
     pub(super) host_resources: crate::HostResources,
     pub(super) previous_digest: Option<String>,
+    pub(super) replaced_records: BTreeMap<String, Installed>,
     pub(super) package: Package,
     pub(super) grants: BTreeSet<String>,
     pub(super) transaction: Transaction,
@@ -101,6 +102,7 @@ impl InstallationPreparation {
             root: self.root,
             workspace: self.environment.workspace,
             previous_digest: self.previous_digest,
+            replaced_records: self.replaced_records,
             package: self.package,
             grants: self.grants,
             transaction: self.transaction,

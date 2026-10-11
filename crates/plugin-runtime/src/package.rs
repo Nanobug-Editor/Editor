@@ -59,14 +59,15 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
             "A language service must provide analysis or formatting"
         );
         if provider.optional_installation {
+            // Capability negotiation already checks the current host version. Reject the retired
+            // 1.0 contract without requiring stricter 1.2 declarations to also include exactly 1.1.
             anyhow::ensure!(
                 manifest
                     .api
                     .as_ref()
                     .and_then(|api| api.required.get("dependencies"))
                     .is_some_and(|requirement| {
-                        requirement.matches(&semver::Version::new(1, 1, 0))
-                            && !requirement.matches(&semver::Version::new(1, 0, 0))
+                        !requirement.matches(&semver::Version::new(1, 0, 0))
                     }),
                 "Optional service installation requires dependencies >=1.1"
             );
@@ -307,6 +308,96 @@ impl Package {
                         .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
                     && service.valid(),
                 "Invalid native service declaration"
+            );
+        }
+        // Additive preparation, contribution gates and finite replacement require an aware host.
+        let deferred_metadata = !manifest.replaces.is_empty()
+            || manifest
+                .services
+                .values()
+                .any(|service| service.on_demand || !service.platforms.is_empty())
+            || manifest.plugin_services.provides.values().any(|contract| {
+                !contract.preparation.is_empty()
+                    || contract.enabled_setting.is_some()
+                    || !contract.platforms.is_empty()
+            });
+        if deferred_metadata {
+            let api = crate::capabilities::negotiate(&manifest)?;
+            anyhow::ensure!(
+                api.capabilities
+                    .get("dependencies")
+                    .is_some_and(|version| *version >= semver::Version::new(1, 2, 0)),
+                "Deferred metadata requires dependencies 1.2"
+            );
+        }
+        for service in manifest
+            .services
+            .values()
+            .filter(|service| service.on_demand)
+        {
+            anyhow::ensure!(
+                service.installation.is_some(),
+                "Deferred service requires an installation plan"
+            );
+        }
+        // Reject malformed forms before installation, not when a settings window tries to render them.
+        for contract in manifest.plugin_services.provides.values() {
+            if !contract.preparation.is_empty() {
+                let api = crate::capabilities::negotiate(&manifest)?;
+                anyhow::ensure!(
+                    api.capabilities
+                        .get("dependencies")
+                        .is_some_and(|v| *v >= semver::Version::new(1, 2, 0)),
+                    "Method preparation requires dependencies 1.2"
+                );
+            }
+            anyhow::ensure!(
+                contract.preparation.len() <= 32
+                    && contract
+                        .preparation
+                        .iter()
+                        .all(|(method, services)| contract.methods.contains_key(method)
+                            && services.len() <= 8
+                            && services.iter().all(|id| manifest
+                                .services
+                                .get(id)
+                                .is_some_and(|service| service.installation.is_some())
+                                && manifest
+                                    .permissions
+                                    .contains(&format!("process.service.{id}")))),
+                "Invalid native method preparation"
+            );
+            if let Some(key) = &contract.enabled_setting {
+                anyhow::ensure!(
+                    manifest
+                        .settings
+                        .get(key)
+                        .is_some_and(|definition| definition.default.is_boolean()),
+                    "Service gate requires a declared boolean setting"
+                );
+            }
+        }
+        anyhow::ensure!(
+            manifest.replaces.len() <= 8
+                && (manifest.replaces.is_empty() || manifest.component.is_some()),
+            "Package replacements require a component and at most eight sources"
+        );
+        let mut replaced = std::collections::BTreeSet::new();
+        for replacement in &manifest.replaces {
+            validate_relative(&replacement.id)?;
+            anyhow::ensure!(
+                replacement.id != manifest.id
+                    && !replacement.id.contains('/')
+                    && replaced.insert(&replacement.id)
+                    && !replacement.contracts.is_empty()
+                    && replacement.contracts.len() <= 32
+                    && replacement.contracts.iter().all(|id| manifest
+                        .plugin_services
+                        .provides
+                        .get(id)
+                        .is_some_and(|contract| contract.enabled_setting.as_ref()
+                            == Some(&replacement.enabled_setting))),
+                "Invalid package replacement"
             );
         }
         // Reject malformed forms before installation, not when a settings window tries to render them.

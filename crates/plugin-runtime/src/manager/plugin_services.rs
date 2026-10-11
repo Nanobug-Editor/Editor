@@ -122,7 +122,7 @@ impl Manager {
         }
         let bytes = serde_json::to_vec_pretty(&preferences)?;
         anyhow::ensure!(
-            bytes.len() <= 1024 * 1024,
+            bytes.len() <= MAX_PREFERENCES_BYTES,
             "Service provider preferences exceed quota"
         );
         atomic_write(&self.root.join("service-providers.json"), &bytes)?;
@@ -139,10 +139,15 @@ impl Manager {
                 Err(error) => self.host_sessions.observe_error(&call, &error),
             }
         }
-        let calls = self.plugin_services.lock().unwrap().take_batch();
-        for call in calls {
+        let mut calls = self.poll_service_preparations();
+        for call in self.plugin_services.lock().unwrap().take_batch() {
+            if call.completion.begin() {
+                calls.push((call, Vec::new()));
+            }
+        }
+        for (call, leases) in calls {
             self.refresh_services();
-            if !call.completion.begin() {
+            if call.completion.status().is_terminal() {
                 continue;
             }
             let valid = self
@@ -154,6 +159,21 @@ impl Manager {
                 call.completion.finish(Err(error));
                 continue;
             }
+            let completion = call.completion.clone();
+            // A ready invocation already owns every declared dependency lease and its durable receipt.
+            // Re-entering preparation on a cache hit would enqueue the same invocation forever.
+            let call = if leases.is_empty() {
+                match self.prepare_service_call(call) {
+                    Ok(Some(call)) => call,
+                    Ok(None) => continue,
+                    Err(error) => {
+                        completion.finish(Err(error));
+                        continue;
+                    }
+                }
+            } else {
+                call
+            };
             if !call.completion.enter_side_effect() {
                 continue;
             }
@@ -234,6 +254,9 @@ impl Manager {
     }
 }
 
+/// Persisted provider choices have the same bound on reads and transactional replacement writes.
+pub(super) const MAX_PREFERENCES_BYTES: usize = 1024 * 1024;
+
 /// Missing local preferences start with no arbitrary choice; malformed files fail explicitly.
 pub(super) fn read_preferences(root: &Path) -> anyhow::Result<Preferences> {
     let path = root.join("service-providers.json");
@@ -241,7 +264,7 @@ pub(super) fn read_preferences(root: &Path) -> anyhow::Result<Preferences> {
         return Ok(Preferences::default());
     }
     anyhow::ensure!(
-        path.metadata()?.len() <= 1024 * 1024,
+        path.metadata()?.len() <= MAX_PREFERENCES_BYTES as u64,
         "Service provider preferences exceed quota"
     );
     Ok(serde_json::from_slice(&std::fs::read(path)?)?)

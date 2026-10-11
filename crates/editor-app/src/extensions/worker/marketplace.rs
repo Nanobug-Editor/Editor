@@ -120,8 +120,19 @@ impl Worker {
         });
     }
 
-    /// Explicit native consent precedes this call. Check the exact current snapshot before any I/O.
-    pub fn install_market(&self, release: Release, generation: u64) -> bool {
+    /// Capture installed replacement targets for the native consent dialog, without granting approval.
+    pub fn market_replacements(&self, release: &Release) -> BTreeMap<String, Installed> {
+        replacement_records(&release.manifest, &self.state.lock().unwrap().entries)
+    }
+
+    /// Explicit native consent precedes this call. Check review and approved target records before I/O.
+    /// A replacement approval belongs to these exact installed records, not just their plugin IDs.
+    pub fn install_market(
+        &self,
+        release: Release,
+        generation: u64,
+        approved_replacements: BTreeMap<String, Installed>,
+    ) -> bool {
         let mut state = self.state.lock().unwrap();
         let id = release.manifest.id.clone();
         let existing = state
@@ -143,6 +154,8 @@ impl Worker {
             || state.market.generation() != generation
             || !self.trusted.load(std::sync::atomic::Ordering::Acquire)
             || !advances
+            || serde_json::to_value(replacement_records(&release.manifest, &state.entries)).ok()
+                != serde_json::to_value(&approved_replacements).ok()
             || release
                 .compatible(
                     env!("CARGO_PKG_VERSION"),
@@ -171,6 +184,8 @@ impl Worker {
         let report_output = Arc::downgrade(&output);
         let guarded_id = id.clone();
         let guarded_existing = existing.clone();
+        let guarded_manifest = release.manifest.clone();
+        let replacement_ids = approved_replacements.keys().cloned().collect::<Vec<_>>();
         let control = plugin_runtime::InstallControl::new(move |stage| {
             if let Some(output) = report_output.upgrade() {
                 if let Some(report) = &mut output.lock().unwrap().installation {
@@ -183,6 +198,7 @@ impl Worker {
             }
         })
         .with_installer_prompts()
+        .with_replacements(replacement_ids)
         .with_guard(move || {
             trusted.load(std::sync::atomic::Ordering::Acquire)
                 && guard_output.upgrade().is_some_and(|output| {
@@ -196,6 +212,12 @@ impl Worker {
                             .find(|e| e.manifest.id == guarded_id)
                             .map(|entry| (entry.manifest.version.clone(), entry.digest.clone()))
                             == guarded_existing
+                        && serde_json::to_value(replacement_records(
+                            &guarded_manifest,
+                            &state.entries,
+                        ))
+                        .ok()
+                            == serde_json::to_value(&approved_replacements).ok()
                 })
         });
         state.install_control = Some(control.clone());
@@ -238,6 +260,21 @@ impl Worker {
         });
         true
     }
+}
+
+/// Ignore already retired targets; a new or changed target must receive its own visible approval.
+fn replacement_records(manifest: &Manifest, entries: &[Installed]) -> BTreeMap<String, Installed> {
+    entries
+        .iter()
+        .filter(|entry| {
+            entry.replaced_by.is_none()
+                && manifest
+                    .replaces
+                    .iter()
+                    .any(|rule| rule.id == entry.manifest.id)
+        })
+        .map(|entry| (entry.manifest.id.clone(), entry.clone()))
+        .collect()
 }
 
 /// Decode inert SVG snapshots off the UI thread, with external references disabled and a total quota.

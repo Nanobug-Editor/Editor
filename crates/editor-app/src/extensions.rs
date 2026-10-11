@@ -33,6 +33,8 @@ mod management;
 mod management_tests;
 #[cfg(test)]
 mod markdown_tests;
+#[cfg(test)]
+mod market_test_server;
 mod marketplace;
 #[cfg(test)]
 mod native_build_tests;
