@@ -36,6 +36,30 @@ fn open_fragment_in_order(
         .get_mut("markdown")
         .unwrap()
         .take_editor_requests();
+    // Pointer focus can also request native scroll synchronization. Keep those real handles in the
+    // actor queue while this scenario reorders only the one navigation completion.
+    let ancillary: Vec<_> = requests
+        .extract_if(.., |request| {
+            matches!(request.operation(), EditorOperation::LocateViewport { .. })
+        })
+        .collect();
+    ui.update(|_, cx| {
+        fixture
+            .app
+            .read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .editor_requests
+            .extend(
+                ancillary
+                    .into_iter()
+                    .map(|request| ("markdown".into(), request)),
+            )
+    });
     assert_eq!(requests.len(), 1, "one actual link issues one owned open");
     let request = requests.pop().unwrap();
     assert!(
@@ -292,7 +316,34 @@ fn delivered_markdown_link_cancels_queued_sync_before_opening_target(cx: &mut Te
         .get_mut("markdown")
         .unwrap()
         .take_editor_requests();
-    assert_eq!(requests.len(), 1);
+    // A new focus receipt is independent of the cancelled older source-driven locate.
+    let ancillary: Vec<_> = requests
+        .extract_if(.., |request| {
+            matches!(request.operation(), EditorOperation::LocateViewport { .. })
+        })
+        .collect();
+    ui.update(|_, cx| {
+        fixture
+            .app
+            .read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .editor_requests
+            .extend(
+                ancillary
+                    .into_iter()
+                    .map(|request| ("markdown".into(), request)),
+            )
+    });
+    assert_eq!(
+        requests.len(),
+        1,
+        "navigation cancellation must still admit exactly one open"
+    );
     let open = requests.pop().unwrap();
     assert!(
         matches!(open.operation(), EditorOperation::NavigateDocument {

@@ -46,7 +46,7 @@ fn fresh_markdown_explicit_import_retains_disabled_choice(cx: &mut TestAppContex
         fixture.native.manager.installed["markdown"]
             .manifest
             .version,
-        "0.17.1"
+        "0.17.2"
     );
     assert!(ui.debug_bounds("editor-plugin-layout").is_some());
     assert!(ui.debug_bounds("editor-source-toolbar").is_some());

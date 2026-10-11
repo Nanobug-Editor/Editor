@@ -52,6 +52,8 @@ mod preview;
 #[cfg(test)]
 mod preview_tests;
 mod recovery;
+#[cfg(all(test, windows))]
+mod test_configurations;
 mod tools;
 #[cfg(test)]
 mod tools_tests;

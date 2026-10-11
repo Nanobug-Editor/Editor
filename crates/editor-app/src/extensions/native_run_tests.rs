@@ -45,7 +45,7 @@ fn fixture_with_provider<'a>(
     root: &std::path::Path,
     program: &str,
     args: Vec<String>,
-    legacy: bool,
+    literal_launch: bool,
 ) -> (
     plugin_runtime::Manager,
     Entity<EditorApp>,
@@ -66,7 +66,9 @@ fn fixture_with_provider<'a>(
         },
     )
     .unwrap();
-    if !legacy {
+    if literal_launch {
+        super::test_configurations::install(&mut manager);
+    } else {
         let configuration =
             Package::read(&crate::test_packages::archive("configuration-example")).unwrap();
         manager
@@ -108,13 +110,12 @@ fn fixture_with_provider<'a>(
         app.update(cx, |app, cx| {
             let key = app.workspace_key();
             // Keep real acceptance writes under this fixture rather than the user configuration root.
-            app.run_controls = crate::run::RunControls::load_with_project(
+            app.run_controls = crate::run::RunControls::load_plugin_configurations(
                 &key,
                 Some(app.workspace.root().join("private-runs")),
-                Some(app.workspace.root().into()),
             );
-            if legacy {
-                app.run_controls.upsert(set.configurations[0].clone(), &key).unwrap();
+            if literal_launch {
+                super::test_configurations::accept(&mut app.run_controls, set.configurations[0].clone());
             } else {
                 let configuration = set.configurations[0].clone();
                 let editor_core::RunTarget::Program { program, args } = &configuration.target else { unreachable!() };
@@ -140,7 +141,14 @@ fn fixture_with_provider<'a>(
 }
 
 /// Read the actual native terminal's glyphs after the ordinary application frame has drawn.
-fn painted_text(app: &Entity<EditorApp>, cx: &mut gpui_kit::VisualTestContext) -> String {
+pub(super) fn painted_text(
+    app: &Entity<EditorApp>,
+    cx: &mut gpui_kit::VisualTestContext,
+) -> String {
+    // Real children use wall time, while the native terminal's 30 ms poll uses GPUI's test clock.
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(30));
+    cx.run_until_parked();
     cx.update(|window, cx| window.draw(cx).clear(cx));
     crate::terminal::tests::painted(app, cx)
 }
@@ -215,7 +223,7 @@ fn a_configuration_environment_reaches_the_program_it_starts(cx: &mut TestAppCon
             configuration.id = id.clone();
             configuration.name = "工具路径".into();
             configuration.tool_paths = vec![tool_root.display().to_string()];
-            app.run_controls.upsert(configuration, &key).unwrap();
+            super::test_configurations::accept(&mut app.run_controls, configuration);
             cx.notify();
             id
         })
@@ -293,33 +301,31 @@ fn a_configuration_environment_reaches_the_program_it_starts(cx: &mut TestAppCon
         app.update(cx, |app, cx| {
             let key = app.workspace_key();
             let id = app.run_controls.generate_id(&key);
-            app.run_controls
-                .upsert(
-                    editor_core::RunConfig {
-                        id: id.clone(),
-                        name: "无环境变量".into(),
-                        target: editor_core::RunTarget::Program {
-                            program: "powershell.exe".into(),
-                            args: vec![
-                                "-NoProfile".into(),
-                                "-Command".into(),
-                                "[Console]::Write('NO_ENV_HERE'); Start-Sleep -Seconds 60".into(),
-                            ],
-                        },
-                        directory: None,
-                        env: Default::default(),
-                        tool_paths: Default::default(),
-                        build: Default::default(),
-                        prelaunch: Default::default(),
-                        source: editor_core::RunConfigSource::Local,
-                        from_target: None,
-                        provider: None,
-                        breakpoints: Default::default(),
-                        local: true,
+            super::test_configurations::accept(
+                &mut app.run_controls,
+                editor_core::RunConfig {
+                    id: id.clone(),
+                    name: "无环境变量".into(),
+                    target: editor_core::RunTarget::Program {
+                        program: "powershell.exe".into(),
+                        args: vec![
+                            "-NoProfile".into(),
+                            "-Command".into(),
+                            "[Console]::Write('NO_ENV_HERE'); Start-Sleep -Seconds 60".into(),
+                        ],
                     },
-                    &key,
-                )
-                .unwrap();
+                    directory: None,
+                    env: Default::default(),
+                    tool_paths: Default::default(),
+                    build: Default::default(),
+                    prelaunch: Default::default(),
+                    source: editor_core::RunConfigSource::Local,
+                    from_target: None,
+                    provider: None,
+                    breakpoints: Default::default(),
+                    local: true,
+                },
+            );
             cx.notify();
             id
         })
@@ -350,10 +356,6 @@ fn a_configuration_environment_reaches_the_program_it_starts(cx: &mut TestAppCon
             .is_empty(),
         "a configuration without entries starts a program without them"
     );
-    let stored = cx.update(|_, cx| {
-        editor_core::storage_path(&app.read(cx).workspace_key()).expect("host-local path")
-    });
-    let _ = std::fs::remove_file(stored);
 }
 
 /// A shell-mode configuration is interpreted by the interpreter it names, script text intact.
@@ -401,9 +403,10 @@ fn a_shell_configuration_runs_its_script_through_the_named_interpreter(cx: &mut 
                 build: String::new(),
                 prelaunch: String::new(),
             };
-            app.run_controls
-                .upsert(draft.to_config().expect("the draft is valid"), &key)
-                .expect("the configuration is stored");
+            super::test_configurations::accept(
+                &mut app.run_controls,
+                draft.to_config().expect("the draft is valid"),
+            );
             app.run_controls.select(&id, &key);
             cx.notify();
             id
@@ -411,7 +414,8 @@ fn a_shell_configuration_runs_its_script_through_the_named_interpreter(cx: &mut 
     });
     let mut launches = Vec::new();
     cx.update(|window, cx| {
-        app.update(cx, |app, cx| app.start_stored_configuration(window, cx));
+        // Enter through the current Run coordinator, which owns validation and the native task tab.
+        app.update(cx, |app, cx| app.start_selected_run(window, cx));
     });
     let mut session = None;
     for _ in 0..200 {
@@ -431,7 +435,7 @@ fn a_shell_configuration_runs_its_script_through_the_named_interpreter(cx: &mut 
     let session = session.unwrap_or_else(|| {
         let status = cx.update(|_, cx| app.read(cx).status.clone());
         let painted = painted_text(&app, cx);
-        panic!("no session; status={status:?} painted={painted:?}")
+        panic!("no session; status={status:?} painted={painted:?}; launches={launches:?}; executions={:?}", manager.executions().iter().map(|session| (session.request(),session.snapshot())).collect::<Vec<_>>())
     });
     // The request names the interpreter and carries the script as one final argument.
     let request = manager.execution(session).unwrap().request().clone();
@@ -447,10 +451,6 @@ fn a_shell_configuration_runs_its_script_through_the_named_interpreter(cx: &mut 
     // The evaluation happened: the same marker carries the interpreter's own arithmetic result.
     let painted = painted_text(&app, cx);
     assert!(painted.contains("SCRIPT_MODE_OK2"), "{painted:?}");
-    let stored = cx.update(|_, cx| {
-        editor_core::storage_path(&app.read(cx).workspace_key()).expect("host-local path")
-    });
-    let _ = std::fs::remove_file(stored);
     let _ = config;
 }
 

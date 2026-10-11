@@ -39,7 +39,9 @@ fn marketplace_official_releases_install_with_native_consent(cx: &mut gpui_kit::
         });
         let id = listing["id"].as_str().unwrap();
         let release = &listing["versions"][0];
-        let bytes = std::fs::read(crate::test_packages::archive(id)).unwrap();
+        // The admitted snapshot fixes a version; a newer local candidate cannot replace its bytes.
+        let archive = format!("{id}-{}", release["version"].as_str().unwrap());
+        let bytes = std::fs::read(crate::test_packages::archive(&archive)).unwrap();
         let package = Package::from_bytes(&bytes).unwrap();
         assert_eq!(package.digest, release["sha256"].as_str().unwrap());
         let one = serde_json::json!({"schema": catalog["schema"], "plugins": [listing]});

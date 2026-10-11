@@ -113,7 +113,9 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
         task_count, 3,
         "plain prose and literal code cannot become editable tasks"
     );
-    fixture.click("plugin-checkbox-marker-b-20-task", ui);
+    let nested = fixture.task_id(1);
+    let selector = Box::leak(format!("plugin-checkbox-marker-{nested}").into_boxed_str());
+    fixture.click(selector, ui);
     let unchecked =
         "- [ ] 父任务\n  - [ ] 子任务\n- [x] 末项\n\n普通文字 [ ]\n\n```\n- [ ] 代码\n```\n";
     assert_eq!(
@@ -123,7 +125,7 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
     );
     fixture.click("plugin-tool-markdown/preview/display-preview", ui);
     assert!(ui.debug_bounds("editor-source-pane").is_none());
-    fixture.click("plugin-checkbox-marker-b-20-task", ui);
+    fixture.click(selector, ui);
     assert_eq!(
         ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).text().to_string()),
         unchecked.replacen("[ ] 子任务", "[x] 子任务", 1)
@@ -146,11 +148,11 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
     for dark in [true, false] {
         ui.update(|_, cx| apply_theme(builtin_theme(dark), cx));
         fixture.settle(ui);
-        let marker = ui.debug_bounds("plugin-checkbox-marker-b-20-task").unwrap();
+        let marker = ui.debug_bounds(selector).unwrap();
         assert_eq!(marker.size, size(px(16.), px(16.)));
         assert!(matches!(
             fixture.manager.live["markdown"].views["preview"]
-                .active_node("b-20-task")
+                .active_node(&nested)
                 .map(|node| &node.kind),
             Some(protocol::ui::Kind::Checkbox { checked: false, .. })
         ));

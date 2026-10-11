@@ -54,7 +54,7 @@ fn source(text: &str) -> SourceSnapshot {
     }
 }
 
-/// Malformed targets, UTF-8, paths and quotas are rejected; missing/active artwork falls back without suppressing nodes.
+/// Invalid typed proposals preserve the lease; missing/active artwork falls back without suppressing nodes.
 #[test]
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn independent_structure_validates_replies_and_denies_io() {
@@ -84,10 +84,11 @@ fn independent_structure_validates_replies_and_denies_io() {
         snapshot.icons.is_empty(),
         "missing icon must retain a navigable tree for native fallback"
     );
-    for text in ["stale", "bad-range", "中文", "escape-icon", "excessive"] {
+    for text in ["stale", "bad-range", "中文", "escape-icon"] {
+        assert!(provider.describe(source(text)).is_err());
         assert!(
-            provider.describe(source(text)).is_err(),
-            "host accepted hostile reply for {text}"
+            provider.is_active(),
+            "typed proposal rejection must preserve the lease"
         );
     }
     let snapshot = provider.describe(source("unsafe-svg")).unwrap();
@@ -102,7 +103,7 @@ fn independent_structure_validates_replies_and_denies_io() {
     );
 }
 
-/// Trap and excessive encoded nesting retire only their pure lease; configuration creates a fresh healthy worker.
+/// Traps and encoded resource quotas retire only the pure lease; configuration explicitly creates a fresh worker.
 #[test]
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn independent_structure_trap_retires_its_lease_and_configuration_recovers() {
@@ -193,6 +194,38 @@ fn independent_structure_trap_retires_its_lease_and_configuration_recovers() {
                 && entry.enabled
                 && entry.error.is_none()),
         "malformed structure output must leave the owner's normal roles available"
+    );
+    // The frozen guest's excessive proposal also exceeds the encoded byte limit. This is a fatal
+    // resource violation before typed proposal validation, so it must not share the recoverable lease.
+    manager
+        .update_setting(
+            "capability-example",
+            Scope::Project,
+            "label",
+            Some(json!("byte-quota")),
+        )
+        .unwrap();
+    let byte_limited = manager.structure_providers()["capability-example/definitions"]
+        .as_ref()
+        .unwrap()
+        .clone();
+    let resources = manager.resource_count();
+    let error = byte_limited.describe(source("excessive")).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("encoded byte quota"),
+        "{error:#}"
+    );
+    assert!(!byte_limited.is_active());
+    assert_eq!(manager.resource_count() + 1, resources);
+    assert!(byte_limited.describe(source("after byte quota")).is_err());
+    assert!(
+        Arc::ptr_eq(
+            &byte_limited,
+            manager.structure_providers()["capability-example/definitions"]
+                .as_ref()
+                .unwrap()
+        ),
+        "byte quota retirement must not silently restart the worker"
     );
 }
 

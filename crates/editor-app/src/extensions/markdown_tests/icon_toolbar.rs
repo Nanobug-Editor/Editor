@@ -34,7 +34,9 @@ fn delivered_markdown_icon_toolbar_is_compact_and_wraps_without_losing_actions(
     fixture.open("notes.md", ui);
     for dark in [false, true] {
         ui.update(|_, cx| apply_theme(builtin_theme(dark), cx));
-        ui.simulate_resize(size(px(1400.), px(900.)));
+        // The source pane shares width with explorer, outline and preview; give all eighteen
+        // real hit targets enough room before asserting the single-row geometry.
+        ui.simulate_resize(size(px(2100.), px(900.)));
         fixture.settle(ui);
         let toolbar = ui.debug_bounds("editor-source-toolbar").unwrap();
         assert!(

@@ -17,14 +17,42 @@ fn click_link(ui: &mut gpui_kit::VisualTestContext) {
 }
 
 /// Require one actual guest-issued handle, preserving its original instance and request identity.
-fn take_request(fixture: &mut NativeMarkdown, plugin: &str) -> plugin_runtime::EditorRequest {
+fn take_request(
+    fixture: &mut NativeMarkdown,
+    plugin: &str,
+    ui: &mut gpui_kit::VisualTestContext,
+) -> plugin_runtime::EditorRequest {
     let mut requests = fixture
         .manager
         .live
         .get_mut(plugin)
         .unwrap()
         .take_editor_requests();
-    assert_eq!(requests.len(), 1, "one operation admits one request");
+    // Native focus can legitimately queue a synchronized viewport receipt beside navigation.
+    // Execute those through the normal queue; exactly one navigation retains its tested authority.
+    let ancillary: Vec<_> = requests
+        .extract_if(.., |request| {
+            matches!(request.operation(), Op::LocateViewport { .. })
+        })
+        .collect();
+    ui.update(|_, cx| {
+        fixture
+            .app
+            .read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .editor_requests
+            .extend(
+                ancillary
+                    .into_iter()
+                    .map(|request| (plugin.to_owned(), request)),
+            )
+    });
+    assert_eq!(requests.len(), 1, "one navigation admits one request");
     requests.pop().unwrap()
 }
 
@@ -35,7 +63,7 @@ fn pending_navigation(
 ) -> plugin_runtime::EditorRequest {
     click_link(ui);
     super::super::composable_tests::pump(&mut fixture.manager, &fixture.app, ui);
-    let request = take_request(fixture, "markdown");
+    let request = take_request(fixture, "markdown", ui);
     assert!(matches!(
         request.operation(),
         Op::NavigateDocument {
@@ -464,7 +492,7 @@ fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
             path: "next.txt".into(),
         },
     );
-    let request = take_request(&mut fixture, "navigation-peer");
+    let request = take_request(&mut fixture, "navigation-peer", ui);
     execute(&mut fixture, "navigation-peer", &request, ui);
     assert!(
         matches!(request.status(), RequestUpdate::Completed { result: Ok(Value::Opened { ref document }) } if document.path == "next.txt")
@@ -490,7 +518,7 @@ fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
             url: "https://example.com/stale".into(),
         },
     );
-    let stale = take_request(&mut fixture, "navigation-peer");
+    let stale = take_request(&mut fixture, "navigation-peer", ui);
     fixture.focus_editor(ui);
     ui.simulate_keystrokes("ctrl-home");
     ui.simulate_input("变更");
@@ -511,7 +539,7 @@ fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
         version,
         NavigationTarget::ExternalUrl { url: url.into() },
     );
-    let browser = take_request(&mut fixture, "navigation-peer");
+    let browser = take_request(&mut fixture, "navigation-peer", ui);
     execute(&mut fixture, "navigation-peer", &browser, ui);
     assert!(matches!(
         browser.status(),

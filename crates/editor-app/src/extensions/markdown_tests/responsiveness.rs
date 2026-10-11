@@ -72,7 +72,7 @@ fn delivered_markdown_source_only_typing_suspends_preview(cx: &mut TestAppContex
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", &source)]);
     fixture.open("notes.md", ui);
     fixture.click("plugin-tool-markdown/preview/display-source", ui);
-    let before = fixture.manager.live["markdown"].views["preview"]
+    let mut before = fixture.manager.live["markdown"].views["preview"]
         .root
         .clone();
     fixture.focus_editor(ui);
@@ -97,6 +97,20 @@ fn delivered_markdown_source_only_typing_suspends_preview(cx: &mut TestAppContex
     );
     fixture.settle(ui);
     let after = &fixture.manager.live["markdown"].views["preview"].root;
+    // NativeEditor must track the live document revision even while derived content is suspended.
+    // Require the exact same source-only tree after normalizing only that mandatory authority.
+    if let (
+        protocol::ui::Kind::NativeEditor { document: previous },
+        protocol::ui::Kind::NativeEditor { document: current },
+    ) = (&mut before.kind, &after.kind)
+    {
+        assert_eq!(previous.id, current.id);
+        assert_eq!(previous.path, current.path);
+        assert_eq!(current.revision, previous.revision + 6);
+        previous.revision = current.revision;
+    } else {
+        panic!("source-only mode must contain only the borrowed native editor");
+    }
     assert_eq!(
         *after, before,
         "hidden content must not be parsed or rebuilt; source authority stays fresh for toolbar commands"

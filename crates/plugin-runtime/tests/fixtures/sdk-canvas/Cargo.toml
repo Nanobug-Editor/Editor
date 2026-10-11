@@ -1,0 +1,14 @@
+[package]
+name = "sdk-canvas-fixture"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+
+# The fixture consumes the exported SDK without depending on a host source directory.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }

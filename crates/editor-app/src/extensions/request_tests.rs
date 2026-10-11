@@ -126,7 +126,38 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
         save.status()
     );
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "after edit");
-    // Typed visibility reaches the actual dock, and hiding must return occupied space to the editor.
+    // Give the owned panel a separate editor split. Hiding a panel that shares Explorer's band
+    // cannot reclaim that still-visible peer's width; this split makes the width assertion observable.
+    cx.update(|window, cx| {
+        let (panel, editor, area) = {
+            let app = app.read(cx);
+            (
+                gpui_base::dock::PanelId::from(
+                    app.plugin_panels["capability-example/welcome"].entity_id(),
+                ),
+                gpui_base::dock::PanelId::from(app.editor_panel.entity_id()),
+                app.dock_area.clone(),
+            )
+        };
+        area.update(cx, |area, cx| {
+            let node = area
+                .layout(gpui_base::dock::DockPlacement::Center)
+                .unwrap()
+                .find_panel_node(editor)
+                .unwrap();
+            area.move_panel(
+                panel,
+                gpui_base::dock::InsertTarget::Split {
+                    node,
+                    placement: gpui_base::Placement::Right,
+                    size: Some(px(240.)),
+                },
+                window,
+                cx,
+            );
+        });
+    });
+    // Typed visibility reaches the actual dock, and hiding must return its occupied space to the editor.
     let mut shown_width = None;
     for visible in [true, false, true] {
         let panel = request(

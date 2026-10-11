@@ -9,10 +9,9 @@ fn pending_task(
     fixture: &mut NativeMarkdown,
     ui: &mut gpui_kit::VisualTestContext,
 ) -> plugin_runtime::EditorRequest {
-    let position = ui
-        .debug_bounds("plugin-checkbox-marker-b-2-task")
-        .unwrap()
-        .center();
+    let selector =
+        Box::leak(format!("plugin-checkbox-marker-{}", fixture.task_id(0)).into_boxed_str());
+    let position = ui.debug_bounds(selector).unwrap().center();
     ui.simulate_click(position, Default::default());
     ui.run_until_parked();
     super::super::composable_tests::pump(&mut fixture.manager, &fixture.app, ui);

@@ -299,7 +299,31 @@ fn real_plugin_tools_preserve_context_shared_intent_and_separate_overflow(cx: &m
             .items
             .clone()
     });
-    assert!(items.iter().all(|item| item.label.starts_with("Window ")));
+    // Native Explorer/Terminal/Outline belong to the same window group. Selection adds a
+    // checkmark; the popup must retain all five plugin windows and exclude function actions.
+    let labels: Vec<_> = items
+        .iter()
+        .map(|item| item.label.trim_start_matches('✓').trim())
+        .collect();
+    let builtins = [
+        t!("panel.explorer").to_string(),
+        t!("terminal.title").to_string(),
+        t!("panel.outline").to_string(),
+    ];
+    assert_eq!(
+        labels
+            .iter()
+            .filter(|label| label.starts_with("Window "))
+            .count(),
+        5
+    );
+    assert!(
+        labels
+            .iter()
+            .all(|label| label.starts_with("Window ")
+                || builtins.iter().any(|builtin| builtin == label)),
+        "{labels:?}"
+    );
     visual.simulate_keystrokes("end enter");
     draw(&app, &mut manager, visual);
     assert!(

@@ -570,6 +570,9 @@ pub(super) struct Worker {
     /// A pending reply must never be reported as an unknown terminal state.
     #[cfg(test)]
     pub run_queries: Mutex<BTreeMap<(String, u64), plugin_runtime::Completion<serde_json::Value>>>,
+    /// Test transport retains configuration receipts across frames, matching the production actor.
+    #[cfg(test)]
+    pub configuration_calls: Mutex<configurations::ConfigurationCalls>,
 }
 
 /// Queue ownership is released on rejection, worker shutdown or completion of native-to-manager transfer.
@@ -697,6 +700,7 @@ impl Worker {
             image_offers: Default::default(),
             recorded: Mutex::new(rx),
             run_queries: Default::default(),
+            configuration_calls: Default::default(),
         }
     }
     #[cfg(not(test))]

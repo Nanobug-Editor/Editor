@@ -436,11 +436,12 @@ fn ui_images_worker_pool_is_global_and_queued_nodes_resume() {
         "separate managers bypassed the global producer bound"
     );
     server.release();
+    let first_resources = first.settle(5);
     assert!(
-        first
-            .settle(5)
+        first_resources
             .values()
-            .all(|image| matches!(image.state, ImageState::Ready(_)))
+            .all(|image| matches!(image.state, ImageState::Ready(_))),
+        "queued nodes must all resume successfully: {first_resources:?}"
     );
     assert!(
         second

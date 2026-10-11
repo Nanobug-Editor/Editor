@@ -135,14 +135,24 @@ impl Driver {
             }
             assert!(
                 Instant::now() < deadline,
-                "configuration flow timed out: {}; debug={:?}; providers={:?}",
+                "configuration flow timed out: {}; debug={:?}; providers={:?}; blocker={:?}; availability={:?}",
                 cx.update(|_, cx| app.read(cx).status.clone()),
                 manager.debug_observations(),
                 manager
                     .published_entries()
                     .iter()
                     .map(|entry| (&entry.manifest.id, &entry.error))
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>(),
+                cx.update(|_, cx| app
+                    .read(cx)
+                    .run_controls
+                    .selected()
+                    .map(|config| app.read(cx).run_controls.debug_blocker(&config.id))),
+                cx.update(|_, cx| app
+                    .read(cx)
+                    .run_controls
+                    .debug_availability()
+                    .map(str::to_owned))
             );
             std::thread::sleep(Duration::from_millis(10));
         }

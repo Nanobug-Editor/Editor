@@ -173,7 +173,6 @@ fn events(
 #[gpui::test]
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn composed_wasm_preview_follows_memory_and_reclaims_the_editor_split(cx: &mut TestAppContext) {
-    use std::io::{Cursor, Write};
     cx.update(|cx| {
         gpui_kit::init(cx);
         typography::init(cx);
@@ -184,29 +183,9 @@ fn composed_wasm_preview_follows_memory_and_reclaims_the_editor_split(cx: &mut T
     let path = directory.path().join("drawing.svg");
     let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100"><rect width="160" height="100" fill="red"/></svg>"#;
     std::fs::write(&path, svg).unwrap();
-    let mut files = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
-    let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
-    manifest["settings_hook"] = serde_json::json!(false);
-    manifest["settings"]["label"]["default"] = serde_json::json!("composable-ui");
-    manifest["panels"][0]["position"] = serde_json::json!("editor");
-    manifest["panels"][0]["file_extensions"] = serde_json::json!(["svg"]);
-    files.insert(
-        "manifest.json".into(),
-        serde_json::to_vec(&manifest).unwrap(),
-    );
-    let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    for (name, bytes) in files {
-        archive
-            .start_file(name, zip::write::SimpleFileOptions::default())
-            .unwrap();
-        archive.write_all(&bytes).unwrap();
-    }
-    let package = Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap();
+    // The current public editor.layout contract requires an explicit source node. A separately
+    // built SDK guest supplies it without changing retired example bytes or host selection logic.
+    let package = crate::test_packages::package("sdk-canvas-fixture");
     let mut manager = plugin_runtime::Manager::open(
         directory.path().join("runtime"),
         protocol::Environment {
@@ -236,40 +215,52 @@ fn composed_wasm_preview_follows_memory_and_reclaims_the_editor_split(cx: &mut T
     publish(&mut manager, &mut renderer, &app, cx);
     assert!(cx.debug_bounds("editor-plugin-layout").is_some());
     assert!(cx.debug_bounds("plugin-ui-caption").is_some());
+    // Drain the preview/viewport callbacks emitted by the first layout before activating its button.
+    pump(&mut manager, &app, cx);
+    publish(&mut manager, &mut renderer, &app, cx);
     cx.update(|_, cx| {
         let owner = app.read(cx).extensions.read(cx);
         let images = &owner.worker.state.lock().unwrap().images;
-        assert!(images["capability-example/welcome/canvas/viewport"][0].is_some());
+        assert!(images["sdk-canvas-fixture/welcome/canvas/viewport"][0].is_some());
     });
-    let zoom = cx.debug_bounds("plugin-ui-zoom").unwrap();
-    cx.simulate_click(
-        point(zoom.left() + px(20.), zoom.center().y),
-        Default::default(),
-    );
+    let zoom = cx.debug_bounds("plugin-button-zoom").unwrap();
+    cx.simulate_click(zoom.center(), Default::default());
     cx.run_until_parked();
     pump(&mut manager, &app, cx);
     publish(&mut manager, &mut renderer, &app, cx);
-    let tree = manager.live["capability-example"].views["welcome"].as_ref();
+    let tree = manager.live["sdk-canvas-fixture"].views["welcome"].as_ref();
     let Kind::Canvas(canvas) = &tree.active_node("viewport").unwrap().kind else {
         unreachable!()
     };
     assert!(matches!(canvas.paint[0], protocol::Paint::Svg {rect,..} if rect.w==200.));
     // The document's memory revision changes while disk content remains untouched.
     cx.update(|window, cx| {
+        window.activate_window();
         app.read(cx)
             .editor
             .clone()
-            .update(cx, |editor, cx| editor.focus(window, cx))
+            .update(cx, |editor, cx| editor.focus(window, cx));
+        // Draw the newly focused native editor so its input handler owns the next text event.
+        window.draw(cx).clear(cx);
     });
+    cx.run_until_parked();
     cx.simulate_input("未保存 ");
     cx.run_until_parked();
+    assert!(cx.update(|_, cx| {
+        app.read(cx)
+            .editor
+            .read(cx)
+            .text()
+            .to_string()
+            .contains("未保存 ")
+    }));
     pump(&mut manager, &app, cx);
     publish(&mut manager, &mut renderer, &app, cx);
-    let tree = manager.live["capability-example"].views["welcome"].as_ref();
+    let tree = manager.live["sdk-canvas-fixture"].views["welcome"].as_ref();
     assert!(serde_json::to_string(tree).unwrap().contains("未保存 "));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), svg);
     assert!(tree.source.is_some());
-    manager.uninstall("capability-example", true).unwrap();
+    manager.uninstall("sdk-canvas-fixture", true).unwrap();
     publish(&mut manager, &mut renderer, &app, cx);
     assert!(cx.debug_bounds("editor-plugin-layout").is_none());
     assert!(cx.debug_bounds("plugin-ui-viewport").is_none());
@@ -317,7 +308,10 @@ pub(super) fn pump_recording_and_debug(
     Vec<(String, u64, super::RunStatus)>,
     Vec<(String, u64, Result<(), String>)>,
 ) {
-    // The same target dispatcher is retained by native target acceptance; older execution fixtures need none.
+    // A configuration validation can complete after this frame. Dropping its transport here would
+    // cancel the real public request, leaving an otherwise healthy launch permanently pending.
+    let worker = cx.update(|_, cx| app.read(cx).extensions.read(cx).worker.clone());
+    let mut configurations = worker.configuration_calls.lock().unwrap();
     pump_recording_all(
         manager,
         app,
@@ -325,7 +319,7 @@ pub(super) fn pump_recording_and_debug(
         launches,
         debug,
         &mut super::worker::targets::TargetCalls::default(),
-        &mut super::worker::configurations::ConfigurationCalls::default(),
+        &mut configurations,
     )
 }
 
