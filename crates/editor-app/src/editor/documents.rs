@@ -75,6 +75,10 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let Some(update) = self.defer_workspace_reconciliation(update) else {
+            return;
+        };
+        self.publish_workspace_file_events(update.file_events.clone(), cx);
         let renamed_from: Vec<_> = update.renames.iter().map(|(old, _)| old.clone()).collect();
         let mut renamed = false;
         let mut renamed_editors = Vec::new();

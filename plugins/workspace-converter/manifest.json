@@ -1,0 +1,23 @@
+{
+  "id": "workspace-converter",
+  "name": "Workspace Text Converter",
+  "version": "0.1.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": { "ui.native": "^1", "editor.documents": "^1.1", "editor.edit": "^1.1", "workspace.files": "^1.2", "files.selection": "^1.1" }
+  },
+  "component": "workspace-converter.wasm",
+  "permissions": ["workspace.read", "workspace.write", "editor.read", "editor.write", "files.select", "ui.panels"],
+  "panels": [{ "id": "converter", "title": "Workspace Text Converter", "position": "right" }],
+  "commands": [
+    { "id": "convert", "title": "Convert workspace text / 转换工作区文本", "menu": true },
+    { "id": "export", "title": "Export conversion report / 导出转换报告", "menu": true },
+    { "id": "cancel", "title": "Cancel conversion / 取消后续转换", "menu": true },
+    { "id": "undo", "title": "Undo conversion batch / 撤销转换批次", "menu": true },
+    { "id": "status", "title": "Inspect conversion receipt / 查看转换结果", "menu": true },
+    { "id": "probe", "title": "Inspect conversion contract" },
+    { "id": "events", "title": "Inspect conversion observations / 查看文件变化", "menu": true }
+  ],
+  "storage_limit": 4096
+}

@@ -261,6 +261,7 @@ impl Worker {
             let _ = self.events.unbounded_send(Event::Discard {
                 approvals,
                 update: Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: None,
                     documents: read_documents(&documents),
                     renames: Vec::new(),

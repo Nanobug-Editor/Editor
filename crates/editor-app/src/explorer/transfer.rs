@@ -492,6 +492,7 @@ impl EditorApp {
         }
         self.apply_reconciliation(
             Reconciliation {
+                file_events: Vec::new(),
                 snapshot: None,
                 renames: vec![(old.to_path_buf(), new.to_path_buf())],
                 documents: Vec::new(),
@@ -525,6 +526,7 @@ impl EditorApp {
         let renames = std::mem::take(&mut self.file_transfers.deferred_renames);
         self.apply_reconciliation(
             Reconciliation {
+                file_events: Vec::new(),
                 snapshot: None,
                 renames,
                 documents: Vec::new(),

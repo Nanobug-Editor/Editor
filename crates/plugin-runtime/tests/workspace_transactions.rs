@@ -1,0 +1,378 @@
+//! Independent real SDK packages exercise public root admission, revocation and bounded file streams.
+use plugin_runtime::{
+    Manager, Package,
+    plugin_protocol::{Environment, api, ui, workspace},
+};
+use std::io::{Cursor, Write};
+use std::path::Path;
+
+/// Packages are built with the current host --plugin-package; no contract is supplied by test code.
+fn install(manager: &mut Manager, plugin: &str) {
+    install_with_private_grant(manager, plugin, false);
+}
+
+/// The authority matrix adds a legitimate private-storage grant to the unchanged real SDK component.
+/// This verifies that even an owned, granted private root cannot be repurposed as a workspace root.
+fn install_with_private_grant(manager: &mut Manager, plugin: &str, private: bool) {
+    let package = Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "../../target/community-transactions/{plugin}-0.1.0.zip"
+    )))
+    .unwrap();
+    let package = if private {
+        let mut files = package.files;
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&files["manifest.json"]).unwrap();
+        manifest["api"]["required"]["storage.private"] = serde_json::json!("^1");
+        manifest["permissions"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!("storage"));
+        files.insert(
+            "manifest.json".into(),
+            serde_json::to_vec(&manifest).unwrap(),
+        );
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, bytes) in files {
+            archive
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(&bytes).unwrap();
+        }
+        Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap()
+    } else {
+        package
+    };
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+}
+
+/// The ordinary guest command exposes bounded results through its declared panel.
+fn probe(
+    manager: &mut Manager,
+    plugin: &str,
+    operation: api::Operation,
+) -> Result<api::Value, api::Failure> {
+    manager
+        .invoke_command(plugin, "probe", serde_json::to_value(operation).unwrap())
+        .unwrap();
+    let ui::Kind::Text { text } = &manager.live[plugin]
+        .views
+        .values()
+        .next()
+        .unwrap()
+        .root
+        .kind
+    else {
+        panic!("probe output expected")
+    };
+    serde_json::from_str(text).unwrap()
+}
+
+fn root(manager: &mut Manager, plugin: &str) -> api::ResourceHandle {
+    let api::Value::Resource(root) = probe(manager, plugin, api::Operation::OpenWorkspace).unwrap()
+    else {
+        panic!("workspace root expected")
+    };
+    root
+}
+
+fn stat(root: api::ResourceHandle, path: &str) -> api::Operation {
+    api::Operation::Editor {
+        operation: api::EditorOperation::Workspace {
+            operation: workspace::Operation::Stat {
+                target: workspace::FileTarget {
+                    root,
+                    path: path.into(),
+                },
+            },
+        },
+        timeout_ms: 30_000,
+    }
+}
+
+fn events(manager: &mut Manager, plugin: &str) -> Vec<api::Notification> {
+    manager
+        .invoke_command(plugin, "events", serde_json::Value::Null)
+        .unwrap();
+    let ui::Kind::Text { text } = &manager.live[plugin]
+        .views
+        .values()
+        .next()
+        .unwrap()
+        .root
+        .kind
+    else {
+        panic!("observation panel expected")
+    };
+    serde_json::from_str(text).unwrap()
+}
+
+/// Traversal/streams/devices, private roots, peers, released roots and junctions fail before host IO.
+#[test]
+#[ignore = "build workspace-scaffold and workspace-converter with the current host --plugin-package first"]
+fn workspace_transaction_roots_reject_escape_private_peer_and_revoked_authority() {
+    let workspace = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    std::fs::write(workspace.path().join("owned.txt"), "owned").unwrap();
+    let mut manager = Manager::open(
+        profile.path().into(),
+        Environment {
+            workspace: workspace.path().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    install_with_private_grant(&mut manager, "workspace-scaffold", true);
+    install(&mut manager, "workspace-converter");
+    let handle = root(&mut manager, "workspace-scaffold");
+    for path in [
+        "../outside",
+        "/outside",
+        "C:/outside",
+        "owned.txt:secret",
+        "CON",
+        "nul.txt",
+        "child/../owned.txt",
+        "child\\owned.txt",
+        "\\\\.\\NUL",
+        "trailing.",
+        "trailing ",
+    ] {
+        assert_eq!(
+            probe(
+                &mut manager,
+                "workspace-scaffold",
+                stat(handle.clone(), path)
+            )
+            .unwrap_err()
+            .code,
+            api::ErrorCode::InvalidPath,
+            "accepted {path}"
+        );
+    }
+    assert_eq!(
+        probe(
+            &mut manager,
+            "workspace-converter",
+            stat(handle.clone(), "owned.txt")
+        )
+        .unwrap_err()
+        .code,
+        api::ErrorCode::InvalidHandle
+    );
+    let api::Value::Resource(private) =
+        probe(&mut manager, "workspace-scaffold", api::Operation::OpenData).unwrap()
+    else {
+        panic!("private root expected")
+    };
+    assert_eq!(
+        probe(
+            &mut manager,
+            "workspace-scaffold",
+            stat(private, "owned.txt")
+        )
+        .unwrap_err()
+        .code,
+        api::ErrorCode::InvalidHandle
+    );
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("secret.txt"), "outside").unwrap();
+        let junction = workspace.path().join("redirect");
+        let result = std::process::Command::new("powershell.exe").creation_flags(0x08000000).args(["-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path $env:NANOBUG_TRANSACTION_LINK -Value $env:NANOBUG_TRANSACTION_TARGET | Out-Null"]).env("NANOBUG_TRANSACTION_LINK", &junction).env("NANOBUG_TRANSACTION_TARGET", outside.path()).output().unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(
+            probe(
+                &mut manager,
+                "workspace-scaffold",
+                stat(handle.clone(), "redirect/secret.txt")
+            )
+            .unwrap_err()
+            .code,
+            api::ErrorCode::InvalidPath
+        );
+        // Remove only the verified link, through the same native filesystem API used to inspect it.
+        use std::os::windows::fs::MetadataExt;
+        assert_ne!(
+            std::fs::symlink_metadata(&junction)
+                .unwrap()
+                .file_attributes()
+                & 0x400,
+            0
+        );
+        std::fs::remove_dir(junction).unwrap();
+    }
+    assert!(matches!(
+        probe(
+            &mut manager,
+            "workspace-scaffold",
+            stat(handle.clone(), "owned.txt")
+        )
+        .unwrap(),
+        api::Value::Accepted(_)
+    ));
+    let request = manager
+        .live
+        .get_mut("workspace-scaffold")
+        .unwrap()
+        .take_editor_requests()
+        .pop()
+        .unwrap();
+    let proof = request.workspace_request().unwrap().files()[0].clone();
+    assert!(proof.guard().is_ok());
+    probe(
+        &mut manager,
+        "workspace-scaffold",
+        api::Operation::CloseResource {
+            handle: handle.clone(),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        proof.guard().err().unwrap().code,
+        api::ErrorCode::InvalidHandle
+    );
+    assert_eq!(
+        probe(
+            &mut manager,
+            "workspace-scaffold",
+            stat(handle, "owned.txt")
+        )
+        .unwrap_err()
+        .code,
+        api::ErrorCode::InvalidHandle
+    );
+    let handle = root(&mut manager, "workspace-scaffold");
+    manager.disable("workspace-scaffold").unwrap();
+    manager.enable("workspace-scaffold").unwrap();
+    assert_eq!(
+        probe(
+            &mut manager,
+            "workspace-scaffold",
+            stat(handle, "owned.txt")
+        )
+        .unwrap_err()
+        .code,
+        api::ErrorCode::InvalidHandle
+    );
+}
+
+/// Actual guests opt in independently; sequences coalesce, overflow terminates and root release stops.
+#[test]
+#[ignore = "build workspace-scaffold and workspace-converter with the current host --plugin-package first"]
+fn workspace_transaction_stream_coalesces_overflows_and_stops_on_root_release() {
+    let workspace = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let mut manager = Manager::open(
+        profile.path().into(),
+        Environment {
+            workspace: workspace.path().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    install(&mut manager, "workspace-scaffold");
+    install(&mut manager, "workspace-converter");
+    let handle = root(&mut manager, "workspace-scaffold");
+    let api::Value::Resource(subscription) = probe(
+        &mut manager,
+        "workspace-scaffold",
+        api::Operation::SubscribeWorkspaceFiles {
+            root: handle.clone(),
+        },
+    )
+    .unwrap() else {
+        panic!("subscription expected")
+    };
+    let changes = [
+        workspace::FileEventKind::Created {
+            path: "unopened.txt".into(),
+        },
+        workspace::FileEventKind::Modified {
+            path: "unopened.txt".into(),
+        },
+        workspace::FileEventKind::Modified {
+            path: "unopened.txt".into(),
+        },
+        workspace::FileEventKind::Renamed {
+            source: "unopened.txt".into(),
+            target: "renamed.txt".into(),
+        },
+        workspace::FileEventKind::Deleted {
+            path: "renamed.txt".into(),
+        },
+        workspace::FileEventKind::RescanRequired,
+    ];
+    for (index, kind) in changes.into_iter().enumerate() {
+        manager.workspace_file_event(workspace::FileEvent {
+            sequence: index as u64 + 1,
+            kind,
+        });
+    }
+    manager.poll();
+    let log = events(&mut manager, "workspace-scaffold");
+    let observed = log
+        .iter()
+        .filter_map(|event| match event {
+            api::Notification::WorkspaceFile {
+                subscription: owner,
+                event,
+            } if *owner == subscription => Some(event),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        observed
+            .iter()
+            .map(|event| event.sequence)
+            .collect::<Vec<_>>(),
+        [1, 3, 4, 5, 6]
+    );
+    assert!(
+        events(&mut manager, "workspace-converter").is_empty(),
+        "unsubscribed independent guest receives no paths"
+    );
+    for index in 7..140 {
+        manager.workspace_file_event(workspace::FileEvent {
+            sequence: index,
+            kind: workspace::FileEventKind::Created {
+                path: format!("file-{index}.txt"),
+            },
+        });
+    }
+    manager.poll();
+    assert!(events(&mut manager, "workspace-scaffold").iter().any(|event| matches!(event, api::Notification::SubscriptionFailed { subscription: owner, error } if *owner == subscription && error.code == api::ErrorCode::LimitExceeded)));
+    let api::Value::Resource(second) = probe(
+        &mut manager,
+        "workspace-scaffold",
+        api::Operation::SubscribeWorkspaceFiles {
+            root: handle.clone(),
+        },
+    )
+    .unwrap() else {
+        panic!("resubscription expected")
+    };
+    probe(
+        &mut manager,
+        "workspace-scaffold",
+        api::Operation::CloseResource { handle },
+    )
+    .unwrap();
+    manager.workspace_file_event(workspace::FileEvent {
+        sequence: 140,
+        kind: workspace::FileEventKind::Created {
+            path: "after-release.txt".into(),
+        },
+    });
+    manager.poll();
+    let log = events(&mut manager, "workspace-scaffold");
+    assert!(log.iter().any(|event| matches!(event, api::Notification::SubscriptionFailed { subscription: owner, error } if *owner == second && error.code == api::ErrorCode::InvalidHandle)));
+    assert!(!log.iter().any(|event| matches!(event, api::Notification::WorkspaceFile { event, .. } if event.sequence == 140)));
+}

@@ -34,6 +34,7 @@ fn external_edits_preserve_dirty_text_and_track_deletion_and_rename(cx: &mut Tes
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: vec![(original.clone(), Ok("second".into()), Instant::now())],
                     renames: Vec::new(),
@@ -76,6 +77,7 @@ fn external_edits_preserve_dirty_text_and_track_deletion_and_rename(cx: &mut Tes
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: vec![(original.clone(), Ok("external".into()), Instant::now())],
                     renames: Vec::new(),
@@ -122,6 +124,7 @@ fn external_edits_preserve_dirty_text_and_track_deletion_and_rename(cx: &mut Tes
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: vec![(
                         original.clone(),
@@ -169,6 +172,7 @@ fn external_edits_preserve_dirty_text_and_track_deletion_and_rename(cx: &mut Tes
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: vec![(
                         original.clone(),

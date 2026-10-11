@@ -4,6 +4,87 @@ use gpui_kit::EntityInputHandler as _;
 use protocol::api::TextRange;
 
 impl EditorApp {
+    /// General edits target every exact open session; toolbar-only active-document semantics stay separate.
+    pub(super) fn apply_plugin_edits(
+        &mut self,
+        request: EditorRequest,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Op::ApplyEdits {
+            document,
+            edits,
+            selection,
+        } = request.operation()
+        else {
+            unreachable!()
+        };
+        let result = (|| {
+            let index = self.plugin_document_target(document)?;
+            let editor = self
+                .text_tab(index)
+                .ok_or_else(|| {
+                    Failure::new(ErrorCode::UnsupportedOperation, "File has no text session")
+                })?
+                .editor
+                .clone();
+            let before = editor.read(cx).text().to_string();
+            let prepared =
+                crate::editor::text_transactions::PreparedTextEdits::new(before, edits, *selection)
+                    .map_err(|error| Failure::new(ErrorCode::InvalidRequest, error.to_string()))?;
+            if !request.enter_side_effect() {
+                return Err(Failure::new(
+                    ErrorCode::Cancelled,
+                    "Text proposal did not execute",
+                ));
+            }
+            editor
+                .update(cx, |editor, cx| prepared.apply(editor, window, cx))
+                .map_err(|error| Failure::new(ErrorCode::InvalidState, error.to_string()))?;
+            let identity = editor.entity_id();
+            let completion = request.clone();
+            let owner = cx.entity().downgrade();
+            cx.defer(move |cx| {
+                // The sole native Change listener advances both the session and capability revisions.
+                let result = owner
+                    .update(cx, |app, cx| {
+                        let index = app
+                            .tabs
+                            .iter()
+                            .position(|tab| tab.owns_editor_id(identity))
+                            .ok_or_else(|| {
+                                Failure::new(ErrorCode::StaleRevision, "Edited document closed")
+                            })?;
+                        let range = app
+                            .text_tab(index)
+                            .unwrap()
+                            .editor
+                            .read(cx)
+                            .selected_range();
+                        Ok(Value::Edited {
+                            document: app.plugin_document_version(index)?,
+                            selection: TextRange {
+                                start: range.start,
+                                end: range.end,
+                            },
+                        })
+                    })
+                    .unwrap_or_else(|_| {
+                        Err(Failure::new(
+                            ErrorCode::StaleRevision,
+                            "Editor window closed",
+                        ))
+                    });
+                completion.finish(result);
+            });
+            cx.notify();
+            Ok(())
+        })();
+        if let Err(error) = result {
+            request.finish(Err(error));
+        }
+    }
+
     /// A toolbar action may only observe or edit the still-active document that produced its UI.
     pub(super) fn current_plugin_edit_target(
         &self,

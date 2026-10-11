@@ -11,6 +11,24 @@ pub enum SelectionMode {
     Save,
 }
 
+/// files.selection 1.1 adds explicit native write consent; existing File/Directory picks stay readonly.
+/// Save always remains an exact write intent and never gains guest read access.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SelectionAccess {
+    ReadOnly,
+    ReadWrite,
+}
+
+/// Borrowed picker metadata lets every native route preserve the same requested access intent.
+pub struct SelectionOptions<'a> {
+    pub title: &'a str,
+    pub mode: SelectionMode,
+    pub multiple: bool,
+    pub suggested_name: Option<&'a str>,
+    pub access: SelectionAccess,
+}
+
 /// The display name is informational; authority resides in the selecting instance's opaque slot.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -49,6 +67,14 @@ pub enum Operation {
         mode: SelectionMode,
         multiple: bool,
         suggested_name: Option<String>,
+    },
+    /// Requires files.selection 1.1. The native picker must display explicit write intent.
+    SelectWithAccess {
+        title: String,
+        mode: SelectionMode,
+        multiple: bool,
+        suggested_name: Option<String>,
+        access: SelectionAccess,
     },
     Confirm {
         title: String,
@@ -101,6 +127,42 @@ pub enum Value {
 }
 
 impl Operation {
+    /// Old directory/file selection never inherits a newer capability's write authority.
+    pub fn selection(&self) -> Option<SelectionOptions<'_>> {
+        let (title, mode, multiple, suggested_name, access) = match self {
+            Self::Select {
+                title,
+                mode,
+                multiple,
+                suggested_name,
+            } => (
+                title,
+                mode,
+                multiple,
+                suggested_name,
+                if *mode == SelectionMode::Save {
+                    SelectionAccess::ReadWrite
+                } else {
+                    SelectionAccess::ReadOnly
+                },
+            ),
+            Self::SelectWithAccess {
+                title,
+                mode,
+                multiple,
+                suggested_name,
+                access,
+            } => (title, mode, multiple, suggested_name, *access),
+            _ => return None,
+        };
+        Some(SelectionOptions {
+            title,
+            mode: *mode,
+            multiple: *multiple,
+            suggested_name: suggested_name.as_deref(),
+            access,
+        })
+    }
     /// Validate transport bounds and unique identities before allocating a native request.
     pub fn validate(&self) -> Result<(), Failure> {
         match self {
@@ -109,6 +171,13 @@ impl Operation {
                 mode,
                 multiple,
                 suggested_name,
+            }
+            | Self::SelectWithAccess {
+                title,
+                mode,
+                multiple,
+                suggested_name,
+                ..
             } => {
                 if title.is_empty()
                     || title.len() > 256

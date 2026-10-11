@@ -1,7 +1,7 @@
 //! Native pickers consume validated requests and actively close with their original owner.
 use super::*;
 use platform_windows::file_picker::{FilePickerKind, FilePickerOptions, pick_files};
-use plugin_runtime::plugin_protocol::interaction::{Operation, SelectionMode};
+use plugin_runtime::plugin_protocol::interaction::{SelectionAccess, SelectionMode};
 use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
 
 impl EditorApp {
@@ -13,18 +13,10 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Op::Interaction {
-            operation:
-                Operation::Select {
-                    title,
-                    mode,
-                    multiple,
-                    suggested_name,
-                },
-        } = request.operation()
-        else {
+        let Op::Interaction { operation } = request.operation() else {
             unreachable!()
         };
+        let selection = operation.selection().expect("picker request");
         let owner_hwnd = window
             .window_handle()
             .ok()
@@ -35,10 +27,20 @@ impl EditorApp {
             .unwrap_or(0);
         let picker = pick_files(FilePickerOptions {
             owner_hwnd,
-            title: format!("{title} · {plugin}"),
-            multiple: *multiple,
-            suggested_name: suggested_name.clone(),
-            kind: match mode {
+            title: if selection.access == SelectionAccess::ReadWrite
+                && selection.mode != SelectionMode::Save
+            {
+                format!(
+                    "{} · {} · {plugin}",
+                    selection.title,
+                    t!("interaction.write_access")
+                )
+            } else {
+                format!("{} · {plugin}", selection.title)
+            },
+            multiple: selection.multiple,
+            suggested_name: selection.suggested_name.map(str::to_owned),
+            kind: match selection.mode {
                 SelectionMode::File => FilePickerKind::OpenFile,
                 SelectionMode::Directory => FilePickerKind::Directory,
                 SelectionMode::Save => FilePickerKind::Save,

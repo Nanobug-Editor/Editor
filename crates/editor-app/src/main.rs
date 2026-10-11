@@ -181,6 +181,8 @@ struct EditorApp {
     explorer_menu: Option<ExplorerMenu>,
     /// Background disk batches and their session-only recovery records.
     file_transfers: explorer::transfer::TransferState,
+    /// Generic plugin plans keep bounded immutable preimages, with each native session still owning Undo.
+    workspace_changes: extensions::workspace_transactions::WorkspaceChanges,
     /// Temporary navigation belongs to one pointer gesture, rather than the persisted session.
     explorer_drag: explorer::drag::DragState,
     tabs: Vec<OpenTab>,
@@ -538,6 +540,7 @@ impl EditorApp {
             tool_overflow: None,
             plugin_popup_snapshot: None,
             plugin_interactions: Vec::new(),
+            workspace_changes: Default::default(),
             plugin_picker_pending: false,
             plugin_file_picker: None,
             dark_theme: false,

@@ -19,6 +19,8 @@ pub(super) enum RootKind {
     ServiceInvocation,
     Subscription,
     PreferenceSubscription,
+    WorkspaceBatch,
+    FileSubscription,
     Process(u64),
 }
 
@@ -150,6 +152,8 @@ impl State {
             | RootKind::ServiceInvocation
             | RootKind::Subscription
             | RootKind::PreferenceSubscription
+            | RootKind::WorkspaceBatch
+            | RootKind::FileSubscription
             | RootKind::Process(_) => {
                 return Err(Failure::new(ErrorCode::InvalidHandle, "Not a file handle"));
             }
@@ -256,6 +260,12 @@ impl State {
             }
             api::Operation::CloseResource { handle } => {
                 self.roots.resolve(&handle)?;
+                if let Some(alive) = self.file_root_lifetimes.remove(&handle.resource) {
+                    alive.store(false, std::sync::atomic::Ordering::Release);
+                }
+                if let Some(batch) = self.workspace_batches.remove(&handle.resource) {
+                    batch.revoke();
+                }
                 if matches!(self.roots.resolve(&handle)?, RootKind::Selected) {
                     self.check_selection_authority()?;
                     self.selected_resources.remove(&handle.resource);
@@ -269,6 +279,7 @@ impl State {
                 self.plugin_services.resources.remove(&handle.resource);
                 self.subscriptions.remove(&handle.resource);
                 self.document_streams.remove(&handle.resource);
+                self.file_subscriptions.remove(&handle.resource);
                 if let Some(resource) = self.virtual_documents.remove(&handle.resource) {
                     resource.revoke();
                 }
@@ -299,6 +310,7 @@ impl State {
             | api::Operation::Process { .. }
             | api::Operation::SubscribeDocuments
             | api::Operation::SubscribeDocumentEvents
+            | api::Operation::SubscribeWorkspaceFiles { .. }
             | api::Operation::ReadPreference { .. }
             | api::Operation::WritePreference { .. }
             | api::Operation::Editor { .. }

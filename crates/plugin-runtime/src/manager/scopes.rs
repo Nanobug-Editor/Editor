@@ -16,6 +16,22 @@ pub(crate) fn workspace_key(workspace: &str) -> String {
 }
 
 impl Manager {
+    /// Publish portable unopened-file observations only to the current trusted workspace.
+    /// Events are data and do not grant paths, content reads or access to parked/application instances.
+    pub fn workspace_file_event(&mut self, event: plugin_protocol::workspace::FileEvent) {
+        if self.trusted && self.workspace_open {
+            for instance in self.live.values_mut() {
+                instance.workspace_file_event(event.clone());
+            }
+        }
+    }
+
+    /// An overflow rejects partial history explicitly; guests recover through bounded rereads.
+    pub fn workspace_events_failed(&mut self, error: api::Failure) {
+        for instance in self.live.values_mut() {
+            instance.workspace_events_failed(error.clone());
+        }
+    }
     /// Publish ordered metadata only to the current trusted workspace's explicitly opted-in streams.
     pub fn document_event(&mut self, event: api::DocumentEvent) {
         if self.trusted && self.workspace_open {

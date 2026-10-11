@@ -33,6 +33,18 @@ impl State {
                 "Deadline must be between 1 and 300000 ms",
             ));
         }
+        if matches!(&operation, EditorOperation::ApplyEdits { .. })
+            && self
+                .api
+                .capabilities
+                .get("editor.edit")
+                .is_none_or(|version| *version < semver::Version::new(1, 1, 0))
+        {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Multiple edits require editor.edit 1.1",
+            ));
+        }
         // New local-resource and position operations are additive editor.documents 1.1 contracts.
         if matches!(
             &operation,
@@ -53,6 +65,7 @@ impl State {
             ));
         }
         let (capability, permission) = match &operation {
+            EditorOperation::Workspace { .. } => ("workspace.files", ""),
             EditorOperation::OpenVirtualDocument { .. }
             | EditorOperation::RefreshVirtualDocument { .. } => ("editor.virtual", "editor.read"),
             EditorOperation::CompareDocuments { .. } => ("editor.diff", "editor.read"),
@@ -79,8 +92,19 @@ impl State {
                 operation.validate()?;
                 if matches!(
                     operation,
-                    plugin_protocol::interaction::Operation::Select { .. }
-                ) {
+                    plugin_protocol::interaction::Operation::SelectWithAccess { .. }
+                ) && self
+                    .api
+                    .capabilities
+                    .get("files.selection")
+                    .is_none_or(|version| *version < semver::Version::new(1, 1, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "Explicit selection access requires files.selection 1.1",
+                    ));
+                }
+                if operation.selection().is_some() {
                     self.check_selection_authority()?;
                     ("files.selection", "files.select")
                 } else {
@@ -124,6 +148,7 @@ impl State {
             EditorOperation::SaveImageInput { .. } => ("editor.images", "workspace.write"),
             EditorOperation::ReadDocumentSelection { .. } => ("editor.edit", "editor.read"),
             EditorOperation::ReplaceDocumentRange { .. } => ("editor.edit", "editor.write"),
+            EditorOperation::ApplyEdits { .. } => ("editor.edit", "editor.write"),
             EditorOperation::WriteClipboard { text } if text.len() > 1024 * 1024 => {
                 return Err(Failure::new(
                     ErrorCode::LimitExceeded,
@@ -166,7 +191,7 @@ impl State {
                 format!("{capability} was not negotiated"),
             ));
         }
-        if !self.permissions.contains(permission) {
+        if !permission.is_empty() && !self.permissions.contains(permission) {
             return Err(Failure::new(
                 ErrorCode::PermissionDenied,
                 format!("{permission} permission required"),
@@ -240,6 +265,11 @@ impl State {
                 "Editor request queue is full",
             ));
         }
+        let workspace_request = if let EditorOperation::Workspace { operation } = &operation {
+            Some(self.prepare_workspace_request(operation)?)
+        } else {
+            None
+        };
         let Value::Resource(handle) = self.roots.open(RootKind::EditorRequest)? else {
             unreachable!()
         };
@@ -266,6 +296,13 @@ impl State {
         if let Some(resource) = virtual_document {
             call = call.with_virtual_document(resource);
         }
+        let batch = workspace_request
+            .as_ref()
+            .and_then(|payload| payload.batch())
+            .map(|batch| batch.handle().clone());
+        if let Some(payload) = workspace_request {
+            call = call.with_workspace_request(payload);
+        }
         self.editor_requests.insert(
             handle.resource,
             PendingRequest {
@@ -275,7 +312,23 @@ impl State {
                 reported: 0,
             },
         );
-        Ok(Value::Accepted(handle))
+        if matches!(
+            self.editor_requests
+                .get(&handle.resource)
+                .unwrap()
+                .call
+                .operation(),
+            EditorOperation::Workspace {
+                operation: plugin_protocol::workspace::Operation::ApplyPlan { .. }
+            }
+        ) {
+            Ok(Value::BatchAccepted {
+                request: handle,
+                batch: batch.unwrap(),
+            })
+        } else {
+            Ok(Value::Accepted(handle))
+        }
     }
 
     /// Virtual access is direct, owned and bounded; service providers cannot borrow their caller's document.
@@ -379,7 +432,8 @@ impl State {
             | EditorOperation::LocateDocument { document, .. }
             | EditorOperation::SaveDocument { document }
             | EditorOperation::ReadDocumentSelection { document }
-            | EditorOperation::ReplaceDocumentRange { document, .. } => check(document),
+            | EditorOperation::ReplaceDocumentRange { document, .. }
+            | EditorOperation::ApplyEdits { document, .. } => check(document),
             EditorOperation::CompareDocuments { left, right } => {
                 check(left)?;
                 check(right)?;
@@ -392,6 +446,12 @@ impl State {
 
 /// Check bounded request shape; only the host can check the target revision and UTF-8 boundaries.
 fn validate_edit_request(operation: &EditorOperation) -> Result<(), Failure> {
+    if let EditorOperation::ApplyEdits {
+        edits, selection, ..
+    } = operation
+    {
+        api::validate_text_edits(edits, *selection)?;
+    }
     if let EditorOperation::ReplaceDocumentRange {
         range,
         text,
@@ -488,12 +548,8 @@ impl Instance {
                         }
                     }
                     if let api::RequestUpdate::Completed { result: Ok(_) } = &update {
-                        if let EditorOperation::Interaction {
-                            operation:
-                                plugin_protocol::interaction::Operation::Select {
-                                    mode, multiple, ..
-                                },
-                        } = pending.call.operation()
+                        if let EditorOperation::Interaction { operation } = pending.call.operation()
+                            && let Some(selection) = operation.selection()
                         {
                             let result = pending
                                 .call
@@ -512,8 +568,12 @@ impl Instance {
                                         &mut state.plugin_services.context,
                                         context.clone(),
                                     );
-                                    let result =
-                                        state.grant_selection(paths, mode.clone(), *multiple);
+                                    let result = state.grant_selection(
+                                        paths,
+                                        selection.mode,
+                                        selection.multiple,
+                                        selection.access,
+                                    );
                                     state.plugin_services.context = previous;
                                     result
                                 });

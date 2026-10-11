@@ -716,6 +716,14 @@ impl Worker {
                     }
                     Err(error) => manager.document_stream_failed(error),
                 }
+                match output.lock().unwrap().file_events.take_batch(64) {
+                    Ok(events) => {
+                        for event in events {
+                            manager.workspace_file_event(event);
+                        }
+                    }
+                    Err(error) => manager.workspace_events_failed(error),
+                }
                 manager.poll();
                 target_calls.poll(&manager, &output);
                 configuration_calls.poll(&manager, &output);

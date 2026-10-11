@@ -15,6 +15,9 @@ mod editor_requests;
 #[cfg(test)]
 mod execution_service_tests;
 mod image_input;
+#[cfg(test)]
+mod workspace_transaction_tests;
+pub(crate) mod workspace_transactions;
 use crate::ui::plugin::images;
 #[cfg(test)]
 mod dock_tests;

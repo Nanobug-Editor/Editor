@@ -30,6 +30,7 @@ impl EditorApp {
                     | plugin_runtime::plugin_protocol::interaction::Operation::QuickPick { .. }
                     | plugin_runtime::plugin_protocol::interaction::Operation::Confirm { .. }
                     | plugin_runtime::plugin_protocol::interaction::Operation::Select { .. }
+                    | plugin_runtime::plugin_protocol::interaction::Operation::SelectWithAccess { .. }
             }
         ) && (self.plugin_picker_pending
             || self
@@ -186,6 +187,7 @@ impl EditorApp {
                 request.operation(),
                 Op::Interaction {
                     operation: plugin_runtime::plugin_protocol::interaction::Operation::Select { .. }
+                        | plugin_runtime::plugin_protocol::interaction::Operation::SelectWithAccess { .. }
                 }
             ) {
                 self.select_plugin_resource(plugin, request, window, cx);
@@ -204,6 +206,14 @@ impl EditorApp {
         }
         if matches!(request.operation(), Op::ReplaceDocumentRange { .. }) {
             self.replace_plugin_document(request, window, cx);
+            return;
+        }
+        if matches!(request.operation(), Op::ApplyEdits { .. }) {
+            self.apply_plugin_edits(request, window, cx);
+            return;
+        }
+        if matches!(request.operation(), Op::Workspace { .. }) {
+            self.perform_workspace_request(plugin, request, window, cx);
             return;
         }
         if matches!(request.operation(), Op::SaveImageInput { .. }) {
@@ -390,6 +400,8 @@ impl EditorApp {
             | Op::RefreshVirtualDocument { .. }
             | Op::Interaction { .. }
             | Op::ReplaceDocumentRange { .. }
+            | Op::ApplyEdits { .. }
+            | Op::Workspace { .. }
             | Op::SaveImageInput { .. }
             | Op::NavigateDocument { .. }
             | Op::LocateViewport { .. } => unreachable!(),
