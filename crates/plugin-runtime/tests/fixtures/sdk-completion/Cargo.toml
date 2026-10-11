@@ -1,0 +1,15 @@
+[package]
+name = "sdk-completion-fixture"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+
+# This nested fixture is an independent plugin project, not a member of its containing host crate.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Resolve public SDK types through the host cache; no path dependency or SDK source copy is allowed.
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }

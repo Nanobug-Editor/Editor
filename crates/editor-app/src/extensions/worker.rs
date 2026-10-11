@@ -189,12 +189,6 @@ pub enum Work {
     },
     Inspect(PathBuf),
     Install(Package),
-    /// Shipped discovery never starts guests or forces the manager window open.
-    InspectBundle(super::bundled::Request),
-    /// Only the matching native confirmation can submit the retained immutable package.
-    InstallBundle(super::bundled::Candidate),
-    /// Refusal is a host-owned identity choice, independent of version digest or removable plugin data.
-    DeclineBundle(super::bundled::Candidate),
     Enable(String),
     Restart(String),
     Disable(String),
@@ -273,9 +267,6 @@ impl Work {
             | Self::Invoke { plugin, .. }
             | Self::ImageInput { plugin, .. } => Some(plugin),
             Self::Install(package) => Some(&package.manifest.id),
-            Self::InstallBundle(candidate) | Self::DeclineBundle(candidate) => {
-                Some(&candidate.package.manifest.id)
-            }
             // A status query observes a program another owner already has, so it claims no plugin.
             Self::PollRun { .. } => None,
             Self::Enable(id)
@@ -302,11 +293,6 @@ impl Work {
             }),
             Self::Install(package) => Some(OperationProgress {
                 id: package.manifest.id.clone(),
-                action: LifecycleAction::Install,
-                delete_data: None,
-            }),
-            Self::InstallBundle(candidate) => Some(OperationProgress {
-                id: candidate.package.manifest.id.clone(),
                 action: LifecycleAction::Install,
                 delete_data: None,
             }),
@@ -371,8 +357,6 @@ pub(super) struct Published {
     pub preference_imports: Vec<PreferenceImport>,
     /// True only after successful private-store recovery and the actor's first complete entry publication.
     pub ready: bool,
-    /// A single first-use reply is consumed only by the main editor owner; it grants no installation rights.
-    pub bundle_reply: Option<super::bundled::Reply>,
     /// Kept independently of live instances and manager windows for this editor process only.
     pub logs: plugin_runtime::logs::RuntimeLogs,
     pub diagnostics: BTreeMap<String, Vec<plugin_runtime::faults::Diagnostic>>,
@@ -646,7 +630,6 @@ impl Worker {
         }
         let installation = match &work {
             Work::Install(package) => Some(package),
-            Work::InstallBundle(candidate) => Some(candidate.package.as_ref()),
             _ => None,
         };
         if let Some(package) = installation {

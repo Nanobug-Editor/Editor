@@ -20,14 +20,11 @@ fn geometry(state: &Published) -> Option<(f32, Rect)> {
 
 /// A stopped resize drag must not replay queued intermediate toolbar/image positions afterwards.
 #[test]
-#[ignore = "build current Image package with scripts/build-plugins.ps1 -Packages svg first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn image_resize_burst_publishes_latest_geometry_without_replaying_old_positions() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("plugins");
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/svg.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("svg")).unwrap();
     let mut manager = Manager::open(root.clone(), Environment::default()).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())

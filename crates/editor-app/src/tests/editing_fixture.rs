@@ -11,10 +11,7 @@ use std::{
 /// Reidentify the distributed HTML parser without changing its services, recognition or dependency bytes.
 /// Passing this archive through Manager proves editing mechanisms are independent of installed package IDs.
 pub(super) fn relabel_html(id: &str) -> Package {
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/html.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("html")).unwrap();
     let mut files = package.files;
     let mut manifest = serde_json::to_value(package.manifest).unwrap();
     manifest["id"] = json!(id);
@@ -40,10 +37,7 @@ pub(super) fn package(
     delay: u64,
     mode: &str,
 ) -> Package {
-    let javascript = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/javascript.zip"),
-    )
-    .unwrap();
+    let javascript = Package::read(&crate::test_packages::archive("javascript")).unwrap();
     let mut manifest = serde_json::to_value(javascript.manifest).unwrap();
     let service = if primary { "analysis" } else { "format" };
     let source = include_bytes!("fixtures/editing-service.cjs");

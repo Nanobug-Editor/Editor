@@ -152,7 +152,6 @@ impl ExtensionPanel {
     ) {
         // Repaints retain one immutable package; only an accepted manual install needs an owned clone.
         let package = package.into();
-        let bundled = self.bundled.confirmation(&package);
         let executable =
             package.manifest.component.is_some() || !package.manifest.services.is_empty();
         let name = package.manifest.name.clone();
@@ -232,8 +231,6 @@ impl ExtensionPanel {
                 let impact = impact.clone();
                 let replacement_ids = replacement_ids.clone();
                 let install_package = package.clone();
-                let install_bundle = bundled.clone();
-                let cancel_bundle = bundled.clone();
                 let action_label = action_label.clone();
                 let install_owner = install_owner.clone();
                 let cancel_owner = owner.clone();
@@ -387,41 +384,9 @@ impl ExtensionPanel {
                     .on_ok(move |_, _, cx| {
                         install_owner
                             .update(cx, |this, cx| {
-                                // Native authority is checked in this event as well as by the serialized manager.
-                                let work = if let Some(candidate) = &install_bundle {
-                                    let current =
-                                        this.bundled.confirmation(&install_package).is_some_and(
-                                            |current| {
-                                                current.request.token == candidate.request.token
-                                            },
-                                        ) && this
-                                            .worker
-                                            .trusted
-                                            .load(std::sync::atomic::Ordering::Acquire)
-                                            && this.bundled.ready
-                                            && !this.entries.iter().any(|entry| {
-                                                bundled::matches_editor_preview(
-                                                    entry,
-                                                    &candidate.request.file,
-                                                )
-                                            })
-                                            && this.parent.upgrade().is_some_and(|parent| {
-                                                this.bundled.source_current(parent.read(cx))
-                                            });
-                                    if !current {
-                                        this.bundled.cancel_request();
-                                        this.bundled.finish();
-                                        cx.notify();
-                                        return true;
-                                    }
-                                    Work::InstallBundle(candidate.clone())
-                                } else {
-                                    Work::Install(install_package.as_ref().clone())
-                                };
+                                // Explicit consent submits the same inspected package through the ordinary lifecycle.
+                                let work = Work::Install(install_package.as_ref().clone());
                                 if this.queue_lifecycle(work) {
-                                    if install_bundle.is_some() {
-                                        this.bundled.finish();
-                                    }
                                     this.pending = None;
                                     this.pending_dialog_open = false;
                                     cx.notify();
@@ -434,11 +399,6 @@ impl ExtensionPanel {
                     })
                     .on_cancel(move |_, _, cx| {
                         let _ = cancel_owner.update(cx, |this, cx| {
-                            if let Some(candidate) = &cancel_bundle {
-                                this.bundled.cancel_request();
-                                this.bundled.finish();
-                                let _ = this.worker.tx.send(Work::DeclineBundle(candidate.clone()));
-                            }
                             this.pending = None;
                             this.pending_dialog_open = false;
                             cx.notify();

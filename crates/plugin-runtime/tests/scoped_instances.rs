@@ -1,4 +1,7 @@
 //! Scope contracts are exercised through the installed real WASM guest and Manager boundary.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, ui::Kind},
@@ -16,18 +19,14 @@ fn text(manager: &Manager, id: &str) -> String {
 
 /// The same package cache must never imply shared workspace data or native view state.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn workspace_instances_keep_private_data_and_workspace_reads_separate() {
     let root = tempfile::tempdir().unwrap();
     let a = tempfile::tempdir().unwrap();
     let b = tempfile::tempdir().unwrap();
     std::fs::write(a.path().join("source.txt"), "workspace A").unwrap();
     std::fs::write(b.path().join("source.txt"), "workspace B").unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let env = |path: &std::path::Path| Environment {
         workspace: path.display().to_string(),
         ..Default::default()
@@ -87,7 +86,7 @@ fn probe(
 
 /// A handle cannot be borrowed by another instance or reused after explicit release or shutdown.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn resource_handles_reject_foreign_and_retired_owners_and_release_all_views() {
     use plugin_runtime::plugin_protocol::api::{ErrorCode, Operation as Op, Value};
     let root = tempfile::tempdir().unwrap();
@@ -97,11 +96,7 @@ fn resource_handles_reject_foreign_and_retired_owners_and_release_all_views() {
         workspace: path.display().to_string(),
         ..Default::default()
     };
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let id = &package.manifest.id;
     let mut manager = Manager::open(root.path().into(), env(a.path())).unwrap();
     manager
@@ -215,7 +210,7 @@ fn resource_handles_reject_foreign_and_retired_owners_and_release_all_views() {
 
 /// A project override must not cancel another workspace's live ownership or background state.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn project_disable_preserves_other_workspace_handles() {
     use plugin_runtime::plugin_protocol::api::{Operation as Op, Value};
     let root = tempfile::tempdir().unwrap();
@@ -255,7 +250,7 @@ fn project_disable_preserves_other_workspace_handles() {
 
 /// A failed registry commit must restore an owner whose subsequent successful writes reach disk.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn failed_update_restores_durable_writes_and_trust_revocation_skips_guest_checkpoint() {
     use plugin_runtime::plugin_protocol::api::{Operation as Op, Value};
     let root = tempfile::tempdir().unwrap();
@@ -319,11 +314,7 @@ fn failed_update_restores_durable_writes_and_trust_revocation_skips_guest_checkp
 /// Reuse the independently built guest with declarations changed only at the public package boundary.
 fn scoped_package(application: bool) -> Package {
     use std::io::{Cursor, Write};
-    let mut package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let mut package = Package::read(&test_packages::archive("capability-example")).unwrap();
     if application {
         package.manifest.id = "application-example".into();
         package.manifest.scope = plugin_runtime::plugin_protocol::api::InstanceScope::Application;
@@ -344,7 +335,7 @@ fn scoped_package(application: bool) -> Package {
 
 /// Application ownership is explicit: it survives workspace closure without borrowing project access.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn application_instance_survives_workspace_closure_and_restricted_workspace_cannot_grant_access() {
     use plugin_runtime::plugin_protocol::api::{ErrorCode, Operation as Op, Value};
     let root = tempfile::tempdir().unwrap();

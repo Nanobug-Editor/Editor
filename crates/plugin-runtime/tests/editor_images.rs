@@ -1,4 +1,7 @@
 //! Independent actual WASM guests receive scoped image metadata through the public manager.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     HostImageInput, HostImageOrigin, Manager, Package,
     plugin_protocol::{Environment, api, ui::Kind},
@@ -16,8 +19,7 @@ use std::{
 fn package(
     edit: impl FnOnce(&mut Value, &mut BTreeMap<String, Vec<u8>>),
 ) -> anyhow::Result<Package> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let mut files = Package::read(&path)?.files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"])?;
     manifest["id"] = json!("image-input-fixture");
@@ -41,7 +43,7 @@ fn package(
 
 /// Negotiation is independent from Markdown and precedes any image capture or filesystem effect.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn editor_images_capability_negotiates_on_independent_real_guest() {
     let package = package(|_, _| {}).unwrap();
     let root = tempfile::tempdir().unwrap();
@@ -193,7 +195,7 @@ fn code(error: anyhow::Error) -> api::ErrorCode {
 
 /// A batch never serializes its pixels; conflicts retain input, success consumes it and receipts remain exact.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn image_input_metadata_and_collision_retry_keep_owned_native_payload() {
     let mut host = Harness::new(&image_package(|_, _| {}));
     host.preview("image-input-fixture", Some(document(7)))
@@ -262,7 +264,7 @@ fn image_input_metadata_and_collision_retry_keep_owned_native_payload() {
 
 /// Names, origins and instance identity do not create ambient write or clipboard authority.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn image_input_names_and_foreign_handles_are_rejected_without_native_requests() {
     let mut host = Harness::new(&image_package(|_, _| {}));
     host.preview("image-input-fixture", Some(document(7)))
@@ -344,7 +346,7 @@ fn image_input_names_and_foreign_handles_are_rejected_without_native_requests() 
 
 /// Batch and resident limits are atomic; releasing tokens returns quota without passing pixels through WASM.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn image_input_batch_and_resident_quotas_release_with_owned_resources() {
     let mut host = Harness::new(&image_package(|_, _| {}));
     host.preview("image-input-fixture", Some(document(7)))
@@ -405,7 +407,7 @@ fn image_input_batch_and_resident_quotas_release_with_owned_resources() {
 
 /// Opt-in publication is separately negotiated; capture requires workspace.write and clipboard grant by origin.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn image_input_declaration_and_capture_permissions_are_independent() {
     for (missing, expected) in [
         ("editor.images", api::ErrorCode::CapabilityUnavailable),

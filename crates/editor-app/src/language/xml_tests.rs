@@ -16,9 +16,9 @@ fn installed_xml() -> (tempfile::TempDir, tempfile::TempDir, Manager, Package) {
         .prefix("plugins#%-")
         .tempdir()
         .unwrap();
-    let archive = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/xml.zip");
+    let archive = crate::test_packages::archive("xml");
     let package =
-        Package::read(&archive).expect("build the XML package with build-plugins.ps1 first");
+        Package::read(&archive).expect("frozen XML package must match its recorded digest");
     let mut manager = Manager::open(
         store.path().to_path_buf(),
         Environment {

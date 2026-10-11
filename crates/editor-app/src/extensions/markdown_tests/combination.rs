@@ -11,7 +11,7 @@ fn text(fixture: &NativeMarkdown, ui: &mut VisualTestContext) -> String {
 
 /// A complete editing session catches interactions that isolated formatting or viewport tests miss.
 #[gpui::test]
-#[ignore = "build markdown and TOML resources through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_combines_edits_images_tasks_links_ime_and_scaled_layout(
     cx: &mut TestAppContext,
 ) {

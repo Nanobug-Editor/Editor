@@ -99,12 +99,8 @@ fn editor_for<'a>(
     )
     .unwrap();
     // Discovery/build rules remain plugins; the terminal is provided by the native application.
-    for name in ["rust-0.6.1", "run-target-example-0.1.0"] {
-        let package = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../dist/plugins/{name}.zip")),
-        )
-        .unwrap();
+    for name in ["rust", "run-target-example"] {
+        let package = Package::read(&crate::test_packages::archive(name)).unwrap();
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();

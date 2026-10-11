@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// A caret inside existing Chinese text formats that line in one native undo transaction.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_heading_switches_current_line_without_inserting_lines(
     cx: &mut TestAppContext,
 ) {
@@ -61,7 +61,7 @@ const TOOLS: &[(&str, &str)] = &[
 /// Every empty-selection button inserts the approved template and selects its editable placeholder.
 /// Real Undo/Redo verifies one document transaction rather than merely checking the guest's formatter.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_toolbar_inserts_all_empty_selection_templates(cx: &mut TestAppContext) {
     // The native environment otherwise follows the runner's English locale. Restore even on failure.
     struct RestoreLocale(String);
@@ -132,7 +132,7 @@ fn delivered_markdown_toolbar_inserts_all_empty_selection_templates(cx: &mut Tes
 
 /// Pointer focus must preserve UTF-8 selection and each formatting command owns one undo step.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_toolbar_formats_chinese_and_selects_templates(cx: &mut TestAppContext) {
     let original = "你好，世界";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);
@@ -221,7 +221,7 @@ fn delivered_markdown_toolbar_formats_chinese_and_selects_templates(cx: &mut Tes
 
 /// A narrow native divider and keyboard intent exercise every public formatting control without clipping.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_toolbar_wraps_all_commands_and_cancels_superseded_intent(
     cx: &mut TestAppContext,
 ) {

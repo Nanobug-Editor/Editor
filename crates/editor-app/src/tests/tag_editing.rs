@@ -34,10 +34,7 @@ fn installed_xml_html_tags_share_native_rename_linked_input_and_undo(cx: &mut Te
     )
     .unwrap();
     for id in ["xml", "html"] {
-        let package = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dist/plugins/{id}.zip")),
-        )
-        .unwrap();
+        let package = Package::read(&crate::test_packages::archive(id)).unwrap();
         if id == "xml" {
             super::editing_fixture::install_xml(&mut manager, &package);
         } else {

@@ -4,10 +4,7 @@ use gpui_kit::VisualTestContext;
 
 /// Inspect the delivered ZIP so all native scenarios execute its real component and resources.
 fn delivered_package() -> Package {
-    Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/markdown.zip"),
-    )
-    .unwrap()
+    Package::read(&crate::test_packages::archive("markdown")).unwrap()
 }
 
 /// Remove one declared permission before public installation, preserving the actual guest and assets.

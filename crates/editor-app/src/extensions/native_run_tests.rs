@@ -67,11 +67,8 @@ fn fixture_with_provider<'a>(
     )
     .unwrap();
     if !legacy {
-        let configuration = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/plugin-api-test/configuration-example.zip"),
-        )
-        .unwrap();
+        let configuration =
+            Package::read(&crate::test_packages::archive("configuration-example")).unwrap();
         manager
             .install(&configuration, configuration.manifest.permissions.clone())
             .unwrap();

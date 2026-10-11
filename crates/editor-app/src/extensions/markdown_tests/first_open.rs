@@ -5,7 +5,7 @@ use harness::NativeMarkdown;
 /// Manual preview input during first publication must survive delayed source layout and locate replies.
 /// Drive the real guest/Manager one publication at a time so startup cannot settle before the wheel.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_first_preview_scroll_does_not_return_to_top(cx: &mut TestAppContext) {
     use super::super::composable_tests::{publish, pump};
     let source = (0..100)

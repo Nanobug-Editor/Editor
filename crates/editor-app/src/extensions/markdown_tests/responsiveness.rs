@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// A source navigation key must reclaim the preview after a wheel gesture and leave links clickable.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_source_home_reclaims_preview_and_link(cx: &mut TestAppContext) {
     let source = "[下一页](next.md)\n\n".to_owned()
         + &(0..70)
@@ -46,7 +46,7 @@ fn delivered_markdown_source_home_reclaims_preview_and_link(cx: &mut TestAppCont
 
 /// Formatting immediately after typing flushes the pending snapshot and still edits the accepted line.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_toolbar_flushes_coalesced_source(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "原文\n")]);
     fixture.open("notes.md", ui);
@@ -64,7 +64,7 @@ fn delivered_markdown_toolbar_flushes_coalesced_source(cx: &mut TestAppContext) 
 
 /// A few screens of ordinary prose must not run preview generation while only source is visible.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_source_only_typing_suspends_preview(cx: &mut TestAppContext) {
     let source = (0..70)
         .map(|i| format!("段落 {i}：普通文档输入与阅读。\n\n"))
@@ -130,7 +130,7 @@ fn delivered_markdown_source_only_typing_suspends_preview(cx: &mut TestAppContex
 
 /// A discrete Windows wheel gesture is expressed in lines, not tiny synthetic pixel deltas.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_wheel_notch_does_not_bounce(cx: &mut TestAppContext) {
     let source = (0..70)
         .map(|i| format!("段落 {i}：普通文档输入与阅读。\n\n"))

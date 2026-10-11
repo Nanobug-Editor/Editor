@@ -5,7 +5,7 @@ use protocol::api::{self, EditorOperation as Op, EditorValue, RequestUpdate};
 
 /// Read selection and save the exact requested revision through the real GPUI document path.
 #[gpui::test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn typed_editor_requests_read_selection_and_save_without_switching_documents(
     cx: &mut TestAppContext,
 ) {
@@ -19,11 +19,7 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
     let path = directory.path().join("sample.txt");
     std::fs::write(&path, "before").unwrap();
     let workspace = Workspace::open(directory.path()).unwrap();
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     let mut manager = plugin_runtime::Manager::open(
         directory.path().join("runtime"),
         protocol::Environment {

@@ -4,15 +4,11 @@ use plugin_runtime::plugin_protocol::api::DocumentVersion;
 
 /// Compose two published seams: a native stdio declaration and the independently built SDK component.
 #[test]
-#[ignore = "build-capability-example.ps1 and cargo build -p plugin-runtime --example lsp_fixture first"]
+#[ignore = "opt-in frozen SDK/WASM fixture; first build plugin-runtime --example lsp_fixture"]
 fn pure_completion_faults_preserve_native_results_and_process() {
     let directory = tempfile::tempdir().unwrap();
     let native = fixture_package(directory.path(), None);
-    let sdk = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let sdk = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     // Keep ordinary guest declarations and assets: its normal instance still activates through the same gates.
     let mut manifest = serde_json::to_value(&sdk.manifest).unwrap();
     manifest["id"] = json!(OWNER);

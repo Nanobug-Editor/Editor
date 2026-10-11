@@ -26,7 +26,7 @@ const TOOLS: &[&str] = &[
 /// Actual hit bounds prove the toolbar shrinks and all actions remain visible in both themes.
 /// Serialized artwork is checked separately from native geometry so a missing icon cannot pass as blank space.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_icon_toolbar_is_compact_and_wraps_without_losing_actions(
     cx: &mut TestAppContext,
 ) {
@@ -71,7 +71,7 @@ fn delivered_markdown_icon_toolbar_is_compact_and_wraps_without_losing_actions(
 
 /// The footer groups every preview control together, and non-Markdown documents show none of them.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_status_icon_follows_sync_and_toggles_only_toolbar(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(
         cx,

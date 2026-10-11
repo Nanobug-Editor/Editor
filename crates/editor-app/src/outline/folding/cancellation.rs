@@ -21,10 +21,7 @@ impl Fixture {
             store: tempfile::tempdir().unwrap(),
             workspace: tempfile::tempdir().unwrap(),
         };
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../plugins/xml")
-            .canonicalize()
-            .unwrap();
+        let root = crate::test_packages::root("xml").canonicalize().unwrap();
         let declaration =
             PluginManifest::parse(&std::fs::read_to_string(root.join("plugin.toml")).unwrap())
                 .unwrap();

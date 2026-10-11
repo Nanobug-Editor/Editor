@@ -11,7 +11,7 @@ use std::{
 
 /// Exercise the shared document at the installed-package seam without replaying the detailed matrices.
 #[gpui::test]
-#[ignore = "build current XML and SVG ZIPs with the current public SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -35,10 +35,7 @@ fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppCont
     )
     .unwrap();
     for id in ["svg", "xml"] {
-        let package = plugin_runtime::Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dist/plugins/{id}.zip")),
-        )
-        .unwrap();
+        let package = plugin_runtime::Package::read(&crate::test_packages::archive(id)).unwrap();
         if id == "xml" {
             // The default private preparation is already covered; reuse its approved exact binary for this short composition.
             super::editing_fixture::install_xml(&mut manager, &package);

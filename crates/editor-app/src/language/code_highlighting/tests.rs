@@ -20,10 +20,7 @@ impl Fixture {
     /// Use the shipped WASM under a novel language identity: no built-in grammar can satisfy it.
     fn new() -> Self {
         let guard = PROVIDERS.lock().unwrap();
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../plugins/toml")
-            .canonicalize()
-            .unwrap();
+        let root = crate::test_packages::root("toml").canonicalize().unwrap();
         let manifest =
             PluginManifest::parse(&fs::read_to_string(root.join("plugin.toml")).unwrap()).unwrap();
         let mut declaration = manifest.highlighters[0].clone();

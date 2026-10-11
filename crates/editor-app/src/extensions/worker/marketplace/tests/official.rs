@@ -6,12 +6,10 @@ use gpui_kit::{VisualTestContext, gpui};
 /// Frozen GitHub snapshots and exact downloaded ZIPs cover all seven first installations once.
 /// Negative permission, compatibility and outage matrices remain owned by the shared market tests.
 #[gpui::test]
-#[ignore = "export seven fixed official Release ZIPs and their registry-built target/marketplace-official/catalog.json"]
+#[ignore = "opt-in real fixed Release ZIP installation; see the frozen package ledger"]
 fn marketplace_official_releases_install_with_native_consent(cx: &mut gpui_kit::TestAppContext) {
-    let fixture =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/marketplace-official");
     let catalog: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(fixture.join("catalog.json")).unwrap()).unwrap();
+        serde_json::from_slice(&crate::test_packages::official_catalog()).unwrap();
     let listings = catalog["plugins"].as_array().unwrap();
     let ids = listings
         .iter()
@@ -41,8 +39,7 @@ fn marketplace_official_releases_install_with_native_consent(cx: &mut gpui_kit::
         });
         let id = listing["id"].as_str().unwrap();
         let release = &listing["versions"][0];
-        let filename = format!("{id}-{}.zip", release["version"].as_str().unwrap());
-        let bytes = std::fs::read(fixture.join(filename)).unwrap();
+        let bytes = std::fs::read(crate::test_packages::archive(id)).unwrap();
         let package = Package::from_bytes(&bytes).unwrap();
         assert_eq!(package.digest, release["sha256"].as_str().unwrap());
         let one = serde_json::json!({"schema": catalog["schema"], "plugins": [listing]});
@@ -164,9 +161,7 @@ fn marketplace_official_releases_install_with_native_consent(cx: &mut gpui_kit::
 #[test]
 #[ignore = "requires the admitted official catalog/stats on Pages and the fixed TOML Release on GitHub"]
 fn marketplace_published_pages_installs_reviewed_release() {
-    let fixture =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/marketplace-official");
-    let expected = Catalog::parse(&std::fs::read(fixture.join("catalog.json")).unwrap()).unwrap();
+    let expected = Catalog::parse(&crate::test_packages::official_catalog()).unwrap();
     let home = tempfile::tempdir().unwrap();
     let root = home.path().join("runtime");
     let worker = Worker::start_background(

@@ -51,7 +51,7 @@ fn publish(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App) {
 
 /// Native drawing, resizing, decode errors, retry, text switching and file closure use the shipped package.
 #[gpui::test]
-#[ignore = "build current Image package with scripts/build-plugins.ps1 -Packages svg first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn image_package_draws_readonly_formats_in_the_native_file_container(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -61,9 +61,7 @@ fn image_package_draws_readonly_formats_in_the_native_file_container(cx: &mut Te
     });
     let directory = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
-    let package =
-        Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/svg.zip"))
-            .unwrap();
+    let package = Package::read(&crate::test_packages::archive("svg")).unwrap();
     let environment = Environment {
         workspace: directory.path().display().to_string(),
         ..Default::default()

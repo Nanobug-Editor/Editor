@@ -156,7 +156,7 @@ fn assert_visible_code(ui: &mut VisualTestContext) {
 
 /// An enabled unknown language provider must color the native code line without editing its source.
 #[gpui::test]
-#[ignore = "build current markdown and TOML WASM resources through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_code_uses_an_independent_enabled_language_provider(cx: &mut TestAppContext) {
     let original = "```novel\nanswer = 42\n```\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);
@@ -210,7 +210,7 @@ fn delivered_markdown_code_uses_an_independent_enabled_language_provider(cx: &mu
 
 /// Explicit choices survive competing installation, while replacement/restart drops old captures.
 #[gpui::test]
-#[ignore = "build current markdown and TOML WASM resources through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_code_tracks_provider_choice_replacement_and_plain_fallback(
     cx: &mut TestAppContext,
 ) {
@@ -289,7 +289,7 @@ fn delivered_markdown_code_tracks_provider_choice_replacement_and_plain_fallback
 
 /// Chinese/CRLF source stays native and undoable; old code cannot follow edits, tabs or reopened IDs.
 #[gpui::test]
-#[ignore = "build current markdown and TOML WASM resources through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_code_keeps_source_undo_and_rejects_retired_document_scenes(
     cx: &mut TestAppContext,
 ) {

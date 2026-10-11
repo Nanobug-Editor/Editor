@@ -108,17 +108,18 @@ Markdown 插件：[总方案](../../plugins/markdown/docs/spec.md)、[工单目�
 ## 插件包说明
 
 - [内置终端、运行与调试](specs/builtin-terminal-run-debug.md)：终端不再独立发行插件包；语言规则和调试器仍通过通用插件接口接入。
-- [示例](../../plugins/example/README.md)
-- [SVG](../../plugins/svg/README.md)
-- [Rust](../../plugins/rust/README.md)
-- [TOML](../../plugins/toml/README.md)
-- [HTML](../../plugins/html/README.md)
-- [JavaScript](../../plugins/javascript/README.md)
-- [XML](../../plugins/xml/README.md)
-- [Markdown](../../plugins/markdown/README.md)
-- [Markdown 输入与增量预览验收](../../plugins/markdown/docs/verification/17-incremental-input-viewport.md)（0.15.0：用户实测输入仍卡顿，性能验收重新打开）
-- [Markdown 源码输入与过期视口通知](../../plugins/markdown/docs/verification/18-source-input-and-stale-viewport.md)（宿主跟进修复与实测限制）
-- [能力协议验收夹具](../../plugins/capability-example/README.md)：仅用于验收，不属于发行插件目录。
+- [Image for Nanobug](https://github.com/T-miracle/Image-for-Nanobug)（安装 ID 为 `svg`）
+- [Rust for Nanobug](https://github.com/T-miracle/Rust-for-Nanobug)
+- [TOML for Nanobug](https://github.com/T-miracle/TOML-for-Nanobug)
+- [HTML for Nanobug](https://github.com/T-miracle/HTML-for-Nanobug)
+- [JavaScript for Nanobug](https://github.com/T-miracle/JavaScript-for-Nanobug)
+- [XML for Nanobug](https://github.com/T-miracle/XML-for-Nanobug)
+- [Markdown for Nanobug](https://github.com/T-miracle/Markdown-for-Nanobug)
+- [Markdown 输入与增量预览验收](https://github.com/T-miracle/Markdown-for-Nanobug/blob/main/docs/verification/17-incremental-input-viewport.md)（0.15.0：用户实测输入仍卡顿，性能验收重新打开）
+- [Markdown 源码输入与过期视口通知](https://github.com/T-miracle/Markdown-for-Nanobug/blob/main/docs/verification/18-source-input-and-stale-viewport.md)（宿主跟进修复与实测限制）
+- [冻结 Package/SDK 验收夹具](../../crates/plugin-runtime/tests/fixtures/packages/README.md)：保留示例覆盖，不属于应用、安装器、SDK 或市场发行目录。
+- [插件市场 04 删除盘点](verification/plugin-marketplace-04-inventory-2026-10-11.md)：源码迁移与受影响消费者的对应关系。
+- [插件市场 04 当前实施与验收](verification/plugin-marketplace-04-2026-10-11.md)：无随附产物、实际测试、基线失败及 M01–M26 汇总；工单仍开启。
 
 ## 后续管理约定
 

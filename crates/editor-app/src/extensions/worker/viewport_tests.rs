@@ -16,7 +16,7 @@ fn wait_for(worker: &Worker, ready: impl Fn(&Published) -> bool) {
 /// A new preview can overtake the previous frame's source measurement in the actor queue.
 /// Reject that obsolete input without a user-facing error, but retain malformed-input errors.
 #[test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn stale_source_viewport_is_discarded_without_plugin_error() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("plugins");
@@ -24,10 +24,7 @@ fn stale_source_viewport_is_discarded_without_plugin_error() {
         workspace: directory.path().display().to_string(),
         ..Default::default()
     };
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/markdown.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("markdown")).unwrap();
     let mut manager = Manager::open(root.clone(), environment.clone()).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())

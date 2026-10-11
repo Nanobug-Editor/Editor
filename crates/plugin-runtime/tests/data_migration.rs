@@ -1,4 +1,7 @@
 //! Private-data migrations are verified through independently built packages and the public manager.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, ui::Kind},
@@ -8,8 +11,7 @@ use std::io::{Cursor, Write};
 
 /// Every version uses the same SDK fixture; only the package's declaration and migration policy differ.
 fn package(version: u32, behavior: &str) -> Package {
-    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let source = test_packages::archive("capability-example");
     let mut files = Package::read(&source).unwrap().files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["version"] = json!(format!("{version}.0.0"));

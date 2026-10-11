@@ -12,10 +12,9 @@ mod lifecycle;
 /// Reuse the current independently built component under an identity unknown to the host.
 /// Commands belong in the protocol manifest: resource-only TOML packages cannot declare them.
 fn shortcut_package() -> Package {
-    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let source = crate::test_packages::archive("capability-example");
     let mut files = Package::read(&source)
-        .expect("build scripts/build-capability-example.ps1 before running this ignored test")
+        .expect("frozen reviewed package must be present and match its ledger")
         .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = serde_json::json!("shortcut-query-fixture");
@@ -48,7 +47,7 @@ fn draw(visual: &mut VisualTestContext) {
 
 /// Published plugin commands are searchable, while both search modes suppress their execution.
 #[gpui::test]
-#[ignore = "build the real SDK fixture with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn shortcuts_real_plugin_query_and_capture_do_not_execute(cx: &mut TestAppContext) {
     crate::tests::with_shortcut_editor(cx, false, vec![], |visual, app, path| {
         let package = shortcut_package();
@@ -173,7 +172,7 @@ fn hide_and_focus_editor(visual: &mut VisualTestContext, app: &Entity<EditorApp>
 
 /// Edited plugin keys run the real component; explicit conflicts preserve unrelated native keys.
 #[gpui::test]
-#[ignore = "build the real SDK fixture with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn shortcuts_real_plugin_edit_dispatch_and_native_conflict(cx: &mut TestAppContext) {
     crate::tests::with_shortcut_editor(
         cx,

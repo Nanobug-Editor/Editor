@@ -115,7 +115,7 @@ fn feedback(fixture: &NativeMarkdown, ui: &mut gpui_kit::VisualTestContext) -> S
 
 /// Permission and domain refusals remain visible in both locales without consuming the source or browser.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_link_refusals_preserve_source_and_localize(cx: &mut TestAppContext) {
     let web = "[网页](https://example.com/refused)\n";
     let unsupported = "[邮件](mailto:reader@example.com)\n";
@@ -168,7 +168,7 @@ fn delivered_markdown_link_refusals_preserve_source_and_localize(cx: &mut TestAp
 
 /// Editing, switching, closing and retirement each seal a real admitted browser request before execution.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_pending_links_cannot_follow_edits_tabs_close_or_disable(
     cx: &mut TestAppContext,
 ) {
@@ -240,7 +240,7 @@ fn delivered_markdown_pending_links_cannot_follow_edits_tabs_close_or_disable(
 
 /// Legal parent paths stay within the workspace, encoded percents decode once, and real sibling files stay closed.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_relative_links_decode_once_and_reject_workspace_escape(
     cx: &mut TestAppContext,
 ) {
@@ -317,7 +317,7 @@ fn delivered_markdown_relative_links_decode_once_and_reject_workspace_escape(
 /// A lexical in-workspace link must reject a real Windows junction that resolves to an external document.
 #[cfg(windows)]
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_relative_link_rejects_external_junction(cx: &mut TestAppContext) {
     let source = "[打开](redirect/secret.md)\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", source)]);
@@ -360,12 +360,9 @@ fn delivered_markdown_relative_link_rejects_external_junction(cx: &mut TestAppCo
 
 /// Repackage only declarations: the independent public SDK guest handles ordinary Operation JSON unchanged.
 fn navigation_peer(browser: bool) -> Package {
-    let mut files = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let mut files = Package::read(&crate::test_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = serde_json::json!("navigation-peer");
     manifest["name"] = serde_json::json!("Independent document navigation");
@@ -441,7 +438,7 @@ fn refuse_ungranted_browser(
 
 /// A non-Markdown consumer opens .txt, refuses absent permission and stale sources, then reaches the real browser boundary.
 #[gpui::test]
-#[ignore = "build current markdown and capability-example through the public SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
     cx: &mut TestAppContext,
 ) {

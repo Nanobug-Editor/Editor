@@ -1,4 +1,7 @@
 //! Public discovery executes through the independently compiled SDK guest and real Manager.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     HostResources, InstallControl, Manager, Package,
     plugin_protocol::{Environment, api, settings, ui::Kind},
@@ -11,8 +14,7 @@ use std::{
 
 /// Repackage the published component using only public declarations and guest-owned assets.
 fn package(edit: impl FnOnce(&mut Value), assets: &[(&str, &[u8])]) -> Package {
-    let archive = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let archive = test_packages::archive("capability-example");
     let mut files = Package::read(&archive).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["api"]["required"]["workspace.files"] = json!(">=1.1, <2");
@@ -182,7 +184,7 @@ fn assert_hook(manager: &mut Manager, sdk: &api::SdkDescriptor, paths: &[&str]) 
 
 /// Guest-selected globs stay within the workspace and honor ignore files and explicit exclusions.
 #[test]
-#[ignore = "build host and run scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn workspace_discovery_uses_only_allowed_files() {
     let store = tempfile::tempdir().unwrap();
     let workspace = workspace();
@@ -226,7 +228,7 @@ fn workspace_discovery_uses_only_allowed_files() {
 
 /// Invalid input and exceeded budgets are typed failures, never successful partial scans.
 #[test]
-#[ignore = "build host and run scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn invalid_globs_and_result_limits_leave_discovery_usable() {
     let store = tempfile::tempdir().unwrap();
     let workspace = workspace();
@@ -307,7 +309,7 @@ fn invalid_globs_and_result_limits_leave_discovery_usable() {
 
 /// Discovery cannot borrow authority from private storage, another guest or a closed workspace root.
 #[test]
-#[ignore = "build host and run scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn discovery_rejects_private_foreign_released_and_retired_handles() {
     let store = tempfile::tempdir().unwrap();
     let workspace = workspace();
@@ -376,7 +378,7 @@ fn discovery_rejects_private_foreign_released_and_retired_handles() {
 
 /// Negotiation, workspace permission and SDK availability remain independent failure causes.
 #[test]
-#[ignore = "build host and run scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn discovery_requires_negotiation_and_preserves_sdk_failure_categories() {
     let workspace = workspace();
     let sdk_root = tempfile::tempdir().unwrap();
@@ -472,7 +474,7 @@ fn discovery_requires_negotiation_and_preserves_sdk_failure_categories() {
 
 /// Host metadata survives normal owner replacement without expanding guest filesystem authority.
 #[test]
-#[ignore = "build host and run scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn sdk_resources_survive_preparation_settings_restart_workspace_and_reopen() {
     let store = tempfile::tempdir().unwrap();
     let workspace = workspace();
@@ -579,7 +581,7 @@ fn sdk_resources_survive_preparation_settings_restart_workspace_and_reopen() {
 
 /// Failed activation after migration restores a fresh SDK-aware owner and leaves committed data intact.
 #[test]
-#[ignore = "build host and run scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn sdk_resources_survive_migration_rollback_without_committing_candidate_data() {
     let store = tempfile::tempdir().unwrap();
     let workspace = workspace();

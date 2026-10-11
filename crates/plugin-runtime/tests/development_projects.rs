@@ -1,21 +1,26 @@
-//! Real independently built candidates enter the public manager without an intermediate ZIP.
+//! Frozen SDK packages and explicit external CLI builds enter the public development-directory boundary.
+/// Shared checked-in inputs preserve real guest code after the example projects are retired.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package, development,
     plugin_protocol::{Environment, api},
 };
 use std::path::PathBuf;
 
-/// The fixture is prepared by the host CLI, so this test cannot silently use a synthetic component.
+/// Explicit CLI candidates remain supported; otherwise stage the fixed guest through the same public builder seam.
 fn candidate() -> Package {
-    let directory = PathBuf::from(
-        std::env::var_os("NANOBUG_DEVELOPMENT_CANDIDATE")
-            .expect("set the directory printed by --plugin-build"),
-    );
+    let temporary = tempfile::tempdir().unwrap();
+    let directory = std::env::var_os("NANOBUG_DEVELOPMENT_CANDIDATE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            development::stage(&test_packages::package("example"), temporary.path()).unwrap()
+        });
     development::read_directory(&directory).expect("read the admitted directory candidate")
 }
 /// Successful/failed replacement preserves logical state, private data and installed identity.
 #[test]
-#[ignore = "build an independent example project with the host --plugin-build and set NANOBUG_DEVELOPMENT_CANDIDATE"]
+#[ignore = "opt-in frozen SDK/WASM directory reload; external CLI candidates may use NANOBUG_DEVELOPMENT_CANDIDATE"]
 fn real_directory_reload_preserves_state_and_rolls_back_failed_component() {
     let package = candidate();
     let id = package.manifest.id.clone();

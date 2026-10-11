@@ -12,6 +12,10 @@ mod run;
 mod sdk_export;
 /// Native terminal state and presentation are independent from the installed plugin registry.
 mod terminal;
+/// Test-only frozen Package resources are shared with runtime integration tests and never embedded in releases.
+#[cfg(test)]
+#[path = "../../plugin-runtime/tests/support/packages.rs"]
+mod test_packages;
 #[cfg(test)]
 mod tests;
 mod ui;

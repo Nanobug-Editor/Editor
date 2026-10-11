@@ -6,7 +6,7 @@ use plugin_runtime::Manager;
 
 /// A real WASM trap withdraws the center and functions, with different recovery for text and binary files.
 #[gpui::test]
-#[ignore = "build current layout-example through scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn real_layout_fault_preserves_native_text_and_binary_retry(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);

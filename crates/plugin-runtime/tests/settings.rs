@@ -1,4 +1,7 @@
 //! Settings are observed through package installation and the public manager, not a parallel resolver.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{Manager, Package, plugin_protocol::Environment};
 
 /// Malformed third-party forms are rejected at inspection, before any settings UI or WASM is created.
@@ -45,15 +48,11 @@ fn settings_declarations_reject_invalid_defaults_and_unbounded_controls() {
 
 /// A newly installed independent package exposes its declared defaults with truthful provenance.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn installed_settings_have_declared_defaults_and_sources() {
     let root = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let mut manager = Manager::open(
         root.path().into(),
         Environment {
@@ -184,7 +183,7 @@ fn installed_settings_have_declared_defaults_and_sources() {
 
 /// Global updates reach parked owners, while confirmed project values and failed hooks retain their boundaries.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn configuration_changes_are_isolated_and_disabled_guests_stay_disabled() {
     use plugin_runtime::plugin_protocol::settings::{Scope, Source};
     let root = tempfile::tempdir().unwrap();
@@ -194,11 +193,7 @@ fn configuration_changes_are_isolated_and_disabled_guests_stay_disabled() {
         workspace: path.display().to_string(),
         ..Default::default()
     };
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let id = &package.manifest.id;
     let mut manager = Manager::open(root.path().into(), env(a.path())).unwrap();
     manager

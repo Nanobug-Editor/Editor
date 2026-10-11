@@ -97,9 +97,9 @@ fn local_import_reports_loading_before_inspection(cx: &mut TestAppContext) {
     editor_cx.update(|window, cx| {
         let owner = app.read(cx).extensions.clone();
         owner.update(cx, |owner, cx| {
-            let manifest: protocol::Manifest = crate::extensions::test_manifest(include_str!(
-                "../../../../plugins/example/manifest.json"
-            ));
+            let manifest: protocol::Manifest = crate::extensions::test_manifest(
+                &crate::test_packages::text("example", "manifest.json"),
+            );
             owner.manager_market = false;
             owner.manager_packages = vec![Package {
                 manifest,
@@ -162,9 +162,9 @@ fn second_local_import_shows_visible_consent(cx: &mut TestAppContext) {
     let app = slot.borrow_mut().take().unwrap();
     let editor_window = editor_cx.update(|window, _| window.window_handle());
     let first_manifest: protocol::Manifest =
-        crate::extensions::test_manifest(include_str!("../../../../plugins/example/manifest.json"));
+        crate::extensions::test_manifest(&crate::test_packages::text("example", "manifest.json"));
     let second_manifest: protocol::Manifest =
-        crate::extensions::test_manifest(include_str!("../../../../plugins/rust/manifest.json"));
+        crate::extensions::test_manifest(&crate::test_packages::text("rust", "manifest.json"));
     let first = Package {
         manifest: first_manifest.clone(),
         files: Default::default(),
@@ -439,7 +439,7 @@ fn uninstall_dialog_offers_both_data_choices(cx: &mut TestAppContext) {
     let app = slot.borrow_mut().take().unwrap();
     let editor_window = editor_cx.update(|window, _| window.window_handle());
     let manifest: protocol::Manifest =
-        crate::extensions::test_manifest(include_str!("../../../../plugins/example/manifest.json"));
+        crate::extensions::test_manifest(&crate::test_packages::text("example", "manifest.json"));
     editor_cx.update(|window, cx| {
         let owner = app.read(cx).extensions.clone();
         owner.update(cx, |owner, cx| {

@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// Every blank marker admitted by the installed parser is editable, preserving its original byte on undo.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_parser_blank_tasks_toggle_and_undo(cx: &mut TestAppContext) {
     let original = "- [\t] 制表符\n- [\u{b}] 垂直空白\n- [\u{c}] 换页空白\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);
@@ -27,7 +27,7 @@ fn delivered_markdown_parser_blank_tasks_toggle_and_undo(cx: &mut TestAppContext
 
 /// A Chinese task changes only its marker and one undo restores the complete original document.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_task_click_updates_source_with_one_undo(cx: &mut TestAppContext) {
     let original = "- [ ] 第一项\n  - [x] 子项\n- [X] 第三项\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);
@@ -93,7 +93,7 @@ fn delivered_markdown_task_click_updates_source_with_one_undo(cx: &mut TestAppCo
 
 /// Nested/uppercase markers stay independent; native keyboard activation also works with source hidden.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_content_readonly(
     cx: &mut TestAppContext,
 ) {
@@ -169,7 +169,7 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
 
 /// Editing through a preview control must retain its keyboard target while source remains visible.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_split_task_retains_focus_for_successive_keyboard_toggles(
     cx: &mut TestAppContext,
 ) {

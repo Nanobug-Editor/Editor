@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// The complete native layout must render at the default thread stack with a usable editor extent.
 #[gpui::test]
-#[ignore = "build migrated markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_initial_layout_borrows_editor_with_full_height(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "# 初次打开\n")]);
     fixture.open("notes.md", ui);
@@ -23,12 +23,9 @@ fn delivered_markdown_initial_layout_borrows_editor_with_full_height(cx: &mut Te
 
 /// SVG opts into the same public presentation contract; native controls require no language branch.
 #[gpui::test]
-#[ignore = "build svg through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_svg_modes_share_native_status_buttons_and_preserve_document(cx: &mut TestAppContext) {
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/svg.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("svg")).unwrap();
     let original = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"/>";
     let (mut fixture, ui) = NativeMarkdown::mount_package(cx, &[("image.svg", original)], &package);
     fixture.open("image.svg", ui);
@@ -77,7 +74,7 @@ fn delivered_svg_modes_share_native_status_buttons_and_preserve_document(cx: &mu
 
 /// Mode changes alter layout alone; source identity, selection and undo history remain native.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_modes_remember_workspace_and_preserve_native_undo(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(
         cx,

@@ -3,11 +3,9 @@ use super::*;
 
 /// Add recognition to the independently SDK-built hostile guest; no fake LSP or grammar is needed for structure.
 fn hostile_package() -> plugin_runtime::Package {
-    let original = plugin_runtime::Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let original =
+        plugin_runtime::Package::read(&crate::test_packages::archive("capability-example"))
+            .unwrap();
     let mut files = original.files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["structure_providers"] =
@@ -35,7 +33,7 @@ fn hostile_package() -> plugin_runtime::Package {
 
 /// Completion itself must clear its revoked target and request a paint, rather than wait for another editor operation.
 #[gpui::test]
-#[ignore = "build capability-example through the current public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn native_structure_trap_clears_tree_without_another_document_event(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);

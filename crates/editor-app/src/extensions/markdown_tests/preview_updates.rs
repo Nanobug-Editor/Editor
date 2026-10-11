@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// New source offsets must wait for the matching preview revision, even while its predecessor stays visible.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_typing_does_not_stamp_new_offsets_with_old_scene(cx: &mut TestAppContext) {
     let source = "# Heading\n\nParagraph\n\n".repeat(40);
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", &source)]);
@@ -61,7 +61,7 @@ fn preview_state(
 /// A displayed preview keeps its tree while the newer revision crosses the guest boundary.
 /// Typing must therefore never blank the pane, and intermediate revisions must coalesce.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_typing_keeps_the_preview_published(cx: &mut TestAppContext) {
     let source = format!(
         "# 标题\n\n段落\n\n| 验收 | 结果 |\n| --- | --- |\n| T01 | `language_tests` 高亮 |\n\n{}",
@@ -130,7 +130,7 @@ fn delivered_markdown_typing_keeps_the_preview_published(cx: &mut TestAppContext
 /// One generated `<table>` used to share native inline state between cells, which painted the
 /// code surfaces of the earlier cells without their glyphs.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_table_cells_keep_independent_blocks(cx: &mut TestAppContext) {
     let source = "| 验收 | 当前验证入口 |\n| --- | --- |\n| T01 | `language_tests`：高亮出现 |\n| T02 | `lsp_tests` 与 `dependency_tests` |\n| T03 | 普通文本 |\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("table.md", source)]);

@@ -1,4 +1,4 @@
-//! Real restore and first-use actors publish failures through the native reminder and consent routes.
+//! Real restore and explicit-import actors publish failures through native reminder and consent routes.
 use super::{Fixture, Manager, Package, Work, Worker};
 use crate::extensions::ExtensionPanel;
 use crate::*;
@@ -175,7 +175,7 @@ fn native_recovery_error_confirmation_preserves_details_and_rearms_new_failure(
 
 /// A real failed first install has no installed row; its owned error still needs a main-window indicator/detail.
 #[gpui::test]
-fn first_use_actor_preparation_failure_is_visible_in_native_status(cx: &mut TestAppContext) {
+fn explicit_import_actor_preparation_failure_is_visible_in_native_status(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         typography::init(cx);
@@ -221,7 +221,16 @@ fn first_use_actor_preparation_failure_is_visible_in_native_status(cx: &mut Test
             app.open_file(fixture.file.clone(), window, cx)
         })
     });
-    wait_for_native(&app, ui, |panel| panel.bundled.dialog_open);
+    let path = fixture.workspace.join(".bundled-plugin-test/generic.zip");
+    worker.tx.send(Work::Inspect(path)).unwrap();
+    super::wait_for(&worker, |state| state.pending.is_some());
+    let package = worker.state.lock().unwrap().pending.clone().unwrap();
+    ui.update(|window, cx| {
+        app.read(cx).extensions.clone().update(cx, |panel, cx| {
+            panel.open_install_dialog(Arc::new(package), window, cx);
+        })
+    });
+    wait_for_native(&app, ui, |panel| panel.pending.is_some());
     assert!(
         ui.debug_bounds("plugin-install-consent").is_some(),
         "first use must draw real native permissions before any preparation"

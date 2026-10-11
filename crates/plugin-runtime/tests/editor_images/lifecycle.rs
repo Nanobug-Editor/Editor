@@ -3,7 +3,7 @@ use super::*;
 
 /// Continuous public events must revoke inputs immediately, without relying on the host polling cadence.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn image_input_withdrawal_and_source_replacement_revoke_before_the_next_public_event() {
     use plugin_runtime::plugin_protocol::settings::{EffectiveValue, Phase, Source};
     let mut host = Harness::new(&image_package(|_, _| {}));
@@ -108,7 +108,7 @@ fn image_input_withdrawal_and_source_replacement_revoke_before_the_next_public_e
 
 /// Preview advance revokes unused offers but never destroys a success receipt from an accepted writer.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn image_input_source_withdrawal_keeps_accepted_save_receipt_and_revokes_unused_handles() {
     let mut host = Harness::new(&image_package(|_, _| {}));
     host.preview("image-input-fixture", Some(document(7)))
@@ -159,7 +159,7 @@ fn image_input_source_withdrawal_keeps_accepted_save_receipt_and_revokes_unused_
 
 /// Closing and workspace parking invalidate capture slots, including before a replacement Preview arrives.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn image_input_close_withdraw_switch_and_reincarnation_cannot_revive_input() {
     let mut host = Harness::new(&image_package(|_, _| {}));
     host.preview("image-input-fixture", Some(document(7)))
@@ -253,7 +253,7 @@ fn image_input_close_withdraw_switch_and_reincarnation_cannot_revive_input() {
 
 /// Unexecuted cancellation allows a retry; waiting cancellation cannot certify that native files were rolled back.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn image_input_cancelled_save_retries_only_before_the_side_effect_gate() {
     let mut host = Harness::new(&image_package(|_, _| {}));
     host.preview("image-input-fixture", Some(document(7)))
@@ -317,7 +317,7 @@ fn image_input_cancelled_save_retries_only_before_the_side_effect_gate() {
 
 /// Real monotonic expiry is exercised through the manager, without a test-only clock or host resource API.
 #[test]
-#[ignore = "build current capability-example through the host SDK first; waits for the public 30s input deadline"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md; waits for the public 30s input deadline"]
 fn image_input_expiry_releases_pixels_and_invalidates_the_guest_handle() {
     let mut host = Harness::new(&image_package(|_, _| {}));
     host.preview("image-input-fixture", Some(document(7)))

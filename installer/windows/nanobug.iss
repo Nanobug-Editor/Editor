@@ -47,7 +47,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#PayloadDir}\Nanobug.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\Nanobug.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#PayloadDir}\plugins\*"; DestDir: "{app}\plugins"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Plugins live in the private user store and are acquired explicitly from the reviewed marketplace.
 Source: "{#PayloadDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

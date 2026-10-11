@@ -1,0 +1,1496 @@
+{
+  "schema": 1,
+  "plugins": [
+    {
+      "id": "html",
+      "repository": "T-miracle/HTML-for-Nanobug",
+      "maintainers": [
+        "T-miracle"
+      ],
+      "summary": "HTML recognition, highlighting, completion, formatting and paired tag editing.",
+      "category": "languages",
+      "tags": [
+        "html",
+        "language"
+      ],
+      "versions": [
+        {
+          "manifest": {
+            "id": "html",
+            "name": "HTML",
+            "version": "0.3.1",
+            "protocol": 7,
+            "contributions": "plugin.toml",
+            "permissions": [
+              "process.service.analysis",
+              "dependencies.prepare"
+            ],
+            "storage_limit": 1024,
+            "api": {
+              "base": "^1",
+              "required": {
+                "language.lsp": ">=1.3,<2",
+                "language.formatting": "^1",
+                "language.editing": ">=1.1, <2",
+                "process": "^1",
+                "dependencies": ">=1.2,<2"
+              }
+            },
+            "services": {
+              "analysis": {
+                "program": "node.exe",
+                "args": [
+                  "${dependency:server}/server.cjs"
+                ],
+                "installation": {
+                  "artifacts": [
+                    {
+                      "id": "node",
+                      "version": "24.19.0",
+                      "platform": "windows-x86_64",
+                      "sha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237",
+                      "source": {
+                        "kind": "url",
+                        "url": "https://nodejs.org/dist/v24.19.0/win-x64/node.exe"
+                      },
+                      "format": {
+                        "kind": "file",
+                        "path": "node.exe"
+                      }
+                    },
+                    {
+                      "id": "server",
+                      "version": "0.3.0",
+                      "platform": "windows-x86_64",
+                      "sha256": "f4bdb38e96a0f996bf49ea94b2e11c11ee4922149192ebe5fa031615795f9ef1",
+                      "source": {
+                        "kind": "package",
+                        "path": "native/server.cjs"
+                      },
+                      "format": {
+                        "kind": "file",
+                        "path": "server.cjs"
+                      }
+                    }
+                  ],
+                  "executable": "node/node.exe"
+                },
+                "platforms": [
+                  "windows-x86_64"
+                ]
+              }
+            },
+            "language_servers": [
+              {
+                "id": "analysis",
+                "language": "html",
+                "service": "analysis",
+                "formatting": true,
+                "editing": true,
+                "completion_triggers": [
+                  "<",
+                  "/",
+                  "=",
+                  "\""
+                ],
+                "completion_after_whitespace": [
+                  ""
+                ]
+              }
+            ]
+          },
+          "host_version": ">=0.1.0",
+          "platforms": [
+            "windows-x86_64"
+          ],
+          "readme": "# Nanobug HTML\r\n\r\n**English** · [简体中文](https://github.com/T-miracle/Nanobug-Plugin-HTML/blob/v0.3.1/README.zh-CN.md)\r\n\r\nHTML recognition, highlighting, completion, formatting and paired tag editing. The stable installation ID is `html`; the first independent release is `0.3.1`.\r\n\r\nThis repository is the authoritative plugin source. The [marketplace registry](https://github.com/T-miracle/Nanobug-Plugin-Marketplace) reviews submissions; fixed ZIP packages live in this repository's Releases. Publishing a Release does not list it automatically. Every initial submission and version requires a registry PR and human review.\r\n\r\n## Build independently\r\n\r\nUse Nanobug built from the commit pinned in host-sdk.json, with the required native toolchain and WASM target already available. Set `$pluginHost` to the absolute path of that executable:\r\n\r\n```powershell\r\n# The public host entry supplies its SDK and packages the project without a source copy.\r\n& $pluginHost --plugin-package . --output dist\r\n```\r\n\r\nFor a WASM project, run `& $pluginHost --plugin-cargo Cargo.toml test --lib` as well. Declarative packages need no empty WASM component. Missing tools are reported, never installed automatically. Before publishing, check permissions, platform claims, capability requirements and the SHA-256 of the complete ZIP. Changed bytes require a new version and review.\r\n\r\n## Maintenance and licensing\r\n\r\n[Original plugin notes](https://github.com/T-miracle/Nanobug-Plugin-HTML/blob/v0.3.1/docs/source-readme.md) preserve feature details and prior verification; current source and this README define the independent build. The migration preserves existing IDs, settings and private data.\r\n\r\nThe Nanobug workspace's Cargo MIT declaration is made explicit in LICENSE. Grammar, icons and native dependencies keep their own licenses and notices. Import a generated ZIP through the native manager, or install from the marketplace after review, and approve its actual permissions.\r\n",
+          "icon": "",
+          "version": "0.3.1",
+          "commit": "68b8c7baabd0790cba884aa19e4f2523b2b2e7ce",
+          "license": "MIT",
+          "url": "https://github.com/T-miracle/HTML-for-Nanobug/releases/download/v0.3.1/html-0.3.1.zip",
+          "asset_id": 630115511,
+          "sha256": "6f1ad3e33ade378f9fdbdedef5d1d8e6f91b4059f620f7a490f0dd97af4a4f5e",
+          "published_at": "2026-10-11T07:38:03Z",
+          "changelog": "# HTML for Nanobug 0.3.1\n\n- Publish the existing plugin from its independent official repository using the pinned public Nanobug SDK.\n- Preserve installation ID `html`, settings and private data; include standalone build instructions and the original license notices.\n- This release changes distribution metadata and packaged documentation. It does not redesign plugin business behavior.\n\nSource commit: `68b8c7baabd0790cba884aa19e4f2523b2b2e7ce`  \nPublic host / SDK: `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`  \nZIP SHA-256: `6f1ad3e33ade378f9fdbdedef5d1d8e6f91b4059f620f7a490f0dd97af4a4f5e`\n\nThe checksum covers the complete published ZIP. Later rebuilds may produce different bytes and must not replace this attachment. Marketplace admission requires a separate reviewed PR.\n\nThe repository name now follows the maintainer's `X-for-Nanobug` naming convention. The source tag, installation ID, version, ZIP filename and complete ZIP bytes are preserved from the verified release.\n",
+          "withdrawn": false,
+          "withdrawal_reason": null
+        }
+      ],
+      "downloads": null
+    },
+    {
+      "id": "javascript",
+      "repository": "T-miracle/JavaScript-for-Nanobug",
+      "maintainers": [
+        "T-miracle"
+      ],
+      "summary": "JavaScript recognition, highlighting and independent formatting.",
+      "category": "languages",
+      "tags": [
+        "javascript",
+        "language"
+      ],
+      "versions": [
+        {
+          "manifest": {
+            "id": "javascript",
+            "name": "JavaScript",
+            "version": "0.3.1",
+            "protocol": 7,
+            "contributions": "plugin.toml",
+            "permissions": [
+              "process.service.format",
+              "dependencies.prepare"
+            ],
+            "storage_limit": 1024,
+            "api": {
+              "base": "^1",
+              "required": {
+                "language.lsp": ">=1.3,<2",
+                "language.formatting": "^1",
+                "process": "^1",
+                "dependencies": ">=1.2,<2"
+              }
+            },
+            "services": {
+              "format": {
+                "program": "node.exe",
+                "args": [
+                  "${dependency:server}/server.cjs"
+                ],
+                "installation": {
+                  "artifacts": [
+                    {
+                      "id": "node",
+                      "version": "24.19.0",
+                      "platform": "windows-x86_64",
+                      "sha256": "3602f2bb1a10f2cbab4c36886218a33c1ab3db87290e73b033c46c77147d0237",
+                      "source": {
+                        "kind": "url",
+                        "url": "https://nodejs.org/dist/v24.19.0/win-x64/node.exe"
+                      },
+                      "format": {
+                        "kind": "file",
+                        "path": "node.exe"
+                      }
+                    },
+                    {
+                      "id": "server",
+                      "version": "0.3.0",
+                      "platform": "windows-x86_64",
+                      "sha256": "ac1532e4f0a071fe709c32a3c57f65471c24d6c7d6bc62baf44ddfeb8fc865c6",
+                      "source": {
+                        "kind": "package",
+                        "path": "native/server.cjs"
+                      },
+                      "format": {
+                        "kind": "file",
+                        "path": "server.cjs"
+                      }
+                    }
+                  ],
+                  "executable": "node/node.exe"
+                },
+                "platforms": [
+                  "windows-x86_64"
+                ]
+              }
+            },
+            "language_servers": [
+              {
+                "id": "format",
+                "language": "javascript",
+                "service": "format",
+                "primary": false,
+                "formatting": true
+              }
+            ]
+          },
+          "host_version": ">=0.1.0",
+          "platforms": [
+            "windows-x86_64"
+          ],
+          "readme": "# Nanobug JavaScript\r\n\r\n**English** · [简体中文](https://github.com/T-miracle/Nanobug-Plugin-JavaScript/blob/v0.3.1/README.zh-CN.md)\r\n\r\nJavaScript recognition, highlighting and independent formatting. The stable installation ID is `javascript`; the first independent release is `0.3.1`.\r\n\r\nThis repository is the authoritative plugin source. The [marketplace registry](https://github.com/T-miracle/Nanobug-Plugin-Marketplace) reviews submissions; fixed ZIP packages live in this repository's Releases. Publishing a Release does not list it automatically. Every initial submission and version requires a registry PR and human review.\r\n\r\n## Build independently\r\n\r\nUse Nanobug built from the commit pinned in host-sdk.json, with the required native toolchain and WASM target already available. Set `$pluginHost` to the absolute path of that executable:\r\n\r\n```powershell\r\n# The public host entry supplies its SDK and packages the project without a source copy.\r\n& $pluginHost --plugin-package . --output dist\r\n```\r\n\r\nFor a WASM project, run `& $pluginHost --plugin-cargo Cargo.toml test --lib` as well. Declarative packages need no empty WASM component. Missing tools are reported, never installed automatically. Before publishing, check permissions, platform claims, capability requirements and the SHA-256 of the complete ZIP. Changed bytes require a new version and review.\r\n\r\n## Maintenance and licensing\r\n\r\n[Original plugin notes](https://github.com/T-miracle/Nanobug-Plugin-JavaScript/blob/v0.3.1/docs/source-readme.md) preserve feature details and prior verification; current source and this README define the independent build. The migration preserves existing IDs, settings and private data.\r\n\r\nThe Nanobug workspace's Cargo MIT declaration is made explicit in LICENSE. Grammar, icons and native dependencies keep their own licenses and notices. Import a generated ZIP through the native manager, or install from the marketplace after review, and approve its actual permissions.\r\n",
+          "icon": "",
+          "version": "0.3.1",
+          "commit": "18dc8818787857b75cb1ae1b4ffd88edfa35a631",
+          "license": "MIT",
+          "url": "https://github.com/T-miracle/JavaScript-for-Nanobug/releases/download/v0.3.1/javascript-0.3.1.zip",
+          "asset_id": 630116325,
+          "sha256": "a09afb41de50211e5e0a866d2698dde2a6d524b54dc74149eda573f42eabe144",
+          "published_at": "2026-10-11T07:38:32Z",
+          "changelog": "# JavaScript for Nanobug 0.3.1\n\n- Publish the existing plugin from its independent official repository using the pinned public Nanobug SDK.\n- Preserve installation ID `javascript`, settings and private data; include standalone build instructions and the original license notices.\n- This release changes distribution metadata and packaged documentation. It does not redesign plugin business behavior.\n\nSource commit: `18dc8818787857b75cb1ae1b4ffd88edfa35a631`  \nPublic host / SDK: `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`  \nZIP SHA-256: `a09afb41de50211e5e0a866d2698dde2a6d524b54dc74149eda573f42eabe144`\n\nThe checksum covers the complete published ZIP. Later rebuilds may produce different bytes and must not replace this attachment. Marketplace admission requires a separate reviewed PR.\n\nThe repository name now follows the maintainer's `X-for-Nanobug` naming convention. The source tag, installation ID, version, ZIP filename and complete ZIP bytes are preserved from the verified release.\n",
+          "withdrawn": false,
+          "withdrawal_reason": null
+        }
+      ],
+      "downloads": null
+    },
+    {
+      "id": "markdown",
+      "repository": "T-miracle/Markdown-for-Nanobug",
+      "maintainers": [
+        "T-miracle"
+      ],
+      "summary": "Markdown source editing, native preview, format toolbar and synchronized scrolling.",
+      "category": "languages",
+      "tags": [
+        "markdown",
+        "language"
+      ],
+      "versions": [
+        {
+          "manifest": {
+            "id": "markdown",
+            "name": "Markdown",
+            "version": "0.17.1",
+            "protocol": 7,
+            "contributions": "plugin.toml",
+            "component": "markdown.wasm",
+            "permissions": [
+              "editor.read",
+              "editor.write",
+              "workspace.read",
+              "workspace.write",
+              "clipboard",
+              "network.images",
+              "navigation.external",
+              "storage"
+            ],
+            "storage_limit": 8192,
+            "api": {
+              "base": "^1",
+              "required": {
+                "ui.native": ">=1.1, <2",
+                "ui.incremental": "^1",
+                "ui.icons": "^1",
+                "ui.richtext": "^1",
+                "ui.code_highlighting": "^1",
+                "ui.images": "^1",
+                "ui.links": "^1",
+                "editor.documents": "^1",
+                "editor.viewport": "^1",
+                "editor.edit": "^1",
+                "editor.toolbar": "^1.1",
+                "editor.images": "^1",
+                "editor.navigation": "^1",
+                "editor.files": "^1",
+                "editor.layout": "^1",
+                "ui.tools": "^1",
+                "ui.content_colors": "^1",
+                "storage.private": ">=1.1, <2"
+              }
+            },
+            "panels": [
+              {
+                "id": "preview",
+                "title": "Markdown",
+                "position": "editor",
+                "file_extensions": [
+                  "md",
+                  "markdown"
+                ],
+                "default_visible": true
+              }
+            ],
+            "commands": []
+          },
+          "host_version": ">=0.1.0",
+          "platforms": [],
+          "readme": "# Nanobug Markdown\n\n**English** · [简体中文](https://github.com/T-miracle/Nanobug-Plugin-Markdown/blob/v0.17.1/README.zh-CN.md)\n\nMarkdown source editing, native preview, format toolbar and synchronized scrolling. The stable installation ID is `markdown`; the first independent release is `0.17.1`.\n\nThis repository is the authoritative plugin source. The [marketplace registry](https://github.com/T-miracle/Nanobug-Plugin-Marketplace) reviews submissions; fixed ZIP packages live in this repository's Releases. Publishing a Release does not list it automatically. Every initial submission and version requires a registry PR and human review.\n\n## Build independently\n\nUse Nanobug built from the commit pinned in host-sdk.json, with the required native toolchain and WASM target already available. Set `$pluginHost` to the absolute path of that executable:\n\n```powershell\n# The public host entry supplies its SDK and packages the project without a source copy.\n& $pluginHost --plugin-package . --output dist\n```\n\nFor a WASM project, run `& $pluginHost --plugin-cargo Cargo.toml test --lib` as well. Declarative packages need no empty WASM component. Missing tools are reported, never installed automatically. Before publishing, check permissions, platform claims, capability requirements and the SHA-256 of the complete ZIP. Changed bytes require a new version and review.\n\n## Maintenance and licensing\n\n[Original plugin notes](https://github.com/T-miracle/Nanobug-Plugin-Markdown/blob/v0.17.1/docs/source-readme.md) preserve feature details and prior verification; current source and this README define the independent build. The migration preserves existing IDs, settings and private data.\n\nThe Nanobug workspace's Cargo MIT declaration is made explicit in LICENSE. Grammar, icons and native dependencies keep their own licenses and notices. Import a generated ZIP through the native manager, or install from the marketplace after review, and approve its actual permissions.\n",
+          "icon": "",
+          "version": "0.17.1",
+          "commit": "31516790679c2ab591105d11e6fd15e974b72505",
+          "license": "MIT",
+          "url": "https://github.com/T-miracle/Markdown-for-Nanobug/releases/download/v0.17.1/markdown-0.17.1.zip",
+          "asset_id": 630116607,
+          "sha256": "2438a081165de70acf0c30c560905167d46b44a5c30d7abf856fa420a14a17a3",
+          "published_at": "2026-10-11T07:38:38Z",
+          "changelog": "# Markdown for Nanobug 0.17.1\n\n- Publish the existing plugin from its independent official repository using the pinned public Nanobug SDK.\n- Preserve installation ID `markdown`, settings and private data; include standalone build instructions and the original license notices.\n- This release changes distribution metadata and packaged documentation. It does not redesign plugin business behavior.\n\nSource commit: `31516790679c2ab591105d11e6fd15e974b72505`  \nPublic host / SDK: `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`  \nZIP SHA-256: `2438a081165de70acf0c30c560905167d46b44a5c30d7abf856fa420a14a17a3`\n\nThe checksum covers the complete published ZIP. Later rebuilds may produce different bytes and must not replace this attachment. Marketplace admission requires a separate reviewed PR.\n\nThe repository name now follows the maintainer's `X-for-Nanobug` naming convention. The source tag, installation ID, version, ZIP filename and complete ZIP bytes are preserved from the verified release.\n",
+          "withdrawn": false,
+          "withdrawal_reason": null
+        }
+      ],
+      "downloads": null
+    },
+    {
+      "id": "rust",
+      "repository": "T-miracle/Rust-for-Nanobug",
+      "maintainers": [
+        "T-miracle"
+      ],
+      "summary": "Rust recognition and language services, Cargo configurations and the merged debugger.",
+      "category": "languages",
+      "tags": [
+        "rust",
+        "cargo",
+        "debugging"
+      ],
+      "versions": [
+        {
+          "manifest": {
+            "id": "rust",
+            "name": "Rust",
+            "version": "0.6.1",
+            "protocol": 7,
+            "contributions": "plugin.toml",
+            "permissions": [
+              "workspace.read",
+              "process.exec",
+              "ui.panels",
+              "process.service.analysis",
+              "process.service.adapter",
+              "dependencies.prepare"
+            ],
+            "storage_limit": 1024,
+            "api": {
+              "base": "^1",
+              "required": {
+                "language.lsp": ">=1.1,<2",
+                "workspace.files": ">=1.1,<2",
+                "host.sdk": "^1",
+                "configuration": "^1",
+                "process": ">=1.7,<2",
+                "plugin.services": ">=1.1,<2",
+                "ui.panels": "^1",
+                "ui.native": ">=1.1,<2",
+                "dependencies": ">=1.2,<2"
+              }
+            },
+            "component": "rust.wasm",
+            "plugin_services": {
+              "provides": {
+                "run.targets": {
+                  "version": "1.0.0",
+                  "methods": {
+                    "discover": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "workspace": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "targets": {
+                            "type": "array",
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "identity": {
+                                  "type": "string",
+                                  "max_bytes": 256
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "max_bytes": 256
+                                },
+                                "source": {
+                                  "type": "string",
+                                  "max_bytes": 4096
+                                },
+                                "target_type": {
+                                  "type": "string",
+                                  "max_bytes": 128
+                                },
+                                "type_version": {
+                                  "type": "integer",
+                                  "min": 1,
+                                  "max": 2147483647
+                                },
+                                "binding": {
+                                  "type": "string",
+                                  "max_bytes": 4096
+                                }
+                              }
+                            },
+                            "max_items": 128
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "workspace.read",
+                        "process.exec"
+                      ]
+                    },
+                    "prepare": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "workspace": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "binding": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "env": {
+                            "type": "array",
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "name": {
+                                  "type": "string",
+                                  "max_bytes": 128
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "max_bytes": 32768
+                                }
+                              }
+                            },
+                            "max_items": 64
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "program": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "workspace.read",
+                        "process.exec",
+                        "ui.panels"
+                      ]
+                    }
+                  }
+                },
+                "run.configurations": {
+                  "version": "1.0.0",
+                  "methods": {
+                    "catalog": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "workspace": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "locale": {
+                            "type": "string",
+                            "max_bytes": 64
+                          },
+                          "os": {
+                            "type": "string",
+                            "max_bytes": 64
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "payload": {
+                            "type": "string",
+                            "max_bytes": 65536
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "workspace.read",
+                        "process.exec"
+                      ]
+                    },
+                    "form": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "workspace": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "locale": {
+                            "type": "string",
+                            "max_bytes": 64
+                          },
+                          "os": {
+                            "type": "string",
+                            "max_bytes": 64
+                          },
+                          "template": {
+                            "type": "string",
+                            "max_bytes": 256
+                          },
+                          "values": {
+                            "type": "string",
+                            "max_bytes": 16384
+                          },
+                          "event": {
+                            "type": "string",
+                            "max_bytes": 65536
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "payload": {
+                            "type": "string",
+                            "max_bytes": 65536
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "workspace.read",
+                        "ui.panels"
+                      ]
+                    },
+                    "validate": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "workspace": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "locale": {
+                            "type": "string",
+                            "max_bytes": 64
+                          },
+                          "os": {
+                            "type": "string",
+                            "max_bytes": 64
+                          },
+                          "template": {
+                            "type": "string",
+                            "max_bytes": 256
+                          },
+                          "values": {
+                            "type": "string",
+                            "max_bytes": 16384
+                          },
+                          "intent": {
+                            "type": "string",
+                            "max_bytes": 64
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "payload": {
+                            "type": "string",
+                            "max_bytes": 65536
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "workspace.read",
+                        "process.exec"
+                      ]
+                    }
+                  }
+                },
+                "debug.session": {
+                  "version": "1.1.0",
+                  "methods": {
+                    "start": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "program": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "args": {
+                            "type": "array",
+                            "max_items": 128,
+                            "items": {
+                              "type": "string",
+                              "max_bytes": 4096
+                            }
+                          },
+                          "cwd": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "name": {
+                            "type": "string",
+                            "max_bytes": 256
+                          },
+                          "env": {
+                            "type": "array",
+                            "max_items": 64,
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "name": {
+                                  "type": "string",
+                                  "max_bytes": 128
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "max_bytes": 32768
+                                }
+                              }
+                            }
+                          },
+                          "breakpoints": {
+                            "type": "array",
+                            "max_items": 512,
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "source": {
+                                  "type": "string",
+                                  "max_bytes": 4096
+                                },
+                                "line": {
+                                  "type": "integer",
+                                  "min": 1,
+                                  "max": 2147483647
+                                }
+                              }
+                            }
+                          },
+                          "stop_on_entry": {
+                            "type": "boolean"
+                          }
+                        },
+                        "optional": [
+                          "cwd",
+                          "name",
+                          "env",
+                          "breakpoints",
+                          "stop_on_entry"
+                        ]
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "state": {
+                            "type": "string",
+                            "max_bytes": 32
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec",
+                        "ui.panels"
+                      ]
+                    },
+                    "set_breakpoints": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "breakpoints": {
+                            "type": "array",
+                            "max_items": 512,
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "source": {
+                                  "type": "string",
+                                  "max_bytes": 4096
+                                },
+                                "line": {
+                                  "type": "integer",
+                                  "min": 1,
+                                  "max": 2147483647
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "breakpoints": {
+                            "type": "array",
+                            "max_items": 512,
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "source": {
+                                  "type": "string",
+                                  "max_bytes": 4096
+                                },
+                                "line": {
+                                  "type": "integer",
+                                  "min": 1,
+                                  "max": 2147483647
+                                },
+                                "verified": {
+                                  "type": "boolean"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    },
+                    "resume": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "state": {
+                            "type": "string",
+                            "max_bytes": 32
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    },
+                    "pause": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "state": {
+                            "type": "string",
+                            "max_bytes": 32
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    },
+                    "step": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          },
+                          "kind": {
+                            "type": "string",
+                            "max_bytes": 32
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "state": {
+                            "type": "string",
+                            "max_bytes": 32
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    },
+                    "frames": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "frames": {
+                            "type": "array",
+                            "max_items": 256,
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "id": {
+                                  "type": "integer",
+                                  "min": 0,
+                                  "max": 2147483647
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "max_bytes": 512
+                                },
+                                "source": {
+                                  "type": "string",
+                                  "max_bytes": 4096
+                                },
+                                "line": {
+                                  "type": "integer",
+                                  "min": 1,
+                                  "max": 2147483647
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    },
+                    "variables": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          },
+                          "frame": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 2147483647
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "variables": {
+                            "type": "array",
+                            "max_items": 512,
+                            "items": {
+                              "type": "record",
+                              "fields": {
+                                "name": {
+                                  "type": "string",
+                                  "max_bytes": 512
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "max_bytes": 4096
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    },
+                    "status": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "state": {
+                            "type": "string",
+                            "max_bytes": 32
+                          },
+                          "reason": {
+                            "type": "string",
+                            "max_bytes": 64
+                          },
+                          "source": {
+                            "type": "string",
+                            "max_bytes": 4096
+                          },
+                          "line": {
+                            "type": "integer",
+                            "min": 1,
+                            "max": 2147483647
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        },
+                        "optional": [
+                          "reason",
+                          "source",
+                          "line"
+                        ]
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    },
+                    "stop": {
+                      "parameters": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          }
+                        }
+                      },
+                      "result": {
+                        "type": "record",
+                        "fields": {
+                          "session": {
+                            "type": "string",
+                            "max_bytes": 128
+                          },
+                          "state": {
+                            "type": "string",
+                            "max_bytes": 32
+                          },
+                          "pause": {
+                            "type": "integer",
+                            "min": 0,
+                            "max": 9223372036854775807
+                          }
+                        }
+                      },
+                      "permissions": [
+                        "process.exec"
+                      ]
+                    }
+                  },
+                  "preparation": {
+                    "start": [
+                      "adapter"
+                    ]
+                  },
+                  "enabled_setting": "debugger.enabled",
+                  "platforms": [
+                    "windows-x86_64"
+                  ]
+                }
+              }
+            },
+            "settings": {
+              "executable": {
+                "title": "Rust Analyzer 可执行文件（留空默认值时自动查找）",
+                "value_type": {
+                  "kind": "string",
+                  "max_length": 4096
+                },
+                "default": "",
+                "scope": "project"
+              },
+              "debugger.enabled": {
+                "title": "启用调试器 / Enable debugger",
+                "value_type": {
+                  "kind": "boolean"
+                },
+                "default": true,
+                "scope": "project"
+              }
+            },
+            "services": {
+              "analysis": {
+                "program": "rust-analyzer",
+                "args": [],
+                "search_paths": [
+                  "${HOME}/scoop/persist/vscode/data/extensions/rust-lang.rust-analyzer-*/server/rust-analyzer.exe",
+                  "${HOME}/.vscode/extensions/rust-lang.rust-analyzer-*/server/rust-analyzer.exe",
+                  "${HOME}/.vscode-insiders/extensions/rust-lang.rust-analyzer-*/server/rust-analyzer.exe"
+                ],
+                "check_args": [
+                  "--version"
+                ]
+              },
+              "adapter": {
+                "program": "me-debug-bridge",
+                "args": [
+                  "${dependency:adapter}/extension/adapter/codelldb.exe",
+                  "${dependency:adapter}/extension/lldb/bin/liblldb.dll"
+                ],
+                "installation": {
+                  "artifacts": [
+                    {
+                      "id": "adapter",
+                      "version": "1.12.3",
+                      "platform": "windows-x86_64",
+                      "sha256": "a916e509308dac817732f63ca604a8b93ed29cd16f38a2fa9f0b64ed58e8f51a",
+                      "source": {
+                        "kind": "url",
+                        "url": "https://github.com/vadimcn/codelldb/releases/download/v1.12.3/codelldb-win32-x64.vsix"
+                      },
+                      "format": {
+                        "kind": "zip"
+                      }
+                    },
+                    {
+                      "id": "bridge",
+                      "version": "0.1.0",
+                      "platform": "windows-x86_64",
+                      "sha256": "0cfdbea994b17f63be2ddc6740d65ffb7a5f6bf8544cc8ae994dbc104c7860f8",
+                      "source": {
+                        "kind": "package",
+                        "path": "native/me-debug-bridge.exe"
+                      },
+                      "format": {
+                        "kind": "file",
+                        "path": "me-debug-bridge.exe"
+                      },
+                      "requires": [
+                        "adapter"
+                      ]
+                    }
+                  ],
+                  "executable": "bridge/me-debug-bridge.exe"
+                },
+                "on_demand": true,
+                "platforms": [
+                  "windows-x86_64"
+                ]
+              }
+            },
+            "language_servers": [
+              {
+                "id": "analysis",
+                "language": "rust",
+                "service": "analysis",
+                "hook": true,
+                "executable_setting": "executable",
+                "initialization_options": {},
+                "client_experimental": {
+                  "serverStatusNotification": true
+                },
+                "readiness": {
+                  "notification": "experimental/serverStatus",
+                  "pointer": "/quiescent",
+                  "expected": true,
+                  "timeout_ms": 120000
+                },
+                "completion_triggers": [
+                  ".",
+                  ":"
+                ],
+                "completion_after_whitespace": [
+                  ":",
+                  "->"
+                ]
+              }
+            ],
+            "replaces": [
+              {
+                "id": "rust-debugger",
+                "versions": ">=0.1,<0.3",
+                "contracts": [
+                  "debug.session"
+                ],
+                "enabled_setting": "debugger.enabled"
+              }
+            ]
+          },
+          "host_version": ">=0.1.0",
+          "platforms": [
+            "windows-x86_64"
+          ],
+          "readme": "# Nanobug Rust\n\n**English** · [简体中文](https://github.com/T-miracle/Nanobug-Plugin-Rust/blob/v0.6.1/README.zh-CN.md)\n\nRust recognition and language services, Cargo configurations and the merged debugger. The stable installation ID is `rust`; the first independent release is `0.6.1`.\n\nThis repository is the authoritative plugin source. The [marketplace registry](https://github.com/T-miracle/Nanobug-Plugin-Marketplace) reviews submissions; fixed ZIP packages live in this repository's Releases. Publishing a Release does not list it automatically. Every initial submission and version requires a registry PR and human review.\n\n## Build independently\n\nUse Nanobug built from the commit pinned in host-sdk.json, with the required native toolchain and WASM target already available. Set `$pluginHost` to the absolute path of that executable:\n\n```powershell\n# The public host entry supplies its SDK and packages the project without a source copy.\n& $pluginHost --plugin-package . --output dist\n```\n\nFor a WASM project, run `& $pluginHost --plugin-cargo Cargo.toml test --lib` as well. Declarative packages need no empty WASM component. Missing tools are reported, never installed automatically. Before publishing, check permissions, platform claims, capability requirements and the SHA-256 of the complete ZIP. Changed bytes require a new version and review.\n\n## Maintenance and licensing\n\n[Original plugin notes](https://github.com/T-miracle/Nanobug-Plugin-Rust/blob/v0.6.1/docs/source-readme.md) preserve feature details and prior verification; current source and this README define the independent build. The migration preserves existing IDs, settings and private data. Only the merged Rust package is distributed.\n\nThe Nanobug workspace's Cargo MIT declaration is made explicit in LICENSE. Grammar, icons and native dependencies keep their own licenses and notices. Import a generated ZIP through the native manager, or install from the marketplace after review, and approve its actual permissions.\n",
+          "icon": "",
+          "version": "0.6.1",
+          "commit": "942a905e4d4dfe02a9b9b162c35e3c2788691d5f",
+          "license": "MIT",
+          "url": "https://github.com/T-miracle/Rust-for-Nanobug/releases/download/v0.6.1/rust-0.6.1.zip",
+          "asset_id": 630116738,
+          "sha256": "9da637f2852318c51fb7b008c1abaefe4848a1d0896d6205210558a561de6867",
+          "published_at": "2026-10-11T07:38:42Z",
+          "changelog": "# Rust for Nanobug 0.6.1\n\n- Publish the existing plugin from its independent official repository using the pinned public Nanobug SDK.\n- Preserve installation ID `rust`, settings and private data; include standalone build instructions and the original license notices.\n- This release changes distribution metadata and packaged documentation. It does not redesign plugin business behavior.\n\nSource commit: `942a905e4d4dfe02a9b9b162c35e3c2788691d5f`  \nPublic host / SDK: `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`  \nZIP SHA-256: `9da637f2852318c51fb7b008c1abaefe4848a1d0896d6205210558a561de6867`\n\nThe checksum covers the complete published ZIP. Later rebuilds may produce different bytes and must not replace this attachment. Marketplace admission requires a separate reviewed PR.\n\nThe repository name now follows the maintainer's `X-for-Nanobug` naming convention. The source tag, installation ID, version, ZIP filename and complete ZIP bytes are preserved from the verified release.\n",
+          "withdrawn": false,
+          "withdrawal_reason": null
+        }
+      ],
+      "downloads": null
+    },
+    {
+      "id": "svg",
+      "repository": "T-miracle/Image-for-Nanobug",
+      "maintainers": [
+        "T-miracle"
+      ],
+      "summary": "Native SVG source preview and PNG, JPEG, GIF and WebP image display.",
+      "category": "media",
+      "tags": [
+        "svg",
+        "images"
+      ],
+      "versions": [
+        {
+          "manifest": {
+            "id": "svg",
+            "name": "Image",
+            "version": "0.6.1",
+            "protocol": 7,
+            "api": {
+              "base": "^1",
+              "required": {
+                "ui.native": ">=1.1, <2",
+                "ui.canvas": ">=1.1, <2",
+                "ui.file_images": "^1",
+                "ui.viewport": "^1",
+                "editor.files": "^1",
+                "editor.documents": "^1",
+                "editor.layout": "^1",
+                "ui.tools": "^1",
+                "storage.private": ">=1.1, <2"
+              }
+            },
+            "component": "svg.wasm",
+            "permissions": [
+              "editor.read",
+              "workspace.read",
+              "storage"
+            ],
+            "storage_limit": 8192,
+            "panels": [
+              {
+                "id": "preview",
+                "title": "Image",
+                "position": "editor",
+                "file_extensions": [
+                  "svg"
+                ],
+                "readonly_file_extensions": [
+                  "png",
+                  "jpg",
+                  "jpeg",
+                  "gif",
+                  "webp"
+                ],
+                "default_visible": true
+              }
+            ],
+            "commands": [],
+            "contributions": "plugin.toml"
+          },
+          "host_version": ">=0.1.0",
+          "platforms": [],
+          "readme": "# Nanobug Image\n\n**English** · [简体中文](https://github.com/T-miracle/Nanobug-Plugin-Image/blob/v0.6.1/README.zh-CN.md)\n\nNative SVG source preview and PNG, JPEG, GIF and WebP image display. The stable installation ID is `svg`; the first independent release is `0.6.1`.\n\nThis repository is the authoritative plugin source. The [marketplace registry](https://github.com/T-miracle/Nanobug-Plugin-Marketplace) reviews submissions; fixed ZIP packages live in this repository's Releases. Publishing a Release does not list it automatically. Every initial submission and version requires a registry PR and human review.\n\n## Build independently\n\nUse Nanobug built from the commit pinned in host-sdk.json, with the required native toolchain and WASM target already available. Set `$pluginHost` to the absolute path of that executable:\n\n```powershell\n# The public host entry supplies its SDK and packages the project without a source copy.\n& $pluginHost --plugin-package . --output dist\n```\n\nFor a WASM project, run `& $pluginHost --plugin-cargo Cargo.toml test --lib` as well. Declarative packages need no empty WASM component. Missing tools are reported, never installed automatically. Before publishing, check permissions, platform claims, capability requirements and the SHA-256 of the complete ZIP. Changed bytes require a new version and review.\n\n## Maintenance and licensing\n\n[Original plugin notes](https://github.com/T-miracle/Nanobug-Plugin-Image/blob/v0.6.1/docs/source-readme.md) preserve feature details and prior verification; current source and this README define the independent build. The migration preserves existing IDs, settings and private data. Image retains the `svg` identity.\n\nThe Nanobug workspace's Cargo MIT declaration is made explicit in LICENSE. Grammar, icons and native dependencies keep their own licenses and notices. Import a generated ZIP through the native manager, or install from the marketplace after review, and approve its actual permissions.\n",
+          "icon": "",
+          "version": "0.6.1",
+          "commit": "cac09895b6bc9cd227a6e318edb8c868da41084e",
+          "license": "MIT",
+          "url": "https://github.com/T-miracle/Image-for-Nanobug/releases/download/v0.6.1/svg-0.6.1.zip",
+          "asset_id": 630116874,
+          "sha256": "911932c643bc9b7a538b3f4b5baa34e04a939256b61ee49bf6d2f9e84656a654",
+          "published_at": "2026-10-11T07:38:47Z",
+          "changelog": "# Image for Nanobug 0.6.1\n\n- Publish the existing plugin from its independent official repository using the pinned public Nanobug SDK.\n- Preserve installation ID `svg`, settings and private data; include standalone build instructions and the original license notices.\n- This release changes distribution metadata and packaged documentation. It does not redesign plugin business behavior.\n\nSource commit: `cac09895b6bc9cd227a6e318edb8c868da41084e`  \nPublic host / SDK: `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`  \nZIP SHA-256: `911932c643bc9b7a538b3f4b5baa34e04a939256b61ee49bf6d2f9e84656a654`\n\nThe checksum covers the complete published ZIP. Later rebuilds may produce different bytes and must not replace this attachment. Marketplace admission requires a separate reviewed PR.\n\nThe repository name now follows the maintainer's `X-for-Nanobug` naming convention. The source tag, installation ID, version, ZIP filename and complete ZIP bytes are preserved from the verified release.\n",
+          "withdrawn": false,
+          "withdrawal_reason": null
+        }
+      ],
+      "downloads": null
+    },
+    {
+      "id": "toml",
+      "repository": "T-miracle/TOML-for-Nanobug",
+      "maintainers": [
+        "T-miracle"
+      ],
+      "summary": "TOML recognition, highlighting and file icons.",
+      "category": "languages",
+      "tags": [
+        "toml",
+        "language"
+      ],
+      "versions": [
+        {
+          "manifest": {
+            "id": "toml",
+            "name": "TOML",
+            "version": "0.2.3",
+            "protocol": 7,
+            "contributions": "plugin.toml",
+            "permissions": [],
+            "storage_limit": 1024,
+            "api": {
+              "base": "^1"
+            }
+          },
+          "host_version": ">=0.1.0",
+          "platforms": [],
+          "readme": "# Nanobug TOML\r\n\r\n**English** · [简体中文](https://github.com/T-miracle/Nanobug-Plugin-TOML/blob/v0.2.3/README.zh-CN.md)\r\n\r\nTOML recognition, highlighting and file icons. The stable installation ID is `toml`; the first independent release is `0.2.3`.\r\n\r\nThis repository is the authoritative plugin source. The [marketplace registry](https://github.com/T-miracle/Nanobug-Plugin-Marketplace) reviews submissions; fixed ZIP packages live in this repository's Releases. Publishing a Release does not list it automatically. Every initial submission and version requires a registry PR and human review.\r\n\r\n## Build independently\r\n\r\nUse Nanobug built from the commit pinned in host-sdk.json, with the required native toolchain and WASM target already available. Set `$pluginHost` to the absolute path of that executable:\r\n\r\n```powershell\r\n# The public host entry supplies its SDK and packages the project without a source copy.\r\n& $pluginHost --plugin-package . --output dist\r\n```\r\n\r\nFor a WASM project, run `& $pluginHost --plugin-cargo Cargo.toml test --lib` as well. Declarative packages need no empty WASM component. Missing tools are reported, never installed automatically. Before publishing, check permissions, platform claims, capability requirements and the SHA-256 of the complete ZIP. Changed bytes require a new version and review.\r\n\r\n## Maintenance and licensing\r\n\r\n[Original plugin notes](https://github.com/T-miracle/Nanobug-Plugin-TOML/blob/v0.2.3/docs/source-readme.md) preserve feature details and prior verification; current source and this README define the independent build. The migration preserves existing IDs, settings and private data.\r\n\r\nThe Nanobug workspace's Cargo MIT declaration is made explicit in LICENSE. Grammar, icons and native dependencies keep their own licenses and notices. Import a generated ZIP through the native manager, or install from the marketplace after review, and approve its actual permissions.\r\n",
+          "icon": "",
+          "version": "0.2.3",
+          "commit": "a1a4677118403ac01e6a0fd2f667cfa788aa9bd2",
+          "license": "MIT",
+          "url": "https://github.com/T-miracle/TOML-for-Nanobug/releases/download/v0.2.3/toml-0.2.3.zip",
+          "asset_id": 630117014,
+          "sha256": "2b3dabe0b2f67b2ed2440fe5eb8e7ac2b3e408105accc2f7bbdc9a2ccf6ebeed",
+          "published_at": "2026-10-11T07:38:52Z",
+          "changelog": "# TOML for Nanobug 0.2.3\n\n- Publish the existing plugin from its independent official repository using the pinned public Nanobug SDK.\n- Preserve installation ID `toml`, settings and private data; include standalone build instructions and the original license notices.\n- This release changes distribution metadata and packaged documentation. It does not redesign plugin business behavior.\n\nSource commit: `a1a4677118403ac01e6a0fd2f667cfa788aa9bd2`  \nPublic host / SDK: `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`  \nZIP SHA-256: `2b3dabe0b2f67b2ed2440fe5eb8e7ac2b3e408105accc2f7bbdc9a2ccf6ebeed`\n\nThe checksum covers the complete published ZIP. Later rebuilds may produce different bytes and must not replace this attachment. Marketplace admission requires a separate reviewed PR.\n\nThe repository name now follows the maintainer's `X-for-Nanobug` naming convention. The source tag, installation ID, version, ZIP filename and complete ZIP bytes are preserved from the verified release.\n",
+          "withdrawn": false,
+          "withdrawal_reason": null
+        }
+      ],
+      "downloads": null
+    },
+    {
+      "id": "xml",
+      "repository": "T-miracle/XML-for-Nanobug",
+      "maintainers": [
+        "T-miracle"
+      ],
+      "summary": "XML highlighting, completion, formatting, schema assistance and document structure.",
+      "category": "languages",
+      "tags": [
+        "xml",
+        "language"
+      ],
+      "versions": [
+        {
+          "manifest": {
+            "id": "xml",
+            "name": "XML",
+            "version": "0.2.2",
+            "protocol": 7,
+            "contributions": "plugin.toml",
+            "component": "xml.wasm",
+            "permissions": [
+              "process.service.analysis",
+              "dependencies.prepare",
+              "editor.read"
+            ],
+            "storage_limit": 33554432,
+            "api": {
+              "base": "^1",
+              "required": {
+                "language.lsp": ">=1.3,<2",
+                "language.completion": "^1",
+                "language.formatting": "^1",
+                "language.editing": "^1",
+                "language.structure": "^1",
+                "process": "^1",
+                "configuration": "^1",
+                "dependencies": ">=1.1,<2"
+              }
+            },
+            "settings": {
+              "executable": {
+                "title": "本机 LemMinX 可执行文件 / Local LemMinX executable",
+                "value_type": {
+                  "kind": "string",
+                  "max_length": 4096
+                },
+                "default": "",
+                "scope": "project"
+              },
+              "download_schemas": {
+                "title": "下载远程 Schema / Download remote schemas",
+                "value_type": {
+                  "kind": "boolean"
+                },
+                "default": false,
+                "scope": "project"
+              },
+              "schema_associations": {
+                "title": "Schema 关联 JSON / Schema associations JSON",
+                "value_type": {
+                  "kind": "string",
+                  "max_length": 4096
+                },
+                "default": "[]",
+                "scope": "project"
+              },
+              "catalogs": {
+                "title": "XML Catalog 路径 JSON / XML catalog paths JSON",
+                "value_type": {
+                  "kind": "string",
+                  "max_length": 4096
+                },
+                "default": "[]",
+                "scope": "project"
+              },
+              "format_attributes": {
+                "title": "格式化属性布局 / Formatted attribute layout",
+                "value_type": {
+                  "kind": "enum",
+                  "choices": [
+                    "preserve",
+                    "splitNewLine",
+                    "alignWithFirstAttr"
+                  ]
+                },
+                "default": "preserve",
+                "scope": "project"
+              },
+              "format_empty_elements": {
+                "title": "格式化空元素 / Formatted empty elements",
+                "value_type": {
+                  "kind": "enum",
+                  "choices": [
+                    "ignore",
+                    "collapse",
+                    "expand"
+                  ]
+                },
+                "default": "ignore",
+                "scope": "project"
+              },
+              "svg_suggestions": {
+                "title": "SVG 元素和属性提示 / SVG element and attribute suggestions",
+                "value_type": {
+                  "kind": "boolean"
+                },
+                "default": true,
+                "scope": "project"
+              }
+            },
+            "services": {
+              "analysis": {
+                "program": "lemminx-win32.exe",
+                "args": [],
+                "installation": {
+                  "artifacts": [
+                    {
+                      "id": "lemminx",
+                      "version": "0.31.2-vscode-xml-0.29.3",
+                      "platform": "windows-x86_64",
+                      "sha256": "7eaefaac68253b0ec8e0ad1f1c0f2d0755423d4e99e52497428b52f80df28eb7",
+                      "source": {
+                        "kind": "url",
+                        "url": "https://github.com/redhat-developer/vscode-xml/releases/download/0.29.3/lemminx-win32.zip"
+                      },
+                      "format": {
+                        "kind": "zip"
+                      }
+                    }
+                  ],
+                  "executable": "lemminx/lemminx-win32.exe"
+                }
+              }
+            },
+            "structure_providers": [
+              {
+                "id": "structure",
+                "language": "xml"
+              }
+            ],
+            "language_servers": [
+              {
+                "id": "analysis",
+                "language": "xml",
+                "service": "analysis",
+                "formatting": true,
+                "editing": true,
+                "hook": true,
+                "executable_setting": "executable",
+                "optional_installation": true,
+                "completion_hook": true,
+                "diagnostic_snapshots": true,
+                "completion_triggers": [
+                  "<",
+                  "/",
+                  ":",
+                  "\"",
+                  "'"
+                ],
+                "completion_after_whitespace": [
+                  ""
+                ]
+              }
+            ]
+          },
+          "host_version": ">=0.1.0",
+          "platforms": [],
+          "readme": "# Nanobug XML\r\n\r\n**English** · [简体中文](https://github.com/T-miracle/Nanobug-Plugin-XML/blob/v0.2.2/README.zh-CN.md)\r\n\r\nXML highlighting, completion, formatting, schema assistance and document structure. The stable installation ID is `xml`; the first independent release is `0.2.2`.\r\n\r\nThis repository is the authoritative plugin source. The [marketplace registry](https://github.com/T-miracle/Nanobug-Plugin-Marketplace) reviews submissions; fixed ZIP packages live in this repository's Releases. Publishing a Release does not list it automatically. Every initial submission and version requires a registry PR and human review.\r\n\r\n## Build independently\r\n\r\nUse Nanobug built from the commit pinned in host-sdk.json, with the required native toolchain and WASM target already available. Set `$pluginHost` to the absolute path of that executable:\r\n\r\n```powershell\r\n# The public host entry supplies its SDK and packages the project without a source copy.\r\n& $pluginHost --plugin-package . --output dist\r\n```\r\n\r\nFor a WASM project, run `& $pluginHost --plugin-cargo Cargo.toml test --lib` as well. Declarative packages need no empty WASM component. Missing tools are reported, never installed automatically. Before publishing, check permissions, platform claims, capability requirements and the SHA-256 of the complete ZIP. Changed bytes require a new version and review.\r\n\r\n## Maintenance and licensing\r\n\r\n[Original plugin notes](https://github.com/T-miracle/Nanobug-Plugin-XML/blob/v0.2.2/docs/source-readme.md) preserve feature details and prior verification; current source and this README define the independent build. The migration preserves existing IDs, settings and private data.\r\n\r\nThe Nanobug workspace's Cargo MIT declaration is made explicit in LICENSE. Grammar, icons and native dependencies keep their own licenses and notices. Import a generated ZIP through the native manager, or install from the marketplace after review, and approve its actual permissions.\r\n",
+          "icon": "",
+          "version": "0.2.2",
+          "commit": "69749e0d37ca28571e39101678f77a051a939ca8",
+          "license": "MIT",
+          "url": "https://github.com/T-miracle/XML-for-Nanobug/releases/download/v0.2.2/xml-0.2.2.zip",
+          "asset_id": 630117223,
+          "sha256": "c6bde8af6e724d2c9570502293f4e9d024137761759205baffb6f10a8bd3dd8a",
+          "published_at": "2026-10-11T07:38:57Z",
+          "changelog": "# XML for Nanobug 0.2.2\n\n- Publish the existing plugin from its independent official repository using the pinned public Nanobug SDK.\n- Preserve installation ID `xml`, settings and private data; include standalone build instructions and the original license notices.\n- This release changes distribution metadata and packaged documentation. It does not redesign plugin business behavior.\n\nSource commit: `69749e0d37ca28571e39101678f77a051a939ca8`  \nPublic host / SDK: `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`  \nZIP SHA-256: `c6bde8af6e724d2c9570502293f4e9d024137761759205baffb6f10a8bd3dd8a`\n\nThe checksum covers the complete published ZIP. Later rebuilds may produce different bytes and must not replace this attachment. Marketplace admission requires a separate reviewed PR.\n\nThe repository name now follows the maintainer's `X-for-Nanobug` naming convention. The source tag, installation ID, version, ZIP filename and complete ZIP bytes are preserved from the verified release.\n",
+          "withdrawn": false,
+          "withdrawal_reason": null
+        }
+      ],
+      "downloads": null
+    }
+  ]
+}

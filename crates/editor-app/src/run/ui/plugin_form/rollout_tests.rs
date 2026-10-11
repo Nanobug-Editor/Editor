@@ -17,10 +17,7 @@ fn project(root: &Path, source: &str) {
     std::fs::write(root.join("src/main.rs"), source).unwrap();
 }
 fn rust_package(manager: &mut Manager, identity: &str) {
-    let mut package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust.zip"),
-    )
-    .unwrap();
+    let mut package = Package::read(&crate::test_packages::archive("rust")).unwrap();
     if identity != "rust" {
         // Ordinary package metadata exercises identity replacement without changing guest or host code.
         let mut manifest: serde_json::Value =

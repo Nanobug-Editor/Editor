@@ -32,7 +32,7 @@ fn runtime_log_time_uses_local_calendar_and_whole_seconds() {
 
 /// The same worker publication and native button route recover a fault while the editor keeps unsaved text.
 #[gpui::test]
-#[ignore = "build capability-example first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn native_restart_recovers_a_fault_without_blocking_document_input(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -43,11 +43,7 @@ fn native_restart_recovers_a_fault_without_blocking_document_input(cx: &mut Test
     let path = temp.path().join("editing.txt");
     std::fs::write(&path, "original").unwrap();
     let workspace = Workspace::open(temp.path()).unwrap();
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     let mut manager = plugin_runtime::Manager::open(
         temp.path().join("plugins"),
         protocol::Environment {
@@ -166,7 +162,7 @@ fn native_restart_recovers_a_fault_without_blocking_document_input(cx: &mut Test
 
 /// A controlled monotonic clock verifies backoff without sleeping through production delays.
 #[test]
-#[ignore = "build capability-example and plugin-runtime lsp_fixture first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn crashing_lsp_stops_retrying_and_manual_recovery_uses_a_new_transport() {
     let temp = tempfile::tempdir().unwrap();
     let exe = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

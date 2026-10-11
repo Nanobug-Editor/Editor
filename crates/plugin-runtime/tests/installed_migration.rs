@@ -1,4 +1,7 @@
 //! Historical installation dumps recover through public lifecycle APIs and an independently built SDK guest.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, Snapshot, settings::Source, ui::Kind},
@@ -171,11 +174,7 @@ fn assert_snapshot(manager: &mut Manager, expected: &str) {
 #[test]
 #[ignore = "build the current independent capability-example SDK guest first"]
 fn compatible_reinstall_imports_legacy_scopes_once_and_keeps_recoverable_bytes() {
-    let package = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let legacy = LegacyInstallation::new(&package);
     let mut manager = legacy.open(&legacy.first);
     let entry = &manager.installed[ID];

@@ -5,12 +5,9 @@ use protocol::ui::{Dialog, Document, MenuItem, Node, PopupMenu};
 
 /// Reuse public example WASM and ordinary package assets; the host has no fixture-specific behavior.
 fn overlay_peer(dialog: bool, svg: bool) -> Package {
-    let mut files = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let mut files = Package::read(&crate::test_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["settings_hook"] = serde_json::json!(false);
     manifest["settings"]["label"]["default"] = serde_json::json!("composable-ui");
@@ -90,7 +87,7 @@ fn overlay_peer(dialog: bool, svg: bool) -> Package {
 
 /// Restored Source mode must retain a visible modal/popup, exclusive input and its dismissal lifecycle.
 #[gpui::test]
-#[ignore = "build markdown and current capability-example through the public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn source_only_toolbar_keeps_sdk_dialog_and_popup_visible(cx: &mut TestAppContext) {
     for dialog in [true, false] {
         let original = "Source text";
@@ -153,7 +150,7 @@ fn source_only_toolbar_keeps_sdk_dialog_and_popup_visible(cx: &mut TestAppContex
 
 /// Toolbar canvases use the same authorized raster pipeline and package cleanup as ordinary UI nodes.
 #[gpui::test]
-#[ignore = "build markdown and current capability-example through the public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn source_toolbar_svg_uses_the_public_canvas_raster_path(cx: &mut TestAppContext) {
     let peer = overlay_peer(true, true);
     let (mut fixture, ui) =

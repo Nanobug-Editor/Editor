@@ -29,7 +29,6 @@ fn prepare_builtin_upgrade_acceptance_profile() {
     let key = workspace.display().to_string();
     let (_, binary) = debugger_packages::interactive_program(&workspace);
     let runtime = root.join("runtime");
-    let repo = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut manager = Manager::open(
         runtime.clone(),
         protocol::Environment {
@@ -40,7 +39,7 @@ fn prepare_builtin_upgrade_acceptance_profile() {
     )
     .unwrap();
     for package in [
-        Package::read(&repo.join("target/plugin-api-test/configuration-example.zip")).unwrap(),
+        Package::read(&crate::test_packages::archive("configuration-example")).unwrap(),
         debugger_packages::debugger("qa-debugger"),
     ] {
         manager

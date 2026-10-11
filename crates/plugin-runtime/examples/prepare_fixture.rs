@@ -2,7 +2,7 @@
 use plugin_runtime::{Manager, Package, plugin_protocol::Environment};
 use std::path::PathBuf;
 
-/// Explicit ZIP arguments prepare any authorized package combination; defaults keep existing smoke scripts stable.
+/// Explicit ZIP arguments prepare only the requested test packages; an empty list models a fresh source-free install.
 fn main() -> anyhow::Result<()> {
     let args: Vec<_> = std::env::args().collect();
     let root = PathBuf::from(args.get(1).expect("fixture root"));
@@ -22,13 +22,7 @@ fn main() -> anyhow::Result<()> {
             ..Environment::default()
         },
     )?;
-    let mut packages = args.iter().skip(3).map(PathBuf::from).collect::<Vec<_>>();
-    if packages.is_empty() {
-        packages = ["terminal", "example"]
-            .into_iter()
-            .map(|name| PathBuf::from(format!("dist/plugins/{name}.zip")))
-            .collect();
-    }
+    let packages = args.iter().skip(3).map(PathBuf::from).collect::<Vec<_>>();
     for path in packages {
         let package = Package::read(&path)?;
         manager.install(&package, package.manifest.permissions.clone())?;

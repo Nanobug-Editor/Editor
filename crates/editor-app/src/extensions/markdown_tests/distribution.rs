@@ -1,35 +1,52 @@
-//! Delivered-package native consent and lifecycle regressions use an isolated fresh fixture.
+//! Source-free native delivery keeps explicit import, trust, providers and historical choices observable.
 use super::*;
 mod fixture;
 use fixture::{Fresh, archive, catalog, delivered, independent_preview};
 
-/// The first trusted file opens consent before WASM and hot-enables its source grammar and preview.
+/// Opening a recognized suffix keeps plain-text authority without recommending a package, even beside old bundle files.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
-fn fresh_markdown_first_use_confirms_real_package_and_retains_disabled_choice(
-    cx: &mut TestAppContext,
-) {
-    let (mut fixture, ui) = Fresh::mount(cx, true, &delivered(), "md");
+fn fresh_official_file_stays_plain_text_without_automatic_install_consent(cx: &mut TestAppContext) {
+    let bytes = std::fs::read(crate::test_packages::archive("toml")).unwrap();
+    let (mut fixture, ui) = Fresh::mount(cx, true, &bytes, "toml");
+    fixture.open("notes.toml", ui);
+    assert!(
+        !fixture.consent(ui),
+        "fresh installations never recommend shipped packages"
+    );
+    assert!(fixture.native.manager.installed.is_empty() && fixture.native.manager.live.is_empty());
+    assert!(ui.debug_bounds("editor-source-toolbar").is_none());
+    assert_eq!(
+        ui.update(|_, cx| fixture
+            .native
+            .app
+            .read(cx)
+            .editor
+            .read(cx)
+            .language_name()
+            .to_string()),
+        "text"
+    );
+}
+
+/// An explicit import requires real consent, publishes grammar/preview and preserves a disabled preference on restart.
+#[gpui::test]
+#[ignore = "opt-in actual reviewed Markdown WASM and native lifecycle"]
+fn fresh_markdown_explicit_import_retains_disabled_choice(cx: &mut TestAppContext) {
+    let bytes = delivered();
+    let (mut fixture, ui) = Fresh::mount(cx, true, &bytes, "md");
     fixture.open("notes.md", ui);
+    assert!(!fixture.consent(ui));
+    fixture.request_import(&bytes, ui);
     assert!(fixture.consent(ui));
     assert!(fixture.native.manager.installed.is_empty() && fixture.native.manager.live.is_empty());
     assert!(ui.debug_bounds("editor-plugin-layout").is_none());
-    assert!(ui.debug_bounds("editor-source-toolbar").is_none());
-    assert!(
-        !fixture
-            .native
-            .manager
-            .has_bundle_choice("markdown")
-            .unwrap(),
-        "an offer is not an explicit user refusal"
-    );
     fixture.click_consent("plugin-install-confirm", ui);
     fixture.settle(ui);
     assert_eq!(
         fixture.native.manager.installed["markdown"]
             .manifest
             .version,
-        "0.16.0"
+        "0.17.1"
     );
     assert!(ui.debug_bounds("editor-plugin-layout").is_some());
     assert!(ui.debug_bounds("editor-source-toolbar").is_some());
@@ -58,49 +75,41 @@ fn fresh_markdown_first_use_confirms_real_package_and_retains_disabled_choice(
     assert!(!fixture.consent(ui));
 }
 
-/// Declining the real prompt remains effective after restarting and replacing the catalog's ZIP hash.
+/// Cancelling an explicit import creates no installation or automatic retry when old bundle bytes change.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
-fn fresh_markdown_cancel_survives_restart_and_changed_shipped_hash(cx: &mut TestAppContext) {
-    let (mut fixture, ui) = Fresh::mount(cx, true, &delivered(), "md");
+#[ignore = "opt-in actual reviewed Markdown native consent"]
+fn fresh_markdown_cancel_survives_restart_and_changed_legacy_bundle(cx: &mut TestAppContext) {
+    let bytes = delivered();
+    let (mut fixture, ui) = Fresh::mount(cx, true, &bytes, "md");
     fixture.open("notes.md", ui);
+    fixture.request_import(&bytes, ui);
     fixture.click_consent("plugin-install-cancel", ui);
     fixture.settle(ui);
     assert!(fixture.native.manager.installed.is_empty());
-    let mut files = Package::from_bytes(&delivered()).unwrap().files;
+    let mut files = Package::from_bytes(&bytes).unwrap().files;
     files.insert(
         "README.md".into(),
-        b"A changed shipped package must retain the user choice.".to_vec(),
+        b"Changed old bundle; opening a file never authorizes it.".to_vec(),
     );
     let changed = language_tests::packages::repack(files).unwrap();
-    assert_ne!(
-        changed.digest,
-        Package::from_bytes(&delivered()).unwrap().digest
-    );
-    let workspace = Workspace::open(fixture.native.directory.path()).unwrap();
-    catalog(workspace.root(), &archive(&changed), "md");
+    assert_ne!(changed.digest, Package::from_bytes(&bytes).unwrap().digest);
+    catalog(fixture.native.directory.path(), &archive(&changed), "md");
     let (mut fixture, ui) = fixture.reopen(cx);
     fixture.open("notes.md", ui);
     assert!(!fixture.consent(ui));
     assert!(fixture.native.manager.installed.is_empty() && fixture.native.manager.live.is_empty());
 }
 
-/// Trust gates both inspection and a previously confirmed but not yet executed installation.
+/// Trust withdrawal before processing an accepted import prevents execution and language publication.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in actual reviewed Markdown and trust withdrawal"]
 fn fresh_markdown_restricted_workspace_and_revoked_consent_never_execute_guest(
     cx: &mut TestAppContext,
 ) {
-    let (mut fixture, ui) = Fresh::mount(cx, false, &delivered(), "md");
+    let bytes = delivered();
+    let (mut fixture, ui) = Fresh::mount(cx, false, &bytes, "md");
     fixture.open("notes.md", ui);
     assert!(!fixture.consent(ui));
-    assert!(
-        !fixture
-            .native
-            .manager
-            .has_bundle_choice("markdown")
-            .unwrap()
-    );
     ui.update(|_, cx| {
         fixture
             .native
@@ -108,7 +117,11 @@ fn fresh_markdown_restricted_workspace_and_revoked_consent_never_execute_guest(
             .update(cx, |app, cx| app.set_workspace_trusted(true, cx))
     });
     fixture.settle(ui);
-    assert!(fixture.consent(ui));
+    assert!(
+        !fixture.consent(ui),
+        "lifting trust does not recommend a plugin"
+    );
+    fixture.request_import(&bytes, ui);
     fixture.click_consent("plugin-install-confirm", ui);
     ui.update(|_, cx| {
         fixture
@@ -121,14 +134,12 @@ fn fresh_markdown_restricted_workspace_and_revoked_consent_never_execute_guest(
     assert!(ui.debug_bounds("editor-plugin-layout").is_none());
 }
 
-/// A queued candidate cannot install into a document that has been switched away or closed.
+/// Switching or closing an active file never gives its old bundle implicit installation authority.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
-fn fresh_markdown_late_confirm_is_withdrawn_on_switch_and_close(cx: &mut TestAppContext) {
+fn fresh_markdown_switch_and_close_never_queue_automatic_installation(cx: &mut TestAppContext) {
     for close in [false, true] {
         let (mut fixture, ui) = Fresh::mount(cx, true, &delivered(), "md");
         fixture.open("notes.md", ui);
-        fixture.click_consent("plugin-install-confirm", ui);
         ui.update(|window, cx| {
             fixture.native.app.update(cx, |app, cx| {
                 if close {
@@ -143,6 +154,7 @@ fn fresh_markdown_late_confirm_is_withdrawn_on_switch_and_close(cx: &mut TestApp
             })
         });
         fixture.settle(ui);
+        assert!(!fixture.consent(ui));
         assert!(
             fixture.native.manager.installed.is_empty() && fixture.native.manager.live.is_empty()
         );
@@ -150,9 +162,8 @@ fn fresh_markdown_late_confirm_is_withdrawn_on_switch_and_close(cx: &mut TestApp
     }
 }
 
-/// An existing independently named language provider must survive without any default installation.
+/// An independently named language provider stays selected instead of acquiring the former default.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
 fn fresh_markdown_keeps_alternative_source_provider(cx: &mut TestAppContext) {
     let (mut fixture, ui) = Fresh::mount(cx, true, &delivered(), "md");
     let mut files = language_package().files;
@@ -174,6 +185,7 @@ fn fresh_markdown_keeps_alternative_source_provider(cx: &mut TestAppContext) {
         .unwrap();
     language_tests::publish_languages(&fixture.native.app, &fixture.native.manager, ui);
     fixture.open("notes.md", ui);
+    // The fixture's recording transport has no actor; publish its real Manager's resources after file activation too.
     language_tests::publish_languages(&fixture.native.app, &fixture.native.manager, ui);
     assert!(!fixture.consent(ui));
     assert!(!fixture.native.manager.installed.contains_key("markdown"));
@@ -191,112 +203,43 @@ fn fresh_markdown_keeps_alternative_source_provider(cx: &mut TestAppContext) {
     );
 }
 
-/// A withdrawn inspection is not a user refusal; its delayed reply cannot consume future first-use support.
+/// Returning after an inactive file cannot turn an old catalog into consent; explicit import remains available.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
-fn fresh_markdown_withdrawn_late_offer_is_available_when_returning_to_file(
-    cx: &mut TestAppContext,
-) {
-    let (mut fixture, ui) = Fresh::mount(cx, true, &delivered(), "md");
-    fixture.settle(ui);
-    let path = fixture.native.directory.path().join("notes.md");
-    ui.update(|window, cx| {
-        fixture
-            .native
-            .app
-            .update(cx, |app, cx| app.open_file(path, window, cx));
-        window.draw(cx).clear(cx);
-    });
-    let request = ui
-        .update(|_, cx| {
-            fixture
-                .native
-                .app
-                .read(cx)
-                .extensions
-                .read(cx)
-                .worker
-                .recorded
-                .lock()
-                .unwrap()
-                .try_iter()
-                .find_map(|work| match work {
-                    Work::InspectBundle(request) => Some(request),
-                    _ => None,
-                })
-        })
-        .expect("production inspection of the active file");
-    let token = request.token;
-    let candidate = bundled::prepare_offer(&mut fixture.native.manager, &request)
-        .unwrap()
-        .unwrap();
-    assert!(
-        !fixture
-            .native
-            .manager
-            .has_bundle_choice("markdown")
-            .unwrap()
-    );
-    ui.update(|window, cx| {
-        fixture.native.app.update(cx, |app, cx| {
-            app.open_file(
-                fixture.native.directory.path().join("other.txt"),
-                window,
-                cx,
-            )
-        });
-        window.draw(cx).clear(cx);
-        fixture
-            .native
-            .app
-            .read(cx)
-            .extensions
-            .read(cx)
-            .worker
-            .state
-            .lock()
-            .unwrap()
-            .bundle_reply = Some(bundled::Reply {
-            token,
-            result: Ok(Some(candidate)),
-        });
-    });
-    fixture.settle(ui);
+#[ignore = "opt-in actual reviewed Markdown after source switching"]
+fn fresh_markdown_return_requires_an_explicit_import(cx: &mut TestAppContext) {
+    let bytes = delivered();
+    let (mut fixture, ui) = Fresh::mount(cx, true, &bytes, "md");
+    fixture.open("notes.md", ui);
+    fixture.open("other.txt", ui);
+    fixture.open("notes.md", ui);
     assert!(!fixture.consent(ui));
     assert!(fixture.native.manager.installed.is_empty());
-    fixture.open("notes.md", ui);
-    assert!(
-        fixture.consent(ui),
-        "returning to the file must still offer a default the user never refused"
-    );
+    fixture.request_import(&bytes, ui);
     fixture.click_consent("plugin-install-confirm", ui);
     fixture.settle(ui);
     assert!(ui.debug_bounds("editor-plugin-layout").is_some());
 }
 
-/// Invalid shipped integrity or private choice metadata fails closed before permission or guest startup.
+/// Corrupt old recommendation metadata is ignored and cannot trigger consent, execution or fabricated status.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
-fn fresh_markdown_bad_catalog_or_choice_metadata_never_offers_execution(cx: &mut TestAppContext) {
+fn fresh_markdown_bad_legacy_catalog_or_choice_metadata_never_offers_execution(
+    cx: &mut TestAppContext,
+) {
     for bad_choices in [false, true] {
         let (mut fixture, ui) = Fresh::mount(cx, true, &delivered(), "md");
-        let workspace = Workspace::open(fixture.native.directory.path()).unwrap();
+        let root = fixture.native.directory.path();
         if bad_choices {
             std::fs::write(
-                workspace
-                    .root()
-                    .join(".runtime-plugin-test/bundle-choices.json"),
+                root.join(".runtime-plugin-test/bundle-choices.json"),
                 b"{\"version\":99,\"entries\":{}}",
             )
             .unwrap();
         } else {
-            let path = workspace
-                .root()
-                .join(".bundled-plugin-test/bundle-defaults.json");
-            let mut catalog: serde_json::Value =
-                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            catalog["packages"][0]["sha256"] = serde_json::json!("0".repeat(64));
-            std::fs::write(path, serde_json::to_vec(&catalog).unwrap()).unwrap();
+            std::fs::write(
+                root.join(".bundled-plugin-test/bundle-defaults.json"),
+                b"{invalid}",
+            )
+            .unwrap();
         }
         fixture.open("notes.md", ui);
         assert!(!fixture.consent(ui));
@@ -304,41 +247,22 @@ fn fresh_markdown_bad_catalog_or_choice_metadata_never_offers_execution(cx: &mut
             fixture.native.manager.installed.is_empty() && fixture.native.manager.live.is_empty()
         );
         assert!(ui.debug_bounds("editor-source-toolbar").is_none());
-        assert!(
-            ui.update(|_, cx| fixture
-                .native
-                .app
-                .read(cx)
-                .extensions
-                .read(cx)
-                .status
-                .is_some()),
-            "the first-use integrity failure must be visible"
-        );
-        let indicator = ui
-            .debug_bounds("plugin-error-indicator")
-            .expect("main-window error indicator");
-        ui.simulate_click(indicator.center(), Default::default());
-        ui.run_until_parked();
-        fixture.settle(ui);
-        assert!(ui.debug_bounds("plugin-status-popup").is_some());
-        assert!(
-            ui.debug_bounds("plugin-manager-status-detail").is_some(),
-            "the actual main-window popup must draw the integrity failure reason"
-        );
+        assert!(ui.debug_bounds("plugin-error-indicator").is_none());
     }
 }
 
-/// A separately built SDK guest and unfamiliar extension follow exactly the same first-use dialog path.
+/// An opaque public-SDK preview enters only by explicit consent and uninstall never offers it again.
 #[gpui::test]
-#[ignore = "build current capability-example through scripts/verify-plugin-sdk.ps1 first"]
-fn first_use_catalog_installs_an_independent_sdk_preview_with_an_opaque_identity(
+#[ignore = "opt-in actual frozen public-SDK preview and native lifecycle"]
+fn explicit_import_installs_an_independent_sdk_preview_with_an_opaque_identity(
     cx: &mut TestAppContext,
 ) {
     let package = independent_preview("opaque");
-    let (mut fixture, ui) = Fresh::mount(cx, true, &archive(&package), "opaque");
+    let bytes = archive(&package);
+    let (mut fixture, ui) = Fresh::mount(cx, true, &bytes, "opaque");
     fixture.open("notes.opaque", ui);
-    assert!(fixture.consent(ui));
+    assert!(!fixture.consent(ui));
+    fixture.request_import(&bytes, ui);
     assert!(fixture.native.manager.live.is_empty());
     fixture.click_consent("plugin-install-confirm", ui);
     fixture.settle(ui);
@@ -365,9 +289,9 @@ fn first_use_catalog_installs_an_independent_sdk_preview_with_an_opaque_identity
     assert!(fixture.native.manager.installed.is_empty());
 }
 
-/// Existing and explicitly disabled previews retain their selection instead of being replaced by a default.
+/// Existing enabled and disabled previews keep their persisted selection across an editor restart.
 #[gpui::test]
-#[ignore = "build markdown and the external SDK fixture through their public host scripts first"]
+#[ignore = "opt-in actual frozen public-SDK preview and retained data"]
 fn fresh_markdown_keeps_an_independent_preview_provider_across_restart(cx: &mut TestAppContext) {
     for disabled in [false, true] {
         let (mut fixture, ui) = Fresh::mount(cx, true, &delivered(), "md");
@@ -403,36 +327,16 @@ fn fresh_markdown_keeps_an_independent_preview_provider_across_restart(cx: &mut 
             ui.debug_bounds("plugin-ui-bundle-greeting").is_some(),
             !disabled
         );
-        assert!(
-            !fixture
-                .native
-                .manager
-                .has_bundle_choice("markdown")
-                .unwrap()
-        );
     }
 }
 
-/// A→B→A between shell frames must create a new live token rather than retain a cancelled request forever.
+/// A→B→A in one frame cannot revive automatic consent; the user's following explicit action can still install.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
-fn fresh_markdown_same_frame_return_replaces_cancelled_consent(cx: &mut TestAppContext) {
+#[ignore = "opt-in actual reviewed Markdown after same-frame tab activation"]
+fn fresh_markdown_same_frame_return_waits_for_explicit_consent(cx: &mut TestAppContext) {
     let bytes = delivered();
-    let package = Package::from_bytes(&bytes).unwrap();
     let (mut fixture, ui) = Fresh::mount(cx, true, &bytes, "md");
     fixture.open("notes.md", ui);
-    let old = ui
-        .update(|_, cx| {
-            fixture
-                .native
-                .app
-                .read(cx)
-                .extensions
-                .read(cx)
-                .bundled
-                .confirmation(&package)
-        })
-        .unwrap();
     ui.update(|window, cx| {
         fixture.native.app.update(cx, |app, cx| {
             app.open_file(
@@ -443,24 +347,10 @@ fn fresh_markdown_same_frame_return_replaces_cancelled_consent(cx: &mut TestAppC
             app.open_file(fixture.native.directory.path().join("notes.md"), window, cx);
         })
     });
-    assert!(
-        !old.request.is_active(),
-        "switching revokes ownership before any subsequent shell frame"
-    );
     fixture.settle(ui);
-    let current = ui
-        .update(|_, cx| {
-            fixture
-                .native
-                .app
-                .read(cx)
-                .extensions
-                .read(cx)
-                .bundled
-                .confirmation(&package)
-        })
-        .expect("returning to the same file exposes a new current consent");
-    assert_ne!(old.request.token, current.request.token);
+    assert!(!fixture.consent(ui));
+    assert!(fixture.native.manager.installed.is_empty());
+    fixture.request_import(&bytes, ui);
     fixture.click_consent("plugin-install-confirm", ui);
     fixture.settle(ui);
     assert!(ui.debug_bounds("editor-plugin-layout").is_some());

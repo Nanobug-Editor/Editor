@@ -1,4 +1,7 @@
 //! Independently built SDK guests opt into native link events at the real ZIP/Manager boundary.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{
@@ -14,8 +17,7 @@ const URI: &str = "https://example.com/help";
 
 /// Only declarations and the ordinary UI asset change; the archive retains actual SDK/WASM dispatch.
 fn package(edit: impl FnOnce(&mut Value, &mut Value)) -> Package {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let mut files = Package::read(&path).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!("navigation-fixture");
@@ -129,7 +131,7 @@ fn link(manager: &mut Manager, uri: &str) -> anyhow::Result<()> {
 
 /// Each read-only node can publish explicit links without acquiring editor.navigation/browser authority.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn richtext_link_events_publish_with_their_independent_capability() {
     for kind in kinds() {
         let package = package(|manifest, document| {
@@ -167,7 +169,7 @@ fn richtext_link_events_publish_with_their_independent_capability() {
 
 /// Both click routing and inert metadata need ui.links; rich-text/image capabilities cannot supply it.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn richtext_cannot_publish_link_events_without_ui_links() {
     // Keep the original flag-only case alongside all three metadata cases with the flag still false.
     for kind in std::iter::once(None).chain(kinds().into_iter().map(Some)) {
@@ -193,7 +195,7 @@ fn richtext_cannot_publish_link_events_without_ui_links() {
 
 /// Omitted flags preserve inert legacy markup and all explicit metadata, even with ui.links negotiated.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn richtext_links_remain_inert_with_the_default_flag() {
     for kind in std::iter::once(None).chain(kinds().into_iter().map(Some)) {
         let package = package(|manifest, document| {

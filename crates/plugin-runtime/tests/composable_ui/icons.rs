@@ -31,7 +31,7 @@ fn icon_package(svg: &str, negotiated: bool) -> Package {
 
 /// An accepted icon is preserved as geometric data; omitted negotiation rejects publication atomically.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn native_icons_require_independent_negotiation_and_preserve_artwork() {
     for negotiated in [false, true] {
         let package = icon_package(SVG, negotiated);
@@ -62,7 +62,7 @@ fn native_icons_require_independent_negotiation_and_preserve_artwork() {
 
 /// Scripts, href namespaces, paint URLs and malformed XML never reach a native renderer.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn native_icons_reject_ambient_resources_and_active_svg() {
     for svg in [
         "<svg><script>alert(1)</script></svg>",

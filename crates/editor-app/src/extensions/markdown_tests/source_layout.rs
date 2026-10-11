@@ -5,7 +5,7 @@ use harness::NativeMarkdown;
 /// A long delivered document exposes collapsed input even when the outer split and toolbar exist.
 /// Native resize, mode clicks and wheel input exercise the same layout as the desktop window.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_source_fills_height_below_toolbar(cx: &mut TestAppContext) {
     let original = (0..160)
         .map(|index| format!("第 {index:03} 行：Markdown 编辑区应显示多行。\n"))
@@ -104,7 +104,7 @@ fn delivered_markdown_source_fills_height_below_toolbar(cx: &mut TestAppContext)
 /// Empty Markdown and toolbar-free SVG must keep a full input target, as must ordinary text tabs.
 /// The two delivered packages enter through Manager instead of a language-specific layout fixture.
 #[gpui::test]
-#[ignore = "build markdown and svg through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_source_height_survives_empty_documents_and_toolbar_free_previews(
     cx: &mut TestAppContext,
 ) {
@@ -117,11 +117,7 @@ fn delivered_source_height_survives_empty_documents_and_toolbar_free_previews(
             false,
         ),
     ] {
-        let package = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../dist/plugins/{package_name}.zip")),
-        )
-        .unwrap();
+        let package = Package::read(&crate::test_packages::archive(package_name)).unwrap();
         let (mut fixture, ui) = NativeMarkdown::mount_package(
             cx,
             &[(name, original), ("plain.txt", "ordinary text\n")],

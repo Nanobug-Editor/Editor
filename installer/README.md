@@ -7,9 +7,10 @@ PowerShell/Python 脚本只在本机 Codex 工作区存档，打包不得调用�
 ## Windows
 
 运行 `cargo build -p editor-app --release` 后，将 `target/release/editor-app.exe` 复制为
-`dist/editor/Nanobug.exe`；复制品牌 ICO 到 `dist/editor/Nanobug.ico`，第三方许可到
-`dist/editor/licenses/`。通过主程序 `--plugin-package` 按各项目的 `nanobug-plugin.json` 独立构建
-并自动生成 `dist/editor/plugins/<id>-<version>.zip`。不要把编译器、宿主源码或脚本放入运行目录。
+`dist/editor/Nanobug.exe`；复制品牌 ICO 到 `dist/editor/Nanobug.ico`，宿主依赖许可到
+`dist/editor/licenses/`。安装器和便携包均不携带插件 ZIP、源码或首次提供索引；运行不依赖同级
+`plugins/` 目录。官方插件由独立仓库发布，经市场审核后由用户主动安装到既有私有目录。
+不要把编译器、宿主源码或脚本放入运行目录；旧的用户安装、设置与私有数据继续保留。
 
 终端、上游 Alacritty 核心及默认主题编译进宿主，无独立终端 ZIP 或 WASM。旧终端安装记录仅用于有限数据导入，原始数据和备份保留。
 
@@ -21,27 +22,7 @@ New-Item -ItemType Directory -Force -Path dist/editor/licenses | Out-Null
 Copy-Item -LiteralPath crates/editor-app/assets/licenses/alacritty-terminal-LICENSE-APACHE -Destination dist/editor/licenses/
 ```
 
-有组件的默认包为 example、svg、rust、rust-debugger、markdown、xml；组件 Cargo 名称分别
-为 example-guest、svg-guest、rust-language-guest、rust-debugger-guest、markdown-guest、xml-language-guest。
-资源包为 toml、html、javascript、run-target-example。每包保留根目录 `manifest.json` 与 `README.md`，
-存在时还包含 `plugin.toml`、`icons.json`、grammar、queries、icons、run-targets 等运行资源。
-只收录清单引用资源，不归档 src、Cargo 缓存或 target 目录。
-
-```powershell
-# 项目描述负责 SDK、原生桥、资源、摘要和 ZIP；显式指定安装目录中的插件输出位置。
-$hostExe = (Resolve-Path .\target\release\editor-app.exe).Path
-& $hostExe --plugin-package plugins/example plugins/svg plugins/rust plugins/rust-debugger plugins/markdown plugins/xml plugins/toml plugins/html plugins/javascript plugins/run-target-example --output dist/editor/plugins
-if ($LASTEXITCODE -ne 0) { throw 'Plugin packaging failed' }
-```
-
-宿主把 WASM 映射到清单规定的包内路径，原生桥摘要写入分发清单，不修改源占位。
-宿主许可目录应收录 Alacritty 和 VTE 的许可；markdown 将 `src/pulldown-cmark-LICENSE`
-映射到 `licenses/pulldown-cmark-LICENSE`。完整包校验通过后才原子替换 ZIP。
-
-自动 ZIP 的包根不会多套一层文件夹。首次提供索引 `plugins/bundle-defaults.json` 使用 version 1；
-packages 中 Markdown 项的 file 必须匹配本次实际生成的 `markdown-<清单版本>.zip`，
-file_extensions 为 `["md", "markdown"]`，sha256 为最终 ZIP 的小写 SHA-256。
-所有 ZIP/资源与索引准备好后，从仓库根执行：
+准备程序、图标和宿主许可后，从仓库根执行以下命令。重新使用旧载荷目录前先检查其文件清单，确保没有旧插件 ZIP 或 bundle-defaults.json；不要把用户的私有插件存储当作发行目录清理。
 
 ```powershell
 # 版本来自 Cargo，不通过旧打包脚本读取；ISCC 接收准备好的运行目录。
@@ -59,7 +40,7 @@ $digest = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvar
 ```
 
 Inno Setup 需事先准备，未加入 PATH 时直接指定 ISCC.exe 完整路径。x64 是第一期验收架构；
-检查原生 EXE 架构和首次提供索引的包摘要后再发行。安装配置保留按用户安装、运行中 mutex
+检查原生 EXE 架构、载荷清单和最终安装器/便携 ZIP 摘要后再发行。安装配置保留按用户安装、运行中 mutex
 保护、双语向导与用户数据保留行为，不包含外部程序或脚本执行项。
 
 ## 原生语言服务资源
@@ -71,7 +52,7 @@ HTML、JavaScript 的 `native/server.cjs` 是已构建的分发资源；共享�
 ```powershell
 # 锁定依赖在忽略的构建目录安装，不调用仓库或存档脚本。
 $packageName = 'html' # 另一个项目为 javascript。
-$project = (Resolve-Path "plugins/$packageName").Path
+$project = (Resolve-Path '../HTML-for-Nanobug').Path # JavaScript 使用 ../JavaScript-for-Nanobug。
 $buildDir = Join-Path $PWD "target/language-services/$packageName"
 New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
 Copy-Item -LiteralPath "$project/service/package.json", "$project/service/package-lock.json", "$project/service/server.cjs" -Destination $buildDir
@@ -94,14 +75,14 @@ LemMinX 按清单在获批的插件私有版本目录准备，不打入 ZIP。
 
 ## macOS/Linux（本期未验收）
 
-这些系统必须先准备对应架构的原生 Nanobug 与适合平台的插件包。旧 Python 包装器不作为
+这些系统必须先准备对应架构的原生 Nanobug。旧 Python 包装器不作为
 当前入口；用以下原生工具直接打包，不能用 Windows EXE 替代 Mach-O/ELF。
 
-- macOS：准备 `Nanobug.app/Contents/MacOS/Nanobug`、`Contents/Resources/plugins` 与 licenses；
+- macOS：准备 `Nanobug.app/Contents/MacOS/Nanobug`、`Contents/Resources/licenses`；
   将品牌 ICNS 复制到 Resources。Info.plist 保留产品名称、版本、bundle ID
   `io.github.t-miracle.nanobug`、CFBundleExecutable Nanobug 和实际最低系统版本。
   DMG 的暂存目录包含 `.app` 和指向 `/Applications` 的链接。
-- Linux：程序和相邻 plugins/licenses 放到 `/usr/lib/nanobug`，`/usr/bin/nanobug` 链接到
+- Linux：程序和相邻 licenses 放到 `/usr/lib/nanobug`，`/usr/bin/nanobug` 链接到
   `../lib/nanobug/nanobug`；补充 `.desktop` 与 256px 品牌 PNG。DEB 的 control 填写实际
   version/architecture/maintainer，使用 dpkg-shlibdeps 计算依赖；RPM 用实际原生 Requires。
 

@@ -1,4 +1,7 @@
 //! Real package boundaries pin service declarations before any native program can run.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::Package;
 use serde_json::json;
 use std::io::{Cursor, Write};
@@ -9,8 +12,7 @@ mod cursor;
 
 /// Repackage the independently built SDK guest with a fixed test tool; no implementation mocks.
 fn executable_package(program: &str, exec: bool) -> Package {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let original = Package::read(&path).unwrap();
     let mut manifest = serde_json::to_value(&original.manifest).unwrap();
     manifest["api"]["required"]["process"] = json!("^1");
@@ -62,7 +64,7 @@ fn probe(
 
 /// A native byte echo program verifies pipes, complete output, and independent stderr transport.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn approved_service_runs_over_stdio_and_cannot_execute_arbitrary_programs() {
     let dir = tempfile::tempdir().unwrap();
     let exe = dir.path().join("echo-fixture.exe");
@@ -163,7 +165,7 @@ fn process_events(manager: &mut plugin_runtime::Manager, id: &str) -> Vec<serde_
 
 /// Refused starts have no native side effects; callback cancellation suppresses already queued output.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn process_quota_precedes_execution_and_closed_handles_receive_no_late_batch_events() {
     let dir = tempfile::tempdir().unwrap();
     let exe = dir.path().join("lifetime-fixture.exe");
@@ -260,7 +262,7 @@ fn process_quota_precedes_execution_and_closed_handles_receive_no_late_batch_eve
 /// Real ConPTY preserves interactive spaces and argv boundaries while resize and normal exit work.
 #[cfg(windows)]
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn interactive_pty_accepts_spaces_and_preserves_quoted_arguments() {
     let dir = tempfile::tempdir().unwrap();
     let exe = dir.path().join("interactive fixture.exe");
@@ -381,7 +383,7 @@ fn declared_stdio_service_is_inspected_without_running_or_retargeting_it() {
 /// Both native transports own immediate descendants; grant rejection must leave the old instance usable.
 #[cfg(windows)]
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn native_trees_are_reclaimed_and_added_execution_grants_require_consent() {
     use plugin_runtime::{Manager, plugin_protocol::Environment};
     let dir = tempfile::tempdir().unwrap();

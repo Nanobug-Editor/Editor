@@ -5,7 +5,7 @@ use gpui_kit::{TestAppContext, gpui};
 
 /// Native clicks, IME-compatible notes and unsaved vectors survive install/revoke without empty regions.
 #[gpui::test]
-#[ignore = "build example and svg through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_ui_packages_follow_native_input_and_reclaim_layout(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -26,10 +26,7 @@ fn delivered_ui_packages_follow_native_input_and_reclaim_layout(cx: &mut TestApp
     )
     .unwrap();
     for id in ["example", "svg"] {
-        let package = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dist/plugins/{id}.zip")),
-        )
-        .unwrap();
+        let package = Package::read(&crate::test_packages::archive(id)).unwrap();
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();

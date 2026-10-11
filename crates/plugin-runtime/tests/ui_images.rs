@@ -1,4 +1,7 @@
 //! Image resources enter through an independent real SDK package and the public manager.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     ImageResource, ImageState, Manager, Package,
     plugin_protocol::{Environment, api},
@@ -24,8 +27,7 @@ fn package(
     permissions: &[&str],
     edit: impl FnOnce(&mut Value, &mut BTreeMap<String, Vec<u8>>),
 ) -> anyhow::Result<Package> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let mut files = Package::read(&path)?.files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"])?;
     manifest["id"] = json!("images-fixture");
@@ -60,7 +62,7 @@ fn package(
 
 /// The capability is additive and does not require a Markdown identity or UI transport upgrade.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_capability_negotiates_independently() {
     let package = package(Vec::new(), &[], |_, _| {}).unwrap();
     let temp = tempfile::tempdir().unwrap();
@@ -156,18 +158,22 @@ fn failed(resources: &BTreeMap<String, Arc<ImageResource>>, node: &str, code: ap
     assert_eq!(failure.code, code, "{node}: {}", failure.message);
 }
 
+/// Keep the readiness assertion strict and report the public resource state on timing or transport failures.
 fn ready<'a>(resources: &'a BTreeMap<String, Arc<ImageResource>>, node: &str) -> &'a [u8] {
     let ImageState::Ready(bytes) =
         &resources[&format!("images-fixture/welcome/image/{node}")].state
     else {
-        panic!("expected ready image {node}");
+        panic!(
+            "expected ready image {node}: {:?}",
+            resources[&format!("images-fixture/welcome/image/{node}")]
+        );
     };
     bytes
 }
 
 /// The actual guest may declare an image only after negotiating ui.images and echoing its Preview.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_node_requires_its_own_capability() {
     let package = package(vec![image("picture", "missing.png")], &[], |manifest, _| {
         manifest["api"]["required"]
@@ -202,7 +208,7 @@ fn ui_images_node_requires_its_own_capability() {
 
 /// Local paths allow parent segments and percent-encoded Unicode only inside the canonical workspace.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_local_reads_are_document_relative_and_bounded() {
     let mut harness = Harness::new(
         vec![
@@ -259,7 +265,7 @@ fn write_large(path: &Path) {
 
 /// Lacking local or network grants is a per-image failure and leaves ordinary content usable.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_missing_permissions_fail_individually() {
     let mut harness = Harness::new(
         vec![
@@ -282,7 +288,7 @@ fn ui_images_missing_permissions_fail_individually() {
 /// Native link resolution must enforce the final junction target, not its lexical workspace prefix.
 #[test]
 #[cfg(windows)]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_local_junction_cannot_escape_workspace() {
     use std::os::windows::process::CommandExt;
     let mut harness = Harness::new(
@@ -313,7 +319,7 @@ fn ui_images_local_junction_cannot_escape_workspace() {
 
 /// Remote bytes use only network.images and never inherit URL credentials, cookies or redirects.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_http_status_permissions_and_redirects_are_per_node() {
     let server = HttpServer::new();
     let mut harness = Harness::new(
@@ -350,7 +356,7 @@ fn ui_images_http_status_permissions_and_redirects_are_per_node() {
 
 /// URI schemes are ASCII-insensitive; a TLS failure on loopback still proves dispatch used network authority.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_http_scheme_case_uses_network_authority() {
     let server = HttpServer::new();
     let upper = server.url("ok").replacen("http://", "HTTP://", 1);
@@ -370,7 +376,7 @@ fn ui_images_http_scheme_case_uses_network_authority() {
 
 /// Per-manager resident limits count encoded bytes from all images without truncating successful images.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_resident_bytes_are_bounded_across_nodes() {
     let nodes = (0..10)
         .map(|index| image(&format!("image-{index}"), "../assets/full.png"))
@@ -404,7 +410,7 @@ fn ui_images_resident_bytes_are_bounded_across_nodes() {
 
 /// Two different manager roots share one process-wide pool; pending nodes resume through normal polling.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn ui_images_worker_pool_is_global_and_queued_nodes_resume() {
     let server = GatedServer::new();
     let nodes = || {

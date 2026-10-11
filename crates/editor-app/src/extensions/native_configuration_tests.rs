@@ -173,12 +173,9 @@ pub(crate) fn fixture<'a>(
         },
     )
     .unwrap();
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for path in [
-        repo.join("target/run-config-plugin-tree/configuration-alpha.zip"),
-        repo.join("target/run-config-plugin-tree/configuration-beta.zip"),
-    ] {
-        let package = Package::read(&path).unwrap();
+    for id in ["configuration-alpha", "configuration-beta"] {
+        // Preserve original acceptance bytes; equivalence cannot be inferred by re-identifying the generic example.
+        let package = crate::test_packages::package(id);
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();
@@ -202,6 +199,7 @@ pub(crate) fn fixture<'a>(
     (manager, slot.borrow_mut().take().unwrap(), cx)
 }
 
+/// Reidentify the fixed public-SDK configuration guest through normal Package validation.
 /// Open the production owned dialog and direct physical input to its own window context.
 pub(crate) fn open_form(
     app: &Entity<EditorApp>,

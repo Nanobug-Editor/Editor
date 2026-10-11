@@ -20,7 +20,7 @@ fn png() -> Vec<u8> {
 
 /// Two native Paste actions before foreground preparation finishes must give an explicit retry outcome.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_busy_input_preserves_the_first_gesture(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "source")]);
     fixture.open("notes.md", ui);
@@ -91,7 +91,7 @@ fn delivered_markdown_image_busy_input_preserves_the_first_gesture(cx: &mut Test
 
 /// Native Paste consumes image bytes, keeps existing files, and Undo only removes the inserted reference.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_paste_creates_sibling_without_overwrite_and_undo_keeps_file(
     cx: &mut TestAppContext,
 ) {
@@ -158,7 +158,7 @@ fn delivered_markdown_image_paste_creates_sibling_without_overwrite_and_undo_kee
 
 /// A real platform drop imports only offered files, chooses actual encoding suffixes and preserves order.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_drop_imports_multiple_formats_and_previews_saved_files(
     cx: &mut TestAppContext,
 ) {
@@ -327,7 +327,7 @@ fn delivered_markdown_image_drop_imports_multiple_formats_and_previews_saved_fil
 
 /// Cancelling the native save-first prompt leaves neither an attachment nor a dangling reference.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_paste_cancel_save_first_has_no_side_effect(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "keep source")]);
     fixture.open("notes.md", ui);

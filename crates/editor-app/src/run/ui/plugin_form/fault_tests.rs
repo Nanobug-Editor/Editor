@@ -360,11 +360,7 @@ fn plugin_configuration_invalid_edit_keeps_owned_stop_and_permissions(cx: &mut T
         },
     )
     .unwrap();
-    let package = plugin_runtime::Package::read(
-        &std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/run-config-plugin-tree/configuration-alpha.zip"),
-    )
-    .unwrap();
+    let package = crate::test_packages::package("configuration-alpha");
     let grants = package
         .manifest
         .permissions

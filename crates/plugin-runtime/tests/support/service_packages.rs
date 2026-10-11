@@ -1,12 +1,14 @@
 //! Shared ZIP fixture construction for public Manager and native editor acceptance tests.
+/// Only checked-in, hash-checked Package inputs are used after plugin-source removal.
+#[path = "packages.rs"]
+mod frozen_packages;
 use plugin_runtime::Package;
 use serde_json::{Value, json};
 use std::io::{Cursor, Write};
 
 /// Test packages use the actual SDK-built component and differ only in declared contracts and assets.
 pub fn package(id: &str, provider: bool, optional: bool, version: &str) -> Package {
-    let archive = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let archive = frozen_packages::archive("capability-example");
     let mut files = Package::read(&archive).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);

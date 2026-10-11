@@ -3,6 +3,7 @@ use super::*;
 use crate::extensions::market_test_server::Server;
 use std::io::Write;
 use std::sync::atomic::Ordering;
+mod delivery;
 mod official;
 mod updates;
 mod wasm_updates;

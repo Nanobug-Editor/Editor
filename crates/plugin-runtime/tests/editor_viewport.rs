@@ -1,4 +1,7 @@
 //! Independent SDK guests exercise semantic viewports at the public ZIP/Manager boundary.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api, ui},
@@ -10,8 +13,7 @@ const ID: &str = "independent-viewport";
 
 /// Mutate public declarations/assets only; keep the independently compiled example's real WASM.
 fn package(edit: impl FnOnce(&mut Value, &mut Value)) -> Package {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let mut files = Package::read(&path).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(ID);
@@ -98,7 +100,7 @@ fn refusal(result: anyhow::Result<()>, code: api::ErrorCode) {
 
 /// This independently named panel opts into viewport reporting without any host display-mode controls.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn viewport_independent_binding_checks_capabilities_source_revision_and_event_ranges() {
     let package = package(|_, _| {});
     let (_root, mut manager) = install(&package);
@@ -210,7 +212,7 @@ fn viewport_independent_binding_checks_capabilities_source_revision_and_event_ra
 
 /// Opting in cannot borrow richtext/viewport/read authority from ordinary UI or another panel.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn viewport_binding_refuses_missing_capability_grant_scope_and_preserves_inert_default() {
     for capability in ["editor.viewport", "ui.richtext"] {
         let package = package(|manifest, document| {
@@ -273,7 +275,7 @@ fn viewport_binding_refuses_missing_capability_grant_scope_and_preserves_inert_d
 
 /// Request admission is typed and instance-owned; retirement seals already accepted queued work.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn viewport_locate_requests_validate_shape_owner_and_retire_without_late_effects() {
     let package = package(|manifest, _| {
         manifest["settings"] = json!({});

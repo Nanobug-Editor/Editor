@@ -60,8 +60,9 @@ fn native_input_and_canvas_route_text_to_their_own_nodes_and_hide_reclaims_targe
     .revision(9);
     cx.update(|window, cx| {
         app.read(cx).extensions.clone().update(cx, |owner, cx| {
-            let manifest: protocol::Manifest = serde_json::from_str(include_str!(
-                "../../../../plugins/capability-example/manifest.json"
+            let manifest: protocol::Manifest = serde_json::from_str(&crate::test_packages::text(
+                "capability-example",
+                "manifest.json",
             ))
             .unwrap();
             let mut state = owner.worker.state.lock().unwrap();
@@ -170,7 +171,7 @@ fn events(
 
 /// Native clicks and unsaved editor input complete a real WASM → raster → GPUI round trip.
 #[gpui::test]
-#[ignore = "build capability-example through scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn composed_wasm_preview_follows_memory_and_reclaims_the_editor_split(cx: &mut TestAppContext) {
     use std::io::{Cursor, Write};
     cx.update(|cx| {

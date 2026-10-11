@@ -1,4 +1,7 @@
 //! Actual independently built guest validates layout negotiation, source epochs and auxiliary limits.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api, ui},
@@ -7,12 +10,9 @@ use std::io::{Cursor, Write};
 
 /// Manifest variants reuse the real public-SDK component rather than bypassing package admission.
 fn package(variant: &str) -> Package {
-    let mut files = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-layout-test/layout-example.zip"),
-    )
-    .expect("build-layout-example.ps1 first")
-    .files;
+    let mut files = Package::read(&test_packages::archive("layout-example"))
+        .expect("frozen layout package must match its recorded digest")
+        .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     if variant == "unnegotiated" {
         manifest["api"]["required"]
@@ -38,7 +38,7 @@ fn package(variant: &str) -> Package {
 
 /// Only a negotiated provider publishes exact editor references; stale ingress never rewinds its authority.
 #[test]
-#[ignore = "build actual independent fixture with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn independent_layout_guest_obeys_negotiation_and_source_ownership() {
     let workspace = tempfile::tempdir().unwrap();
     for (variant, expected) in [

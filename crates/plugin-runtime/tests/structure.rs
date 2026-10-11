@@ -1,4 +1,7 @@
 //! An independently SDK-built unfamiliar provider proves pure authority, response validation and lease revocation.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{
@@ -8,17 +11,12 @@ use plugin_runtime::{
 use serde_json::json;
 use std::{
     io::{Cursor, Write},
-    path::PathBuf,
     sync::Arc,
 };
 
 /// Use the real hostile guest with ordinary install grants, including IO grants that its pure executor must deny.
 fn package() -> Package {
-    let original = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let original = Package::read(&test_packages::archive("capability-example")).unwrap();
     let mut files = original.files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["structure_providers"] =
@@ -58,7 +56,7 @@ fn source(text: &str) -> SourceSnapshot {
 
 /// Malformed targets, UTF-8, paths and quotas are rejected; missing/active artwork falls back without suppressing nodes.
 #[test]
-#[ignore = "build capability-example through the current public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn independent_structure_validates_replies_and_denies_io() {
     let workspace = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
@@ -106,7 +104,7 @@ fn independent_structure_validates_replies_and_denies_io() {
 
 /// Trap and excessive encoded nesting retire only their pure lease; configuration creates a fresh healthy worker.
 #[test]
-#[ignore = "build capability-example through the current public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn independent_structure_trap_retires_its_lease_and_configuration_recovers() {
     let workspace = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
@@ -200,7 +198,7 @@ fn independent_structure_trap_retires_its_lease_and_configuration_recovers() {
 
 /// Configuration, trust and workspace replacement invalidate even Arcs retained by a native window.
 #[test]
-#[ignore = "build capability-example through the current public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn independent_structure_retires_on_settings_trust_workspace_and_uninstall() {
     let workspace = tempfile::tempdir().unwrap();
     let other_workspace = tempfile::tempdir().unwrap();
