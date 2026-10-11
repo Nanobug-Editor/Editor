@@ -1,6 +1,6 @@
 # 05：通用树与编辑器装饰实施候选
 
-日期：2026-10-11。状态：正式包、自动宿主接入及当前三项仓库门禁已通过；当前独立双轴复查及主代理桌面验收尚在进行。T24/C03 未因此标记完成，议题 [#97](https://github.com/T-miracle/Nanobug/issues/97) 保持开放。
+日期：2026-10-11。状态：正式包、受影响接缝回归、当前宿主构建及三项仓库门禁已通过；新增滚动与更新恢复修复的独立双轴复查、当前宿主物理验收仍待主代理完成。T24/C03 未因此标记完成，议题 [#97](https://github.com/T-miracle/Nanobug/issues/97) 保持开放。
 
 依据：[05 工单](../../tickets/plugin-api-community-foundation/05-trees-and-decorations.md)、[社区方案](../../specs/plugin-api-community-foundation.md)、[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)。公开用法、权限、错误、限额、取消与释放说明位于 [Tree 源码](../../../../crates/plugin-protocol/src/tree.rs)和[装饰源码](../../../../crates/plugin-protocol/src/decorations.rs)，不内嵌或导出 Markdown。
 
@@ -15,7 +15,9 @@
 | 普通合并 | `a4ad93dc088d0f4973bb3e8d0efb66315bbe76ac`，同时保留两侧能力 |
 | 平台说明与 Base 树访问断言 | `0d4213302ce0b408ec7a6cef24000a177798c313` |
 | 共享图标准入 | `51e5bb676c13fec7a0424e2efbb21ad128c323d7` |
-| 当前行为/构建候选 | `7ab592878ed71943479a9e20e4423abb27249354` |
+| 首轮正式包/自动矩阵/桌面输入 | `7ab592878ed71943479a9e20e4423abb27249354`；后续纯文档 `d9b06d4b30da398fec681f073ff47ee7f9bd7aca` |
+| 通用更新快照与恢复修复 | `465b44d30c5007888b6bdacc1aef438fdc8c88cb` |
+| 当前滚动修复/宿主/门禁候选 | `edb2cd838d5fc5427708498401b9bb8f27a97300`，Git tree `352912ee584a6c561261929428d17e4b76c97506` |
 | SDK / 协议 / 能力 | SDK crate `0.2.0`；protocol `7` / base `1`；稳定 `ui.tree 1.0`、`editor.decorations 1.0` |
 | 工具链 | Rust/Cargo `1.98.1`，Windows x64 MSVC，已安装的 `wasm32-wasip2` |
 | Cargo 输出 / 日志 | `../target05` / `../target05/logs/`，下文日志名均相对此目录 |
@@ -55,9 +57,13 @@ cargo build -p editor-app --jobs 2
 & '../target05/debug/editor-app.exe' --plugin-package plugins/database-tree plugins/todo-tree plugins/bookmarks plugins/coverage --output target/community-presentation --release
 ```
 
-实际四包分别执行同一公开构建入口，日志为 `action-{id}-package.log`，均为 release 成功；没有仓库 `crates/` 路径依赖、SDK 源码副本或历史构建脚本。宿主构建日志 `action-sdk-host-build.log`：exit 0，1m27s。宿主 `C:/Users/Tmiracle/.codex/worktrees/plugin-api-trees/target05/debug/editor-app.exe` SHA256：`27189941951236959DC137B44F5AF0F58468A5DE24316B1E31CE15B07CB9ED20`。
+首轮 `7ab5928` 的四包分别执行同一公开构建入口，日志为 `action-{id}-package.log`，均为 release 成功；没有仓库 `crates/` 路径依赖、SDK 源码副本或历史构建脚本。旧宿主构建日志 `action-sdk-host-build.log`：exit 0，1m27s，SHA256 `27189941951236959DC137B44F5AF0F58468A5DE24316B1E31CE15B07CB9ED20`。该旧 EXE 及首轮真实失败证据由主代理另存，不冒充修复后的宿主。
+
+当前固定 `edb2cd8` / Git tree `352912e` 直接执行 `cargo build -p editor-app`，exit 0，39.44s，日志 `scroll-update-host-build.log`；同 shell 工具链、源码点和干净状态见 `scroll-update-host-environment.log`。新宿主 `C:/Users/Tmiracle/.codex/worktrees/plugin-api-trees/target05/debug/editor-app.exe` SHA256 为 `B5B3D67403836D0BE4A347E822162C2B8117567FF11BEC431BC88A7C3CE2B3B5`，见 `scroll-update-host-hash.log`；物理复验另行记录。
 
 当前 SDK 导出为 41 个源码/Cargo/WIT/JSON 资源、0 个 Markdown；逐文件与本候选 `crates/plugin-protocol/` 的原始字节核对，hash 差异为 0。内容缓存 digest：`93226c2989d2714785bb6d2b9562b5c4afa98e3e191417df8d2fbd127dc34ae2`。正式包均使用此宿主管理的 SDK 缓存，日志记录实际 cache 路径。
+
+本轮新 EXE 又实际执行 `--export-plugin-sdk ../target05/sdk-scroll-update-edb2cd8`；此入口在创建 GPUI 窗口前返回，没有启动桌面。`scroll-update-sdk-verification.json` 固定上述完整 HEAD/tree、实际导出目录，读回仍为 **41 文件 / 0 Markdown / 0 hash 差异**，实际 SDK key 不变。`7ab5928..edb2cd8` 的 `crates/plugin-protocol/` 与 `plugins/` diff 为 0，四个正式 ZIP/WASM 沿用原字节，没有重复编译或提升无改动包版本。
 
 包位于工作树 `target/community-presentation/`；SHA256 取自 ZIP 及其实际 WASM 条目：
 
@@ -68,9 +74,9 @@ cargo build -p editor-app --jobs 2
 | `bookmarks-0.1.1.zip` | `B31717B0F0A397C78BAF57FED4C7EE427992119B9166979F4CC0ADA953BA07C0` | `B75B6CD834949B452BAF0CC68936CF4A6586BA09659BEE29F684FFB210985472` |
 | `coverage-0.1.1.zip` | `D099242DFEFD27100D4EA08EB4693F0F46472FCB761D38A5B07A89D86D2076EC` | `19F4971C357439A6BA32F79C6265FBD8011067BFD9506D7A2016AA1879211CFF` |
 
-## 当前自动验证
+## 首轮正式包自动矩阵（历史固定点 `7ab5928`）
 
-这些测试消费上述正式包，运行数据各用独立 tempdir；GPUI TestAppContext 的实际绘制和输入不等同于主代理的物理桌面验收。
+这些测试消费上述正式包，运行数据各用独立 tempdir；记录保留首轮实际输入和结果，没有宣称本轮重复执行全部矩阵。GPUI TestAppContext 的实际绘制和输入不等同于主代理的物理桌面验收。
 
 | 命令/接缝 | 当前结果 | 证据 |
 | --- | --- | --- |
@@ -86,12 +92,33 @@ cargo build -p editor-app --jobs 2
 
 共享图标准入提交还在隔离的“上一 HEAD + index”完整源码树通过 `cargo check -p plugin-runtime`（41.27s，`icon-intermediate-check.log`）及格式检查，没有借用后续菜单修改验证其中间状态。
 
+## 本轮受影响接缝与当前门禁
+
+针对性 Green 来自本轮修复过程，最终汇入 `465b44d` 与 `edb2cd8`；每次实际 shell/源码状态均另存相应 `*-environment.log`。下表最后三项门禁固定在干净 `edb2cd8` / Git tree `352912e`，没有沿用旧 `7ab5928` 的门禁或把默认 ignored 计为通过。
+
+| 命令/接缝 | 实际结果 | 证据 |
+| --- | --- | --- |
+| `cargo test -p editor-app community_decorations_hide_offscreen_markers_and_restore_after_scroll -- --ignored --nocapture --test-threads=1` | **1 passed / 0 failed / 0 ignored**，39.19s；构建 55.60s | `decorations-scroll-green.log`；真实滚轮、连续稳定帧、滚回几何与磁盘文本 |
+| `cargo test -p plugin-runtime --test community_presentation community_database_tree_update_captures_live_snapshot_before_retirement -- --ignored --nocapture --test-threads=1` | **1/0/0**，41.92s | `tree-update-snapshot-green.log`；旧树在 Snapshot 时仍可用，成功切换后撤销旧 owner |
+| `cargo test -p plugin-runtime --test community_presentation community_database_tree_failed_cutover_restores_fresh_owned_tree -- --ignored --nocapture --test-threads=1` | **1/0/0**，58.19s | `tree-failed-cutover-green-retry.log`；公开迁移取消后恢复新 WASM/owner，旧树撤销、新树可用 |
+| `cargo test -p plugin-runtime --test data_migration failed_migration_activation_and_commit_preserve_old_data -- --ignored --nocapture --test-threads=1` | **1/0/0**，222.04s | `fresh-rollback-data-migration.log`；失败迁移、激活和提交保留旧私有数据 |
+| `cargo test -p plugin-runtime --test hot_update mixed_update_rollback_replaces_all_owners_and_preserves_latest_data -- --ignored --nocapture --test-threads=1` | **1/0/0**，164.64s | `fresh-rollback-hot-update.log`；最新 Data、服务/LSP/进程/owner 的恢复与退役 |
+| `cargo fmt --check` | **exit 0**，2.59s，无输出 | 实际工具执行返回已保存；PowerShell `Tee-Object` 未生成空日志，不引用不存在的 `scroll-update-final-fmt.log` |
+| `cargo test --workspace --exclude editor-app` | **exit 0；244 passed / 0 failed / 208 ignored**；构建 2m08s | `scroll-update-final-non-ui.log`、`scroll-update-final-non-ui-counts.json`；默认测试并行，无全局 `RUST_TEST_THREADS` |
+| `cargo check --workspace` | **exit 0**，4.76s | `scroll-update-final-workspace-check.log` |
+
+本轮沿用自有已真实构建的 `capability-example.zip`，版本 `0.19.0`、冻结 SDK38，SHA256 `BDFC5D3327B5B7A4F3D25BA1AE95E2A6A47B62634FB040E17FB4430C9AA46773`；这是既有 migration/hot-update 夹具，不冒称当前 SDK41 新构建。LSP 夹具直接 `cargo build -p plugin-runtime --example lsp_fixture` 成功，再从 `../target05/debug/examples/lsp_fixture.exe` 复制至本树 `target/debug/examples/lsp_fixture.exe`；源/目标 SHA256 同为 `B67DF87C7A220DE7E2900D503FCFE96C3F878DCE9F3CB171E40520A3AE53E405`，见 `rollback-lsp-fixture-build.log` 与 `rollback-lsp-fixture-hashes.log`。
+
+本轮非 UI 门禁实际默认并行通过；没有放宽 HTTP 超时或断言，也没有用串行结果替代默认执行。已有首轮三项 Manager 正向和菜单/配额/UTF-8 矩阵未受滚动源码影响，不重复执行；两项新更新回归与既有迁移/mixed-update 回归覆盖本轮通用恢复变更。
+
 ### 真实 Red/Green 与失败保留
 
 - 菜单异参回归先在真实 native 菜单执行 details，却收到 `recovered:summary`，**0 passed / 1 failed**、22.23s，日志 `tree-action-native-red-arguments.log`；增加精确 action 身份后上述当前 Green 通过。两次更早菜单 ID/语言选择失败没有冒充 typed 参数 Red。
 - 先前的树错误自动重试、保留退役行及 native revoke 未归还配额均有实际 Red/Green，原始日志分别保留为 `database-native-retry-*`、`database-native-paging-menu-*`、`tree-native-revoke-*`。这些旧日志说明开发过程，不替代当前 0.1.1 包验证。
 - 初次合并后的非 UI 构建遭 `LNK1104 msvcrt.lib`，exit 101，`merged-non-ui-workspace.log` 未报告测试通过；同一 shell 核对 VS 环境后 jobs 2 重试 exit 0，244 passed / 206 ignored，`merged-non-ui-workspace-retry.log`。这属于旧固定点证据，最终当前门禁另列。
 - 曾误用较宽 `community_` 过滤词命中未准备的 01 夹具；相关失败保留，没有计为 05 通过。ignored 测试必须先直接构建正式包，再显式执行，默认跳过不能计数。
+- 新更新回归先实际失败：`tree-update-snapshot-red.log` **0/1/0，38.99s**；移除非承重的初次分页后，`tree-update-snapshot-minimal-red.log` **0/1/0，40.18s**，两次均出现与现场相同的 Snapshot `Tree was revoked` 与 restart owner 不可用。Snapshot 改在资源撤销前执行后成功切换 Green 如上。
+- 公开 `InstallControl` 在 `Migrating` 阶段取消的 `tree-failed-cutover-red.log` **0/1/0，41.12s**，恢复沿用旧 WASM 内存里的退役句柄，旧实例未恢复可用。改为从不可变已安装旧包创建新 WASM、恢复逻辑 Snapshot/设置和原 grants 后 Green 如上；相邻测试纯归位曾遗漏 module path，`tree-failed-cutover-green.log` 的 E0583 为编译失败，没有计为行为 Red 或 Green。
 
 ## 主代理桌面接入与待验项目
 
@@ -107,7 +134,7 @@ cargo build -p editor-app --jobs 2
 
 同一收紧命令修复后实际 **1 passed / 0 failed / 0 ignored，39.19s**（构建 55.60s），`decorations-scroll-green.log`：三项标记初次可见，真实向下滚轮 820 px 后连续三帧均没有标记 bounds，滚回后准确对齐原生源行，磁盘文本仍为准备夹具。回归归入相邻 `community_presentation_tests/scroll.rs`，共享已有正式包/原生发布 helpers；没有改动或重复既有菜单、配额、越权与 UTF-8 负面矩阵。SDK 与四个正式插件源包均未改变，沿用上表真实 0.1.1 ZIP。
 
-首次桌面观察、独立的更新 snapshot/回滚修复及其准确制品输入见[主代理原生验收记录](05-trees-and-decorations-native.md)。上述行为 Red 与夹具失败日志均保留；当前宿主重建、三门禁、真实窗口中的原始输入/Undo 后滚动及 Windows UIA 撤销仍待本轮确认，不以自动 Green 代替物理结果。
+首次桌面观察、独立的更新 snapshot/回滚修复及其准确制品输入见[主代理原生验收记录](05-trees-and-decorations-native.md)。上述行为 Red 与夹具失败日志均保留；当前 `edb2cd8` 宿主重建、SDK 读回和三门禁已通过。新宿主真实窗口中的原始输入/Undo 后滚动、Windows UIA 撤销与提供者 reload 仍待主代理复验，不以自动 Green 代替物理结果。
 
 本阶段不直接操作桌面。主代理已独占原生验收；以下是现有公开入口的操作指引，尚未冒称执行结果。
 
@@ -130,6 +157,6 @@ cargo build -p editor-app --jobs 2
 
 ## 独立审查与交付边界
 
-原固定点 `de539764…a4ad93` / `a4ad93…0d42133` 的 Standards 结论为硬性 0、判断性 1（P3 重复图标准入）；Spec 随后发现 P2 同名节点 action 参数混淆。两项已在当前候选修正；新的 `a4ad93…7ab5928` / `0d42133…7ab5928` 增量正在分别交给独立 Standards 与 Spec 复审，旧结论不覆盖新输入。
+原固定点 `de539764…a4ad93` / `a4ad93…0d42133` 的 Standards 结论为硬性 0、判断性 1（P3 重复图标准入）；Spec 随后发现 P2 同名节点 action 参数混淆。两项修正后的 `7ab5928` 已由主代理确认独立双轴复查通过。新增 `d9b06d4..edb2cd8` 的通用恢复与 gutter 滚动修复仍待独立增量审查，旧结论不覆盖本轮新输入。
 
 本记录与普通候选提交不表示 push、议题关闭、版本发布或 T24/C03 完成。主代理在当前复查、门禁与桌面验收完成后统一集成及交付；07 再补跨能力组合，不重复本单负面矩阵。
