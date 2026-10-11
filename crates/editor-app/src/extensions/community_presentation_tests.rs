@@ -7,6 +7,8 @@ use plugin_runtime::{
 };
 use serde_json::{Value as Json, json};
 
+mod scroll;
+
 /// Isolated real packages require exactly their declared grants, without a business-specific host API.
 fn providers(workspace: &Path, ids: &[&str]) -> (tempfile::TempDir, Manager) {
     let root = tempfile::tempdir().unwrap();

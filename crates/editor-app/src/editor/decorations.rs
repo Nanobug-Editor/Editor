@@ -288,6 +288,7 @@ impl EditorApp {
                         let markers = app.tabs[index].text.as_ref()?.highlighter.markers();
                         let editor = app.editor.read(cx);
                         let viewport = editor.input_bounds();
+                        let visible_rows = editor.visible_row_range()?;
                         let items = markers
                             .borrow()
                             .presentation(cx.theme().is_dark(), &rust_i18n::locale());
@@ -296,6 +297,15 @@ impl EditorApp {
                             items
                                 .into_iter()
                                 .filter_map(|(range, label, artwork, style, key)| {
+                                    // Native geometry can clamp an offset above the viewport to its
+                                    // first laid-out row. Check the native buffer-row range before
+                                    // creating an element, so offscreen marks have neither a hit
+                                    // region nor an accessibility node.
+                                    let source_row =
+                                        editor.text().offset_to_position(range.start).line as usize;
+                                    if !visible_rows.contains(&source_row) {
+                                        return None;
+                                    }
                                     let row =
                                         editor.range_to_bounds(&(range.start..range.start))?;
                                     (row.bottom() > viewport.top() && row.top() < viewport.bottom())

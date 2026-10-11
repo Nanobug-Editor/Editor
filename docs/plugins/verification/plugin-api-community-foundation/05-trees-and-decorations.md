@@ -95,6 +95,20 @@ cargo build -p editor-app --jobs 2
 
 ## 主代理桌面接入与待验项目
 
+### 原生滚动缺陷的补充回归（自动 Green，当前宿主物理复验待做）
+
+主代理在当前 204 行 CRLF 夹具中先验证中文、非 BMP 输入与 Undo 的 revision/锚点，再向下滚动 820 px；稳定首行已为 21，覆盖率图标却仍留在顶部，三项标记的辅助 Label 也未撤销。关闭文档后的标记和 Todo 清理通过；提供者 reload 另遇 snapshot 资源退役错误，尚未计为 T24 通过。
+
+自动复现命令为 `cargo test -p editor-app community_decorations_hide_offscreen_markers_and_restore_after_scroll -- --ignored --nocapture --test-threads=1`，使用当前两个正式 0.1.1 包、生产 Manager、DocumentSession 与真实 GPUI 滚轮事件。首次实际 **0 passed / 1 failed / 0 ignored，95.32s**，`decorations-scroll-red.log`：原生可见首行已大于 3，但 coverage-line-2 仍有 `12px × 12px` 的绘制/命中 bounds；这属于行为 Red。测试要求连续三帧无三项标记 bounds，并在滚回时校验与原生源行几何一致、磁盘内容不变。Windows UIA Label 另由主代理物理复查，TestPlatform 不冒充其结果。
+
+收紧复现时改用普通文件关闭/打开代替批量模拟输入；第一次 `decorations-scroll-minimal-red.log` **0/1/0，44.32s** 停在 coverage 范围为空，没有到达滚动断言，不计为缺陷 Red。夹具补规范化文件身份和插件调用前的载入内容断言后，`decorations-scroll-canonical-red.log` 再次实际 **0/1/0，39.12s**，两个精确 coverage 范围和初始 gutter 均通过，再次在屏外 coverage 图标仍有 `12px × 12px` bounds 处失败。相比首次 95.32s，去掉了非承重的批量输入步骤，保留同一真实缺陷路径。
+
+原因已核对 Cargo.lock 锁定的 gpui-base 0.7.0：`input/base/state.rs:901–922` 的 `line_and_position_for_offset` 对视口前方 offset 使用 `saturating_sub`，会得到首个已布局行的位置；`range_to_bounds` 的返回值因此不能独自证明源行可见。其公开 `visible_row_range` 返回同一 native layout 的未换行 buffer 行范围（`state.rs:2962–2964`、`element.rs:1000–1060`）。本地 prepaint 已先按此范围筛掉屏外源行，才取得 bounds 并创建图标/命中/辅助节点；保留原像素裁剪处理部分可见行，没有复制第二套布局。
+
+同一收紧命令修复后实际 **1 passed / 0 failed / 0 ignored，39.19s**（构建 55.60s），`decorations-scroll-green.log`：三项标记初次可见，真实向下滚轮 820 px 后连续三帧均没有标记 bounds，滚回后准确对齐原生源行，磁盘文本仍为准备夹具。回归归入相邻 `community_presentation_tests/scroll.rs`，共享已有正式包/原生发布 helpers；没有改动或重复既有菜单、配额、越权与 UTF-8 负面矩阵。SDK 与四个正式插件源包均未改变，沿用上表真实 0.1.1 ZIP。
+
+首次桌面观察、独立的更新 snapshot/回滚修复及其准确制品输入见[主代理原生验收记录](05-trees-and-decorations-native.md)。上述行为 Red 与夹具失败日志均保留；当前宿主重建、三门禁、真实窗口中的原始输入/Undo 后滚动及 Windows UIA 撤销仍待本轮确认，不以自动 Green 代替物理结果。
+
 本阶段不直接操作桌面。主代理已独占原生验收；以下是现有公开入口的操作指引，尚未冒称执行结果。
 
 同一隔离 profile 可用现有发行/dev bootstrap：把当前 host 放在独立 `bin/`，把 Todo/Bookmarks/Coverage 三个正式 ZIP 原样放入 `bin/plugins/`；DB 使用 `--plugin-dev <database-tree项目目录> --release --profile <独立目录> --workspace <验收工作区> --grant ui.panels`。首次 bootstrap 从 EXE 相邻的 plugins 目录通过 `Package::read` 与公开 `Manager::install` 装入其余三个包；不编辑安装状态，不增加宿主测试 API。每轮用新 profile，避免先前 `bootstrapped.json` 掩盖输入变化。
