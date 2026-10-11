@@ -1,0 +1,56 @@
+{
+  "id": "todo-tree",
+  "name": "Todo Tree",
+  "version": "0.1.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "ui.tree": "^1",
+      "ui.panels": "^1",
+      "editor.documents": "^1.1",
+      "plugin.commands": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "todo-tree.wasm",
+  "permissions": [
+    "ui.panels",
+    "editor.read"
+  ],
+  "panels": [
+    {
+      "id": "presentation",
+      "title": "Todo Tree",
+      "position": "right"
+    }
+  ],
+  "commands": [
+    {
+      "id": "refresh-todos",
+      "title": "Refresh Todos / 刷新待办",
+      "menu": true
+    },
+    {
+      "id": "probe",
+      "title": "Inspect public contract"
+    },
+    {
+      "id": "locate-todo",
+      "title": "Locate Todo / 定位待办",
+      "signature": {
+        "parameters": {
+          "type": "string",
+          "max_bytes": 128
+        },
+        "result": {
+          "type": "null"
+        },
+        "permissions": [
+          "editor.read"
+        ]
+      }
+    }
+  ],
+  "storage_limit": 4096
+}

@@ -214,6 +214,10 @@ pub struct SdkDescriptor {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
+    /// Instance-owned lazy tree publication; no editor or file authority is implied.
+    Tree {
+        operation: crate::tree::Operation,
+    },
     /// Typed calls preserve caller ownership through the shared request completion gate.
     Commands {
         operation: crate::commands::Operation,
@@ -529,6 +533,10 @@ pub struct DocumentChange {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditorOperation {
+    /// Owned point/range/gutter markers; requires editor.decorations and editor.read.
+    Decorations {
+        operation: crate::decorations::Operation,
+    },
     /// Open an existing workspace text resource; local opens also require workspace.read.
     OpenDocument {
         resource: ResourceIdentity,
@@ -632,6 +640,12 @@ pub enum EditorOperation {
 /// Values describe the actual document and revision observed or saved, rather than an acknowledgement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EditorValue {
+    /// Native current positions are metadata, independent of text, selection or Undo storage.
+    Decorations {
+        handle: ResourceHandle,
+        document: DocumentVersion,
+        positions: Vec<crate::decorations::Position>,
+    },
     /// Open/refresh returns current metadata; EditorState retains the only live text.
     DocumentOpened(DocumentInfo),
     /// Navigation returns the version validated before the native selection.

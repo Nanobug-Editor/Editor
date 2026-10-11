@@ -6,13 +6,20 @@ use std::{cell::RefCell, ops::Range};
 
 /// Some candidates means structure owns folds (including an empty pending result); None restores grammar folds.
 #[derive(Clone)]
-pub(super) struct Controller(Rc<RefCell<Option<Vec<FoldRange>>>>);
+pub(crate) struct Controller {
+    folds: Rc<RefCell<Option<Vec<FoldRange>>>>,
+    markers: crate::editor::decorations::SharedMarkers,
+}
 
 impl Controller {
-    /// Install only when an editor first receives structure. Unrelated language editors retain their original adapter.
-    pub(super) fn attach(editor: &Entity<EditorState>, cx: &mut App) -> Self {
-        let controller = Self(Rc::new(RefCell::new(Some(Vec::new()))));
-        let folds = controller.0.clone();
+    /// Install once per text session; structure, grammar folds and owned marker edits share this adapter.
+    pub(crate) fn attach(editor: &Entity<EditorState>, cx: &mut App) -> Self {
+        let controller = Self {
+            folds: Rc::new(RefCell::new(None)),
+            markers: Rc::new(RefCell::new(Default::default())),
+        };
+        let folds = controller.folds.clone();
+        let markers = controller.markers.clone();
         editor.update(cx, |editor, cx| {
             let language = editor.language_name();
             editor.set_highlighter_factory(
@@ -22,6 +29,7 @@ impl Controller {
                         syntax: Rc::new(RefCell::new(plugin_syntax(language))),
                         parser_cancelled: Rc::new(Cell::new(false)),
                         folds: folds.clone(),
+                        markers: markers.clone(),
                         generation: Rc::new(Cell::new(0)),
                         pending: None,
                     }))
@@ -33,6 +41,10 @@ impl Controller {
         });
         controller
     }
+    /// Borrow only bounded current marker geometry from the same native update adapter.
+    pub(crate) fn markers(&self) -> crate::editor::decorations::SharedMarkers {
+        self.markers.clone()
+    }
 
     /// A revision change revokes old structure candidates before another native frame can fold them.
     pub(super) fn replace(
@@ -41,7 +53,7 @@ impl Controller {
         editor: &Entity<EditorState>,
         cx: &mut App,
     ) {
-        *self.0.borrow_mut() = Some(folds.clone());
+        *self.folds.borrow_mut() = Some(folds.clone());
         editor.update(cx, |editor, cx| {
             editor.apply_highlighter_fold_candidates(folds, cx)
         });
@@ -49,7 +61,7 @@ impl Controller {
 
     /// Retiring this provider restores only this editor's grammar candidates, without clearing another document.
     pub(super) fn detach(&self, editor: &Entity<EditorState>, cx: &mut App) {
-        *self.0.borrow_mut() = None;
+        *self.folds.borrow_mut() = None;
         editor.update(cx, |editor, cx| {
             // Native refresh reparses/queries the same dynamic grammar while preserving its editor and Undo owner.
             let language = editor.language_name();
@@ -65,6 +77,8 @@ struct Adapter {
     /// Cancellation leaves resumable parser state; read its cached styles but never parse another input with it.
     parser_cancelled: Rc<Cell<bool>>,
     folds: Rc<RefCell<Option<Vec<FoldRange>>>>,
+    /// Ordered InputEdit/update_batch callbacks track positions without retaining old text or history.
+    markers: crate::editor::decorations::SharedMarkers,
     generation: Rc<Cell<u64>>,
     pending: Option<gpui_kit::Task<()>>,
 }
@@ -83,6 +97,9 @@ impl InputHighlighter for Adapter {
         window: &mut Window,
         cx: &mut Context<EditorState>,
     ) {
+        if let Some(edit) = &edit {
+            self.markers.borrow_mut().edit(edit);
+        }
         self.generation.set(self.generation.get().wrapping_add(1));
         self.pending.take();
         // Base also passes a zero-range edit while initializing/refreshing a highlighter, without changing the document.

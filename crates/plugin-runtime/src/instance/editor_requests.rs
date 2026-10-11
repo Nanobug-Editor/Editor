@@ -53,6 +53,7 @@ impl State {
             ));
         }
         let (capability, permission) = match &operation {
+            EditorOperation::Decorations { .. } => ("editor.decorations", "editor.read"),
             EditorOperation::OpenVirtualDocument { .. }
             | EditorOperation::RefreshVirtualDocument { .. } => ("editor.virtual", "editor.read"),
             EditorOperation::CompareDocuments { .. } => ("editor.diff", "editor.read"),
@@ -251,6 +252,7 @@ impl State {
             }
         };
         let mut call = EditorRequest::new(
+            // Decoration admission supplies immutable owner and artwork, never guest native paths.
             handle.clone(),
             operation,
             self.workspace.display().to_string(),
@@ -265,6 +267,14 @@ impl State {
         }
         if let Some(resource) = virtual_document {
             call = call.with_virtual_document(resource);
+        }
+        match self.prepare_decorations(call.operation()) {
+            Ok(Some((resource, icons))) => call = call.with_decorations(resource, icons),
+            Ok(None) => {}
+            Err(error) => {
+                self.roots.remove(&handle);
+                return Err(error);
+            }
         }
         self.editor_requests.insert(
             handle.resource,
@@ -439,6 +449,24 @@ impl Instance {
     }
     /// Terminal results release slots even if the guest fails while consuming its notification.
     pub(super) fn poll_editor_requests(&mut self) -> anyhow::Result<()> {
+        // Native close, failed publication and delegated retirement release this source's quota.
+        let revoked = self
+            .store
+            .data()
+            .decorations
+            .iter()
+            .filter(|(_, resource)| !resource.is_live())
+            .map(|(slot, resource)| (*slot, resource.handle().clone()))
+            .collect::<Vec<_>>();
+        for (slot, handle) in revoked {
+            self.store.data_mut().decorations.remove(&slot);
+            self.store.data_mut().roots.remove(&handle);
+            self.store
+                .data_mut()
+                .plugin_services
+                .resources
+                .remove(&slot);
+        }
         // A native tab close revokes its shared authority; release the persistent root before new work.
         let revoked = self
             .store
@@ -478,6 +506,26 @@ impl Instance {
             }
             if update.is_terminal() {
                 if let Some(pending) = self.store.data_mut().editor_requests.remove(&slot) {
+                    if matches!(
+                        pending.call.operation(),
+                        EditorOperation::Decorations {
+                            operation: plugin_protocol::decorations::Operation::Create { .. }
+                        }
+                    ) && !matches!(&update, api::RequestUpdate::Completed { result: Ok(_) })
+                    {
+                        if let Some(resource) = pending.call.decoration() {
+                            resource.revoke();
+                            let handle = resource.handle().clone();
+                            // Release before notifying the guest, which may immediately retry a failed create.
+                            self.store.data_mut().decorations.remove(&handle.resource);
+                            self.store.data_mut().roots.remove(&handle);
+                            self.store
+                                .data_mut()
+                                .plugin_services
+                                .resources
+                                .remove(&handle.resource);
+                        }
+                    }
                     if matches!(
                         pending.call.operation(),
                         EditorOperation::OpenVirtualDocument { .. }

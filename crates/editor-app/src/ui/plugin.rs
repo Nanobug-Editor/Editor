@@ -18,6 +18,9 @@ mod svg;
 mod tests;
 mod textareas;
 mod theme;
+mod tree;
+#[cfg(test)]
+mod tree_tests;
 mod viewport;
 #[cfg(test)]
 mod viewport_tests;
@@ -84,6 +87,8 @@ pub(crate) struct PluginView {
     visual_measurements: BTreeMap<String, Rc<Cell<Option<(ui::ContentSize, ui::ContentSize)>>>>,
     /// Collection widgets retain native rename/drag state independently of canvas redraws.
     collections: BTreeMap<String, Entity<controls::CollectionView>>,
+    /// Generic trees retain Base state by UI node and runtime resource incarnation.
+    trees: BTreeMap<String, Entity<tree::TreeView>>,
     popup: Option<Entity<controls::CollectionView>>,
     origin: gpui_kit::Point<gpui_kit::Pixels>,
     dialog_focus: FocusHandle,
@@ -104,6 +109,11 @@ pub(crate) struct PluginView {
 impl PluginView {
     /// Suspend guest input and pending locations while retaining paint and the native text entity.
     pub(crate) fn set_scene_current(&mut self, current: bool, cx: &mut Context<Self>) {
+        if self.scene_current.get() && !current {
+            for tree in self.trees.values() {
+                tree.read(cx).resource.suspend();
+            }
+        }
         if !current {
             // Accepted requests may still await the next layout. Losing source authority
             // withdraws their effects too, without undoing an already applied Base offset.
@@ -265,6 +275,7 @@ impl PluginView {
             canvases: BTreeMap::new(),
             visual_measurements: BTreeMap::new(),
             collections: BTreeMap::new(),
+            trees: BTreeMap::new(),
             popup: None,
             origin: Default::default(),
             dialog_focus: cx.focus_handle(),

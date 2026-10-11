@@ -13,6 +13,7 @@ use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
 mod commands;
 mod data_files;
+mod decorations;
 mod document_events;
 mod editor_requests;
 mod file_discovery;
@@ -27,6 +28,7 @@ mod settings;
 mod stdio;
 mod structure;
 mod tools;
+mod trees;
 use resource_roots::ResourceRoots;
 wasmtime::component::bindgen!({path:"../plugin-protocol/wit",world:"plugin",require_store_data_send:true});
 
@@ -57,6 +59,10 @@ struct State {
     /// Persistent readonly authority survives request completion but not instance retirement.
     virtual_documents:
         std::collections::BTreeMap<u64, std::sync::Arc<crate::VirtualDocumentResource>>,
+    /// Owned metadata survives UI publication, while retirement seals every native projection.
+    trees: std::collections::BTreeMap<u64, std::sync::Arc<crate::TreeResource>>,
+    /// Marker collections retain only unforgeable lifetime/document metadata; native text owns positions.
+    decorations: std::collections::BTreeMap<u64, std::sync::Arc<crate::DecorationResource>>,
     preference_subscriptions: std::collections::BTreeMap<u64, preferences::Subscription>,
     wasi: WasiCtx,
     table: ResourceTable,
@@ -336,6 +342,8 @@ impl Instance {
             subscriptions: Default::default(),
             document_streams: Default::default(),
             virtual_documents: Default::default(),
+            trees: Default::default(),
+            decorations: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest
                 .panels
@@ -641,6 +649,14 @@ impl Instance {
             resource.revoke();
         }
         self.store.data_mut().virtual_documents.clear();
+        for tree in self.store.data().trees.values() {
+            tree.revoke();
+        }
+        self.store.data_mut().trees.clear();
+        for resource in self.store.data().decorations.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().decorations.clear();
         self.store.data_mut().preference_subscriptions.clear();
         for request in self.store.data_mut().editor_requests.values() {
             request.call.retire();
@@ -697,6 +713,7 @@ impl Instance {
     pub fn poll(&mut self) -> anyhow::Result<bool> {
         self.reconcile_image_inputs();
         self.retire_service_sources();
+        let trees_changed = self.prune_trees()?;
         self.poll_service_replies()?;
         let revoked = self.poll_service_revocations()?;
         self.poll_service_requests()?;
@@ -705,7 +722,7 @@ impl Instance {
         self.poll_document_streams()?;
         let preferences_changed = self.poll_preferences()?;
         let events = self.store.data_mut().poll_processes()?;
-        let changed = revoked || preferences_changed || !events.is_empty();
+        let changed = revoked || trees_changed || preferences_changed || !events.is_empty();
         for event in events {
             // Exit removes its slot, but the last callback still inherits the originating service authority.
             let context = if let api::Notification::Process { handle, .. } = &event {

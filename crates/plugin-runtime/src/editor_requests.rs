@@ -22,6 +22,16 @@ pub struct EditorAuthority {
 }
 
 impl EditorAuthority {
+    /// Issue persistent lifetime metadata only after the instance has checked capability and grants.
+    pub(crate) fn new(
+        owner: Arc<AtomicBool>,
+        context: Option<&crate::plugin_services::Context>,
+    ) -> Self {
+        Self {
+            owner,
+            callers: context.map_or_else(Vec::new, |context| context.lifetimes.clone()),
+        }
+    }
     /// Return whether the initiating instance and every delegated source remain authorized.
     /// Completing a task does not retire a persistent view; disable/cutover/trust revocation does.
     pub fn is_live(&self) -> bool {
@@ -48,6 +58,9 @@ pub struct EditorRequest {
     image_input: Option<std::sync::Arc<crate::ImageInputResource>>,
     /// Persistent authority is distinct from this transient completion handle.
     virtual_document: Option<std::sync::Arc<crate::VirtualDocumentResource>>,
+    /// The native request borrows one admitted marker owner and immutable package artwork.
+    decoration: Option<std::sync::Arc<crate::DecorationResource>>,
+    decoration_icons: std::collections::BTreeMap<String, Arc<[u8]>>,
     /// Source wait cancellation closes pending UI, while successful calls may retain owned work.
     parents: Vec<Completion<serde_json::Value>>,
     /// Native paths never cross the guest transport; the instance issues grants only at delivery.
@@ -85,6 +98,8 @@ impl EditorRequest {
             },
             image_input: None,
             virtual_document: None,
+            decoration: None,
+            decoration_icons: Default::default(),
             parents,
             selection: Default::default(),
             progress: Default::default(),
@@ -104,6 +119,22 @@ impl EditorRequest {
     /// Native virtual opens require runtime-issued owned authority.
     pub fn virtual_document(&self) -> Option<&std::sync::Arc<crate::VirtualDocumentResource>> {
         self.virtual_document.as_ref()
+    }
+    /// Native marker admission cannot fabricate a collection owner or read ambient icon paths.
+    pub fn decoration(&self) -> Option<&Arc<crate::DecorationResource>> {
+        self.decoration.as_ref()
+    }
+    pub fn decoration_icons(&self) -> &std::collections::BTreeMap<String, Arc<[u8]>> {
+        &self.decoration_icons
+    }
+    pub(crate) fn with_decorations(
+        mut self,
+        resource: Arc<crate::DecorationResource>,
+        icons: std::collections::BTreeMap<String, Arc<[u8]>>,
+    ) -> Self {
+        self.decoration = Some(resource);
+        self.decoration_icons = icons;
+        self
     }
     /// Attach after the instance admits ownership, permissions and quota.
     pub(crate) fn with_virtual_document(
@@ -134,6 +165,17 @@ impl EditorRequest {
     }
     pub fn begin(&self) -> bool {
         self.expire_parents();
+        if self
+            .decoration
+            .as_ref()
+            .is_some_and(|resource| !resource.is_live())
+        {
+            self.completion.finish(Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Decoration resource was revoked",
+            )));
+            return false;
+        }
         if self
             .virtual_document
             .as_ref()

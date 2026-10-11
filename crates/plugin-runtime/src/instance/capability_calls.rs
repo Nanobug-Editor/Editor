@@ -59,6 +59,7 @@ impl State {
                 "process",
                 "service",
                 "commands",
+                "tree",
             ]
             .contains(&method)
             {
@@ -141,6 +142,7 @@ impl State {
             }
             self.check_service_authority(&request.operation)?;
             let result = match request.operation {
+                api::Operation::Tree { operation } => self.tree_request(operation),
                 api::Operation::Commands { operation } => self.command_request(operation),
                 api::Operation::Service { operation } => self.service_request(operation),
                 api::Operation::Process { operation } => self.process_request(operation),
@@ -592,8 +594,14 @@ impl Instance {
             let mut visual_viewport = false;
             let mut icons = false;
             let mut invalid_icon = None;
+            let mut invalid_tree = None;
             let mut links = view.document.link_events;
             let mut visit = |node: &ui::Node| {
+                if let ui::Kind::Tree { handle } = &node.kind {
+                    if invalid_tree.is_none() {
+                        invalid_tree = self.store.data().owned_tree(handle).err();
+                    }
+                }
                 links |= !node.links.is_empty();
                 if let Some(svg) = &node.button_icon {
                     icons = true;
@@ -627,6 +635,9 @@ impl Instance {
             }
             if let Some(dialog) = &view.document.dialog {
                 dialog.content.visit(&mut visit);
+            }
+            if let Some(error) = invalid_tree {
+                return Err(error.into());
             }
             if resizable
                 && !api

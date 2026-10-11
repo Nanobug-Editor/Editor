@@ -43,6 +43,8 @@ impl EditorApp {
             attach_language_server(&editor, &document_path, server, app, cx);
         }
         // Definition markers use their own layer beside plugin syntax highlighting.
+        // One native adapter survives grammar/fold updates and ordinary document Undo.
+        let highlighter = crate::outline::folding::Controller::attach(&editor, cx);
         let definition_highlight = editor.update(cx, |editor, cx| {
             editor.create_decorations_collection(Vec::new(), cx)
         });
@@ -98,6 +100,7 @@ impl EditorApp {
             overwrite_confirmed: false,
             definition_highlight,
             definition_highlight_generation: 0,
+            highlighter,
             diagnostics: Default::default(),
             _subscription: subscription,
             _observer: observer,

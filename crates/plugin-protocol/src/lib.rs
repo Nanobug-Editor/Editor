@@ -10,6 +10,8 @@ pub mod commands;
 /// Public command-template, native-form and validation service contract.
 pub mod configurations;
 pub mod debug;
+/// Native source-owned point and range markers with explicit edit and deletion semantics.
+pub mod decorations;
 pub mod dependencies;
 pub mod execution;
 /// Native host dialogs and instance-bound user-selected file authority.
@@ -22,6 +24,8 @@ pub mod settings;
 pub mod structure;
 /// Dynamic target discovery and build preparation are provider policy, independent of execution.
 pub mod targets;
+/// Generic native lazy trees and their bounded provider callbacks.
+pub mod tree;
 pub mod ui;
 
 /// Guest imports and exports use the WIT contract supplied by the building editor.

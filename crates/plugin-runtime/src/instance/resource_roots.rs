@@ -13,6 +13,10 @@ pub(super) enum RootKind {
     ImageInput,
     /// Readonly text never grants file-root authority.
     VirtualDocument,
+    /// Native tree metadata is not a filesystem root.
+    Tree,
+    /// Point/range metadata grants no file access.
+    Decoration,
     ServiceReference,
     ServiceRequest,
     /// Provider-side deferred reply; it is not a consumer reference or a native process authority.
@@ -143,6 +147,8 @@ impl State {
         let (capability, permission, root) = match kind {
             RootKind::EditorRequest
             | RootKind::VirtualDocument
+            | RootKind::Tree
+            | RootKind::Decoration
             | RootKind::Selected
             | RootKind::ImageInput
             | RootKind::ServiceReference
@@ -269,6 +275,12 @@ impl State {
                 self.plugin_services.resources.remove(&handle.resource);
                 self.subscriptions.remove(&handle.resource);
                 self.document_streams.remove(&handle.resource);
+                if let Some(tree) = self.trees.remove(&handle.resource) {
+                    tree.revoke();
+                }
+                if let Some(resource) = self.decorations.remove(&handle.resource) {
+                    resource.revoke();
+                }
                 if let Some(resource) = self.virtual_documents.remove(&handle.resource) {
                     resource.revoke();
                 }
@@ -293,6 +305,7 @@ impl State {
                 Ok(Value::Unit)
             }
             api::Operation::ReadAsset { .. }
+            | api::Operation::Tree { .. }
             | api::Operation::Commands { .. }
             | api::Operation::DescribeSdk
             | api::Operation::Service { .. }

@@ -7,6 +7,7 @@ use plugin_runtime::{
     },
 };
 
+mod decorations;
 mod documents;
 mod edits;
 mod images;
@@ -60,6 +61,16 @@ impl EditorApp {
             return;
         }
         self.sync_plugin_document_metadata(cx);
+        for index in 0..self.tabs.len() {
+            if let Ok(document) = self.plugin_document_version(index) {
+                if let Some(text) = &self.tabs[index].text {
+                    text.highlighter
+                        .markers()
+                        .borrow_mut()
+                        .synchronize(Some(&document), cx);
+                }
+            }
+        }
         let current = (0..self.tabs.len())
             .filter(|index| self.tabs[*index].virtual_document.is_none())
             .filter_map(|index| self.plugin_document_version(index).ok())
@@ -219,6 +230,9 @@ impl EditorApp {
             return;
         }
         let result = (|| match request.operation() {
+            Op::Decorations { operation } => {
+                self.perform_plugin_decorations(operation, &request, cx)
+            }
             Op::OpenDocument { resource } => {
                 self.open_plugin_resource(resource, &request, window, cx)
             }

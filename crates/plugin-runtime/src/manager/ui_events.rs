@@ -194,6 +194,22 @@ impl Manager {
                 })?;
             // Reject stale host callbacks before calling WASM; they are not plugin crashes.
             document.validate_event(event)?;
+            if let ui::Action::Tree(tree_event) = &event.action {
+                let instance = self.live.get(id).expect("validated UI owner");
+                instance.validate_tree_event(tree_event)?;
+                if let plugin_protocol::tree::Event::Invoke {
+                    tree,
+                    epoch,
+                    node,
+                    command,
+                } = tree_event
+                {
+                    let command = instance.tree_command(tree, *epoch, node, command)?;
+                    // A native node menu uses the same declared schema, broker and incarnation as ticket 02.
+                    // The node's opaque identifier remains plugin data and grants no path authority.
+                    return self.invoke_command(id, &command.command, command.arguments);
+                }
+            }
         }
         if let api::Notification::Tool(event) = inner {
             let instance = self.live.get(id).ok_or_else(|| {

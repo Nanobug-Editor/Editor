@@ -417,6 +417,8 @@ pub(super) struct Published {
     pub views: BTreeMap<String, Arc<ui::Document>>,
     /// Each scene's full-color image operations are ready before the UI observes that scene.
     pub images: super::images::SceneImages,
+    /// Native trees borrow current runtime resources; their pages remain bounded and owner checked.
+    pub trees: Vec<Arc<plugin_runtime::TreeResource>>,
     pub pending: Option<Package>,
     pub status: Option<OperationStatus>,
     pub progress: Option<OperationProgress>,

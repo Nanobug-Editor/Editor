@@ -1,0 +1,56 @@
+{
+  "id": "database-tree",
+  "name": "Database Tree",
+  "version": "0.1.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "ui.tree": "^1",
+      "ui.panels": "^1",
+      "plugin.commands": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "database-tree.wasm",
+  "permissions": [
+    "ui.panels"
+  ],
+  "panels": [
+    {
+      "id": "presentation",
+      "title": "Database Tree",
+      "position": "right"
+    }
+  ],
+  "commands": [
+    {
+      "id": "refresh-database",
+      "title": "Refresh database / 刷新数据库",
+      "menu": true
+    },
+    {
+      "id": "probe",
+      "title": "Inspect public contract"
+    },
+    {
+      "id": "inspect-object",
+      "title": "Inspect database object / 查看数据库对象",
+      "signature": {
+        "parameters": {
+          "type": "string",
+          "max_bytes": 128
+        },
+        "result": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "id": "complete-pending",
+      "title": "Complete delayed page / 完成延迟页",
+      "menu": true
+    }
+  ],
+  "storage_limit": 4096
+}

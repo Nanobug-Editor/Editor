@@ -776,7 +776,9 @@ impl Worker {
                     false
                 });
                 let mut editor_requests = Vec::new();
+                let mut trees = Vec::new();
                 for (id, instance) in &mut manager.live {
+                    trees.extend(instance.tree_resources());
                     editor_requests.extend(
                         instance
                             .take_editor_requests()
@@ -1036,6 +1038,7 @@ impl Worker {
                     .collect();
                 published.views = views;
                 published.images = images;
+                published.trees = trees;
                 published.processes = processes;
                 published.generation += 1;
             }
