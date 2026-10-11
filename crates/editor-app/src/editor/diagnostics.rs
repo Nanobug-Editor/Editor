@@ -25,7 +25,7 @@ pub(crate) struct DocumentDiagnostics {
 }
 
 impl EditorApp {
-    /// Coalesce typing bursts while clearing markers from the previous text immediately.
+    /// Coalesce typing bursts while clearing obsolete markers and retaining exact-current owners.
     pub(crate) fn refresh_syntax_diagnostics(
         &mut self,
         editor_id: gpui_kit::EntityId,
@@ -44,13 +44,21 @@ impl EditorApp {
             .as_ref()
             .and_then(|language| self.language_servers.get(language))
             .cloned();
+        let version = self.plugin_document_version(index).ok();
+        let trusted = self.session_state.workspace_trusted;
         let Some(tab) = self.tabs[index].text.as_mut() else {
             return;
         };
         tab.diagnostics.task = None;
         tab.diagnostics.syntax.clear();
         tab.diagnostics.semantic.clear();
-        tab.diagnostics.direct.clear();
+        // Grammar/contribution refresh does not own another checker's result. Actual edits,
+        // retirement and trust changes still invalidate its full native incarnation/revision.
+        tab.diagnostics.direct.retain(|_, publication| {
+            trusted
+                && publication.collection.is_live()
+                && version.as_ref() == Some(&publication.document)
+        });
         tab.diagnostics.generation = tab.diagnostics.generation.wrapping_add(1);
         let generation = tab.diagnostics.generation;
         let plugin_generation = self.plugin_loading_generation;
@@ -65,6 +73,7 @@ impl EditorApp {
         });
         let Some(language) = language else {
             tab.diagnostics.parser = Default::default();
+            self.publish_document_diagnostics(editor_id, cx);
             cx.notify();
             return;
         };
@@ -157,6 +166,9 @@ impl EditorApp {
                     .await;
             }
         }));
+        // Clearing the legacy parser/server pair must immediately re-project preserved owners,
+        // including plain documents that will not receive another syntax or LSP publication.
+        self.publish_document_diagnostics(editor_id, cx);
         cx.notify();
     }
 

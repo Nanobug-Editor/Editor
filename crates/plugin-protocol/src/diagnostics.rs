@@ -134,6 +134,18 @@ pub struct Fix {
     pub plan: Plan,
 }
 
+impl Fix {
+    /// Validate the shared inert action label and complete plan shape before native presentation.
+    /// Empty/blank labels, control characters, excessive bytes or malformed plans return false;
+    /// owner grants, source/target revisions and effects remain the native transaction's checks.
+    pub fn valid(&self) -> bool {
+        !self.title.trim().is_empty()
+            && self.title.len() <= 256
+            && !self.title.chars().any(char::is_control)
+            && self.plan.validate().is_ok()
+    }
+}
+
 /// The collection provides owner/source identity; plugins cannot forge another source in this payload.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -175,12 +187,7 @@ impl Diagnostic {
                     && matches!(item.resource, crate::api::ResourceIdentity::Local { .. })
                     && item.resource.validate().is_ok()
             })
-            && self.fixes.iter().all(|fix| {
-                !fix.title.is_empty()
-                    && fix.title.len() <= 256
-                    && !fix.title.chars().any(char::is_control)
-                    && fix.plan.validate().is_ok()
-            })
+            && self.fixes.iter().all(Fix::valid)
     }
 }
 

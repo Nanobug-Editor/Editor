@@ -193,10 +193,7 @@ impl Result {
                     })
             }
             Self::CodeActions { actions } => {
-                actions.len() <= 32
-                    && actions
-                        .iter()
-                        .all(|item| bounded(&item.title, 256) && item.plan.validate().is_ok())
+                actions.len() <= 32 && actions.iter().all(crate::diagnostics::Fix::valid)
             }
             Self::SignatureHelp { help: None } => true,
             Self::SignatureHelp { help: Some(help) } => {
@@ -253,5 +250,74 @@ impl Proposal {
             && self.document == request.source.document
             && self.result.feature() == request.feature
             && self.result.valid()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        api::{TextEdit, TextRange},
+        diagnostics::Fix,
+        workspace::{Change, Plan},
+    };
+
+    /// The public proposal boundary must reject the whole list before a control-bearing label
+    /// reaches a native button, even when an earlier action and all edit data are well formed.
+    #[test]
+    fn direct_actions_reject_control_labels_without_accepting_a_valid_prefix() {
+        let document = DocumentVersion {
+            id: "native-document".into(),
+            path: "source.expr".into(),
+            revision: 7,
+        };
+        let request = Request {
+            request: 9,
+            provider: "expressions".into(),
+            feature: Feature::CodeActions,
+            source: SourceSnapshot {
+                document: document.clone(),
+                text: "中文🙂".into(),
+            },
+            cursor: 6,
+            settings: Default::default(),
+        };
+        let fix = Fix {
+            title: "修复表达式".into(),
+            plan: Plan {
+                title: "Replace expression".into(),
+                origin: Some(document.clone()),
+                changes: vec![Change::EditDocument {
+                    document: document.clone(),
+                    edits: vec![TextEdit {
+                        range: TextRange { start: 0, end: 6 },
+                        text: "新".into(),
+                    }],
+                    selection: TextRange { start: 3, end: 3 },
+                }],
+            },
+        };
+        let mut proposal = Proposal {
+            request: 9,
+            document,
+            result: Result::CodeActions {
+                actions: vec![fix.clone()],
+            },
+        };
+        assert!(
+            proposal.valid_for(&request),
+            "Ordinary Unicode labels remain supported"
+        );
+        for title in ["修复\n下一行", "修复\0隐藏文本"] {
+            let mut malformed = fix.clone();
+            malformed.title = title.into();
+            proposal.result = Result::CodeActions {
+                actions: vec![fix.clone(), malformed],
+            };
+            assert!(
+                !proposal.valid_for(&request),
+                "A control-bearing action accepted a partial list"
+            );
+        }
     }
 }

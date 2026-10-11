@@ -141,10 +141,15 @@ pub fn refresh_entries(root: &Path, installed: &[Installed]) {
                 )
             })
             .collect(),
+        // An omitted optional contract contributes no direct role. Publishing its declaration
+        // without an admitted executor would shadow a valid selected standard LSP provider.
         installed
             .iter()
             .filter(|entry| {
-                entry.enabled && entry.error.is_none() && entry.compatibility_error().is_none()
+                entry.enabled
+                    && entry.error.is_none()
+                    && entry.compatibility_error().is_none()
+                    && entry.supports_capability("language.direct")
             })
             .map(|entry| {
                 (

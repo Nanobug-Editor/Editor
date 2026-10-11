@@ -161,7 +161,11 @@ impl Checker {
                             return None;
                         }
                         let start = start + 8;
-                        let path = snapshot.text[start..].lines().next()?.trim().to_owned();
+                        let raw = snapshot.text[start..].lines().next()?;
+                        let path = raw.trim().to_owned();
+                        // The path policy removes whitespace; its diagnostic must point at those
+                        // same complete UTF-8 bytes, not at the untrimmed key's following offset.
+                        let start = start + raw.len() - raw.trim_start().len();
                         let resource = api::ResourceIdentity::Local { path: path.clone() };
                         resource.validate().ok()?;
                         Some((start, path))

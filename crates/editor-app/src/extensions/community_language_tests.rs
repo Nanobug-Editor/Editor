@@ -295,3 +295,4 @@ fn rejected(request: &EditorRequest) -> api::Failure {
 mod declarative;
 mod diagnostics_native;
 mod language_native;
+mod optional;

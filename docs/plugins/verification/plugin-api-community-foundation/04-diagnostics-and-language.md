@@ -65,6 +65,27 @@ Snapshot 修复后的阶段包实际 ZIP SHA-256：
 
 T20 的旧语言回归只读复制既有实际包，不修改原工作区：`C:/Users/Tmiracle/.codex/worktrees/plugin-api-community/Editor/dist/plugins/javascript.zip`，0.3.0/protocol7，SHA-256 `6B0A98C6397ECF4034C9ACC2AA35069DD7443F8978DAEB0305008C466CCCDE11`；`C:/Projects/RustProjects/Editor/dist/plugins/xml.zip`，0.2.1/protocol7，SHA-256 `96B4E933259FFE3155D1967256DA2D2882C4104EBE0535CF8297F7599D083AB9`。它们是既有语言的回归输入，不冒充本单新 SDK 重建的四个交付包。
 
+## 联合候选与独立审查
+
+03/05/06 已交付基线 `cb1bdb290555cdfc03654e7b01fe9af6a5826293` 已普通合并到 04，固定联合候选为 `5ce40208cfbbd7b114cd38fc7baba3965fc330de`（父提交为 `d792daf` 与 `cb1bdb2`）。联合格式、编译检查、Host 构建和 app 测试 EXE 构建均退出 0；此时 SDK/正式包仍是阶段输入，不能称最终交付。合并保留 live Snapshot 先于 stop、失败后的 fresh WASM/activation 恢复，以及诊断、树/装饰、HTTP/timer/private 的联合能力。
+
+两个未参与 04 实现的独立审查轴及原始报告见[独立审查记录](04-diagnostics-and-language-review.md)。Standards 初轮硬性违反 1（P3 Fix 标题控制字符）、坏味道 0；Spec 初轮缺失或部分 0、范围外 0、行为错误 3（P2 可选 Direct 幽灵角色、跨来源诊断误清除、配置裁剪 Unicode 坐标）。两轴分别保存，后续固定修复候选复查尚未完成。
+
+公开接缝的真实反例命令/日志位于本树外 `../target04/`：
+
+| 审查发现 | 精确命令过滤词 | 真实 Red |
+| --- | --- | --- |
+| 控制字符动作标题 | `cargo test -p plugin-protocol direct_actions_reject_control_labels_without_accepting_a_valid_prefix -- --nocapture` | 0/1/0，0.00 秒；有效前缀加含换行标题的完整 proposal 仍被接受；`review04-fix-title-red.log` |
+| 可选 Direct 角色遮蔽 LSP | app EXE `native_community_language_omitted_optional_direct_keeps_selected_lsp_features --ignored --nocapture --test-threads=1` | 0/1/0，43.58 秒；合法当前包真实省略未来可选能力，原 LSP 已准备且保留有效选择，仍没有引用结果；`review04-optional-direct-red.log` |
+| 禁用 A 清除未变 B | app EXE `native_community_language_diagnostics_preserve_independent_owners_and_cleanup --ignored --nocapture --test-threads=1` | 0/1/0，42.99 秒；原同源清理正确后，禁用 A/贡献刷新把同 DocumentVersion 的 B 从 1 清成 0；`review04-independent-owners-red.log` |
+| Unicode 路径范围失效 | app EXE `native_community_language_config_trimmed_unicode_path_keeps_exact_diagnostic_span --ignored --nocapture --test-threads=1` | 0/1/0，21.44 秒；`include= 中 ` 的缺文件诊断从期望 1 变成 0；`review04-config-unicode-red.log` |
+
+修复只省略未协商的 Direct 角色、保留仍存活且精确版本匹配的独立来源、在插件内计算裁剪路径的真实起点，并让诊断/LSP/Direct 共用 `Fix::valid`。标题边界 Green 1/0/0，0.00 秒；可选角色的三个实际 LSP 入口 Green 1/0/0，22.02 秒；配置真实包 Unicode/空格/tab 范围 Green 1/0/0，26.03 秒。双来源与权限完整 Green 1/0/0，111.39 秒（`review04-independent-owners-permission-green.log`）：禁用 A、B 原 seal 存活、同版本选择变更、编辑撤销/重发及最终禁用清理，随后实际权限拒绝与无副作用均通过。新权限 probe 首次曾在停用 guest 前置条件失败（0/1/0，90.08 秒）；重装保留先前 disabled 选择是正常行为，夹具补上公共 `enable` 后窄重验通过，没有放宽生产准入。
+
+C02 扩展同一真实包场景：required future Direct 和缺必需 editor.read 的 Package 准入拒绝、合法 Direct 包缺确认 grants 的 Manager 拒绝，均已在可选角色 Green 中实际执行，不伪造协商版本或权限。已准入 checker 缺 editor.diagnostics 的 Create 操作实际返回 typed PermissionDenied，没有新原生请求、诊断或文本副作用，随后 shutdown。四个新包在阶段修复期间从未正式交付，首发保留清单/Cargo 的 0.1.0；两个已交付事务消费者随公开 Plan 源契约适配升为 0.1.1，最终均按新 SDK 实际重建。
+
+为验证已修改的插件领域代码，仅配置检查器先通过当时联合阶段 Host 的公开 `--plugin-package plugins/config-check --output target/community-language` 构建（退出 0，release 23.46 秒；`review04-config-trim-package.log`）。阶段 SDK 为 `d8159187830e6f18e4d4f3b831adba33cb30f148eda348c494729978ad46dc7e`；该包 SHA-256 为 `238942D2793AF1CB2174545CC2F461876D7A9B5E8A9FC45CFD1DEDA59E978698`，旧包保存为 `../target04/config-check-before-trim.zip`。它不充当最终 Fix 源码/联合 SDK 的输入；修复候选冻结后仍统一重建全部四个新包和两个受影响事务包。
+
 ## 剩余验收
 
 T17–T20、正式包 C01–C06、三项门禁与 Windows 物理 Problems/修复/引用/参数提示尚在执行。每次仅因源码/输入变化或未决失败补充受影响测试；不重复未修改的 03 全磁盘负面矩阵。源前提修改仍需要单文件和跨文件修复连接、预览后改源与关闭重开、取消和会话 Undo，以及相关 03 回归。
