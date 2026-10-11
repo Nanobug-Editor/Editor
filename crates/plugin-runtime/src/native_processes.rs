@@ -326,13 +326,19 @@ fn supervise(
                             "Session already owns a process"
                         );
                         let reporter = diagnostics.reporter("host", "native-processes");
+                        // Authority is checked before consulting the caller's absolute tool directories.
+                        // Resolve once for both transports so the child and locator see the same PATH.
+                        let program = crate::toolchains::resolve_with_environment(
+                            &launch.program,
+                            &launch.env,
+                        )?;
                         let id = match launch.transport {
                             Transport::Pty {
                                 columns,
                                 rows,
                                 inherit_cursor,
                             } => processes.spawn(
-                                launch.program,
+                                program.display().to_string(),
                                 launch.args,
                                 launch.cwd,
                                 columns,
@@ -342,7 +348,7 @@ fn supervise(
                                 reporter,
                             )?,
                             Transport::Stdio => processes.spawn_stdio(
-                                &crate::toolchains::resolve(&launch.program)?,
+                                &program,
                                 &launch.args,
                                 std::path::Path::new(&launch.cwd),
                                 &launch.env,
