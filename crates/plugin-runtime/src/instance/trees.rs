@@ -96,45 +96,7 @@ impl State {
                             signature.parameters.accepts(&command.arguments)?;
                         }
                         if let Some(icon) = &node.icon {
-                            if !self.permissions.contains("assets.read") {
-                                return Err(Failure::new(
-                                    ErrorCode::PermissionDenied,
-                                    "Tree icons require assets.read",
-                                ));
-                            }
-                            if !self.api.capabilities.contains_key("ui.icons") {
-                                return Err(Failure::new(
-                                    ErrorCode::CapabilityUnavailable,
-                                    "Tree icons require ui.icons",
-                                ));
-                            }
-                            for path in [&icon.light, &icon.dark] {
-                                if icons.contains_key(path) {
-                                    continue;
-                                }
-                                let path_on_disk =
-                                    safe_path(&self.assets, path, true).map_err(|_| {
-                                        Failure::new(
-                                            ErrorCode::InvalidPath,
-                                            "Tree icon is not an owned package asset",
-                                        )
-                                    })?;
-                                if !std::fs::metadata(&path_on_disk).is_ok_and(|metadata| {
-                                    metadata.is_file() && metadata.len() <= 65536
-                                }) {
-                                    return Err(Failure::new(
-                                        ErrorCode::LimitExceeded,
-                                        "Tree icon exceeds 64 KiB",
-                                    ));
-                                }
-                                let bytes = std::fs::read(path_on_disk).map_err(|_| {
-                                    Failure::new(ErrorCode::NotFound, "Tree icon asset unavailable")
-                                })?;
-                                crate::package::icons::svg(&bytes).map_err(|error| {
-                                    Failure::new(ErrorCode::InvalidRequest, error.to_string())
-                                })?;
-                                icons.insert(path.clone(), Arc::<[u8]>::from(bytes));
-                            }
+                            self.prepare_icon(icon, &mut icons)?;
                         }
                     }
                 }

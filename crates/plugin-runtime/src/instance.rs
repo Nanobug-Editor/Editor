@@ -17,6 +17,7 @@ mod decorations;
 mod document_events;
 mod editor_requests;
 mod file_discovery;
+mod icons;
 mod image_inputs;
 mod plugin_services;
 mod preferences;

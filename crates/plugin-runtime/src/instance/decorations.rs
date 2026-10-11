@@ -25,41 +25,7 @@ impl State {
         let mut icons = BTreeMap::new();
         for marker in markers {
             if let Some(icon) = &marker.icon {
-                if !self.permissions.contains("assets.read") {
-                    return Err(Failure::new(
-                        ErrorCode::PermissionDenied,
-                        "Marker icons require assets.read",
-                    ));
-                }
-                if !self.api.capabilities.contains_key("ui.icons") {
-                    return Err(Failure::new(
-                        ErrorCode::CapabilityUnavailable,
-                        "Marker icons require ui.icons",
-                    ));
-                }
-                for path in [&icon.light, &icon.dark] {
-                    if icons.contains_key(path) {
-                        continue;
-                    }
-                    let resolved = safe_path(&self.assets, path, true).map_err(|_| {
-                        Failure::new(ErrorCode::InvalidPath, "Marker icon is not an owned asset")
-                    })?;
-                    if !std::fs::metadata(&resolved)
-                        .is_ok_and(|metadata| metadata.is_file() && metadata.len() <= 65536)
-                    {
-                        return Err(Failure::new(
-                            ErrorCode::LimitExceeded,
-                            "Marker icon exceeds 64 KiB",
-                        ));
-                    }
-                    let bytes = std::fs::read(resolved).map_err(|_| {
-                        Failure::new(ErrorCode::NotFound, "Marker icon unavailable")
-                    })?;
-                    crate::package::icons::svg(&bytes).map_err(|error| {
-                        Failure::new(ErrorCode::InvalidRequest, error.to_string())
-                    })?;
-                    icons.insert(path.clone(), Arc::<[u8]>::from(bytes));
-                }
+                self.prepare_icon(icon, &mut icons)?;
             }
         }
         if icons.values().map(|bytes| bytes.len()).sum::<usize>() > 2 * 1024 * 1024 {
