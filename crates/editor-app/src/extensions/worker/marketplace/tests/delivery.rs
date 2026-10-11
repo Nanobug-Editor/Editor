@@ -215,14 +215,13 @@ fn inspect_history_and_upgrade(
         );
     }
     // A native click can enqueue installation before the actor publishes progress. Observe the
-    // selected version (or its explicit failure), rather than mistaking the initial idle state for done.
+    // selected version, rather than mistaking an older status or the initial idle state for done.
     wait(worker, |state| {
         state.progress.is_none()
-            && (state.status.is_some()
-                || state.entries.iter().any(|entry| {
-                    entry.manifest.id == release.manifest.id
-                        && entry.manifest.version == release.manifest.version
-                }))
+            && state.entries.iter().any(|entry| {
+                entry.manifest.id == release.manifest.id
+                    && entry.manifest.version == release.manifest.version
+            })
     });
     form.update(|_, cx| panel.update(cx, |panel, cx| panel.poll(cx)));
     draw(form);

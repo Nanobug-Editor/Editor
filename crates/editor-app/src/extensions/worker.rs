@@ -566,6 +566,9 @@ pub(super) struct Worker {
     image_offers: Arc<std::sync::atomic::AtomicUsize>,
     #[cfg(test)]
     pub recorded: Mutex<mpsc::Receiver<Work>>,
+    /// Recorded UI transport is inert; real background actors retain live marketplace transport.
+    #[cfg(test)]
+    pub recording: bool,
     /// Test transport retains actual public completions just as the production actor does.
     /// A pending reply must never be reported as an unknown terminal state.
     #[cfg(test)]
@@ -699,6 +702,7 @@ impl Worker {
             trusted: Arc::new(std::sync::atomic::AtomicBool::new(trusted)),
             image_offers: Default::default(),
             recorded: Mutex::new(rx),
+            recording: true,
             run_queries: Default::default(),
             configuration_calls: Default::default(),
         }

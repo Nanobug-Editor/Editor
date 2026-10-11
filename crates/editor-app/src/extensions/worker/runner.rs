@@ -1076,6 +1076,8 @@ impl Worker {
             #[cfg(test)]
             recorded: Mutex::new(mpsc::channel().1),
             #[cfg(test)]
+            recording: false,
+            #[cfg(test)]
             run_queries: Default::default(),
             #[cfg(test)]
             configuration_calls: Default::default(),
