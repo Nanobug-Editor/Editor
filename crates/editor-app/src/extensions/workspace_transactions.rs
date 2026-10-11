@@ -76,6 +76,8 @@ struct Record {
     batch: Arc<WorkspaceBatch>,
     title: String,
     source: String,
+    /// Readonly language source is a precondition, not a text preimage or recovery target.
+    origin: Option<NativeVersion>,
     changes: Vec<Change>,
     native: Vec<NativeTarget>,
     edits: BTreeMap<u16, NativeEdit>,

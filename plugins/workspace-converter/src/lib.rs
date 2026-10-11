@@ -94,6 +94,7 @@ impl Converter {
 
     fn submit(&mut self, title: &str) -> Result<(), api::Failure> {
         let plan = Plan {
+            origin: None,
             title: title.into(),
             changes: std::mem::take(&mut self.changes),
         };

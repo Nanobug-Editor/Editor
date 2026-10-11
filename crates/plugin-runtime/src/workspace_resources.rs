@@ -16,6 +16,65 @@ use std::{
     },
 };
 
+/// Admit document preconditions and edits under the original capability/grant set. Native language
+/// leases and WASM instances share this pure gate before either allocates requests or recovery slots.
+/// File targets still require their separate per-root checks in the owning instance.
+pub(crate) fn validate_plan_documents(
+    plan: &plugin_protocol::workspace::Plan,
+    capabilities: &std::collections::BTreeMap<String, semver::Version>,
+    permission: impl Fn(&str) -> Result<(), Failure>,
+) -> Result<(), Failure> {
+    let require = |name: &str, minor| {
+        if capabilities
+            .get(name)
+            .is_none_or(|version| *version < semver::Version::new(1, minor, 0))
+        {
+            Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                format!("{name} 1.{minor} was not negotiated"),
+            ))
+        } else {
+            Ok(())
+        }
+    };
+    require("workspace.files", 2)?;
+    if plan.origin.is_some() {
+        require("workspace.files", 3)?;
+        permission("editor.read")?;
+    }
+    plan.validate()?;
+    if plan.changes.iter().any(|change| {
+        matches!(
+            change,
+            plugin_protocol::workspace::Change::EditDocument { .. }
+        )
+    }) {
+        require("editor.edit", 1)?;
+        permission("editor.write")?;
+    }
+    Ok(())
+}
+
+/// Bind a result to its immutable native source without fabricating a noop source edit.
+/// Both instance and declarative service ingress use the same readonly Plan.origin condition.
+pub(crate) fn language_plan(
+    document: plugin_protocol::api::DocumentVersion,
+    mut plan: plugin_protocol::workspace::Plan,
+) -> Result<plugin_protocol::workspace::Plan, Failure> {
+    if plan
+        .origin
+        .as_ref()
+        .is_some_and(|origin| origin != &document)
+    {
+        return Err(Failure::new(
+            ErrorCode::InvalidRequest,
+            "Language plan origin does not match its result source",
+        ));
+    }
+    plan.origin = Some(document);
+    Ok(plan)
+}
+
 /// A temporary ancestor pin. Keeping it alive through IO prevents Windows link/rename redirection.
 pub struct FileGuard {
     _pins: CheckedPath,

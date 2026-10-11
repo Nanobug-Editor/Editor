@@ -19,6 +19,7 @@ mod language;
 mod native_execution;
 mod terminal_presentations;
 pub use native_execution::NativeExecutionUpdate;
+mod direct;
 mod plugin_services;
 mod preferences;
 mod preparation;
@@ -108,6 +109,8 @@ pub struct Manager {
     language_services: BTreeMap<String, language::Prepared>,
     /// Pure snapshot workers share plugin lifecycle, without owning native LSP processes.
     structure_providers: BTreeMap<String, structure::Prepared>,
+    /// Experimental language roles share lifecycle but do not replace the primary LSP choice.
+    direct_language_providers: BTreeMap<String, direct::Prepared>,
     /// Byte producers are independent of WASM calls and retained only for current preview identities.
     images: BTreeMap<String, crate::images::Entry>,
     image_budget: std::sync::Arc<std::sync::atomic::AtomicUsize>,
@@ -214,6 +217,7 @@ impl Manager {
             workspace_open: true,
             language_services: BTreeMap::new(),
             structure_providers: BTreeMap::new(),
+            direct_language_providers: BTreeMap::new(),
             images: BTreeMap::new(),
             image_budget: Default::default(),
             image_input_budget: Default::default(),
@@ -721,6 +725,13 @@ impl Manager {
             .queue_host_command(command, arguments, timeout_ms, None)
     }
     pub fn poll(&mut self) {
+        for service in self
+            .language_services
+            .values()
+            .filter_map(|prepared| prepared.service.as_ref().ok())
+        {
+            service.poll_requests();
+        }
         self.advance_terminal_exits();
         self.native_executions.poll(&self.plugin_services);
         self.route_services();
@@ -807,6 +818,7 @@ mod icon_tests {
                 plugin_services: Default::default(),
                 language_servers: Default::default(),
                 structure_providers: Default::default(),
+                direct_language_providers: Default::default(),
                 services: Default::default(),
                 settings: Default::default(),
                 settings_hook: false,
@@ -874,6 +886,7 @@ mod scope_tests {
             plugin_services: Default::default(),
             language_servers: Default::default(),
             structure_providers: Default::default(),
+            direct_language_providers: Default::default(),
             services: Default::default(),
             settings: Default::default(),
             settings_hook: false,

@@ -27,6 +27,7 @@ fn workspace_transaction_copy_growth_is_rejected_before_preview_or_disk_effects(
                 operation: api::EditorOperation::Workspace {
                     operation: workspace::Operation::ApplyPlan {
                         plan: workspace::Plan {
+                            origin: None,
                             title: "Bounded copy proposal / 有限复制计划".into(),
                             changes: ["first.bin", "second.bin"]
                                 .into_iter()

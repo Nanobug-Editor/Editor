@@ -26,7 +26,11 @@ impl EditorApp {
                 !presentation.is_disabled(),
                 presentation.is_editable(),
                 editor.lsp().definition_provider.is_some(),
-                !editor.lsp().code_action_providers.is_empty(),
+                !editor.lsp().code_action_providers.is_empty()
+                    || self.native_language_feature_available(
+                        plugin_runtime::plugin_protocol::direct::Feature::CodeActions,
+                        cx,
+                    ),
             )
         };
         let app = cx.entity().downgrade();
@@ -82,6 +86,9 @@ impl EditorApp {
                     .capture_action(cx.listener(Self::linked_history_redo))
                     .capture_action(cx.listener(Self::text_drag_escape))
                     .capture_action(cx.listener(Self::cancel_rename_action))
+                    // Keep Base's native shortcut/menu activation, then admit the same versioned
+                    // proposal used by direct and standard LSP consumers before any text effect.
+                    .capture_action(cx.listener(Self::native_code_actions))
                     .capture_action(cx.listener(Self::paste_plugin_images))
                     .capture_action(cx.listener(Self::linked_paste))
                     .capture_action(cx.listener(Self::linked_cut))

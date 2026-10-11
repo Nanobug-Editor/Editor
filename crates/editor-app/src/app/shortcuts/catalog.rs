@@ -187,6 +187,10 @@ fn shell_action(name: &str) -> bool {
             | "me_editor::ShowDefinitionDetails"
             | "me_editor::NextSyntaxError"
             | "me_editor::PreviousSyntaxError"
+            | "me_editor::ShowProblems"
+            | "me_editor::ShowReferences"
+            | "me_editor::ShowCodeActions"
+            | "me_editor::ShowSignatureHelp"
             | "extensions::ToggleExtensions"
             | "extensions::QuitEditor"
             | "shortcuts::OpenShortcuts"
@@ -241,6 +245,27 @@ fn append_unbound(result: &mut Vec<Operation>, cx: &App) {
             Scope::Global,
         ),
         ("extensions::ToggleExtensions", "EditorShell", Scope::Global),
+        // Shared language consumers and Problems use the same native document command boundary.
+        (
+            "me_editor::ShowProblems",
+            crate::app::shell::DOCUMENT_COMMAND_CONTEXT,
+            Scope::Global,
+        ),
+        (
+            "me_editor::ShowReferences",
+            crate::app::shell::DOCUMENT_COMMAND_CONTEXT,
+            Scope::Global,
+        ),
+        (
+            "me_editor::ShowCodeActions",
+            crate::app::shell::DOCUMENT_COMMAND_CONTEXT,
+            Scope::Global,
+        ),
+        (
+            "me_editor::ShowSignatureHelp",
+            crate::app::shell::DOCUMENT_COMMAND_CONTEXT,
+            Scope::Global,
+        ),
         ("extensions::QuitEditor", "EditorShell", Scope::Global),
         ("shortcuts::OpenShortcuts", "EditorShell", Scope::Global),
         ("input::ActivateToken", "Input", Scope::Panel),

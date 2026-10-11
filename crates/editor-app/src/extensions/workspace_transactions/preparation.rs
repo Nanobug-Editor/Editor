@@ -172,10 +172,19 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) -> Result<(Record, Vec<String>), Failure> {
         plan.validate()?;
+        let origin = plan
+            .origin
+            .as_ref()
+            .map(|document| {
+                self.plugin_document_target(document)
+                    .map(|index| native_version(&self.tabs[index]))
+            })
+            .transpose()?;
         let mut record = Record {
             batch,
             title: plan.title,
             source: source.into(),
+            origin,
             changes: plan.changes,
             native: Vec::new(),
             edits: BTreeMap::new(),
@@ -440,6 +449,21 @@ impl EditorApp {
             return Err(failure(
                 ErrorCode::PermissionDenied,
                 "Plan authority was revoked",
+            ));
+        }
+        // A pure source condition protects preview-to-apply without constraining later group Undo.
+        // After the first completed effect, ordinary changed-target checks govern the remaining steps.
+        if record.completed.is_empty()
+            && matches!(
+                record.batch.receipt().state,
+                BatchState::Preparing | BatchState::Preview | BatchState::Applying
+            )
+            && let Some(origin) = &record.origin
+            && !self.tabs.iter().any(|tab| native_version(tab) == *origin)
+        {
+            return Err(failure(
+                ErrorCode::StaleRevision,
+                "The plan's readonly source changed or closed",
             ));
         }
         for target in &record.native {

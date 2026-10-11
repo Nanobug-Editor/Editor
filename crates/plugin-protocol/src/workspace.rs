@@ -1,8 +1,9 @@
-//! Stable workspace.files 1.2 discovery and mixed native plans. Cancellation stops further work;
+//! Stable workspace.files 1.3 extends 1.2 discovery and mixed native plans with readonly origins.
+//! Cancellation stops further work;
 //! receipts describe actual effects and current-session recovery, without global atomic rollback.
 //! The native implementation is verified on Windows; other hosts are compilation-only targets.
 //!
-//! Acquire a workspace root with `api::Operation::WorkspaceRoot`, then use portable relative
+//! Acquire a workspace root with `api::Operation::OpenWorkspace`, then use portable relative
 //! [`FileTarget`] values; guests never receive native paths. Reads require `workspace.read`,
 //! mutations require `workspace.write`, and an opened unsaved buffer additionally requires
 //! `editor.documents 1.1` plus `editor.read`. Buffer changes require `editor.edit 1.1` and
@@ -16,6 +17,10 @@
 //! target uses its unique DocumentSession and remains unsaved; Copy cannot read a dirty opened
 //! source directly, Delete refuses opened targets, and Rename follows the normal native path reconciliation.
 //! Use a document snapshot followed by Write when copying current unsaved text.
+//! A plan with [`Plan::origin`] requires workspace.files 1.3 and editor.read: its exact native
+//! document incarnation/revision is checked before preparation and after confirmation, even
+//! when the plan changes only another file. The origin grants no access and adds no text edit.
+//! An absent origin retains the 1.2 message shape; do not send origins to a negotiated older host.
 //!
 //! Pages contain 1..=256 entries. Read returns at most 1 MiB; directory listing admits at
 //! most 4,096 entries. Recursive discovery respects its FileQuery budget and ignore state.
@@ -201,12 +206,26 @@ pub enum Change {
 #[serde(deny_unknown_fields)]
 pub struct Plan {
     pub title: String,
+    /// workspace.files 1.3: an optional readonly source condition checked before preview and effects.
+    /// It grants no access and does not add the source to the group's Undo targets. Close/reopen,
+    /// rename or any intervening native revision rejects the plan even when its changes target
+    /// other files. Hosts below 1.3 must not receive a plan using this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<crate::api::DocumentVersion>,
     pub changes: Vec<Change>,
 }
 
 impl Plan {
     /// Validate bounded transport shape before acquiring resources or reading any native target.
     pub fn validate(&self) -> Result<(), Failure> {
+        if let Some(origin) = &self.origin {
+            crate::api::FileVersion {
+                id: origin.id.clone(),
+                path: origin.path.clone(),
+                revision: origin.revision,
+            }
+            .validate()?;
+        }
         if self.title.is_empty()
             || self.title.len() > 256
             || self.title.chars().any(char::is_control)

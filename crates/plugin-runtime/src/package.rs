@@ -218,6 +218,7 @@ impl Package {
         super::capabilities::require_current(&manifest)?;
         validate_language_services(&manifest)?;
         crate::structure::validate_manifest(&manifest)?;
+        crate::direct::validate_manifest(&manifest)?;
         manifest
             .plugin_services
             .validate()
@@ -374,7 +375,9 @@ impl Package {
                 "Expected a WebAssembly component, not a core module"
             );
         } else {
-            // Host-managed packages cannot declare executable UI or privileged operations.
+            // Declarative native language consumers have their own sealed runtime lease.
+            // Their original document/navigation grants need no empty guest component;
+            // executable UI, commands and unrestricted process calls still require one.
             anyhow::ensure!(
                 manifest.panels.is_empty()
                     && manifest.commands.is_empty()
@@ -383,6 +386,14 @@ impl Package {
                             permission.as_str(),
                             "dependencies.prepare" | "dependencies.install"
                         ) {
+                            return true;
+                        }
+                        if !manifest.language_servers.is_empty()
+                            && matches!(
+                                permission.as_str(),
+                                "editor.read" | "editor.write" | "workspace.read"
+                            )
+                        {
                             return true;
                         }
                         permission
@@ -447,6 +458,7 @@ impl Package {
                     "clipboard",
                     "assets.read",
                     "editor.read",
+                    "editor.diagnostics",
                     "editor.write",
                     "ui.panels",
                     "ui.interaction",

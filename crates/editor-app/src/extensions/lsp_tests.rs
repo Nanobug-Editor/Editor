@@ -62,13 +62,21 @@ fn arbitrary_client_capabilities_reach_the_native_lsp_handshake() {
 
 /// Preserve package inspection and explicit grants while supplying the user-selected local fixture.
 pub(crate) fn package(exe: &Path, log: &Path) -> Package {
+    package_with_args(exe, log, &[])
+}
+
+/// Reinspect the actual component archive with explicit controlled-fixture argument arrays.
+/// Flags belong to the plugin service declaration, never a test-only native transport API.
+pub(crate) fn package_with_args(exe: &Path, log: &Path, flags: &[&str]) -> Package {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/plugin-api-test/capability-example.zip");
     let mut files = Package::read(&root).unwrap().files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["api"]["required"]["language.lsp"] = json!("^1");
     manifest["api"]["required"]["process"] = json!("^1");
-    manifest["services"] = json!({"analysis":{"program":exe,"args":[log]}});
+    let mut arguments = vec![json!(log)];
+    arguments.extend(flags.iter().map(|flag| json!(flag)));
+    manifest["services"] = json!({"analysis":{"program":exe,"args":arguments}});
     manifest["permissions"]
         .as_array_mut()
         .unwrap()

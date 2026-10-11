@@ -61,6 +61,7 @@ impl State {
                 "process",
                 "service",
                 "commands",
+                "diagnostics",
             ]
             .contains(&method)
             {
@@ -143,6 +144,7 @@ impl State {
             }
             self.check_service_authority(&request.operation)?;
             let result = match request.operation {
+                api::Operation::Diagnostics { operation } => self.create_diagnostics(operation),
                 api::Operation::Commands { operation } => self.command_request(operation),
                 api::Operation::Service { operation } => self.service_request(operation),
                 api::Operation::Process { operation } => self.process_request(operation),
@@ -450,6 +452,7 @@ impl Instance {
             output.language_completion.is_none()
                 || (self.store.data().language_completion_call
                     && !self.store.data().language_structure_call
+                    && !self.store.data().language_direct_call
                     && self
                         .store
                         .data()
@@ -462,6 +465,7 @@ impl Instance {
             output.language_structure.is_none()
                 || (self.store.data().language_structure_call
                     && !self.store.data().language_completion_call
+                    && !self.store.data().language_direct_call
                     && self
                         .store
                         .data()
@@ -469,6 +473,19 @@ impl Instance {
                         .capabilities
                         .contains_key("language.structure")),
             "Structure results require a negotiated pure language invocation"
+        );
+        anyhow::ensure!(
+            output.language_direct.is_none()
+                || (self.store.data().language_direct_call
+                    && !self.store.data().language_completion_call
+                    && !self.store.data().language_structure_call
+                    && self
+                        .store
+                        .data()
+                        .api
+                        .capabilities
+                        .contains_key("language.direct")),
+            "Direct results require a negotiated experimental pure invocation"
         );
         anyhow::ensure!(
             !self.store.data().migrating

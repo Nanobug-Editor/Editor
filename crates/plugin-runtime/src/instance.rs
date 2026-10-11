@@ -13,6 +13,8 @@ use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
 mod commands;
 mod data_files;
+mod diagnostics;
+mod direct;
 mod document_events;
 mod editor_requests;
 pub(crate) mod file_discovery;
@@ -31,6 +33,7 @@ mod tools;
 mod workspace_events;
 mod workspace_files;
 use resource_roots::ResourceRoots;
+pub(crate) use workspace_files::NativeDocumentRequests;
 wasmtime::component::bindgen!({path:"../plugin-protocol/wit",world:"plugin",require_store_data_send:true});
 
 struct State {
@@ -65,6 +68,9 @@ struct State {
     /// Persistent readonly authority survives request completion but not instance retirement.
     virtual_documents:
         std::collections::BTreeMap<u64, std::sync::Arc<crate::VirtualDocumentResource>>,
+    /// The native document owns diagnostic data; runtime slots retain only source authority.
+    diagnostic_collections:
+        std::collections::BTreeMap<u64, std::sync::Arc<crate::DiagnosticCollection>>,
     preference_subscriptions: std::collections::BTreeMap<u64, preferences::Subscription>,
     wasi: WasiCtx,
     table: ResourceTable,
@@ -90,6 +96,8 @@ struct State {
     language_completion_call: bool,
     /// Only this callback may publish a structure proposal; it cannot impersonate completion data.
     language_structure_call: bool,
+    /// Only the experimental pure callback may return direct feature data.
+    language_direct_call: bool,
     /// Read-only discovery can release only the file roots allocated by its own hook.
     language_hook_checkpoint: Option<u64>,
     /// Migration grants access exclusively to a transaction's isolated private-data copy.
@@ -349,6 +357,7 @@ impl Instance {
             subscriptions: Default::default(),
             document_streams: Default::default(),
             virtual_documents: Default::default(),
+            diagnostic_collections: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest
                 .panels
@@ -384,6 +393,7 @@ impl Instance {
             language_pure: pure,
             language_completion_call: false,
             language_structure_call: false,
+            language_direct_call: false,
             language_hook_checkpoint: None,
             migrating: false,
             staged_writes: Some(Default::default()),
@@ -657,6 +667,10 @@ impl Instance {
             resource.revoke();
         }
         self.store.data_mut().virtual_documents.clear();
+        for collection in self.store.data_mut().diagnostic_collections.values() {
+            collection.revoke();
+        }
+        self.store.data_mut().diagnostic_collections.clear();
         self.store.data_mut().preference_subscriptions.clear();
         for request in self.store.data_mut().editor_requests.values() {
             request.call.retire();
@@ -681,6 +695,10 @@ impl Instance {
     /// Observable ownership count includes native views and file/process resources.
     pub fn resource_count(&self) -> usize {
         self.store.data().roots.len() + self.views.len() + self.process_count()
+    }
+    /// Immutable instance authority is shared by every native language/diagnostic consumer.
+    pub(crate) fn editor_authority(&self) -> crate::EditorAuthority {
+        crate::EditorAuthority::new(self.store.data().plugin_services.alive.clone(), None)
     }
     /// Rollback is an explicit host transition with fresh ownership, never revival of old handles.
     pub(crate) fn restart(

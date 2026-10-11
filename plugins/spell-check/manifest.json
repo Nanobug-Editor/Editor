@@ -1,0 +1,13 @@
+{
+  "id": "spell-check", "name": "Spelling Checker", "version": "0.1.0", "protocol": 7,
+  "api": {"base": "^1", "required": {"ui.native": "^1", "editor.documents": "^1.1", "editor.edit": "^1.1", "editor.diagnostics": "^1", "workspace.files": "^1.3"}},
+  "component": "spell-check.wasm",
+  "permissions": ["editor.read", "editor.write", "editor.diagnostics", "ui.panels"],
+  "panels": [{"id": "checker", "title": "Spelling / 拼写检查", "position": "right"}],
+  "commands": [
+    {"id": "check", "title": "Check spelling / 检查拼写", "menu": true},
+    {"id": "clear", "title": "Clear spelling problems / 清除拼写问题", "menu": true},
+    {"id": "probe", "title": "Inspect diagnostic contract"}
+  ],
+  "storage_limit": 1024
+}

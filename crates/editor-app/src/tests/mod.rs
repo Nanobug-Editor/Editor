@@ -5,6 +5,7 @@ mod host_messages;
 mod language_editing;
 mod language_fixture;
 mod outline;
+mod problems;
 mod run_file_tabs;
 mod shortcuts;
 mod shortcuts_controls;

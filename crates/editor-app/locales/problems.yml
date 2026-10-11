@@ -1,0 +1,28 @@
+_version: 2
+problems.title:
+  en: "Problems (%{count})"
+  zh-CN: "问题 (%{count})"
+problems.empty:
+  en: "No problems in this document"
+  zh-CN: "当前文档没有问题"
+problems.language_source:
+  en: "Language diagnostics"
+  zh-CN: "语言诊断"
+problems.error:
+  en: "Error"
+  zh-CN: "错误"
+problems.warning:
+  en: "Warning"
+  zh-CN: "警告"
+problems.information:
+  en: "Information"
+  zh-CN: "信息"
+problems.hint:
+  en: "Hint"
+  zh-CN: "提示"
+problems.reveal:
+  en: "Reveal location"
+  zh-CN: "定位问题"
+problems.close:
+  en: "Close"
+  zh-CN: "关闭"

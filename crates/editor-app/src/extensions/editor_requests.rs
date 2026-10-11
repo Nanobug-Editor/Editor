@@ -216,6 +216,10 @@ impl EditorApp {
             self.perform_workspace_request(plugin, request, window, cx);
             return;
         }
+        if matches!(request.operation(), Op::Diagnostics { .. }) {
+            self.publish_plugin_diagnostics(request, cx);
+            return;
+        }
         if matches!(request.operation(), Op::SaveImageInput { .. }) {
             self.save_plugin_image(request, window, cx);
             return;
@@ -404,7 +408,8 @@ impl EditorApp {
             | Op::Workspace { .. }
             | Op::SaveImageInput { .. }
             | Op::NavigateDocument { .. }
-            | Op::LocateViewport { .. } => unreachable!(),
+            | Op::LocateViewport { .. }
+            | Op::Diagnostics { .. } => unreachable!(),
         })();
         request.finish(result);
     }

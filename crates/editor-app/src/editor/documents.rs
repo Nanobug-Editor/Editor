@@ -680,6 +680,15 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self
+            .tabs
+            .get(index)
+            .is_some_and(|tab| self.active_path.as_deref() != Some(tab.path()))
+        {
+            // A real navigation intent ends readonly waits immediately, even when pending
+            // native linked input must keep the old editor mounted until its history drains.
+            self.cancel_language_features(window, cx);
+        }
         // Platform input may still be awaiting semantic ranges; enter it into its original editor
         // before changing the active entity. Its Change subscription retains that document's revision.
         self.finish_linked_input(window, cx);
@@ -725,6 +734,7 @@ impl EditorApp {
             // Revoke queued first-use installation before a different native document becomes active.
             // Re-activating this same document preserves a permission dialog that is already on screen.
             self.withdraw_bundled_request(cx);
+            self.cancel_language_features(window, cx);
         }
         self.active_path = Some(path.clone());
         if let Some(editor) = editor {

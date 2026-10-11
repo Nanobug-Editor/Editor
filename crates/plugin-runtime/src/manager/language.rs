@@ -29,13 +29,7 @@ impl Manager {
                 let values = self
                     .effective_settings(&entry.manifest.id)
                     .map_err(|error| format!("{error:#}"));
-                let fingerprint = serde_json::to_vec(&(
-                    &entry.digest,
-                    &self.environment.workspace,
-                    &values,
-                    &self.host_resources.sdk,
-                ))
-                .unwrap();
+                let fingerprint = self.language_fingerprint(&entry, &values);
                 if self
                     .language_services
                     .get(&key)
@@ -203,8 +197,19 @@ impl Manager {
             program,
             args,
             self.host_resources.logs.clone(),
-            // Server extensions borrow only versions negotiated by this package, never its own flags.
-            crate::capabilities::negotiate(&entry.manifest)?.capabilities,
+            crate::language_service::LanguagePolicy {
+                // Original negotiation and installation consent remain separate from server flags.
+                capabilities: crate::capabilities::negotiate(&entry.manifest)?.capabilities,
+                permissions: entry.grants.clone(),
+                workspace,
+                data: self.data_directory_for(&entry.manifest, &self.environment),
+                application: entry.manifest.scope
+                    == plugin_protocol::api::InstanceScope::Application,
+                inherited: self
+                    .live
+                    .get(&entry.manifest.id)
+                    .map(Instance::editor_authority),
+            },
         );
         if language_service.provider.completion_hook {
             let assets = self
@@ -243,11 +248,101 @@ impl Manager {
         language_service.dependencies = prepared.map(|prepared| prepared.locks).unwrap_or_default();
         Ok(language_service)
     }
+    /// Native plans bind digest, grant set, effective configuration, scope and SDK without printing
+    /// settings. Issuance and later submission use the same identity, so stale metadata cannot lend
+    /// authority while a publication snapshot is waiting for the UI or worker's next tick.
+    fn language_fingerprint(
+        &self,
+        entry: &Installed,
+        values: &Result<plugin_protocol::settings::Effective, String>,
+    ) -> Vec<u8> {
+        serde_json::to_vec(&(
+            &entry.digest,
+            &entry.grants,
+            &self.environment.workspace,
+            values,
+            &self.host_resources.sdk,
+        ))
+        .unwrap()
+    }
+
+    /// The public native result carries its actual cache Arc, never merely a reusable package ID.
+    /// Workspace effects additionally reject application scope and any unpublished grant/version.
+    pub(super) fn check_language_origin(
+        &self,
+        service: &Arc<LanguageService>,
+    ) -> Result<(), plugin_protocol::api::Failure> {
+        use plugin_protocol::api::{ErrorCode, Failure, InstanceScope};
+        let entry = self.installed.get(&service.owner).ok_or_else(|| {
+            Failure::new(ErrorCode::InvalidHandle, "Language package is unavailable")
+        })?;
+        if !self.workspace_open
+            || entry.manifest.scope != InstanceScope::Workspace
+            || !(entry.enabled || entry.project_enabled_in(&self.environment.workspace))
+            || entry.error.is_some()
+        {
+            return Err(Failure::new(
+                ErrorCode::PermissionDenied,
+                "No published workspace language authority",
+            ));
+        }
+        let key = format!("{}/{}", service.owner, service.provider.id);
+        let prepared = self.language_services.get(&key).ok_or_else(|| {
+            Failure::new(
+                ErrorCode::InvalidHandle,
+                "Language service is no longer published",
+            )
+        })?;
+        let values = self
+            .effective_settings(&service.owner)
+            .map_err(|error| format!("{error:#}"));
+        if !prepared
+            .service
+            .as_ref()
+            .is_ok_and(|current| Arc::ptr_eq(current, service))
+            || prepared.fingerprint != self.language_fingerprint(entry, &values)
+        {
+            return Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Language service metadata or owner changed",
+            ));
+        }
+        Ok(())
+    }
+
+    /// The actor transfers WASM and controlled native calls through one owned dispatcher. Each
+    /// issuer remains responsible for permission, lifetime and quota checks before publication.
+    pub fn take_editor_requests(&mut self) -> Vec<(String, crate::EditorRequest)> {
+        let mut requests = Vec::new();
+        for (id, instance) in &mut self.live {
+            requests.extend(
+                instance
+                    .take_editor_requests()
+                    .into_iter()
+                    .map(|request| (id.clone(), request)),
+            );
+        }
+        for service in self
+            .language_services
+            .values()
+            .filter_map(|prepared| prepared.service.as_ref().ok())
+        {
+            requests.extend(
+                service
+                    .take_editor_requests()
+                    .into_iter()
+                    .map(|request| (service.owner.clone(), request)),
+            );
+        }
+        requests
+    }
+
     /// Called only on successful replacement or revocation; failed configuration preserves old leases.
     pub(super) fn retire_language_services(&mut self, id: &str) {
         self.language_services
             .retain(|key, _| !key.starts_with(&format!("{id}/")));
         // Every pure language role loses authority at the same package retirement boundary.
         self.retire_structure_providers(id);
+        self.retire_direct_providers(id);
     }
 }

@@ -13,6 +13,8 @@ pub(super) enum RootKind {
     ImageInput,
     /// Readonly text never grants file-root authority.
     VirtualDocument,
+    /// Diagnostic handles contain no file access or independent mutable text.
+    DiagnosticCollection,
     ServiceReference,
     ServiceRequest,
     /// Provider-side deferred reply; it is not a consumer reference or a native process authority.
@@ -145,6 +147,7 @@ impl State {
         let (capability, permission, root) = match kind {
             RootKind::EditorRequest
             | RootKind::VirtualDocument
+            | RootKind::DiagnosticCollection
             | RootKind::Selected
             | RootKind::ImageInput
             | RootKind::ServiceReference
@@ -283,6 +286,9 @@ impl State {
                 if let Some(resource) = self.virtual_documents.remove(&handle.resource) {
                     resource.revoke();
                 }
+                if let Some(collection) = self.diagnostic_collections.remove(&handle.resource) {
+                    collection.revoke();
+                }
                 self.preference_subscriptions.remove(&handle.resource);
                 self.image_inputs.remove(&handle.resource);
                 self.plugin_services.references.remove(&handle.resource);
@@ -304,6 +310,7 @@ impl State {
                 Ok(Value::Unit)
             }
             api::Operation::ReadAsset { .. }
+            | api::Operation::Diagnostics { .. }
             | api::Operation::Commands { .. }
             | api::Operation::DescribeSdk
             | api::Operation::Service { .. }

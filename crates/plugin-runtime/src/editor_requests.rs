@@ -41,6 +41,24 @@ impl EditorAuthority {
                 .iter()
                 .all(|alive| alive.load(Ordering::Acquire))
     }
+    /// A controlled service adds its own retirement boundary while retaining the initiating chain.
+    /// Private issuance cannot lend or revive an instance or delegated caller.
+    pub(crate) fn with_native_owner(&self, owner: Arc<AtomicBool>) -> Self {
+        let mut callers = vec![self.owner.clone()];
+        callers.extend(self.callers.iter().cloned());
+        Self { owner, callers }
+    }
+    /// Compare sealed lifetimes when a native result is routed back to its original owner.
+    /// Matching display names or package IDs alone cannot authorize a replacement incarnation.
+    pub(crate) fn same_owner(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.owner, &other.owner)
+            && self.callers.len() == other.callers.len()
+            && self
+                .callers
+                .iter()
+                .zip(&other.callers)
+                .all(|(left, right)| Arc::ptr_eq(left, right))
+    }
 }
 
 /// Clones share one completion gate; dropping an instance seals every outstanding call.
@@ -58,6 +76,8 @@ pub struct EditorRequest {
     image_input: Option<std::sync::Arc<crate::ImageInputResource>>,
     /// Persistent authority is distinct from this transient completion handle.
     virtual_document: Option<std::sync::Arc<crate::VirtualDocumentResource>>,
+    /// Publications retain their admitted collection through the native completion gate.
+    diagnostic_collection: Option<std::sync::Arc<crate::DiagnosticCollection>>,
     /// Source wait cancellation closes pending UI, while successful calls may retain owned work.
     parents: Vec<Completion<serde_json::Value>>,
     /// Native paths never cross the guest transport; the instance issues grants only at delivery.
@@ -68,6 +88,33 @@ pub struct EditorRequest {
     workspace_request: Option<crate::WorkspaceRequest>,
 }
 impl EditorRequest {
+    /// Controlled native owners retain the common completion policy and their complete sealed
+    /// service/instance chain, even when no guest context exists to receive a notification.
+    pub(crate) fn from_authority(
+        handle: ResourceHandle,
+        operation: EditorOperation,
+        workspace: String,
+        data_root: std::path::PathBuf,
+        timeout_ms: u32,
+        authority: EditorAuthority,
+    ) -> Self {
+        let mut request = Self::new(
+            handle,
+            operation,
+            workspace,
+            data_root,
+            timeout_ms,
+            authority.owner.clone(),
+            None,
+        );
+        request.completion.lifetimes.push(authority.owner.clone());
+        request
+            .completion
+            .lifetimes
+            .extend(authority.callers.iter().cloned());
+        request.authority = authority;
+        request
+    }
     /// Construction follows authority checks in the instance; only typed owned data crosses threads.
     pub(crate) fn new(
         handle: ResourceHandle,
@@ -93,6 +140,7 @@ impl EditorRequest {
             authority: EditorAuthority::new(owner, context),
             image_input: None,
             virtual_document: None,
+            diagnostic_collection: None,
             parents,
             selection: Default::default(),
             progress: Default::default(),
@@ -109,6 +157,17 @@ impl EditorRequest {
     /// Hosts may clone it to observe revocation, but cannot mutate its runtime-owned lifetimes.
     pub fn authority(&self) -> &EditorAuthority {
         &self.authority
+    }
+    /// Native publishers receive only the admitted collection, never a guest-created source string.
+    pub fn diagnostic_collection(&self) -> Option<&std::sync::Arc<crate::DiagnosticCollection>> {
+        self.diagnostic_collection.as_ref()
+    }
+    pub(crate) fn with_diagnostic_collection(
+        mut self,
+        collection: std::sync::Arc<crate::DiagnosticCollection>,
+    ) -> Self {
+        self.diagnostic_collection = Some(collection);
+        self
     }
     /// Borrow checked IO authority; absence means this request cannot execute a workspace operation.
     pub fn workspace_request(&self) -> Option<&crate::WorkspaceRequest> {
@@ -151,6 +210,17 @@ impl EditorRequest {
     }
     pub fn begin(&self) -> bool {
         self.expire_parents();
+        if self
+            .diagnostic_collection
+            .as_ref()
+            .is_some_and(|collection| !collection.is_live())
+        {
+            self.completion.finish(Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Diagnostic collection was revoked",
+            )));
+            return false;
+        }
         if self
             .virtual_document
             .as_ref()

@@ -151,6 +151,21 @@ impl LanguageServer {
         connection: &mut Option<LanguageServerConnection>,
     ) {
         if let Err(error) = result {
+            // Cancellation and typed protocol refusals leave the shared service available to other
+            // tabs. Actual transport faults alone consume this connection's finite retry budget.
+            if error
+                .downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
+                .is_some_and(|failure| {
+                    matches!(
+                        failure.code,
+                        plugin_runtime::plugin_protocol::api::ErrorCode::Cancelled
+                            | plugin_runtime::plugin_protocol::api::ErrorCode::StaleRevision
+                            | plugin_runtime::plugin_protocol::api::ErrorCode::UnsupportedOperation
+                    )
+                })
+            {
+                return;
+            }
             if let Some(connection) = connection.as_mut() {
                 // Mark the failure before Drop chooses controlled or fault-aware process shutdown.
                 connection.failed = true;

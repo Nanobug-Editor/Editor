@@ -3,6 +3,7 @@ use super::*;
 use lsp_types::{
     DocumentChanges, LinkedEditingRanges, OneOf, PrepareRenameResponse, TextEdit, WorkspaceEdit,
 };
+use plugin_runtime::plugin_protocol::api::{ErrorCode, Failure};
 use plugin_runtime::plugin_protocol::language::SEMANTIC_LINKED_EDITING_METHOD;
 #[cfg(test)]
 mod tests;
@@ -108,7 +109,7 @@ impl LanguageServer {
             if response.is_null() {
                 return Ok(Vec::new());
             }
-            rename_edits(response, &uri, version, |target| {
+            document_edits(response, &uri, version, |target| {
                 connection.logical_uri(target)
             })
         })
@@ -186,7 +187,7 @@ impl LanguageServer {
 /// Optional wire versions must match the synchronized snapshot; null versions still rely on
 /// the caller's document lease and final native revision/source guards. Resource operations,
 /// cross-document edits, mixed representations and unnegotiated annotations are rejected whole.
-fn rename_edits(
+pub(super) fn document_edits(
     response: Value,
     uri: &Uri,
     version: i32,
@@ -208,7 +209,10 @@ fn rename_edits(
         {
             ensure!(
                 edit.get("annotationId").is_none(),
-                "Rename annotations are not supported"
+                Failure::new(
+                    ErrorCode::UnsupportedOperation,
+                    "Workspace edit annotations are not supported"
+                )
             );
         }
     }
@@ -222,52 +226,85 @@ fn rename_edits(
         for edit in edits.as_array().into_iter().flatten() {
             ensure!(
                 edit.get("annotationId").is_none(),
-                "Rename annotations are not supported"
+                Failure::new(
+                    ErrorCode::UnsupportedOperation,
+                    "Workspace edit annotations are not supported"
+                )
             );
         }
     }
-    let edit: WorkspaceEdit = serde_json::from_value(response).context("Decode rename edits")?;
+    let edit: WorkspaceEdit = serde_json::from_value(response).map_err(|error| {
+        Failure::new(
+            ErrorCode::InvalidRequest,
+            format!("Decode workspace edits: {error}"),
+        )
+    })?;
     ensure!(
         edit.change_annotations
             .as_ref()
             .is_none_or(|annotations| annotations.is_empty()),
-        "Rename annotations are not supported"
+        Failure::new(
+            ErrorCode::UnsupportedOperation,
+            "Workspace edit annotations are not supported"
+        )
     );
     ensure!(
         edit.changes.is_none() || edit.document_changes.is_none(),
-        "Rename mixed changes and documentChanges"
+        Failure::new(
+            ErrorCode::InvalidRequest,
+            "Workspace edit mixes changes and documentChanges"
+        )
     );
     let mut edits = Vec::new();
     for (target, changes) in edit.changes.unwrap_or_default() {
         ensure!(
             logical_uri(&target) == *uri,
-            "Rename attempted to change another document"
+            Failure::new(
+                ErrorCode::UnsupportedOperation,
+                "Workspace edit targets another document"
+            )
         );
         edits.extend(changes);
     }
     let documents = match edit.document_changes {
         Some(DocumentChanges::Edits(documents)) => documents,
         Some(DocumentChanges::Operations(_)) => {
-            anyhow::bail!("Rename resource operations are not supported")
+            return Err(Failure::new(
+                ErrorCode::UnsupportedOperation,
+                "Workspace resource operations are not supported",
+            )
+            .into());
         }
         None => return Ok(edits),
     };
     for document in documents {
         ensure!(
             logical_uri(&document.text_document.uri) == *uri,
-            "Rename attempted to change another document"
+            Failure::new(
+                ErrorCode::UnsupportedOperation,
+                "Workspace edit targets another document"
+            )
         );
         ensure!(
             document
                 .text_document
                 .version
                 .is_none_or(|declared| declared == version),
-            "Rename proposal has a stale document version"
+            Failure::new(
+                ErrorCode::StaleRevision,
+                "Workspace edit has a stale document version"
+            )
         );
         for edit in document.edits {
             match edit {
                 OneOf::Left(edit) => edits.push(edit),
-                OneOf::Right(_) => anyhow::bail!("Rename annotations are not supported"),
+                OneOf::Right(_) => {
+                    return Err(Failure::new(
+                        ErrorCode::UnsupportedOperation,
+                        "Workspace edit annotations are not supported",
+                    )
+                    .into());
+                }
             }
         }
     }

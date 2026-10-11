@@ -68,6 +68,12 @@ impl RunStatus {
 }
 
 pub enum Work {
+    /// User-selected language data goes back to the sealed original provider's ordinary plan admission.
+    LanguageFix {
+        origin: plugin_runtime::LanguageFixOrigin,
+        document: api::DocumentVersion,
+        fix: diagnostics::Fix,
+    },
     /// Native terminal input retains a guest's authenticated presentation handle, not an OS handle.
     PresentedInput {
         handle: api::ResourceHandle,
@@ -383,6 +389,9 @@ pub(super) struct Published {
     /// Readonly structure workers publish independently of native language-service availability.
     pub structure_providers:
         BTreeMap<String, Result<Arc<plugin_runtime::StructureProvider>, String>>,
+    /// Experimental language role leases remain separate from the single selected native LSP.
+    pub direct_language_providers:
+        BTreeMap<String, Result<Arc<plugin_runtime::DirectProvider>, String>>,
     pub configurations: BTreeMap<String, Result<settings::Effective, String>>,
     pub configuration_result: Option<(u64, Result<(), String>)>,
     pub configuration_revision: u64,

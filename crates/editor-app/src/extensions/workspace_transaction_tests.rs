@@ -10,7 +10,7 @@ use plugin_runtime::{
 fn manager(workspace: &Path, plugin: &str) -> (tempfile::TempDir, Manager) {
     let profile = tempfile::tempdir().unwrap();
     let package = Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/community-transactions/{plugin}-0.1.0.zip"
+        "../../target/community-transactions/{plugin}-0.1.1.zip"
     )))
     .unwrap();
     let mut manager = Manager::open(
@@ -220,6 +220,7 @@ fn preview(
             operation: api::EditorOperation::Workspace {
                 operation: workspace::Operation::ApplyPlan {
                     plan: workspace::Plan {
+                        origin: None,
                         title: "Transaction boundary / 事务边界".into(),
                         changes,
                     },

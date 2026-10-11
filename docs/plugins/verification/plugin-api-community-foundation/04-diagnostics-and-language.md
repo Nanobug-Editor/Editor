@@ -1,0 +1,72 @@
+# 04：多来源诊断与共享语言结果验收
+
+日期：2026-10-11。议题：[#96](https://github.com/T-miracle/Nanobug/issues/96)。状态：实施与验收进行中；尚未完成原生桌面验收、最终门禁、独立审查及交付，不关闭议题。
+
+依据：[已批准工单](../../tickets/plugin-api-community-foundation/04-diagnostics-and-language.md)、[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)、[社区基础能力方案](../../specs/plugin-api-community-foundation.md)与[平台规格](../../specs/plugin-api-platform.md)。Windows 物理桌面验收由根代理独占；本文件区分实际包/GPUI 自动测试与桌面观察。
+
+## 输入与边界
+
+- 独立工作树 `C:/Users/Tmiracle/.codex/worktrees/plugin-api-language/Editor`，分支 `codex/plugin-api-language`，起点 `3aa9177a20b428dbac5ebffbd0aa78e34a464eda`。原项目目录已有改动不计为本单产物。
+- Rust/Cargo `1.98.1`，现有 MSVC x64 与 `wasm32-wasip2`；VS Community 18 临时开发环境，`CARGO_TARGET_DIR=../target04`、`CARGO_BUILD_JOBS=2`。不安装额外工具、不调用归档脚本。
+- 新的稳定能力 `editor.diagnostics 1.0`；实验能力 `language.direct 0.1`；标准 LSP 新结果属于 `language.lsp 1.4`。实验提供者按语言/特征沿既有选择机制运行，不改变有效单 LSP 选择。
+- 只读修复前提 `workspace::Plan.origin` 属于通用 `workspace.files 1.3`。旧无前提消息可以反序列化；发送前提必须协商最低 1.3。它只检查原生文档 incarnation/revision，不授予源或目标读写权限；目标仍经过原有权限、预览、冲突与撤销路径。
+- 声明式 LSP 不要求空 WASM。其当前文档动作以真实服务 seal、原 grants 和实际协商的 LSP 1.4 / editor.edit 1.1 / workspace.files 1.3，经同一公开 `Manager.take_editor_requests`、事务预览和 Native Undo。原生发行者限制为当前源的完整 `EditDocument`，不增加文件或跨文档授权；最多 8 个保留批次、32 个待处理请求，最后一个 Native 回执持有者释放对应槽。
+- 诊断保存在已有 `DocumentDiagnostics`，原生 Problems 是即时投影；不建立另一份诊断模型、Rope 或撤销栈。两个独立来源的相同位置/消息仍分别显示，旧语法与 LSP 的成对去重保持原行为。
+- 独立消费者为 `spell-check`、`config-check`、`expression-language`、`keyvalue-language`，各自初版 0.1.0。前两者没有 LSP；后两者分别使用纯直接回调和受控标准 stdio LSP。四包已实际构建与准入，最新 SDK 注释输入改变后的最终指纹仍待重建，不能沿用阶段包冒充最终输入。
+
+## 已取得的逐切片证据
+
+| 检查 | 实际结果 | 说明 |
+| --- | --- | --- |
+| 公开诊断能力准入 | Red 1 失败 → Green 1/0/0，13.80 秒 | 元数据/权限边界测试；不是实际 WASM 构建证据 |
+| `native_lsp_references_preserve_unsaved_utf16_and_single_connection --ignored` | Red 0/1/0，23.30 秒 → Green 1/0/0，22.80 秒 | 真实公开 Manager、组件与受控 stdio；两次引用使用同一个 initialize/didOpen，未保存中文/非 BMP 坐标 |
+| 原生引用列表键盘与焦点 | Red 0/1/0，0.01 秒 → Green 1/0/0，0.02 秒 | 真正绘制的 Base 行、Down 焦点与完整 KeyDown/KeyUp Enter 选择；只发 KeyDown 的旧测试不能模拟 Base KeyboardClick |
+| 标准共享引用/参数/动作 | Signature Red 0/1/0，23.13 秒；Action Red 0/1/0，28.78 秒 → Green 1/0/0，29.85 秒 | 同一个公开 Manager、组件、真实 stdio、未保存中文/非 BMP 文档；两 overload 与 active override、UTF-16 修改转换和原生源 revision |
+| 同连接用户取消 | Green 1/0/0，29.70 秒 | 首请求抵达 wire 后取消，typed Cancelled 与对应 `$/cancelRequest`；原进程继续两次引用、参数、动作，只 initialize/didOpen 一次，退役后进程归零 |
+| pending 关联输入期间的新语言意图 | 真正行为 Red 0/1/0，4.26 秒 → Green 1/0/0，9.65 秒 | 真实慢 stdio / `has_pending` 准入；显式取消、A→B→A、真正关闭重开后任何 heading 均不迟到重现，后续 fresh 请求与原输入/Undo 仍有效 |
+| 无 WASM 的当前文档修复与原 seal | 行为 Red 0/1/0，0.74 秒；末尾 shutdown Red 0/1/0，1.42 秒 → Green 1/0/0，1.41 秒 | 正式 KV ZIP 公开重检为声明式包；实际 Ctrl+.、预览取消、dirty Apply、原生回执 Undo、引用、参数；同 ID disable/enable 不能复活旧来源；缺 write 为 PermissionDenied，真实未协商 files 为 CapabilityUnavailable；shutdown 即刻 process/seal 清理 |
+| 原生服务请求与 Batch 归属 | Green 1/0/0，0.04 秒 | 公开 Manager，无 fake WASM；一次交付、8 批次配额、取消后 transient 回收、最后回执 holder 释放、disable/uninstall/shutdown 撤销已经发表的 Request/Batch；该测试不启动 stdio，不冒充 UI 证据 |
+| 三项原 Rename 回归 | 各 1/0/0 | 共享 `document_edits` 解码后的 forms/rejection/versioned overlap；没有重写 Rename 或另建文本/Undo |
+| 原生代码动作列表 | Red 0/1/0，0.02 秒 → Green 1/0/0 | Base 名称/焦点/完整键盘选择只返回一次原 Fix 完整计划，不直接写文本 |
+| 原生参数卡片 | Red 0/1/0，0.02 秒 → Green 1/0/0，0.02 秒 | 两 overload、signature-local active parameter、惰性纯文本文档、Close/Escape；公开 `test_support()` 只登记实际绘制 role/name，正常构建无测试状态 |
+| 原生 Problems 名称与 Escape | Red 0/1/0，0.14 秒 → Green 1/0/0，0.15 秒 | 真正的 Heading、命名本地 Base 按钮与编辑区焦点恢复 |
+| 正式新 WASM 生命周期 | Red 0/2/0，25.86 秒 → Green 2/0/0，57.77 秒 | 三个新 guest 最初漏回空逻辑 Snapshot，在 Manager.install 即被严格拒绝；只补 guest `Some(Default)`，未放宽宿主。新包真实 rebuild 后 Direct 3 features/cancel/retire 与诊断 foreign-clear/quota/queued revocation 都通过 |
+| 正式诊断 Native 多来源与清理 | Green 1/0/0，54.60 秒 | 两 owner 同位置/消息分别显示，外来集合清理被拒绝，自己的清理与禁用清理有效 |
+| 正式修复预览/源前提/Undo | Green 1/0/0，65.16 秒 | 本文档修改与整组 Undo；只改另文件的取消/确认/Undo；预览期间改源、真正关闭重开源均 StaleRevision，无目标副作用 |
+| 正式两语言完整 Native 流程 | Red 0/1/0，55.38 秒 → 阶段 Green 1/0/0，66.92 秒 | `.nbexpr` 与 `.nbkv` 都完成实际 Shift+F12 导航、Ctrl+. 动作/分组 Undo、参数卡、provider disable/replacement、A→B→A、真正关闭重开；新文档 ID 强断言保留。仍须最终联合源码/SDK重建后重验，不能沿用阶段 ZIP 充当最终输入 |
+| 共享语言 UI / 版本门禁连接 | 最新 UI 3/0/0，0.04 秒；同 stdio 1/0/0，22.72 秒 | 当前服务 seal 与 LSP 1.4 准入后的引用、动作、纯参数卡与同连接取消；没有用旧包版本声明伪造低版本 host 协商 |
+| source SDK 出口 | 最新 3/0/0，0.19 秒 | 完整 source-only、缓存修复与并发出口；不等于最终联合 SDK 与四包 WASM/UI 通过 |
+| app 编译记录 | 多轮 exit 101 后最新 `--bin editor-app --no-run` exit 0，18.72 秒 | 接口编译错误不计行为 Red；修正 Stateful 身份、公开像素转换、Style trait 和选择器生命周期。保留实际 linker/import 警告，未改变冻结依赖 |
+
+上述 LSP 先例使用只读旧组件包 `C:/Projects/RustProjects/Editor/target/plugin-api-test/capability-example.zip`，协议 7、版本 0.17.1，SHA-256 `EE67E56F0A5186265EAD02CD634155EA4DF938DEB6FC12CAB2D6B9F5F70420CB`，只复制到本树测试夹具目录，没有修改原包。它仅证明宿主接缝，不代替本单四个正式消费者的当前 SDK 构建。
+
+受控 stdio 夹具通过 `cargo build -p plugin-runtime --example lsp_fixture` 直接构建；当前引用/参数/动作及延迟一次引用场景的 EXE SHA-256 为 `1E29C5C8A8229D1B55B13294F2F488BADD7B0747E157CF5E02A80F64538DFD44`。响应与真实取消由上表的实际宿主测试验证。
+
+## 构建阶段输入与失败诊断
+
+初次 source SDK 为 `f9d19b04fcec1cec84726a51d8496102d7664d779229f7b744f89c532a358bbc`，42 个源码/协议入口，Markdown 为零，逐源 hash 与宿主出口一致。第一宿主 EXE SHA-256 为 `F53737D02F52105D3FDBC9DFF3EC6B3AC4F1AA10A321F17A133D3673034C06D9`。它们属于首次切片输入；后续源码注释、原生路由与取消修正需要新的最终宿主和 SDK，不把旧 hash 延用为冻结产物。
+
+Snapshot 修复后的阶段包实际 ZIP SHA-256：
+
+| 独立包 | 版本 | 阶段 ZIP SHA-256 |
+| --- | --- | --- |
+| spell-check | 0.1.0 | `458EDE2F968C20500DDEB3668EFFC78960BE26778D3E8D19DBE8DC1B871303B0` |
+| config-check | 0.1.0 | `BD97EFD58BBC17C5F5EB4AE01C71E7EB0EC2054B44C2947911682B9ADA308D07` |
+| expression-language | 0.1.0 | `B4D1DF0998C30C2EC75CF3CDD4DFBEE930B1A2DB7B2A31E37B9CFF585FC74A5C` |
+| keyvalue-language | 0.1.0 | `4896A2A3A2020FEE7A78ECEE206AF0F96506D6E551ACFFD4E280D6B137059B51` |
+
+原始失败与重建后的输入分别保存在本树外 `../target04/formal04-before-snapshot-inputs.json` 和 `formal04-inputs.json`，日志保留实际命令/结果。最初 0/2 发生在候选快照检查之前的安装，不是 Direct 回调或集合归属错误。宿主要求每个候选显式返回逻辑状态，纯空状态也必须为 `Some(Default)`；三个新消费者修复后通过，handle/root/request/text 不写入 Snapshot。
+
+两语言旧 close/reopen 测试曾用 tempfile 原始路径，Windows 原生 tab 保存 canonical 路径，导致 `discard_tab` 没命中、重开其实仍是同一 entity。测试改用实际 canonical 路径，必须断言旧 tab 确实移除、新 Document.id 与旧值不同，再观察迟到结果；没有据此错误地改生产 incarnation 逻辑。
+
+后续前置失败与真正缺陷分开记录：慢输入用例第一次无法取得 fresh 卡，声明式包第一次被旧 executable-permission 规则拒绝，均尚未到目标行为。Windows 语言租约使用既有 `navigation::file_uri` 的规范卷标大小写；改用该公开内部接缝后能命中真实 lease。仅给已声明语言服务的无 WASM 包保留必要的 `editor.read/write`、`workspace.read` 授权准入，未开放面板、命令或不受控进程权限。随后取得真正 pending cancel 与无 WASM fix Red，再修 reservation/原文档 ID/原 provider generation、服务发行队列。最后 shutdown Red 在全部 UI/权限流程之后暴露缓存未退役，补入与禁用相同的 Prepared 退役入口后原断言通过。
+
+本轮源码固定后将普通合并已交付的 03/05/06 联合资源基线，再用这个联合 Host/SDK 一次构建四个正式包及受 `Plan.origin` 影响的 `workspace-scaffold`、`workspace-converter`。合并前的阶段构建与源码出口不充当联合候选的最终输入。
+
+T20 的旧语言回归只读复制既有实际包，不修改原工作区：`C:/Users/Tmiracle/.codex/worktrees/plugin-api-community/Editor/dist/plugins/javascript.zip`，0.3.0/protocol7，SHA-256 `6B0A98C6397ECF4034C9ACC2AA35069DD7443F8978DAEB0305008C466CCCDE11`；`C:/Projects/RustProjects/Editor/dist/plugins/xml.zip`，0.2.1/protocol7，SHA-256 `96B4E933259FFE3155D1967256DA2D2882C4104EBE0535CF8297F7599D083AB9`。它们是既有语言的回归输入，不冒充本单新 SDK 重建的四个交付包。
+
+## 剩余验收
+
+T17–T20、正式包 C01–C06、三项门禁与 Windows 物理 Problems/修复/引用/参数提示尚在执行。每次仅因源码/输入变化或未决失败补充受影响测试；不重复未修改的 03 全磁盘负面矩阵。源前提修改仍需要单文件和跨文件修复连接、预览后改源与关闭重开、取消和会话 Undo，以及相关 03 回归。
+
+最终交付由根代理完成整合、推送与 issue 状态读回。本记录不会把正在运行、ignored 未执行或编译检查误写为功能通过。

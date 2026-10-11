@@ -1,4 +1,32 @@
 //! Language-service declarations and bounded optional hook data, independent of concrete language names.
+//!
+//! `language.lsp 1.4` adds standard `textDocument/references`, `textDocument/codeAction` and
+//! `textDocument/signatureHelp` to the existing completion, hover, definition and diagnostic transport.
+//! Declare this minimum when depending on these native consumers; optional negotiation may omit
+//! their dependent behavior. Server initialization must also advertise the corresponding standard
+//! capability. Editing and formatting continue to require their independent capabilities.
+//!
+//! The host synchronizes the unsaved native source and UTF-16 caret, retains its document lease,
+//! revision and selected-provider generation, and checks them again on delivery and selection.
+//! References are workspace-local; reading another document still requires `workspace.read`.
+//! Literal code-action text edits currently target the current source only. Commands, resource
+//! operations, other-document edits, annotations and lazy resolution return an explicit unsupported
+//! result rather than executing a valid prefix. Accepted actions use the shared native preview,
+//! permission, conflict and group-Undo workflow, with readonly `workspace.files 1.3` plan origins.
+//! A declarative language package needs no empty WASM component for this workflow: its controlled
+//! service owns an incarnation seal and bounded request/recovery resources under the original
+//! `editor.read`, `editor.write`, `editor.edit 1.1` and `workspace.files 1.3` consent/contracts.
+//! Its native issuer retains at most 8 batch receipts and 32 pending requests, delivered once
+//! through the common manager dispatcher. The service and any optional guest instance must both
+//! remain live; retire, scope/trust change, replacement and manager shutdown revoke old proposals
+//! and recovery immediately. Native receipts retain the existing group
+//! Undo; dropping their last native holder releases the service-owned batch. No file-root authority
+//! or foreign-document effect is implied by a language result or its readonly origin condition.
+//!
+//! Signature labels and documentation are inert plain text. Closing presentation stops that request's
+//! wait, sends `$/cancelRequest` for an outstanding standard request and discards later delivery;
+//! it does not retire the shared server or spend its finite transport-retry budget. Request timeout,
+//! process supervision and bounded transport remain the existing controlled stdio service behavior.
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;

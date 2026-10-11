@@ -1,0 +1,11 @@
+# Recognition is a declarative public contribution, independent from grammar or LSP registration.
+[plugin]
+id = "expression-language"
+name = "Expression Language"
+version = "0.1.0"
+host_version = ">=0.1.0"
+
+[[language_definitions]]
+id = "expression"
+name = "Expression"
+extensions = ["nbexpr"]

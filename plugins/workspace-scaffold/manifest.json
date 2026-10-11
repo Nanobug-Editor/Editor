@@ -1,7 +1,7 @@
 {
   "id": "workspace-scaffold",
   "name": "Workspace Scaffold",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "protocol": 7,
   "api": {
     "base": "^1",

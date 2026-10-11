@@ -46,6 +46,7 @@ impl LanguageServerConnection {
             prepare_rename_provider: false,
             linked_editing_provider: false,
             semantic_linked_editing_provider: false,
+            language_features: Default::default(),
             configuration,
             failed: false,
         };
@@ -78,44 +79,68 @@ impl LanguageServerConnection {
                 })?,
             );
         }
-        let initialized = self.request(
-            "initialize",
-            json!({
-                "processId": std::process::id(),
-                "rootUri": root_uri,
-                // Match rootUri even for servers that still consult deprecated rootPath.
-                "rootPath": url::Url::parse(root_uri)?.to_file_path().ok(),
-                "workspaceFolders": [{ "uri": root_uri, "name": "workspace" }],
-                "initializationOptions": self.configuration,
-                "capabilities": {
-                    "general": { "positionEncodings": ["utf-16"] },
-                    // Single-document versioned text edits are supported; resource and annotation
-                    // capabilities remain unadvertised because this native command cannot apply them.
-                    "workspace": { "workspaceFolders": true, "workspaceEdit": {"documentChanges":true} },
-                    "textDocument": {
-                        "diagnostic": { "dynamicRegistration": false, "relatedDocumentSupport": false },
-                        "synchronization": { "didSave": true },
-                        "publishDiagnostics": {
-                            "versionSupport": true,
-                            "relatedInformation": true,
-                            "tagSupport": { "valueSet": [1, 2] },
-                            "codeDescriptionSupport": true
-                        },
-                        "definition": { "linkSupport": true },
-                        "typeDefinition": { "linkSupport": true },
-                        "formatting": { "dynamicRegistration": false },
-                        "rename": { "dynamicRegistration": false, "prepareSupport": true },
-                        "linkedEditingRange": { "dynamicRegistration": false },
-                        "completion": {
-                            "completionItem": { "snippetSupport": false }
-                        },
-                        "hover": { "contentFormat": ["markdown", "plaintext"] }
+        let language_features_authorized = features::language_features_authorized(&self.service);
+        let mut parameters = json!({
+            "processId": std::process::id(),
+            "rootUri": root_uri,
+            // Match rootUri even for servers that still consult deprecated rootPath.
+            "rootPath": url::Url::parse(root_uri)?.to_file_path().ok(),
+            "workspaceFolders": [{ "uri": root_uri, "name": "workspace" }],
+            "initializationOptions": self.configuration,
+            "capabilities": {
+                "general": { "positionEncodings": ["utf-16"] },
+                // Single-document versioned text edits are supported; resource and annotation
+                // capabilities remain unadvertised because this native command cannot apply them.
+                "workspace": { "workspaceFolders": true, "workspaceEdit": {"documentChanges":true} },
+                "textDocument": {
+                    "diagnostic": { "dynamicRegistration": false, "relatedDocumentSupport": false },
+                    "synchronization": { "didSave": true },
+                    "publishDiagnostics": {
+                        "versionSupport": true,
+                        "relatedInformation": true,
+                        "tagSupport": { "valueSet": [1, 2] },
+                        "codeDescriptionSupport": true
                     },
-                    "experimental": experimental
+                    "definition": { "linkSupport": true },
+                    "typeDefinition": { "linkSupport": true },
+                    "references": { "dynamicRegistration": false },
+                    // Literal, already-resolved text proposals enter the existing preview path;
+                    // command execution, lazy resolve and annotations remain unadvertised.
+                    "codeAction": {
+                        "dynamicRegistration": false,
+                        "codeActionLiteralSupport": { "codeActionKind": { "valueSet": [""] } },
+                        "isPreferredSupport": false, "disabledSupport": false,
+                        "dataSupport": false, "honorsChangeAnnotations": false
+                    },
+                    "signatureHelp": {
+                        "dynamicRegistration": false, "contextSupport": true,
+                        "signatureInformation": { "documentationFormat": ["plaintext"],
+                            "parameterInformation": { "labelOffsetSupport": true },
+                            "activeParameterSupport": true }
+                    },
+                    "formatting": { "dynamicRegistration": false },
+                    "rename": { "dynamicRegistration": false, "prepareSupport": true },
+                    "linkedEditingRange": { "dynamicRegistration": false },
+                    "completion": {
+                        "completionItem": { "snippetSupport": false }
+                    },
+                    "hover": { "contentFormat": ["markdown", "plaintext"] }
                 },
-                "clientInfo": { "name": crate::app::APP_NAME, "version": env!("CARGO_PKG_VERSION") }
-            }),
-        )?;
+                "experimental": experimental
+            },
+            "clientInfo": { "name": crate::app::APP_NAME, "version": env!("CARGO_PKG_VERSION") }
+        });
+        if !language_features_authorized {
+            // Preserve earlier completion/navigation/editing support without advertising methods
+            // that the original runtime service did not negotiate, even when a server offers them.
+            let text_document = parameters["capabilities"]["textDocument"]
+                .as_object_mut()
+                .context("LSP initialization requires text-document capabilities")?;
+            for method in ["references", "codeAction", "signatureHelp"] {
+                text_document.remove(method);
+            }
+        }
+        let initialized = self.request("initialize", parameters)?;
         // Only send optional save notifications when the server requests them.
         self.pull_diagnostics = initialized["capabilities"]["diagnosticProvider"].is_object()
             || initialized["capabilities"]["diagnosticProvider"] == Value::Bool(true);
@@ -133,6 +158,18 @@ impl LanguageServerConnection {
         self.prepare_rename_provider =
             capabilities["renameProvider"]["prepareProvider"] == Value::Bool(true);
         self.linked_editing_provider = supported("linkedEditingRangeProvider");
+        if language_features_authorized && supported("referencesProvider") {
+            self.language_features
+                .insert(plugin_runtime::plugin_protocol::direct::Feature::References);
+        }
+        if language_features_authorized && supported("signatureHelpProvider") {
+            self.language_features
+                .insert(plugin_runtime::plugin_protocol::direct::Feature::SignatureHelp);
+        }
+        if language_features_authorized && supported("codeActionProvider") {
+            self.language_features
+                .insert(plugin_runtime::plugin_protocol::direct::Feature::CodeActions);
+        }
         self.semantic_linked_editing_provider = semantic_linked_supported(
             semantic_linked_authorized,
             capabilities["experimental"][SEMANTIC_LINKED_EDITING_CAPABILITY].clone(),

@@ -65,6 +65,7 @@ fn plan(changes: Vec<workspace::Change>) -> api::Operation {
         operation: api::EditorOperation::Workspace {
             operation: workspace::Operation::ApplyPlan {
                 plan: workspace::Plan {
+                    origin: None,
                     title: "External plan / 外部计划".into(),
                     changes,
                 },

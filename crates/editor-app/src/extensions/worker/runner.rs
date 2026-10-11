@@ -712,6 +712,14 @@ impl Worker {
                             drop(reservation);
                             result
                         }
+                        Some(Work::LanguageFix {
+                            origin,
+                            document,
+                            fix,
+                        }) => manager
+                            .submit_language_fix(&origin, document, fix)
+                            .map(|_| ())
+                            .map_err(anyhow::Error::from),
                         Some(Work::Invoke {
                             plugin,
                             command,
@@ -896,14 +904,8 @@ impl Worker {
                         .push((*session, *request, result));
                     false
                 });
-                let mut editor_requests = Vec::new();
+                let editor_requests = manager.take_editor_requests();
                 for (id, instance) in &mut manager.live {
-                    editor_requests.extend(
-                        instance
-                            .take_editor_requests()
-                            .into_iter()
-                            .map(|request| (id.clone(), request)),
-                    );
                     for (panel, scene) in &instance.views {
                         views.insert(format!("{id}/{panel}"), scene.clone());
                     }
@@ -935,6 +937,7 @@ impl Worker {
                     .collect::<BTreeMap<_, _>>();
                 let language_services = manager.language_services();
                 let structure_providers = manager.structure_providers();
+                let direct_language_providers = manager.direct_language_providers();
                 for service in language_services
                     .values()
                     .filter_map(|service| service.as_ref().ok())
@@ -1023,6 +1026,19 @@ impl Worker {
                         }
                     }
                     published.structure_providers = structure_providers;
+                    published.configuration_revision += 1;
+                }
+                let direct_changed = direct_language_providers.len()
+                    != published.direct_language_providers.len()
+                    || direct_language_providers.iter().any(|(key, value)| {
+                        match (value, published.direct_language_providers.get(key)) {
+                            (Ok(current), Some(Ok(old))) => !Arc::ptr_eq(current, old),
+                            (Err(current), Some(Err(old))) => current != old,
+                            _ => true,
+                        }
+                    });
+                if direct_changed {
+                    published.direct_language_providers = direct_language_providers;
                     published.configuration_revision += 1;
                 }
                 // Host executions are published as views; the launch identity joins each answer to

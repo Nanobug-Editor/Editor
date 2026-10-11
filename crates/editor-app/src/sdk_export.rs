@@ -12,6 +12,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // Stable diagnostics and experimental direct callbacks ship the identical versioned contracts.
+    (
+        "src/diagnostics.rs",
+        include_bytes!("../../plugin-protocol/src/diagnostics.rs"),
+    ),
+    (
+        "src/direct.rs",
+        include_bytes!("../../plugin-protocol/src/direct.rs"),
+    ),
     // Files and recovery receipts use the same public contract in every independent consumer.
     (
         "src/workspace.rs",
@@ -324,7 +333,14 @@ mod tests {
     fn fresh_sdk_export_is_a_source_package() {
         let root = tempfile::tempdir().unwrap();
         export(root.path()).unwrap();
-        for required in ["Cargo.toml", "src/lib.rs", "wit/plugin.wit"] {
+        for required in [
+            "Cargo.toml",
+            "src/lib.rs",
+            "src/diagnostics.rs",
+            "src/direct.rs",
+            "src/workspace.rs",
+            "wit/plugin.wit",
+        ] {
             assert!(root.path().join(required).is_file(), "missing {required}");
         }
         let mut directories = vec![root.path().to_path_buf()];

@@ -48,6 +48,18 @@ shortcuts.operation.FormatDocument:
 shortcuts.operation.RenameSymbol:
   en: "Rename symbol"
   zh-CN: "重命名符号"
+shortcuts.operation.ShowProblems:
+  en: "Show Problems"
+  zh-CN: "显示问题"
+shortcuts.operation.ShowReferences:
+  en: "Show References"
+  zh-CN: "查找引用"
+shortcuts.operation.ShowCodeActions:
+  en: "Show Code Actions"
+  zh-CN: "显示代码操作"
+shortcuts.operation.ShowSignatureHelp:
+  en: "Show Parameter Help"
+  zh-CN: "显示参数提示"
 shortcuts.operation.Backspace:
   en: "Delete backward"
   zh-CN: "向前删除"

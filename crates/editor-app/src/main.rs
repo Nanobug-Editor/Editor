@@ -94,7 +94,11 @@ actions!(
         NavigateToDefinition,
         ShowDefinitionDetails,
         NextSyntaxError,
-        PreviousSyntaxError
+        PreviousSyntaxError,
+        ShowProblems,
+        ShowReferences,
+        ShowCodeActions,
+        ShowSignatureHelp
     ]
 );
 
@@ -106,6 +110,10 @@ struct EditorApp {
     language_servers: HashMap<String, Arc<language_navigation::LanguageServer>>,
     /// Formatting jobs and linked ranges retain identities; EditorState remains the sole text/undo owner.
     language_edits: editor::language_edits::State,
+    /// Readonly language results retain exact source/provider metadata and one shared native view.
+    language_features: editor::language_features::State,
+    /// Native Problems keeps focus/selection only and reads the existing document diagnostics model.
+    problems: editor::diagnostics::problems::ProblemsState,
     file_store: NativeFileStore,
     history: Option<LocalHistory>,
     editor: Entity<EditorState>,
@@ -500,6 +508,8 @@ impl EditorApp {
             workspace_snapshot: None,
             language_servers: HashMap::new(),
             language_edits: Default::default(),
+            language_features: Default::default(),
+            problems: Default::default(),
             file_store: NativeFileStore,
             history: LocalHistory::for_current_user().ok(),
             editor,

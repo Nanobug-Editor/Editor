@@ -84,6 +84,10 @@ mod tests;
 mod worker;
 use crate::ui::controls::Input;
 use crate::*;
+
+#[cfg(test)]
+mod community_language_tests;
+mod diagnostics;
 use gpui_base::input::InputState;
 use gpui_kit::{AnyElement, ClipboardItem, PathPromptOptions, SharedString};
 use plugin_runtime::{
@@ -270,6 +274,45 @@ impl ExtensionPanel {
             .unwrap()
             .structure_providers
             .clone()
+    }
+    /// Native language consumers receive only trusted immutable pure provider leases.
+    pub(crate) fn direct_language_providers(
+        &self,
+    ) -> BTreeMap<String, Result<Arc<plugin_runtime::DirectProvider>, String>> {
+        if !self
+            .worker
+            .trusted
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return BTreeMap::new();
+        }
+        self.worker
+            .state
+            .lock()
+            .unwrap()
+            .direct_language_providers
+            .clone()
+    }
+    /// Route a visible fix to its original provider; the worker rechecks its lifetime and grants.
+    pub(crate) fn submit_language_fix(
+        &self,
+        origin: plugin_runtime::LanguageFixOrigin,
+        document: protocol::api::DocumentVersion,
+        fix: protocol::diagnostics::Fix,
+    ) -> Result<(), protocol::api::Failure> {
+        self.worker
+            .tx
+            .send(worker::Work::LanguageFix {
+                origin,
+                document,
+                fix,
+            })
+            .map_err(|_| {
+                protocol::api::Failure::new(
+                    protocol::api::ErrorCode::OperationFailed,
+                    "Plugin worker is unavailable",
+                )
+            })
     }
     /// Discover shipped ZIPs for the local market tab and inspect their manifests once.
     fn load_market_packages(&mut self) {

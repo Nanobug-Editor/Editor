@@ -31,6 +31,10 @@ pub(crate) fn bind_editor_shell_keys(cx: &mut App) {
         // Error navigation follows the active document and wraps at either end.
         KeyBinding::new("f8", NextSyntaxError, document_context),
         KeyBinding::new("shift-f8", PreviousSyntaxError, document_context),
+        KeyBinding::new("ctrl-shift-m", ShowProblems, document_context),
+        KeyBinding::new("shift-f12", ShowReferences, document_context),
+        KeyBinding::new("ctrl-.", ShowCodeActions, document_context),
+        KeyBinding::new("ctrl-shift-space", ShowSignatureHelp, document_context),
     ]);
     cx.set_global(ShellBindingsInitialized);
 }
@@ -348,6 +352,7 @@ impl Render for EditorApp {
         self.sync_plugin_document_menu(window, cx);
         self.sync_document_comparison(window, cx);
         self.sync_outline(window, cx);
+        self.prune_direct_diagnostics(cx);
         if let Some(path) = self.pending_plugin_file.take() {
             self.open_file(path, window, cx);
         }
@@ -398,6 +403,30 @@ impl Render for EditorApp {
             .on_action(cx.listener(Self::format_document_action))
             .on_action(cx.listener(Self::rename_symbol_action))
             .on_action(cx.listener(Self::toggle_outline))
+            .on_action(
+                cx.listener(|app, _: &ShowProblems, window, cx| app.show_problems(window, cx)),
+            )
+            .on_action(cx.listener(|app, _: &ShowReferences, window, cx| {
+                app.request_language_feature(
+                    plugin_runtime::plugin_protocol::direct::Feature::References,
+                    window,
+                    cx,
+                )
+            }))
+            .on_action(cx.listener(|app, _: &ShowCodeActions, window, cx| {
+                app.request_language_feature(
+                    plugin_runtime::plugin_protocol::direct::Feature::CodeActions,
+                    window,
+                    cx,
+                )
+            }))
+            .on_action(cx.listener(|app, _: &ShowSignatureHelp, window, cx| {
+                app.request_language_feature(
+                    plugin_runtime::plugin_protocol::direct::Feature::SignatureHelp,
+                    window,
+                    cx,
+                )
+            }))
             .on_action(cx.listener(|app, _: &NextSyntaxError, window, cx| {
                 app.navigate_syntax_error(false, window, cx);
             }))
@@ -527,6 +556,8 @@ impl Render for EditorApp {
             .child(self.render_file_transfer(cx))
             .child(self.render_workspace_receipts(cx))
             .child(self.render_workspace_plan(window, cx))
+            .child(self.render_problems(window, cx))
+            .children(self.render_language_features(window, cx))
             .child(
                 div()
                     .id("plugin-notice-stack")

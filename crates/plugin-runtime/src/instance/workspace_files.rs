@@ -15,6 +15,8 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
+mod native;
+pub(crate) use native::NativeDocumentRequests;
 
 impl State {
     /// Direct host commands retain the owning installation grant; services must delegate every grant.
@@ -223,7 +225,11 @@ impl State {
                 )?);
             }
             Operation::ApplyPlan { plan } => {
-                plan.validate()?;
+                crate::workspace_resources::validate_plan_documents(
+                    plan,
+                    &self.api.capabilities,
+                    |permission| self.file_permission(permission),
+                )?;
                 if self.workspace_batches.len() >= 8 || self.roots.len() >= 127 {
                     return Err(Failure::new(
                         ErrorCode::LimitExceeded,
@@ -252,12 +258,6 @@ impl State {
                         };
                     match change {
                         Change::EditDocument { .. } => {
-                            if !can_edit {
-                                return Err(Failure::new(
-                                    ErrorCode::PermissionDenied,
-                                    "Document plan requires editor.edit 1.1 and editor.write",
-                                ));
-                            }
                             required.insert("editor.write".into());
                         }
                         Change::CreateDirectory { target } | Change::Delete { target, .. } => {

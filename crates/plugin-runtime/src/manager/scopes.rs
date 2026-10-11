@@ -120,11 +120,12 @@ impl Manager {
         self.images.len()
             + self.native_executions.resource_count()
             + self.structure_resource_count()
+            + self.direct_resource_count()
             + self
                 .language_services
                 .values()
                 .filter_map(|item| item.service.as_ref().ok())
-                .map(|service| service.process_count())
+                .map(|service| service.process_count() + service.request_resource_count())
                 .sum::<usize>()
             + self
                 .live
@@ -184,6 +185,7 @@ impl Manager {
             // Host protocol transports are recreated when this window selects another workspace.
             self.language_services.clear();
             self.clear_structure_providers();
+            self.clear_direct_providers();
             self.parked.insert(
                 old_key,
                 ParkedWorkspace {
@@ -266,6 +268,7 @@ impl Manager {
             self.retire_workspace_image_inputs();
             self.language_services.clear();
             self.clear_structure_providers();
+            self.clear_direct_providers();
         }
         let (environment, mut live) = if current {
             self.workspace_open = false;
@@ -361,7 +364,11 @@ impl Manager {
         self.stop_owned_programs();
         self.native_executions.shutdown();
         // Revocation must invalidate workers retained by a host before its last Arc is released.
+        // Declarative services have no Main WASM in `live`; dropping cached preparations
+        // retires their native seals, published requests and retained batch receipts now.
+        self.language_services.clear();
         self.clear_structure_providers();
+        self.clear_direct_providers();
         // Host execution sessions end with the window that owns them; no start is left queued.
         self.host_sessions.retire();
         let _ = self.checkpoint();

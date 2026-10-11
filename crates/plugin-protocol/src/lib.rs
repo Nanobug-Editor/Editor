@@ -48,6 +48,10 @@ pub mod commands;
 pub mod configurations;
 pub mod debug;
 pub mod dependencies;
+/// Owned multi-source diagnostics and native, previewed business fixes.
+pub mod diagnostics;
+/// Experimental pure language features consumed by the native editor.
+pub mod direct;
 pub mod execution;
 /// Native host dialogs and instance-bound user-selected file authority.
 pub mod interaction;
@@ -89,6 +93,9 @@ pub struct Manifest {
     /// Pure structure contributors are independent of the selected native language service.
     #[serde(default)]
     pub structure_providers: Vec<structure::Provider>,
+    /// Experimental readonly language providers; independent of the selected native LSP.
+    #[serde(default)]
+    pub direct_language_providers: Vec<direct::Provider>,
     /// Fixed native service definitions; each key requires its own installation grant.
     #[serde(default)]
     pub services: std::collections::BTreeMap<String, process::Service>,

@@ -20,7 +20,7 @@ fn contract_package(
     edit: impl FnOnce(&mut serde_json::Value),
 ) -> anyhow::Result<Package> {
     let package = Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "../../target/community-transactions/{plugin}-0.1.0.zip"
+        "../../target/community-transactions/{plugin}-0.1.1.zip"
     )))
     .unwrap();
     let mut files = package.files;
@@ -331,6 +331,7 @@ fn workspace_transaction_missing_write_grants_and_unsupported_required_version_h
                     operation: api::EditorOperation::Workspace {
                         operation: workspace::Operation::ApplyPlan {
                             plan: workspace::Plan {
+                                origin: None,
                                 title: "Denied proposal".into(),
                                 changes: vec![change]
                             },

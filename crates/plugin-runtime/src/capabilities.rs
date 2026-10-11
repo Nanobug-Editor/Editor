@@ -45,7 +45,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.collections".into(), Version::new(1, 0, 0)),
         ("ui.grid".into(), Version::new(1, 0, 0)),
         ("plugin.services".into(), Version::new(1, 1, 0)),
-        ("workspace.files".into(), Version::new(1, 2, 0)),
+        ("workspace.files".into(), Version::new(1, 3, 0)),
         ("host.sdk".into(), Version::new(1, 0, 0)),
         ("storage.private".into(), Version::new(1, 1, 0)),
         ("storage.editor".into(), Version::new(1, 0, 0)),
@@ -56,6 +56,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("editor.layout".into(), Version::new(1, 0, 0)),
         ("editor.viewport".into(), Version::new(1, 0, 0)),
         ("editor.edit".into(), Version::new(1, 1, 0)),
+        ("editor.diagnostics".into(), Version::new(1, 0, 0)),
         ("editor.navigation".into(), Version::new(1, 0, 0)),
         ("editor.toolbar".into(), Version::new(1, 1, 0)),
         ("editor.images".into(), Version::new(1, 0, 0)),
@@ -64,8 +65,11 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.clipboard".into(), Version::new(1, 0, 0)),
         // 1.7 presents an already-owned PTY; negotiation still grants no execution or UI authority.
         ("process".into(), Version::new(1, 7, 0)),
-        // 1.2 adds owned native roots; 1.3 adds opt-in immutable diagnostic URI snapshots.
-        ("language.lsp".into(), Version::new(1, 3, 0)),
+        // 1.2 owns native roots; 1.3 opts into immutable diagnostic URIs; 1.4 adds shared native
+        // references/code actions/signature consumers, gated again by standard server advertisement.
+        ("language.lsp".into(), Version::new(1, 4, 0)),
+        // Pure references/actions/signature help remain explicitly experimental until wider use.
+        ("language.direct".into(), Version::new(0, 1, 0)),
         ("language.completion".into(), Version::new(1, 0, 0)),
         // Independent providers negotiate editing and structure without replacing primary LSP ownership.
         ("language.formatting".into(), Version::new(1, 0, 0)),

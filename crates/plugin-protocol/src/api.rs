@@ -218,6 +218,10 @@ pub struct SdkDescriptor {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
+    /// Stable diagnostic collection creation; publication uses versioned native editor requests.
+    Diagnostics {
+        operation: crate::diagnostics::Operation,
+    },
     /// Typed calls preserve caller ownership through the shared request completion gate.
     Commands {
         operation: crate::commands::Operation,
@@ -389,6 +393,8 @@ pub enum Notification {
     LanguageCompletion(crate::language::CompletionRequest),
     /// language.structure: describe a readonly snapshot; the host owns outline UI and navigation.
     LanguageStructure(crate::structure::Request),
+    /// language.direct 0.1 experimental: readonly references, actions or parameter help.
+    LanguageDirect(crate::direct::Request),
     Process {
         handle: ResourceHandle,
         update: crate::process::Update,
@@ -547,6 +553,10 @@ pub struct DocumentChange {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditorOperation {
+    /// Replace or clear only this instance's collection at the exact open document revision.
+    Diagnostics {
+        publication: crate::diagnostics::Publication,
+    },
     /// workspace.files 1.2: resource queries and previewed native mixed plans.
     Workspace {
         operation: crate::workspace::Operation,
@@ -786,6 +796,9 @@ pub struct ViewPatch {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Output {
+    /// Accepted only by the negotiated experimental pure language callback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_direct: Option<crate::direct::Proposal>,
     /// Returned only by the negotiated pure completion callback, with its source and request identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language_completion: Option<crate::language::CompletionProposal>,

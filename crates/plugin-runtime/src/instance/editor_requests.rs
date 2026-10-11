@@ -65,6 +65,16 @@ impl State {
             ));
         }
         let (capability, permission) = match &operation {
+            EditorOperation::Diagnostics { publication } => {
+                self.diagnostic_collection(publication)?;
+                if !self.permissions.contains("editor.read") {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Diagnostics require editor.read",
+                    ));
+                }
+                ("editor.diagnostics", "editor.diagnostics")
+            }
             EditorOperation::Workspace { .. } => ("workspace.files", ""),
             EditorOperation::OpenVirtualDocument { .. }
             | EditorOperation::RefreshVirtualDocument { .. } => ("editor.virtual", "editor.read"),
@@ -198,6 +208,12 @@ impl State {
             ));
         }
         validate_edit_request(&operation)?;
+        let diagnostic_collection = if let EditorOperation::Diagnostics { publication } = &operation
+        {
+            Some(self.diagnostic_collection(publication)?)
+        } else {
+            None
+        };
         // Progress messages modify their existing owner; they cannot allocate or finish another task.
         if let EditorOperation::Interaction {
             operation: interaction,
@@ -295,6 +311,9 @@ impl State {
         }
         if let Some(resource) = virtual_document {
             call = call.with_virtual_document(resource);
+        }
+        if let Some(collection) = diagnostic_collection {
+            call = call.with_diagnostic_collection(collection);
         }
         let batch = workspace_request
             .as_ref()
