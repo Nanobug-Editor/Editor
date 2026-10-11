@@ -323,6 +323,12 @@ impl HostExecution {
     pub fn provider_instance(&self) -> &str {
         &self.provider_instance
     }
+    /// Match a provider-local session only in its pinned incarnation. Local IDs can repeat across
+    /// providers or after a provider update, so output routing must compare both parts of identity.
+    pub fn owns_provider_session(&self, instance: &str, session: &str) -> bool {
+        self.provider_instance == instance
+            && self.snapshot().provider_session.as_deref() == Some(session)
+    }
     /// Whether the pinned provider is still the live incarnation that answered this session.
     pub fn provider_active(&self) -> bool {
         self.provider_alive.load(Ordering::Acquire)
@@ -1014,7 +1020,7 @@ pub(crate) fn session_answer(
                 ));
             }
             let session = manager
-                .start_execution_from(request, context.clone(), configuration)
+                .start_execution_from(request, context.clone(), configuration, false)
                 .map_err(|error| Failure::new(ErrorCode::OperationFailed, format!("{error:#}")))?;
             let snapshot = session.snapshot();
             Ok(serde_json::json!({
@@ -1187,7 +1193,7 @@ impl Manager {
             caller,
             ancestry: Vec::new(),
         };
-        self.start_execution_from(request, context, None)
+        self.start_execution_from(request, context, None, false)
     }
     /// A saved configuration owns one active launch even after its literal command is edited.
     /// Different IDs remain independent; an ID does not grant extra source authority.
@@ -1206,7 +1212,28 @@ impl Manager {
             caller,
             ancestry: Vec::new(),
         };
-        self.start_execution_from(request, context, Some(configuration))
+        self.start_execution_from(request, context, Some(configuration), false)
+    }
+    /// Start one configuration in an existing native VT view, keeping exact source ownership.
+    /// Compatible providers negotiate optional cursor inheritance; headless execution remains unchanged.
+    /// Returns an asynchronous creation receipt or a trust, schema, quota or capability error.
+    pub fn start_terminal_configuration_execution(
+        &mut self,
+        configuration: &str,
+        request: RunRequest,
+    ) -> anyhow::Result<HostExecution> {
+        let caller = host_caller(&self.host_scope());
+        let context = CallContext {
+            // Native terminal launches keep host ownership without acquiring command-picker authority.
+            native_waits: Vec::new(),
+            menu: None,
+            origin: crate::plugin_services::InvocationOrigin::Delegated,
+            lifetimes: vec![self.host_alive.clone()],
+            permissions: caller.permissions.clone(),
+            caller,
+            ancestry: Vec::new(),
+        };
+        self.start_execution_from(request, context, Some(configuration), true)
     }
     /// Forward the source's shrinking authority and lifetime through the host gateway.
     fn start_execution_from(
@@ -1214,6 +1241,7 @@ impl Manager {
         request: RunRequest,
         context: CallContext,
         configuration: Option<&str>,
+        terminal: bool,
     ) -> anyhow::Result<HostExecution> {
         let dedup_key = execution_identity(&request, configuration).map_err(start_failure)?;
         if let Some(existing) = self.host_sessions.find(&dedup_key, &context.caller) {
@@ -1223,16 +1251,41 @@ impl Manager {
         self.host_sessions
             .reserve_capacity()
             .map_err(start_failure)?;
-        let dependency = execution_dependency().map_err(start_failure)?;
+        let mut dependency = execution_dependency().map_err(start_failure)?;
         let caller = &context.caller;
         self.refresh_services();
-        let (reference, provider) = {
+        let (mut reference, provider) = {
             let broker = self.plugin_services.lock().unwrap();
             let reference = broker
                 .resolve(&caller, EXECUTION_CONTRACT, &dependency)
                 .map_err(start_failure)?;
             let provider = reference.provider.clone();
             (reference, provider)
+        };
+        let method = if terminal
+            && provider.contracts[EXECUTION_CONTRACT]
+                .methods
+                .get("execute_terminal")
+                == Some(&plugin_protocol::execution::terminal_execute_method())
+        {
+            dependency.methods.insert(
+                "execute_terminal".into(),
+                plugin_protocol::execution::terminal_execute_method(),
+            );
+            reference = self
+                .plugin_services
+                .lock()
+                .unwrap()
+                .resolve_pinned(
+                    caller,
+                    EXECUTION_CONTRACT,
+                    &dependency,
+                    &provider.caller.instance,
+                )
+                .map_err(start_failure)?;
+            "execute_terminal"
+        } else {
+            "execute"
         };
         let mut completion = Completion::new(EXECUTION_START_TIMEOUT_MS);
         completion.lifetimes = context.lifetimes.clone();
@@ -1247,10 +1300,15 @@ impl Manager {
             )
             .map_err(start_failure)?;
         let queued = (|| {
-            let mut call = host_call(
+            let mut arguments = serde_json::to_value(&request)?;
+            if method == "execute_terminal" {
+                arguments["inherit_cursor"] = cfg!(windows).into();
+            }
+            let mut call = host_method_call(
                 &execution.origin.caller,
                 reference,
-                &request,
+                method,
+                arguments,
                 &dependency,
                 completion.clone(),
                 self.host_alive.clone(),
@@ -1306,6 +1364,7 @@ impl Manager {
     pub(super) fn stop_owned_programs(&mut self) {
         // Debuggers own their targets as a separate resource tree; disconnect before parking a scope.
         self.stop_owned_debuggers();
+        self.retire_workspace_terminals();
         let active = self
             .host_sessions
             .iter()
@@ -1382,6 +1441,31 @@ impl Manager {
             .ok()
             .flatten();
         let mut candidates = Vec::new();
+        // Native participants use the same registry and shape matching as installed providers.
+        for provider in self
+            .plugin_services
+            .lock()
+            .unwrap()
+            .participants(&scope, contract)
+        {
+            if self.installed.contains_key(&provider.caller.plugin) {
+                continue;
+            }
+            let unavailable = if !self.trusted || !self.workspace_open {
+                Some("Workspace restricted".into())
+            } else if dependency
+                .is_some_and(|dependency| !dependency.matches(&provider.contracts[contract]))
+            {
+                Some("Contract methods are incompatible".into())
+            } else {
+                None
+            };
+            candidates.push(ProviderCandidate {
+                selected: selected.as_deref() == Some(provider.caller.plugin.as_str()),
+                unavailable,
+                plugin: provider.caller.plugin,
+            });
+        }
         for installed in self.installed.values() {
             let Some(declaration) = installed.manifest.plugin_services.provides.get(contract)
             else {
@@ -1478,16 +1562,15 @@ mod tests {
     /// A mismatch would be reported to the user as an unavailable capability, so the drift is caught
     /// here instead of after a release.
     #[test]
-    fn host_execution_dependency_matches_the_maintained_provider_manifest() {
-        let manifest: Value =
-            serde_json::from_str(include_str!("../../../../plugins/terminal/manifest.json"))
-                .unwrap();
-        let declared = &manifest["plugin_services"]["provides"][EXECUTION_CONTRACT];
-        let contract: plugin_protocol::service::Contract =
-            serde_json::from_value(declared.clone()).unwrap();
+    fn host_execution_dependency_matches_the_builtin_provider() {
+        let provider = super::super::native_execution::provider(
+            "workspace",
+            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+        );
+        let contract = &provider.contracts[EXECUTION_CONTRACT];
         let dependency = execution_dependency().unwrap();
         assert!(
-            dependency.matches(&contract),
+            dependency.matches(contract),
             "host execution dependency drifted from the maintained provider declaration"
         );
     }

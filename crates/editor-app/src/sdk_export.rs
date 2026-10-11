@@ -1,20 +1,27 @@
-//! Supply the editor's compiled-in Rust, WIT and JSON contract to independent Cargo guests.
-//! Public usage, ownership, limits and errors live in the identical exported source comments.
+//! Export the host's SDK sources and protocol resources for independent plugin builds.
+//!
+//! `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]` prepares a
+//! content-addressed source cache and supplies Cargo's dependency override automatically.
+//! `--export-plugin-sdk <directory>` publishes the same inputs for other toolchains.
+//! Interface guidance stays beside the public Rust types; Markdown is not embedded or exported.
 use anyhow::Context;
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{borrow::Cow, io::Write};
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // Document contracts ship in the exact same SDK used by the host consumer.
     (
         "src/api/documents.rs",
         include_bytes!("../../plugin-protocol/src/api/documents.rs"),
     ),
+    // Typed commands and native menu declarations share the actual independent guest SDK.
     (
         "src/commands.rs",
         include_bytes!("../../plugin-protocol/src/commands.rs"),
     ),
+    // Independent guests receive the identical native interaction types as the runtime.
     (
         "src/interaction.rs",
         include_bytes!("../../plugin-protocol/src/interaction.rs"),
@@ -27,6 +34,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/layout_tests.rs",
         include_bytes!("../../plugin-protocol/src/ui/layout_tests.rs"),
     ),
+    // Public configuration providers receive the identical template, native form and validation types.
     (
         "src/configurations.rs",
         include_bytes!("../../plugin-protocol/src/configurations.rs"),
@@ -35,6 +43,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/configurations/command_form.rs",
         include_bytes!("../../plugin-protocol/src/configurations/command_form.rs"),
     ),
+    // Independent target providers use the same exact schemas as the host consumer.
     (
         "src/targets.rs",
         include_bytes!("../../plugin-protocol/src/targets.rs"),
@@ -43,6 +52,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/run-targets.json",
         include_bytes!("../../plugin-protocol/src/run-targets.json"),
     ),
+    // The canonical optional debug signatures are packaged with their Rust SDK accessor.
     (
         "src/debug.rs",
         include_bytes!("../../plugin-protocol/src/debug.rs"),
@@ -51,6 +61,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/debug-session.json",
         include_bytes!("../../plugin-protocol/src/debug-session.json"),
     ),
+    // Independent providers receive the same bounded observation contract as the host.
     (
         "src/execution.rs",
         include_bytes!("../../plugin-protocol/src/execution.rs"),
@@ -95,6 +106,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/language.rs",
         include_bytes!("../../plugin-protocol/src/language.rs"),
     ),
+    // Pure structure providers build independently against the same versioned data types as the host.
     (
         "src/structure.rs",
         include_bytes!("../../plugin-protocol/src/structure.rs"),
@@ -139,6 +151,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/validate.rs",
         include_bytes!("../../plugin-protocol/src/ui/validate.rs"),
     ),
+    // Incremental native publication is part of the same independently exported public SDK.
     (
         "src/ui/incremental.rs",
         include_bytes!("../../plugin-protocol/src/ui/incremental.rs"),
@@ -159,6 +172,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "wit/plugin.wit",
         include_bytes!("../../plugin-protocol/wit/plugin.wit"),
     ),
+    // Trees and native marker consumers compile against the same bounded contract as this host.
     (
         "src/tree.rs",
         include_bytes!("../../plugin-protocol/src/tree.rs"),
@@ -257,32 +271,28 @@ pub(crate) fn cargo_config() -> anyhow::Result<PathBuf> {
     Ok(config)
 }
 
-/// Source and schema bytes remain identical to the contract compiled into this host.
-fn exported_bytes<'a>(_: &str, bytes: &'a [u8]) -> Cow<'a, [u8]> {
-    Cow::Borrowed(bytes)
-}
-
 /// Content-addressed caches let different editor versions build plugins independently.
 fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
     let mut digest = Sha256::new();
-    for (name, raw) in SDK_FILES {
-        let bytes = exported_bytes(name, raw);
+    for (name, bytes) in SDK_FILES {
         digest.update((name.len() as u64).to_le_bytes());
         digest.update(name.as_bytes());
         digest.update((bytes.len() as u64).to_le_bytes());
-        digest.update(bytes.as_ref());
+        digest.update(bytes);
     }
     let target = root.join(format!("{:x}", digest.finalize()));
     export(&target)?;
     Ok(target)
 }
 
-/// Preserve unchanged files for Cargo freshness and atomically repair incomplete caches.
+/// Publish Rust sources, Cargo manifests, WIT and JSON protocol resources into `target`.
+///
+/// Existing unrelated files are preserved. Unchanged sources retain Cargo freshness;
+/// incomplete files are atomically repaired. Directory and write failures propagate.
 pub fn export(target: &Path) -> anyhow::Result<()> {
-    for (relative, raw) in SDK_FILES {
-        let bytes = exported_bytes(relative, raw);
+    for (relative, bytes) in SDK_FILES {
         let path = target.join(relative);
-        publish(&path, bytes.as_ref())?;
+        publish(&path, bytes)?;
     }
     Ok(())
 }
@@ -326,6 +336,34 @@ mod tests {
 
     use super::*;
 
+    /// Independent authors receive only compilable sources and protocol resources in a fresh SDK.
+    #[test]
+    fn fresh_sdk_export_is_a_source_package() {
+        let root = tempfile::tempdir().unwrap();
+        export(root.path()).unwrap();
+        for required in ["Cargo.toml", "src/lib.rs", "wit/plugin.wit"] {
+            assert!(root.path().join(required).is_file(), "missing {required}");
+        }
+        let mut directories = vec![root.path().to_path_buf()];
+        while let Some(directory) = directories.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    directories.push(path);
+                } else {
+                    assert!(
+                        matches!(
+                            path.extension().and_then(|extension| extension.to_str()),
+                            Some("rs" | "toml" | "wit" | "json")
+                        ),
+                        "SDK contains a non-source resource: {}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+
     /// Two independent host invocations can publish a fresh SDK concurrently without partial files.
     #[test]
     fn concurrent_sdk_exports_converge() {
@@ -345,22 +383,17 @@ mod tests {
             worker.join().unwrap().unwrap();
         }
         for (relative, bytes) in SDK_FILES {
-            assert_eq!(
-                std::fs::read(root.path().join(relative)).unwrap(),
-                exported_bytes(relative, bytes).as_ref()
-            );
+            assert_eq!(std::fs::read(root.path().join(relative)).unwrap(), *bytes);
         }
     }
 
+    /// Reuse a complete source cache and repair interrupted files without rewriting good inputs.
     #[test]
     fn cached_contract_is_complete_reused_and_repairs_corruption() {
         let root = tempfile::tempdir().unwrap();
         let sdk = prepare_cache(root.path()).unwrap();
         for (relative, bytes) in SDK_FILES {
-            assert_eq!(
-                std::fs::read(sdk.join(relative)).unwrap(),
-                exported_bytes(relative, bytes).as_ref()
-            );
+            assert_eq!(std::fs::read(sdk.join(relative)).unwrap(), *bytes);
         }
         let manifest = sdk.join("Cargo.toml");
         let modified = manifest.metadata().unwrap().modified().unwrap();
@@ -370,10 +403,7 @@ mod tests {
         std::fs::remove_file(sdk.join("wit/plugin.wit")).unwrap();
         prepare_cache(root.path()).unwrap();
         for (relative, bytes) in SDK_FILES {
-            assert_eq!(
-                std::fs::read(sdk.join(relative)).unwrap(),
-                exported_bytes(relative, bytes).as_ref()
-            );
+            assert_eq!(std::fs::read(sdk.join(relative)).unwrap(), *bytes);
         }
     }
 }

@@ -14,6 +14,165 @@ editor.diff_right:
 editor.close_diff:
   en: "Close comparison"
   zh-CN: "关闭比较"
+plugins.market_fetched_at:
+  en: "Catalog last fetched: %{time}"
+  zh-CN: "目录最后获取时间：%{time}"
+plugins.market_published_at:
+  en: "Published: %{time}"
+  zh-CN: "发布时间：%{time}"
+plugins.market_source:
+  en: "Source repository"
+  zh-CN: "源码仓库"
+plugins.market_feedback:
+  en: "Feedback / issues"
+  zh-CN: "反馈与问题"
+plugins.market_all_categories:
+  en: "All categories (next)"
+  zh-CN: "全部分类（切换）"
+plugins.market_identity:
+  en: "ID: %{id} · Source: %{repository}"
+  zh-CN: "标识：%{id} · 来源：%{repository}"
+plugins.market_compatibility:
+  en: "Editor: %{host} · Platforms: %{platforms}"
+  zh-CN: "编辑器：%{host} · 平台：%{platforms}"
+plugins.market_all_tags:
+  en: "All tags (next)"
+  zh-CN: "全部标签（切换）"
+plugins.market_sort_relevance:
+  en: "Match"
+  zh-CN: "相关"
+plugins.market_sort_downloads:
+  en: "Downloads"
+  zh-CN: "下载"
+plugins.market_sort_updated:
+  en: "Updated"
+  zh-CN: "更新"
+plugins.market_sort_name:
+  en: "Name"
+  zh-CN: "名称"
+plugins.market_refresh:
+  en: "Refresh catalog"
+  zh-CN: "刷新目录"
+plugins.market_refreshing:
+  en: "Refreshing catalog; cached entries are read-only."
+  zh-CN: "正在刷新目录；缓存内容仅供浏览。"
+plugins.market_offline:
+  en: "Catalog unavailable; installation is disabled. %{error}"
+  zh-CN: "目录不可用，已暂停安装。%{error}"
+plugins.market_downloads:
+  en: "Downloads: %{count}"
+  zh-CN: "下载次数：%{count}"
+plugins.market_downloads_unavailable:
+  en: "Download count unavailable"
+  zh-CN: "下载次数暂不可用"
+plugins.market_incompatible:
+  en: "No compatible reviewed version for this editor and platform."
+  zh-CN: "当前编辑器和平台暂无兼容的已审核版本。"
+plugins.market_permissions:
+  en: "Requested permissions: %{permissions}"
+  zh-CN: "申请权限：%{permissions}"
+plugins.market_native_services:
+  en: "Native services (run outside the WASM sandbox): %{services}"
+  zh-CN: "原生服务（在 WASM 沙箱外运行）：%{services}"
+plugins.market_downloading:
+  en: "Downloading package: %{bytes} bytes"
+  zh-CN: "正在下载插件包：%{bytes} 字节"
+plugins.market_preparing:
+  en: "Preparing installation: %{stage}"
+  zh-CN: "正在准备安装：%{stage}"
+terminal.title:
+  en: "Terminal"
+  zh-CN: "终端"
+terminal.error.restore:
+  en: "Could not restore terminal data: %{details}"
+  zh-CN: "恢复终端数据失败：%{details}"
+terminal.error.save:
+  en: "Could not save terminal data: %{details}"
+  zh-CN: "保存终端数据失败：%{details}"
+terminal.error.settings:
+  en: "Could not apply terminal settings: %{details}"
+  zh-CN: "应用终端设置失败：%{details}"
+terminal.error.process:
+  en: "Terminal process failed: %{details}"
+  zh-CN: "终端进程操作失败：%{details}"
+terminal.invalid_profiles:
+  en: "Use 1–32 shell profiles and a font name of at most 256 bytes"
+  zh-CN: "请配置 1–32 个 Shell，字体名称不得超过 256 个字节"
+terminal.invalid_font_size:
+  en: "Font size must be between 8 and 32"
+  zh-CN: "字号必须在 8 到 32 之间"
+terminal.invalid_default_profile:
+  en: "The default profile does not identify a shell"
+  zh-CN: "默认配置没有指向有效的 Shell"
+terminal.invalid_history:
+  en: "History must be at most 100000 lines"
+  zh-CN: "历史记录最多保留 100000 行"
+terminal.invalid_font_family:
+  en: "Font family cannot be empty"
+  zh-CN: "字体名称不能为空"
+terminal.invalid_profile:
+  en: "Shell profile exceeds the accepted size or contains invalid characters"
+  zh-CN: "Shell 配置超出长度限制或包含非法字符"
+terminal.empty_profile:
+  en: "Shell name and program cannot be empty"
+  zh-CN: "Shell 名称和程序路径不能为空"
+terminal.invalid_color:
+  en: "Invalid color %{color}; use #RRGGBB"
+  zh-CN: "无效颜色 %{color}，请使用 #RRGGBB"
+terminal.invalid_snapshot:
+  en: "Terminal snapshot is invalid or unsupported; original data was preserved"
+  zh-CN: "终端快照损坏或版本不支持，已保留原数据"
+terminal.storage_quota:
+  en: "Terminal data exceeds the storage limit"
+  zh-CN: "终端数据超出存储容量限制"
+terminal.new:
+  en: "New terminal"
+  zh-CN: "新建终端"
+terminal.menu:
+  en: "Terminal actions"
+  zh-CN: "终端操作"
+terminal.exited:
+  en: "Exited"
+  zh-CN: "已退出"
+terminal.session_limit:
+  en: "The terminal session limit has been reached. Close an unused tab first."
+  zh-CN: "已达到终端会话上限，请先关闭不用的 Tab。"
+terminal.shell_scripts:
+  en: "Shell scripts"
+  zh-CN: "Shell 脚本"
+terminal.shell_unavailable:
+  en: "Shell is unavailable on this operating system"
+  zh-CN: "此操作系统不支持所选 Shell"
+terminal.script_required:
+  en: "Enter a script"
+  zh-CN: "请填写脚本内容"
+terminal.shell_no_debugger:
+  en: "This Shell template has no debugger"
+  zh-CN: "此 Shell 模板未提供调试器"
+terminal.clear:
+  en: "Clear buffer"
+  zh-CN: "清空缓冲区"
+terminal.close_task:
+  en: "Stop %{name} and close its tab?"
+  zh-CN: "停止 %{name} 并关闭此 Tab？"
+terminal.cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+terminal.stop_close:
+  en: "Stop and close"
+  zh-CN: "停止并关闭"
+terminal.stop:
+  en: "Stop task"
+  zh-CN: "停止任务"
+terminal.rerun:
+  en: "Run again"
+  zh-CN: "再次运行"
+terminal.interrupt:
+  en: "Interrupt"
+  zh-CN: "中断"
+terminal.settings:
+  en: "Terminal settings"
+  zh-CN: "终端设置"
 shortcuts.global_tab:
   en: "Global shortcuts"
   zh-CN: "全局快捷键"

@@ -26,7 +26,8 @@ fn native_plugin_input_does_not_confirm_marked_ime_text(cx: &mut TestAppContext)
     .unwrap();
     let package = Package::read(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example-0.18.0.zip"),
+            // Match the current independent package instead of silently reusing a retired build.
+            .join("../../target/plugin-api-test/capability-example-0.19.0.zip"),
     )
     .unwrap();
     manager
@@ -121,7 +122,7 @@ fn native_plugin_quick_pick_scrolls_the_keyboard_target_into_view(cx: &mut TestA
     .unwrap();
     let package = Package::read(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example-0.18.0.zip"),
+            .join("../../target/plugin-api-test/capability-example-0.19.0.zip"),
     )
     .unwrap();
     manager
