@@ -96,6 +96,8 @@ fn installer_dialog_requires_sdk_choice_and_concrete_execution_confirmation(
         // Open at the real default size before native preparation publishes its consent prompt.
         // A test-side resize would hide a late prompt stranded in the former 200px progress window.
         assert!(control.installer_prompt().is_none());
+        let compact = dialog_cx.update(|window, _| window.viewport_size());
+        assert!(compact.height <= px(260.));
         dialog_cx.update(|window, cx| {
             typography::set_font_size(cx, font_size);
             theme::sync_font_sizes(cx);
@@ -123,6 +125,10 @@ fn installer_dialog_requires_sdk_choice_and_concrete_execution_confirmation(
             "用途："
         }));
         dialog_cx.update(|window, cx| window.draw(cx).clear(cx));
+        dialog_cx.run_until_parked();
+        dialog_cx.update(|window, cx| window.draw(cx).clear(cx));
+        let expanded = dialog_cx.update(|window, _| window.viewport_size());
+        assert!(expanded.height > compact.height);
         let confirm = dialog_cx
             .debug_bounds("plugin-install-native-confirm-region")
             .unwrap();

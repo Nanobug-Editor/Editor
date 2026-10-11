@@ -8,6 +8,8 @@ struct InstallationView {
     /// SDK consent is local to one displayed prompt, never carried into another installer step.
     sdk_prompt: Option<u64>,
     sdk_selected: bool,
+    /// Expand the initially compact native window once when asynchronous consent becomes visible.
+    consent_expanded: bool,
     _subscription: Subscription,
 }
 impl Drop for InstallationView {
@@ -29,7 +31,7 @@ impl Drop for InstallationView {
     }
 }
 impl Render for InstallationView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let report = self.worker.state.lock().unwrap().installation.clone();
         let message = report
             .as_ref()
@@ -40,6 +42,16 @@ impl Render for InstallationView {
             .control
             .as_ref()
             .and_then(|control| control.installer_prompt());
+        if prompt.is_some() && !self.consent_expanded {
+            // Preparation can publish consent after opening. Keep plain progress compact, then
+            // give the fixed consent footer room without shrinking a window the user enlarged.
+            self.consent_expanded = true;
+            let viewport = window.viewport_size();
+            window.resize(size(
+                viewport.width.max(px(520.)),
+                viewport.height.max(px(360. + PANEL_HEADER_HEIGHT)),
+            ));
+        }
         if self.sdk_prompt != prompt.as_ref().map(|prompt| prompt.id) {
             self.sdk_prompt = prompt.as_ref().map(|prompt| prompt.id);
             self.sdk_selected = false;
@@ -195,15 +207,15 @@ impl ExtensionPanel {
             control: worker.state.lock().unwrap().install_control.clone(),
             sdk_prompt: None,
             sdk_selected: false,
+            consent_expanded: false,
             worker: worker.clone(),
             _subscription: cx.observe(&owner, |_, _, cx| cx.notify()),
         });
         app_dialog::open_dialog_sized(
             t!("plugin_installation.title").to_string(),
-            // Preparation can publish consent after the progress window opens. Reserve its fixed
-            // controls from the first frame so a late prompt remains usable without manual resizing.
+            // Ordinary preparation stays compact; the view expands when consent arrives asynchronously.
             520.,
-            360.,
+            200.,
             // Bound the flex content to the viewport so long messages cannot push out the footer.
             move |content, _, _| content.min_h_0().overflow_hidden().child(view.clone()),
             cx,
