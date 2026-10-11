@@ -72,7 +72,8 @@ impl State {
         }
         self.file_authority(RootKind::Data, true)?;
         // Prepare/configuration/Activate and post-flush Snapshot are still unpublished. Only the trusted
-        // manager's durable cutover opens directory authority; staged_writes being empty proves no commit.
+        // manager's durable cutover opens directory authority; an empty staged_writes does not prove
+        // activation was committed.
         if !self.activation_committed {
             return Err(Failure::new(
                 ErrorCode::InvalidState,

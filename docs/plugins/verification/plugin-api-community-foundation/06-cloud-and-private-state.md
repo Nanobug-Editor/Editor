@@ -2,7 +2,7 @@
 
 日期：2026-10-09，续验 2026-10-11。对应 [工单 06](../../tickets/plugin-api-community-foundation/06-cloud-and-private-state.md) / [#98](https://github.com/T-miracle/Nanobug/issues/98)，来源为[社区生态方案](../../specs/plugin-api-community-foundation.md)。
 
-状态：首候选的自动验证与 Windows 原生连接验收通过；固定候选 `69478ced8238e8f2e9ce67d2909e901387ac9109` 的独立审查为 Standards 0 项、Spec 4 项（最高 P1）。四项已在 `d92f79c8957063d1f77a5600f4480baed50859e0` 修复并通过复审，Standards 仍为 0 项；Spec 新发现一项 P2：失败配置候选清理旧实例的 Temporary。该项已补实际 SDK 红绿回归，并依当前 AGENTS 将独立 SDK 改为纯源码资源；根代理还需对 `d92f79c` 到续修最终候选作固定点双轴复审及整合交付。本单尚未标记完成或关闭，本文保留各阶段的实际证据。
+状态：首候选的自动验证与 Windows 原生连接验收通过；固定候选 `69478ced8238e8f2e9ce67d2909e901387ac9109` 的独立审查为 Standards 0 项、Spec 4 项（最高 P1）。四项已在 `d92f79c8957063d1f77a5600f4480baed50859e0` 修复并通过复审，Standards 仍为 0 项；Spec 新发现一项 P2：失败配置候选清理旧实例的 Temporary。续修候选 `a248ccfb1ce9281a989f4888f469a0a25bf47c87` 已补实际 SDK 红绿回归与纯源码出口，固定点双轴复审为 Spec P1/P2/P3 = 0/0/0，Standards = 0/0/1，仅一处注释措辞。注释已修正，独立 Standards 读回及根代理提供的已验证主分支整合尚待完成；本单尚未标记完成或关闭，本文保留各阶段的实际证据。
 
 ## 工作树、版本与构建入口
 
@@ -85,6 +85,15 @@ cargo test -p plugin-runtime --test cloud t30_failed_cloud_update_retires_candid
 ## Temporary 归属续修与纯源码 SDK（2026-10-11）
 
 `d92f79c` 的复审确认四项旧发现均已解决，同时新增一项 P2：`update_setting` 在旧实例私有根上准备配置候选，失败候选的 stop/Drop 无条件删除共享 `.temporary`，使仍在运行的旧实例丢失文件。此次固定复审基线为 `d92f79c8957063d1f77a5600f4480baed50859e0`，不将旧候选的绿色评审当成续修最终候选已通过。
+
+根代理对 `d92f79c8957063d1f77a5600f4480baed50859e0` → `a248ccfb1ce9281a989f4888f469a0a25bf47c87` 完成独立双轴复审：
+
+| 审查轴 | P1 | P2 | P3 | 结论 |
+| --- | --- | --- | --- | --- |
+| Spec | 0 | 0 | 0 | Temporary 归属、发布、权限与纯源码 SDK 行为符合规格，无新增行为发现 |
+| Standards | 0 | 0 | 1 | `private.rs` 注释误写空 staged_writes 证明未提交，未准确区分 flush 与 committed activation |
+
+唯一 P3 已仅修正为“空 staged_writes 不能证明 activation 已提交”；实际守卫仍是 `activation_committed`，没有修改代码行为、协议源码、SDK 内容或包资源。注释与本记录通过 `git diff --check`，复用上一候选对应行为和 SDK 证据，不重复运行 ignored、SDK 或完整 Rust 套件。根代理另安排独立 Standards 读回，在读回前不将此项记为已复审归零。主分支及 01/02 整合等待根代理给出已验证固定点，本工作树未自行 merge、push 或关闭议题。
 
 修复复用实例现有 roots 与 committed activation，未新增宿主测试专用 API、独立权限层或 UUID 存储目录：
 
