@@ -40,7 +40,11 @@ pub mod development;
 mod structure;
 pub use structure::{StructureProvider, StructureSnapshot};
 mod manager;
+/// Reviewed static catalogs and bounded downloads share the public package validation path.
+pub mod marketplace;
 mod migration;
+/// Trusted native host features share the runtime's bounded process-tree supervisor.
+pub mod native_processes;
 mod package;
 mod plugin_services;
 mod process;
@@ -50,18 +54,22 @@ pub use manager::{
     DEBUG_CONTRACT, DEFAULT_STOP_GRACE_MS, DebugAbilities, DebugAnswer, DebugBreakpoint,
     DebugFrame, DebugRequest, DebugSession, DebugState, DebugVariable, EXECUTION_CONTRACT,
     EXECUTION_START_TIMEOUT_MS, ExecutionFailure, ExecutionSnapshot, ExecutionState, HostExecution,
-    InstallationPreparation, Installed, Manager, PreparedInstallation, ProviderCandidate,
-    RunEnvEntry, RunRequest, StopOptions, TargetOrigin, TargetRequest, debug_dependency_for_test,
-    frames_from_value, variables_from_value,
+    InstallationPreparation, Installed, Manager, NativeExecutionUpdate, PreparedInstallation,
+    ProviderCandidate, RunEnvEntry, RunRequest, StopOptions, TargetOrigin, TargetRequest,
+    debug_dependency_for_test, frames_from_value, variables_from_value,
 };
 mod native_work;
+mod terminal_presentations;
 pub use native_work::{PreparationRegistry, PreparationSnapshot};
 pub use package::Package;
 pub use plugin_protocol;
+pub use terminal_presentations::{TerminalOwner, TerminalPresentation, TerminalPresentations};
 
 /// Host-owned resources travel with every candidate; guests only see negotiated descriptions.
 #[derive(Clone, Debug, Default)]
 pub struct HostResources {
+    /// Native terminal projection is shared across providers; it never owns or duplicates a child.
+    pub terminals: TerminalPresentations,
     /// Authenticated preparation observation shared with all delegated native-process owners.
     pub preparations: native_work::PreparationRegistry,
     /// No SDK is a supported host configuration; an export failure affects only a requesting guest.

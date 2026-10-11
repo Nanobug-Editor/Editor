@@ -15,6 +15,18 @@ pub(crate) fn workspace_key(workspace: &str) -> String {
     format!("{:x}", Sha256::digest(path.to_string_lossy().as_bytes()))
 }
 
+/// Offline migrations and admitted live instances share one source-of-truth layout calculation.
+fn scoped_files(root: &Path, manifest: &Manifest, workspace: &str) -> PathBuf {
+    let root = root.join("data").join(&manifest.id);
+    match manifest.scope {
+        api::InstanceScope::Application => root.join("application/files"),
+        api::InstanceScope::Workspace => root
+            .join("workspaces")
+            .join(workspace_key(workspace))
+            .join("files"),
+    }
+}
+
 impl Manager {
     /// Publish portable unopened-file observations only to the current trusted workspace.
     /// Events are data and do not grant paths, content reads or access to parked/application instances.
@@ -48,6 +60,25 @@ impl Manager {
         }
     }
 
+    /// Resolve an installation's persisted files without activating a component or granting access.
+    /// `root` is the host's plugin store; `workspace` uses the same canonical identity as live instances.
+    /// Invalid path-component identities are rejected. The result is metadata, not a guest capability.
+    pub fn persisted_data_directory(
+        root: &Path,
+        manifest: &Manifest,
+        workspace: &str,
+    ) -> anyhow::Result<PathBuf> {
+        anyhow::ensure!(
+            !manifest.id.is_empty()
+                && !matches!(manifest.id.as_str(), "." | "..")
+                && manifest
+                    .id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte)),
+            "Invalid plugin identity"
+        );
+        Ok(scoped_files(root, manifest, workspace))
+    }
     /// Only the selected trusted workspace can publish document events to its owners.
     pub fn document_changed(&mut self, change: api::DocumentChange) {
         // Legacy SDK subscriptions know only local workspace-relative paths.
@@ -87,6 +118,7 @@ impl Manager {
     /// Count resources across logical workspaces and the application owner for shutdown diagnostics.
     pub fn resource_count(&self) -> usize {
         self.images.len()
+            + self.native_executions.resource_count()
             + self.structure_resource_count()
             + self
                 .language_services
@@ -116,14 +148,7 @@ impl Manager {
         manifest: &Manifest,
         environment: &Environment,
     ) -> PathBuf {
-        let root = self.root.join("data").join(&manifest.id);
-        let root = match manifest.scope {
-            api::InstanceScope::Application => root.join("application"),
-            api::InstanceScope::Workspace => root
-                .join("workspaces")
-                .join(workspace_key(&environment.workspace)),
-        };
-        root.join("files")
+        scoped_files(&self.root, manifest, &environment.workspace)
     }
 
     /// Switch the published workspace without discarding other logical workspace owners.
@@ -169,8 +194,10 @@ impl Manager {
             );
         }
         self.environment = environment;
+        self.host_resources.terminals.select_scope(next_key.clone());
         self.trusted = trusted;
         self.workspace_open = true;
+        self.native_executions.set_trusted(trusted);
         if let Some(mut parked) = self.parked.remove(&next_key) {
             if trusted && parked.trusted {
                 self.live.append(&mut parked.live);
@@ -186,6 +213,7 @@ impl Manager {
 
     /// Revocation retires workspace guests immediately; application owners retain their own scope.
     pub fn set_workspace_trust(&mut self, trusted: bool) -> anyhow::Result<()> {
+        self.native_executions.set_trusted(trusted);
         // Authority is revoked even when a guest fails to save its final snapshot.
         self.trusted = trusted;
         if !trusted {
@@ -226,9 +254,13 @@ impl Manager {
         let key = workspace_key(workspace);
         let current = workspace_key(&self.environment.workspace) == key;
         if current {
+            self.native_executions.set_trusted(false);
             // Trust revocation skips guest callbacks; ordinary close retains its bounded cleanup.
             if self.trusted {
                 self.stop_owned_programs();
+            } else {
+                // Revocation cannot call guests, but must revoke native resources even for global owners.
+                self.retire_workspace_terminals();
             }
             self.retire_workspace_images();
             self.retire_workspace_image_inputs();
@@ -327,6 +359,7 @@ impl Manager {
         // Programs get a shared bounded cleanup window and then forceful tree termination. The UI
         // awaits the actor's shutdown acknowledgement; only afterwards may its window disappear.
         self.stop_owned_programs();
+        self.native_executions.shutdown();
         // Revocation must invalidate workers retained by a host before its last Arc is released.
         self.clear_structure_providers();
         // Host execution sessions end with the window that owns them; no start is left queued.

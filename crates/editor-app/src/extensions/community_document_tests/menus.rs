@@ -6,7 +6,8 @@ use plugin_runtime::plugin_protocol::commands::Location;
 /// An ordinary menu consumer reports only the context delivered by the production command route.
 fn menu_consumer() -> Package {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example-0.18.0.zip");
+        // Keep comparison/menu connection tests on the current embedded SDK consumer.
+        .join("../../target/plugin-api-test/capability-example-0.19.0.zip");
     let mut files = Package::read(&path).unwrap().files;
     let mut manifest: Json = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!("document-menu-reader");

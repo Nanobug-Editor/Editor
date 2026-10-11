@@ -1,7 +1,10 @@
-//! Supply the editor's compiled-in contract to independent Cargo plugin projects.
+//! Export the host's SDK sources and protocol resources for independent plugin builds.
 //!
+//! `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]` prepares a
+//! content-addressed source cache and supplies Cargo's dependency override automatically.
+//! `--export-plugin-sdk <directory>` publishes the same inputs for other toolchains.
 //! Only protocol Rust sources, Cargo metadata, WIT and JSON resources are embedded.
-//! Usage, permissions and failure semantics live in source comments beside the public API.
+//! Interface guidance stays beside the public Rust types; Markdown is not embedded or exported.
 use anyhow::Context;
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -269,8 +272,7 @@ pub(crate) fn cargo_config() -> anyhow::Result<PathBuf> {
 /// Content-addressed caches let different editor versions build plugins independently.
 fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
     let mut digest = Sha256::new();
-    for (name, raw) in SDK_FILES {
-        let bytes = *raw;
+    for (name, bytes) in SDK_FILES {
         digest.update((name.len() as u64).to_le_bytes());
         digest.update(name.as_bytes());
         digest.update((bytes.len() as u64).to_le_bytes());
@@ -281,10 +283,12 @@ fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
     Ok(target)
 }
 
-/// Preserve unchanged files for Cargo freshness and atomically repair incomplete caches.
+/// Publish Rust sources, Cargo manifests, WIT and JSON protocol resources into `target`.
+///
+/// Existing unrelated files are preserved. Unchanged sources retain Cargo freshness;
+/// incomplete files are atomically repaired. Directory and write failures propagate.
 pub fn export(target: &Path) -> anyhow::Result<()> {
-    for (relative, raw) in SDK_FILES {
-        let bytes = *raw;
+    for (relative, bytes) in SDK_FILES {
         let path = target.join(relative);
         publish(&path, bytes)?;
     }
@@ -315,6 +319,34 @@ fn publish(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    /// Independent authors receive only compilable sources and protocol resources in a fresh SDK.
+    #[test]
+    fn fresh_sdk_export_is_a_source_package() {
+        let root = tempfile::tempdir().unwrap();
+        export(root.path()).unwrap();
+        for required in ["Cargo.toml", "src/lib.rs", "wit/plugin.wit"] {
+            assert!(root.path().join(required).is_file(), "missing {required}");
+        }
+        let mut directories = vec![root.path().to_path_buf()];
+        while let Some(directory) = directories.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    directories.push(path);
+                } else {
+                    assert!(
+                        matches!(
+                            path.extension().and_then(|extension| extension.to_str()),
+                            Some("rs" | "toml" | "wit" | "json")
+                        ),
+                        "SDK contains a non-source resource: {}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+
     /// Two independent host invocations can publish a fresh SDK concurrently without partial files.
     #[test]
     fn concurrent_sdk_exports_converge() {
@@ -338,6 +370,7 @@ mod tests {
         }
     }
 
+    /// Reuse a complete source cache and repair interrupted files without rewriting good inputs.
     #[test]
     fn cached_contract_is_complete_reused_and_repairs_corruption() {
         let root = tempfile::tempdir().unwrap();

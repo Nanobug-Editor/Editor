@@ -1,4 +1,57 @@
-//! Stable editor.documents 1.1 identities and immutable, bounded document descriptions.
+//! Stable `editor.documents` 1.1 identities, exact reads and ordered metadata observations.
+//!
+//! # Declaration and read flow
+//!
+//! Use protocol `7`, base API `^1`, capability `editor.documents >=1.1,<2` and the
+//! `editor.read` installation permission. Virtual content and comparisons additionally
+//! negotiate `editor.virtual ^1` and `editor.diff ^1`; opening a workspace local resource
+//! requires `workspace.read`. An optional capability must be checked before its operation.
+//! Resource paths identify content and do not grant file access.
+//!
+//! Enumerate at most 128 readable live text sessions, retain an exact
+//! [`super::DocumentVersion`], then read that version with a complete or bounded range.
+//! Reads observe the authoritative editor state, including unsaved changes; there is no
+//! disk fallback for a closed or stale session. Each result contains at most 256 KiB of
+//! UTF-8 text and immutable metadata. Foreign instance-owned virtual sessions are excluded.
+//! Re-enumerate after a close or revision change rather than applying an old result.
+//!
+//! Byte ranges are half-open and must end on UTF-8 character boundaries. UTF-16 coordinates
+//! are zero-based source lines and columns: CRLF is one line break, a lone CR or LF is a
+//! break, and a surrogate pair cannot be split. Original BOM and line-ending bytes remain
+//! unchanged. For `中😀\r\nsecond`, line 0 columns 1..3 select UTF-8 bytes 3..7;
+//! line 1 column 0 is byte 9, and line 0 column 2 is invalid.
+//!
+//! # Events and cleanup
+//!
+//! `SubscribeDocumentEvents` shares the eight-subscription instance budget with document
+//! subscriptions. Notifications have a host sequence and metadata for open, change, close,
+//! save, active document, selection and viewport transitions; they contain no text delta.
+//! `WillSave` is observational and may arrive after the write, so it cannot intercept a save.
+//! Host ingress and each event stream are bounded at 128 entries. Overflow clears the
+//! stream, emits terminal `SubscriptionFailed(LimitExceeded)` and releases its handle;
+//! enumerate current state and subscribe again. Explicit release, loss of trust and instance
+//! retirement revoke subscriptions and prevent late notifications.
+//!
+//! # Readonly content and comparisons
+//!
+//! `OpenVirtualDocument` creates up to 32 instance-owned documents of at most 1 MiB each. They have
+//! no temporary backing file, disk save, language-server session, history or persistent tab
+//! restoration. A language hint controls presentation only. `RefreshVirtualDocument` requires the
+//! exact owned version and returns a new version without creating user Undo history.
+//!
+//! `CompareDocuments` uses two exact source versions, at most 1 MiB and 2,000 lines each,
+//! with a four-million-cell comparison budget. The left pane is readonly; the right keeps
+//! normal editing behavior, and each pane scrolls independently. Views borrow existing
+//! editor state rather than owning another mutable text or Undo stack. A source edit or
+//! close, a changed active right target, or retirement of the owner/delegated caller ends
+//! the comparison; closing it returns focus to the right editor. Finishing the initiating
+//! request does not itself close the view.
+//!
+//! A typical preview flow is: enumerate/read an exact source; derive immutable content;
+//! open a virtual document; compare its returned version with the fresh source version.
+//! For an update, refresh the owned virtual version and acquire a fresh source version before
+//! comparing again. Handle `StaleRevision`, `InvalidHandle`, `PermissionDenied` and
+//! `LimitExceeded` explicitly instead of substituting another document or truncating text.
 use super::{DocumentVersion, ErrorCode, Failure, ResourceHandle, TextRange};
 use serde::{Deserialize, Serialize};
 

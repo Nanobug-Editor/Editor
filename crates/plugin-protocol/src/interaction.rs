@@ -1,4 +1,54 @@
-//! Stable native interactions: cancellation is a terminal result, never an empty successful choice.
+//! Stable native interactions and opaque, instance-bound selected-file authority.
+//!
+//! # Declaration and completion
+//!
+//! Use protocol `7`, base API `^1`, capability `ui.interaction ^1` and permission
+//! `ui.interaction` for confirmations, quick picks, inputs, notices and progress. Selection
+//! instead requires `files.selection ^1`, the `files.select` installation grant and an active
+//! trusted workspace. Native selection is implemented on Windows; unsupported platforms
+//! return `UnsupportedOperation`, independently of user cancellation.
+//!
+//! The `start` guest helper returns an accepted editor request, not a user decision. Consume its
+//! [`crate::api::Notification::Request`] updates and expect [`crate::api::EditorValue::Interaction`]
+//! only on successful completion: a picked ID, bounded input string, confirmation, dismissed
+//! notice, explicitly finished progress, or selected resource list. Password input masks
+//! presentation; callers must never log the returned secret. Escape, window closure, request
+//! cancellation, timeout or retirement produces a `Cancelled` or `Completed { result: Err(..) }`
+//! terminal update rather
+//! than an empty string or false success. The first terminal result wins; late picks issue no grants.
+//!
+//! Modals use one FIFO queue per window and restore focus only while owning it. Attributed
+//! notices and progress are nonmodal, preserve editor focus and are not persistent history.
+//! The `update` helper coalesces changes into the same progress request; percentages are optional and
+//! range from 0 to 100. The `finish` helper completes only an owned pending task. Cancellation prevents
+//! subsequent updates or finish from reviving it.
+//!
+//! Titles are 1..=256 bytes and messages at most 4,096 bytes. Quick picks contain 1..=512
+//! unique IDs (1..=128 bytes), labels of 1..=256 bytes and descriptions of at most 1,024 bytes.
+//! Input budgets are 1..=65,536 bytes, initial values must fit, and placeholders are at most
+//! 256 bytes. Each instance has at most 32 pending interactions, with timeouts of
+//! 1..=300,000 milliseconds. The Windows picker uses four bounded workers and buffers at
+//! most 64 paths per callback. Public SDK admission accepts at most 32 objects per batch;
+//! each retained grant consumes the instance's shared 128-resource handle quota. A batch
+//! is fully validated before any grant is issued.
+//!
+//! # Selected resources
+//!
+//! [`crate::interaction::SelectionMode::File`] grants only the exact selected file, a directory grant confines
+//! subsequent relative paths beneath that selected directory, and Save grants only the
+//! selected write intent. Selecting a Save target does not itself write or overwrite it.
+//! Save is single-selection; `suggested_name` is a basename of at most 255 bytes, cannot be
+//! `.` or `..`, and cannot contain a slash, backslash, colon or NUL. A display name or path
+//! never substitutes for the opaque [`crate::interaction::SelectedResource::handle`].
+//!
+//! File reads use the file handle with an empty relative path; directory reads use bounded
+//! relative paths. All access rechecks canonical containment, symlinks/junctions, device and
+//! alternate-stream rejection, and the live owner. Ordinary replacement invalidates old
+//! object handles. Do not persist or transfer them: explicit close, disable, trust loss and
+//! instance replacement revoke them. This capability grants neither arbitrary filesystem
+//! access nor workspace mutation. A service or cross-plugin command cannot open a picker or
+//! inherit a selected object. The first directly invoked host command may request selection
+//! under its own approved permissions; a guest-supplied caller identity cannot forge that origin.
 use crate::api::{ErrorCode, Failure};
 use serde::{Deserialize, Serialize};
 
