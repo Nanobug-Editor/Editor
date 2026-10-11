@@ -2,7 +2,9 @@
 
 日期：2026-10-09，续验 2026-10-11。对应 [工单 06](../../tickets/plugin-api-community-foundation/06-cloud-and-private-state.md) / [#98](https://github.com/T-miracle/Nanobug/issues/98)，来源为[社区生态方案](../../specs/plugin-api-community-foundation.md)。
 
-状态：首候选的自动验证与 Windows 原生连接验收通过；固定候选 `69478ced8238e8f2e9ce67d2909e901387ac9109` 的独立审查为 Standards 0 项、Spec 4 项（最高 P1）。四项已在 `d92f79c8957063d1f77a5600f4480baed50859e0` 修复并通过复审，Standards 仍为 0 项；Spec 新发现一项 P2：失败配置候选清理旧实例的 Temporary。续修候选 `a248ccfb1ce9281a989f4888f469a0a25bf47c87` 已补实际 SDK 红绿回归与纯源码出口，固定点双轴复审为 Spec P1/P2/P3 = 0/0/0，Standards = 0/0/1，仅一处注释措辞。注释在 `54272a6261a3cd7c9b726aa6578d3a4392d94c47` 修正，独立 Standards 读回为硬项 0 / smell 0，Spec 保持 0/0/0。现整合根代理验证的 `de5397645d05c5d91e8cd74108d46ad9d7a88ff3`；整合候选的固定点复审与当前产物原生短连接仍由根代理完成。本单尚未标记完成或关闭，本文保留各阶段的实际证据。
+状态：已完成并交付。主分支整合、固定候选双轴复审和当前正式包的 Windows 原生短连接均已完成；交付点 `1c5cbe697ebf37f1497bac1b7b8d08ca7f972876` 的远端完整 SHA 已读回一致，#98 已读回 `closed/completed`，关闭时间为 `2026-10-11T06:28:28Z`。本轮保留已接受的 P3 复用权衡；交付读回见文末，本文继续按固定输入保留各阶段的实际证据。
+
+历史复审：首候选的自动验证与 Windows 原生连接验收通过；固定候选 `69478ced8238e8f2e9ce67d2909e901387ac9109` 的独立审查为 Standards 0 项、Spec 4 项（最高 P1）。四项已在 `d92f79c8957063d1f77a5600f4480baed50859e0` 修复并通过复审，Standards 仍为 0 项；Spec 新发现一项 P2：失败配置候选清理旧实例的 Temporary。续修候选 `a248ccfb1ce9281a989f4888f469a0a25bf47c87` 已补实际 SDK 红绿回归与纯源码出口，固定点双轴复审为 Spec P1/P2/P3 = 0/0/0，Standards = 0/0/1，仅一处注释措辞。注释在 `54272a6261a3cd7c9b726aa6578d3a4392d94c47` 修正，独立 Standards 读回为硬项 0 / smell 0，Spec 保持 0/0/0。其后普通合并根代理验证的 `de5397645d05c5d91e8cd74108d46ad9d7a88ff3`，当前候选与原生短连接的结果见后文，不将旧阶段的产物验收冒充当前输入通过。
 
 ## 工作树、版本与构建入口
 
@@ -240,7 +242,7 @@ cargo test -p plugin-runtime --test cloud t27_t29_private_directories_credential
 
 本阶段先 `cargo fmt --check` 退出 0（`fmt06-main-integration.log`），最后源码注释补齐后格式再次退出 0（`fmt06-main-integration-final.log`）；`cargo check --workspace` 首次退出 0、35.10 秒（`check06-main-integration.log`），源码注释补齐后最终检查退出 0、8.01 秒（`check06-main-integration-final.log`）。新宿主 `cargo build -p editor-app` 退出 0、4 分 26 秒（`build-host06-main-integration.log`），仍直接使用当前 Cargo/VS 工具，未安装工具或调用历史脚本。
 
-实际 fresh export 为 `../target06/sdk06-main-integration`：**42 文件、0 非源码资源、与当前 protocol 源和实际 compiler SDK 缓存分别 0 hash 差异**。SDK key 为 `aa89f9a713a00439bf79c329b9db51758e24d9a1a6b3417f15df963da3208f76`；四个 release compiler-artifact 均引用该 key（`export-sdk06-main-integration.log`、`packages06-main-integration.log`、`fingerprints06-main-integration.log`）。正式 0.1.1 translation/query 与 0.1.0 secret/Temporary 夹具分别构建 **21.78 / 21.00 / 20.05 / 20.68 秒**，原 build key 及包版本保持不变，此阶段未修改消费者业务。新增文档类型及其源码字节改变 WASM 身份；当前 Native 短连接必须核对下表，不能复用旧 hash 作为新产物已验收。
+实际 fresh export 为 `../target06/sdk06-main-integration`：**42 文件、0 非源码资源、与当前 protocol 源和实际 compiler SDK 缓存分别 0 hash 差异**。SDK key 为 `aa89f9a713a00439bf79c329b9db51758e24d9a1a6b3417f15df963da3208f76`；四个 release compiler-artifact 均引用该 key（`export-sdk06-main-integration.log`、`packages06-main-integration.log`、`fingerprints06-main-integration.log`）。正式 0.1.1 translation/query 与 0.1.0 secret/Temporary 夹具分别构建 **21.78 / 21.00 / 20.05 / 20.68 秒**，原 build key 及包版本保持不变，此阶段未修改消费者业务。新增文档类型及其源码字节改变 WASM 身份；根代理的当前 Native 短连接已按下表核对，见[原生记录](native-06.md)的“2026-10-11”部分，没有复用旧 hash 作为新产物已验收。
 
 | 当前主分支整合产物 | SHA-256 |
 | --- | --- |
@@ -271,13 +273,13 @@ cargo test --workspace --exclude editor-app
 
 固定普通合并候选 `f2a907a6a6348aedd3b2f1a37681c4fda1f8da7c` 的 Standards 复审指出一项 P3 判断性 `Duplicated Code`：`plugins/cloud-translation/src/lib.rs:299` 和 `plugins/code-host-query/src/lib.rs:297` 各自显式处理 Headers/Chunk/Finished/Failed 流步骤。根代理接受本轮保留：两个包是独立构建、可复制的公开消费者，公开 SDK 已提供通用传输能力；目前不为两个示例增加新的 SDK 抽象，真正形成稳定复用后再提取。此项没有行为违反，也没有通过改源消除重复；记录为已接受的复用权衡。
 
-本次补记只修改验收 Markdown；相对上述固定候选的 `crates/` 与 `plugins/` 差异为零，宿主、SDK 与包指纹及本阶段门禁证据保持对应关系。没有重建产物或重复行为测试。根代理已完成当前正式包的原生短连接，见[原生记录](native-06.md)的“2026-10-11”部分；最终推送与议题关闭按远端读回记录。
+本次补记只修改验收 Markdown；相对上述固定候选的 `crates/` 与 `plugins/` 差异为零，宿主、SDK 与包指纹及本阶段门禁证据保持对应关系。没有重建产物或重复行为测试。根代理已完成当前正式包的原生短连接，见[原生记录](native-06.md)的“2026-10-11”部分；最终推送与议题关闭已读回，详见文末交付记录。
 
-本执行代理未启动桌面、推送或关闭 issue。根代理完成候选固定点复审及当前正式包的必要原生短连接：新宿主上的云查询/缓存与分块结果、取消资源回落，并与其已验证的原生终端共存；Token、IME、两主题等未变完整 UI 主矩阵维持原证据。
+本单实现代理没有启动桌面。生产交付与议题关闭由根代理完成，实施代理仅按授权推送交付状态的 Markdown 补记。候选固定点复审及当前正式包的必要原生短连接已完成：新宿主上的云查询/缓存与分块结果、取消资源回落，并与已验证的原生终端共存；Token、IME、两主题等未变完整 UI 主矩阵维持原证据。
 
 ## 原生连接验收与限制
 
-根代理负责共享 Windows desktop 的顺序验收；本执行代理没有操作桌面。首候选的实际记录见[原生连接证据](native-06.md)：首轮云翻译密码遮罩/系统凭据/POST 分块/缓存/进度取消与真实 FIN/503/退出及精确凭据清理通过；86D4 宿主通用 Text 的真实 UIA Name、第二消费者 GET 两块结果和离线安全失败随后通过。所有监听器与宿主控制器正常 stop、退出 0，自有进程为空；两个明确测试键精确 API 清理读回 missing，普通 profile/控制器日志扫描无假 Token，工作区为空。修复候选的大结果原生滚动复核及固定点双轴复审另由根代理完成，不把旧 EXE 的首候选结果记成新 hash 原生通过。Token 输入、进度、IME 与控件完整矩阵引用 [02 的验收记录](02-commands-and-interaction.md)，本单仅补连接与可见结果，不重复 UI 主矩阵。
+根代理负责共享 Windows desktop 的顺序验收；本执行代理没有操作桌面。首候选的实际记录见[原生连接证据](native-06.md)：首轮云翻译密码遮罩/系统凭据/POST 分块/缓存/进度取消与真实 FIN/503/退出及精确凭据清理通过；86D4 宿主通用 Text 的真实 UIA Name、第二消费者 GET 两块结果和离线安全失败随后通过。所有监听器与宿主控制器正常 stop、退出 0，自有进程为空；两个明确测试键精确 API 清理读回 missing，普通 profile/控制器日志扫描无假 Token，工作区为空。后续修复候选的大结果原生滚动复核及固定点双轴复审也已完成，按原生记录对应日期与输入查验，不把旧 EXE 的首候选结果记成新 hash 原生通过。Token 输入、进度、IME 与控件完整矩阵引用 [02 的验收记录](02-commands-and-interaction.md)，本单仅补连接与可见结果，不重复 UI 主矩阵。
 
 根代理已追加同一原生记录的“审查修复后”部分：**95C21 宿主 + code-host-query 0.1.1** 实际 GET 完成 65,536 bytes，滚动到末尾可见完整末尾标记，稳定 Windows UIA 三个 Text Name 包含全部首尾；正式 Read cache 后两个 Text Name 保留原始正文，菜单仍可用。实际 dev candidate `74847847fe64410687e1a09090f97d79f6283946519179fd5383bbd0f1a4ea21` 的 WASM 与正式 ZIP 内 `DF6344…` 相同；缓存严格 UTF-8、65,536 bytes，全部 bytes SHA-256 `8955d95861d723df83fcaf8be5a28f8f89e041133ef1d6895fc9e3425f19f0c3` 等于独立重建夹具。控制器/监听器正常 stop、退出 0，自有 EXE 进程和工作区条目均为 0，两个精确测试 OS 键均 missing，普通 profile/日志无假 Token。共享桌面工具的过期目标和焦点干扰按记录重新选择精确自有 EXE 后验证，未操作其他实例。这里只把新滚动接缝记为新 hash 原生通过，未重复 Token/POST/权限主矩阵；`d92f79c` 双轴复审已完成，新增 Temporary P2 及续修候选固定点复审状态见上节。
 
@@ -291,4 +293,10 @@ cargo test --workspace --exclude editor-app
 
 OS DNS 是同步调用：消费者能立即收到 Cancelled/TimedOut，但进行中的 OS DNS 可能占用四个有界 worker 中一个，直至 OS 返回；前后与 connect 接缝检查撤销，禁止迟到连接，未创建无界 DNS helper。不能宣称 OS DNS 本身即时终止。Windows 以外的系统密钥接口明确返回 UnsupportedOperation，本次没有其他平台原生交叉验收。外部 HTTP 副作用不可回滚，恢复只还原受管私有数据和逻辑状态。未扩展 OAuth、AI、WebSocket 或后台任务系统。
 
-本单实现代理不推送、不关闭 #98；根代理完成真实原生验收、固定候选双轴审查、推送后读回关闭。父设计 #92 保持开放。
+## 远端交付读回（2026-10-11）
+
+生产输入固定为 `f2a907a6a6348aedd3b2f1a37681c4fda1f8da7c`，最终独立审查覆盖 `de5397645d05c5d91e8cd74108d46ad9d7a88ff3...f2a907a6a6348aedd3b2f1a37681c4fda1f8da7c`：Spec 遗漏/范围外/错误为 **0/0/0**，Standards 硬项 **0**，判断性 P3 重复实现 **1**，按上文接受保留。根代理的当前 Native 连接全部通过，详见[原生记录](native-06.md)的“2026-10-11”部分。
+
+根代理普通提交并推送交付点 [`1c5cbe697ebf37f1497bac1b7b8d08ca7f972876`](https://github.com/T-miracle/Nanobug/commit/1c5cbe697ebf37f1497bac1b7b8d08ca7f972876)，该点与上述生产输入的 `crates/`、`plugins/` 差异为零。本次补记前再次执行 `git ls-remote origin refs/heads/codex/plugin-api-cloud`，远端完整 SHA 与本地交付点一致。根代理在 API PATCH 后 GET 读回 [#98](https://github.com/T-miracle/Nanobug/issues/98) 为 `closed`、`state_reason=completed`、`closed_at=2026-10-11T06:28:28Z`；正文保留原规格、勾验收条件并指向该交付点的逐单与原生证据。没有重写原规格或修改父设计 #92；父设计保持开放。
+
+本次仅完善这两份验收 Markdown 的当前状态与交付说明，保留历史未验收时点和全部失败记录；没有修改生产代码、宿主、SDK 或包，没有重复 Cargo/原生测试或再次评论、关闭议题。后续纯文档补记不改变上述生产验收输入和产物指纹。
