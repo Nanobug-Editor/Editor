@@ -197,6 +197,8 @@ pub struct RunControls {
     step_requests: BTreeMap<u64, (String, usize)>,
     /// Storage directory used for host-local configuration files.
     root: Option<std::path::PathBuf>,
+    /// A failed startup transaction freezes configuration writes until a repaired restart.
+    storage_blocked: Option<String>,
     /// Workspace directory holding this project's shared file, when the workspace has one.
     project: Option<std::path::PathBuf>,
     /// The project's shared entries as the file currently holds them.
@@ -225,6 +227,8 @@ pub struct RunControls {
     debug_owners: std::collections::BTreeMap<String, String>,
     /// Replacing a debug target waits for the original target's actual final observation.
     debug_reruns: std::collections::BTreeMap<String, String>,
+    /// Confirmed closes made before the host creation receipt retain their original start request.
+    debug_closes: std::collections::BTreeMap<String, u64>,
     /// Source often arrives after the stopped receipt; locate each reported pause at most once.
     debug_position_epochs: std::collections::BTreeMap<String, u64>,
     /// Frozen final debug requests wait until every ordinary preparation step actually succeeds.
@@ -431,6 +435,7 @@ impl Default for RunControls {
             polls: Vec::new(),
             step_requests: BTreeMap::new(),
             root: None,
+            storage_blocked: None,
             project: None,
             shared: editor_core::SharedSet::default(),
             discovered: Vec::new(),
@@ -444,6 +449,7 @@ impl Default for RunControls {
             debug_epochs: Default::default(),
             debug_owners: Default::default(),
             debug_reruns: Default::default(),
+            debug_closes: Default::default(),
             debug_position_epochs: Default::default(),
             debug_preparations: Default::default(),
             debug_preparation_bindings: Default::default(),
@@ -459,6 +465,11 @@ impl Default for RunControls {
 }
 
 impl RunControls {
+    /// Preserve all pending migration targets instead of letting form validation rewrite their hashes.
+    pub(crate) fn block_persistence(&mut self, message: String) {
+        self.error = Some(message.clone());
+        self.storage_blocked = Some(message);
+    }
     /// Load the configurations stored for one workspace, reporting an unreadable file.
     #[cfg(test)]
     pub fn load(workspace: &str, root: Option<std::path::PathBuf>) -> Self {
@@ -613,12 +624,15 @@ impl RunControls {
         self.configs.clone()
     }
 
-    /// Commit one local snapshot atomically; failed writes do not change the baseline.
+    /// Commit one local snapshot atomically; migration protection and failed writes retain the baseline.
     pub(crate) fn commit_configuration_set(
         &mut self,
         set: RunConfigSet,
         workspace: &str,
     ) -> Result<(), String> {
+        if let Some(message) = &self.storage_blocked {
+            return Err(message.clone());
+        }
         let bytes = set.to_json().map_err(|error| error.to_string())?;
         let set = RunConfigSet::from_json(&bytes).map_err(|error| error.to_string())?;
         let root = self
@@ -779,6 +793,9 @@ impl RunControls {
     /// shared is the project's file: a shared entry's portable half is read from there on every load,
     /// so this copy cannot drift the configuration that actually runs.
     fn persist_local(&mut self, workspace: &str) -> Result<(), String> {
+        if let Some(message) = &self.storage_blocked {
+            return Err(message.clone());
+        }
         let Some(root) = self.root.clone() else {
             return Ok(());
         };
@@ -797,6 +814,9 @@ impl RunControls {
 
     /// Write the project's shared file, creating it only when something is actually shared.
     fn persist_shared(&mut self, shared: &editor_core::SharedSet) -> Result<(), String> {
+        if let Some(message) = &self.storage_blocked {
+            return Err(message.clone());
+        }
         let Some(project) = self.project.clone() else {
             return Ok(());
         };
@@ -1677,7 +1697,7 @@ impl RunControls {
         config: &str,
         mut plan: RunPlan,
         workspace: &str,
-    ) -> Result<(), String> {
+    ) -> Result<u64, String> {
         let target = plan
             .steps
             .pop()
@@ -1710,7 +1730,7 @@ impl RunControls {
         self.debug_preparations.insert(config.into(), arguments);
         let request = self.begin(config);
         self.begin_sequence(config, plan, request);
-        Ok(())
+        Ok(request)
     }
     /// Only the completed sequence may consume this once; a stopped preparation discards it.
     pub fn take_prepared_debug(&mut self, config: &str) -> Option<serde_json::Value> {
@@ -2718,6 +2738,7 @@ impl RunControls {
 
     /// Begin the debug session for one configuration, so its identity can be recorded when it answers.
     pub fn begin_debug_session(&mut self, config: &str) {
+        self.debug_closes.remove(config);
         // A restarted target owns a new epoch sequence; old numeric epochs cannot shadow it.
         self.debug_epochs.remove(config);
         self.debug_position_epochs.remove(config);
@@ -2743,6 +2764,48 @@ impl RunControls {
             frame: None,
         });
         Some(request)
+    }
+
+    /// Remember cancellation before creation; it cannot be redirected to a later launch round.
+    pub fn defer_debug_close(&mut self, config: &str) -> bool {
+        let Some(request) = self
+            .debug_requests
+            .iter()
+            .find(|pending| {
+                pending.config.as_deref() == Some(config) && pending.method == DebugMethod::Start
+            })
+            .map(|pending| pending.id)
+        else {
+            return false;
+        };
+        self.debug_closes.insert(config.into(), request);
+        true
+    }
+    /// An early host identity permits forceful cancellation without waiting for a DAP handshake.
+    pub fn take_ready_debug_closes(&mut self) -> Vec<String> {
+        let keys: Vec<_> = self
+            .debug_closes
+            .keys()
+            .filter(|config| {
+                self.debug_sessions.session(config).is_none_or(|session| {
+                    session.provider_session().is_some()
+                        || matches!(
+                            session.state(),
+                            editor_core::DebugSessionState::Failed { .. }
+                                | editor_core::DebugSessionState::Exited
+                        )
+                })
+            })
+            .cloned()
+            .collect();
+        let mut ready = Vec::new();
+        for config in keys {
+            self.debug_closes.remove(&config);
+            if self.debug_target_active(&config) {
+                ready.push(config);
+            }
+        }
+        ready
     }
 
     /// Actual failure clears this action and marks its own start, without failing a different selection.

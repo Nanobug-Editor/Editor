@@ -5,6 +5,7 @@ mod admission;
 mod bundled_tests;
 mod command_epochs;
 pub(super) mod configurations;
+mod marketplace;
 mod preparation;
 #[cfg(all(test, windows))]
 mod registry_startup_tests;
@@ -67,6 +68,32 @@ impl RunStatus {
 }
 
 pub enum Work {
+    /// Native terminal input retains a guest's authenticated presentation handle, not an OS handle.
+    PresentedInput {
+        handle: api::ResourceHandle,
+        bytes: Vec<u8>,
+    },
+    PresentedResize {
+        handle: api::ResourceHandle,
+        columns: u16,
+        rows: u16,
+    },
+    /// Closing an independently presented PTY follows the same observed native exit contract.
+    PresentedExit {
+        handle: api::ResourceHandle,
+        mode: plugin_runtime::plugin_protocol::process::ExitMode,
+    },
+    /// Native views use the same pinned execution owner as public service consumers.
+    ExecutionInput {
+        session: u64,
+        bytes: Vec<u8>,
+    },
+    /// Geometry is negotiated as the optional execution 2.1 method, never a raw process handle.
+    ExecutionResize {
+        session: u64,
+        columns: u16,
+        rows: u16,
+    },
     /// One-time opaque migration uses current scoped storage consent, never the UI filesystem thread.
     ImportPreference {
         plugin: String,
@@ -334,6 +361,11 @@ pub(super) struct InstallationProgress {
 }
 #[derive(Default)]
 pub(super) struct Published {
+    /// Refresh generations authorize downloads; cached catalogs only support browsing.
+    pub market: plugin_runtime::marketplace::CatalogState,
+    pub market_revision: u64,
+    /// Bounded, predecoded icons never invoke the UI's ambient file or URL resolver.
+    pub market_icons: BTreeMap<String, crate::ui::plugin::bitmap::Bitmap>,
     /// Completion bundles let the session discard only the historical data actually stored.
     pub preference_imports: Vec<PreferenceImport>,
     /// True only after successful private-store recovery and the actor's first complete entry publication.
@@ -366,6 +398,11 @@ pub(super) struct Published {
     /// A snapshot is a view of the runtime's session, never a second process model: the worker
     /// republishes it and the UI joins it to the saved configuration.
     pub host_executions: Vec<HostRunSnapshot>,
+    /// Ordered native execution bytes; a slow UI applies bounded backpressure rather than dropping VT state.
+    pub native_execution_updates: Vec<NativeExecutionMessage>,
+    pub terminal_presentations: Vec<PresentedTerminalMessage>,
+    /// Host debug IDs bind PTY publications to accepted rounds before creation completes.
+    pub debug_terminal_requests: BTreeMap<String, u64>,
     /// Result of a start request the worker could not even queue, keyed by launch identity.
     pub run_errors: Vec<(String, u64, String)>,
     /// Answers to stop requests this editor made, keyed by stop identity.
@@ -520,6 +557,21 @@ pub struct HostRunSnapshot {
     pub provider_session: Option<String>,
     /// Provider-reported failure, retained as the visible result of the launch.
     pub failure: Option<String>,
+}
+
+/// The actor joins a provider observation to its immutable configuration/request, never current selection.
+#[derive(Clone, Debug)]
+pub struct NativeExecutionMessage {
+    pub execution: u64,
+    pub config: String,
+    pub request_id: u64,
+    pub update: plugin_runtime::NativeExecutionUpdate,
+}
+/// A host invocation is joined to its admitted UI round before any adapter handshake can publish bytes.
+#[derive(Clone, Debug)]
+pub struct PresentedTerminalMessage {
+    pub request_id: u64,
+    pub presentation: plugin_runtime::TerminalPresentation,
 }
 /// The channel disconnect also shuts down when the last UI owner is released.
 pub(super) struct Worker {
