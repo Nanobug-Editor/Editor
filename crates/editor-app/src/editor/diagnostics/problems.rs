@@ -13,6 +13,8 @@ pub(crate) struct ProblemsState {
     open: bool,
     focus: Option<FocusHandle>,
     previous: Option<FocusHandle>,
+    /// Focus belongs to each painted Base row; these handles contain no diagnostic payload.
+    rows: Vec<FocusHandle>,
     selected: usize,
     document: Option<api::DocumentVersion>,
     scroll: ScrollHandle,
@@ -42,16 +44,19 @@ impl EditorApp {
     /// Return focus only while this modal still owns it; a later user focus change remains intact.
     fn close_problems(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.problems.open = false;
-        if self
-            .problems
-            .focus
-            .as_ref()
-            .is_some_and(|focus| focus.contains_focused(window, cx))
-            && let Some(previous) = self.problems.previous.take()
-        {
+        let owns_focus =
+            self.problems.focus.as_ref().is_some_and(|focus| {
+                focus.is_focused(window) || focus.contains_focused(window, cx)
+            }) || self
+                .problems
+                .rows
+                .iter()
+                .any(|focus| focus.is_focused(window));
+        if owns_focus && let Some(previous) = self.problems.previous.take() {
             previous.focus(window, cx);
         }
         self.problems.focus = None;
+        self.problems.rows.clear();
         cx.notify();
     }
 
@@ -115,8 +120,11 @@ impl EditorApp {
         rows
     }
 
-    /// Keyboard selection scrolls the same native list as pointer selection; Enter reveals its range.
+    /// Arrow selection scrolls and focuses the live Base row; Base owns Enter and Escape delivery.
     fn problems_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if event.keystroke.modifiers != Default::default() {
+            return;
+        }
         let length = self.problem_rows(cx).len();
         match event.keystroke.key.as_str() {
             "up" => self.problems.selected = self.problems.selected.saturating_sub(1),
@@ -125,17 +133,10 @@ impl EditorApp {
             }
             "home" => self.problems.selected = 0,
             "end" => self.problems.selected = length.saturating_sub(1),
-            "enter" => {
-                self.reveal_problem(window, cx);
-                cx.stop_propagation();
-                return;
-            }
-            "escape" => {
-                self.close_problems(window, cx);
-                cx.stop_propagation();
-                return;
-            }
             _ => return,
+        }
+        if let Some(focus) = self.problems.rows.get(self.problems.selected) {
+            focus.focus(window, cx);
         }
         self.problems.scroll.scroll_to_item(self.problems.selected);
         cx.stop_propagation();
@@ -224,20 +225,48 @@ impl EditorApp {
     }
 
     /// Base supplies focus trapping and dismissal; local buttons and theme tokens own all appearance.
-    pub(crate) fn render_problems(&mut self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_problems(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         if !self.problems.open {
             return div().into_any_element();
         }
         let document = self
             .active_text_tab_index()
             .and_then(|index| self.plugin_document_version(index).ok());
-        if self.problems.document != document {
+        let document_changed = self.problems.document != document;
+        if document_changed {
             self.problems.document = document.clone();
             self.problems.selected = 0;
             self.problems.scroll.scroll_to_item(0);
         }
         let rows = self.problem_rows(cx);
         self.problems.selected = self.problems.selected.min(rows.len().saturating_sub(1));
+        let dialog_focus = self.problems.focus.as_ref().unwrap();
+        let owns_focus = dialog_focus.is_focused(window)
+            || dialog_focus.contains_focused(window, cx)
+            || self
+                .problems
+                .rows
+                .iter()
+                .any(|focus| focus.is_focused(window));
+        let rows_changed = self.problems.rows.len() != rows.len();
+        self.problems
+            .rows
+            .resize_with(rows.len(), || cx.focus_handle());
+        // The initial Dialog focus is above the body, so its keys cannot reach a descendant
+        // listener. Enter the selected native row, including before the deferred first paint.
+        // If live publications remove a focused row, keep focus inside this modal without
+        // pulling it back from an unrelated control the user selected in the meantime.
+        if dialog_focus.is_focused(window) || ((rows_changed || document_changed) && owns_focus) {
+            self.problems
+                .rows
+                .get(self.problems.selected)
+                .unwrap_or(dialog_focus)
+                .focus(window, cx);
+        }
         let mut sources = BTreeMap::<String, usize>::new();
         for row in &rows {
             *sources.entry(row.source.clone()).or_default() += 1;
@@ -253,6 +282,7 @@ impl EditorApp {
         for (index, row) in rows.iter().enumerate() {
             list = list.child(
                 Button::new(format!("native-problem-{index}"))
+                    .track_focus(&self.problems.rows[index])
                     .label(row.label.clone())
                     .accessibility_label(format!("{} · {}", row.source, row.label))
                     .w_full()
@@ -261,10 +291,18 @@ impl EditorApp {
                     .ghost()
                     .when(index == self.problems.selected, |button| button.primary())
                     .debug_selector(move || format!("native-problem-{index}"))
-                    .on_click(cx.listener(move |app, _, _, cx| {
-                        app.problems.selected = index;
-                        cx.notify();
-                    })),
+                    .on_click(
+                        cx.listener(move |app, event: &gpui_kit::ClickEvent, window, cx| {
+                            app.problems.selected = index;
+                            // Pointer selection exposes details; a complete native keyboard click
+                            // reveals the selected position, without stealing Enter from fix buttons.
+                            if event.is_keyboard() {
+                                app.reveal_problem(window, cx);
+                            } else {
+                                cx.notify();
+                            }
+                        }),
+                    ),
             );
         }
         let mut body = div()
@@ -274,7 +312,7 @@ impl EditorApp {
             .gap_3()
             .bg(cx.theme().popover)
             .text_color(cx.theme().popover_foreground)
-            .on_key_down(cx.listener(Self::problems_key))
+            .capture_key_down(cx.listener(Self::problems_key))
             .child(
                 div()
                     .id("native-problems-heading")

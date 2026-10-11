@@ -36,6 +36,54 @@ fn native_community_language_diagnostics_fix_preview_source_revision_and_undo(
             ),
             2
         );
+        // Open from the editor's shortcut without clicking a child first: Base keeps initial
+        // focus on its Dialog, so row arrows must work from that actual dispatch path too.
+        visual.simulate_keystrokes("ctrl-shift-m");
+        draw(visual);
+        let visible_fix = |visual: &mut VisualTestContext, label: &str| {
+            visual.update(|window, _| {
+                gpui_base::test_support::snapshots(window)
+                    .iter()
+                    .any(|node| {
+                        node.role() == Some(gpui_kit::Role::Button)
+                            && node.visible()
+                            && node.label().is_some_and(|name| name.contains(label))
+                    })
+            })
+        };
+        assert!(visible_fix(visual, "Replace with the"));
+        visual.simulate_keystrokes("down");
+        draw(visual);
+        assert!(
+            visible_fix(visual, "Create default configuration"),
+            "Down from the initially focused Base Dialog must select the other source and its fix"
+        );
+        visual.simulate_keystrokes("up");
+        draw(visual);
+        assert!(visible_fix(visual, "Replace with the"));
+        visual.simulate_keystrokes("end");
+        draw(visual);
+        assert!(visible_fix(visual, "Create default configuration"));
+        visual.simulate_keystrokes("home");
+        draw(visual);
+        assert!(visible_fix(visual, "Replace with the"));
+        visual.simulate_keystrokes("down");
+        draw(visual);
+        // Match a real Base keyboard click: the shortcut helper alone only emits KeyDown.
+        let keystroke = gpui_kit::Keystroke::parse("enter").unwrap();
+        visual.simulate_event(gpui_kit::KeyDownEvent {
+            keystroke: keystroke.clone(),
+            is_held: false,
+            prefer_character_input: false,
+        });
+        visual.simulate_event(gpui_kit::KeyUpEvent { keystroke });
+        draw(visual);
+        assert!(visual.debug_bounds("native-problems-list").is_none());
+        assert_eq!(
+            visual.update(|_, cx| app.read(cx).editor.read(cx).cursor()),
+            12
+        );
+        assert_eq!(text(visual, &app), original);
         select_problem(visual, &app, "teh");
         assert!(
             visual.update(|window, _| gpui_base::test_support::snapshots(window)
