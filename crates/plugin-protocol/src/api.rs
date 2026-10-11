@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 mod documents;
+mod edits;
+#[cfg(feature = "guest")]
+pub use edits::apply_edits;
+pub use edits::{TextEdit, validate_text_edits};
 mod navigation;
 pub use documents::{
     DocumentAccess, DocumentEncoding, DocumentEol, DocumentEvent, DocumentEventKind, DocumentInfo,
@@ -227,6 +231,10 @@ pub enum Operation {
     SubscribeDocuments,
     /// Opt into ordered metadata notifications; requires editor.documents 1.1 and editor.read.
     SubscribeDocumentEvents,
+    /// workspace.files 1.2: observe this exact workspace root, including unopened file changes.
+    SubscribeWorkspaceFiles {
+        root: ResourceHandle,
+    },
     CancelRequest {
         handle: ResourceHandle,
         mode: CancelMode,
@@ -286,6 +294,11 @@ pub struct Request {
 /// Result variants carry structured values, never JSON hidden inside a string result.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Value {
+    /// A plan's wait can stop independently from its current-session recovery resource.
+    BatchAccepted {
+        request: ResourceHandle,
+        batch: ResourceHandle,
+    },
     Commands(Vec<crate::commands::Descriptor>),
     Preference(PreferenceRead),
     /// process 1.6: an existing native executable, never an execution grant or process handle.
@@ -396,6 +409,11 @@ pub enum Notification {
     SubscriptionFailed {
         subscription: ResourceHandle,
         error: Failure,
+    },
+    /// Opt-in workspace observations are distinct from document revision notifications.
+    WorkspaceFile {
+        subscription: ResourceHandle,
+        event: crate::workspace::FileEvent,
     },
     /// Shared private intent changed; delivery belongs to this exact live watch, not a document session.
     PreferenceChanged {
@@ -529,6 +547,10 @@ pub struct DocumentChange {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditorOperation {
+    /// workspace.files 1.2: resource queries and previewed native mixed plans.
+    Workspace {
+        operation: crate::workspace::Operation,
+    },
     /// Open an existing workspace text resource; local opens also require workspace.read.
     OpenDocument {
         resource: ResourceIdentity,
@@ -619,6 +641,14 @@ pub enum EditorOperation {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         expected_selection: Option<TextRange>,
     },
+    /// A complete original-revision proposal for any opened local text session, including background tabs.
+    /// Requires editor.edit 1.1 and editor.write. One native Undo changes this document alone.
+    /// Cross-resource proposals use workspace.files plans with preview, consent and explicit group Undo.
+    ApplyEdits {
+        document: DocumentVersion,
+        edits: Vec<TextEdit>,
+        selection: TextRange,
+    },
     ActiveDirectory,
     SaveDocument {
         document: DocumentVersion,
@@ -632,6 +662,7 @@ pub enum EditorOperation {
 /// Values describe the actual document and revision observed or saved, rather than an acknowledgement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EditorValue {
+    Workspace(crate::workspace::Value),
     /// Open/refresh returns current metadata; EditorState retains the only live text.
     DocumentOpened(DocumentInfo),
     /// Navigation returns the version validated before the native selection.

@@ -260,7 +260,9 @@ impl State {
                 api::Operation::Editor {
                     operation:
                         api::EditorOperation::Interaction {
-                            operation: plugin_protocol::interaction::Operation::Select { .. },
+                            operation:
+                                plugin_protocol::interaction::Operation::Select { .. }
+                                | plugin_protocol::interaction::Operation::SelectWithAccess { .. },
                         },
                     ..
                 } => return self.check_selection_authority(),
@@ -307,12 +309,15 @@ impl State {
             | api::Operation::Service { .. }
             | api::Operation::DescribeSdk => return Ok(()),
             api::Operation::OpenWorkspace => "workspace.read",
+            api::Operation::SubscribeWorkspaceFiles { .. } => "workspace.read",
             api::Operation::ReadFile { handle, .. } | api::Operation::FindFiles { handle, .. }
                 if matches!(self.roots.resolve(handle)?, RootKind::Workspace) =>
             {
                 "workspace.read"
             }
             api::Operation::Editor { operation, .. } => match operation {
+                // Workspace admission checks every root direction and every delegated grant together.
+                api::EditorOperation::Workspace { .. } => return Ok(()),
                 api::EditorOperation::OpenDocument {
                     resource: api::ResourceIdentity::Local { .. },
                 } => {
@@ -325,7 +330,9 @@ impl State {
                     "workspace.read"
                 }
                 api::EditorOperation::Interaction {
-                    operation: plugin_protocol::interaction::Operation::Select { .. },
+                    operation:
+                        plugin_protocol::interaction::Operation::Select { .. }
+                        | plugin_protocol::interaction::Operation::SelectWithAccess { .. },
                 } => {
                     return Err(Failure::new(
                         ErrorCode::PermissionDenied,
@@ -360,7 +367,8 @@ impl State {
                 }
                 // Delegated range edits cannot borrow the provider's stronger write grant.
                 api::EditorOperation::SaveDocument { .. }
-                | api::EditorOperation::ReplaceDocumentRange { .. } => "editor.write",
+                | api::EditorOperation::ReplaceDocumentRange { .. }
+                | api::EditorOperation::ApplyEdits { .. } => "editor.write",
                 api::EditorOperation::SetPanelVisibility { .. } => "ui.panels",
                 _ => "editor.read",
             },

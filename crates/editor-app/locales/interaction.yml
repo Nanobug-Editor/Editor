@@ -1,4 +1,7 @@
 _version: 2
+interaction.write_access:
+  en: "Allow creating, replacing, renaming and deleting selected files"
+  zh-CN: "允许创建、覆盖、改名和删除所选资源"
 interaction.search:
   en: "Search choices"
   zh-CN: "搜索选项"
@@ -20,3 +23,60 @@ interaction.warning:
 interaction.error:
   en: "Error"
   zh-CN: "错误"
+workspace_plan.edit:
+  en: "Edit %{path} (%{ranges} ranges)"
+  zh-CN: "编辑 %{path}（%{ranges} 处修改）"
+workspace_plan.buffer_write:
+  en: "Replace opened buffer %{path} (%{bytes} bytes, remains unsaved)"
+  zh-CN: "替换已打开的 %{path}（%{bytes} 字节，保持未保存）"
+workspace_plan.disk_write:
+  en: "Create or atomically replace disk file %{path} (%{bytes} bytes)"
+  zh-CN: "创建或原子替换磁盘文件 %{path}（%{bytes} 字节）"
+workspace_plan.mkdir:
+  en: "Create directory %{path}"
+  zh-CN: "创建目录 %{path}"
+workspace_plan.delete:
+  en: "Delete %{path}"
+  zh-CN: "删除 %{path}"
+workspace_plan.copy:
+  en: "Copy %{source} → %{target}"
+  zh-CN: "复制 %{source} → %{target}"
+workspace_plan.rename:
+  en: "Rename %{source} → %{target}"
+  zh-CN: "改名 %{source} → %{target}"
+workspace_plan.selected_target:
+  en: "Selected exact target"
+  zh-CN: "已选择的精确目标"
+workspace_plan.excerpt:
+  en: " … (excerpt)"
+  zh-CN: " …（片段）"
+workspace_plan.attribution:
+  en: "Requested by %{source}"
+  zh-CN: "来自 %{source} 的修改计划"
+workspace_plan.unsaved_notice:
+  en: "Opened text stays unsaved. Disk actions may partially complete if canceled or blocked. Whole-batch Undo checks all targets first."
+  zh-CN: "已打开文本保持未保存。取消或遇到阻碍时，磁盘操作可能部分完成。整组撤销会先检查全部目标。"
+workspace_plan.apply:
+  en: "Apply plan"
+  zh-CN: "应用计划"
+workspace_plan.undo:
+  en: "Undo whole batch"
+  zh-CN: "撤销整组操作"
+workspace_plan.complete:
+  en: "Complete"
+  zh-CN: "已完成"
+workspace_plan.partial:
+  en: "Partially complete"
+  zh-CN: "部分完成"
+workspace_plan.undone:
+  en: "Undone"
+  zh-CN: "已整组撤销"
+workspace_plan.undo_partial:
+  en: "Undo partially complete"
+  zh-CN: "撤销部分完成"
+workspace_plan.completed_steps:
+  en: "%{count} of %{total} operations completed"
+  zh-CN: "已完成 %{count} / %{total} 项操作"
+workspace_plan.document_conflict:
+  en: "Document was edited, renamed, closed or used local Undo"
+  zh-CN: "文档已编辑、改名、关闭或进行了局部撤销"

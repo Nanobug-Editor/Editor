@@ -60,6 +60,7 @@ pub mod structure;
 /// Dynamic target discovery and build preparation are provider policy, independent of execution.
 pub mod targets;
 pub mod ui;
+pub mod workspace;
 
 /// Guest imports and exports use the WIT contract supplied by the building editor.
 #[cfg(feature = "guest")]

@@ -56,6 +56,8 @@ impl State {
                 "cancel_request",
                 "subscribe_documents",
                 "subscribe_document_events",
+                // Workspace observations are an opt-in public operation, not an editor text stream.
+                "subscribe_workspace_files",
                 "process",
                 "service",
                 "commands",
@@ -146,6 +148,9 @@ impl State {
                 api::Operation::Process { operation } => self.process_request(operation),
                 api::Operation::SubscribeDocuments => self.subscribe_documents(),
                 api::Operation::SubscribeDocumentEvents => self.subscribe_document_stream(),
+                api::Operation::SubscribeWorkspaceFiles { root } => {
+                    self.subscribe_workspace_files(root)
+                }
                 api::Operation::CancelRequest { handle, mode } => {
                     self.roots.resolve(&handle)?;
                     if let Some(request) = self.plugin_services.pending.get(&handle.resource) {
@@ -175,29 +180,32 @@ impl State {
                 operation => self.resource_request(operation),
             };
             // Record all delegated allocations at the common boundary, including file and request handles.
-            if let (
-                Ok(
+            if let (Ok(value), Some(context)) = (&result, &self.plugin_services.context) {
+                let handles = match value {
                     api::Value::Resource(handle)
                     | api::Value::Accepted(handle)
                     | api::Value::Preference(api::PreferenceRead {
                         subscription: Some(handle),
                         ..
-                    }),
-                ),
-                Some(context),
-            ) = (&result, &self.plugin_services.context)
-            {
-                if matches!(
-                    self.roots.resolve(handle),
-                    Ok(resource_roots::RootKind::Process(_))
-                ) {
-                    self.host_resources
-                        .preparations
-                        .opened(&context.lifetimes, handle);
+                    }) => vec![handle],
+                    // A batch has two independent lifetimes. Both waits and retained recovery must
+                    // remain cancellable/releasable by the source that originally allocated them.
+                    api::Value::BatchAccepted { request, batch } => vec![request, batch],
+                    _ => Vec::new(),
+                };
+                for handle in handles {
+                    if matches!(
+                        self.roots.resolve(handle),
+                        Ok(resource_roots::RootKind::Process(_))
+                    ) {
+                        self.host_resources
+                            .preparations
+                            .opened(&context.lifetimes, handle);
+                    }
+                    self.plugin_services
+                        .resources
+                        .insert(handle.resource, (handle.clone(), context.clone()));
                 }
-                self.plugin_services
-                    .resources
-                    .insert(handle.resource, (handle.clone(), context.clone()));
             }
             result
         })();

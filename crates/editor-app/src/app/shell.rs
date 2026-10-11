@@ -525,6 +525,8 @@ impl Render for EditorApp {
             .child(self.render_explorer_edit(cx))
             .child(self.render_explorer_delete(cx))
             .child(self.render_file_transfer(cx))
+            .child(self.render_workspace_receipts(cx))
+            .child(self.render_workspace_plan(window, cx))
             .child(
                 div()
                     .id("plugin-notice-stack")

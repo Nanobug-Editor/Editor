@@ -757,6 +757,14 @@ impl Worker {
                     }
                     Err(error) => manager.document_stream_failed(error),
                 }
+                match output.lock().unwrap().file_events.take_batch(64) {
+                    Ok(events) => {
+                        for event in events {
+                            manager.workspace_file_event(event);
+                        }
+                    }
+                    Err(error) => manager.workspace_events_failed(error),
+                }
                 manager.poll();
                 if output.lock().unwrap().terminal_presentations.len() < 240 {
                     let messages = manager

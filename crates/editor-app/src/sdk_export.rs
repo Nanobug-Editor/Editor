@@ -3,6 +3,7 @@
 //! `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]` prepares a
 //! content-addressed source cache and supplies Cargo's dependency override automatically.
 //! `--export-plugin-sdk <directory>` publishes the same inputs for other toolchains.
+//! Only protocol Rust sources, Cargo metadata, WIT and JSON resources are embedded.
 //! Interface guidance stays beside the public Rust types; Markdown is not embedded or exported.
 use anyhow::Context;
 use sha2::{Digest, Sha256};
@@ -11,6 +12,16 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // Files and recovery receipts use the same public contract in every independent consumer.
+    (
+        "src/workspace.rs",
+        include_bytes!("../../plugin-protocol/src/workspace.rs"),
+    ),
+    // Independent projects receive the host's exact original-revision multi-range contract.
+    (
+        "src/api/edits.rs",
+        include_bytes!("../../plugin-protocol/src/api/edits.rs"),
+    ),
     // Document contracts ship in the exact same SDK used by the host consumer.
     (
         "src/api/documents.rs",

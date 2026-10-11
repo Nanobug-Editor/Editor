@@ -22,6 +22,16 @@ pub struct EditorAuthority {
 }
 
 impl EditorAuthority {
+    /// Internal issuers share one immutable lifetime chain instead of copying completion semantics.
+    pub(crate) fn new(
+        owner: Arc<AtomicBool>,
+        context: Option<&crate::plugin_services::Context>,
+    ) -> Self {
+        Self {
+            owner,
+            callers: context.map_or_else(Vec::new, |context| context.lifetimes.clone()),
+        }
+    }
     /// Return whether the initiating instance and every delegated source remain authorized.
     /// Completing a task does not retire a persistent view; disable/cutover/trust revocation does.
     pub fn is_live(&self) -> bool {
@@ -54,6 +64,8 @@ pub struct EditorRequest {
     selection: std::sync::Arc<std::sync::Mutex<Option<Vec<std::path::PathBuf>>>>,
     /// Replaceable presentation belongs to this one request, never a second cancellable task.
     progress: std::sync::Arc<std::sync::Mutex<(String, Option<u8>)>>,
+    /// Checked native roots and a separately releasable recovery resource never come from guest paths.
+    workspace_request: Option<crate::WorkspaceRequest>,
 }
 impl EditorRequest {
     /// Construction follows authority checks in the instance; only typed owned data crosses threads.
@@ -78,16 +90,13 @@ impl EditorRequest {
             workspace,
             data_root,
             completion,
-            authority: EditorAuthority {
-                owner,
-                // Keep the entire delegated chain rather than substituting the final provider.
-                callers: context.map_or_else(Vec::new, |context| context.lifetimes.clone()),
-            },
+            authority: EditorAuthority::new(owner, context),
             image_input: None,
             virtual_document: None,
             parents,
             selection: Default::default(),
             progress: Default::default(),
+            workspace_request: None,
         }
     }
     pub fn handle(&self) -> &ResourceHandle {
@@ -100,6 +109,14 @@ impl EditorRequest {
     /// Hosts may clone it to observe revocation, but cannot mutate its runtime-owned lifetimes.
     pub fn authority(&self) -> &EditorAuthority {
         &self.authority
+    }
+    /// Borrow checked IO authority; absence means this request cannot execute a workspace operation.
+    pub fn workspace_request(&self) -> Option<&crate::WorkspaceRequest> {
+        self.workspace_request.as_ref()
+    }
+    pub(crate) fn with_workspace_request(mut self, request: crate::WorkspaceRequest) -> Self {
+        self.workspace_request = Some(request);
+        self
     }
     /// Native virtual opens require runtime-issued owned authority.
     pub fn virtual_document(&self) -> Option<&std::sync::Arc<crate::VirtualDocumentResource>> {
@@ -154,6 +171,7 @@ impl EditorRequest {
             self.operation,
             EditorOperation::Interaction {
                 operation: plugin_protocol::interaction::Operation::Select { .. }
+                    | plugin_protocol::interaction::Operation::SelectWithAccess { .. }
             }
         ) && result.is_ok()
         {
@@ -193,6 +211,7 @@ impl EditorRequest {
             self.operation,
             EditorOperation::Interaction {
                 operation: plugin_protocol::interaction::Operation::Select { .. }
+                    | plugin_protocol::interaction::Operation::SelectWithAccess { .. }
             }
         ) {
             self.completion.finish(Err(Failure::new(

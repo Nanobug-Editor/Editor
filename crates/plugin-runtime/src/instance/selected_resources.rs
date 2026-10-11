@@ -1,27 +1,20 @@
-//! Native picker grants bind one instance to an exact file/save target or a readonly directory.
+//! Native picker grants bind one instance to an exact file/save target or an explicitly selected directory.
+//! Legacy picks stay readonly; files.selection 1.1 preserves the user's explicit write consent.
 use super::*;
+use crate::native_path::{invalid_path, io_failure, is_reparse, pin_path};
 use api::{EditorValue, ErrorCode, Failure, ResourceHandle, Value};
-use plugin_protocol::interaction::{SelectedResource, SelectionMode};
-use std::{
-    fs::{File, OpenOptions},
-    io::Read,
-    path::Component,
-    sync::atomic::Ordering,
-};
+use plugin_protocol::interaction::{SelectedResource, SelectionAccess, SelectionMode};
+use std::{fs::OpenOptions, io::Read, sync::atomic::Ordering};
 
 /// Immutable authority is never reconstructed from a guest's display name or resource number.
 pub(super) struct Selection {
-    handle: ResourceHandle,
-    path: PathBuf,
-    mode: SelectionMode,
+    pub(super) handle: ResourceHandle,
+    pub(super) path: PathBuf,
+    pub(super) mode: SelectionMode,
+    /// A new explicit picker may allow writes; Save remains write-only even when this is true.
+    pub(super) write: bool,
     /// Only immutable identities survive selection; even shared native handles can obstruct replace.
-    observed: Vec<(u64, u64, u64)>,
-}
-
-/// Native validation and reads briefly exclude deletion; grants retain only the captured identities.
-struct CheckedPath {
-    identities: Vec<(u64, u64, u64)>,
-    _handles: Vec<File>,
+    pub(super) observed: Vec<(u64, u64, u64)>,
 }
 
 impl State {
@@ -67,6 +60,7 @@ impl State {
         paths: Vec<PathBuf>,
         mode: SelectionMode,
         multiple: bool,
+        access: SelectionAccess,
     ) -> Result<EditorValue, Failure> {
         self.check_selection_authority()?;
         if paths.is_empty()
@@ -129,6 +123,7 @@ impl State {
                     handle: handle.clone(),
                     path,
                     mode,
+                    write: access == SelectionAccess::ReadWrite,
                     observed: pins.identities,
                 },
             );
@@ -238,147 +233,4 @@ impl State {
         }
         self.selected_resources.clear();
     }
-}
-
-/// Reject Windows aliases, streams and redirected ancestors; Save alone permits a missing leaf.
-fn pin_path(path: &Path, missing_leaf: bool) -> Result<CheckedPath, Failure> {
-    if !path.is_absolute() {
-        return Err(invalid_path());
-    }
-    let mut current = PathBuf::new();
-    let mut pins = CheckedPath {
-        identities: Vec::new(),
-        _handles: Vec::new(),
-    };
-    for component in path.components() {
-        match component {
-            Component::Prefix(prefix) => {
-                if !matches!(
-                    prefix.kind(),
-                    std::path::Prefix::Disk(_) | std::path::Prefix::VerbatimDisk(_)
-                ) {
-                    return Err(invalid_path());
-                }
-                current.push(component);
-                continue;
-            }
-            Component::RootDir => current.push(component),
-            Component::Normal(name) => {
-                let name = name.to_str().ok_or_else(invalid_path)?;
-                let stem = name
-                    .split('.')
-                    .next()
-                    .unwrap_or("")
-                    .trim_end_matches(' ')
-                    .to_ascii_uppercase();
-                if name.contains([':', '\0', '<', '>', '"', '|', '?', '*'])
-                    || name.chars().any(char::is_control)
-                    || name.ends_with(['.', ' '])
-                    || matches!(
-                        stem.as_str(),
-                        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-                    )
-                    || ["COM", "LPT"].iter().any(|prefix| {
-                        stem.strip_prefix(prefix).is_some_and(|suffix| {
-                            matches!(
-                                suffix,
-                                "1" | "2"
-                                    | "3"
-                                    | "4"
-                                    | "5"
-                                    | "6"
-                                    | "7"
-                                    | "8"
-                                    | "9"
-                                    | "¹"
-                                    | "²"
-                                    | "³"
-                            )
-                        })
-                    })
-                {
-                    return Err(invalid_path());
-                }
-                current.push(component);
-            }
-            _ => return Err(invalid_path()),
-        }
-        let metadata = match std::fs::symlink_metadata(&current) {
-            Ok(metadata) => metadata,
-            Err(error)
-                if missing_leaf
-                    && current == path
-                    && error.kind() == std::io::ErrorKind::NotFound =>
-            {
-                continue;
-            }
-            Err(error) => return Err(io_failure(error)),
-        };
-        if is_reparse(&metadata) {
-            return Err(invalid_path());
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            // Pins exist only during native-result validation or one read, never for a grant lifetime.
-            let pin = OpenOptions::new()
-                .access_mode(0)
-                .share_mode(3)
-                .custom_flags(0x02000000 | 0x00200000)
-                .open(&current)
-                .map_err(io_failure)?;
-            if is_reparse(&pin.metadata().map_err(io_failure)?) {
-                return Err(invalid_path());
-            }
-            use std::os::windows::io::AsRawHandle;
-            use windows_sys::Win32::Storage::FileSystem::{
-                BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
-            };
-            let mut info = std::mem::MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
-            // SAFETY: pin is a live owned handle; the API fills the correctly sized output on success.
-            if unsafe { GetFileInformationByHandle(pin.as_raw_handle(), info.as_mut_ptr()) } == 0 {
-                return Err(io_failure(std::io::Error::last_os_error()));
-            }
-            // SAFETY: the successful call above initialized every field.
-            let info = unsafe { info.assume_init() };
-            pins.identities.push((
-                u64::from(info.dwVolumeSerialNumber),
-                (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
-                (u64::from(info.ftCreationTime.dwHighDateTime) << 32)
-                    | u64::from(info.ftCreationTime.dwLowDateTime),
-            ));
-            pins._handles.push(pin);
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            pins.identities.push((metadata.dev(), metadata.ino(), 0));
-        }
-    }
-    Ok(pins)
-}
-
-fn is_reparse(metadata: &std::fs::Metadata) -> bool {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        metadata.file_attributes() & 0x400 != 0
-    }
-    #[cfg(not(windows))]
-    {
-        metadata.file_type().is_symlink()
-    }
-}
-fn invalid_path() -> Failure {
-    Failure::new(ErrorCode::InvalidPath, "Unsafe selected resource path")
-}
-fn io_failure(error: std::io::Error) -> Failure {
-    Failure::new(
-        if error.kind() == std::io::ErrorKind::NotFound {
-            ErrorCode::NotFound
-        } else {
-            ErrorCode::OperationFailed
-        },
-        error.to_string(),
-    )
 }

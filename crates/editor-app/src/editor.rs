@@ -19,6 +19,7 @@ mod resources;
 mod source;
 pub(crate) mod tabs;
 mod text_session;
+pub(crate) mod text_transactions;
 pub(crate) use popovers::{CompletionPopupState, DefinitionPopupFocus};
 mod popovers;
 pub(crate) use text_drag::TextDragState;

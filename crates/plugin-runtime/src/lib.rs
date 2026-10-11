@@ -6,6 +6,8 @@ mod data_transaction;
 mod document_events;
 mod document_stream;
 pub use document_stream::DocumentStream;
+mod workspace_events;
+pub use workspace_events::WorkspaceEvents;
 mod editor_requests;
 mod virtual_documents;
 pub use virtual_documents::VirtualDocumentResource;
@@ -23,6 +25,10 @@ pub use logs::{LogLevel, LogRecord, RuntimeLogs};
 mod request_state;
 pub use document_events::DocumentEvents;
 pub use editor_requests::{EditorAuthority, EditorRequest};
+mod workspace_resources;
+pub use workspace_resources::{AuthorizedFile, FileGuard, WorkspaceBatch, WorkspaceRequest};
+/// Secure disk preparation and current-session recovery do not own native document text or history.
+pub mod workspace_io;
 /// A caller-owned gate for one request; public so a host caller can await its own answer.
 pub use plugin_protocol::api::RequestUpdate;
 pub use request_state::Completion;
@@ -71,3 +77,4 @@ pub struct HostResources {
     /// One process-local log owner is shared by live, prepared and retired sources; never exposed to WASI.
     pub logs: RuntimeLogs,
 }
+mod native_path;

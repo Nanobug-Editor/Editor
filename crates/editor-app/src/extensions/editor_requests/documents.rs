@@ -121,7 +121,7 @@ impl EditorApp {
     }
 
     /// Identity, path and revision are checked together; close/reopen can never satisfy an old target.
-    pub(super) fn plugin_document_target(
+    pub(in crate::extensions) fn plugin_document_target(
         &self,
         document: &DocumentVersion,
     ) -> Result<usize, Failure> {

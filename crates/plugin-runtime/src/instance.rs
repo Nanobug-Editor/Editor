@@ -15,7 +15,7 @@ mod commands;
 mod data_files;
 mod document_events;
 mod editor_requests;
-mod file_discovery;
+pub(crate) mod file_discovery;
 mod image_inputs;
 mod plugin_services;
 mod preferences;
@@ -28,6 +28,8 @@ mod stdio;
 mod structure;
 mod terminal_calls;
 mod tools;
+mod workspace_events;
+mod workspace_files;
 use resource_roots::ResourceRoots;
 wasmtime::component::bindgen!({path:"../plugin-protocol/wit",world:"plugin",require_store_data_send:true});
 
@@ -47,6 +49,11 @@ struct State {
     image_inputs: std::collections::BTreeMap<u64, image_inputs::Input>,
     /// User-selected targets remain separate from workspace and private-data roots.
     selected_resources: std::collections::BTreeMap<u64, selected_resources::Selection>,
+    /// IO leases and recovery slots remain separate from mutable native document state.
+    file_root_lifetimes:
+        std::collections::BTreeMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    workspace_batches: std::collections::BTreeMap<u64, std::sync::Arc<crate::WorkspaceBatch>>,
+    file_subscriptions: std::collections::BTreeMap<u64, crate::workspace_events::Subscription>,
     declared_panels: BTreeSet<String>,
     /// Editor toolbar authority is confined to this package's declared workspace preview surfaces.
     declared_editor_panels: BTreeSet<String>,
@@ -336,6 +343,9 @@ impl Instance {
             editor_requests: Default::default(),
             image_inputs: Default::default(),
             selected_resources: Default::default(),
+            file_root_lifetimes: Default::default(),
+            workspace_batches: Default::default(),
+            file_subscriptions: Default::default(),
             subscriptions: Default::default(),
             document_streams: Default::default(),
             virtual_documents: Default::default(),
@@ -636,6 +646,8 @@ impl Instance {
     pub(crate) fn quiesce(&mut self) {
         self.clear_image_inputs();
         self.store.data_mut().clear_selections();
+        self.store.data_mut().clear_workspace_resources();
+        self.store.data_mut().file_subscriptions.clear();
         // Native cleanup keeps its original observer before quiesce seals delegated service roots.
         self.store.data_mut().retire_native_processes();
         self.store.data_mut().plugin_services.clear();
@@ -708,6 +720,7 @@ impl Instance {
         self.poll_editor_requests()?;
         self.poll_document_events()?;
         self.poll_document_streams()?;
+        self.poll_workspace_events()?;
         let preferences_changed = self.poll_preferences()?;
         let events = self.store.data_mut().poll_processes()?;
         let changed = revoked || preferences_changed || !events.is_empty();

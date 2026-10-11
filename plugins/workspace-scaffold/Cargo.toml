@@ -1,0 +1,16 @@
+[package]
+name = "workspace-scaffold-guest"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+
+# Independent consumers resolve the exact source-only SDK through the host --plugin-cargo entry.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1.0"

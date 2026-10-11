@@ -909,6 +909,7 @@ fn run_save_gate_refuses_an_unconfirmed_disk_conflict(cx: &mut TestAppContext) {
             // The ordinary watcher result creates the conflict; no test mutates private tab state.
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: vec![(
                         path.clone(),

@@ -17,6 +17,15 @@ pub(super) fn find(
     query: &FileQuery,
     deadline: Instant,
 ) -> Result<FileMatches, Failure> {
+    find_versioned(root, query, deadline).map(|(matches, _)| matches)
+}
+
+/// The continuation fingerprint includes every scoped ignore file, even when matches stay unchanged.
+pub(crate) fn find_versioned(
+    root: &Path,
+    query: &FileQuery,
+    deadline: Instant,
+) -> Result<(FileMatches, String), Failure> {
     if query.include.is_empty() {
         return Err(Failure::new(
             ErrorCode::InvalidRequest,
@@ -53,13 +62,19 @@ pub(super) fn find(
         ignore_lines: 0,
         paths: BTreeSet::new(),
         skipped: BTreeSet::new(),
+        ignore_fingerprint: sha2::Sha256::default(),
     };
     discovery.directory(&root, 0, &mut Vec::new())?;
     discovery.check_time()?;
-    Ok(FileMatches {
-        paths: discovery.paths.into_iter().collect(),
-        skipped: discovery.skipped.into_iter().collect(),
-    })
+    use sha2::Digest;
+    let version = format!("{:x}", discovery.ignore_fingerprint.finalize());
+    Ok((
+        FileMatches {
+            paths: discovery.paths.into_iter().collect(),
+            skipped: discovery.skipped.into_iter().collect(),
+        },
+        version,
+    ))
 }
 
 /// Globs have portable root-relative syntax; shell expansion and native drive syntax are rejected.
@@ -112,6 +127,7 @@ struct Discovery<'a> {
     ignore_lines: usize,
     paths: BTreeSet<String>,
     skipped: BTreeSet<String>,
+    ignore_fingerprint: sha2::Sha256,
 }
 
 impl Discovery<'_> {
@@ -246,6 +262,10 @@ impl Discovery<'_> {
             }
         };
         self.ignore_bytes += contents.len();
+        use sha2::Digest;
+        self.ignore_fingerprint
+            .update(path.to_string_lossy().as_bytes());
+        self.ignore_fingerprint.update(contents.as_bytes());
         if contents.len() > MAX_IGNORE_FILE_BYTES || self.ignore_bytes > MAX_BYTES {
             return Err(limit("File discovery ignore-file quota exceeded"));
         }

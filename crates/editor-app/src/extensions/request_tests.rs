@@ -185,6 +185,7 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: vec![(
                         path.canonicalize().unwrap(),
@@ -259,6 +260,7 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
             std::fs::rename(&path, &renamed).unwrap();
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: Vec::new(),
                     renames: vec![(old, renamed.canonicalize().unwrap())],

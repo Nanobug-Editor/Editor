@@ -1,5 +1,7 @@
 //! Conventional rename input and cancellable proposals share the native document transaction gate.
 use super::*;
+use crate::language::navigation::editing::byte_at_position;
+use gpui_kit::EntityInputHandler as _;
 
 impl EditorApp {
     /// Prepare the ordinary rename field; an unsupported or unknown semantic target produces no edits.

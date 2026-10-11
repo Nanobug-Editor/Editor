@@ -390,6 +390,8 @@ pub(super) struct Published {
     pub document_events: plugin_runtime::DocumentEvents,
     /// Ordered metadata is opt-in and must not be merged with legacy version coalescing.
     pub document_stream: plugin_runtime::DocumentStream,
+    /// The shared watcher covers unopened files and explicitly fails bounded ingress on overflow.
+    pub file_events: plugin_runtime::WorkspaceEvents,
     /// Bounded typed work has a completion gate that survives queue transfer and rejects stale callbacks.
     pub editor_requests: Vec<(String, plugin_runtime::EditorRequest)>,
     pub entries: Vec<Installed>,

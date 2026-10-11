@@ -23,7 +23,7 @@
 | --- | --- | --- | --- |
 | 01 文档与只读资源 | [#93](https://github.com/T-miracle/Nanobug/issues/93) | 已验收交付，议题已关闭 | `7b50045a78dacafacb2bb7a76f0694c91a1b755d` 已推送并核对远端；双轴未解决项均为 0 |
 | 02 命令与交互 | [#94](https://github.com/T-miracle/Nanobug/issues/94) | 已验收交付，议题已关闭 | `8506cc8f1f9baee3fca030d59b7d1d21b5227763` 已推送并核对远端；双轴未解决项均为 0 |
-| 03 工作区事务 | [#95](https://github.com/T-miracle/Nanobug/issues/95) | 实施中；预重构与 Atomic 行为回归已启动 | T11–T16 及共同完成条件，未验收不关闭 |
+| 03 工作区事务 | [#95](https://github.com/T-miracle/Nanobug/issues/95) | 实际 SDK 完整矩阵、当前两消费者连接、三门禁及新增流程原生 C03 通过 | [03 验收记录](03-workspace-transactions.md)、[同一 profile 原生记录](03-workspace-transactions-native.md)；`0318970` 冻结源码未变；既有 Settings UIA 退役崩溃在基线复现且未修复；最终整合和远端交付由根代理处理 |
 | 04 诊断与语言 | [#96](https://github.com/T-miracle/Nanobug/issues/96) | 等待 03 | T17–T20 及共同完成条件 |
 | 05 树与装饰 | [#97](https://github.com/T-miracle/Nanobug/issues/97) | 实施中，独立工作树依赖已满足 | T21–T24 及共同完成条件 |
 | 06 网络与私有状态 | [#98](https://github.com/T-miracle/Nanobug/issues/98) | 当前候选的 Temporary、Data 保留路径、授权顺序和源码包已验证，双轴归零 | 待当前主分支整合及受影响连接，不提前关闭 |
