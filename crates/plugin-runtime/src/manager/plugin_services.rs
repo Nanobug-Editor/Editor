@@ -3,10 +3,12 @@ use super::*;
 use crate::plugin_services::{Call, Preferences};
 use plugin_protocol::service::Choice;
 use plugin_protocol::settings::Scope;
+mod demand_calls;
 
 impl Manager {
-    /// Retry only unavailable dependencies after another package starts; missing/cyclic graphs terminate.
-    pub(super) fn activate_saved_plugins(&mut self, mut pending: Vec<(String, bool)>) {
+    /// Restore admitted metadata and choices without materializing business or language roles.
+    /// Metadata failures remain bounded; slow preparation belongs to an actual demand in the shared pool.
+    pub(super) fn restore_saved_plugins(&mut self, mut pending: Vec<(String, bool)>) {
         while !pending.is_empty() {
             let mut retry = Vec::new();
             let mut progress = false;
@@ -16,7 +18,7 @@ impl Manager {
                 }
                 let result = self.enable(&id);
                 let entry = self.installed.get_mut(&id).unwrap();
-                // Activation restores persisted defaults even for project-only instances.
+                // Restore persisted defaults after registering project-only availability.
                 entry.enabled = enabled;
                 match result {
                     Ok(()) => progress = true,
@@ -39,23 +41,82 @@ impl Manager {
             pending = retry;
         }
     }
-    /// Registry snapshots include exact live incarnations, including parked workspaces and consumers.
+    /// Static registry snapshots include eligible cold guests and exact live owners in original scopes.
     ///
     /// The host is published beside them so a consumer's selection and this registry agree: the
     /// session contract has exactly one provider per workspace, and it is the runtime that owns the
     /// table those sessions live in.
     pub(super) fn refresh_services(&mut self) {
-        let providers = self
+        let live = self
             .live
             .values()
             .chain(self.parked.values().flat_map(|scope| scope.live.values()))
             .filter_map(Instance::service_provider)
+            .map(|provider| {
+                (
+                    (
+                        provider.caller.plugin.clone(),
+                        provider.caller.scope.clone(),
+                    ),
+                    provider,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let providers = self
+            .service_availabilities()
+            .into_iter()
+            .map(|(entry, token, alive)| {
+                let mut contracts = entry.manifest.plugin_services.provides.clone();
+                for command in &entry.manifest.commands {
+                    if let Some(signature) = &command.signature {
+                        contracts.insert(
+                            plugin_protocol::commands::contract(&entry.manifest.id, &command.id),
+                            plugin_protocol::service::Contract {
+                                version: semver::Version::new(1, 0, 0),
+                                methods: BTreeMap::from([("invoke".into(), signature.clone())]),
+                            },
+                        );
+                    }
+                }
+                let current = live.get(&(entry.manifest.id.clone(), token.scope().to_owned()));
+                let mut provider = crate::plugin_services::Provider {
+                    availability: Some(token.clone()),
+                    alive,
+                    owner_alive: current.and_then(|provider| provider.owner_alive.clone()),
+                    caller: plugin_protocol::service::Caller {
+                        plugin: entry.manifest.id,
+                        instance: current
+                            .map(|provider| provider.caller.instance.clone())
+                            .unwrap_or_default(),
+                        scope: token.scope().into(),
+                        permissions: entry.grants,
+                    },
+                    contracts,
+                };
+                if current.is_none() {
+                    provider.caller.instance = provider.identity();
+                }
+                provider
+            })
             .collect();
-        let scope = self.host_scope().to_owned();
-        let host = vec![
-            super::native_execution::provider(&scope, self.host_alive.clone()),
-            super::host_services::session_provider(&scope, self.host_alive.clone()),
-        ];
+        let mut scopes = self
+            .parked
+            .iter()
+            .filter(|(_, parked)| parked.trusted)
+            .map(|(scope, _)| scope.clone())
+            .collect::<Vec<_>>();
+        if self.trusted && self.workspace_open {
+            scopes.push(self.host_scope().to_owned());
+        }
+        let host = scopes
+            .into_iter()
+            .flat_map(|scope| {
+                [
+                    super::native_execution::provider(&scope, self.host_alive.clone()),
+                    super::host_services::session_provider(&scope, self.host_alive.clone()),
+                ]
+            })
+            .collect();
         self.plugin_services
             .lock()
             .unwrap()
@@ -139,19 +200,49 @@ impl Manager {
                 Err(error) => self.host_sessions.observe_error(&call, &error),
             }
         }
+        self.poll_service_demands();
         let calls = self.plugin_services.lock().unwrap().take_batch();
         for call in calls {
             self.refresh_services();
-            if !call.completion.begin() {
+            if matches!(call.completion.status(), api::RequestUpdate::Accepted)
+                && !call.completion.begin()
+            {
                 continue;
             }
+            if call.completion.status().is_terminal() {
+                continue;
+            }
+            let valid = self.plugin_services.lock().unwrap().validate_call(&call);
+            if let Err(error) = valid {
+                call.completion.finish(Err(error));
+                continue;
+            }
+            let call = match self.admit_service_demand(call) {
+                Ok(Some(call)) => call,
+                Ok(None) => continue,
+                Err((call, failure)) => {
+                    call.completion.finish(Err(failure));
+                    continue;
+                }
+            };
             let valid = self
                 .plugin_services
                 .lock()
                 .unwrap()
-                .validate_reference(&call.context.caller, &call.reference);
-            if let Err(error) = valid {
-                call.completion.finish(Err(error));
+                .context_alive(&call.context)
+                && call
+                    .signature
+                    .permissions
+                    .is_subset(&call.context.permissions)
+                && call
+                    .signature
+                    .permissions
+                    .is_subset(&call.reference.provider.caller.permissions);
+            if !valid {
+                call.completion.finish(Err(api::Failure::new(
+                    api::ErrorCode::PermissionDenied,
+                    "Original service source or grants were revoked",
+                )));
                 continue;
             }
             if !call.completion.enter_side_effect() {
@@ -180,18 +271,26 @@ impl Manager {
         }
     }
     fn dispatch_service(&mut self, call: &Call) -> Result<Option<serde_json::Value>, api::Failure> {
-        let native = super::native_execution::provider(&self.host_scope(), self.host_alive.clone());
+        let scope = &call.reference.provider.caller.scope;
+        let native = super::native_execution::provider(scope, self.host_alive.clone());
         if call.reference.provider.caller.instance == native.caller.instance {
-            return self.native_executions.answer(
-                call,
-                &self.environment.workspace,
-                self.trusted && self.workspace_open,
-            );
+            let (workspace, trusted) = if scope == &self.host_scope() {
+                (
+                    self.environment.workspace.clone(),
+                    self.trusted && self.workspace_open,
+                )
+            } else {
+                self.parked
+                    .get(scope)
+                    .map(|parked| (parked.environment.workspace.clone(), parked.trusted))
+                    .unwrap_or_default()
+            };
+            return self.native_executions.answer(call, &workspace, trusted);
         }
         // The host is a participant like any provider, so a call addressed to its session contract is
         // answered here instead of being searched for among the running instances. The identity is
         // compared exactly, so a plugin cannot reach the host's session surface by naming it.
-        let host = self.host_scope().to_owned();
+        let host = scope.to_owned();
         if call.reference.provider.caller.instance
             == super::host_services::host_caller(&host).instance
         {
@@ -305,6 +404,7 @@ mod tests {
         let completion = Completion::new(5_000);
         let signature = dependency.methods["list"].clone();
         let call = Call {
+            availability: Default::default(),
             handle: plugin_protocol::api::ResourceHandle {
                 instance: reference.provider.caller.instance.clone(),
                 scope: scope.clone(),

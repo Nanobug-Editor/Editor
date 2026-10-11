@@ -83,6 +83,7 @@ impl State {
                 let mut completion = crate::Completion::new(timeout_ms);
                 completion.lifetimes = source.lifetimes.clone();
                 let call = Call {
+                    availability: Default::default(),
                     handle: handle.clone(),
                     reference,
                     method: "invoke".into(),
@@ -174,6 +175,7 @@ impl Instance {
         // Host waits have no guest root slot. Reconciliation anchors them to their exact target,
         // while the callback still reports the host caller and cannot borrow unrelated resources.
         let call = Call {
+            availability: Default::default(),
             handle: api::ResourceHandle {
                 instance: state.plugin_services.principal.instance.clone(),
                 scope: source.caller.scope,

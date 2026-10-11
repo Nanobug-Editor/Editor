@@ -41,6 +41,12 @@ fn t30_backpressure_cancel_disable_and_trust_revoke_stop_workers() {
             grant(manifest, &server.origin)
         }),
     );
+    // The resource baseline belongs to the demanded owner, not its dormant installed metadata.
+    demand(
+        &mut manager,
+        "cloud-translation",
+        DemandReason::Command("probe".into()),
+    );
     let baseline = manager.resource_count();
     let mut pressure = vec![];
     for _ in 0..4 {
@@ -173,6 +179,10 @@ fn t29_timers_are_fair_bounded_disposable_and_debounce_resets_delay() {
             grant(manifest, &server.origin)
         }),
     );
+    // Both consumers will receive real timer/refresh commands below; warming does not issue HTTP.
+    for id in ["cloud-translation", "code-host-query"] {
+        demand(&mut manager, id, DemandReason::Command("probe".into()));
+    }
     let baseline = manager.resource_count();
     let mut handles = vec![];
     for _ in 0..32 {
@@ -285,6 +295,12 @@ fn t29_timer_callback_reset_postpones_another_due_timer_without_releasing_it() {
     let root = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(root.path().into(), environment(root.path())).unwrap();
     install(&mut manager, &package("timer-callback", |_| {}));
+    // This fixture declares arm/release, so its demand must not assume a probe command exists.
+    demand(
+        &mut manager,
+        "timer-callback",
+        DemandReason::Command("arm".into()),
+    );
     let baseline = manager.resource_count();
     for repeat in [false, true] {
         manager

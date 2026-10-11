@@ -10,6 +10,13 @@ fn publish(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App) {
         .read(cx)
         .plugin_file_context(app.read(cx).active_tab_index().unwrap())
         .unwrap();
+    // Only the selected binary file's displayed view is consumed; installation remains cold.
+    package_ui_test_support::demand(
+        manager,
+        "svg",
+        plugin_runtime::DemandReason::View("preview".into()),
+    )
+    .unwrap();
     manager
         .event(
             "svg",
@@ -40,6 +47,7 @@ fn publish(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App) {
     let owner = app.read(cx).extensions.clone();
     owner.update(cx, |owner, cx| {
         let mut state = owner.worker.state.lock().unwrap();
+        state.publish_manager(manager);
         state.views = views;
         state.images = prepared;
         drop(state);
@@ -51,7 +59,7 @@ fn publish(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App) {
 
 /// Native drawing, resizing, decode errors, retry, text switching and file closure use the shipped package.
 #[gpui::test]
-#[ignore = "build current Image package with scripts/build-plugins.ps1 -Packages svg first"]
+#[ignore = "build current Image package through host --plugin-cargo and --plugin-package first"]
 fn image_package_draws_readonly_formats_in_the_native_file_container(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -87,8 +95,12 @@ fn image_package_draws_readonly_formats_in_the_native_file_container(cx: &mut Te
         owner.update(cx, |owner, cx| {
             // Native package assets use the same installed root as this real Manager.
             owner.root = data.path().to_path_buf();
-            owner.worker.state.lock().unwrap().entries =
-                manager.installed.values().cloned().collect();
+            owner
+                .worker
+                .state
+                .lock()
+                .unwrap()
+                .publish_manager(&mut manager);
             owner.poll(cx);
         });
     });

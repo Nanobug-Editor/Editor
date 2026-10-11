@@ -109,6 +109,9 @@ impl Manager {
         let mut snapshot = self.load_snapshot(&id)?;
         let previous = self.installed.get(&id).cloned();
         let mut old = self.live.remove(&id);
+        // Cold installation and dormant replacement commit validated data without business activation.
+        // A running predecessor retains the established transactional live cutover and fresh recovery.
+        let activate_business = old.is_some();
         // Removing the actor's ingress blocks new calls without revoking handles used by Snapshot output.
         // The final snapshot must validate against its live owner before stop seals that incarnation.
         self.retire_language_services(&id);
@@ -166,7 +169,7 @@ impl Manager {
             // Final discovery sees current data/configuration. Changed plans must be prepared anew, outside cutover.
             prepared
                 .next
-                .prepare_state(self.environment.clone(), migrated)?;
+                .prepare_state(self.environment.clone(), migrated.clone())?;
             self.configure_saved_settings(&mut prepared.next, manifest)?;
             let values = prepared.next.configuration.clone();
             let plans = dependencies::resolve_dependency_plans(
@@ -179,24 +182,32 @@ impl Manager {
                 serde_json::to_vec(&plans)? == serde_json::to_vec(&prepared.dependency_plans)?,
                 "Dependency selection changed during preparation; prepare the update again"
             );
-            prepared
-                .next
-                .connect_services(self.plugin_services.clone())?;
             control.check()?;
-            prepared
-                .next
-                .connect_diagnostics(self.native_diagnostics.clone());
-            prepared.next.activate()?;
+            if activate_business {
+                prepared
+                    .next
+                    .connect_services(self.plugin_services.clone())?;
+                prepared
+                    .next
+                    .connect_diagnostics(self.native_diagnostics.clone());
+                prepared.next.activate()?;
+            }
             prepared.next.commit_data()?;
-            let checkpoint = prepared.next.snapshot()?;
-            anyhow::ensure!(
-                checkpoint.data.len() <= manifest.storage_limit,
-                "Snapshot exceeds declared quota"
-            );
-            atomic_write(
-                &candidate.join("state.json"),
-                &serde_json::to_vec(&checkpoint)?,
-            )?;
+            let checkpoint = if activate_business {
+                Some(prepared.next.snapshot()?)
+            } else {
+                migrated
+            };
+            if let Some(checkpoint) = checkpoint {
+                anyhow::ensure!(
+                    checkpoint.data.len() <= manifest.storage_limit,
+                    "Snapshot exceeds declared quota"
+                );
+                atomic_write(
+                    &candidate.join("state.json"),
+                    &serde_json::to_vec(&checkpoint)?,
+                )?;
+            }
             atomic_write(
                 &candidate.join("data-format.json"),
                 &serde_json::to_vec(&target)?,
@@ -266,10 +277,14 @@ impl Manager {
         prepared
             .next
             .retarget_data(self.instance_data_directory(manifest));
-        // Snapshot and data swaps precede durable publication; neither grants directory or credential mutation.
-        prepared.next.commit_activation();
+        // Unpublished preparation never gains Temporary/Secret mutation authority, even after flushing data.
+        if activate_business {
+            prepared.next.commit_activation();
+        }
         let entry = &self.installed[&id];
-        if entry.enabled || entry.project_enabled_in(&self.environment.workspace) {
+        if activate_business
+            && (entry.enabled || entry.project_enabled_in(&self.environment.workspace))
+        {
             self.live.insert(id.clone(), prepared.next);
         } else {
             prepared.next.stop();
@@ -285,11 +300,7 @@ impl Manager {
         entry: &Installed,
         snapshot: Option<Snapshot>,
     ) -> anyhow::Result<Instance> {
-        let assets = self
-            .root
-            .join("packages")
-            .join(&entry.manifest.id)
-            .join(&entry.digest);
+        let (assets, package) = self.read_installed_assets(entry)?;
         let component = entry
             .manifest
             .component
@@ -297,7 +308,7 @@ impl Manager {
             .ok_or_else(|| anyhow::anyhow!("Stopped instance has no WASM component"))?;
         let mut restored = Instance::prepare_with_resources(
             self.engine.as_ref().unwrap(),
-            &std::fs::read(assets.join(component))?,
+            &package.files[component],
             &entry.manifest,
             &entry.grants,
             self.environment.clone(),

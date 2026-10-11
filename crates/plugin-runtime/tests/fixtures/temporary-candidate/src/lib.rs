@@ -72,6 +72,14 @@ impl State {
                 require_unpublished_temporary(match phase {
                     settings::Phase::Validate => "validate",
                     settings::Phase::Apply => "apply",
+                    // This fixture negotiates restart-only configuration, so a new SDK's hot phase
+                    // is rejected explicitly instead of treating it as an unpublished candidate.
+                    settings::Phase::Changed => {
+                        return Err(api::Failure::new(
+                            api::ErrorCode::CapabilityUnavailable,
+                            "Temporary candidate uses restart configuration",
+                        ));
+                    }
                 })?;
                 let reject = values["reject"].value.as_bool() == Some(true);
                 match phase {

@@ -3,7 +3,7 @@ use super::*;
 
 pub(super) struct ParkedWorkspace {
     pub(super) environment: Environment,
-    trusted: bool,
+    pub(super) trusted: bool,
     pub(super) live: BTreeMap<String, Instance>,
 }
 
@@ -196,6 +196,7 @@ impl Manager {
             );
         }
         self.environment = environment;
+        self.activation.select_scope(&next_key);
         self.host_resources.terminals.select_scope(next_key.clone());
         self.trusted = trusted;
         self.workspace_open = true;
@@ -243,7 +244,7 @@ impl Manager {
             })
             .map(|(id, entry)| (id.clone(), entry.enabled))
             .collect::<Vec<_>>();
-        self.activate_saved_plugins(entries);
+        self.restore_saved_plugins(entries);
         if let Err(error) = self.save_registry() {
             for entry in self.installed.values_mut() {
                 entry.error = Some(format!("{error:#}"));
@@ -254,6 +255,8 @@ impl Manager {
     /// Closing one scope removes only its views and resources, never the application singleton.
     pub fn close_workspace(&mut self, workspace: &str) -> anyhow::Result<()> {
         let key = workspace_key(workspace);
+        // A reopened path gets a new static generation; old preparations never borrow its new lease.
+        self.activation.invalidate_scope(&key);
         let current = workspace_key(&self.environment.workspace) == key;
         if current {
             self.native_executions.set_trusted(false);
@@ -357,6 +360,9 @@ impl Manager {
 
     /// Shutdown retires application resources as well as all workspace resources.
     pub fn shutdown(&mut self) {
+        // Detached preparation observes this seal before activation and cannot publish after shutdown.
+        self.host_alive
+            .store(false, std::sync::atomic::Ordering::Release);
         self.retire_workspace_images();
         self.retire_workspace_image_inputs();
         // Programs get a shared bounded cleanup window and then forceful tree termination. The UI

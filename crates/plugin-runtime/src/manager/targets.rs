@@ -3,7 +3,10 @@ use super::{
     Manager,
     host_services::{host_caller, host_method_call, start_failure},
 };
-use crate::{Completion, plugin_services::Context};
+use crate::{
+    Availability, Completion,
+    plugin_services::{Context, Reference},
+};
 use plugin_protocol::{api::RequestUpdate, service::Dependency, targets};
 use serde_json::Value;
 use std::sync::{
@@ -17,7 +20,8 @@ pub struct TargetRequest {
     alive: Arc<AtomicBool>,
     native: Arc<std::sync::Mutex<crate::native_work::NativeWork>>,
     provider: String,
-    instance: String,
+    reference: Reference,
+    availability: Availability,
     scope: String,
 }
 impl TargetRequest {
@@ -25,7 +29,8 @@ impl TargetRequest {
     pub fn origin(&self) -> TargetOrigin {
         TargetOrigin {
             provider: self.provider.clone(),
-            instance: self.instance.clone(),
+            instance: self.reference.owner().map(str::to_owned),
+            availability: self.availability.clone(),
             scope: self.scope.clone(),
         }
     }
@@ -87,19 +92,21 @@ impl Drop for TargetRequest {
     }
 }
 impl Manager {
-    /// Snapshot compatible live configuration contributors without starting an invocation.
+    /// Snapshot compatible static configuration contributors without starting an invocation.
     /// Restricted or closed workspaces have no valid origins; this does not grant permissions.
-    pub fn configuration_origins(&self) -> Vec<TargetOrigin> {
+    pub fn configuration_origins(&mut self) -> Vec<TargetOrigin> {
         if !self.trusted || !self.workspace_open {
             return vec![];
         }
         self.configuration_providers()
             .into_iter()
             .filter_map(|provider| {
-                let instance = self.instance_id(&provider)?.to_owned();
+                let availability = self.availability(&provider).ok()?;
+                let instance = self.instance_id(&provider).map(str::to_owned);
                 Some(TargetOrigin {
                     provider,
                     instance,
+                    availability,
                     scope: self.host_scope(),
                 })
             })
@@ -133,7 +140,7 @@ impl Manager {
         }
         Ok(())
     }
-    /// List compatible live contributors without selecting a default or starting project tools.
+    /// List compatible static contributors without selecting a default or starting project tools.
     pub fn target_providers(&self) -> Vec<String> {
         let contract = targets::declaration();
         let dependency = Dependency {
@@ -141,21 +148,22 @@ impl Manager {
             optional: false,
             methods: contract.methods,
         };
-        self.live
-            .keys()
-            .filter(|id| {
-                self.installed
-                    .get(*id)
-                    .and_then(|entry| {
-                        entry
-                            .manifest
-                            .plugin_services
-                            .provides
-                            .get(targets::CONTRACT)
-                    })
-                    .is_some_and(|contract| dependency.matches(contract))
+        self.published_entries()
+            .into_iter()
+            .filter(|entry| {
+                entry.enabled
+                    && entry.error.is_none()
+                    && self.trusted
+                    && self.workspace_open
+                    && entry.manifest.scope == plugin_protocol::api::InstanceScope::Workspace
+                    && entry
+                        .manifest
+                        .plugin_services
+                        .provides
+                        .get(targets::CONTRACT)
+                        .is_some_and(|contract| dependency.matches(contract))
             })
-            .cloned()
+            .map(|entry| entry.manifest.id)
             .collect()
     }
     /// Begin only a known method on an explicit contributor. Schema, grants and trust precede effects.
@@ -182,7 +190,7 @@ impl Manager {
         )
     }
 
-    /// All compatible live plugins can supply command templates, forms and validation.
+    /// All compatible static plugins can supply command templates, forms and validation on real demand.
     pub fn configuration_providers(&self) -> Vec<String> {
         let contract = plugin_protocol::configurations::declaration();
         let dependency = Dependency {
@@ -190,25 +198,26 @@ impl Manager {
             optional: false,
             methods: contract.methods,
         };
-        self.live
-            .keys()
-            .filter(|id| {
-                self.installed
-                    .get(*id)
-                    .and_then(|entry| {
-                        entry
-                            .manifest
-                            .plugin_services
-                            .provides
-                            .get(plugin_protocol::configurations::CONTRACT)
-                    })
-                    .is_some_and(|contract| dependency.matches(contract))
+        self.published_entries()
+            .into_iter()
+            .filter(|entry| {
+                entry.enabled
+                    && entry.error.is_none()
+                    && self.trusted
+                    && self.workspace_open
+                    && entry.manifest.scope == plugin_protocol::api::InstanceScope::Workspace
+                    && entry
+                        .manifest
+                        .plugin_services
+                        .provides
+                        .get(plugin_protocol::configurations::CONTRACT)
+                        .is_some_and(|contract| dependency.matches(contract))
             })
-            .cloned()
+            .map(|entry| entry.manifest.id)
             .collect()
     }
 
-    /// Pin one configuration call to its original live instance and workspace with bounded resources.
+    /// Retain an original configuration call and bind its first instance once, with bounded resources.
     /// Permission or schema failures are returned before any guest callback or native process starts.
     pub fn begin_configuration_call(
         &mut self,
@@ -250,17 +259,12 @@ impl Manager {
         let scope = self.host_scope();
         let caller = host_caller(&scope);
         self.refresh_services();
-        let instance = self
-            .live
-            .get(provider)
-            .and_then(|instance| instance.instance_id())
-            .ok_or_else(|| anyhow::anyhow!("Target provider unavailable; reinstall or enable it"))?
-            .to_owned();
+        let availability = self.availability(provider).map_err(start_failure)?;
         let reference = self
             .plugin_services
             .lock()
             .unwrap()
-            .resolve_pinned(&caller, name, &dependency, &instance)
+            .resolve_named(&caller, name, &dependency, provider)
             .map_err(start_failure)?;
         let alive = Arc::new(AtomicBool::new(true));
         let native = Arc::new(std::sync::Mutex::new(
@@ -281,7 +285,7 @@ impl Manager {
         let owner = reference.provider.clone();
         let mut call = host_method_call(
             &caller,
-            reference,
+            reference.clone(),
             method,
             arguments,
             &dependency,
@@ -302,7 +306,8 @@ impl Manager {
             alive,
             native,
             provider: provider.into(),
-            instance,
+            reference,
+            availability,
             scope,
         })
     }
@@ -310,19 +315,33 @@ impl Manager {
 
 /// Read-only provenance of a public service receipt. The runtime alone creates these values.
 /// Consumers recheck provenance before accepting delayed results; ordinary permission checks still apply.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct TargetOrigin {
     provider: String,
-    instance: String,
+    instance: Option<String>,
+    availability: Availability,
     scope: String,
 }
+impl PartialEq for TargetOrigin {
+    /// Static provenance survives one first birth; retirement/configuration changes advance availability.
+    /// A completed receipt still keeps its exact owner for valid_for, independently of discovery equality.
+    fn eq(&self, other: &Self) -> bool {
+        self.provider == other.provider
+            && self.scope == other.scope
+            && self.availability == other.availability
+    }
+}
+impl Eq for TargetOrigin {}
 impl TargetOrigin {
     /// Whether the original trusted workspace and live provider incarnation still exist.
     pub fn valid_for(&self, manager: &Manager) -> bool {
         manager.trusted
             && manager.workspace_open
             && manager.host_scope() == self.scope
-            && manager.instance_id(&self.provider) == Some(self.instance.as_str())
+            && manager.availability_current(&self.availability)
+            && self.instance.as_ref().is_none_or(|instance| {
+                manager.instance_id(&self.provider) == Some(instance.as_str())
+            })
     }
     /// Identify presentation ownership without exposing a constructible caller reference.
     pub fn provider(&self) -> &str {

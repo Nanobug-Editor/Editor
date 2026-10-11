@@ -77,6 +77,13 @@ fn native_restart_recovers_a_fault_without_blocking_document_input(cx: &mut Test
     });
     let barrier = Arc::new(std::sync::Barrier::new(2));
     let start = barrier.clone();
+    // A cold-command refusal is not the guest fault under test: obtain real command admission first.
+    package_ui_test_support::demand(
+        &mut manager,
+        "capability-example",
+        plugin_runtime::DemandReason::Command("fault-spin".into()),
+    )
+    .unwrap();
     let fault = std::thread::spawn(move || {
         start.wait();
         assert!(
@@ -152,6 +159,13 @@ fn native_restart_recovers_a_fault_without_blocking_document_input(cx: &mut Test
         })
         .unwrap();
     manager.restart_plugin(&restart).unwrap();
+    // Recovery clears the fault; the explicitly displayed original view consumes the replacement.
+    package_ui_test_support::demand(
+        &mut manager,
+        "capability-example",
+        plugin_runtime::DemandReason::View("welcome".into()),
+    )
+    .unwrap();
     assert!(!manager.live["capability-example"].views.is_empty());
     assert!(editor_cx.update(|_, cx| {
         app.read(cx)
@@ -195,6 +209,15 @@ fn crashing_lsp_stops_retrying_and_manual_recovery_uses_a_new_transport() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    package_ui_test_support::demand(
+        &mut manager,
+        "capability-example",
+        plugin_runtime::DemandReason::Language {
+            provider: "capability-example/analysis".into(),
+            role: plugin_runtime::LanguageRole::Lsp,
+        },
+    )
+    .unwrap();
     let plan = manager.language_services()["capability-example/analysis"]
         .as_ref()
         .unwrap()
@@ -230,6 +253,15 @@ fn crashing_lsp_stops_retrying_and_manual_recovery_uses_a_new_transport() {
     assert!(server.recovery_status().unwrap().contains("暂停"));
     std::fs::remove_file(marker).unwrap();
     manager.restart_plugin("capability-example").unwrap();
+    package_ui_test_support::demand(
+        &mut manager,
+        "capability-example",
+        plugin_runtime::DemandReason::Language {
+            provider: "capability-example/analysis".into(),
+            role: plugin_runtime::LanguageRole::Lsp,
+        },
+    )
+    .unwrap();
     let plan = manager.language_services()["capability-example/analysis"]
         .as_ref()
         .unwrap()
@@ -286,6 +318,16 @@ fn retired_language_status_cannot_alert_while_its_publication_is_still_current(
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
     let key = "status-publication/analysis";
+    // Preparing this selected lease never spawns the declared executable until an adapter uses it.
+    package_ui_test_support::demand(
+        &mut manager,
+        "status-publication",
+        plugin_runtime::DemandReason::Language {
+            provider: key.into(),
+            role: plugin_runtime::LanguageRole::Lsp,
+        },
+    )
+    .unwrap();
     let services = manager.language_services();
     let plan = services[key].as_ref().unwrap().clone();
     let logs = manager.runtime_logs();

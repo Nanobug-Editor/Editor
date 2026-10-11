@@ -1,4 +1,8 @@
 //! Independent language.structure 1.0: readonly document trees and folds, without an LSP process.
+//!
+//! Static provider discovery does not start a guest. Consuming the selected structure role for
+//! an original document demands its owner through the bounded activation lifecycle; waiting
+//! never changes the captured document/revision, and retirement discards later delivery.
 use crate::{
     api::{DocumentVersion, TextRange},
     language::SourceSnapshot,

@@ -7,6 +7,9 @@
 //! the provider unavailable and never grant fallback authority. Providers are selected per
 //! language/feature independently of the single native LSP choice. Installing a later candidate
 //! never silently replaces an existing effective selection.
+//! Metadata discovery stays cold; an actual selected feature request demands its owner once.
+//! Activation waiting retains the original document, revision and selection rather than sampling
+//! whatever editor is active when a worker becomes ready. Disable/close/replacement revoke it.
 //!
 //! [`Request`] runs in an isolated pure worker with no host operations, files, processes, private
 //! state or mutable text. Return `Output.language_direct` only from `LanguageDirect`; all replies

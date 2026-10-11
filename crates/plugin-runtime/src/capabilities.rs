@@ -9,6 +9,76 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
         "插件不兼容：协议 {} 已停止支持，请使用新版 SDK 更新插件（需要协议 7）。",
         manifest.protocol
     );
+    // Registry restoration uses the same release floor as ZIP/development admission. Neither
+    // capability negotiation nor an already saved grant makes a future host contract available.
+    if let Some(minimum) = &manifest.minimum_host {
+        anyhow::ensure!(minimum.len() <= 128, "Invalid minimum host version length");
+        let minimum = Version::parse(minimum)
+            .map_err(|error| anyhow::anyhow!("Invalid minimum host version: {error}"))?;
+        let host = Version::parse(env!("CARGO_PKG_VERSION"))?;
+        anyhow::ensure!(
+            !host.cmp_precedence(&minimum).is_lt(),
+            "插件不兼容：minimum host {minimum}, current host {host}; please update the host."
+        );
+    }
+    anyhow::ensure!(manifest.activation.valid(), "Invalid background purpose");
+    if manifest.activation.background.is_some() {
+        anyhow::ensure!(
+            manifest.component.is_some()
+                && manifest
+                    .api
+                    .as_ref()
+                    .is_some_and(|requirements| requirements
+                        .required
+                        .get("lifecycle.activation")
+                        .is_some_and(|range| range.matches(&Version::new(1, 0, 0)))),
+            "Background activation requires WASM and lifecycle.activation 1.0"
+        );
+    }
+    // Registry records and new archives agree on which added schema semantics an old callback
+    // may receive. Today's inventory matching ^1 does not prove that the author excluded 1.0.
+    if manifest
+        .settings
+        .values()
+        .any(|definition| definition.requires_configuration_1_1())
+    {
+        anyhow::ensure!(
+            manifest
+                .api
+                .as_ref()
+                .and_then(|requirements| requirements.required.get("configuration"))
+                .is_some_and(|range| range.matches(&Version::new(1, 1, 0))
+                    && !range.matches(&Version::new(1, 0, 0))),
+            "Hot settings and secret references require configuration >=1.1"
+        );
+    }
+    if manifest
+        .settings
+        .values()
+        .any(|definition| definition.apply == plugin_protocol::settings::Apply::HotApply)
+    {
+        anyhow::ensure!(
+            manifest.component.is_some() && manifest.settings_hook,
+            "Hot settings require a WASM configuration hook"
+        );
+    }
+    if manifest.settings.values().any(|definition| {
+        matches!(
+            definition.value_type,
+            plugin_protocol::settings::SettingType::SecretReference
+        )
+    }) {
+        anyhow::ensure!(
+            manifest.permissions.contains("secrets")
+                && manifest
+                    .api
+                    .as_ref()
+                    .is_some_and(|requirements| requirements
+                        .required
+                        .contains_key("storage.secrets")),
+            "Secret references require storage.secrets and secrets permission"
+        );
+    }
     negotiate(manifest)
         .map(|_| ())
         .map_err(|error| anyhow::anyhow!("插件 API 不兼容，请更新插件：{error:#}"))
@@ -33,6 +103,8 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("network.http".into(), Version::new(1, 0, 0)),
         ("storage.secrets".into(), Version::new(1, 0, 0)),
         ("lifecycle.timers".into(), Version::new(1, 0, 0)),
+        // Continuous-work declarations are consumed by the same bounded, trusted demand manager.
+        ("lifecycle.activation".into(), Version::new(1, 0, 0)),
         ("ui.tools".into(), Version::new(1, 0, 0)),
         ("ui.content_colors".into(), Version::new(1, 0, 0)),
         ("ui.incremental".into(), Version::new(1, 0, 0)),
@@ -65,7 +137,8 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("editor.navigation".into(), Version::new(1, 0, 0)),
         ("editor.toolbar".into(), Version::new(1, 1, 0)),
         ("editor.images".into(), Version::new(1, 0, 0)),
-        ("configuration".into(), Version::new(1, 0, 0)),
+        // 1.1 adds explicitly declared hot changes and namespace-only secret references.
+        ("configuration".into(), Version::new(1, 1, 0)),
         ("ui.panels".into(), Version::new(1, 0, 0)),
         ("ui.clipboard".into(), Version::new(1, 0, 0)),
         // 1.7 presents an already-owned PTY; negotiation still grants no execution or UI authority.

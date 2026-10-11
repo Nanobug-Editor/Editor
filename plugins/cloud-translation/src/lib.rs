@@ -5,10 +5,13 @@ const DEFAULT_URL: &str = "http://127.0.0.1:18906/translate";
 const DEFAULT_QUERY: &str = "hello 世界😀";
 use plugin_protocol::{Snapshot, api, http, interaction, storage, timers, ui};
 use std::cell::RefCell;
+mod configuration;
 thread_local! { static STATE: RefCell<State> = RefCell::new(State::default()); }
 #[derive(Default)]
 struct State {
     environment: plugin_protocol::Environment,
+    /// Validated plugin policy; key_ref names an own secret key, never credential bytes.
+    configuration: configuration::Configuration,
     text: String,
     revision: u64,
     input: Option<api::ResourceHandle>,
@@ -77,6 +80,9 @@ impl State {
             }
             api::Input::Event { event, .. } => match event {
                 api::Notification::Theme(environment) => self.environment = environment,
+                api::Notification::Configuration { phase, values } => {
+                    return self.configure(phase, values);
+                }
                 api::Notification::Service(plugin_protocol::service::Notification::Invoke(
                     call,
                 )) => {
@@ -113,6 +119,11 @@ impl State {
                 }
                 api::Notification::Command { id, arguments, .. } => match id.as_str() {
                     "set-token" => {
+                        if self.configuration.key_ref.is_empty() {
+                            self.text =
+                                self.label("Choose a secret reference first", "请先选择密钥引用");
+                            return self.view();
+                        }
                         self.release();
                         self.input = Some(interaction::start(
                             interaction::Operation::Input {
@@ -127,7 +138,12 @@ impl State {
                     }
                     "delete-token" => {
                         self.release();
-                        plugin_protocol::secrets::delete("api-token")?;
+                        if self.configuration.key_ref.is_empty() {
+                            self.text =
+                                self.label("Choose a secret reference first", "请先选择密钥引用");
+                            return self.view();
+                        }
+                        plugin_protocol::secrets::delete(&self.configuration.key_ref)?;
                         self.text = self.label("Token deleted", "密钥已删除");
                     }
                     "query" => {
@@ -200,7 +216,18 @@ impl State {
                                 result:
                                     Ok(api::EditorValue::Interaction(interaction::Value::Input(value))),
                             } => {
-                                plugin_protocol::secrets::write("api-token", value.into_bytes())?;
+                                // A cleared reference cannot turn an old password reply into a default/global write.
+                                if self.configuration.key_ref.is_empty() {
+                                    self.text = self.label(
+                                        "Choose a secret reference first",
+                                        "请先选择密钥引用",
+                                    );
+                                    return self.view();
+                                }
+                                plugin_protocol::secrets::write(
+                                    &self.configuration.key_ref,
+                                    value.into_bytes(),
+                                )?;
                                 self.text = self.label("Token stored securely", "密钥已安全保存");
                             }
                             _ => self.text = self.label("Token input cancelled", "密钥输入已取消"),
@@ -251,6 +278,44 @@ impl State {
         }
         .into()
     }
+    /// Validate emits only a proposal; Apply stores policy before business activation.
+    /// Changed retains the original owner/HTTP request and updates only cadence and future policy.
+    fn configure(
+        &mut self,
+        phase: plugin_protocol::settings::Phase,
+        values: plugin_protocol::settings::Effective,
+    ) -> Result<api::Output, api::Failure> {
+        use plugin_protocol::settings::Phase;
+        let parsed = configuration::Configuration::parse(&values);
+        if phase == Phase::Validate {
+            return Ok(api::Output {
+                configuration: Some(parsed.err().unwrap_or_default()),
+                ..Default::default()
+            });
+        }
+        let configuration = parsed.map_err(|_| {
+            api::Failure::new(
+                api::ErrorCode::InvalidRequest,
+                "Invalid cloud configuration",
+            )
+        })?;
+        if phase == Phase::Changed {
+            if self.configuration.poll_interval_ms != configuration.poll_interval_ms {
+                if let Some(timer) = &self.poll {
+                    // Reset keeps the live handle; no stream, deadline or external query is replayed.
+                    timers::reset(timer, configuration.poll_interval_ms)?;
+                }
+            }
+            if self.configuration.key_ref != configuration.key_ref {
+                if let Some(input) = self.input.take() {
+                    // Forget the old handle before replacement so a late password cannot write the new key.
+                    api::guest::close_resource(input)?;
+                }
+            }
+        }
+        self.configuration = configuration;
+        Ok(api::Output::default())
+    }
     /// Every new intent releases its older network stream and progress; no stale result replaces the current query.
     fn begin(&mut self) -> Result<(), api::Failure> {
         self.release();
@@ -260,8 +325,14 @@ impl State {
             self.url = DEFAULT_URL.into();
             self.query = DEFAULT_QUERY.into();
         }
-        let token = plugin_protocol::secrets::read("api-token")?;
+        // A blank reference makes an unauthenticated request; secrets still checks namespace/permission.
+        let token = if self.configuration.key_ref.is_empty() {
+            None
+        } else {
+            plugin_protocol::secrets::read(&self.configuration.key_ref)?
+        };
         let mut request = self.request();
+        request.timeout_ms = self.configuration.timeout_ms;
         if let Some(token) = token {
             let token = String::from_utf8(token).map_err(|_| {
                 api::Failure::new(api::ErrorCode::InvalidRequest, "Token is not UTF-8")
@@ -273,7 +344,7 @@ impl State {
         }
         request.max_response_bytes = 65536;
         self.stream = Some(http::start(request)?);
-        self.poll = Some(timers::start(25, true)?);
+        self.poll = Some(timers::start(self.configuration.poll_interval_ms, true)?);
         self.cache = Some(storage::open(storage::Area::Cache)?);
         self.progress = Some(interaction::start(
             interaction::Operation::Progress {
@@ -413,7 +484,12 @@ impl plugin_protocol::bindings::Guest for Guest {
             let mut state = state.borrow_mut();
             let initializing = matches!(
                 &invocation.message,
-                api::Input::Prepare { .. } | api::Input::Activate
+                api::Input::Prepare { .. }
+                    | api::Input::Activate
+                    | api::Input::Event {
+                        event: api::Notification::Configuration { .. },
+                        ..
+                    }
             );
             match state.dispatch(invocation.message) {
                 Ok(output) => Ok(output),

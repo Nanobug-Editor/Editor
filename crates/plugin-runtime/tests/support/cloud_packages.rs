@@ -1,4 +1,8 @@
 //! Independent SDK-built cloud packages enter the production Package/Manager boundary.
+#[path = "demand.rs"]
+mod demand_support;
+pub use demand_support::ready as demand;
+pub use plugin_runtime::DemandReason;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api, ui::Kind},
@@ -77,6 +81,8 @@ pub fn probe(
     id: &str,
     operation: api::Operation,
 ) -> Result<api::Value, api::Failure> {
+    // Probing is an actual declared command demand; installation/discovery themselves stay dormant.
+    demand(manager, id, DemandReason::Command("probe".into()));
     manager
         .invoke_command(id, "probe", serde_json::to_value(operation).unwrap())
         .unwrap();

@@ -1,6 +1,6 @@
 # 基础社区生态：实施与验收入口
 
-日期：2026-10-11。状态：已恢复实施，未完成的验收项和工单保持开放。
+日期：2026-10-12。状态：01–06 已验收交付，07 行为验收与最终独立双轴复核完成，待普通提交、推送与关闭。
 
 本次恢复按用户新约定使用源码接口注释和不含 Markdown 的独立 SDK，保留宿主原生终端与公开执行/PTY 能力。主分支普通合并、源码包 Red/Green、四个正式独立包与当前原生连接均已通过，[2026-10-11 恢复记录](2026-10-11-resume.md)保存精确输入和结果；后续工单继续按依赖实施，历史包验证只适用于其记载的输入。
 
@@ -28,7 +28,7 @@
 | 04 诊断与语言 | [#96](https://github.com/T-miracle/Nanobug/issues/96) | 已验收交付，议题已关闭 | [04 主验收](04-diagnostics-and-language.md)、[双轴审查](04-diagnostics-and-language-review.md)、[生产原生记录](04-native-desktop.md)；`2d140d1c71d117046d907c600a18245f865dc696` 两分支已推送核对，2026-10-11T15:17:51Z 读回 closed/completed |
 | 05 树与装饰 | [#97](https://github.com/T-miracle/Nanobug/issues/97) | 已验收交付，议题已关闭 | [05 验收记录](05-trees-and-decorations.md)、[修复版原生记录](05-trees-and-decorations-native.md)；交付 `694038055387d55513916d9781baefa9a970d271` 已普通推送核对，2026-10-11T11:01:31Z 读回 closed/completed；集成点联合验证另记 |
 | 06 网络与私有状态 | [#98](https://github.com/T-miracle/Nanobug/issues/98) | 已验收交付，议题已关闭 | [06 验收记录](06-cloud-and-private-state.md)、[当前原生记录](native-06.md)；源码 `f2a907a`、最终文档分支 `72bdf8bab1c9f4d489118715f9f3a17c0f6d301c` 已推送核对；当前集成分支继续汇合，联合验证另记 |
-| 07 激活与兼容 | [#99](https://github.com/T-miracle/Nanobug/issues/99) | 实施中，三个直接依赖均已关闭 | 从 `2d140d1` 整合基线继续 T31–T35 及共同完成条件，尚未计作验收完成 |
+| 07 激活与兼容 | [#99](https://github.com/T-miracle/Nanobug/issues/99) | 验收与双轴审查完成，待普通交付 | [07 主验收](07-activation-and-compatibility.md)、[双轴记录](07-activation-and-compatibility-review.md)、[Windows 原生记录](native-07.md)；Runtime 19、额外 Query 1、App 12 显式通过，非 UI 260 通过/246 ignored，三门禁 exit0，两轴未解决项0；远端尚未关闭 |
 
 ## 证据与复用规则
 

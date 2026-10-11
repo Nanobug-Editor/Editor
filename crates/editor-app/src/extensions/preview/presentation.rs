@@ -44,8 +44,19 @@ impl EditorApp {
         if preview.read(cx).renderable_document().is_none()
             && self.active_text_tab_index().is_some()
         {
-            // Native input is available before the provider's first background parse finishes.
-            return self.render_native_editor(window, cx);
+            // The caller has selected one authorized, visible file provider. Before its first
+            // layout exists, the actual native body paint must still drive that provider's demand.
+            // Reuse its masked/generation-checked probe while retaining the sole native text state;
+            // declaration/default visibility alone never starts a guest, and errors keep the fallback above.
+            let demand_probe = preview.update(cx, |panel, cx| panel.view_demand_probe(cx));
+            return v_flex()
+                .size_full()
+                .min_h_0()
+                .min_w_0()
+                .relative()
+                .child(self.render_native_editor(window, cx))
+                .child(demand_probe)
+                .into_any_element();
         }
         let has_editor = preview
             .read(cx)

@@ -64,6 +64,7 @@ impl Worker {
                 BTreeMap::<(u64, u64), plugin_runtime::Completion<serde_json::Value>>::new();
             let mut target_calls = super::targets::TargetCalls::default();
             let mut configuration_calls = super::configurations::ConfigurationCalls::default();
+            let mut demands = super::demands::Demands::default();
             loop {
                 // Development candidates use the live actor's transaction and private data owner.
                 if preparation.is_none() && deferred.is_empty() {
@@ -168,7 +169,17 @@ impl Worker {
                     vec![id.clone()]
                 } else {
                     match &work {
-                        Some(Work::SetSetting { plugin, .. }) => vec![plugin.clone()],
+                        Some(Work::SetSetting { plugin, key, .. })
+                            if manager
+                                .installed
+                                .get(plugin)
+                                .and_then(|entry| entry.manifest.settings.get(key))
+                                .is_none_or(|definition| {
+                                    definition.apply != settings::Apply::HotApply
+                                }) =>
+                        {
+                            vec![plugin.clone()]
+                        }
                         Some(
                             Work::Restart(id)
                             | Work::Disable(id)
@@ -179,7 +190,7 @@ impl Worker {
                             vec![package.manifest.id.clone()]
                         }
                         Some(Work::SetTrust(false) | Work::Shutdown(_)) => {
-                            manager.live.keys().cloned().collect()
+                            manager.installed.keys().cloned().collect()
                         }
                         _ => Vec::new(),
                     }
@@ -723,27 +734,14 @@ impl Worker {
                             .submit_language_fix(&origin, document, fix)
                             .map(|_| ())
                             .map_err(anyhow::Error::from),
-                        Some(Work::Invoke {
-                            plugin,
-                            command,
-                            arguments,
-                            context,
-                            expected_epoch,
-                        }) => {
-                            // Release publication ownership before entering WASM; guest execution
-                            // cannot hold the mutex needed by the native publication consumer.
-                            let admission = output.lock().unwrap().admit_command(
-                                &manager,
+                        Some(work @ (Work::Invoke { .. } | Work::Demand { .. })) => {
+                            demands.dispatch(
+                                work,
+                                &mut manager,
+                                &output,
                                 authority.load(std::sync::atomic::Ordering::Acquire),
-                                &plugin,
-                                &command,
-                                expected_epoch,
                             );
-                            admission.and_then(|()| {
-                                manager.invoke_command_with_context(
-                                    &plugin, &command, arguments, context,
-                                )
-                            })
+                            Ok(())
                         }
                         None => Ok(()),
                     }
@@ -776,7 +774,18 @@ impl Worker {
                     }
                     Err(error) => manager.workspace_events_failed(error),
                 }
+                // Withdraw cancelled native waiters before Manager can commit a completed preparation.
+                demands.poll(
+                    &mut manager,
+                    &output,
+                    authority.load(std::sync::atomic::Ordering::Acquire),
+                );
                 manager.poll();
+                demands.poll(
+                    &mut manager,
+                    &output,
+                    authority.load(std::sync::atomic::Ordering::Acquire),
+                );
                 if output.lock().unwrap().terminal_presentations.len() < 240 {
                     let messages = manager
                         .take_terminal_presentations()
@@ -850,7 +859,7 @@ impl Worker {
                         .extend(messages);
                 }
                 target_calls.poll(&manager, &output);
-                configuration_calls.poll(&manager, &output);
+                configuration_calls.poll(&mut manager, &output);
                 debug_requests.retain(|request, (method, pending)| {
                     let result = match pending.status() {
                         api::RequestUpdate::Accepted | api::RequestUpdate::Progress { .. } => {
@@ -1171,7 +1180,7 @@ impl Worker {
                 }
                 // Recovery also changes ownership when installation returns Err; the same
                 // real-instance publication is used by application-level Manager fixtures.
-                published.publish_manager(&manager);
+                published.publish_manager(&mut manager);
                 published.diagnostics = manager
                     .installed
                     .keys()
@@ -1201,4 +1210,5 @@ impl Worker {
 /// Native callbacks retain their original owner; replacement advances the publication epoch.
 fn retire_publication(published: &mut Published, id: &str) {
     published.retire_instance(id);
+    published.retire_commands(id);
 }

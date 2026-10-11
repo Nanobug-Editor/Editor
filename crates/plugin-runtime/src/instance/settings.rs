@@ -76,14 +76,15 @@ impl Instance {
             .language_service
             .ok_or_else(|| anyhow::anyhow!("LSP hook returned no proposal"))
     }
-    /// Resolve discoveries on an isolated candidate before any active instance or saved config is changed.
-    pub(crate) fn configure_settings(
+    /// Resolve discoveries on an isolated candidate without applying values or granting active authority.
+    /// Hot validation uses this same bounded hook before saving, and initial preparation applies its result.
+    pub(crate) fn validate_settings(
         &mut self,
         manifest: &Manifest,
         mut values: Effective,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Effective> {
         if manifest.settings.is_empty() {
-            return Ok(());
+            return Ok(values);
         }
         anyhow::ensure!(
             self.store
@@ -144,8 +145,57 @@ impl Instance {
                 }
             }
         }
-        self.configuration = values;
+        Ok(values)
+    }
+
+    /// Initial/replacement configuration applies only after isolated validation succeeds.
+    pub(crate) fn configure_settings(
+        &mut self,
+        manifest: &Manifest,
+        values: Effective,
+    ) -> anyhow::Result<()> {
+        self.configuration = self.validate_settings(manifest, values)?;
         self.reapply_settings()
+    }
+
+    /// Deliver a validated, saved map to the same committed configuration-1.1 owner.
+    /// The manager retires this owner on failure; neither memory nor external effects are rolled back.
+    pub(crate) fn apply_hot_settings(
+        &mut self,
+        manifest: &Manifest,
+        values: Effective,
+    ) -> anyhow::Result<()> {
+        if !manifest.settings_hook
+            || !self
+                .negotiated()
+                .capabilities
+                .get("configuration")
+                .is_some_and(|version| version.major == 1 && version.minor >= 1)
+        {
+            anyhow::bail!(api::Failure::new(
+                api::ErrorCode::CapabilityUnavailable,
+                "Hot configuration requires the negotiated 1.1 hook"
+            ));
+        }
+        anyhow::ensure!(
+            self.store.data().active && self.store.data().activation_committed,
+            "Hot configuration requires a committed active owner"
+        );
+        let reply = self.call(api::Input::Event {
+            panel: None,
+            event: api::Notification::Configuration {
+                phase: Phase::Changed,
+                values: values.clone(),
+            },
+        })?;
+        if let Some(proposal) = reply.configuration {
+            anyhow::ensure!(
+                proposal.errors.is_empty() && proposal.discovered.is_empty(),
+                "Changed cannot reject or replace already validated saved values"
+            );
+        }
+        self.configuration = values;
+        Ok(())
     }
 
     /// Rollback reinitializes guest memory, so the previous resolved configuration must be delivered again.

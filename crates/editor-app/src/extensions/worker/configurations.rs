@@ -96,7 +96,8 @@ impl ConfigurationCalls {
     }
 
     /// Polling consumes each terminal receipt once and rejects retired providers before publication.
-    pub fn poll(&mut self, manager: &Manager, output: &Arc<Mutex<Published>>) {
+    /// Static origin discovery refreshes metadata without activating any contributor.
+    pub fn poll(&mut self, manager: &mut Manager, output: &Arc<Mutex<Published>>) {
         let origins = manager.configuration_origins();
         {
             let mut published = output.lock().unwrap();

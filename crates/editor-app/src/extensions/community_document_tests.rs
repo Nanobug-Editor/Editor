@@ -50,13 +50,19 @@ fn invoke_result(
 }
 
 /// Independent guests share this production publication adapter, without plugin-specific host code.
-fn invoke_for(
+pub(super) fn invoke_for(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,
     plugin: &str,
     operation: Json,
 ) -> Result<api::EditorValue, api::Failure> {
+    // This actual probe command, rather than package installation, consumes its cold guest.
+    super::package_ui_test_support::demand(
+        manager,
+        plugin,
+        plugin_runtime::DemandReason::Command("probe".into()),
+    )?;
     manager
         .invoke_command(
             plugin,
@@ -82,7 +88,7 @@ fn invoke_for(
     visual.update(|_, cx| {
         app.read(cx).extensions.clone().update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
-            state.entries = manager.published_entries();
+            state.publish_manager(manager);
             state.editor_requests.push((plugin.into(), request.clone()));
             drop(state);
             owner.poll(cx);
@@ -104,6 +110,12 @@ fn run_consumer(
     plugin: &str,
     command: &str,
 ) {
+    super::package_ui_test_support::demand(
+        manager,
+        plugin,
+        plugin_runtime::DemandReason::Command(command.into()),
+    )
+    .unwrap();
     manager
         .invoke_command(plugin, command, json!(null))
         .unwrap();
@@ -115,7 +127,7 @@ fn run_consumer(
         visual.update(|_, cx| {
             app.read(cx).extensions.clone().update(cx, |owner, cx| {
                 let mut state = owner.worker.state.lock().unwrap();
-                state.entries = manager.published_entries();
+                state.publish_manager(manager);
                 state.editor_requests.extend(
                     requests
                         .iter()

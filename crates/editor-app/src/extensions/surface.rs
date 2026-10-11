@@ -676,6 +676,7 @@ impl Render for ExtensionPanel {
                 // The viewport has a definite extent; its rich content must not participate in the
                 // parent's intrinsic sizing. Keep normal native paint/event registration each frame.
                 .child(div().absolute().inset_0().size_full().child(view))
+                .child(self.view_demand_probe(cx))
                 .children(self.command_popup(window, cx))
                 .into_any_element();
         }
@@ -683,6 +684,8 @@ impl Render for ExtensionPanel {
         // An unpublished or retired document has no focusable guest controls.
         div()
             .size_full()
+            .relative()
+            .child(self.view_demand_probe(cx))
             .children(self.command_popup(window, cx))
             .into_any_element()
     }

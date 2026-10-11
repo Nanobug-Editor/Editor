@@ -34,6 +34,7 @@ fn arbitrary_client_capabilities_reach_the_native_lsp_handshake() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    demand_lsp(&mut manager, "analysis").unwrap();
     let plan = manager.language_services()["capability-example/analysis"]
         .as_ref()
         .unwrap()
@@ -98,28 +99,30 @@ pub(crate) fn publish(
     manager: &mut plugin_runtime::Manager,
     cx: &mut gpui_kit::VisualTestContext,
 ) {
-    let services = manager.language_services();
-    // Shared GPUI fixtures mirror both production publications without exposing the worker as an API.
-    let structures = manager.structure_providers();
-    cx.update(|window, cx| {
-        app.update(cx, |app, cx| {
-            app.extensions.update(cx, |panel, cx| {
-                {
-                    let mut state = panel.worker.state.lock().unwrap();
-                    state.entries = manager.published_entries();
-                    // The public manager has finished preparation; mirror the actor's completed
-                    // publication so layout restoration does not wait for a nonexistent test worker.
-                    state.startup.clear();
-                    state.language_services = services;
-                    state.structure_providers = structures;
-                    state.configuration_revision += 1;
-                }
-                panel.poll(cx);
-            });
-            app.sync_runtime_contributions(window, cx);
-        })
-    });
-    cx.run_until_parked();
+    // First publish static declarations; native opened documents then produce their actual demand.
+    // Two transport/publication turns expose its first role birth without activating unused plans.
+    for _ in 0..2 {
+        cx.update(|window, cx| {
+            super::package_ui_test_support::pump(app, manager, cx);
+            app.update(cx, |app, cx| app.sync_runtime_contributions(window, cx));
+        });
+        cx.run_until_parked();
+    }
+}
+
+/// Standalone transport checks consume precisely the declared service under test.
+fn demand_lsp(
+    manager: &mut plugin_runtime::Manager,
+    role: &str,
+) -> Result<plugin_runtime::ActivationReceipt, protocol::api::Failure> {
+    super::package_ui_test_support::demand(
+        manager,
+        "capability-example",
+        plugin_runtime::DemandReason::Language {
+            provider: format!("capability-example/{role}"),
+            role: plugin_runtime::LanguageRole::Lsp,
+        },
+    )
 }
 
 #[gpui::test]
@@ -176,7 +179,8 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
         app.language_servers["novel"].clone()
     });
     server.prepare_until_ready().unwrap();
-    // Recognition can change while both LSP plans remain exactly the same published instances.
+    // Recognition can change while the Runtime lease remains prepared; the native adapter exists
+    // only for an actually selected open document and must retire when that document stops using it.
     let mut other_files =
         super::language_tests::packages::language_package("other-recognition").files;
     let other_source = String::from_utf8(other_files["plugin.toml"].clone())
@@ -209,8 +213,8 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
             "recognition change must revoke old document providers"
         );
         assert!(
-            Arc::ptr_eq(&server, &app.language_servers["novel"]),
-            "unaffected service must retain its instance"
+            !app.language_servers.contains_key("novel"),
+            "an unselected language cannot retain an eager native server"
         );
     });
     crate::language::providers::choose(
@@ -221,6 +225,9 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
     .unwrap();
     cx.update(|_, cx| app.update(cx, |app, cx| app.sync_dynamic_languages(cx)));
     cx.run_until_parked();
+    publish(&app, &mut manager, cx);
+    server = cx.update(|_, cx| app.read(cx).language_servers["novel"].clone());
+    server.prepare_until_ready().unwrap();
     let navigation = cx.update(|window, cx| {
         let (provider, text) = {
             let editor = app.read(cx).editor.read(cx);
@@ -304,6 +311,7 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
     publish(&app, &mut manager, cx);
     server = cx.update(|_, cx| app.read(cx).language_servers["novel"].clone());
     server.prepare_until_ready().unwrap();
+    demand_lsp(&mut manager, "secondary").unwrap();
     let secondary = manager.language_services()["capability-example/secondary"]
         .as_ref()
         .unwrap()
@@ -328,6 +336,7 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
         )
         .unwrap();
     assert!(!lease.is_active());
+    assert!(demand_lsp(&mut manager, "analysis").is_err());
     assert!(Arc::ptr_eq(
         &secondary,
         manager.language_services()["capability-example/secondary"]
@@ -357,6 +366,7 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
             Some(json!("emit-ui")),
         )
         .unwrap();
+    assert!(demand_lsp(&mut manager, "analysis").is_err());
     let error = manager.language_services()["capability-example/analysis"]
         .as_ref()
         .err()
@@ -384,6 +394,7 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
             Some(json!("dynamic-start")),
         )
         .unwrap();
+    assert!(demand_lsp(&mut manager, "analysis").is_err());
     assert!(
         manager.language_services()["capability-example/analysis"]
             .as_ref()
@@ -423,6 +434,7 @@ fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
             Some(json!("escaped-project")),
         )
         .unwrap();
+    assert!(demand_lsp(&mut manager, "analysis").is_err());
     assert!(manager.language_services()["capability-example/analysis"].is_err());
     manager.uninstall("capability-example", false).unwrap();
     assert!(!restored.is_active() && restored.spawn().is_err());

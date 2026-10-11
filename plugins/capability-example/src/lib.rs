@@ -433,7 +433,9 @@ impl State {
                             ..Default::default()
                         });
                     }
-                    Phase::Apply => self.configuration = values,
+                    // Both phases carry the complete map. Restart-only declarations keep Apply;
+                    // a future explicitly negotiated hot value can use Changed without stale fields.
+                    Phase::Apply | Phase::Changed => self.configuration = values,
                 }
             }
             api::Input::Event {

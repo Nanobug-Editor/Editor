@@ -1,5 +1,10 @@
 //! Optional service preparation can preserve resource features without weakening update rollback.
-use plugin_runtime::{Manager, Package, plugin_protocol::Environment};
+#[path = "support/demand.rs"]
+mod demand_support;
+use plugin_runtime::{
+    DemandReason, LanguageRole, Manager, Package,
+    plugin_protocol::{Environment, api},
+};
 use serde_json::json;
 use std::{
     io::{Cursor, Write},
@@ -36,6 +41,18 @@ fn package(version: &str, missing: &Path, optional: bool) -> Package {
     Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap()
 }
 
+/// Optional installation preserves cold resources; selecting the role exposes its typed missing-tool error.
+fn selected_analysis(manager: &mut Manager) -> Result<(), api::Failure> {
+    demand_support::try_ready(
+        manager,
+        "novel-optional",
+        DemandReason::Language {
+            provider: "novel-optional/analysis".into(),
+            role: LanguageRole::Lsp,
+        },
+    )
+}
+
 /// First installation may retain its declared language, while updates preserve the old version on failure.
 #[test]
 fn optional_language_dependency_failure_keeps_resources_and_rejects_failed_update() {
@@ -61,6 +78,8 @@ fn optional_language_dependency_failure_keeps_resources_and_rejects_failed_updat
                 && entry.enabled
                 && entry.error.is_none())
     );
+    assert!(manager.language_services().is_empty());
+    assert!(selected_analysis(&mut manager).is_err());
     assert!(
         manager.language_services()["novel-optional/analysis"].is_err(),
         "missing dependency must remain a visible preparation failure"
@@ -102,6 +121,9 @@ fn long_private_installation_root_publishes_optional_dependency_receipt() {
     drop(manager);
     let mut reopened = Manager::open(root, environment).unwrap();
     assert_eq!(reopened.installed["novel-optional"].digest, first.digest);
+    // Reopening remains cold; only this original selected-role demand materializes the failure catalog.
+    assert!(reopened.language_services().is_empty());
+    assert!(selected_analysis(&mut reopened).is_err());
     assert!(reopened.language_services()["novel-optional/analysis"].is_err());
     assert!(reopened.published_entries().iter().any(|entry| {
         entry.manifest.id == "novel-optional" && entry.enabled && entry.error.is_none()

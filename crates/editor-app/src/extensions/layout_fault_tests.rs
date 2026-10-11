@@ -148,6 +148,13 @@ fn binary_fault_retains_tab_and_retries(
 
 /// A guest diagnostic trap passes through declared command dispatch and normal runtime fault retirement.
 fn trap_layout(manager: &mut Manager) {
+    // The diagnostic must reach guest code rather than pass through a cold-instance refusal.
+    demand(
+        manager,
+        "fault-layout",
+        plugin_runtime::DemandReason::Command("diagnostic-trap".into()),
+    )
+    .unwrap();
     let error = manager
         .invoke_command("fault-layout", "diagnostic-trap", serde_json::Value::Null)
         .expect_err("the explicit guest diagnostic must fail");

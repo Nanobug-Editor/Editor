@@ -7,10 +7,14 @@ use std::time::Instant;
 pub(super) fn wait_for_control(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
+    manager: &mut Manager,
     selector: &'static str,
 ) {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
+        visual.executor().advance_clock(Duration::from_millis(10));
+        pump(visual, app, manager);
+        publish_providers(visual, app, manager);
         draw(visual);
         if visual.debug_bounds(selector).is_some() {
             return;
@@ -90,6 +94,7 @@ fn native_community_languages_share_reference_navigation_and_document_lifetime(
             // The source comes only from real native input; caret placement uses its public editor seam.
             place_caret(visual, &app, caret);
             if name.ends_with("nbkv") {
+                pump(visual, &app, &mut manager);
                 let server =
                     visual.update(|_, cx| app.read(cx).language_servers["keyvalue"].clone());
                 server.prepare_until_ready().unwrap();
@@ -102,7 +107,7 @@ fn native_community_languages_share_reference_navigation_and_document_lifetime(
                 });
             }
             visual.simulate_keystrokes("shift-f12");
-            wait_for_control(visual, &app, "language-feature-row-1");
+            wait_for_control(visual, &app, &mut manager, "language-feature-row-1");
             assert!(visual.update(|window, _| {
                 gpui_base::test_support::snapshots(window)
                     .iter()
@@ -135,7 +140,7 @@ fn native_community_languages_share_reference_navigation_and_document_lifetime(
             // enters the same public actor and preview before text changes; group Undo restores it.
             eprintln!("Formal native language {name}: actions and group Undo");
             visual.simulate_keystrokes("ctrl-.");
-            wait_for_control(visual, &app, "language-feature-row-0");
+            wait_for_control(visual, &app, &mut manager, "language-feature-row-0");
             click(visual, "language-feature-row-0");
             let request = pump(visual, &app, &mut manager)
                 .into_iter()
@@ -181,7 +186,7 @@ fn native_community_languages_share_reference_navigation_and_document_lifetime(
             };
             place_caret(visual, &app, signature_caret);
             visual.simulate_keystrokes("ctrl-shift-space");
-            wait_for_control(visual, &app, "language-signature-card-0");
+            wait_for_control(visual, &app, &mut manager, "language-signature-card-0");
             visual.update(|window, _| {
                 let nodes = gpui_base::test_support::snapshots(window);
                 let label = rust_i18n::t!("language_features.parameter", parameter = parameter);
@@ -216,6 +221,7 @@ fn native_community_languages_share_reference_navigation_and_document_lifetime(
             publish_providers(visual, &app, &mut manager);
             no_late_row(visual, "provider replacement", name);
             if name.ends_with("nbkv") {
+                pump(visual, &app, &mut manager);
                 visual
                     .update(|_, cx| app.read(cx).language_servers["keyvalue"].clone())
                     .prepare_until_ready()

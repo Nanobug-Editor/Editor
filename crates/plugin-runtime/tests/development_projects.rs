@@ -1,6 +1,9 @@
 //! Real independently built candidates enter the public manager without an intermediate ZIP.
+#[path = "support/demand.rs"]
+mod demand;
+
 use plugin_runtime::{
-    Manager, Package, development,
+    DemandReason, Manager, Package, development,
     plugin_protocol::{Environment, api},
 };
 use std::path::PathBuf;
@@ -19,11 +22,21 @@ fn candidate() -> Package {
 fn real_directory_reload_preserves_state_and_rolls_back_failed_component() {
     let package = candidate();
     let id = package.manifest.id.clone();
+    let view = package
+        .manifest
+        .panels
+        .first()
+        .expect("the independently built example must declare a native view")
+        .id
+        .clone();
     let data = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(data.path().into(), Environment::default()).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    assert!(!manager.live.contains_key(&id));
+    // Static discovery stays cold; consume the real view through its original availability/receipt.
+    demand::ready(&mut manager, &id, DemandReason::View(view.clone()));
     manager
         .event(
             &id,
@@ -71,6 +84,9 @@ fn real_directory_reload_preserves_state_and_rolls_back_failed_component() {
     manager.shutdown();
     drop(manager); // Release the exclusive private-data lease before reopening this profile.
     let mut reopened = Manager::open(data.path().into(), Environment::default()).unwrap();
+    assert!(!reopened.live.contains_key(&id));
+    // Reopening restores logical installation/snapshot, then this actual view demands the new owner.
+    demand::ready(&mut reopened, &id, DemandReason::View(view));
     assert_eq!(
         reopened.live.get_mut(&id).unwrap().snapshot().unwrap().data,
         state.data
@@ -90,11 +106,21 @@ fn real_directory_reload_preserves_state_and_rolls_back_failed_component() {
 fn real_directory_new_permissions_require_confirmation() {
     let package = candidate();
     let id = package.manifest.id.clone();
+    let view = package
+        .manifest
+        .panels
+        .first()
+        .expect("the independently built example must declare a native view")
+        .id
+        .clone();
     let root = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(root.path().into(), Environment::default()).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    assert!(!manager.live.contains_key(&id));
+    // A rejected permission upgrade must preserve an already demanded owner, not only dormant metadata.
+    demand::ready(&mut manager, &id, DemandReason::View(view));
     let mut files = package.files.clone();
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["permissions"] = serde_json::json!(["storage"]);

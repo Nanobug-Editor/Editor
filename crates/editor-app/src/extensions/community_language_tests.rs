@@ -36,21 +36,16 @@ fn packages(
 }
 
 /// Replacements and disablement use the same production contribution snapshot as initial installation.
-fn publish_providers(
+pub(super) fn publish_providers(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,
 ) {
-    let direct = manager.direct_language_providers();
-    let language = manager.language_services();
     visual.update(|_, cx| {
         app.read(cx).extensions.clone().update(cx, |panel, cx| {
             let mut state = panel.worker.state.lock().unwrap();
-            state.ready = true;
-            state.entries = manager.published_entries();
-            state.direct_language_providers = direct;
-            state.language_services = language;
-            state.configuration_revision += 1;
+            state.publish_manager(manager);
+            super::package_ui_test_support::publish_catalog(&mut state, manager);
             drop(state);
             panel.poll(cx);
         })
@@ -66,6 +61,9 @@ fn draw(visual: &mut VisualTestContext) {
 
 /// Production actor ingress is mirrored without constructing handles, authorities or document text.
 fn ingress(visual: &mut VisualTestContext, app: &Entity<EditorApp>, manager: &mut Manager) {
+    let worker = visual.update(|_, cx| app.read(cx).extensions.read(cx).worker.clone());
+    let trusted = worker.trusted.load(std::sync::atomic::Ordering::Acquire);
+    let mut demands = super::worker::demands::Demands::default();
     let (changes, files, work) = visual.update(|_, cx| {
         let worker = app.read(cx).extensions.read(cx).worker.clone();
         let mut state = worker.state.lock().unwrap();
@@ -86,6 +84,13 @@ fn ingress(visual: &mut VisualTestContext, app: &Entity<EditorApp>, manager: &mu
         manager.workspace_file_event(file);
     }
     for work in work {
+        let work = match work {
+            work @ (Work::Demand { .. } | Work::Invoke { .. }) => {
+                demands.dispatch(work, manager, &worker.state, trusted);
+                continue;
+            }
+            work => work,
+        };
         if let Work::LanguageFix {
             origin,
             document,
@@ -95,19 +100,32 @@ fn ingress(visual: &mut VisualTestContext, app: &Entity<EditorApp>, manager: &mu
             manager.submit_language_fix(&origin, document, fix).unwrap();
         }
     }
+    // Only actual native use enters this wait; idle provider metadata must remain cold.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !demands.is_empty() {
+        demands.poll(manager, &worker.state, trusted);
+        manager.poll();
+        demands.poll(manager, &worker.state, trusted);
+        assert!(
+            Instant::now() < deadline,
+            "community native demand did not complete"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    publish_providers(visual, app, manager);
 }
 
 /// Execute ordinary published requests through the application's serialized native dispatcher.
 fn publish(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
-    manager: &Manager,
+    manager: &mut Manager,
     requests: &[(String, EditorRequest)],
 ) {
     visual.update(|_, cx| {
         app.read(cx).extensions.clone().update(cx, |panel, cx| {
             let mut state = panel.worker.state.lock().unwrap();
-            state.entries = manager.published_entries();
+            state.publish_manager(manager);
             state.editor_requests.extend(requests.iter().cloned());
             drop(state);
             panel.poll(cx);
@@ -117,7 +135,7 @@ fn publish(
 }
 
 /// Bounded guest state machines drain through actual completion events rather than handcrafted results.
-fn pump(
+pub(super) fn pump(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,
@@ -143,6 +161,12 @@ fn begin(
     id: &str,
     operation: api::Operation,
 ) -> Result<api::Value, api::Failure> {
+    // The probe is an ordinary declared command; it consumes its own cold package on first use.
+    super::package_ui_test_support::demand(
+        manager,
+        id,
+        plugin_runtime::DemandReason::Command("probe".into()),
+    )?;
     manager
         .invoke_command(id, "probe", serde_json::to_value(operation).unwrap())
         .unwrap();

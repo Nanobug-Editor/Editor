@@ -1,5 +1,7 @@
 //! Hot LSP selection is independent of grammar loading and rebinds already-open document snapshots.
 use crate::*;
+mod demands;
+pub(crate) use demands::DemandState;
 
 /// Readiness belongs to the selected service instance, independently from its grammar provider.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,6 +47,7 @@ impl EditorApp {
     pub(crate) fn sync_dynamic_language_servers(&mut self, cx: &mut Context<Self>) {
         let selected = crate::language::providers::language_servers();
         let selected_formatters = crate::language::providers::formatters();
+        let wanted = self.demand_open_language_servers(&selected, cx);
         let available = self.extensions.read(cx).language_services();
         // Role maps share adapters for the same immutable plan; a native service owns one process lease.
         let previous = self
@@ -79,6 +82,7 @@ impl EditorApp {
         let mut changed = false;
         self.language_servers.retain(|language, server| {
             let keep = self.session_state.workspace_trusted
+                && wanted.contains_key(language)
                 && selected
                     .get(language)
                     .and_then(|id| id.as_ref())
@@ -91,9 +95,16 @@ impl EditorApp {
             keep
         });
         self.language_service_states
-            .retain(|language, _| self.language_servers.contains_key(language));
+            .retain(|language, _| wanted.contains_key(language));
+        self.publish_language_demand_states();
         if self.session_state.workspace_trusted {
             for (language, id) in selected {
+                if !wanted.contains_key(&language) {
+                    continue;
+                }
+                if !self.language_demand_is_ready(&language) {
+                    continue;
+                }
                 if self.language_servers.contains_key(&language) {
                     continue;
                 }

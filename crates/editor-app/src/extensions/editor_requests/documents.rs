@@ -5,10 +5,19 @@ use crate::editor::language_for_path;
 impl EditorApp {
     /// Publish metadata transitions without retaining text or replacing the legacy revision stream.
     pub(super) fn sync_plugin_document_metadata(&mut self, cx: &mut Context<Self>) {
+        // Native server lifetime includes external dependencies; this guard-only map is never
+        // part of the SDK document stream and grants no workspace/file read authority.
+        let lifetimes = (0..self.tabs.len())
+            .filter_map(|index| self.native_language_document_version(index))
+            .map(|version| (version.id.clone(), version))
+            .collect();
+        self.plugin_command_intents
+            .synchronize_lifetimes(&lifetimes);
         let current = (0..self.tabs.len())
             .filter_map(|index| self.plugin_document_info(index, cx).ok())
             .map(|info| (info.document.id.clone(), info))
             .collect::<BTreeMap<_, _>>();
+        self.plugin_command_intents.synchronize(&current);
         let previous = std::mem::replace(&mut self.plugin_document_metadata, current.clone());
         for (id, info) in &current {
             match previous.get(id) {
@@ -83,6 +92,8 @@ impl EditorApp {
         kind: api::DocumentEventKind,
         cx: &App,
     ) {
+        // Native cancellation precedes actor ingress, so a busy demand cannot overtake an edit.
+        self.plugin_command_intents.observe(&kind);
         if !self.session_state.workspace_trusted {
             return;
         }

@@ -530,6 +530,33 @@ plugins.project_enabled:
 plugins.manager_error:
   en: "Plugin manager: %{error}"
   zh-CN: "插件管理器：%{error}"
+plugins.language_demand_timeout:
+  en: "The selected language provider did not become available in time."
+  zh-CN: "所选语言提供者未能在规定时间内就绪。"
+plugins.command_target_changed:
+  en: "The command target changed. Invoke the command again."
+  zh-CN: "命令目标已改变，请重新执行命令。"
+plugins.document_target_changed:
+  en: "The original document changed or was closed."
+  zh-CN: "原文档已改变或关闭。"
+plugins.command_owner_changed:
+  en: "The plugin command was replaced or disabled."
+  zh-CN: "插件命令已被替换或禁用。"
+plugins.demand_queue_full:
+  en: "Too many plugin requests are pending. Try again later."
+  zh-CN: "等待中的插件请求过多，请稍后重试。"
+plugins.demand_cancelled:
+  en: "The plugin request was cancelled."
+  zh-CN: "插件请求已取消。"
+plugins.demand_timeout:
+  en: "The plugin did not become available in time."
+  zh-CN: "插件未能在规定时间内就绪。"
+plugins.worker_unavailable:
+  en: "The plugin worker is unavailable."
+  zh-CN: "插件后台服务不可用。"
+plugins.restricted:
+  en: "Plugins are unavailable in a restricted workspace."
+  zh-CN: "受限工作区中不能运行插件。"
 plugins.install:
   en: "Install"
   zh-CN: "安装"
@@ -1025,6 +1052,9 @@ settings.plugin_project:
 settings.plugin_user_only:
   en: "User only"
   zh-CN: "仅用户全局"
+settings.plugin_secret_reference_hint:
+  en: "Enter a key in this plugin's secret storage, not the token itself. Leave blank if unconfigured."
+  zh-CN: "填写此插件私有密钥存储中的 key，而非令牌内容；留空表示尚未配置。"
 settings.plugin_apply:
   en: "Apply"
   zh-CN: "应用"

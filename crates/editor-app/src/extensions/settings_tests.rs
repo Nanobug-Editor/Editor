@@ -29,6 +29,8 @@ fn native_plugin_settings_apply_and_show_effective_source(cx: &mut TestAppContex
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // Settings discovery is metadata only; neither opening this form nor isolated validation runs Main.
+    assert!(manager.live.is_empty());
     let slot = Rc::new(RefCell::new(None));
     let capture = slot.clone();
     let (_, editor_cx) = cx.add_window_view(move |window, cx| {
@@ -102,6 +104,10 @@ fn native_plugin_settings_apply_and_show_effective_source(cx: &mut TestAppContex
         .update_setting(&plugin, scope, &key, value)
         .map_err(|e| e.to_string());
     assert!(result.is_ok());
+    assert!(
+        manager.live.is_empty(),
+        "applying a cold setting must not run business activation"
+    );
     form_cx.update(|_, cx| {
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
@@ -176,6 +182,10 @@ fn native_plugin_settings_apply_and_show_effective_source(cx: &mut TestAppContex
     assert!(form_cx.debug_bounds("plugin-settings-error").is_some());
     assert_eq!(
         manager.effective_settings(&plugin).unwrap()["label"].value,
-        serde_json::json!("Discovered label")
+        serde_json::json!("Default label")
+    );
+    assert!(
+        manager.live.is_empty(),
+        "reading effective settings remains cold"
     );
 }

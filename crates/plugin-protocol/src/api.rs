@@ -460,6 +460,8 @@ pub enum Notification {
         handle: ResourceHandle,
         update: crate::process::Update,
     },
+    /// configuration 1.0 supplies Validate/Apply; 1.1 opts into Changed for suitable hot values.
+    /// The full map carries plugin-only scope/provenance and never secret credential bytes.
     Configuration {
         phase: crate::settings::Phase,
         values: crate::settings::Effective,

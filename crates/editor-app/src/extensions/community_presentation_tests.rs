@@ -62,7 +62,7 @@ fn drain(
         visual.update(|_, cx| {
             app.read(cx).extensions.clone().update(cx, |owner, cx| {
                 let mut state = owner.worker.state.lock().unwrap();
-                state.entries = manager.published_entries();
+                state.publish_manager(manager);
                 state.editor_requests.extend(requests.iter().cloned());
                 drop(state);
                 owner.poll(cx);
@@ -87,7 +87,11 @@ fn drain(
 }
 
 /// Deliver the actual native ingress; consumers rescan immutable snapshots instead of marker history.
-fn events(visual: &mut VisualTestContext, app: &Entity<EditorApp>, manager: &mut Manager) {
+pub(super) fn events(
+    visual: &mut VisualTestContext,
+    app: &Entity<EditorApp>,
+    manager: &mut Manager,
+) {
     let ingress = visual.update(|_, cx| {
         app.read(cx)
             .extensions
@@ -120,6 +124,8 @@ fn community_todos_and_coverage_follow_real_cut_replace_undo_and_close(cx: &mut 
         visual.run_until_parked();
         let (_root, mut manager) = providers(path.parent().unwrap(), &["todo-tree", "coverage"]);
         events(visual, &app, &mut manager);
+        // The tree is actually used here; its declared refresh command consumes the cold owner.
+        command(visual, &app, &mut manager, "todo-tree", "refresh-todos");
         let collection = command(visual, &app, &mut manager, "coverage", "scan-coverage")
             .pop()
             .unwrap();
@@ -247,13 +253,20 @@ fn community_todos_and_coverage_follow_real_cut_replace_undo_and_close(cx: &mut 
         assert!(!resource.is_live());
     });
 }
-fn command(
+/// Demand a declared business command and return its actual native decoration resources.
+pub(super) fn command(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,
     id: &str,
     command: &str,
 ) -> Vec<std::sync::Arc<plugin_runtime::DecorationResource>> {
+    super::package_ui_test_support::demand(
+        manager,
+        id,
+        plugin_runtime::DemandReason::Command(command.into()),
+    )
+    .unwrap();
     manager.invoke_command(id, command, Json::Null).unwrap();
     drain(visual, app, manager)
 }
@@ -264,7 +277,8 @@ fn text(manager: &Manager, id: &str) -> String {
     };
     text.clone()
 }
-fn positions(
+/// Read versioned decoration positions through the guest's public command receipt.
+pub(super) fn positions(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,
@@ -287,6 +301,11 @@ fn admit_marker(
     id: &str,
     operation: api::Operation,
 ) -> Result<plugin_runtime::EditorRequest, api::Failure> {
+    super::package_ui_test_support::demand(
+        manager,
+        id,
+        plugin_runtime::DemandReason::Command("probe".into()),
+    )?;
     manager
         .invoke_command(id, "probe", serde_json::to_value(operation).unwrap())
         .unwrap();
@@ -315,7 +334,7 @@ fn consume_marker(
     visual.update(|_, cx| {
         app.read(cx).extensions.clone().update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
-            state.entries = manager.published_entries();
+            state.publish_manager(manager);
             state.editor_requests.push((id.into(), request.clone()));
             drop(state);
             owner.poll(cx);

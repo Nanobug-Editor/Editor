@@ -60,6 +60,7 @@ impl ExtensionPanel {
         plugin: &str,
         command: &str,
         expected_epoch: u64,
+        guard: super::command_intents::CommandGuard,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
@@ -87,6 +88,7 @@ impl ExtensionPanel {
                     serde_json::Value::Null,
                     Some(expected_epoch),
                     None,
+                    Some(guard),
                 );
                 match accepted {
                     Err(error) => {
@@ -110,7 +112,7 @@ impl ExtensionPanel {
         command: &str,
         arguments: serde_json::Value,
     ) -> Result<(), String> {
-        self.enqueue_command(plugin, command, arguments, None, None)
+        self.enqueue_command(plugin, command, arguments, None, None, None)
             .map(|_| ())
     }
 
@@ -123,6 +125,7 @@ impl ExtensionPanel {
         arguments: serde_json::Value,
         expected_epoch: Option<u64>,
         context: Option<protocol::commands::Context>,
+        guard: Option<super::command_intents::CommandGuard>,
     ) -> Result<u64, String> {
         let state = self.worker.state.lock().unwrap();
         let current = state.command_epoch(plugin, command);
@@ -143,6 +146,10 @@ impl ExtensionPanel {
             return Err("插件命令参数不能超过 64 KiB".into());
         }
         let epoch = current.expect("admission checked command ownership");
+        let origin = worker::demands::CommandOrigin {
+            availability: state.availabilities[plugin].clone(),
+            guard,
+        };
         self.worker
             .tx
             .send(Work::Invoke {
@@ -151,6 +158,7 @@ impl ExtensionPanel {
                 arguments,
                 context,
                 expected_epoch: epoch,
+                origin: Some(origin),
             })
             .map_err(|_| "插件后台服务不可用".to_owned())?;
         Ok(epoch)
@@ -187,10 +195,17 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
-        let epoch = self
-            .extensions
-            .read(cx)
-            .enqueue_command(plugin, command, arguments, None, None)?;
+        let guard = self
+            .capture_current_command_guard(cx)
+            .map_err(|error| error.to_string())?;
+        let epoch = self.extensions.read(cx).enqueue_command(
+            plugin,
+            command,
+            arguments,
+            None,
+            None,
+            Some(guard),
+        )?;
         self.reveal_plugin_command_panel(plugin, command, epoch, window, cx);
         Ok(())
     }
@@ -207,8 +222,8 @@ impl EditorApp {
         // Reconcile freshly published panels so callers do not depend on a previous repaint.
         self.extensions.update(cx, |owner, cx| owner.poll(cx));
         self.sync_plugin_panels(window, cx);
-        // Polling may observe a replacement after admission. Pin its publication while revealing
-        // so an old accepted command cannot send panel.opened to the replacement's surface.
+        // Preserve the admitted metadata identity, then release publication before updating a
+        // native panel: explicit show itself reads worker state and must not re-lock this mutex.
         let worker = self.extensions.read(cx).worker.clone();
         let state = worker.state.lock().unwrap();
         if !worker.trusted.load(std::sync::atomic::Ordering::Acquire)
@@ -216,6 +231,7 @@ impl EditorApp {
         {
             return;
         }
+        let availability = state.availabilities[plugin].clone();
         let panel = self
             .extensions
             .read(cx)
@@ -225,14 +241,16 @@ impl EditorApp {
             .and_then(|entry| entry.manifest.panels.first())
             .and_then(|panel| self.plugin_panels.get(&format!("{plugin}/{}", panel.id)))
             .cloned();
+        drop(state);
         if let Some(panel) = panel {
             panel.update(cx, |panel, cx| {
-                panel.show(window, cx);
+                panel.visible.set(true);
+                panel.demand_view_at(availability);
+                panel.focus(window, cx);
                 cx.notify();
             });
             self.dock_area.update(cx, |_, cx| cx.notify());
         }
-        drop(state);
         cx.notify();
     }
 }

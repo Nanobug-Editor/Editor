@@ -79,6 +79,12 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
     });
     cx.run_until_parked();
     let request = |manager: &mut plugin_runtime::Manager, operation| {
+        super::package_ui_test_support::demand(
+            manager,
+            &package.manifest.id,
+            plugin_runtime::DemandReason::Command("scope-probe".into()),
+        )
+        .unwrap();
         manager
             .invoke_command(
                 &package.manifest.id,

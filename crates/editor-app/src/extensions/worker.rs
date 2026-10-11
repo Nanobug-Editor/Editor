@@ -5,6 +5,7 @@ mod admission;
 mod bundled_tests;
 mod command_epochs;
 pub(super) mod configurations;
+pub(crate) mod demands;
 mod marketplace;
 mod preparation;
 #[cfg(all(test, windows))]
@@ -232,6 +233,19 @@ pub enum Work {
         context: Option<plugin_runtime::plugin_protocol::commands::Context>,
         /// Capture once when the host accepts this command; never retarget it after a restart.
         expected_epoch: u64,
+        /// Static identity and native target survive demand; absent origins cannot borrow a replacement.
+        origin: Option<demands::CommandOrigin>,
+    },
+    /// Only consuming an actual entry starts a guest; immutable discovery never queues this work.
+    Demand {
+        plugin: String,
+        availability: plugin_runtime::Availability,
+        reason: plugin_runtime::DemandReason,
+        guard: Option<super::command_intents::CommandGuard>,
+        cancellation: plugin_runtime::RequestCancellation,
+        reply: futures::channel::oneshot::Sender<
+            Result<plugin_runtime::ActivationReceipt, api::Failure>,
+        >,
     },
     /// The editor's run controls start a program through the public execution contract.
     ///
@@ -279,6 +293,7 @@ impl Work {
             Self::SetSetting { plugin, .. }
             | Self::ImportPreference { plugin, .. }
             | Self::Invoke { plugin, .. }
+            | Self::Demand { plugin, .. }
             | Self::ImageInput { plugin, .. } => Some(plugin),
             Self::Install(package) => Some(&package.manifest.id),
             Self::InstallBundle(candidate) | Self::DeclineBundle(candidate) => {
@@ -473,6 +488,10 @@ pub(super) struct Published {
     pub generation: u64,
     /// Changes when a plugin instance is replaced, even by the same package digest.
     pub instance_epochs: BTreeMap<String, u64>,
+    /// Discoverable entry identity remains stable across its first cold birth.
+    pub command_epochs: BTreeMap<String, u64>,
+    /// Opaque metadata identities confer no execution or file authority.
+    pub availabilities: BTreeMap<String, plugin_runtime::Availability>,
     /// Real runtime identities stay private; consumers receive only published epochs.
     instance_ids: BTreeMap<String, String>,
     pub processes: BTreeMap<String, usize>,

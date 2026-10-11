@@ -3,11 +3,11 @@ use super::*;
 use crate::ui::controls::menu::MenuStyle;
 use gpui_kit::component::menu::{PopupMenu as NativeMenu, PopupMenuItem};
 use protocol::{
-    api::DocumentVersion,
+    api::{self, DocumentVersion},
     commands::{Context as MenuContext, Location},
 };
 
-/// A rendered entry retains the exact contribution and instance epoch until native activation.
+/// A rendered entry retains the exact contribution and static command epoch until native activation.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub(crate) struct Contribution {
     pub(crate) plugin: String,
@@ -260,12 +260,21 @@ impl EditorApp {
         {
             return;
         }
+        let guard = match self.capture_menu_command_guard(target, cx) {
+            Ok(guard) => guard,
+            Err(error) => {
+                self.status = error.to_string();
+                cx.notify();
+                return;
+            }
+        };
         match self.extensions.read(cx).enqueue_command(
             &row.plugin,
             &row.command,
             menu.arguments.clone(),
             Some(row.epoch),
             Some(context),
+            Some(guard),
         ) {
             Err(error) => self.status = error,
             Ok(epoch) => {
@@ -273,6 +282,46 @@ impl EditorApp {
             }
         }
         cx.notify();
+    }
+
+    /// Freeze the clicked session and its own selection before entering demand. Nonactive tabs
+    /// retain their identity; focusing a toolbar never substitutes the current editor's document.
+    fn capture_menu_command_guard(
+        &mut self,
+        target: &Target,
+        cx: &App,
+    ) -> Result<super::command_intents::CommandGuard, api::Failure> {
+        let selection = target.document.as_ref().and_then(|document| {
+            (0..self.tabs.len()).find_map(|index| {
+                self.plugin_document_info(index, cx)
+                    .ok()
+                    .filter(|info| info.document == *document)
+                    .map(|info| info.selection)
+            })
+        });
+        self.plugin_command_intents.capture(
+            target.document.clone(),
+            selection,
+            target.path.clone(),
+            target.directory,
+        )
+    }
+
+    /// Ordinary host shortcuts freeze the actual current session using the same native guard.
+    pub(crate) fn capture_current_command_guard(
+        &mut self,
+        cx: &App,
+    ) -> Result<super::command_intents::CommandGuard, api::Failure> {
+        let target = self
+            .active_tab_index()
+            .and_then(|index| self.plugin_document_version(index).ok())
+            .map(|document| self.plugin_document_menu_target(&document))
+            .unwrap_or(Target {
+                path: None,
+                document: None,
+                directory: false,
+            });
+        self.capture_menu_command_guard(&target, cx)
     }
 
     /// Captured versions and virtual liveness are independent of the currently focused tab.

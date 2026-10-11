@@ -1,12 +1,14 @@
 {
   "id": "cloud-translation",
   "name": "云翻译",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "protocol": 7,
+  "minimum_host": "0.1.0",
   "api": {
     "base": "^1",
     "required": {
       "package.assets": "^1",
+      "configuration": ">=1.1,<2",
       "network.http": "^1",
       "storage.secrets": "^1",
       "lifecycle.timers": "^1",
@@ -16,6 +18,30 @@
     }
   },
   "component": "cloud-translation.wasm",
+  "settings_hook": true,
+  "settings": {
+    "poll_interval": {
+      "title": "拉取间隔（毫秒） / Poll interval (ms)",
+      "value_type": { "kind": "integer", "min": 10, "max": 1000 },
+      "default": 25,
+      "scope": "project",
+      "apply": "hot_apply"
+    },
+    "timeout": {
+      "title": "HTTP 超时（毫秒） / HTTP timeout (ms)",
+      "value_type": { "kind": "integer", "min": 100, "max": 120000 },
+      "default": 30000,
+      "scope": "project",
+      "apply": "hot_apply"
+    },
+    "keyRef": {
+      "title": "私有密钥引用 / Private secret reference",
+      "value_type": { "kind": "secret_reference" },
+      "default": "api-token",
+      "scope": "user",
+      "apply": "hot_apply"
+    }
+  },
   "permissions": [
     "assets.read",
     "network.http",

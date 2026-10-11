@@ -267,6 +267,17 @@ impl EditorApp {
             }
             let active = self.file_panel_is_active(panel, &selected, cx);
             panel.update(cx, |panel, cx| {
+                // The same preview panel can stay selected across a tab switch. Withdraw the
+                // original wait before the next document is allowed to demand this view.
+                if !active
+                    || panel
+                        .preview_version
+                        .as_ref()
+                        .zip(version.as_ref())
+                        .is_some_and(|(old, next)| old != next)
+                {
+                    panel.view_demand.borrow_mut().cancel();
+                }
                 // File identity and text are one ordered publication. Do not send new text while
                 // its FilePreview is still waiting for the previous parse or the cadence timer.
                 let file_bound = panel.entries.iter().any(|entry| {
@@ -400,6 +411,9 @@ impl EditorApp {
                 });
             let active = context.is_some() && participates && file_contract;
             panel.update(cx, |panel, cx| {
+                if !active {
+                    panel.view_demand.borrow_mut().cancel();
+                }
                 if active {
                     let file = context
                         .as_ref()
@@ -407,6 +421,14 @@ impl EditorApp {
                         .cloned();
                     let version = file.as_ref().map(|file| file.version.clone());
                     let source = file.as_ref().and_then(|file| file.text.clone());
+                    if panel
+                        .preview_file
+                        .as_ref()
+                        .zip(version.as_ref())
+                        .is_some_and(|(old, next)| old != next)
+                    {
+                        panel.view_demand.borrow_mut().cancel();
+                    }
                     if let Some(source) = &source
                         && panel.preview_version.as_ref() != Some(source)
                         && panel.defer_source_publication(source, cx)

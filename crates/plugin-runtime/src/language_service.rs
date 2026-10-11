@@ -324,8 +324,18 @@ impl LanguageService {
             .filter(|lease| lease.child.strong_count() > 0)
             .count()
     }
+    /// Actual plan equality permits same-owner hot revalidation to retain the existing transport.
+    /// A matching package name never substitutes for inherited exact authority or active native seals.
     pub(crate) fn same_plan(&self, other: &Self) -> bool {
-        self.owner == other.owner
+        let same_inherited = match (&self.policy.inherited, &other.policy.inherited) {
+            (Some(original), Some(candidate)) => original.same_owner(candidate),
+            (None, None) => true,
+            _ => false,
+        };
+        self.is_active()
+            && other.is_active()
+            && same_inherited
+            && self.owner == other.owner
             && self.provider == other.provider
             && self.root == other.root
             && self.program == other.program
@@ -333,6 +343,7 @@ impl LanguageService {
             && self.policy.capabilities == other.policy.capabilities
             && self.policy.permissions == other.policy.permissions
             && self.policy.workspace == other.policy.workspace
+            && self.policy.data == other.policy.data
             && self.policy.application == other.policy.application
             && self.completion.as_ref().map(|hook| &hook.settings)
                 == other.completion.as_ref().map(|hook| &hook.settings)

@@ -40,6 +40,109 @@ fn interaction_package(id: &str) -> Package {
     Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap()
 }
 
+/// Real native input after acceptance must reject the queued original document instead of executing
+/// against the replacement revision. A fresh menu activation is the positive control.
+#[gpui::test]
+#[ignore = "build capability-example with current --plugin-package before running"]
+fn native_plugin_menu_rejects_an_edit_while_its_original_command_waits(cx: &mut TestAppContext) {
+    use protocol::commands::Location;
+    crate::tests::with_shortcut_editor(cx, false, vec![], |visual, app, path| {
+        let runtime = tempfile::tempdir().unwrap();
+        let mut manager = plugin_runtime::Manager::open(
+            runtime.path().into(),
+            protocol::Environment {
+                workspace: path.parent().unwrap().display().to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let package = interaction_package("native-command-original-target");
+        manager
+            .install(&package, package.manifest.permissions.clone())
+            .unwrap();
+        let mut renderer = images::VectorRenderer::default();
+        composable_tests::publish(&mut manager, &mut renderer, &app, visual);
+        let original = visual.update(|window, cx| {
+            app.update(cx, |app, cx| {
+                let original = app
+                    .plugin_document_version(app.active_text_tab_index().unwrap())
+                    .unwrap();
+                let target = app.plugin_menu_target(path);
+                let row = app
+                    .plugin_menu_entries(&target, &[Location::Editor], cx)
+                    .into_iter()
+                    .find(|row| row.command == "menu-context")
+                    .unwrap();
+                app.invoke_plugin_menu(&row, &target, window, cx);
+                // The command reveals its panel, so restore the originating native editor's focus.
+                // set_value is silent loading, not a user edit: actual input below must cross
+                // InputEvent::Change and DocumentSession before the guest transport is pumped.
+                app.editor.focus_handle(cx).focus(window, cx);
+                original
+            })
+        });
+        visual.simulate_keystrokes("ctrl-a");
+        visual.simulate_input("changed");
+        visual.run_until_parked();
+        visual.update(|_, cx| {
+            let app = app.read(cx);
+            let index = app.active_text_tab_index().unwrap();
+            let current = app.plugin_document_version(index).unwrap();
+            assert_eq!(current.id, original.id);
+            assert_eq!(current.path, original.path);
+            assert!(
+                current.revision > original.revision,
+                "native input must advance the captured session's revision"
+            );
+            assert_eq!(app.editor.read(cx).text().to_string(), "changed");
+            assert!(
+                app.tabs[index].text.as_ref().unwrap().session.is_dirty(),
+                "the regression must use DocumentSession's real edit path"
+            );
+        });
+        composable_tests::pump(&mut manager, &app, visual);
+        let text = manager
+            .live
+            .get(&package.manifest.id)
+            .and_then(|instance| instance.views.get("welcome"))
+            .and_then(|view| match &view.root.kind {
+                protocol::ui::Kind::Text { text } => Some(text.as_str()),
+                _ => None,
+            });
+        assert!(
+            text.is_none_or(
+                |text| serde_json::from_str::<protocol::commands::Context>(text).is_err()
+            ),
+            "the old queued menu command must not reach guest business code"
+        );
+        composable_tests::publish(&mut manager, &mut renderer, &app, visual);
+        visual.update(|window, cx| {
+            app.update(cx, |app, cx| {
+                let target = app.plugin_menu_target(path);
+                let row = app
+                    .plugin_menu_entries(&target, &[Location::Editor], cx)
+                    .into_iter()
+                    .find(|row| row.command == "menu-context")
+                    .unwrap();
+                app.invoke_plugin_menu(&row, &target, window, cx);
+            })
+        });
+        composable_tests::pump(&mut manager, &app, visual);
+        let protocol::ui::Kind::Text { text } =
+            &manager.live[&package.manifest.id].views["welcome"]
+                .root
+                .kind
+        else {
+            panic!("fresh command produced no context");
+        };
+        let context: protocol::commands::Context = serde_json::from_str(text).unwrap();
+        assert_eq!(
+            context.path.as_deref(),
+            path.file_name().and_then(|name| name.to_str())
+        );
+    });
+}
+
 /// Real explorer activation keeps its clicked target, conditions, ordering and incarnation gates.
 #[gpui::test]
 #[ignore = "build capability-example with current --plugin-package before running"]
@@ -217,6 +320,12 @@ fn native_plugin_input_confirms_unicode_and_restores_editor_focus(cx: &mut TestA
     let app = slot.borrow_mut().take().unwrap();
     cx.simulate_resize(size(px(1200.), px(800.)));
     cx.update(|window, cx| app.read(cx).editor.focus_handle(cx).focus(window, cx));
+    super::package_ui_test_support::demand(
+        &mut manager,
+        &package.manifest.id,
+        plugin_runtime::DemandReason::Command("scope-probe".into()),
+    )
+    .unwrap();
     manager
         .invoke_command(
             &package.manifest.id,
@@ -281,6 +390,12 @@ fn native_plugin_input_confirms_unicode_and_restores_editor_focus(cx: &mut TestA
         .unwrap();
     cx.update(|_, cx| apply_theme(builtin_theme(true), cx));
     let mut start = |operation| {
+        super::package_ui_test_support::demand(
+            &mut manager,
+            &second.manifest.id,
+            plugin_runtime::DemandReason::Command("scope-probe".into()),
+        )
+        .unwrap();
         manager
             .invoke_command(
                 &second.manifest.id,

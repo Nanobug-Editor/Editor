@@ -5,7 +5,9 @@ use crate::*;
 use gpui_base::input::InputState;
 use lsp_types::{PrepareRenameResponse, TextEdit};
 use plugin_runtime::plugin_protocol::api::DocumentVersion;
+mod formatting;
 mod rename;
+use formatting::Reservation as FormatReservation;
 
 /// Only metadata and UI state live here; native EditorState continues to own every mutable text byte.
 #[derive(Default)]
@@ -17,6 +19,8 @@ pub(crate) struct State {
     pub(crate) history_forwarding: Rc<Cell<bool>>,
     rename: Option<RenameForm>,
     request: u64,
+    /// The actual format intention owns its activation wait and Escape cancellation.
+    format_pending: Option<plugin_runtime::RequestCancellation>,
     /// Escape, replacement requests and service switches revoke both prepare and rename replies.
     rename_request: u64,
     rename_pending: bool,
@@ -47,11 +51,18 @@ struct RenameForm {
 #[derive(Clone, Copy)]
 enum DocumentAction {
     Save,
-    Format,
     Rename,
 }
 
 impl EditorApp {
+    /// Escape ends this format wait without touching native source or another provider's callers.
+    pub(crate) fn cancel_pending_format(&mut self) {
+        if let Some(pending) = self.language_edits.format_pending.take() {
+            pending.cancel();
+            self.language_edits.request = self.language_edits.request.wrapping_add(1);
+        }
+    }
+
     /// Rebind input semantics when the active document or selected service changes.
     pub(crate) fn sync_linked_input(&mut self, cx: &mut Context<Self>) {
         let language = self
@@ -115,9 +126,7 @@ impl EditorApp {
         if self.reject_readonly_document_action(window, cx) {
             return;
         }
-        if !self.wait_for_native_input(DocumentAction::Format, window, cx) {
-            self.request_format(false, window, cx);
-        }
+        self.request_format(false, window, cx);
     }
 
     /// Default Save never formats. Opt-in saves wait for one selected formatter and then the Change effects.
@@ -126,9 +135,6 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.wait_for_native_input(DocumentAction::Save, window, cx) {
-            return;
-        }
         let language = self
             .active_path
             .as_deref()
@@ -140,7 +146,9 @@ impl EditorApp {
         {
             self.request_format(true, window, cx);
         } else {
-            self.save_current(cx);
+            if !self.wait_for_native_input(DocumentAction::Save, window, cx) {
+                self.save_current(cx);
+            }
         }
     }
 
@@ -186,9 +194,6 @@ impl EditorApp {
                 }
                 match action {
                     DocumentAction::Save => app.save_document_with_formatting(window, cx),
-                    DocumentAction::Format => {
-                        app.format_document_action(&FormatDocument, window, cx)
-                    }
                     DocumentAction::Rename => app.rename_symbol_action(&RenameSymbol, window, cx),
                 }
             });
@@ -197,51 +202,27 @@ impl EditorApp {
         true
     }
 
-    /// Snapshot before dispatch, then refuse results for changed, closed, reopened or retired targets.
-    fn request_format(&mut self, save: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(index) = self.active_text_tab_index() else {
-            return;
-        };
-        let language = language_for_path(self.tabs[index].path());
-        if let Some(error) = providers::formatter_error(&language) {
-            // A hand-edited unknown ID cannot borrow an old cached service or another candidate.
-            // Ordinary saving remains available; preserve any disk conflict/failure beside this error.
-            let message = error.message();
-            if save {
-                self.save_current(cx);
-                self.status = format!("{} · {message}", self.status);
-            } else {
-                self.status = message;
-            }
-            cx.notify();
-            return;
-        }
-        let Some(server) = self.language_edits.formatters.get(&language).cloned() else {
-            self.status = self
-                .language_edits
-                .formatter_errors
-                .get(&language)
-                .cloned()
-                .unwrap_or_else(|| t!("editor.format_unavailable").to_string());
-            cx.notify();
-            return;
-        };
-        if !self.session_state.workspace_trusted {
-            return;
-        }
-        let Ok(document) = self.plugin_document_version(index) else {
-            self.status = t!("editor.editing_stale").to_string();
-            cx.notify();
-            return;
-        };
-        let Some(uri) = navigation::file_uri(self.tabs[index].path()) else {
-            return;
-        };
+    /// Dispatch only the already frozen post-drain source; neither demand nor completion resamples it.
+    fn dispatch_format(
+        &mut self,
+        reservation: FormatReservation,
+        server: Arc<navigation::LanguageServer>,
+        source: plugin_runtime::plugin_protocol::language::SourceSnapshot,
+        cursor: usize,
+        uri: lsp_types::Uri,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Continue cancellation through the readonly transport, including an Escape after birth.
+        // The demand wait owns a different token and may be dropped now without cancelling format.
+        let cancellation = plugin_runtime::RequestCancellation::default();
+        self.language_edits.format_pending = Some(cancellation.clone());
         let lease = server.open_document(uri);
-        let source = self.editor.read(cx).text().to_string();
-        let cursor = self.editor.read(cx).cursor();
-        self.language_edits.request += 1;
-        let request = self.language_edits.request;
+        let request = reservation.request;
+        let language = reservation.language.clone();
+        let save = reservation.save;
+        let document = source.document;
+        let source = source.text;
         let active = server.clone();
         let snapshot = source.clone();
         cx.spawn_in(window, async move |this, cx| {
@@ -253,9 +234,13 @@ impl EditorApp {
                 )
                 .await;
             let _ = this.update_in(cx, |app, window, cx| {
-                if app.language_edits.request != request {
+                if cancellation.is_cancelled()
+                    || app.language_edits.request != request
+                    || !app.format_reservation_is_current(&reservation, cx)
+                {
                     return;
                 }
+                app.language_edits.format_pending.take();
                 if !app
                     .language_edits
                     .formatters

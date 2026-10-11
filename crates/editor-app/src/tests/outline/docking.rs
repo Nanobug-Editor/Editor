@@ -123,7 +123,7 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
         visual.update(|window, cx| {
             app.update(cx, |app, cx| app.open_file(case_path.clone(), window, cx))
         });
-        wait_outline(visual);
+        wait_outline(visual, &app, &mut manager);
         let (outline, explorer, editor) = visual.update(|_, cx| {
             let app = app.read(cx);
             (
@@ -213,7 +213,7 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
             })
         });
         visual.simulate_input(" ");
-        wait_outline(visual);
+        wait_outline(visual, &app, &mut manager);
         close(
             extent(panel_bounds(&app, outline, visual, false)),
             extent(resized_outline),

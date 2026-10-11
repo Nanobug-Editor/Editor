@@ -27,6 +27,15 @@ impl Manager {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Unknown plugin"))?
             .enabled;
+        // Rejected requests above have no lifecycle effects. An admitted explicit restart retires
+        // only this logical owner; parked peers retain their original availability and resources.
+        let scope = if self.installed[id].manifest.scope == api::InstanceScope::Application {
+            "application".into()
+        } else {
+            scopes::workspace_key(&self.environment.workspace)
+        };
+        self.activation.invalidate(id, Some(&scope));
+        self.cancel_pending_demands(id, Some(&scope));
         // Prefer a current safe checkpoint; a trapping guest leaves the last committed checkpoint intact.
         if let Some(instance) = self
             .live

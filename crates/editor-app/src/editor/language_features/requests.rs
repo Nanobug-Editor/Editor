@@ -8,12 +8,16 @@ use gpui_kit::AnyElement;
 use plugin_runtime::{
     DirectProvider, RequestCancellation, plugin_protocol::language::SourceSnapshot,
 };
+mod demand;
+use demand::Choice;
 
 /// No source text is retained here. Replacing or dropping a request cancels its readonly wait.
 #[derive(Default)]
 pub(crate) struct State {
     sequence: u64,
     active: Option<Active>,
+    /// Escape also cancels cold activation and the preceding native-input drain.
+    pending: Option<RequestCancellation>,
 }
 
 /// Provider identity and generation reject same-ID replacements and A→B→A selections.
@@ -37,7 +41,8 @@ struct Intent {
     language: String,
     feature: direct::Feature,
     generation: u64,
-    target: Target,
+    target: Option<Target>,
+    choice: Choice,
 }
 
 /// Direct and LSP callbacks share one native consumer without lending host file authority.
@@ -89,6 +94,11 @@ impl Drop for Active {
 }
 
 impl EditorApp {
+    /// Native semantic consumers share this monotonically revoked tab/window round for ABA checks.
+    pub(crate) fn language_features_sequence(&self) -> u64 {
+        self.language_features.sequence
+    }
+
     /// The native Base action and context menu share the selected direct role or primary LSP.
     /// Without that public consumer, propagation preserves any existing Base-only provider.
     pub(crate) fn native_language_feature_available(
@@ -99,7 +109,7 @@ impl EditorApp {
         self.session_state.workspace_trusted
             && self.active_path.as_deref().is_some_and(|path| {
                 let language = editor::language_for_path(path);
-                self.language_feature_target(&language, feature, cx)
+                self.language_feature_choice(&language, feature, cx)
                     .is_some()
             })
     }
@@ -125,6 +135,9 @@ impl EditorApp {
         // A pending bridge wait has no Active view yet. Advancing its reservation still cancels
         // it synchronously, including A→B→A and a newer request on the same editor entity.
         self.language_features.sequence = self.language_features.sequence.wrapping_add(1);
+        if let Some(pending) = self.language_features.pending.take() {
+            pending.cancel();
+        }
         if let Some(active) = self.language_features.active.take() {
             active.view.update(cx, |view, cx| {
                 view.prune(None, false, window, cx);
@@ -208,12 +221,18 @@ impl EditorApp {
                 .is_some_and(|current| {
                     current.id == intent.document.id && current.path == intent.document.path
                 })
-            && self.language_feature_target_is_current(
-                &intent.language,
-                intent.feature,
-                &intent.target,
-                cx,
-            )
+            && self
+                .language_feature_choice(&intent.language, intent.feature, cx)
+                .as_ref()
+                == Some(&intent.choice)
+            && intent.target.as_ref().is_none_or(|target| {
+                self.language_feature_target_is_current(
+                    &intent.language,
+                    intent.feature,
+                    target,
+                    cx,
+                )
+            })
     }
 
     /// Rendering revokes changed source/provider results instead of retaining a stale actionable card.
@@ -251,11 +270,12 @@ impl EditorApp {
             return;
         };
         let language = editor::language_for_path(self.tabs[index].path());
-        let Some(target) = self.language_feature_target(&language, feature, cx) else {
+        let Some(choice) = self.language_feature_choice(&language, feature, cx) else {
             self.status = t!("language_features.unavailable").to_string();
             cx.notify();
             return;
         };
+        let target = self.language_feature_target(&language, feature, cx);
         let intent = Intent {
             sequence: self.language_features.sequence,
             editor: self.editor.clone(),
@@ -264,7 +284,9 @@ impl EditorApp {
             feature,
             generation: providers::feature_generation(),
             target,
+            choice,
         };
+        self.language_features.pending = Some(RequestCancellation::default());
         if let Some(bridge) = self
             .language_edits
             .bridge
@@ -358,10 +380,28 @@ impl EditorApp {
             text: state.text().to_string(),
         };
         let cursor = state.cursor();
+        let Some(target) = intent.target.clone() else {
+            self.demand_language_feature(intent, source, cursor, window, cx);
+            return;
+        };
+        self.dispatch_language_feature(intent, target, source, cursor, window, cx);
+    }
+
+    /// After demand, dispatch the frozen source to its exact selected live lease, without resampling.
+    fn dispatch_language_feature(
+        &mut self,
+        intent: Intent,
+        target: Target,
+        source: SourceSnapshot,
+        cursor: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.language_features.pending.take();
         let cancellation = RequestCancellation::default();
         let sequence = intent.sequence;
         let feature = intent.feature;
-        let target = intent.target;
+        let document = source.document.clone();
         let view = cx.new(|cx| {
             LanguageFeatures::new(
                 target.origin().owner().into(),

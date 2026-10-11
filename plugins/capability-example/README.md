@@ -1,5 +1,10 @@
 # Capability Example
 
+0.19.1 builds with the current source SDK, handles the full configuration map for both Apply and
+Changed, and keeps its existing restart declarations. Static commands and panels remain discoverable
+while the default business instance is cold; first command/view demand activates it. The frozen 0.19.0
+package remains a separate old-SDK compatibility fixture rather than being rebuilt as new evidence.
+
 0.18.0 adds public typed commands, native context contributions and restricted selection. “选择文件并显示信息” appears in the editor/selection, explorer and Tab menus; select any accessible file, including outside the workspace, to read its byte count through its temporary file grant. Directory selection returns a subtree-read intent. Save selection returns an exact-target intent and does not write a file. Cancel and expiry remain cancelled results; the plugin closes returned handles after use. The `echo` command demonstrates a checked string parameter/result. No package ID is recognized by the host.
 
 0.17.0 adds an independently packaged `language.structure` provider probe with arbitrary

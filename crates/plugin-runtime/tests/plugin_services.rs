@@ -61,6 +61,42 @@ fn install(manager: &mut Manager, package: Package) {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // These existing authority/cleanup scenarios observe the real status view. Showing that view
+    // is their explicit demand; separate service_activation tests assert installation stays cold.
+    demand(manager, &package.manifest.id).unwrap();
+}
+/// Drive a public view demand without turning installation or metadata discovery into activation.
+fn demand(
+    manager: &mut Manager,
+    id: &str,
+) -> Result<(), plugin_runtime::plugin_protocol::api::Failure> {
+    let token = manager.availability(id)?;
+    let request = manager.begin_demand(
+        &token,
+        plugin_runtime::DemandReason::View("welcome".into()),
+        120_000,
+    )?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    loop {
+        manager.poll();
+        match request.status() {
+            plugin_runtime::plugin_protocol::api::RequestUpdate::Completed { result } => {
+                return result.and_then(|receipt| manager.admit_receipt(&token, &receipt));
+            }
+            plugin_runtime::plugin_protocol::api::RequestUpdate::Cancelled { reason, .. } => {
+                return Err(plugin_runtime::plugin_protocol::api::Failure::new(
+                    reason,
+                    "Service fixture demand ended",
+                ));
+            }
+            _ => {}
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Service fixture activation timed out"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }
 fn text(manager: &Manager, id: &str) -> String {
     let document = manager.live[id].views["welcome"].as_ref();
@@ -334,6 +370,7 @@ fn deferred_replies_release_their_slots_on_cancel_timeout_and_source_retirement(
         resources
     );
     manager.enable("service-consumer").unwrap();
+    demand(&mut manager, "service-consumer").unwrap();
     command(
         &mut manager,
         "service-consumer",
@@ -451,10 +488,21 @@ fn unique_and_selected_providers_are_interchangeable_and_old_references_expire()
         Some("z-provider-b")
     );
     drop(manager);
-    let manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
     assert!(
-        manager.live.contains_key("service-consumer"),
-        "required consumer must restart after its later-sorted provider"
+        manager
+            .published_entries()
+            .iter()
+            .any(|entry| entry.manifest.id == "service-consumer" && entry.enabled),
+        "required consumer remains discoverable independently of its later-sorted cold provider"
+    );
+    assert!(
+        manager.live.is_empty(),
+        "reopen is static discovery, not a demand"
+    );
+    assert_eq!(
+        manager.service_choices()[0].selected.as_deref(),
+        Some("z-provider-b")
     );
 }
 
@@ -465,12 +513,15 @@ fn missing_and_incompatible_services_do_not_activate_required_consumers() {
     let temp = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
     let required = package("required-consumer", false, false, "^1");
+    manager
+        .install(&required, required.manifest.permissions.clone())
+        .unwrap();
     assert!(
-        manager
-            .install(&required, required.manifest.permissions.clone())
-            .is_err()
+        demand(&mut manager, "required-consumer").is_err(),
+        "required dependency fails at the actual demand"
     );
-    assert!(!manager.installed.contains_key("required-consumer"));
+    assert!(manager.installed.contains_key("required-consumer"));
+    assert!(!manager.live.contains_key("required-consumer"));
     install(&mut manager, package("service-consumer", false, true, "^1"));
     assert!(
         command(
@@ -492,9 +543,8 @@ fn missing_and_incompatible_services_do_not_activate_required_consumers() {
         .contains("CapabilityUnavailable")
     );
     assert!(
-        manager
-            .install(&required, required.manifest.permissions.clone())
-            .is_err()
+        demand(&mut manager, "required-consumer").is_err(),
+        "incompatible dependencies cannot become a live provider"
     );
 }
 
@@ -647,6 +697,8 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
     manager
         .set_project_enabled("service-consumer", true)
         .unwrap();
+    // Enabling retains a cold installation; the status view supplies this scenario's next demand.
+    demand(&mut manager, "service-consumer").unwrap();
     command(
         &mut manager,
         "service-consumer",
@@ -672,6 +724,8 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
     manager
         .set_project_enabled("service-consumer", true)
         .unwrap();
+    // Re-enabling changes availability without eagerly creating a replacement instance.
+    demand(&mut manager, "service-consumer").unwrap();
     command(
         &mut manager,
         "service-consumer",
@@ -700,6 +754,8 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
     manager.poll();
     assert_eq!(manager.live["provider-a"].resource_count(), resources);
     // A fresh delegated request also retains the provider's own instance boundary.
+    // The fixture keeps the legacy Restart policy, so its new instance also needs an explicit demand.
+    demand(&mut manager, "service-consumer").unwrap();
     command(
         &mut manager,
         "service-consumer",

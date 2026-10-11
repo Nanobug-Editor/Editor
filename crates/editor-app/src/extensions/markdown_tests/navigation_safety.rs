@@ -385,6 +385,13 @@ fn navigation_peer(browser: bool) -> Package {
 
 /// The probe creates a real request in WASM; neither handles nor native completion results are fabricated.
 fn probe(fixture: &mut NativeMarkdown, version: DocumentVersion, target: NavigationTarget) {
+    // Preserve the original navigation version through the peer's public cold command admission.
+    super::super::package_ui_test_support::demand(
+        &mut fixture.manager,
+        "navigation-peer",
+        plugin_runtime::DemandReason::Command("scope-probe".into()),
+    )
+    .unwrap();
     fixture
         .manager
         .invoke_command(

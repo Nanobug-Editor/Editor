@@ -33,6 +33,11 @@ fn begin(
     plugin: &str,
     operation: api::Operation,
 ) -> Result<api::Value, api::Failure> {
+    super::package_ui_test_support::demand(
+        manager,
+        plugin,
+        plugin_runtime::DemandReason::Command("probe".into()),
+    )?;
     manager
         .invoke_command(plugin, "probe", serde_json::to_value(operation).unwrap())
         .unwrap();
@@ -60,7 +65,7 @@ fn publish(
     visual.update(|_, cx| {
         app.read(cx).extensions.clone().update(cx, |panel, cx| {
             let mut state = panel.worker.state.lock().unwrap();
-            state.entries = manager.published_entries();
+            state.publish_manager(manager);
             state.editor_requests.extend(
                 requests
                     .iter()
@@ -104,7 +109,7 @@ fn text(visual: &mut VisualTestContext, app: &Entity<EditorApp>) -> String {
 }
 
 /// The business fixture starts with distinct disk and unsaved text, plus copy/delete sources.
-fn seed(visual: &mut VisualTestContext, path: &Path) {
+pub(super) fn seed(visual: &mut VisualTestContext, path: &Path) {
     for (name, bytes) in [
         ("community-disk.txt", "磁盘旧A🙂\r\n旧B\r\n"),
         ("community-template.txt", "模板 中文🙂\r\n"),
@@ -118,11 +123,17 @@ fn seed(visual: &mut VisualTestContext, path: &Path) {
 }
 
 /// A real guest state machine reaches a native preview without test-only plan construction.
-fn scaffold_preview(
+pub(super) fn scaffold_preview(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,
 ) -> EditorRequest {
+    super::package_ui_test_support::demand(
+        manager,
+        "workspace-scaffold",
+        plugin_runtime::DemandReason::Command("scaffold".into()),
+    )
+    .unwrap();
     manager
         .invoke_command("workspace-scaffold", "scaffold", serde_json::Value::Null)
         .unwrap();
@@ -167,7 +178,7 @@ fn scaffold_preview(
     )
 }
 
-fn confirm(visual: &mut VisualTestContext) {
+pub(super) fn confirm(visual: &mut VisualTestContext) {
     let bounds = visual.debug_bounds("workspace-plan-confirm").unwrap();
     visual.simulate_click(bounds.center(), Default::default());
     visual.run_until_parked();
@@ -192,7 +203,8 @@ fn named_button(visual: &mut VisualTestContext, id: &str, label: &str) {
     });
 }
 
-fn batch(request: &EditorRequest) -> workspace::Receipt {
+/// Inspect the real native batch completion, including its shared undo handle.
+pub(super) fn batch(request: &EditorRequest) -> workspace::Receipt {
     let api::RequestUpdate::Completed {
         result: Ok(api::EditorValue::Workspace(workspace::Value::Batch(receipt))),
     } = request.status()
@@ -296,7 +308,8 @@ fn document(
     documents[0].document.clone()
 }
 
-fn undo(
+/// Undo the accepted workspace batch through its owning guest and native document session.
+pub(super) fn undo(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,

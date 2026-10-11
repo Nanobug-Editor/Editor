@@ -171,7 +171,7 @@ impl State {
                         )
                     })?;
                 signature.parameters.accepts(&arguments)?;
-                let mut context =
+                let mut source =
                     self.plugin_services
                         .context
                         .clone()
@@ -185,15 +185,17 @@ impl State {
                             permissions: self.permissions.clone(),
                         });
                 // A peer call receives its own parameters, never another command's native target.
-                context.menu = None;
-                let context = context.delegate(&reference.provider, &signature)?;
+                source.menu = None;
+                let context = source.delegate(&reference.provider, &signature)?;
                 let Value::Resource(handle) = self.roots.open(RootKind::ServiceRequest)? else {
                     unreachable!()
                 };
                 let mut completion = crate::request_state::Completion::new(timeout_ms);
-                // The callee may trap while producing the final failure; only the requesting chain owns this wait.
-                completion.lifetimes = context.lifetimes[..context.lifetimes.len() - 1].to_vec();
+                // The result belongs to the original caller chain. Callee retirement may produce
+                // an explicit failure, while its logical/exact seals separately revoke effects.
+                completion.lifetimes = source.lifetimes.clone();
                 let call = Call {
+                    availability: Default::default(),
                     handle: handle.clone(),
                     reference,
                     method,
@@ -607,6 +609,8 @@ impl Instance {
                 );
             }
             Provider {
+                availability: None,
+                owner_alive: Some(self.store.data().plugin_services.alive.clone()),
                 alive: self.store.data().plugin_services.alive.clone(),
                 caller: self.store.data().plugin_services.principal.clone(),
                 contracts,

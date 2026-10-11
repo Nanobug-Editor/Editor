@@ -76,6 +76,13 @@ fn community_database_tree_native_keyboard_waits_for_manual_retry(cx: &mut TestA
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // This standalone native projection explicitly displays the provider's declared view.
+    crate::extensions::demand_plugin_fixture(
+        &mut manager,
+        "database-tree",
+        plugin_runtime::DemandReason::View("presentation".into()),
+    )
+    .unwrap();
     let resource = manager.live["database-tree"]
         .tree_resources()
         .pop()

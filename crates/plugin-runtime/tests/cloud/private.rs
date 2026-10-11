@@ -27,6 +27,8 @@ fn t27_t29_private_directories_credentials_isolation_and_temporary_retirement() 
         ("cloud-translation", "secret-present"),
         ("code-host-query", "secret-missing"),
     ] {
+        // The second namespace has not yet consumed a command, unlike the first writer above.
+        demand(&mut manager, id, DemandReason::Command("probe".into()));
         manager
             .invoke_command(
                 id,

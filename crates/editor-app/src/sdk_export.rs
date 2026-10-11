@@ -12,6 +12,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // Old and new independent guests share the same documented demand/default lifecycle contract.
+    (
+        "src/activation.rs",
+        include_bytes!("../../plugin-protocol/src/activation.rs"),
+    ),
     // Stable diagnostics and experimental direct callbacks ship the identical versioned contracts.
     (
         "src/diagnostics.rs",
@@ -393,6 +398,8 @@ mod tests {
         for required in [
             "Cargo.toml",
             "src/lib.rs",
+            "src/activation.rs",
+            "src/settings.rs",
             "wit/plugin.wit",
             "src/http.rs",
             "src/secrets.rs",

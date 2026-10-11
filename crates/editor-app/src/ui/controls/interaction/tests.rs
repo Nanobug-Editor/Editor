@@ -33,6 +33,13 @@ fn native_plugin_input_does_not_confirm_marked_ime_text(cx: &mut TestAppContext)
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // Only the actual interaction command wakes this independently installed package.
+    crate::extensions::demand_plugin_fixture(
+        &mut manager,
+        &package.manifest.id,
+        plugin_runtime::DemandReason::Command("scope-probe".into()),
+    )
+    .unwrap();
     manager
         .invoke_command(
             &package.manifest.id,
@@ -128,6 +135,13 @@ fn native_plugin_quick_pick_scrolls_the_keyboard_target_into_view(cx: &mut TestA
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // Quick-pick consumption follows the same explicit public command admission as native input.
+    crate::extensions::demand_plugin_fixture(
+        &mut manager,
+        &package.manifest.id,
+        plugin_runtime::DemandReason::Command("scope-probe".into()),
+    )
+    .unwrap();
     manager
         .invoke_command(
             &package.manifest.id,

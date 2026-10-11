@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     native_work::NativeWork,
-    plugin_services::{Context, Provider},
+    plugin_services::{Context, Provider, Reference},
 };
 use plugin_protocol::{api::RequestUpdate, process::ExitMode};
 use std::{
@@ -56,6 +56,9 @@ pub(in crate::manager) struct Owned {
     pub configuration: Option<String>,
     pub origin: Context,
     pub provider: Provider,
+    /// The pending start and this session share one immutable first owner binding.
+    /// Static publication identity remains descriptive until the actual guest is admitted.
+    reference: Reference,
     pub alive: Arc<AtomicBool>,
     pub start: Completion<Value>,
     pub observation: Option<DebugRequest>,
@@ -295,17 +298,19 @@ impl Manager {
                 return self.force_debug_session(&id);
             }
             arguments["session"] = Value::String(session.backend()?);
-            let reference = self
-                .plugin_services
-                .lock()
-                .unwrap()
-                .resolve_pinned(
-                    &session.origin.caller,
-                    DEBUG_CONTRACT,
-                    &dependency,
-                    &session.provider.caller.instance,
-                )
-                .map_err(start_failure)?;
+            let reference =
+                self.plugin_services
+                    .lock()
+                    .unwrap()
+                    .resolve_pinned(
+                        &session.origin.caller,
+                        DEBUG_CONTRACT,
+                        &dependency,
+                        session.reference.owner().ok_or_else(|| {
+                            anyhow::anyhow!("Debug provider has not been admitted")
+                        })?,
+                    )
+                    .map_err(start_failure)?;
             (
                 id,
                 session.origin.clone(),
@@ -317,6 +322,7 @@ impl Manager {
         let mut completion = Completion::new(timeout);
         completion.lifetimes = origin.lifetimes.clone();
         let provider = reference.provider.clone();
+        let session_reference = reference.clone();
         let mut call = host_method_call(
             &origin.caller,
             reference,
@@ -342,6 +348,7 @@ impl Manager {
                     id: id.clone(),
                     configuration: configuration.map(str::to_owned),
                     provider,
+                    reference: session_reference,
                     alive: origin.lifetimes.last().unwrap().clone(),
                     origin,
                     start: completion.clone(),
@@ -422,7 +429,15 @@ impl Manager {
                 session.finish_retirement();
                 continue;
             }
-            if !live.contains(&session.provider.caller.instance) {
+            // A cold start is valid before first birth. Once bound, the exact owner's retirement
+            // is irreversible; a later incarnation cannot revive this session.
+            if !session.provider.alive.load(Ordering::Acquire)
+                || !session.reference.owner_alive()
+                || session
+                    .reference
+                    .owner()
+                    .is_some_and(|owner| !live.iter().any(|id| id == owner))
+            {
                 let reason = self
                     .installed
                     .get(&session.provider.caller.plugin)

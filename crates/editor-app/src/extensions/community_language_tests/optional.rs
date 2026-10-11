@@ -118,6 +118,7 @@ fn native_community_language_omitted_optional_direct_keeps_selected_lsp_features
         visual.simulate_keystrokes("ctrl-a");
         visual.simulate_input(source);
         draw(visual);
+        pump(visual, &app, &mut manager);
         let server = visual.update(|_, cx| app.read(cx).language_servers["keyvalue"].clone());
         server.prepare_until_ready().unwrap();
         assert!(server.supports_language_features());
@@ -126,7 +127,7 @@ fn native_community_language_omitted_optional_direct_keeps_selected_lsp_features
         // the missing pure role left the shared native request and selection path operational.
         place_caret(visual, &app, 10);
         visual.simulate_keystrokes("shift-f12");
-        wait_for_control(visual, &app, "language-feature-row-1");
+        wait_for_control(visual, &app, &mut manager, "language-feature-row-1");
         click(visual, "language-feature-row-1");
         assert_eq!(
             visual.update(|_, cx| app.read(cx).editor.read(cx).cursor()),
@@ -138,7 +139,7 @@ fn native_community_language_omitted_optional_direct_keeps_selected_lsp_features
         // server, without creating a pure executor or silently treating a ghost as ambiguity.
         place_caret(visual, &app, 0);
         visual.simulate_keystrokes("ctrl-.");
-        wait_for_control(visual, &app, "language-feature-row-0");
+        wait_for_control(visual, &app, &mut manager, "language-feature-row-0");
         assert!(visual.update(|window, _| {
             gpui_base::test_support::snapshots(window)
                 .iter()
@@ -154,7 +155,7 @@ fn native_community_language_omitted_optional_direct_keeps_selected_lsp_features
         draw(visual);
         place_caret(visual, &app, source.len());
         visual.simulate_keystrokes("ctrl-shift-space");
-        wait_for_control(visual, &app, "language-signature-card-0");
+        wait_for_control(visual, &app, &mut manager, "language-signature-card-0");
         assert!(visual.update(|window, _| {
             let label = rust_i18n::t!("language_features.parameter", parameter = "value");
             gpui_base::test_support::snapshots(window)

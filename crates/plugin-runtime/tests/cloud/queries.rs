@@ -26,6 +26,8 @@ fn t25_two_cloud_consumers_stream_use_system_tokens_and_cache_without_leaking_se
     for id in ["cloud-translation", "code-host-query"] {
         let package = package(id, |manifest| grant(manifest, &server.origin));
         install(&mut manager, &package);
+        // These original query consumers require a receipt before their first native input/command.
+        demand(&mut manager, id, DemandReason::Command("query".into()));
     }
     manager
         .invoke_command("cloud-translation", "set-token", Json::Null)

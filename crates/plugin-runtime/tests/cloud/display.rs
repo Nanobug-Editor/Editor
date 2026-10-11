@@ -38,6 +38,8 @@ fn t25_response_limit_and_invalid_utf8_preserve_full_display_cache_and_cancel() 
             &mut manager,
             &package(id, |manifest| grant(manifest, &server.origin)),
         );
+        // The subsequent large-body command is the actual entry; catalog installation stays cold.
+        demand(&mut manager, id, DemandReason::Command("query".into()));
     }
     let baseline = manager.resource_count();
     for id in ["cloud-translation", "code-host-query"] {

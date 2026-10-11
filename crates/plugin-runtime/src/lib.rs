@@ -61,12 +61,14 @@ mod process;
 mod toolchains;
 pub use instance::Instance;
 pub use manager::{
-    DEBUG_CONTRACT, DEFAULT_STOP_GRACE_MS, DebugAbilities, DebugAnswer, DebugBreakpoint,
-    DebugFrame, DebugRequest, DebugSession, DebugState, DebugVariable, EXECUTION_CONTRACT,
+    ActivationReceipt, Availability, DEBUG_CONTRACT, DEFAULT_STOP_GRACE_MS, DebugAbilities,
+    DebugAnswer, DebugBreakpoint, DebugFrame, DebugRequest, DebugSession, DebugState,
+    DebugVariable, DemandPreparation, DemandReason, DemandRequest, EXECUTION_CONTRACT,
     EXECUTION_START_TIMEOUT_MS, ExecutionFailure, ExecutionSnapshot, ExecutionState, HostExecution,
-    InstallationPreparation, Installed, Manager, NativeExecutionUpdate, PreparedInstallation,
-    ProviderCandidate, RunEnvEntry, RunRequest, StopOptions, TargetOrigin, TargetRequest,
-    debug_dependency_for_test, frames_from_value, variables_from_value,
+    InstallationPreparation, Installed, LanguageRole, Manager, NativeExecutionUpdate,
+    PreparedDemand, PreparedInstallation, ProviderCandidate, RunEnvEntry, RunRequest, StopOptions,
+    TargetOrigin, TargetRequest, debug_dependency_for_test, frames_from_value,
+    variables_from_value,
 };
 mod native_work;
 mod terminal_presentations;

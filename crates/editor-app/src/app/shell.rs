@@ -347,6 +347,7 @@ impl Render for EditorApp {
         self.sync_plugin_document_menu(window, cx);
         self.sync_document_comparison(window, cx);
         self.sync_plugin_documents(cx);
+        self.sync_dynamic_language_servers(cx);
         self.sync_run_controls(window, cx);
         self.dispatch_editor_requests(window, cx);
         self.sync_plugin_document_menu(window, cx);
@@ -369,6 +370,7 @@ impl Render for EditorApp {
         v_flex()
             .id("editor-shell")
             .key_context("EditorShell")
+            .capture_key_down(cx.listener(Self::cancel_pending_language_feature))
             .relative()
             .on_mouse_down(
                 MouseButton::Left,

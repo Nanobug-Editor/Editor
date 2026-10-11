@@ -5,6 +5,10 @@
 //! Declare this minimum when depending on these native consumers; optional negotiation may omit
 //! their dependent behavior. Server initialization must also advertise the corresponding standard
 //! capability. Editing and formatting continue to require their independent capabilities.
+//! Provider metadata remains available while cold. Only a selected document's role/feature
+//! demand starts its controlled service and any necessary guest; enumerating providers never
+//! starts every installed language. Preserve the original unsaved snapshot and target while
+//! activation waits; delivery still checks document/revision and selected-provider generation.
 //!
 //! The host synchronizes the unsaved native source and UTF-16 caret, retains its document lease,
 //! revision and selected-provider generation, and checks them again on delivery and selection.

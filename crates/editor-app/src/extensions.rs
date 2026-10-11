@@ -1,7 +1,15 @@
 //! Generic runtime-plugin dock and manager. Feature behavior arrives from installed packages.
+mod activation;
+#[cfg(test)]
+// Keep the cross-feature GPUI scenario in tests/, with existing private extension helpers.
+#[path = "tests/activation_combination.rs"]
+mod activation_combination_tests;
+#[cfg(test)]
+mod activation_tests;
 mod bundled;
 #[cfg(test)]
 mod capability_tests;
+pub(crate) mod command_intents;
 pub(crate) mod command_menus;
 mod commands;
 #[cfg(test)]
@@ -57,6 +65,9 @@ mod native_run_tests;
 mod native_ui_tests;
 #[cfg(test)]
 mod package_ui_test_support;
+/// Cross-feature native fixtures consume the same public, bounded demand path as plugin UI tests.
+#[cfg(test)]
+pub(crate) use package_ui_test_support::demand as demand_plugin_fixture;
 mod preview;
 #[cfg(test)]
 mod preview_tests;
@@ -73,6 +84,8 @@ mod request_tests;
 #[cfg(test)]
 mod service_tests;
 mod settings;
+#[cfg(test)]
+mod settings_hot_tests;
 #[cfg(test)]
 mod settings_tests;
 #[cfg(test)]
@@ -96,13 +109,13 @@ use plugin_runtime::{
     Installed, Package,
     plugin_protocol::{self as protocol, api::Notification as PluginEvent},
 };
-#[cfg(test)]
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 pub(crate) use worker::DebugAnswerMessage;
 pub(crate) use worker::NativeExecutionMessage;
 pub(crate) use worker::PresentedTerminalMessage;
 pub(crate) use worker::configurations::{ConfigurationCatalog, ConfigurationReply};
+pub(crate) use worker::demands::DemandWait;
 pub(crate) use worker::targets::TargetCatalog;
 pub use worker::{HostRunSnapshot, RunStatus, Work as HostWork};
 use worker::{LifecycleAction, OperationProgress, Work, Worker};
@@ -243,11 +256,65 @@ pub struct ExtensionPanel {
     last_size: (f32, f32, f32, f32),
     /// Last plugin instance generation measured against this panel's native canvas.
     instance_epoch: u64,
+    /// Paint/show demand is independent of default visibility and survives only its original wait.
+    view_demand: RefCell<activation::ViewDemand>,
     /// Wait for the final snapshot before the native app shutdown deadline.
     _quit: Option<Subscription>,
     _focus_events: Vec<Subscription>,
 }
 impl ExtensionPanel {
+    /// Native consumers retain one original static identity and cancellation guard through activation.
+    /// Preparation remains in the Manager; the returned wait owns only this caller's receipt.
+    pub(crate) fn demand_entry(
+        &self,
+        availability: plugin_runtime::Availability,
+        reason: plugin_runtime::DemandReason,
+        guard: Option<command_intents::CommandGuard>,
+    ) -> Result<DemandWait, protocol::api::Failure> {
+        self.worker.demand(availability, reason, guard)
+    }
+
+    /// Metadata discovery never compiles a guest; native requests retain this original identity.
+    pub(crate) fn availability(&self, plugin: &str) -> Option<plugin_runtime::Availability> {
+        self.worker
+            .trusted
+            .load(std::sync::atomic::Ordering::Acquire)
+            .then(|| {
+                self.worker
+                    .state
+                    .lock()
+                    .unwrap()
+                    .availabilities
+                    .get(plugin)
+                    .cloned()
+            })
+            .flatten()
+    }
+
+    /// Demand precisely one selected language provider/role, leaving every unrelated server cold.
+    pub(crate) fn demand_language(
+        &self,
+        key: &str,
+        role: plugin_runtime::LanguageRole,
+        guard: Option<command_intents::CommandGuard>,
+    ) -> Result<worker::demands::DemandWait, protocol::api::Failure> {
+        let plugin = key.split_once('/').map_or(key, |(plugin, _)| plugin);
+        let availability = self.availability(plugin).ok_or_else(|| {
+            protocol::api::Failure::new(
+                protocol::api::ErrorCode::CapabilityUnavailable,
+                "Selected language provider unavailable",
+            )
+        })?;
+        self.worker.demand(
+            availability,
+            plugin_runtime::DemandReason::Language {
+                provider: key.to_owned(),
+                role,
+            },
+            guard,
+        )
+    }
+
     /// Protocol preparation runs on the worker; UI consumers receive only immutable approved leases.
     pub(crate) fn language_services(
         &self,
@@ -459,6 +526,7 @@ impl ExtensionPanel {
             last_theme: None,
             last_size: (0., 0., 0., 0.),
             instance_epoch: 0,
+            view_demand: Default::default(),
             _quit: Some(quit),
             _focus_events: vec![],
         }
@@ -564,6 +632,7 @@ impl ExtensionPanel {
             last_theme: None,
             last_size: (0., 0., 0., 0.),
             instance_epoch: 0,
+            view_demand: Default::default(),
             _quit: None,
             _focus_events: vec![],
         }
@@ -762,6 +831,7 @@ impl ExtensionPanel {
                 vec![]
             }
         };
+        self.poll_view_demand(cx);
         if !editor_requests.is_empty() {
             let parent = self.parent.clone();
             cx.defer(move |cx| {
@@ -892,7 +962,7 @@ impl ExtensionPanel {
     /// Plugins decide whether opening an empty view requires new state or process resources.
     pub(crate) fn show(&self, window: &mut Window, cx: &mut App) {
         self.visible.set(true);
-        self.command("panel.opened".into());
+        self.demand_view();
         self.focus(window, cx);
     }
     /// Preview publication state for native tests: the revision sent and the one the guest echoed.
@@ -1067,6 +1137,16 @@ impl dock::BasePanel for ExtensionPanel {
     }
     fn visible(&self, _: &App) -> bool {
         self.visible.get()
+    }
+    /// Base owns dock activation; deselection cancels a pending demand without starting other tabs.
+    fn set_active(&mut self, active: bool, _: &mut Window, _: &mut Context<Self>) {
+        if !active {
+            self.view_demand.borrow_mut().cancel();
+        }
+    }
+    /// Removal is Base's close signal, including an active panel removed without set_active(false).
+    fn on_removed(&mut self, _: &mut Window, _: &mut Context<Self>) {
+        self.view_demand.borrow_mut().cancel();
     }
 }
 impl DockPanel for ExtensionPanel {

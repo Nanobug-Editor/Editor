@@ -39,7 +39,7 @@ fn action_preview(
 ) -> EditorRequest {
     place_caret(visual, app, 0);
     visual.simulate_keystrokes("ctrl-.");
-    wait_for_control(visual, app, "language-feature-row-0");
+    wait_for_control(visual, app, manager, "language-feature-row-0");
     assert!(visual.update(|window, _| {
         gpui_base::test_support::snapshots(window)
             .iter()
@@ -157,6 +157,7 @@ fn native_community_language_declarative_features_preview_undo_and_original_seal
             let app = app.read(cx);
             app.tabs[app.active_text_tab_index().unwrap()].is_dirty()
         }));
+        pump(visual, &app, &mut manager);
         let service = manager.language_services()["keyvalue-language/analysis"]
             .as_ref()
             .unwrap()
@@ -201,7 +202,7 @@ fn native_community_language_declarative_features_preview_undo_and_original_seal
         // parameter help consumes the same live connection and inert native signature card.
         place_caret(visual, &app, source.find("中文").unwrap());
         visual.simulate_keystrokes("shift-f12");
-        wait_for_control(visual, &app, "language-feature-row-1");
+        wait_for_control(visual, &app, &mut manager, "language-feature-row-1");
         click(visual, "language-feature-row-1");
         assert_eq!(
             visual.update(|_, cx| app.read(cx).editor.read(cx).cursor()),
@@ -210,7 +211,7 @@ fn native_community_language_declarative_features_preview_undo_and_original_seal
         assert_eq!(text(visual, &app), source);
         place_caret(visual, &app, source.len());
         visual.simulate_keystrokes("ctrl-shift-space");
-        wait_for_control(visual, &app, "language-signature-card-0");
+        wait_for_control(visual, &app, &mut manager, "language-signature-card-0");
         visual.update(|window, _| {
             let parameter = rust_i18n::t!("language_features.parameter", parameter = "value");
             assert!(
@@ -242,6 +243,7 @@ fn native_community_language_declarative_features_preview_undo_and_original_seal
         );
         manager.enable("keyvalue-language").unwrap();
         publish_providers(visual, &app, &mut manager);
+        pump(visual, &app, &mut manager);
         let replacement = manager.language_services()["keyvalue-language/analysis"]
             .as_ref()
             .unwrap()
@@ -276,6 +278,7 @@ fn native_community_language_declarative_features_preview_undo_and_original_seal
             .install(&readonly, readonly.manifest.permissions.clone())
             .unwrap();
         publish_providers(visual, &app, &mut manager);
+        pump(visual, &app, &mut manager);
         let (readonly_origin, document, fix) = current_action(visual, &app);
         assert_eq!(
             manager
@@ -305,6 +308,7 @@ fn native_community_language_declarative_features_preview_undo_and_original_seal
             .install(&old_contract, old_contract.manifest.permissions.clone())
             .unwrap();
         publish_providers(visual, &app, &mut manager);
+        pump(visual, &app, &mut manager);
         let limited = manager.language_services()["keyvalue-language/analysis"]
             .as_ref()
             .unwrap()

@@ -19,6 +19,12 @@ fn native_community_language_diagnostics_fix_preview_source_revision_and_undo(
             &["spell-check", "config-check"],
         );
         for id in ["spell-check", "config-check"] {
+            super::super::package_ui_test_support::demand(
+                &mut manager,
+                id,
+                plugin_runtime::DemandReason::Command("check".into()),
+            )
+            .unwrap();
             manager
                 .invoke_command(id, "check", serde_json::Value::Null)
                 .unwrap();
@@ -210,6 +216,12 @@ fn native_community_language_config_trimmed_unicode_path_keeps_exact_diagnostic_
             visual.simulate_keystrokes("ctrl-a");
             visual.simulate_input(source);
             draw(visual);
+            super::super::package_ui_test_support::demand(
+                &mut manager,
+                "config-check",
+                plugin_runtime::DemandReason::Command("check".into()),
+            )
+            .unwrap();
             manager
                 .invoke_command("config-check", "check", serde_json::Value::Null)
                 .unwrap();

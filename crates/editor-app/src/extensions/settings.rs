@@ -61,7 +61,8 @@ impl SettingsView {
             None
         } else {
             let value = match definition.value_type {
-                SettingType::String { .. } => {
+                // Secret references use the same native text entry, but persist only an own key.
+                SettingType::String { .. } | SettingType::SecretReference => {
                     serde_json::Value::String(draft.input.read(cx).value().to_string())
                 }
                 SettingType::Integer { .. } => match draft.input.read(cx).value().parse::<i64>() {
@@ -246,6 +247,17 @@ impl SettingsView {
                 div()
                     .debug_selector(move || value_selector.clone())
                     .child(value_control),
+            )
+            .when(
+                matches!(definition.value_type, SettingType::SecretReference),
+                |field| {
+                    field.child(
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(t!("settings.plugin_secret_reference_hint").to_string()),
+                    )
+                },
             )
             .child(
                 h_flex()

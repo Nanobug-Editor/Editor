@@ -51,15 +51,24 @@ use crate::extensions::lsp_tests::publish;
 mod chrome;
 mod docking;
 mod folding;
-mod lifetime;
 
 /// Advance the real native frame/tasks until the selected package's tree is painted.
-fn wait_outline(cx: &mut VisualTestContext) {
-    wait_node(cx, "outline-node-/0/0");
+fn wait_outline(
+    cx: &mut VisualTestContext,
+    app: &Entity<EditorApp>,
+    manager: &mut plugin_runtime::Manager,
+) {
+    wait_node(cx, app, manager, "outline-node-/0/0");
 }
 
 /// Observe a genuinely painted virtual row, including automatic scrolling to a distant definition.
-fn wait_node(cx: &mut VisualTestContext, selector: &'static str) {
+/// Model-local lifetime acceptance reuses this test-only setup without widening production state.
+pub(crate) fn wait_node(
+    cx: &mut VisualTestContext,
+    app: &Entity<EditorApp>,
+    manager: &mut plugin_runtime::Manager,
+    selector: &'static str,
+) {
     // Package interaction acceptance opens the hidden-by-default panel through the user's footer control.
     cx.update(|window, cx| window.draw(cx).clear(cx));
     if cx.debug_bounds("outline-hide").is_none() {
@@ -71,6 +80,8 @@ fn wait_node(cx: &mut VisualTestContext, selector: &'static str) {
         // Base debounce and asynchronous highlighting use the test dispatcher clock, while WASM still uses wall time.
         cx.executor().advance_clock(Duration::from_millis(10));
         cx.run_until_parked();
+        // Draw produces the real selected structure demand; this harness drives its public actor.
+        publish(app, manager, cx);
         cx.update(|window, cx| window.draw(cx).clear(cx));
         if cx.debug_bounds(selector).is_some() {
             break;
@@ -133,7 +144,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
         window.activate_window();
         app.update(cx, |app, cx| app.open_file(path.clone(), window, cx));
     });
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     visual.update(|window, cx| {
         let focus = app.read(cx).outline_panel.focus_handle(cx);
         focus.focus(window, cx);
@@ -146,7 +157,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
         "Dock focus must enter Base's tree direction-key behavior"
     );
     visual.simulate_keystrokes("right");
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     let child = visual.debug_bounds("outline-node-/0/0").unwrap();
     visual.simulate_click(child.center(), Default::default());
     visual.run_until_parked();
@@ -191,7 +202,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
         "moving to the root restores the two-level outline baseline"
     );
     visual.simulate_click(leaf_position, Default::default());
-    wait_node(visual, "outline-node-/0/0/0");
+    wait_node(visual, &app, &mut manager, "outline-node-/0/0/0");
     // A disclosure changes expansion without moving the editor or activating its definition.
     let before_disclosure = visual.update(|_, cx| app.read(cx).editor.read(cx).cursor());
     // Follow-disabled browsing retains a collapsed branch while the native editor moves inside it.
@@ -292,7 +303,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
         });
         assert!(visual.debug_bounds("outline-loading").is_some());
     }
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     visual.update(|_, cx| {
         let tree = app.read(cx).outline.tree.read(cx);
         let index = tree.index_of(&"/0/0".into()).unwrap();
@@ -310,7 +321,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
     });
     assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
     visual.simulate_keystrokes("ctrl-z");
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     visual.update(|_, cx| assert_eq!(app.read(cx).editor.read(cx).text().to_string(), source));
     visual.update(|_, cx| apply_theme(builtin_theme(true), cx));
     visual.simulate_scale_factor_change(2.);
@@ -331,7 +342,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
         })
     });
     visual.simulate_keystrokes("ctrl-v");
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     visual.update(|_, cx| assert_eq!(app.read(cx).editor.read(cx).text().to_string(), long_source));
     visual.update(|window, cx| {
         app.update(cx, |app, cx| {
@@ -342,7 +353,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
             cx.notify();
         })
     });
-    wait_node(visual, "outline-node-/0/75");
+    wait_node(visual, &app, &mut manager, "outline-node-/0/75");
     assert!(
         visual.debug_bounds("outline-node-/0/0").is_none(),
         "following a distant definition must scroll its virtual tree"
@@ -375,7 +386,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
     );
     visual.simulate_scale_factor_change(1.);
     visual.simulate_keystrokes("ctrl-z");
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     visual.update(|_, cx| assert_eq!(app.read(cx).editor.read(cx).text().to_string(), source));
     visual.update(|window, cx| {
         app.update(cx, |app, cx| {
@@ -387,7 +398,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
     assert!(visual.debug_bounds("outline-empty").is_some());
     assert!(visual.debug_bounds("outline-node-/0").is_none());
     visual.update(|window, cx| app.update(cx, |app, cx| app.open_file(path.clone(), window, cx)));
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     let closed_path = path.canonicalize().unwrap();
     visual.update(|window, cx| {
         app.update(cx, |app, cx| {
@@ -408,7 +419,7 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
     });
     assert!(visual.debug_bounds("outline-node-/0").is_none());
     visual.update(|window, cx| app.update(cx, |app, cx| app.open_file(path.clone(), window, cx)));
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     manager.disable("novel-tree").unwrap();
     publish(&app, &mut manager, visual);
     visual.update(|window, cx| window.draw(cx).clear(cx));

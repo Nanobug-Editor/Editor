@@ -5,7 +5,7 @@ use gpui_kit::{TestAppContext, gpui};
 
 /// Native clicks, IME-compatible notes and unsaved vectors survive install/revoke without empty regions.
 #[gpui::test]
-#[ignore = "build example and svg through scripts/build-plugins.ps1 first"]
+#[ignore = "build example and svg with host --plugin-package plugins/example plugins/svg --output dist/plugins; independent Cargo uses --plugin-cargo"]
 fn delivered_ui_packages_follow_native_input_and_reclaim_layout(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -46,6 +46,12 @@ fn delivered_ui_packages_follow_native_input_and_reclaim_layout(cx: &mut TestApp
     let app = slot.borrow_mut().take().unwrap();
     cx.simulate_resize(size(px(1400.), px(900.)));
     publish(&mut manager, &mut renderer, &app, cx);
+    // Actual positive body paint schedules view demand; drive its ordinary receipt/publication
+    // turns before looking for guest controls, rather than waking every installed fixture eagerly.
+    for _ in 0..2 {
+        pump(&mut manager, &app, cx);
+        publish(&mut manager, &mut renderer, &app, cx);
+    }
     let button = cx.debug_bounds("plugin-ui-increment").unwrap();
     cx.simulate_click(button.center(), Default::default());
     cx.run_until_parked();
@@ -74,7 +80,64 @@ fn delivered_ui_packages_follow_native_input_and_reclaim_layout(cx: &mut TestApp
         pump(&mut manager, &app, cx);
         publish(&mut manager, &mut renderer, &app, cx);
     }
-    assert!(cx.debug_bounds("editor-plugin-layout").is_some());
+    // Observe the real cold file-view gate before changing either its producer or this harness.
+    // Only a failure drains recorded work for diagnosis; no demand or owner is synthesized.
+    assert!(
+        cx.debug_bounds("editor-plugin-layout").is_some(),
+        "selected file view did not publish a native layout: live={:?}; installed_error={:?}; state={:#?}",
+        manager.instance_id("svg"),
+        manager.installed["svg"].error,
+        cx.update(|_, cx| {
+            let app = app.read(cx);
+            let owner = app.extensions.read(cx);
+            let availability = owner.availability("svg");
+            let selected = app.active_editor_preview(cx).map(|panel| {
+                let panel = panel.read(cx);
+                (
+                    panel.active.clone(),
+                    panel.surface_id.clone(),
+                    panel.visible.get(),
+                    panel.preview_file.clone(),
+                    panel.preview_version.clone(),
+                    panel.preview_error.clone(),
+                    panel.current_document().is_some(),
+                )
+            });
+            let queued = owner
+                .worker
+                .recorded
+                .lock()
+                .unwrap()
+                .try_iter()
+                .filter_map(|work| match work {
+                    Work::Demand { plugin, reason, .. } => {
+                        Some(format!("Demand {plugin}: {reason:?}"))
+                    }
+                    Work::Event(plugin, epoch, panel, PluginEvent::FilePreview { file }) => {
+                        Some(format!("FilePreview {plugin}/{panel:?}@{epoch}: {file:?}"))
+                    }
+                    Work::Event(plugin, epoch, panel, PluginEvent::Preview { document, text }) => {
+                        Some(format!(
+                            "Preview {plugin}/{panel:?}@{epoch}: {document:?}, {} bytes",
+                            text.len()
+                        ))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let state = owner.worker.state.lock().unwrap();
+            (
+                app.active_path.clone(),
+                app.active_text_tab_index()
+                    .map(|index| app.plugin_document_version(index)),
+                app.editor.read(cx).text().to_string(),
+                availability,
+                selected,
+                state.views.keys().cloned().collect::<Vec<_>>(),
+                queued,
+            )
+        })
+    );
     let canvas = cx.debug_bounds("plugin-ui-preview-canvas").unwrap();
     let drawing = |manager: &plugin_runtime::Manager| {
         // Image composes a native source beside this canvas through the public layout contract.

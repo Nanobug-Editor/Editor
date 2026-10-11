@@ -7,6 +7,12 @@ fn converter_preview(
     app: &Entity<EditorApp>,
     manager: &mut Manager,
 ) -> EditorRequest {
+    super::super::package_ui_test_support::demand(
+        manager,
+        "workspace-converter",
+        plugin_runtime::DemandReason::Command("convert".into()),
+    )
+    .unwrap();
     manager
         .invoke_command("workspace-converter", "convert", serde_json::Value::Null)
         .unwrap();

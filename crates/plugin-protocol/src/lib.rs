@@ -12,6 +12,10 @@
 //! # Compatibility and authority
 //!
 //! Package versions, component transport versions and capability versions are separate.
+//! The current host release is 0.1.0. [`Manifest::minimum_host`] is an optional SemVer
+//! floor, not a capability version or an upper-bound range. It is checked for both package
+//! admission and restored records; a future floor diagnoses an update requirement without
+//! deleting saved settings/data. Declarative `plugin.toml` host ranges are checked separately.
 //! Current executable packages use protocol `7` and declare their base API and required
 //! or optional capability ranges in [`api::Requirements`]. The host negotiates these
 //! before activation: an unavailable required capability rejects the package, while an
@@ -40,6 +44,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+/// Visible declarations, demand reasons and explicit continuous-work policy.
+pub mod activation;
 /// Capability-based lifecycle, notifications and correlated host operations.
 pub mod api;
 /// Typed command composition and stable native menu locations.
@@ -93,6 +99,14 @@ pub mod bindings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
+    /// Optional minimum host release as a full SemVer of at most 128 bytes (for example `0.1.0`).
+    /// This is a floor, not `^0.1`; comparison ignores build metadata and retains prerelease precedence.
+    /// Omission retains capability-based compatibility; unsupported floors reject before activation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum_host: Option<String>,
+    /// Business instances default to demand activation; static contributions remain discoverable.
+    #[serde(default, skip_serializing_if = "activation::Policy::is_default")]
+    pub activation: activation::Policy,
     /// Opt-in private-data format; the host never interprets the plugin's business fields.
     #[serde(default)]
     pub data_format: Option<DataFormat>,

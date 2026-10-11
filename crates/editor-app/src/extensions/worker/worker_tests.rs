@@ -74,6 +74,145 @@ fn wait_for(worker: &Worker, ready: impl Fn(&Published) -> bool) {
     }
 }
 
+/// A fixture enters through the same published static identity the native command consumer uses.
+fn command_work(worker: &Worker, command: &str, arguments: serde_json::Value) -> Work {
+    let state = worker.state.lock().unwrap();
+    Work::Invoke {
+        plugin: "capability-example".into(),
+        command: command.into(),
+        arguments,
+        context: None,
+        expected_epoch: state
+            .command_epoch("capability-example", command)
+            .unwrap_or_default(),
+        origin: state
+            .availabilities
+            .get("capability-example")
+            .cloned()
+            .map(|availability| super::demands::CommandOrigin {
+                availability,
+                guard: None,
+            }),
+    }
+}
+
+/// Callback tests explicitly show the declared view; installation alone no longer runs Main.
+fn show_fixture_view(worker: &Worker) {
+    wait_for(worker, |state| state.ready);
+    let availability = worker.state.lock().unwrap().availabilities["capability-example"].clone();
+    let mut wait = worker
+        .demand(
+            availability,
+            plugin_runtime::DemandReason::View("welcome".into()),
+            None,
+        )
+        .unwrap();
+    futures::executor::block_on(wait.wait()).unwrap();
+}
+
+/// Installed command metadata is discoverable without creating an instance or publishing a view.
+/// The independently built public package follows the same cold startup path as a user profile.
+#[test]
+#[ignore = "build capability-example through the public SDK first"]
+fn cold_commands_are_discoverable_without_starting_the_guest() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("plugins");
+    let package = Package::read(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/plugin-api-test/capability-example.zip"),
+    )
+    .unwrap();
+    let command = package.manifest.commands.first().unwrap().id.clone();
+    let mut manager = Manager::open(root.clone(), Environment::default()).unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+    drop(manager);
+    let worker = Worker::start_background(root, Environment::default(), true);
+    wait_for(&worker, |state| state.ready);
+    let (discoverable, has_views, has_instances) = {
+        let state = worker.state.lock().unwrap();
+        (
+            state
+                .command_epoch("capability-example", &command)
+                .is_some(),
+            !state.views.is_empty(),
+            !state.instance_ids.is_empty(),
+        )
+    };
+    // Release the publication mutex and shut down before assertions so a genuine regression
+    // cannot poison the actor's cleanup path and turn the expected test failure into an abort.
+    let (tx, rx) = futures::channel::oneshot::channel();
+    worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
+    futures::executor::block_on(rx).unwrap();
+    assert!(
+        discoverable,
+        "opening a command menu must not depend on a live guest"
+    );
+    assert!(!has_views, "metadata discovery cannot run Main");
+    assert!(!has_instances, "the installed guest stays cold");
+}
+
+/// Actual command business code must execute after first birth under the original cold epoch.
+/// Discoverability alone or an empty Main publication cannot satisfy this positive control.
+#[test]
+#[ignore = "build capability-example through the public SDK first"]
+fn cold_command_first_birth_preserves_its_original_command_epoch() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("plugins");
+    let package = Package::read(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/plugin-api-test/capability-example.zip"),
+    )
+    .unwrap();
+    let mut manager = Manager::open(root.clone(), Environment::default()).unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+    drop(manager);
+    let worker = Worker::start_background(root, Environment::default(), true);
+    wait_for(&worker, |state| state.ready);
+    let original = worker
+        .state
+        .lock()
+        .unwrap()
+        .command_epoch("capability-example", "check-errors");
+    worker
+        .tx
+        .send(command_work(
+            &worker,
+            "check-errors",
+            serde_json::Value::Null,
+        ))
+        .unwrap();
+    wait_for(&worker, |state| {
+        state.views.values().any(|view| {
+            serde_json::to_string(view)
+                .unwrap()
+                .contains("Typed errors and request IDs verified.")
+        })
+    });
+    let (epoch, born) = {
+        let state = worker.state.lock().unwrap();
+        (
+            state.command_epoch("capability-example", "check-errors"),
+            state.instance_ids.contains_key("capability-example"),
+        )
+    };
+    let (tx, rx) = futures::channel::oneshot::channel();
+    worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
+    futures::executor::block_on(rx).unwrap();
+    assert!(born, "first demand must produce its real owner");
+    assert!(
+        original.is_some(),
+        "the original command was statically visible"
+    );
+    assert_eq!(
+        epoch, original,
+        "first birth cannot revoke its own original command"
+    );
+}
+
 /// Production dispatch retains a command target while inspection failures remain manager-wide.
 #[test]
 fn operation_errors_retain_plugin_ownership_through_worker_publication() {
@@ -87,6 +226,7 @@ fn operation_errors_retain_plugin_ownership_through_worker_publication() {
         .tx
         .send(Work::Invoke {
             plugin: "missing-plugin".into(),
+            origin: None,
             context: None,
             command: "unknown".into(),
             arguments: json!(null),
@@ -148,6 +288,7 @@ fn obsolete_ui_callbacks_are_information_but_real_rejections_are_errors() {
         .unwrap();
     drop(manager);
     let worker = Worker::start_background(root, environment, true);
+    show_fixture_view(&worker);
     wait_for(&worker, |state| {
         state.views.contains_key("capability-example/welcome")
     });
@@ -262,6 +403,7 @@ fn run_preparation(restrict: bool) {
         .unwrap();
     drop(manager);
     let worker = Worker::start_background(root, environment, true);
+    show_fixture_view(&worker);
     wait_for(&worker, |state| {
         state.views.contains_key("capability-example/welcome")
     });
@@ -311,13 +453,11 @@ fn run_preparation(restrict: bool) {
     waiting.recv_timeout(Duration::from_secs(60)).unwrap();
     worker
         .tx
-        .send(Work::Invoke {
-            plugin: "capability-example".into(),
-            context: None,
-            command: "scope-write".into(),
-            arguments: json!({"text":"during preparation"}),
-            expected_epoch: worker.state.lock().unwrap().instance_epochs["capability-example"],
-        })
+        .send(command_work(
+            &worker,
+            "scope-write",
+            json!({"text":"during preparation"}),
+        ))
         .unwrap();
     wait_for(&worker, |state| {
         state.views.get("capability-example/welcome").map(|document| document.as_ref())
@@ -326,13 +466,7 @@ fn run_preparation(restrict: bool) {
     assert!(worker.state.lock().unwrap().progress.is_some());
     worker
         .tx
-        .send(Work::Invoke {
-            plugin: "capability-example".into(),
-            context: None,
-            command: "active-directory".into(),
-            arguments: json!(null),
-            expected_epoch: worker.state.lock().unwrap().instance_epochs["capability-example"],
-        })
+        .send(command_work(&worker, "active-directory", json!(null)))
         .unwrap();
     wait_for(&worker, |state| !state.editor_requests.is_empty());
     let request = worker
@@ -374,13 +508,7 @@ fn run_preparation(restrict: bool) {
         );
         worker
             .tx
-            .send(Work::Invoke {
-                plugin: "capability-example".into(),
-                context: None,
-                command: "scope-read".into(),
-                arguments: json!(null),
-                expected_epoch: worker.state.lock().unwrap().instance_epochs["capability-example"],
-            })
+            .send(command_work(&worker, "scope-read", json!(null)))
             .unwrap();
         // This later command is an ordering barrier after any queued grant; it must remain rejected.
         wait_for(&worker, |state| {
@@ -418,13 +546,7 @@ fn run_preparation(restrict: bool) {
             .unwrap();
         worker
             .tx
-            .send(Work::Invoke {
-                plugin: "capability-example".into(),
-                context: None,
-                command: "scope-read".into(),
-                arguments: json!(null),
-                expected_epoch: worker.state.lock().unwrap().instance_epochs["capability-example"],
-            })
+            .send(command_work(&worker, "scope-read", json!(null)))
             .unwrap();
         wait_for(&worker, |state| {
             state.views.get("capability-example/welcome").map(|document| document.as_ref())

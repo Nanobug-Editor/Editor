@@ -444,6 +444,12 @@ fn t27_profile_aliases_preserve_credentials_and_other_profiles_are_isolated() {
         profile.canonicalize().unwrap(),
     ] {
         let mut manager = Manager::open(spelling, environment(profile)).unwrap();
+        // Reopen republishes cold metadata; reading the credential is an explicit command demand.
+        demand(
+            &mut manager,
+            "cloud-translation",
+            DemandReason::Command("probe".into()),
+        );
         manager
             .invoke_command(
                 "cloud-translation",
@@ -459,6 +465,11 @@ fn t27_profile_aliases_preserve_credentials_and_other_profiles_are_isolated() {
     let other = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(other.path().into(), environment(other.path())).unwrap();
     install(&mut manager, &package("cloud-translation", |_| {}));
+    demand(
+        &mut manager,
+        "cloud-translation",
+        DemandReason::Command("probe".into()),
+    );
     manager
         .invoke_command(
             "cloud-translation",

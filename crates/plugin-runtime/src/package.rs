@@ -4,12 +4,37 @@ use plugin_schema::{FileIconConfig, PluginManifest, ThemeFile};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Read},
     path::Path,
 };
 mod atomic_file;
 pub(crate) mod icons;
 pub(crate) use atomic_file::atomic_write;
+
+/// Parse only the actual installed contribution bytes for static discovery and package admission.
+/// The caller validates the package-relative path/owner; this gate checks identity, version and
+/// the author's host range without reading grammar assets or starting a business instance.
+pub(crate) fn compatible_contributions(
+    manifest: &Manifest,
+    bytes: &[u8],
+) -> anyhow::Result<PluginManifest> {
+    let contributions = PluginManifest::parse(std::str::from_utf8(bytes)?)?;
+    let host = semver::Version::parse(env!("CARGO_PKG_VERSION"))?;
+    let supported = semver::VersionReq::parse(&contributions.plugin.host_version)?;
+    anyhow::ensure!(
+        supported.matches(&host),
+        "Unsupported host version: requires {supported}, host {host}"
+    );
+    anyhow::ensure!(
+        contributions.plugin.id == manifest.id,
+        "Contribution manifest identity differs from package identity"
+    );
+    anyhow::ensure!(
+        contributions.plugin.version == manifest.version,
+        "Contribution manifest version differs from package version"
+    );
+    Ok(contributions)
+}
 
 /// LSP declarations carry exactly the native service authority that the host will exercise.
 fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
@@ -412,7 +437,9 @@ impl Package {
             // Validate every declarative reference before installation can mutate the registry.
             validate_relative(path)?;
             let source = package_text(&files, path)?;
-            let contributions = PluginManifest::parse(source)?;
+            // Local ZIP/development admission enforces the author's same host range as remote
+            // discovery, before extracting files or mutating any installed registry/data.
+            let contributions = compatible_contributions(&manifest, source.as_bytes())?;
             if !contributions.language_definitions.is_empty()
                 || !contributions.highlighters.is_empty()
             {
@@ -429,14 +456,6 @@ impl Package {
                     package_text(&files, &path.to_string_lossy())?;
                 }
             }
-            anyhow::ensure!(
-                contributions.plugin.id == manifest.id,
-                "Contribution manifest identity differs from package identity"
-            );
-            anyhow::ensure!(
-                contributions.plugin.version == manifest.version,
-                "Contribution manifest version differs from package version"
-            );
             if let Some(theme) = &contributions.theme {
                 ThemeFile::parse(package_text(&files, &theme.file.to_string_lossy())?)?;
                 if let Some(path) = &theme.file_icons {
@@ -682,6 +701,7 @@ pub(crate) fn validate_relative(name: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     /// Inspection rejects retired wire formats before any component can be installed or activated.
     #[test]

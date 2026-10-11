@@ -98,6 +98,12 @@ fn hot_update_and_rollback_resync_unsaved_open_document(cx: &mut TestAppContext)
     manager
         .install(&original, original.manifest.permissions.clone())
         .unwrap();
+    super::package_ui_test_support::demand(
+        &mut manager,
+        "capability-example",
+        plugin_runtime::DemandReason::Command("scope-write".into()),
+    )
+    .unwrap();
     manager
         .invoke_command(
             "capability-example",

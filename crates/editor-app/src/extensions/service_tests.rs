@@ -119,6 +119,12 @@ fn native_service_provider_selection_routes_the_same_consumer_to_a_different_pac
     });
     form.run_until_parked();
     assert!(form.debug_bounds("plugin-settings-status").is_some());
+    super::package_ui_test_support::demand(
+        &mut manager,
+        "service-consumer",
+        plugin_runtime::DemandReason::Command("service-open".into()),
+    )
+    .unwrap();
     manager
         .invoke_command(
             "service-consumer",

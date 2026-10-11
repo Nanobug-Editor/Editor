@@ -235,6 +235,10 @@ struct EditorApp {
     plugin_active_document: Option<plugin_runtime::plugin_protocol::api::DocumentVersion>,
     /// Sequence numbers preserve ordered source observations across worker publication.
     plugin_document_sequence: u64,
+    /// The native window revokes original command waits without retaining another text model.
+    plugin_command_intents: extensions::command_intents::CommandIntents,
+    /// Only original open documents retain primary LSP preparation waits.
+    language_server_demands: app::language_servers::DemandState,
     /// A comparison borrows existing native document entities and owns only its decoration layers.
     document_comparison: Option<editor::comparison::DocumentComparison>,
     /// Comparison commands capture their own target through the existing local popup control.
@@ -581,6 +585,8 @@ impl EditorApp {
             plugin_document_metadata: Default::default(),
             plugin_active_document: None,
             plugin_document_sequence: 0,
+            plugin_command_intents: Default::default(),
+            language_server_demands: Default::default(),
             document_comparison: None,
             document_command_menu: None,
             plugin_popup: None,
