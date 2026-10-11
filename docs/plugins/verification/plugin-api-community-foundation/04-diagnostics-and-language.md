@@ -1,6 +1,6 @@
 # 04：多来源诊断与共享语言结果验收
 
-日期：2026-10-11。议题：[#96](https://github.com/T-miracle/Nanobug/issues/96)。状态：实现与行为验收完成。联合 SDK 和六个独立包、三门禁、17 项正式连接回归、两个独立审查轴及干净生产宿主的 Windows 物理验收均已通过。默认 Ctrl+. 的本机输入环境限制保留，公开改绑已在两语言完成键盘预览/取消；由根代理统一整合、推送并读回 issue 状态，本记录不提前宣称议题已关闭。
+日期：2026-10-11。议题：[#96](https://github.com/T-miracle/Nanobug/issues/96)。状态：实现、行为验收与交付完成。联合 SDK 和六个独立包、三门禁、17 项正式连接回归、两个独立审查轴及干净生产宿主的 Windows 物理验收均已通过。默认 Ctrl+. 的本机输入环境限制保留，公开改绑已在两语言完成键盘预览/取消。普通交付 `2d140d1c71d117046d907c600a18245f865dc696` 已推送至实施与集成分支并核对远端；2026-10-11T15:17:51Z 读回议题为 `closed / completed`，七条验收勾选均完成。父设计议题 #92 保持开放。
 
 依据：[已批准工单](../../tickets/plugin-api-community-foundation/04-diagnostics-and-language.md)、[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)、[社区基础能力方案](../../specs/plugin-api-community-foundation.md)与[平台规格](../../specs/plugin-api-platform.md)。Windows 物理桌面验收由根代理独占；本文件区分实际包/GPUI 自动测试与桌面观察。
 

@@ -2,7 +2,7 @@
 
 稳定标识：`plugin-api-community-foundation-07-lifecycle`
 
-状态：已批准，待实施；发布标签 `ready-for-agent`。实际设计议题及依赖编号见发布记录。
+状态：已批准，实施中；2026-10-11 已读回直接依赖 #96、#97、#98 全部 `closed / completed`。从已验证整合点 `2d140d1c71d117046d907c600a18245f865dc696` 继续 T31–T35，尚未计作验收完成。实际设计议题及依赖编号见发布记录。
 
 ## What to build
 

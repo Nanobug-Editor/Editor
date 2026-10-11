@@ -71,4 +71,4 @@ Root 随后完成该候选的真实 Windows Down、Enter、Escape 及 Direct 首
 
 最终生产源码仍为 `fde5a430`，没有另增快捷键业务修复。Standards 原复审者和另一位未参与 04 实现的 Spec 审查者独立核对了源码一致性及补充证据：规范轴硬性违反 0、判断性坏味道 0；规格轴新增缺失/部分 0、越界 0、行为错误 0。`cb1bdb2...fde5a430` 实际为 125 文件、5 个提交；前述 123/124 文件是各自历史候选的实际范围，不混用。
 
-最终输入为源码 SDK 49 文件、0 Markdown 与六个正式包；17 个连接 GPUI 用例逐一显式执行通过，三个规定门禁 exit 0（非 UI 253 passed、0 failed、231 ignored），实际运行时及公开准入负面证据见[主验收](04-diagnostics-and-language.md)。ignored 计数不作为通过。生产物理复验结果和默认键的输入环境限制见[原生记录](04-native-desktop.md)；两个轴的零发现不替代行为证据。提交、推送和 #96 关闭须按真实远端状态再核对，父议题 #92 保持开放。
+最终输入为源码 SDK 49 文件、0 Markdown 与六个正式包；17 个连接 GPUI 用例逐一显式执行通过，三个规定门禁 exit 0（非 UI 253 passed、0 failed、231 ignored），实际运行时及公开准入负面证据见[主验收](04-diagnostics-and-language.md)。ignored 计数不作为通过。生产物理复验结果和默认键的输入环境限制见[原生记录](04-native-desktop.md)；两个轴的零发现不替代行为证据。随后普通交付 `2d140d1c71d117046d907c600a18245f865dc696` 在实施与集成分支均推送并核对同 SHA，2026-10-11T15:17:51Z 读回 #96 为 `closed / completed`；父议题 #92 保持开放。

@@ -11,10 +11,10 @@
 - [插件开发工作区整合主工作区改动](verification/plugin-development-main-integration.md)：2026-10-08 用户授权整合全部未提交改动，包含两侧备份、冲突处理与重新验证；未提交或推送。
 - [缺失项目描述修复与主工作区 Release 交付](verification/plugin-development-main-delivery.md)：截图错误的回归测试、主工作区整合与 Release 启动证据。
 
-- [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-11 已恢复，源码 SDK 与当前主分支整合见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。01、02、03、05、06 已交付并读回关闭；04 实施中，07 等待 04。稳定核心＋实验扩展，AI 暂不实现，整批尚未完成。
+- [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-11 已恢复，源码 SDK 与当前主分支整合见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。01–06 已交付并读回关闭；07 的三个直接依赖均已满足，正在实施。稳定核心＋实验扩展，AI 暂不实现，整批尚未完成。
 - [01 / 02 普通合并连接验证](verification/plugin-api-community-foundation/01-02-integration.md)：真实 SDK 菜单、精确左文档版本、焦点退役回归及新增原生连接已验证，双轴未解决项均为 0；为 03 / 05 提供已修正整合点。
 - [03 工作区计划与会话恢复验收](verification/plugin-api-community-foundation/03-workspace-transactions.md)、[Windows 原生记录](verification/plugin-api-community-foundation/03-workspace-transactions-native.md)：真实脚手架与分页转换消费者、混合脏文本与磁盘计划、取消及整组 Undo、精确 Native Save、Dark/字号布局和正常停止通过；既有 Settings UIA 崩溃及最终交付状态按记录核对。
-- [04 多来源诊断与共享语言结果验收](verification/plugin-api-community-foundation/04-diagnostics-and-language.md)：独立检查器、直接结果与标准 LSP 的原生呈现、事务和资源退役，实施及验收进行中；最终联合 SDK、原生桌面和门禁证据按该记录核对。
+- [04 多来源诊断与共享语言结果验收](verification/plugin-api-community-foundation/04-diagnostics-and-language.md)：独立检查器、直接结果与标准 LSP 的原生呈现、事务和资源退役已验收交付，#96 已读回关闭；49 文件源码 SDK、六包、17 项连接回归、规定门禁及两语言生产键盘流程通过，本机默认快捷键限制保留在记录中。
 - [工单 06：云查询、密钥与私有状态验收](verification/plugin-api-community-foundation/06-cloud-and-private-state.md)：独立云翻译/托管查询 SDK 包、实际 HTTP/TLS/CONNECT、系统 Credential、四项原审查修复、Temporary 归属续修与纯源码 SDK 证据；当前完成状态及限制以记录为准。
 - [05 通用树与编辑器装饰验收](verification/plugin-api-community-foundation/05-trees-and-decorations.md)、[Windows 原生记录](verification/plugin-api-community-foundation/05-trees-and-decorations-native.md)：四个独立正式包、菜单参数、编辑/Undo、屏外标记撤销、树开发重载与失败恢复通过；独立双轴归零、交付分支 `6940380` 已推送核对，#97 已读回关闭。集成点的资源和 SDK 联合验证另记。
 - [通用插件接口完整性审计](specs/plugin-api-ecosystem-audit/README.md)：2026-10-08 的 58 项历史调查；语言接口已随后整合，当前实施范围见基础社区生态方案，不等于所有检查项获准实施。

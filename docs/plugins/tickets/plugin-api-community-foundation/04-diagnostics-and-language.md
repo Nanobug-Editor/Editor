@@ -2,7 +2,7 @@
 
 稳定标识：`plugin-api-community-foundation-04-diagnostics`
 
-状态：已批准，待实施；发布标签 `ready-for-agent`。实际设计议题及依赖编号见发布记录。
+状态：已实现、验收并交付；普通提交 `2d140d1c71d117046d907c600a18245f865dc696` 已推送至实施与集成分支并核对远端。2026-10-11T15:17:51Z 读回 #96 为 `closed / completed`，验收详见[主记录](../../verification/plugin-api-community-foundation/04-diagnostics-and-language.md)。实际设计议题及依赖编号见发布记录。
 
 ## What to build
 
