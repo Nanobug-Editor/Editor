@@ -13,7 +13,7 @@
 
 - [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-11 已恢复，源码 SDK 与当前主分支整合见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。01、02 已交付关闭，03、05、06 继续验证，其余按依赖推进。稳定核心＋实验扩展，AI 暂不实现，整批尚未完成。
 - [01 / 02 普通合并连接验证](verification/plugin-api-community-foundation/01-02-integration.md)：真实 SDK 菜单、精确左文档版本、焦点退役回归及新增原生连接已验证，双轴未解决项均为 0；为 03 / 05 提供已修正整合点。
-- [03 工作区计划与会话恢复验收](verification/plugin-api-community-foundation/03-workspace-transactions.md)：真实脚手架与分页转换消费者、未保存文本和磁盘混合计划、取消及部分 I/O 恢复、整组 Undo 与受限选择授权的候选验证；桌面操作与交付状态按记录核对。
+- [03 工作区计划与会话恢复验收](verification/plugin-api-community-foundation/03-workspace-transactions.md)、[Windows 原生记录](verification/plugin-api-community-foundation/03-workspace-transactions-native.md)：真实脚手架与分页转换消费者、混合脏文本与磁盘计划、取消及整组 Undo、精确 Native Save、Dark/字号布局和正常停止通过；既有 Settings UIA 崩溃及最终交付状态按记录核对。
 - [通用插件接口完整性审计](specs/plugin-api-ecosystem-audit/README.md)：2026-10-08 的 58 项历史调查；语言接口已随后整合，当前实施范围见基础社区生态方案，不等于所有检查项获准实施。
 - [XML 插件与通用语言编辑能力方案](specs/xml-language-tools.md) / [#72](https://github.com/T-miracle/Editor/issues/72)，[三个实施工单 #73–#75](tickets/xml-language-tools/README.md)：全部验收、推送并核对关闭；包含可替换格式化、XML/HTML 标签编辑及宿主大纲与停靠，父设计议题保持不变。
 - [XML 语言工单 01 验收记录](verification/xml-language-tools/01-xml-language.md)：记录实际包、原生输入与服务结果，当前状态以记录为准。

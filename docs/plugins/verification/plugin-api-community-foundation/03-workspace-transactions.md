@@ -1,6 +1,6 @@
 # 03：工作区计划与当前会话恢复验收
 
-日期：2026-10-11。议题：[#95](https://github.com/T-miracle/Nanobug/issues/95)。状态：候选验证中；Windows 桌面操作、双轴审查及远端交付尚未完成，不关闭议题。
+日期：2026-10-11。议题：[#95](https://github.com/T-miracle/Nanobug/issues/95)。状态：候选测试与本单新增流程的 Windows 原生 C03 验收已完成；最终审查汇总、整合及远端交付由根代理记录，不提前关闭议题。既有 Settings 退役窗口的 UIA 崩溃已在基线复现，未修复。
 
 依据：[已批准工单](../../tickets/plugin-api-community-foundation/03-workspace-transactions.md)、[共同完成条件与测试责任](../../tickets/plugin-api-community-foundation/README.md)、[方案](../../specs/plugin-api-community-foundation.md)。用户恢复后新增的源码 SDK 规则替代历史站点正文要求，终端沿用已交付宿主原生模块。
 
@@ -44,7 +44,7 @@ SDK 注释普通提交 `70edad0f25ec04cdf3068d500276a3c1440912d9` 准确区分 `
 | --- | --- | --- |
 | T11 | 真实 SDK `ApplyEdits` 非相邻中文/CRLF/非 BMP 范围合成一次原生 Atomic；前后键入分别 Undo/Redo；磁盘不保存 | 实际包矩阵通过；原生 Atomic 回归通过 |
 | T12 | 脚手架一个计划完成创建目录、未打开文件写入、复制、连续两次改名、新建文件与删除；转换器分页发现并读取当前原生缓冲区；外部 ReadWrite 与 Save 的必要操作边界 | 实际包矩阵通过；02 受影响的选择授权回归 5/0 |
-| T13 | 打开脏文本保持未保存，磁盘文件按已确认计划落盘；明确原生预览确认，Escape 或 guest 取消不会提交等待中的计划 | 实际包矩阵通过；桌面 C03 正在验收 |
+| T13 | 打开脏文本保持未保存，磁盘文件按已确认计划落盘；明确原生预览确认，Escape 或 guest 取消不会提交等待中的计划 | 实际包矩阵通过；桌面取消、两步混合 Apply/Undo 与 Native Save 通过，见[原生记录](03-workspace-transactions-native.md) |
 | T14 | 预览后的磁盘变化、revision、目标关闭/重开阻止执行；大小写别名仍读取和修改脏缓冲区；真实目录 junction、设备名、ADS、越界、私有根与同号外实例句柄被拒绝 | 实际包矩阵及公开 Manager 边界用例通过 |
 | T15 | 整组 Undo 恢复文本、被删除文件和改名链，移除本批创建内容；后续键入及局部 Undo/Redo 使整组自动恢复在任何效果前停止 | 实际包矩阵通过 |
 | T16 | Windows 真正的文件占用导致提交和 Undo 中途失败，保留真实完成索引与部分恢复状态，解除占用后可重试；文本步骤后取消保留已发生效果；文件观察的创建/修改/删除、配对或明确未配对改名、合并、溢出重扫和根释放 | 原生 watcher 3/0，实际包恢复矩阵和公开 Manager 事件用例通过 |
@@ -95,6 +95,8 @@ SDK 注释普通提交 `70edad0f25ec04cdf3068d500276a3c1440912d9` 准确区分 `
 
 当前构建、门禁与应用 Green 的临时工具环境分别保存为 `workspace-a11y-build-green-environment.log`、`workspace-a11y-gates-environment.log` 与 `workspace-a11y-green-environment.log`。最后的三门禁对应组合生产输入 `0318970`，验收 Markdown 不参与 Rust/SDK 编译。基线已有未使用项与 Tree-sitter/Wasmtime 链接警告保留，未进行无关清理。
 
-原生桌面验收由根代理执行：每个开发实例运行一个插件项目，分别使用脚手架和转换器的独立 profile。一次双项目启动被现行 CLI 明确拒绝，退出 1、没有 GUI 或数据效果，不扩展开发实例能力。打开 `community-live.txt` 后追加未保存中文与 emoji，经脚手架菜单检查预览八项动作，再按 Escape 取消；删除和完整恢复已经由上述真实 SDK/GPUI 临时目录矩阵覆盖，桌面不重复执行删除。转换菜单明确确认后检查脏文本与未打开磁盘写入，再整组 Undo；Save 导出通过系统保存对话框确认精确目标。相关深浅主题、中英文、焦点、键盘、IME、滚动、缩放和基础无障碍结果由根代理补记。当前不把 GPUI 测试窗口等同于这一桌面验收。
+原生桌面验收由根代理使用同一冻结宿主、两个正式 release 组件和 `profile-final/` 完成：公开 dev 只运行脚手架一个主项目，正式 Converter 作为 bundled 包进入同一 Manager。一次历史双项目 dev 启动被 CLI 明确拒绝，退出 1、没有 GUI 或数据效果；独立 profile 的早期准备方案不是最终成功路径。原生八步预览/Escape、带未保存中文与 emoji 的 live 和未打开 disk 两步 Apply/整组 Undo、Native Save 选精确完整路径后再明确 Apply 均已通过。报告是严格 UTF-8 无 BOM、30 字节，Apply 前不存在；完整指纹和逐步结果见[原生验收记录](03-workspace-transactions-native.md)。删除和完整恢复由上述真实 SDK/GPUI 临时目录矩阵覆盖，桌面没有重复执行删除。
 
-Standards 和 Spec 两轴由根代理组织固定候选独立复审。C01/C02/C04/C05 的源码 SDK、包准入、权限与清理证据、C06 三门禁及受影响应用测试见上表；C03、最终双轴结果、推送、远端 SHA 核对和议题状态由根代理交付时记录。本记录不提前宣称工单完成。
+同一 profile 重启后，根代理通过实际 Settings 按钮切换 Dark 并将字号从 14 调到 16；新八步预览完整可见，中文取消/应用操作和中英标题有实体完整 UIA 名称，Tab、Escape 与返回菜单焦点均有稳定回读，最后控制器正常 `stop` 返回 0、所属窗口与进程均为 0。英文按钮名称由实际 GPUI/Base 测试覆盖，没有宣称实体英文 locale 切换。第一次关闭 Settings 时遇到的失效 HWND/COM abort 也在没有 03 事务或消费者的已验证基线重现；本轮只调整验收时对该窗口的查询方式，没有修复上游缺陷。主题和字号是当次内存状态，不承诺本次重启持久化。C03 相关结果与限制均按原生记录区分。
+
+Standards 和 Spec 两轴由根代理组织固定候选独立复审。C01/C02/C04/C05 的源码 SDK、包准入、权限与清理证据、C06 三门禁及受影响应用测试见上表；C03 见新增原生记录，相关 Dark/字号布局、新预览和正常停止待项已结清。最终双轴汇总、整合、推送、远端 SHA 核对和议题状态由根代理交付时记录。本记录不提前宣称工单交付完成。
