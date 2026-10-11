@@ -11,7 +11,7 @@
       "sha256": "cac840637b5348c553da810e0d101f318088714caec18e30710bbc97c8327e13",
       "repository": "T-miracle/Markdown-for-Nanobug",
       "source_commit": "8480eb38e059d575cb5dafd740ed14f035d20936",
-      "scope": "local candidate; task identity, pre-parser budget and default-locale recovery verification"
+      "scope": "reviewed Release v0.17.2; task identity, pre-parser budget and default-locale recovery verification; marketplace PR #7 merged"
     },
     {
       "id": "sdk-canvas-fixture",

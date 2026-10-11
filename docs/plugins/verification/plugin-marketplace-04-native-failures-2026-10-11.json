@@ -1,224 +1,335 @@
 {
   "baseline": "1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2",
   "platform": "windows-x86_64",
-  "status": "unresolved; not counted as passed",
+  "status": "resolved; initial failures retained as history",
   "logs": "Task-local target logs; exact assertions retained and original Alpha/Beta bytes restored before the four rollout comparisons.",
   "tests": [
     {
       "test": "extensions::composable_tests::composed_wasm_preview_follows_memory_and_reclaims_the_editor_split",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-failures.log"
+      "baseline_log": "marketplace-04-baseline-failures.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::installer_tests::installer_dialog_requires_sdk_choice_and_concrete_execution_confirmation",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-correct-location.log"
+      "baseline_log": "marketplace-04-baseline-correct-location.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::layout_fault_tests::real_layout_fault_preserves_native_text_and_binary_retry",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-failures.log"
+      "baseline_log": "marketplace-04-baseline-failures.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::icon_toolbar::delivered_markdown_icon_toolbar_is_compact_and_wraps_without_losing_actions",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::input_latency::delivered_markdown_input_to_frame_latency",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::link_navigation::delivered_markdown_keyboard_link_focus_reveals_the_distant_target",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::link_navigation::synchronized::delivered_markdown_fragment_sync_preserves_both_arrival_orders_and_clamped_tail",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::link_navigation::synchronized::delivered_markdown_link_cancels_queued_sync_before_opening_target",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::migration::migrated_markdown_keeps_native_input_visible_during_pending_guest_refresh",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::navigation_safety::delivered_markdown_pending_links_cannot_follow_edits_tabs_close_or_disable",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::responsiveness::delivered_markdown_source_only_typing_suspends_preview",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::source_layout::delivered_markdown_source_fills_height_below_toolbar",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::source_layout::delivered_source_height_survives_empty_documents_and_toolbar_free_previews",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::task_checkboxes::delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_content_readonly",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::task_checkboxes::delivered_markdown_split_task_retains_focus_for_successive_keyboard_toggles",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::task_checkboxes::delivered_markdown_task_click_updates_source_with_one_undo",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::markdown_tests::task_safety::delivered_markdown_task_requests_cannot_follow_tabs_close_or_disable",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-markdown-sdk.log"
+      "baseline_log": "marketplace-04-baseline-markdown-sdk.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_build_tests::a_failing_step_blocks_every_later_step_and_the_program",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_build_tests::a_launch_prepares_each_step_in_order_before_the_program",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_build_tests::a_step_that_references_a_build_tracks_its_current_definition",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_build_tests::build_runs_only_the_build_actions",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_build_tests::stopping_during_preparation_never_starts_the_program",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_discovery_tests::a_discovered_project_is_confirmed_built_run_and_offered_for_debugging",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_discovery_tests::a_real_rust_project_is_discovered_built_and_run",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_run_tests::a_configuration_environment_reaches_the_program_it_starts",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-failures.log"
+      "baseline_log": "marketplace-04-baseline-failures.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_run_tests::a_shell_configuration_runs_its_script_through_the_named_interpreter",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_run_tests::debugging::real_wasm_fault_paints_its_native_error_and_preserves_unrelated_work",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::native_run_tests::sharing::native_shared_configuration_runs_in_two_isolated_projects",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::request_tests::typed_editor_requests_read_selection_and_save_without_switching_documents",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "extensions::tools_tests::real_plugin_tools_preserve_context_shared_intent_and_separate_overflow",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "run::ui::plugin_form::rollout_tests::plugin_configuration_rollout_cargo_and_local_shell_execute",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-config-variants.log"
+      "baseline_log": "marketplace-04-baseline-config-variants.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "run::ui::plugin_form::rollout_tests::plugin_configuration_rollout_locales_themes_and_font_sizes",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-config-variants.log"
+      "baseline_log": "marketplace-04-baseline-config-variants.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "run::ui::plugin_form::rollout_tests::plugin_configuration_rollout_real_cargo_debug_pause_inspect_step_and_stop",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-config-variants.log"
+      "baseline_log": "marketplace-04-baseline-config-variants.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "run::ui::plugin_form::rollout_tests::plugin_configuration_rollout_templates_filter_tools_without_execution",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-config-variants.log"
+      "baseline_log": "marketplace-04-baseline-config-variants.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "tests::outline::docking::native_outline_four_directions_resize_and_workspace_restore",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
     },
     {
       "test": "tests::xml_language_tools::xml_language_tools_svg_combination_and_workspace_restore",
       "result": "failed",
       "baseline_result": "failed",
-      "baseline_log": "marketplace-04-baseline-native.log"
+      "baseline_log": "marketplace-04-baseline-native.log",
+      "final_result": "passed",
+      "final_log": "marketplace-04-app-closure2.log"
+    }
+  ],
+  "initial_status": "unresolved; not counted as passed",
+  "final_host_revision": "556658e065fa63abcf53404b1205e5e624009086",
+  "final_validation": {
+    "application": {
+      "passed": 686,
+      "failed": 0,
+      "ignored": 0,
+      "log": "marketplace-04-app-closure2.log"
+    },
+    "runtime": {
+      "passed": 188,
+      "failed": 0,
+      "ignored": 0,
+      "log": "marketplace-04-runtime-ignored-final.log"
+    },
+    "image_group": {
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0,
+      "seconds": 70.02,
+      "log": "marketplace-04-runtime-ignored-final.log"
+    },
+    "markdown": {
+      "version": "0.17.2",
+      "source_commit": "8480eb38e059d575cb5dafd740ed14f035d20936",
+      "sha256": "cac840637b5348c553da810e0d101f318088714caec18e30710bbc97c8327e13",
+      "native_passed": 88
+    }
+  },
+  "runtime_failures": [
+    {
+      "test": "independent_structure_validates_replies_and_denies_io",
+      "result": "failed",
+      "baseline_result": "failed",
+      "baseline_evidence": "https://github.com/T-miracle/Nanobug/blob/0b33b7f91971d883b44a35dd5240266bd6a52431/docs/plugins/verification/plugin-marketplace-04-2026-10-11.md",
+      "final_result": "passed",
+      "final_log": "marketplace-04-runtime-ignored-final.log"
     }
   ]
 }

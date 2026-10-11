@@ -1,129 +1,114 @@
-# 插件市场 04：无随附交付与覆盖迁移
+# 插件市场 04：无随附 Windows 交付验收
 
-状态：实施候选，验收存在未解决项，[市场 #5](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/issues/5)保持开启。七包收录及线上发布属于已交付的 [03](plugin-marketplace-03-2026-10-11.md)，本记录不改变首批固定版本的审核结论。
+状态：Windows 行为验收完成，原 37 项失败及图像组稳定性已解决。最终代码为 `556658e065fa63abcf53404b1205e5e624009086`，交付入口为 [宿主 PR #101](https://github.com/T-miracle/Nanobug/pull/101)和[市场工单 #5](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/issues/5)；合并及议题关闭状态以这些链接的真实记录为准。最终复核于北京时间 2026-10-12 完成。
 
-## 比较点与输入
+## 固定点与输入
 
-宿主比较点为 `1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2`，工作分支为 `codex/marketplace-versions`。全部实施在隔离工作树完成；主工作区已有改动、暂存区和真实用户数据未纳入。删除前盘点及迁移对应关系见 [inventory](plugin-marketplace-04-inventory-2026-10-11.md)。
+删除阶段比较点为 `1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2`；回归修复比较点为 `0b33b7f91971d883b44a35dd5240266bd6a52431`。全部实施在 `codex/marketplace-versions` 隔离工作树完成，未在主工作区编辑、暂存或提交其既有改动。删除前依赖及覆盖映射见 [inventory](plugin-marketplace-04-inventory-2026-10-11.md)。
 
-替代输入为 [packages](../../../crates/plugin-runtime/tests/fixtures/packages/README.md)中的 18 个真实 ZIP 和两个正式 Pages 快照；共 20 个 SHA-256 已逐项核对。七个正式 ZIP 的版本、ID、文件名和字节与已审核的独立 Release 相同。六个退役示例和历史 Rust/Rust Debugger/TOML 只用于测试，不进入市场、应用或 SDK。原 Alpha/Beta 配置验收变体保留原字节；其原源码/SDK/工具链摘要未知，在 [ledger](../../../crates/plugin-runtime/tests/fixtures/packages/inputs.json)逐项注明，不能推断与通用示例等价。
+[固定输入](../../../crates/plugin-runtime/tests/fixtures/packages/README.md)含 21 个 ZIP 和两个正式 Pages 快照；23 项实际 SHA-256 核对均匹配。初批七个已审核 Release 保持原版本、ID、文件名和字节。新增的 SDK Launch/Canvas 是最小独立公开 SDK 消费者，只作为测试输入，不发布为市场插件。原 Alpha/Beta 验收变体保留原字节；原源码、SDK 和工具链摘要未知，继续在 [ledger](../../../crates/plugin-runtime/tests/fixtures/packages/inputs.json)逐项注明。
 
-正式目录快照为注册表提交 `8d1a8ca28d5c7a6a88dd2c93c2f9ce4598c38b99`，SHA-256 为 `5c5ce9e3a992c92ea7ca84db5340bec4df33c25294089b14454ed86aeb931adf`；统计快照的测量时间为 `2026-10-11T07:53:39Z`，SHA-256 为 `280e8e1333598baefeb1dfbaba02cd3336e71a686680de6b3e4549258c185726`。测试只把传输地址改为本地受控 HTTP，不以另造元数据代替正式快照。
+正式短组合的冻结目录仍对应注册表 `8d1a8ca28d5c7a6a88dd2c93c2f9ce4598c38b99`，目录 SHA-256 为 `5c5ce9e3a992c92ea7ca84db5340bec4df33c25294089b14454ed86aeb931adf`；统计测量时间为 `2026-10-11T07:53:39Z`，摘要为 `280e8e1333598baefeb1dfbaba02cd3336e71a686680de6b3e4549258c185726`。测试替换传输地址为受控 HTTP，保留正式元数据及包字节。
 
-## 实际变化
+Markdown 回归使用独立发布的 0.17.2：源码 `8480eb38e059d575cb5dafd740ed14f035d20936`，ZIP 616350 字节，SHA-256 `cac840637b5348c553da810e0d101f318088714caec18e30710bbc97c8327e13`。公开 SDK 来源仍为 `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`，SDK 摘要仍为 `dcac05a1312eb110b7343b8b460fd9d5b6cefe3ad27753e78c519b7b85779e4c`。详见[独立包验收](https://github.com/T-miracle/Markdown-for-Nanobug/blob/985ea81ed762ea7a62f371ec4dfdf273cc9f0fe4/docs/verification/22-marketplace-regressions-2026-10-11.md)。
 
-- 生产启动不再扫描可执行文件旁或开发目录中的插件 ZIP，不再按打开文件自动推荐或安装。普通市场与本地导入继续使用公开 Package、Manager、InstallControl 和原生权限确认。
-- 在验证替代输入后，移除 14 个插件/示例目录的 285 个跟踪文件；用户已装插件、身份、禁用选择和私有数据继续读取。开发隔离配置也不再自动安装随附包。
-- grammar/query、manifest、图标、实际 WASM、旧版迁移和 native 测试改从摘要固定的 Package 读取。共享加载器仅在测试中使用，保留原来的行为断言、权限和生命周期接缝。
-- SDK 补全改为最小独立项目，仍断言七类公开 UI 类型。该项目声明独立 workspace，使用宿主 SDK 缓存，没有本地 SDK 源码副本或 path 依赖；开发目录场景使用公开 stage/read_directory。
-- Windows 安装载荷只含程序、图标和宿主许可；根双语 README、安装器说明及插件资料入口同步更新。构建和打包直接调用工具，没有恢复退役脚本或文档站。
+## 最终行为与修复
 
-## 共同门禁与原生测试
+- 新安装不携带、扫描、推荐或自动安装插件，仍可使用纯文本、默认主题及内置终端。市场与本地导入共用公开 Package、Manager、InstallControl 和权限确认；已有插件、禁用选择、身份及私有数据继续读取。
+- 删除 14 个迁出目录的 285 个跟踪文件。grammar/query、图标、WASM、迁移及原生测试改用摘要固定的真实包；SDK 补全、运行和 Canvas 夹具独立使用公开构建入口，不添加本地宿主路径依赖或 SDK 副本。
+- 修复受控原生启动对显式 PATH 的解析，先校验授权，再按规范化目录解析；Windows 键名按大小写无关处理，不更改全局环境。真实子进程回归保留 Unicode 和字面量 argv，并确认撤销。
+- 配置、Preview、NativeEditor、viewport 回执和实例撤销测试迁到现行公开契约，保留权限、revision、故障和生命周期断言。结构提供者在违规后撤销；测试不再期待退休实例继续服务。
+- Markdown 在局部重解析中保留任务节点身份和焦点，在构造解析器前检查输入预算；超限保留只读预览及原生可编辑源码，恢复小文档或空文档时清理限额状态，不提高 fuel 或节点配额。
+- 安装提示使用真实双语插值；详情在有界区域滚动，SDK 选择、执行确认和取消留在可见 footer。普通进度初始为 200 高，异步确认到达后只扩窗一次，保留用户较大的窗口；未放宽原紧凑窗口断言。
+- 插件恢复按钮保留在诊断滚动区外，真实 Enter 在 mouse-up 前即触发恢复；链接键盘定位等原生布局完成后再清除待显示目标。
+- 录制 UI 测试不启动环境中的默认在线目录检查；此限制只存在于 `cfg(test)`。显式 HTTP 夹具、真实后台 actor 和生产传输保持原链路。升级测试等待实际安装版本发布；ConPTY 回归等待完整重绘，保留原历史次数与占用行断言。
 
-本次使用 Windows x86_64 MSVC、现有 Rust/Cargo 1.98.1 及已准备的原生依赖。没有新增全局编译器或 SDK。
+## 共同门禁与实际原生回归
 
-| 实际检查 | 结果 |
-| --- | --- |
-| `cargo fmt --check` | 通过 |
-| `cargo test --workspace --exclude editor-app` | 237 passed / 0 failed / 188 ignored；ignored 不算通过 |
-| `cargo check --workspace` | 通过，3.81 秒 |
-| `cargo test -p editor-app` | 500 passed / 0 failed / 185 ignored，128.02 秒；后续移除空条件及修正文档不改变行为，追加编译和受影响 ignored 验证 |
-| `cargo build -p editor-app --release` | 最终源码状态通过，34.50 秒 |
-| 新启动、本地显式导入、旧选择与 actor 失败 | 20 个原生用例通过，149.82 秒 |
-| 原 Alpha/Beta 配置变体、树、故障和 rollout | 13 个实际 WASM/native 用例执行，9 passed / 4 failed；四项在正确原始输入的基线中复现 |
-| SDK 补全、真实 LSP 生命周期 | 七类补全通过，51.50 秒；LSP 11 项通过 |
-| 显式隔离配置/升级资料准备与 Neovim Unicode/resize | 三项实际执行通过；两项是准备夹具，不冒充人工 GUI 验收 |
+Windows x86_64 MSVC，使用既有 Rust/Cargo 1.98.1、Visual Studio 工具链及准备好的原生依赖；未安装新的全局编译器或 SDK。
 
-运行时的 188 个 ignored 场景按冻结输入逐项显式执行。第一组 capability/code-highlighting/composable-layout/UI/data-migration 为 29 passed；development 为 2 passed，editor-edit 为 11 passed；editor-images 共 10 项取得通过结果，后四项各自独立执行。其余 39 个二进制首次为 133 passed / 3 failed；复核后逐项共有 187 项至少一次通过，结构提供者一项仍失败。这个逐项数字不等于连续运行完整套件通过，失败没有改为 skipped。
-
-ui_images 的同进程串行组为 12 passed / 2 failed，477.35 秒；失败为 workspace-switch 和 scheme-case 的 Ready 断言。二者在独立进程各为 1 passed，63.79/32.30 秒；先前 document-close/revision 两项独立复验也通过。保留严格断言并补充公开资源状态诊断；测试包含共享全局工作池，同进程稳定性仍待排查，没有把独立通过冒充整组通过。
-
-structure 的串行组为 2 passed / 1 failed，363.56 秒。`independent_structure_validates_replies_and_denies_io` 在 malformed/quota 输入后出现 `Structure provider has been retired`；固定点原代码使用同字节包也为 0 passed / 1 failed，65.75 秒。该失败属于已复现基线问题，仍保留断言，不宣称解决。
-
-应用的 185 个 ignored 场景已取得逐项执行结果：149 passed / 36 failed。失败清单及所对应的基线日志见 [native-failures](plugin-marketplace-04-native-failures-2026-10-11.json)。这些结果中不包含基线执行；也不把修复夹具路径前的假失败作为最终结果。
-
-首次把 Windows 测试程序复制到 target 根目录，导致其相对定位的 LSP fixture 缺失；在原 target/debug/deps 位置重测 11 项全部通过。SDK 独立项目的 nested workspace 归属错误已修复并取得通过。Alpha/Beta 原包恢复后重新跑了相应消费者，没有用通用包替换其 WASM，也没有削弱断言。
-
-## 已复现的基线失败
-
-在独立、干净的 `1bfc4cf` 工作树使用同字节 ZIP 和原测试断言复核：
-
-| 失败覆盖族 | 数量 | 实际基线结果 |
+| 检查 | 最终结果 | 任务内日志 |
 | --- | --- | --- |
-| Markdown 工具栏/输入延迟、导航请求、源码布局、任务交互及过期状态 | 14 | 相同断言失败；Markdown 全组当前为 62 passed / 14 failed |
-| native build/discovery/run、typed editor request、tools、outline/XML 组合 | 16 | 相同投影、等待或布局断言失败 |
-| 配置 rollout | 4 | 恢复原 Alpha/Beta 字节后 0 passed / 4 failed，239.35 秒；此前缺夹具的结果不作为归因证据 |
-| composed WASM preview、旧 installer prompt | 2 | 相同基线失败；LSP 夹具定位正确时仍复现旧 prompt 问题 |
+| `cargo fmt --check` | 通过 | 交付命令输出 |
+| `cargo test --workspace --exclude editor-app` | 238 passed / 0 failed / 188 ignored | `target/marketplace-04-non-ui-closure.log` |
+| `cargo check --workspace` | 通过 | `target/marketplace-04-check-closure.log` |
+| 全部应用测试，含全部 ignored | **686 passed / 0 failed / 0 ignored**，855.91 秒 | `target/marketplace-04-app-closure2.log` |
+| 全部 runtime ignored，50 个测试二进制连续执行 | **188 passed / 0 failed / 0 ignored** | `target/marketplace-04-runtime-ignored-final.log` |
+| runtime 图像组，同进程串行 | 14 passed / 0 failed / 0 ignored，70.02 秒 | 同上 `ui_images` 段 |
+| runtime structure 组 | 3 passed / 0 failed / 0 ignored，26.56 秒 | 同上 `structure` 段 |
+| Markdown 独立单元 / 真实包原生集成 | 76 / 88 passed；原生 88 项亦包含在最终 686 项中 | 独立包记录及应用日志 |
+| 原生市场全部场景 | 14 passed；包含在最终 686 项中 | 应用日志 |
+| SDK 迟到确认 / 紧凑进度窗口 | 各 1 passed；真实默认尺寸，无测试侧 resize | `marketplace-04-late-consent-closure2.log`、`marketplace-04-compact-progress-green.log` |
+| `cargo build -p editor-app --release` | 通过，37.98 秒 | `target/marketplace-04-exe-closure2-build.log` |
+| 市场 Python / 正式 CI | 13 passed；正式 CI 及 Pages deploy 均成功 | [Actions 38154042902](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/actions/runs/38154042902) |
 
-应用共 36 项未解决，另有上述一项 runtime structure 基线失败及图像组稳定性问题。基线复现说明本次路径迁移没有引入这些已观察失败，并不证明相关功能正确，也不构成忽略测试或关闭本单的依据。没有为这些失败改生产 UI/API、删除断言或扩大 ignore。它们继续保留在回归资产中。
+普通 workspace 命令中 188 项 ignored 不计通过；其实际执行由单列的 runtime ignored 结果证明。应用最终命令为：
 
-## 最终 Windows 产物
+```powershell
+cargo test -p editor-app --release --no-run
+# 保留在 deps 中，避免破坏原生 fixture 的相对定位。
+Copy-Item target/release/deps/editor_app-93e7ac438177c654.exe target/release/deps/marketplace04-app-closure2.exe
+$env:NANOBUG_UPGRADE_QA_ROOT = 'C:/Users/Tmiracle/.codex/tmp/market04-closure-suite2'
+$env:ME_EDITOR_PROFILE_HOME = "$env:NANOBUG_UPGRADE_QA_ROOT/profile"
+target/release/deps/marketplace04-app-closure2.exe --include-ignored --test-threads=1
+cargo test -p plugin-runtime --tests --release -- --ignored --test-threads=1
+```
 
-最终载荷只有 `Nanobug.exe`、`Nanobug.ico`、`licenses/alacritty-terminal-LICENSE-APACHE`。便携 ZIP 解包后核对同样三项；实际便携 EXE 的 `--export-plugin-sdk` 返回 0，SDK 不含 Markdown 或 ZIP。
+每个代码提交核对“此前提交＋index”；含其他待提交根因时导出 index 树隔离验证。最终应用二进制另从宿主树编译并核对绝对夹具路径。中间共享 target 的副本含隔离目录路径，造成 15 项缺原生输入；该运行不作为最终通过证据。统一增高窗口导致紧凑测试失败已修复。最终连续 686 项结果覆盖所有原失败名称。
 
-| 产物 | 字节数 | SHA-256 |
+## 保留的首轮失败历史
+
+首轮为应用 36 项失败、runtime structure 一项失败，另有图像组同进程不稳定。在干净 `1bfc4cf`、同字节包及原断言中已复现。该归因没有作为关闭依据。
+
+[失败账本](plugin-marketplace-04-native-failures-2026-10-11.json)保留原 `result`、`baseline_result` 和日志；新增 `final_result` 与最终日志。36 个应用名称逐项在最终通过日志中找到，structure 一项由连续 runtime 结果覆盖。未删除测试、扩大 ignore、提高资源配额或通过插件 ID 增加宿主专属 API。首轮完整候选记录仍可从[原提交](https://github.com/T-miracle/Nanobug/blob/0b33b7f91971d883b44a35dd5240266bd6a52431/docs/plugins/verification/plugin-marketplace-04-2026-10-11.md)读取。
+
+## 最终 Windows 产物与安装
+
+发行载荷和便携解包均只有程序、图标和宿主许可三个文件，无插件目录或源码。直接调用 Cargo、Inno Setup 6.7.3 和归档工具，不调用退役脚本。
+
+| 最终产物 | 字节数 | SHA-256 |
 | --- | ---: | --- |
-| `dist/marketplace-04/editor/Nanobug.exe` | 109853184 | `5208da4226101dfe078622eaadf59e21774e0bee3e0a068da581e2f74870632d` |
-| `dist/marketplace-04/installers/Nanobug-Setup-0.1.0-x64.exe` | 21377325 | `29a0b1feb91b1040efedccb58dd4c1e29a235ac3a17a144459b10068c4ae105e` |
-| `dist/marketplace-04/Nanobug-0.1.0-windows-x86_64.zip` | 30207826 | `fa7e6183e2e4051a25b1f7162b751c03abc27f0f20b0a1ff0af14979eebd1e85` |
+| `dist/marketplace-04-final2/editor/Nanobug.exe` | 109918720 | `232e6548214d4aa7e78b2928813c26430a0d574904d052711f8d63ac6c40a648` |
+| `dist/marketplace-04-final2/installers/Nanobug-Setup-0.1.0-x64.exe` | 21352622 | `b3f2ae1dfea7af757ef6b9efe425dcaab596b0c51bb3ea7bcc894072e905807c` |
+| `dist/marketplace-04-final2/Nanobug-0.1.0-windows-x86_64.zip` | 30207862 | `1e58b8096005a130986a26a2ae8a40f2291548430feeb2e737c36fad76c45c44` |
 
-直接使用现有 Inno Setup 6.7.3 编译。最终 EXE 经独立验收身份的安装器完成干净安装、旧载荷安装、原位升级和卸载，均 exit 0；安装的 EXE 摘要与上表相同，干净安装没有 plugins 目录。每阶段核对隔离用户的 20 个设置/安装/私有文件，SHA-256 均保持不变；旧应用目录中的历史插件文件没有被递归删除。
+最终程序完成便携 SDK 导出、干净安装、旧载荷安装、原位升级及两次卸载，六阶段均 exit 0；新安装和升级的 EXE 摘要与上表一致，安装后 SDK 导出也 exit 0。隔离用户的 40 个文件在每阶段保持原相对身份和 SHA-256；未递归删除旧应用目录的历史插件文件。结果为 `target/marketplace-04-closure2-install-results.json`，前后摘要在 `target/marketplace-04-closure2-install/private-{before,after}.json`。
 
-隔离副本只调整 AppId、运行锁、快捷方式及语言文件位置，载荷与 Files 规则保持生产模板；不使用真实用户的安装身份。第一次使用生产运行锁的尝试检测到已运行的 Nanobug，正确取消安装，随后使用隔离身份完成目录验收。生产配置仍保留原运行保护；未关闭用户应用或操作其未保存文档。
+实际安装使用独立验收 AppId/运行锁及无用户快捷方式的模板；载荷与 Files 规则保持生产模板。生产安装器保留运行保护；未关闭用户正在运行的 Nanobug。安装器载荷、SDK 检查与 GPUI 自动化证据分别记录，不冒充人工操作已安装 GUI。
 
-## 最终短组合与 M01–M26
+## 正式市场与最终短组合
 
-`unbundled_official_market_install_and_existing_user_upgrade`：1 passed / 0 ignored，1.89 秒。实际公开 Worker/Manager、正式 TOML 0.2.3 ZIP、原用户 TOML 0.2.2 和私有数据贯通无随附启动、目录刷新、原生确认、安装、高亮、升级红点、历史/日志、升级、目录失败门禁、恢复及撤回。统计使用上述正式快照并验证测量时间。英文/深色 14 字号和中文/浅色 18 字号通过原生输入、焦点、滚动及真实布局断言。
+[Markdown PR #1](https://github.com/T-miracle/Markdown-for-Nanobug/pull/1)已合并，[Release v0.17.2](https://github.com/T-miracle/Markdown-for-Nanobug/releases/tag/v0.17.2)附件固定上述摘要；[市场 PR #7](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/pull/7)合并提交为 `5ba32ff21d16ffde5340d78f1236f651a9201be0`。正式 Pages 读回七个插件，Markdown 同时保留 0.17.2 与 0.17.1；新版本 asset ID `631092655`，旧版 `630116607` 的源 commit 和摘要不变。统计读回测量时间 `2026-10-11T16:10:50Z`，Markdown 当时 total 9，版本分别 1 和 8；下载次数不等于安装人数。
 
-| 验收 | 当前结论与证据 |
+首次 PR CI 的 403 为未认证 GitHub API 限流。市场 `03924cd9929cc10492aac97c80c7ce42e631a043` 将 Actions 只读凭据限定到精确 HTTPS API 来源，拒绝跨域重定向，ZIP 不携带凭据。13 项测试及正式 PR/main CI 已验证；PR 仍仅使用可信基线代码、固定 inert Package 校验器和候选数据，不运行访客。
+
+`unbundled_official_market_install_and_existing_user_upgrade` 在最终 686 项中通过：无随附启动、受控 HTTP 上的正式 TOML 0.2.3、原用户 0.2.2 与私有数据贯通原生确认、安装、高亮、红点、历史/日志、升级、目录失败门禁、恢复及撤回；正式统计快照和测量时间也实际断言。正式 Pages 的线上客户端消费另由 `marketplace_published_pages_installs_reviewed_release` 通过。
+
+## M01–M26 结果
+
+| 验收 | 最终依据 |
 | --- | --- |
-| M01 | 01/03 已交付：PR 收录与本批维护者授权，见 03 |
-| M02 | 01 的来源/许可/归属校验已交付 |
-| M03 | 01/02 的同版本摘要与实际包校验已交付；本单固定输入逐项摘要核对 |
-| M04 | 01/02 已交付：正式目录/详情直接消费 |
-| M05 | 01 已交付搜索/分类/排序；本单组合再验证原生搜索 |
-| M06 | 无随附启动、无缓存失败、纯文本/默认主题及内置终端自动化通过 |
-| M07 | 01/03 的真实包和原生权限确认已交付；本单组合复验 |
-| M08 | 02 已交付兼容稳定版及历史选择 |
-| M09 | 02 已交付升级限制；本单保留显式本地导入 |
-| M10 | 02 的权限增量确认已交付 |
-| M11 | 01/02 的进度、取消、重试已交付 |
-| M12 | 01/02 的完整 ZIP 摘要和实际清单拒绝已交付 |
-| M13 | 01/02 已交付失败门禁；本单组合复验故障/恢复 |
-| M14 | 01/02 的缓存/时间/迟到结果门禁已交付 |
-| M15 | 02 已交付检查调度，不自动升级 |
-| M16 | 02 已交付红点；本单原生标题栏组合复验 |
-| M17 | 02/03 的正式统计已交付；本单读取固定实际快照及更新时间 |
-| M18 | 02 已交付附件失效/撤回；本单复验撤回不卸载 |
-| M19 | 01/03 已交付公开权限/信任/资源接缝；本单启动/导入回归通过 |
-| M20 | 02 的升级事务已交付；本单旧版本身份与私有数据复验 |
-| M21 | 03 已交付七仓独立构建、身份连续和合并 Rust |
-| M22 | 迁移和源码删除已实施；原断言保留，实际 native 失败仍未解决 |
-| M23 | 无随附载荷、无自动推荐及隔离安装/升级/卸载通过 |
-| M24 | 原生 GPUI 自动化组合通过；实际已安装 GUI 的人工操作系统 IME 未实测 |
-| M25 | 实际 WASM 场景已显式执行；36 项应用失败、一项 runtime structure 失败及图像组稳定性阻止宣称全面通过 |
-| M26 | 03 已交付正式 Pages/Release/统计链路；本单未修改正式注册表或 Release |
+| M01–M04 | 01/03 的审核、来源/许可/归属、不可变 ZIP 与目录详情；本次 0.17.2 再经 PR/CI/Pages |
+| M05–M07 | 搜索/分类/排序、无随附启动、离线结果及原生安装确认；最终市场组通过 |
+| M08–M12 | 兼容历史版本、升级约束、增量权限、取消重试、完整 ZIP/清单校验；最终市场组通过 |
+| M13–M16 | 缓存/刷新失败门禁、迟到结果、只检查更新及红点；真实 actor 回归通过 |
+| M17–M21 | 实际统计/时间、撤回、公开权限/信任、升级事务与旧数据、七仓身份连续；01–03 及最终组合 |
+| M22 | 源码删除的依赖闭包、固定输入和关键消费者完成；应用 686、runtime 188 全部通过 |
+| M23 | 无随附发行、无自动推荐、隔离安装/升级/卸载及 40 文件数据保留通过 |
+| M24 | 中英文、深浅主题、14/18/24 字号、键盘/焦点、中文输入与 composition、滚动及原生布局通过 |
+| M25 | 三项 Rust 门禁、全部相关应用及实际 WASM、独立审查和 Windows 最终交付证据完整 |
+| M26 | 正式 Release、审核 PR、Pages、统计及实际客户端消费均通过 |
 
-01/02 的细项矩阵分别见 [01](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/blob/main/docs/verification/01-reviewed-install-2026-10-10.md)和 [02](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/blob/main/docs/verification/02-versions-updates-2026-10-11.md)。未变化的七包源码和业务输入复用 03 的独立构建与代表能力记录，没有再构建相同正式 ZIP。最终组合使用本次源码编译的 GPUI 测试程序；安装器/便携 EXE 的安装、载荷和 SDK 检查另行实测，没有把这两条证据混称为人工操作已安装 GUI。
+细项矩阵引用 [01](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/blob/main/docs/verification/01-reviewed-install-2026-10-10.md)、[02](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/blob/main/docs/verification/02-versions-updates-2026-10-11.md)、[03](plugin-marketplace-03-2026-10-11.md)。未变化的六个插件和初批版本不重复构建；变动的 Markdown 在独立仓库重新构建、验包和验证。
 
 ## Standards
 
-固定比较点 `1bfc4cf…d13cbb7` 的独立初审发现三项规范问题，修复后按原顺序复核：
-
-1. 双语 SDK 打包和运行指南的随附初始化说明已改为当前开发候选及既有安装保留，与 bootstrap 一致。
-2. 插件索引的过期实施状态和 12 个失效 Markdown 链接已修正；独立仓库固定提交的文件通过 GitHub tree 核对。
-3. 旧目录读取和错误重标识注释已修正；双语 SDK 契约链接改指实际仓库文档，不再声称 Markdown 随 SDK 导出。
-
-复核未发现新增规范问题：未解决硬性违规为 0。保留一项非阻断的 Mysterious Name 建议：`load_market_packages()` 只清空旧容器。本次不为命名扩大生产修改范围。
+按 `1bfc4cf…0b33b7f` 完成删除与文档初审修复，再按 `0b33b7f…556658e` 独立复核最终代码：未解决规范违规 **0**。保留非阻断的 Duplicated Code 建议：几个 Markdown 测试重复分离并重排 LocateViewport，可后续合并测试辅助逻辑；本单不扩大重构。
 
 ## Spec
 
-初审发现一项 P2：双语 SDK UI 指导修改已删除的示例源码。已改为固定 `b77e6317` 的历史源码链接及当前冻结 ZIP 夹具说明，明确当前 checkout 和导出的 SDK 不含示例源码。两个历史文件经 Git object 核对，修复后的相对链接有效；复核没有新增生产行为错误或范围蔓延。
+最终独立复核：产品契约缺漏 **0**、错误实现 **0**、范围蔓延 **0**。迟到确认提示 P2 已由真实默认窗口回归解除。最终连续测试、正式发布及安装结果补齐剩余交付条件。审查不替代行为测试，二者均有独立结果。
 
-未解决的新实现缺陷为 0；M25 的已披露基线失败及图像组稳定性仍是开放验收项。两轴独立审查通过修复复核，不等于全部行为验收通过。
+## 实测边界
 
-审查汇总：Standards 为 0 项未解决硬性违规、1 项非阻断命名建议；Spec 为 0 项未解决新缺陷、1 类开放验收限制。修复仅涉及文档和注释，追加 `git diff --check`、`cargo fmt --check` 与链接验证，不重复没有行为变化的完整 Rust/WASM 执行。
-
-## 收尾限制
-
-工单 04 保持开启：待处理上述实际失败、图像组稳定性及人工操作系统 IME 验收；独立 Standards/Spec 审查和修复复核已完成。尚未将本单实施候选合入 main 或发布宿主版本。macOS/Linux、人工 OS IME 和签名/公证均未验证。前单七包正式市场审核与发布已完成，不受本单开放状态影响。
+本单 M24 使用原生 GPUI 自动化输入、composition 和实际布局；没有实测物理 OS IME 候选窗口。这不代表其他 run-config 规格的专项人工验收已完成。macOS/Linux、签名及公证未验证；没有发布新的宿主版本标签。父市场规格 #1 和历史 Nanobug #100 不因本单完成而关闭。
