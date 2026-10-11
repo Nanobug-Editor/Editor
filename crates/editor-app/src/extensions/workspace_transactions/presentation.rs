@@ -71,6 +71,9 @@ impl EditorApp {
         let app = cx.entity().downgrade();
         let cancel = app.clone();
         let confirm = app.clone();
+        // Local button text does not name the Base action: both channels must use the same locale.
+        let cancel_label = t!("interaction.cancel").to_string();
+        let confirm_label = t!("workspace_plan.apply").to_string();
         let details = div()
             .id("workspace-plan-details")
             .debug_selector(|| "workspace-plan-details".into())
@@ -93,7 +96,15 @@ impl EditorApp {
             .p_4()
             .bg(cx.theme().popover)
             .text_color(cx.theme().popover_foreground)
-            .child(div().font_semibold().child(prompt.title.clone()))
+            .child(
+                div()
+                    .id("workspace-plan-title")
+                    // Keep Base's single modal role and expose its visible title as a named heading.
+                    .role(gpui_kit::Role::Heading)
+                    .aria_label(prompt.title.clone())
+                    .font_semibold()
+                    .child(prompt.title.clone()),
+            )
             .child(
                 div()
                     .text_sm()
@@ -111,7 +122,8 @@ impl EditorApp {
                     .gap_2()
                     .child(
                         Button::new("workspace-plan-cancel")
-                            .label(t!("interaction.cancel").to_string())
+                            .label(cancel_label.clone())
+                            .accessibility_label(cancel_label)
                             .debug_selector(|| "workspace-plan-cancel".into())
                             .on_click(move |_, window, cx| {
                                 let _ = cancel.update(cx, |app, cx| {
@@ -122,7 +134,8 @@ impl EditorApp {
                     .child(
                         Button::new("workspace-plan-confirm")
                             .primary()
-                            .label(t!("workspace_plan.apply").to_string())
+                            .label(confirm_label.clone())
+                            .accessibility_label(confirm_label)
                             .debug_selector(|| "workspace-plan-confirm".into())
                             .on_click(move |_, window, cx| {
                                 let _ = confirm.update(cx, |app, cx| {
@@ -216,9 +229,11 @@ impl EditorApp {
             if receipt.recoverable && receipt.state != BatchState::Undone {
                 let key = key.clone();
                 let disabled = self.workspace_changes.active;
+                let undo_label = t!("workspace_plan.undo").to_string();
                 card = card.child(
                     Button::new(format!("workspace-batch-undo-{}", key.2))
-                        .label(t!("workspace_plan.undo").to_string())
+                        .label(undo_label.clone())
+                        .accessibility_label(undo_label)
                         .disabled(disabled)
                         .debug_selector(|| "workspace-batch-undo".into())
                         .on_click(cx.listener(move |app, _, window, cx| {

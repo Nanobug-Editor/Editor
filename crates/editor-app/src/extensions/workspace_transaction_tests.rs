@@ -174,6 +174,24 @@ fn confirm(visual: &mut VisualTestContext) {
     visual.update(|window, cx| window.draw(cx).clear(cx));
 }
 
+/// Read Base's painted accessibility properties, rather than assuming visible text names a button.
+fn named_button(visual: &mut VisualTestContext, id: &str, label: &str) {
+    visual.update(|window, _| {
+        let buttons = gpui_base::test_support::snapshots(window);
+        let button = buttons
+            .iter()
+            .find(|item| {
+                item.path().iter().any(
+                    |part| matches!(part, gpui_kit::ElementId::Name(name) if name.as_str() == id),
+                )
+            })
+            .expect("the real workspace action must be painted");
+        assert_eq!(button.role(), Some(gpui_kit::Role::Button));
+        assert_eq!(button.label(), Some(label));
+        assert!(button.visible());
+    });
+}
+
 fn batch(request: &EditorRequest) -> workspace::Receipt {
     let api::RequestUpdate::Completed {
         result: Ok(api::EditorValue::Workspace(workspace::Value::Batch(receipt))),
@@ -317,6 +335,24 @@ fn workspace_transaction_scaffolder_preserves_unsaved_text_and_recovers_mixed_ba
         let root = path.parent().unwrap();
         let (_profile, mut manager) = manager(root, "workspace-scaffold");
         let request = scaffold_preview(visual, &app, &mut manager);
+        named_button(
+            visual,
+            "workspace-plan-cancel",
+            &t!("interaction.cancel").to_string(),
+        );
+        named_button(
+            visual,
+            "workspace-plan-confirm",
+            &t!("workspace_plan.apply").to_string(),
+        );
+        visual.update(|window, _| {
+            assert!(
+                gpui_base::test_support::snapshots(window)
+                    .iter()
+                    .any(|item| item.role() == Some(gpui_kit::Role::Dialog)),
+                "preview retains Base's native modal role"
+            );
+        });
         assert_eq!(text(visual, &app), original);
         assert_eq!(
             std::fs::read_to_string(root.join("community-disk.txt")).unwrap(),
@@ -352,6 +388,11 @@ fn workspace_transaction_scaffolder_preserves_unsaved_text_and_recovers_mixed_ba
         assert!(!root.join("community-generated/copied.txt").exists());
         assert!(!root.join("community-generated/intermediate.txt").exists());
         assert!(!root.join("community-remove.txt").exists());
+        named_button(
+            visual,
+            &format!("workspace-batch-undo-{}", receipt.batch.resource),
+            &t!("workspace_plan.undo").to_string(),
+        );
         let api::EditorValue::Workspace(workspace::Value::Batch(undone)) = invoke(
             visual,
             &app,
