@@ -116,8 +116,8 @@ compare-and-set, unchanged values do not advance revisions, and stale writes ret
 are reported and preserved. Up to 32 revocable watches deliver `PreferenceChanged`;
 unreadable records terminate their watch with `SubscriptionFailed`. Plugins bind, validate,
 reread after conflicts and close subscriptions themselves. Preferences never store editor
-text or undo state and grant no UI or document authority. The distributed SDK's
-`TOOLS.md` describes the full binding and finite legacy preference import contract.
+text or undo state and grant no UI or document authority. The repository's
+[TOOLS.md](../../../crates/plugin-protocol/TOOLS.md) describes the full binding and finite legacy preference import contract; protocol documentation is not included in the exported SDK.
 
 ## Retired presentation interfaces
 
@@ -217,9 +217,14 @@ unchanged in `ui::Document.source`; a stale preview never replaces a newer docum
 `source` empty. Hiding or unloading destroys the native event target and removes its layout
 space.
 
-An independent SDK example lives in `plugins/capability-example/src/composition.rs` with
-`composed-ui.json` beside it; configuring the example's `label` as `composable-ui` shows the
-composed interface, and the `ui-layout` command takes `form`, `canvas` or `combined`.
+The historical independent guest example is preserved at source commit
+`b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`: see
+[composition.rs](https://github.com/T-miracle/Nanobug/blob/b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5/plugins/capability-example/src/composition.rs)
+and [composed-ui.json](https://github.com/T-miracle/Nanobug/blob/b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5/plugins/capability-example/composed-ui.json).
+In that revision, `label=composable-ui` shows the composed interface and `ui-layout`
+accepts `form`, `canvas` or `combined`. Its fixed ZIP remains a
+[regression fixture](../../../crates/plugin-runtime/tests/fixtures/packages/README.md);
+the example source is no longer in the current host checkout or exported SDK.
 
 ## Common interface elements
 
@@ -288,7 +293,7 @@ digits or `._+-#`; a label alone starts no service. `Document.code_highlighting`
 by default, requires `ui.code_highlighting ^1`, `ui.richtext`, `editor.read` and an exact
 source in an owned workspace editor panel. It reuses the selected dynamic WASM provider;
 missing, disabled or failed providers fall back to monospace text. Plugins normalize their
-own language aliases. The SDK's `CODE_HIGHLIGHTING.md` specifies cancellation and budgets.
+own language aliases. The repository's [CODE_HIGHLIGHTING.md](../../../crates/plugin-protocol/CODE_HIGHLIGHTING.md) specifies cancellation and budgets.
 
 Stable block IDs and half-open UTF-8 `source_range = { start, end }` refer to the immutable
 memory text version in `Document.source`, not generated HTML offsets. All mapped node
@@ -298,12 +303,12 @@ remain rejected. Mappings create no second text state or write authority.
 
 `Document.editor_viewport` binds an active Scroll ID to source viewport notifications and
 `Action::Viewport`, requiring `editor.viewport`, `ui.richtext`, `editor.read` and exact
-source. The SDK's `VIEWPORT.md` specifies split synchronization, origin tags and navigation.
+source. The repository's [VIEWPORT.md](../../../crates/plugin-protocol/VIEWPORT.md) specifies split synchronization, origin tags and navigation.
 `ui.links ^1` enables explicit `Document.link_events` and `Action::Link { uri }`;
 `Node.links` supplies image and keyboard targets. Parsing and drawing never open links.
 Node, revision, modal, disabled and instance checks still apply. Versioned
-`editor.navigation` requests separately validate permissions and targets; see the SDK's
-`NAVIGATION.md`.
+`editor.navigation` requests separately validate permissions and targets; see the repository's
+[NAVIGATION.md](../../../crates/plugin-protocol/NAVIGATION.md).
 
 ## Authorized image resources
 

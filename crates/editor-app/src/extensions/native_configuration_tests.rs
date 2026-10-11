@@ -199,7 +199,6 @@ pub(crate) fn fixture<'a>(
     (manager, slot.borrow_mut().take().unwrap(), cx)
 }
 
-/// Reidentify the fixed public-SDK configuration guest through normal Package validation.
 /// Open the production owned dialog and direct physical input to its own window context.
 pub(crate) fn open_form(
     app: &Entity<EditorApp>,

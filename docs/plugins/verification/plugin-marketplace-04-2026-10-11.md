@@ -106,6 +106,24 @@ structure 的串行组为 2 passed / 1 failed，363.56 秒。`independent_struct
 
 01/02 的细项矩阵分别见 [01](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/blob/main/docs/verification/01-reviewed-install-2026-10-10.md)和 [02](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/blob/main/docs/verification/02-versions-updates-2026-10-11.md)。未变化的七包源码和业务输入复用 03 的独立构建与代表能力记录，没有再构建相同正式 ZIP。最终组合使用本次源码编译的 GPUI 测试程序；安装器/便携 EXE 的安装、载荷和 SDK 检查另行实测，没有把这两条证据混称为人工操作已安装 GUI。
 
+## Standards
+
+固定比较点 `1bfc4cf…d13cbb7` 的独立初审发现三项规范问题，修复后按原顺序复核：
+
+1. 双语 SDK 打包和运行指南的随附初始化说明已改为当前开发候选及既有安装保留，与 bootstrap 一致。
+2. 插件索引的过期实施状态和 12 个失效 Markdown 链接已修正；独立仓库固定提交的文件通过 GitHub tree 核对。
+3. 旧目录读取和错误重标识注释已修正；双语 SDK 契约链接改指实际仓库文档，不再声称 Markdown 随 SDK 导出。
+
+复核未发现新增规范问题：未解决硬性违规为 0。保留一项非阻断的 Mysterious Name 建议：`load_market_packages()` 只清空旧容器。本次不为命名扩大生产修改范围。
+
+## Spec
+
+初审发现一项 P2：双语 SDK UI 指导修改已删除的示例源码。已改为固定 `b77e6317` 的历史源码链接及当前冻结 ZIP 夹具说明，明确当前 checkout 和导出的 SDK 不含示例源码。两个历史文件经 Git object 核对，修复后的相对链接有效；复核没有新增生产行为错误或范围蔓延。
+
+未解决的新实现缺陷为 0；M25 的已披露基线失败及图像组稳定性仍是开放验收项。两轴独立审查通过修复复核，不等于全部行为验收通过。
+
+审查汇总：Standards 为 0 项未解决硬性违规、1 项非阻断命名建议；Spec 为 0 项未解决新缺陷、1 类开放验收限制。修复仅涉及文档和注释，追加 `git diff --check`、`cargo fmt --check` 与链接验证，不重复没有行为变化的完整 Rust/WASM 执行。
+
 ## 收尾限制
 
-工单 04 保持开启：待处理上述实际失败、图像组稳定性及完成独立 Standards/Spec 审查。尚未将本单实施候选合入 main 或发布宿主版本。macOS/Linux、人工 OS IME 和签名/公证均未验证。前单七包正式市场审核与发布已完成，不受本单开放状态影响。
+工单 04 保持开启：待处理上述实际失败、图像组稳定性及人工操作系统 IME 验收；独立 Standards/Spec 审查和修复复核已完成。尚未将本单实施候选合入 main 或发布宿主版本。macOS/Linux、人工 OS IME 和签名/公证均未验证。前单七包正式市场审核与发布已完成，不受本单开放状态影响。

@@ -27,7 +27,7 @@ fn archive(id: &str, version: &str, extension: &str) -> Vec<u8> {
     zip.finish().unwrap().into_inner()
 }
 
-/// Fixture roots are canonical host paths; only cfg(test) admits the isolated catalog beneath this workspace.
+/// Canonical fixture roots contain retired bundle remnants that startup must ignore.
 struct Fixture {
     _directory: tempfile::TempDir,
     workspace: PathBuf,
@@ -58,7 +58,7 @@ impl Fixture {
         fixture
     }
 
-    /// Explicit overrides create corrupt catalogs through the same filesystem boundary production reads.
+    /// Write valid or corrupt historical catalogs to prove neither can trigger automatic installation.
     fn catalog(&self, extension: &str, filename: &str, digest: Option<&str>) {
         let directory = self.workspace.join(".bundled-plugin-test");
         std::fs::create_dir_all(&directory).unwrap();
