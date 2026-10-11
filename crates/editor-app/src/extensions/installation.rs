@@ -34,7 +34,7 @@ impl Render for InstallationView {
         let message = report
             .as_ref()
             .map(|report| report.message.clone())
-            .unwrap_or_else(|| "安装操作已结束。".into());
+            .unwrap_or_else(|| t!("plugin_installation.finished").to_string());
         let cancellable = report.is_some_and(|report| report.cancellable);
         let prompt = self
             .control
@@ -57,39 +57,107 @@ impl Render for InstallationView {
                     .overflow_y_scroll()
                     .gap_3()
                     .child(message)
+                    .when_some(prompt.clone(), |view, prompt| {
+                        view.child(
+                            v_flex()
+                                .debug_selector(|| "plugin-install-prompt-details".into())
+                                // Preserve the natural detail height inside the bounded scroller.
+                                .flex_shrink_0()
+                                .w_full()
+                                .gap_2()
+                                .when_some(prompt.source, |details, source| {
+                                    details.child(
+                                        t!("plugin_installation.source", value = source)
+                                            .to_string(),
+                                    )
+                                })
+                                .child(
+                                    t!("plugin_installation.purpose", value = prompt.purpose)
+                                        .to_string(),
+                                )
+                                .child(
+                                    t!(
+                                        "plugin_installation.program",
+                                        value = prompt.program.display().to_string()
+                                    )
+                                    .to_string(),
+                                )
+                                .child(
+                                    t!(
+                                        "plugin_installation.arguments",
+                                        value = format!("{:?}", prompt.args)
+                                    )
+                                    .to_string(),
+                                )
+                                .child(
+                                    t!(
+                                        "plugin_installation.target",
+                                        value = prompt.target.display().to_string()
+                                    )
+                                    .to_string(),
+                                )
+                                .child(t!("plugin_installation.native_notice").to_string()),
+                        )
+                    }),
+            )
+            // Consent stays outside the details scroller: an off-screen button cannot authorize execution.
             .when_some(prompt, |view, prompt| {
                 let entity = cx.entity();
                 let sdk_required = prompt.project_sdk;
                 let id = prompt.id;
                 let preparation = prompt.preparation_only;
-                view.child(v_flex().gap_2()
-                    .when_some(prompt.source, |details, source| details.child(format!("下载来源：{source}")))
-                    .child(format!("用途：{}", prompt.purpose))
-                    .child(format!("程序：{}", prompt.program.display()))
-                    .child(format!("参数：{:?}", prompt.args))
-                    .child(format!("私有目标：{}", prompt.target.display()))
-                    .child("原生程序以当前用户的 OS 权限运行，私有目录不是系统沙箱。取消会终止受管进程并清理临时目录，不能撤销程序已产生的外部影响。")
-                    .when(sdk_required, |details| details.child(div()
-                        .id("plugin-install-sdk-region")
-                        .debug_selector(|| "plugin-install-sdk-region".into()).child(
-                        crate::ui::controls::Checkbox::new("plugin-install-sdk-opt-in")
-                            .label("主动下载并准备此项目 SDK / 编译器")
-                            .checked(self.sdk_selected)
-                            .on_change(move |checked, _, cx| entity.update(cx, |this, cx| {
-                                this.sdk_selected = *checked;
-                                cx.notify();
-                            })))))
-                    .child(div().id("plugin-install-native-confirm-region")
-                        .debug_selector(|| "plugin-install-native-confirm-region".into()).child(Button::new("plugin-install-native-confirm")
-                        .label(if preparation { "确认准备 SDK" } else { "确认执行此安装步骤" }).outline()
-                        .disabled(sdk_required && !self.sdk_selected)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(control) = &this.control {
-                                control.approve_installer(id, this.sdk_selected);
-                            }
-                            cx.notify();
-                        })))))
-            }))
+                view.child(
+                    v_flex()
+                        .flex_shrink_0()
+                        .gap_2()
+                        .when(sdk_required, |details| {
+                            details.child(
+                                div()
+                                    .id("plugin-install-sdk-region")
+                                    .debug_selector(|| "plugin-install-sdk-region".into())
+                                    .child(
+                                        crate::ui::controls::Checkbox::new(
+                                            "plugin-install-sdk-opt-in",
+                                        )
+                                        .label(t!("plugin_installation.sdk_opt_in").to_string())
+                                        .checked(self.sdk_selected)
+                                        .on_change(
+                                            move |checked, _, cx| {
+                                                entity.update(cx, |this, cx| {
+                                                    this.sdk_selected = *checked;
+                                                    cx.notify();
+                                                })
+                                            },
+                                        ),
+                                    ),
+                            )
+                        })
+                        .child(
+                            div()
+                                .id("plugin-install-native-confirm-region")
+                                .debug_selector(|| "plugin-install-native-confirm-region".into())
+                                .child(
+                                    Button::new("plugin-install-native-confirm")
+                                        .label(
+                                            t!(if preparation {
+                                                "plugin_installation.confirm_sdk"
+                                            } else {
+                                                "plugin_installation.confirm_step"
+                                            })
+                                            .to_string(),
+                                        )
+                                        .outline()
+                                        .disabled(sdk_required && !self.sdk_selected)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            if let Some(control) = &this.control {
+                                                control.approve_installer(id, this.sdk_selected);
+                                            }
+                                            cx.notify();
+                                        })),
+                                ),
+                        ),
+                )
+            })
             .child(
                 // Keep the action visible while long status or consent details scroll above it.
                 h_flex().flex_shrink_0().justify_end().child(
@@ -99,9 +167,9 @@ impl Render for InstallationView {
                         .child(
                             Button::new("plugin-install-progress-close")
                                 .label(if cancellable {
-                                    "取消安装"
+                                    t!("plugin_installation.cancel").to_string()
                                 } else {
-                                    "关闭"
+                                    t!("plugin_installation.close").to_string()
                                 })
                                 .outline()
                                 .on_click(cx.listener(move |this, _, window, _| {
@@ -131,10 +199,11 @@ impl ExtensionPanel {
             _subscription: cx.observe(&owner, |_, _, cx| cx.notify()),
         });
         app_dialog::open_dialog_sized(
-            "插件安装进度",
-            // Brief progress messages use a compact canvas; detailed steps remain scrollable.
+            t!("plugin_installation.title").to_string(),
+            // Preparation can publish consent after the progress window opens. Reserve its fixed
+            // controls from the first frame so a late prompt remains usable without manual resizing.
             520.,
-            200.,
+            360.,
             // Bound the flex content to the viewport so long messages cannot push out the footer.
             move |content, _, _| content.min_h_0().overflow_hidden().child(view.clone()),
             cx,
