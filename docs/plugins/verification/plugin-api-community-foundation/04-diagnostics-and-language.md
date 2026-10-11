@@ -1,6 +1,6 @@
 # 04：多来源诊断与共享语言结果验收
 
-日期：2026-10-11。议题：[#96](https://github.com/T-miracle/Nanobug/issues/96)。状态：联合实现及两个独立审查轴已收口，最终 SDK 和六个独立包已构建；物理验收发现的 Problems 键盘缺陷已补真实回归并修复，新宿主、增量审查及剩余验收进行中，尚未交付，不关闭议题。
+日期：2026-10-11。议题：[#96](https://github.com/T-miracle/Nanobug/issues/96)。状态：实现与行为验收完成。联合 SDK 和六个独立包、三门禁、17 项正式连接回归、两个独立审查轴及干净生产宿主的 Windows 物理验收均已通过。默认 Ctrl+. 的本机输入环境限制保留，公开改绑已在两语言完成键盘预览/取消；由根代理统一整合、推送并读回 issue 状态，本记录不提前宣称议题已关闭。
 
 依据：[已批准工单](../../tickets/plugin-api-community-foundation/04-diagnostics-and-language.md)、[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)、[社区基础能力方案](../../specs/plugin-api-community-foundation.md)与[平台规格](../../specs/plugin-api-platform.md)。Windows 物理桌面验收由根代理独占；本文件区分实际包/GPUI 自动测试与桌面观察。
 
@@ -33,14 +33,14 @@
 | 正式新 WASM 生命周期 | Red 0/2/0，25.86 秒 → Green 2/0/0，57.77 秒 | 三个新 guest 最初漏回空逻辑 Snapshot，在 Manager.install 即被严格拒绝；只补 guest `Some(Default)`，未放宽宿主。新包真实 rebuild 后 Direct 3 features/cancel/retire 与诊断 foreign-clear/quota/queued revocation 都通过 |
 | 正式诊断 Native 多来源与清理 | Green 1/0/0，54.60 秒 | 两 owner 同位置/消息分别显示，外来集合清理被拒绝，自己的清理与禁用清理有效 |
 | 正式修复预览/源前提/Undo | Green 1/0/0，65.16 秒 | 本文档修改与整组 Undo；只改另文件的取消/确认/Undo；预览期间改源、真正关闭重开源均 StaleRevision，无目标副作用 |
-| 正式两语言完整 Native 流程 | Red 0/1/0，55.38 秒 → 阶段 Green 1/0/0，66.92 秒 | `.nbexpr` 与 `.nbkv` 都完成实际 Shift+F12 导航、Ctrl+. 动作/分组 Undo、参数卡、provider disable/replacement、A→B→A、真正关闭重开；新文档 ID 强断言保留。仍须最终联合源码/SDK重建后重验，不能沿用阶段 ZIP 充当最终输入 |
-| 共享语言 UI / 版本门禁连接 | 最新 UI 3/0/0，0.04 秒；同 stdio 1/0/0，22.72 秒 | 当前服务 seal 与 LSP 1.4 准入后的引用、动作、纯参数卡与同连接取消；没有用旧包版本声明伪造低版本 host 协商 |
-| source SDK 出口 | 最新 3/0/0，0.19 秒 | 完整 source-only、缓存修复与并发出口；不等于最终联合 SDK 与四包 WASM/UI 通过 |
-| app 编译记录 | 多轮 exit 101 后最新 `--bin editor-app --no-run` exit 0，18.72 秒 | 接口编译错误不计行为 Red；修正 Stateful 身份、公开像素转换、Style trait 和选择器生命周期。保留实际 linker/import 警告，未改变冻结依赖 |
+| 正式两语言完整 Native 流程 | Red 0/1/0，55.38 秒 → 阶段 Green 1/0/0，66.92 秒 | `.nbexpr` 与 `.nbkv` 都完成实际 Shift+F12 导航、Ctrl+. 动作/分组 Undo、参数卡、provider disable/replacement、A→B→A、真正关闭重开；新文档 ID 强断言保留。最终联合源码/SDK/正式包的重验另列于下文，不沿用阶段 ZIP 充当最终输入 |
+| 共享语言 UI / 版本门禁连接 | 阶段 UI 3/0/0，0.04 秒；同 stdio 1/0/0，22.72 秒 | 阶段服务 seal 与 LSP 1.4 准入后的引用、动作、纯参数卡与同连接取消；没有用旧包版本声明伪造低版本 host 协商 |
+| source SDK 出口 | 阶段 3/0/0，0.19 秒 | 完整 source-only、缓存修复与并发出口；不代替下文最终联合 SDK 与四包 WASM/UI 结果 |
+| app 编译记录 | 多轮 exit 101 后阶段 `--bin editor-app --no-run` exit 0，18.72 秒 | 接口编译错误不计行为 Red；修正 Stateful 身份、公开像素转换、Style trait 和选择器生命周期。保留实际 linker/import 警告，未改变冻结依赖 |
 
 上述 LSP 先例使用只读旧组件包 `C:/Projects/RustProjects/Editor/target/plugin-api-test/capability-example.zip`，协议 7、版本 0.17.1，SHA-256 `EE67E56F0A5186265EAD02CD634155EA4DF938DEB6FC12CAB2D6B9F5F70420CB`，只复制到本树测试夹具目录，没有修改原包。它仅证明宿主接缝，不代替本单四个正式消费者的当前 SDK 构建。
 
-受控 stdio 夹具通过 `cargo build -p plugin-runtime --example lsp_fixture` 直接构建；当前引用/参数/动作及延迟一次引用场景的 EXE SHA-256 为 `1E29C5C8A8229D1B55B13294F2F488BADD7B0747E157CF5E02A80F64538DFD44`。响应与真实取消由上表的实际宿主测试验证。
+受控 stdio 夹具通过 `cargo build -p plugin-runtime --example lsp_fixture` 直接构建；此阶段引用/参数/动作及延迟一次引用场景的 EXE SHA-256 为 `1E29C5C8A8229D1B55B13294F2F488BADD7B0747E157CF5E02A80F64538DFD44`。响应与真实取消由上表的实际宿主测试验证；最终门禁后的夹具指纹另列于下文。
 
 ## 构建阶段输入与失败诊断
 
@@ -111,9 +111,9 @@ C02 扩展同一真实包场景：required future Direct 和缺必需 editor.rea
 
 | 命令或 app EXE 过滤词 | 实际结果 | 日志（本树外 `../target04/`） |
 | --- | --- | --- |
-| `cargo fmt --check` | exit 0，2.74 秒 | `joint04-final-fmt.log` |
-| `cargo test --workspace --exclude editor-app` | 253/0/231，71 个 result 批次；exit 0，222.37 秒 | `joint04-final-non-ui.log` |
-| `cargo check --workspace` | exit 0，15.30 秒 | `joint04-final-check.log` |
+| `cargo fmt --check` | `fde5a430` exit 0，2.86 秒 | `joint04-problems-final-fmt.log` |
+| `cargo test --workspace --exclude editor-app` | `fde5a430` 253/0/231，71 个 result 批次；exit 0，12.41 秒 | `joint04-problems-final-non-ui.log` |
+| `cargo check --workspace` | `fde5a430` exit 0，5.35 秒 | `joint04-problems-final-check.log` |
 | `native_language_features_` | 3/0/0；真实绘制引用/动作按钮、纯文本参数卡与键盘选择 | `joint04-final-language-ui.log` |
 | `native_problems_heading_controls_and_escape_restore_focus` | 1/0/0；命名本地 Base 控件与 Escape 焦点恢复 | `joint04-final-problems-ui.log` |
 | `sdk_export::tests::` | 4/0/0；联合 source SDK 完整出口、缓存修复与并发发布 | `joint04-final-sdk-source-tests.log` |
@@ -123,7 +123,37 @@ C02 扩展同一真实包场景：required future Direct 和缺必需 editor.rea
 | runtime `workspace_transaction_roots_reject_escape_private_peer_and_revoked_authority --ignored` | 1/0/0；exit 0，91.21 秒；当前公开包的 root、私有/同伴边界与撤权 | `joint04-final-workspace-roots.log` |
 | runtime `workspace_transaction_missing_write_grants_and_unsupported_required_version_have_no_effects --ignored` | 1/0/0；exit 0，30.38 秒；缺写权限和未来必要版本均无副作用 | `joint04-final-workspace-grants.log` |
 
-应用行为使用同一冻结源码实际编译的 `../target04/debug/deps/editor_app-bf8b72a9198c679b.exe`（SHA-256 `A2F8040A6D9D8D5A4D935F0B2E488D464F8101D442BF25F94673EAAB536CCCF4`），直接逐过滤词执行 `--nocapture --test-threads=1`；明确标注的真实包测试另加 `--ignored`。没有因纯文档提交重复链接应用。门禁构建后的受控 stdio 夹具当前 SHA-256 为 `0E9192D1750B351D96FA8DA68F1D84CF7A6E4FB2B48EA78D40E677D57A67D05C`；前文 `1E29…` 是切片阶段的实际输入。完整计数和命令分别保存在 `joint04-final-gate-audit.json` 与 `joint04-final-small-app-results.json`。
+上述小型 app 用例使用 `cc17293` 实际编译的 `../target04/debug/deps/editor_app-bf8b72a9198c679b.exe`（SHA-256 `A2F8040A6D9D8D5A4D935F0B2E488D464F8101D442BF25F94673EAAB536CCCF4`），直接逐过滤词执行 `--nocapture --test-threads=1`。它们合计 14/0/0，完整计数和命令保存在 `joint04-final-small-app-results.json`。`cc17293` 第一轮三门禁同样全过，非 UI 253/0/231、222.37 秒；后续 Problems 源码变化后重跑上表三门禁，没有把原结果冒充新源码结果。两个阶段分别保存为 `joint04-final-gate-audit.json` 与 `joint04-problems-final-gate-audit.json`。
+
+门禁构建后的受控 stdio 夹具当前 SHA-256 为 `0E9192D1750B351D96FA8DA68F1D84CF7A6E4FB2B48EA78D40E677D57A67D05C`；前文 `1E29…` 是切片阶段的实际输入。现有语言回归使用前述准确版本的 JavaScript/XML 包，不安装新的完整编译器或 SDK。
+
+## 最终正式包与既有功能连接回归
+
+以下 17 项均显式执行，合计 **17/0/0**。Problems 使用下节列出的 `cargo test -p editor-app --bin editor-app ... -- --ignored --nocapture --test-threads=1`；其余 16 项命令为 `../target04/debug/deps/editor_app-bf8b72a9198c679b.exe <过滤词> --ignored --nocapture --test-threads=1`。生产输入 `fde5a430`，测试 EXE SHA-256 为 `9C0C819F27D68D0658AFDE295206F3EC5C67F805F3B01BBB1961124CA424AC3E`，新语言与事务输入为前述最终六个 ZIP。每项进程均确认精确匹配一条通过测试，没有把零匹配计为通过。表中秒数是实际行为时间；Problems 行为 68.43 秒，编译及执行总共 153.93 秒，其余编译和进程启动时间保留在各 result JSON。
+
+| 实际过滤词 | 通过/失败/ignored；行为秒数 | 日志（`../target04/`） |
+| --- | --- | --- |
+| `native_community_languages_share_reference_navigation_and_document_lifetime` | 1/0/0；76.06 | `joint04-final-formal-languages.log` |
+| `native_community_language_diagnostics_fix_preview_source_revision_and_undo` | 1/0/0；68.43 | `joint04-problems-keyboard-green-final.log` |
+| `native_community_language_declarative_features_preview_undo_and_original_seal` | 1/0/0；1.67 | `joint04-final-declarative.log` |
+| `native_community_language_omitted_optional_direct_keeps_selected_lsp_features` | 1/0/0；33.55 | `joint04-final-optional-direct.log` |
+| `pending_linked_input_cannot_revive_cancelled_language_intents` | 1/0/0；9.92 | `joint04-final-pending-intent.log` |
+| `native_lsp_shared_features_preserve_unsaved_utf16_and_single_connection` | 1/0/0；31.22 | `joint04-final-shared-lsp.log` |
+| `native_completion_remains_available_outside_guest_workspace` | 1/0/0；31.95 | `joint04-final-external-completion.log` |
+| `installed_javascript_formatter_can_be_replaced_without_changing_analysis` | 1/0/0；9.67 | `joint04-final-formatter.log` |
+| `public_rename_field_owns_typing_confirmation_and_native_history` | 1/0/0；5.33 | `joint04-final-rename-field.log` |
+| `delayed_linked_service_preserves_first_input_history_save_and_retirement` | 1/0/0；17.47 | `joint04-final-linked-input.log` |
+| `native_outline_package_navigation_follow_and_revocation` | 1/0/0；61.21 | `joint04-final-outline.log` |
+| `native_community_language_diagnostics_preserve_independent_owners_and_cleanup` | 1/0/0；196.44 | `joint04-final-diagnostic-owners.log` |
+| `native_community_language_config_trimmed_unicode_path_keeps_exact_diagnostic_span` | 1/0/0；35.83 | `joint04-final-config-unicode.log` |
+| `workspace_transaction_scaffolder_preserves_unsaved_text_and_recovers_mixed_batch` | 1/0/0；35.79 | `joint04-final-scaffolder.log` |
+| `workspace_transaction_converter_pages_preserves_dirty_buffer_and_restores_complete_batch` | 1/0/0；36.71 | `joint04-final-converter.log` |
+| `workspace_transaction_io_failure_during_commit_and_undo_retains_actual_recovery` | 1/0/0；37.57 | `joint04-final-io-recovery.log` |
+| `workspace_transaction_cancel_after_native_change_preserves_receipt_and_explicit_undo` | 1/0/0；41.43 | `joint04-final-cancel-recovery.log` |
+
+两语言用例完整保留引用导航、实际按键动作、普通计划预览/整组 Undo、参数卡、提供者禁用与替换、A→B→A，以及真正关闭重开后的不同原生文档 ID 断言。无 WASM 用例同时验证原服务 seal 的预览/Undo、撤销后的旧来源拒绝和必要能力/写授权拒绝。两检查器覆盖独立 owner、同版本选择刷新、权限拒绝与清理；配置用例保留中文、非 BMP、空格和 Tab 的精确原始范围。
+
+共享输入取消、补全、格式化、Rename、关联编辑和大纲按真实影响各验一次。共用事务源前提及原生服务发行者变更另选择当前 03 的两个正式消费者、I/O 恢复和取消后的回执 Undo，未重复无关的完整磁盘负面矩阵。完整命令、结果及测试 EXE 指纹保存在 `joint04-final-all-connected-app-audit.json`；15 项顺序队列为 `joint04-final-connected-app-results.json`，两语言和 Problems 的独立结果分别保存。
 
 ## 物理反馈后的 Problems 键盘修复
 
@@ -131,10 +161,35 @@ C02 扩展同一真实包场景：required future Direct 和缺必需 editor.rea
 
 精确命令为 `cargo test -p editor-app --bin editor-app native_community_language_diagnostics_fix_preview_source_revision_and_undo -- --ignored --nocapture --test-threads=1`。真实 Red 为 0/1/0，行为 68.10 秒，断言初始 Dialog 焦点下 Down 后仍没有另一个来源的修复按钮；日志 `joint04-problems-keyboard-red.log`。核对锁定的 `gpui-base 0.7.0` 公开 Dialog 行为后确认初始焦点在列表监听器的祖先上。修复仅为现有原生行建立焦点句柄，把初始焦点送入选中行，方向键在同一投影中移动焦点；Base 行仍拥有 Enter 点击，Dialog 仍拥有 Escape，修复按钮的 Enter 不被拦截。句柄没有保存诊断载荷或另建模型。
 
-第一次 Green 编译仅因 ClickEvent 参数类型推断失败退出 101（6.48 秒），没有行为结果，不计 Red。明确公开参数类型后，同一完整测试实际 1/0/0，行为 68.43 秒、编译及执行 153.93 秒；日志 `joint04-problems-keyboard-green-final.log`。受影响的空列表命名控件/Escape 焦点测试另实际 1/0/0，行为 0.16 秒（`joint04-problems-keyboard-empty-green.log`）。新测试 EXE SHA-256 为 `9C0C819F27D68D0658AFDE295206F3EC5C67F805F3B01BBB1961124CA424AC3E`；上述 SDK 与六个 ZIP 不需因这项 UI 修复重建。修复后的普通候选、宿主 hash、三门禁、独立增量审查和物理按键复验仍需准确补记。
+第一次 Green 编译仅因 ClickEvent 参数类型推断失败退出 101（6.48 秒），没有行为结果，不计 Red。明确公开参数类型后，同一完整测试实际 1/0/0，行为 68.43 秒、编译及执行 153.93 秒；日志 `joint04-problems-keyboard-green-final.log`。受影响的空列表命名控件/Escape 焦点测试另实际 1/0/0，行为 0.16 秒（`joint04-problems-keyboard-empty-green.log`）。新测试 EXE SHA-256 为 `9C0C819F27D68D0658AFDE295206F3EC5C67F805F3B01BBB1961124CA424AC3E`；上述 SDK 与六个 ZIP 不需因这项 UI 修复重建。
 
-## 剩余验收
+修复普通提交为 `fde5a430a5a8ff6f850e567d2206816a8c1d15b2`，tree `5bbdeda19dcffe5d70871875a052d45b832ca6b2`。宿主 `D4D899CCFB0CF713CD30E12320880EF39CB56313B54596B39BDFA9C7AEB7E8FC` 构建退出 0，44.85 秒。原两个独立审查者在 `cc17293..fde5a430` 上分别复查：Standards 硬性违反 0、坏味道 0，Spec 遗漏/部分 0、越界 0、行为错误 0，原始报告见[独立增量记录](04-diagnostics-and-language-review.md#problems-初始焦点候选的增量复查)。Root 实际复验 Down 切换来源及修复详情、Enter 定位到编辑器 `4:1`、Escape 关闭和恢复焦点；另在唯一首条通知上实际完成 Direct Apply 后的整组 Undo。第一轮第二条通知按钮被裁剪的观察保留，不将无效点击写成通过。
 
-`cc17293` 的三项联合门禁、两个独立审查轴和最终六包的四项 runtime 连接回归已通过。Problems 增量修复的门禁、双轴审查和新 Host 物理按键复验仍待完成；其余最终 GPUI 连接回归继续执行。Ctrl+. 在旧 Host 的明确英文编辑输入模式下仍没有弹窗，右键动作有效，尚不能认定原因为 IME；由根代理在新窗口先复验，并核对完整按键路由及弹窗生命周期。C01–C06 不提前标记完整交付。每次仅因源码/输入变化或未决失败补充受影响测试；不重复未修改的 03 全磁盘负面矩阵。源前提修改仍检查单文件和跨文件修复连接、预览后改源与关闭重开、取消和会话 Undo，以及相关 03 回归。
+## 默认快捷键的输入环境边界与干净生产宿主
+
+本机 Microsoft Pinyin 输入环境下，默认 Ctrl+. 在编辑区未显示动作，右键相同动作有效。全新窗口、无旧弹窗状态与真实英文字母提交/Undo 后仍可重复。临时诊断宿主只增加公开事件边界的日志，不改变绑定、事件传播或提供者。真实日志明确显示：Ctrl+. 后仅收到单独 Control 事件，没有句点进入 GPUI 通用 `intercept_keystrokes`；同一焦点的 Ctrl+Shift+Space 正常进入并执行 `me_editor::ShowSignatureHelp`。因此不能把这个默认组合键声明为物理通过，也不能凭此前合成按键 Green 或猜测 `prefer_character_input` 来盲改宿主。
+
+根代理通过已有“快捷键 → 全局快捷键 → 显示代码操作 → 修改快捷键 → 保存”，仅在隔离 `ME_EDITOR_PROFILE_HOME` 将 `me_editor::ShowCodeActions` 改为 Ctrl+Shift+F9，公开 schema 1 文件准确读回；未修改真实用户配置或系统输入法。实际 Direct 与标准 LSP 都显示命名代码动作，Return 进入普通预览，Escape 取消，原文/revision/未保存状态保持不变。同名面板动作的冲突草稿已取消，未保存。[原生记录](04-native-desktop.md)保存准确输入、观察及默认组合键的环境限制。
+
+临时追踪已用 `apply_patch` 全部移除；`rg native-language-trace` 全源码零匹配，`git diff --exit-code fde5a430 -- crates plugins Cargo.toml Cargo.lock` 为 0。没有为了环境限制新增按插件或语言分支、硬编码抢占按键、修改用户重绑定/禁用语义，亦未 fork 或升级上游。重新构建干净生产 Host 退出 0，37.84 秒，SHA-256 **`13B45326BC9B0283D466B7C2C056680EA3DE7610A2352AB7BEFEEB461BEBDCA6`**，路径 `C:/Users/Tmiracle/.codex/worktrees/plugin-api-language/target04/debug/editor-app.exe`，日志和结果分别为 `joint04-clean-final-host-build.log` 与 `joint04-clean-final-host-build-result.json`。这是同一 `fde5a430` 生产源码的实际产物；两版 trace EXE 仅作诊断证据，不作为最终交付宿主。
+
+清理后逐一重新核对 49 个 SDK 导出与仓库源 hash、六个 ZIP hash，差异为 0，SDK Markdown 仍为 0。`joint04-final-inputs.json` 更新为干净 Host hash，之前的准确输入另保存为 `joint04-final-inputs-before-trace-cleanup.json`；核对结果为 `joint04-clean-final-input-audit.json`。源码逐字相同，既有三门禁、17 项连接回归与六包构建继续有效，没有因临时日志重复整套测试。
+
+根代理以干净生产 Host `13B453…DCA6` 完成第五轮窄复验：公开开发控制器 `64583`、新窗口 `15337192`，加载隔离配置中已公开保存的 Ctrl+Shift+F9。标准 LSP 的 `Use default port` 和 Direct 的 `Use sum` 都真正显示；Return 分别进入共享 `oops` → `8080`、`add` → `sum` 预览，Escape 后两个原文与未保存状态均未改变。全程没有 trace。公开 `stop` exit 0，Sky 返回验收应用空列表，隔离程序和 profile 内受管服务进程为 0，三个原文件磁盘 hash 精确未变。具体物理输入与结果由[原生最终记录](04-native-desktop.md)独立保存。
+
+## 完成条件与交付
+
+联合三门禁、两个独立审查轴及 Problems 增量复查、最终六包的四项 runtime 和 17 项 GPUI 连接回归均已通过。Problems 键盘、原生引用定位、参数提示、单条通知的 Direct 整组 Undo，以及干净生产宿主公开改绑后的两语言键盘预览/取消均取得实际物理 Green。本单 T17–T20 与 C01–C06 的依据如下：
+
+| 完成条件 | 实际证据 |
+| --- | --- |
+| C01 正式接入 | 四个首发 0.1.0 正式包和受影响的两个 0.1.1 事务包经联合 source SDK 公开独立构建；真正 Package/Manager → 原生结果/预览/Undo，不要求声明式包附空 WASM。 |
+| C02 当前能力安全 | required/optional 与权限准入、诊断 PermissionDenied、跨 owner 清理拒绝、修复 origin 两阶段版本条件、取消/切换/关闭/退役、无 WASM 原 seal 和 shutdown 清理的实际包证据；敏感能力没有新增旁路。 |
+| C03 原生行为 | 中英文资源、Base 名称/角色/键盘与焦点的实际 GPUI 测试；Root 独占 Windows 真实 IME、主题、字号/窗口尺寸、问题来源/修复、引用、参数及键盘预览，停止后受管资源归零。 |
+| C04 开发者路径 | 公开源码注释同步版本、权限、错误、取消、归属、释放、配额和实验边界；根双语 README 保持构建/打包入口；49 个 SDK 文件均为源码/Cargo/WIT/JSON，没有 Markdown 或访客 SDK 副本。 |
+| C05 验证证据 | 普通生产提交、SDK/工具链、六包与 Host hash、精确命令/结果/ignored、真实 Red/Green 和 Windows 环境限制分别记录；初轮及复查 Standards/Spec 报告保持独立。 |
+| C06 交付检查 | 针对性切片、最终三门禁、14 项小型 app 测试、17 项显式 ignored 连接回归、4 项显式 runtime 回归及最终物理验收均真实执行；纯日志移除后确认生产源码不变，避免重复六包和整套测试。 |
+
+默认 Ctrl+. 在本机当前输入环境仍未送达 GPUI，不宣称默认组合键物理通过；已有公开快捷键设置和原生菜单提供可用入口。多个长标题事务通知同时出现时第二条 Undo 按钮裁剪的观察保留，唯一首条通知的整组 Undo 已独立实测；未扩大为无关通知布局重构。macOS/Linux 未实测或交叉构建；231 项非 UI ignored 没有全部执行，本文仅标明实际选择并运行的项目。
 
 最终交付由根代理完成整合、推送与 issue 状态读回。本记录不会把正在运行、ignored 未执行或编译检查误写为功能通过。
