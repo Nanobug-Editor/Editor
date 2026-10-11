@@ -2,7 +2,7 @@
 
 稳定标识：`plugin-api-community-foundation-07-lifecycle`
 
-状态：2026-10-12 行为验收、规定门禁与最终独立双轴复核完成，待普通提交、推送与 #99 关闭。Runtime 十九项与额外 Query 探针、应用十二项、三项规定门禁及 Windows 新增原生交互已实际通过，双轴未解决项均0，详见[主验收记录](../../verification/plugin-api-community-foundation/07-activation-and-compatibility.md)、[原生记录](../../verification/plugin-api-community-foundation/native-07.md)。直接依赖 #96、#97、#98 已读回 `closed / completed`；设计议题 #92 保持开放。实际映射见发布记录。
+状态：2026-10-12 已验收交付。普通源码提交 `8ee28952014a6533253fc83e17c3410d88a76e48` 已推送origin并核对完整SHA；#99于2026-10-11T22:20:41Z关闭，随后读回 `closed / completed`。Runtime十九项、额外Query一项、App十二项、三门禁与Windows新增原生验收通过，最终独立双轴未解决项均0，详见[主验收记录](../../verification/plugin-api-community-foundation/07-activation-and-compatibility.md)、[原生记录](../../verification/plugin-api-community-foundation/native-07.md)。七张实施工单均已关闭；设计议题#92保持开放、正文未修改。实际映射见发布记录。
 
 ## What to build
 

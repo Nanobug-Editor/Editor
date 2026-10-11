@@ -1,6 +1,6 @@
 # 07：Windows 生产宿主原生验收
 
-日期：2026-10-12（Asia/Shanghai）。本轮物理交互已完成；普通提交、推送和 #99 关闭另按[主验收记录](07-activation-and-compatibility.md)核对。父设计议题 #92 不修改。
+日期：2026-10-12（Asia/Shanghai）。本轮物理交互已完成；普通源码交付 `8ee28952014a6533253fc83e17c3410d88a76e48` 已推送核对，#99已读回closed/completed，见[主验收交付记录](07-activation-and-compatibility.md#普通交付及全批次议题读回)。父设计议题 #92 保持开放、正文未修改。
 
 ## 固定输入与范围
 

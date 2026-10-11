@@ -1,6 +1,6 @@
 # 07：按需激活、配置热应用与兼容升级验收
 
-状态：行为验收、规定门禁及最终独立双轴审查已完成，待普通提交、推送和核对关闭 [#99](https://github.com/T-miracle/Nanobug/issues/99)。本记录只计实际行为与实际命令；最终审查时真实 HEAD 为 `90ceab915d63c2e6b8cb260c6f28acfc45adc7fc`，#99 尚为 OPEN，父设计议题 #92 保持开放。
+状态：已验收交付。普通源码提交 `8ee28952014a6533253fc83e17c3410d88a76e48` 已推送 `origin/codex/plugin-api-community` 并核对完整SHA；2026-10-11T22:20:41Z [#99](https://github.com/T-miracle/Nanobug/issues/99)已关闭，随后独立读回为 `closed / completed`。七张实施工单均已关闭，父设计议题 #92 保持开放且正文未修改。阶段快照及失败保留其当时真实状态。
 
 依据：[工单](../../tickets/plugin-api-community-foundation/07-activation-and-compatibility.md)、[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)、[社区生态方案](../../specs/plugin-api-community-foundation.md)。接口用法维护在公开协议源码注释，独立 SDK 只导出 Rust、Cargo、WIT 与 JSON。 [独立双轴记录](07-activation-and-compatibility-review.md)分别保存 Standards 与 Spec 结论。
 
@@ -9,7 +9,7 @@
 - 最终规定三门禁已实际通过：格式 exit 0，非 UI `260/0/246 ignored`，Workspace check exit 0。246 项 ignored 未在默认门禁中执行，不计作通过覆盖；新增 Query 窄 probe 已另行实际通过。
 - [十九项 Runtime 矩阵](#门禁后的-runtime-指纹与十九项计划)均已显式执行，实际 `19/0/0`；T32 三次及 SDK5 一次历史 Red 保留，额外窄 Query 用例的 `1/0/0` 独立计数。
 - [应用结果](#新宿主构建sdk-字节核对与当前应用结果)：原十二项实际 `12/0/0`，最终强观察、冷 restart 及 FileView 的完整 Green 均已记录；四项原失败和 FileView 追加诊断 Red 保留。
-- 最终生产 Host `E81B1F97...DBC0` 导出 50 个 SDK 文件、0 Markdown，与旧 1D29 导出的文件字节全部相同。T35 实际包 GPUI 短组合和 C03 Windows 新增交互均已验收；[Windows 物理记录](native-07.md)明确具体场景与环境限制，不声称八包全量物理组合。最终独立双轴已完成且均零问题，普通交付待执行。
+- 最终生产 Host `E81B1F97...DBC0` 导出 50 个 SDK 文件、0 Markdown，与旧 1D29 导出的文件字节全部相同。T35 实际包 GPUI 短组合和 C03 Windows 新增交互均已验收；[Windows 物理记录](native-07.md)明确具体场景与环境限制，不声称八包全量物理组合。最终独立双轴均零问题，普通源码交付及议题关闭已实际读回。
 
 ## 固定基线与输入
 
@@ -539,4 +539,12 @@ SDK5 迁移阶段 cfg(test) 单文件修正保存为 snapshot `5eaf5604854d1cb0f
 
 相应 JSON 为 `../target01/07-review-snapshot-app-empty-input.json`、`07-review-snapshot-outline-transport.json`、`07-review-snapshot-app-restart-probe.json`、`07-review-snapshot-app-probe-private.json`、`07-review-snapshot-app-outline-notification.json`、`07-review-snapshot-file-view-cold.json`。详细独立报告仍分轴保存于[独立双轴记录](07-activation-and-compatibility-review.md)。App10 不扩展生产可见性，跨功能 GPUI 测试文件仍放 `src/tests/outline/lifetime.rs`，由 model 的测试模块挂载；完成观察保留真实 Subscription，不新增宿主测试 API。
 
-行为验收及规定门禁已完成：Runtime `19/0/0`、额外 Query probe 独立 `1/0/0`、应用原十二项 `12/0/0`；最终格式和 Workspace check 均 exit 0，非 UI `260/0/246 ignored`。T35 是实际包 GPUI 短组合，C03 是本机 Windows 新增物理交互，两者分别有真实证据；历史失败、旧 SDK 输入及平台限制全部保留。最终 Host/SDK/源码和停止清理已核对，见[Windows 物理记录](native-07.md)。最后独立双轴基线 `90ceab9` → 冻结 `b3bf9fc5342dc0421947d83fdd3727b5a5bc511f`，tree `ff7d7a2d9649250c62e66be44f8457a2f742e435`；165文件，相对已审源码点 `2515a09` 源码delta0、仅七份文档收口，真实索引与分支未动。Standards硬规范0/十二类smell无可行动项，Spec遗漏/范围蔓延/错误实现 `0/0/0`；两轴实际读回最终日志、保留EXE、SDK及原生清理证据，并确认outline原P2的源码与108.21秒行为闭合。详细结论见[独立双轴记录](07-activation-and-compatibility-review.md)。随后仅记录这些真实审查结论；普通提交、推送与 #99 关闭仍待执行，父设计议题 #92 保持开放。
+行为验收及规定门禁已完成：Runtime `19/0/0`、额外 Query probe 独立 `1/0/0`、应用原十二项 `12/0/0`；最终格式和 Workspace check 均 exit 0，非 UI `260/0/246 ignored`。T35 是实际包 GPUI 短组合，C03 是本机 Windows 新增物理交互，两者分别有真实证据；历史失败、旧 SDK 输入及平台限制全部保留。最终 Host/SDK/源码和停止清理已核对，见[Windows 物理记录](native-07.md)。最后独立双轴基线 `90ceab9` → 冻结 `b3bf9fc5342dc0421947d83fdd3727b5a5bc511f`，tree `ff7d7a2d9649250c62e66be44f8457a2f742e435`；165文件，相对已审源码点 `2515a09` 源码delta0、仅七份文档收口，真实索引与分支未动。Standards硬规范0/十二类smell无可行动项，Spec遗漏/范围蔓延/错误实现 `0/0/0`；两轴实际读回最终日志、保留EXE、SDK及原生清理证据，并确认outline原P2的源码与108.21秒行为闭合。详细结论见[独立双轴记录](07-activation-and-compatibility-review.md)。普通源码提交、推送与#99关闭均已实际完成，详见下一节。
+
+## 普通交付及全批次议题读回
+
+普通提交 `8ee28952014a6533253fc83e17c3410d88a76e48` 包含固定审查范围165文件；`crates/`、`plugins/` 相对最后受测源码快照2515差异0。暂存前检查范围及产物排除，暂存后`git diff --cached --check`通过，工作树当时pending0，原用户工作区未暂存或修改。随后普通推送到`origin/codex/plugin-api-community`；2026-10-11T22:19:13.1020363Z `git ls-remote --heads`读回同一完整SHA。外部实际结果为`../target01/07-delivery-commit-result.json`、`07-delivery-push-result.json`。
+
+GitHub connector更新#99返回403 `Resource not accessible by integration`。按既有工单授权改用本仓库现有Git认证/GitHub REST，凭据仅内存使用；更新完整正文、勾选八项验收、按用户新约定同步C04源码注释/零Markdown SDK位置规则，并设closed/completed。2026-10-11T22:20:41Z完成关闭，另一次GET于22:20:43.0730345Z读回相同正文及状态；`07-issue-closed-readback.json`保存非敏感议题结果。没有修改标签、指派、九条依赖或父议题。
+
+2026-10-11T22:21:08Z再次通过连接器读取#92–#99：#93–#99全部closed/completed；#92仍OPEN，正文与执行前baseline逐字相同。此后仅同步本地工单、验收索引与发布映射的真实交付状态；源码/SDK/包输入未改变，不重复无关Rust构建或测试。

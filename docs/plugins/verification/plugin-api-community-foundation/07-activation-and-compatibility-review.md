@@ -1,6 +1,6 @@
 # 07：独立双轴审查记录
 
-状态：最终独立双轴复核已完成；Standards与Spec均无未解决项，行为与Windows原生证据已读回。普通提交与远端交付待执行。本记录不代替[主验收记录](07-activation-and-compatibility.md)，不将源码审查通过计为测试通过。
+状态：最终独立双轴复核已完成；Standards与Spec均无未解决项，行为与Windows原生证据已读回。普通源码提交 `8ee28952014a6533253fc83e17c3410d88a76e48` 已推送核对，#99随后已读回closed/completed，详见[主验收交付记录](07-activation-and-compatibility.md#普通交付及全批次议题读回)。源码审查通过与作者实际执行的测试分别记录。
 
 固定起点为 `90ceab915d63c2e6b8cb260c6f28acfc45adc7fc`，规格为[社区生态方案](../../specs/plugin-api-community-foundation.md)、[07 工单](../../tickets/plugin-api-community-foundation/07-activation-and-compatibility.md)和[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)，平台不变量仍按 [plugin-api-platform](../../specs/plugin-api-platform.md)执行。规范依据为仓库及用户当前 `AGENTS.md`。Standards 与 Spec 由两个独立代理审查；作者负责实际执行测试和验证交付。
 

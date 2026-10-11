@@ -1,6 +1,6 @@
 # 基础社区生态：实施与验收入口
 
-日期：2026-10-12。状态：01–06 已验收交付，07 行为验收与最终独立双轴复核完成，待普通提交、推送与关闭。
+日期：2026-10-12。状态：七张实施工单全部验收交付并读回 `closed / completed`，父设计议题#92保持开放且正文未修改。最后07源码交付 `8ee28952014a6533253fc83e17c3410d88a76e48` 已普通推送origin并核对完整SHA。
 
 本次恢复按用户新约定使用源码接口注释和不含 Markdown 的独立 SDK，保留宿主原生终端与公开执行/PTY 能力。主分支普通合并、源码包 Red/Green、四个正式独立包与当前原生连接均已通过，[2026-10-11 恢复记录](2026-10-11-resume.md)保存精确输入和结果；后续工单继续按依赖实施，历史包验证只适用于其记载的输入。
 
@@ -28,7 +28,7 @@
 | 04 诊断与语言 | [#96](https://github.com/T-miracle/Nanobug/issues/96) | 已验收交付，议题已关闭 | [04 主验收](04-diagnostics-and-language.md)、[双轴审查](04-diagnostics-and-language-review.md)、[生产原生记录](04-native-desktop.md)；`2d140d1c71d117046d907c600a18245f865dc696` 两分支已推送核对，2026-10-11T15:17:51Z 读回 closed/completed |
 | 05 树与装饰 | [#97](https://github.com/T-miracle/Nanobug/issues/97) | 已验收交付，议题已关闭 | [05 验收记录](05-trees-and-decorations.md)、[修复版原生记录](05-trees-and-decorations-native.md)；交付 `694038055387d55513916d9781baefa9a970d271` 已普通推送核对，2026-10-11T11:01:31Z 读回 closed/completed；集成点联合验证另记 |
 | 06 网络与私有状态 | [#98](https://github.com/T-miracle/Nanobug/issues/98) | 已验收交付，议题已关闭 | [06 验收记录](06-cloud-and-private-state.md)、[当前原生记录](native-06.md)；源码 `f2a907a`、最终文档分支 `72bdf8bab1c9f4d489118715f9f3a17c0f6d301c` 已推送核对；当前集成分支继续汇合，联合验证另记 |
-| 07 激活与兼容 | [#99](https://github.com/T-miracle/Nanobug/issues/99) | 验收与双轴审查完成，待普通交付 | [07 主验收](07-activation-and-compatibility.md)、[双轴记录](07-activation-and-compatibility-review.md)、[Windows 原生记录](native-07.md)；Runtime 19、额外 Query 1、App 12 显式通过，非 UI 260 通过/246 ignored，三门禁 exit0，两轴未解决项0；远端尚未关闭 |
+| 07 激活与兼容 | [#99](https://github.com/T-miracle/Nanobug/issues/99) | 已验收交付，议题已关闭 | [07 主验收](07-activation-and-compatibility.md)、[双轴记录](07-activation-and-compatibility-review.md)、[Windows 原生记录](native-07.md)；Runtime19/额外Query1/App12、三门禁与Windows新增交互实际通过，双轴未解决项0；`8ee28952014a6533253fc83e17c3410d88a76e48`已推送核对，22:20:41Z关闭并读回closed/completed |
 
 ## 证据与复用规则
 
@@ -38,7 +38,7 @@
 
 02 的[逐单验收与双轴结论](https://github.com/T-miracle/Nanobug/blob/8506cc8f1f9baee3fca030d59b7d1d21b5227763/docs/plugins/verification/plugin-api-community-foundation/02-commands-and-interaction.md)已经发布到独立分支，随后与 01 集成。2026-10-09 06:01:59 UTC，GitHub connector 更新返回 403；按既有工单授权改用既有 Git 认证直接更新，随即读回 #94 为 `closed / completed`。没有输出凭据或修改父设计议题。
 
-2026-10-11 06:34:32 UTC，03 的两个普通推送均已读回完整 SHA，随后读取 #95 为 `closed / completed`。06 的当前 Native HTTP、密钥、缓存、取消及正常停止已记录；2026-10-11 06:28:28 UTC，读取 #98 为 `closed / completed`，交付状态随后用纯文档提交 `72bdf8b` 同步并推送。05 的修复版原生滚动、提示、重载与关闭验收已通过，交付 `694038055387d55513916d9781baefa9a970d271` 已推送核对，2026-10-11T11:01:31Z 读回 #97 为 `closed / completed`。上述关闭只适用于各自已验收输入；04 已随后完成联合回归、双轴与生产原生验收，普通交付 `2d140d1c71d117046d907c600a18245f865dc696` 已推送核对，2026-10-11T15:17:51Z 读回 #96 为 `closed / completed`。07 与父设计议题 #92 继续开放。
+2026-10-11 06:34:32 UTC，03 的两个普通推送均已读回完整 SHA，随后读取 #95 为 `closed / completed`。06 的当前 Native HTTP、密钥、缓存、取消及正常停止已记录；2026-10-11 06:28:28 UTC，读取 #98 为 `closed / completed`，交付状态随后用纯文档提交 `72bdf8b` 同步并推送。05 的修复版原生滚动、提示、重载与关闭验收已通过，交付 `694038055387d55513916d9781baefa9a970d271` 已推送核对，2026-10-11T11:01:31Z 读回 #97 为 `closed / completed`。上述关闭只适用于各自已验收输入；04 已随后完成联合回归、双轴与生产原生验收，普通交付 `2d140d1c71d117046d907c600a18245f865dc696` 已推送核对，2026-10-11T15:17:51Z 读回 #96 为 `closed / completed`。当时07与父设计议题#92仍开放；07后续已交付 `8ee28952014a6533253fc83e17c3410d88a76e48`，22:20:41Z关闭并读回，详见[07交付记录](07-activation-and-compatibility.md#普通交付及全批次议题读回)。22:21:08Z全批次七个实施议题均closed/completed，父#92仍OPEN且正文未改。
 
 每单记录自己的实际源码版本、工具链、SDK、包版本与 hash、测试命令和结果、原生操作、审查结论及未验证部分。协议准入或某个子用例通过不等于整项验收通过，默认跳过的 ignored 测试也不计为通过。
 

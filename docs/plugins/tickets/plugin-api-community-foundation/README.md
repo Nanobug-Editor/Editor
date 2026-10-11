@@ -1,10 +1,10 @@
 # 基础社区生态：通用插件 API 完善工单
 
-设计议题 [#92](https://github.com/T-miracle/Nanobug/issues/92) 保持开放；实施工单 [#93–#99](https://github.com/T-miracle/Nanobug/issues/93)，完整编号、数据库 ID 和九条原生阻塞边见[发布记录](publication.json)。全部议题已读回核对 `ready-for-agent`，未验收工单保持 open。
+设计议题 [#92](https://github.com/T-miracle/Nanobug/issues/92) 保持开放且未修改；实施工单 #93–#99 于2026-10-11T22:21:08Z全部读回 `closed / completed`，完整编号、数据库 ID 和九条原生阻塞边见[发布记录](publication.json)。批准、发布及各单真实验收输入保留于本目录和验收记录。
 
 日期：2026-10-12（批准基线：2026-10-09）
 
-状态：01–06 已验收交付并读回关闭；07 行为验收、规定门禁与最终独立双轴复核完成，待普通提交、推送与关闭。用户于 2026-10-09 批准七单拆分、九条直接阻塞边与测试接缝，并授权连续执行、创建执行会话及子代理；远端状态以[发布映射](publication.json)及[验收入口](../../verification/plugin-api-community-foundation/README.md)的实际读回为准。
+状态：七张工单全部验收交付、普通提交和推送，并已读回关闭。07源码交付 `8ee28952014a6533253fc83e17c3410d88a76e48` 的Runtime19/额外Query1/App12、规定三门禁、Windows原生与最终双轴均通过，具体版本、产物和限制见[验收入口](../../verification/plugin-api-community-foundation/README.md)。用户于2026-10-09批准的拆分、九条直接阻塞边和测试接缝继续作为本批历史基线，不扩展为其他工单授权。
 
 2026-10-11 恢复执行，按用户新仓库约定调整 C04 的说明位置：基础构建入口在根双语 README，接口用法在源码注释；独立 SDK 仅含源码、Cargo、WIT 与 JSON。原站点说明要求由此替代，其余完成条件和依赖关系继续有效，已完成验收记录保留当时的真实版本与产物。
 
