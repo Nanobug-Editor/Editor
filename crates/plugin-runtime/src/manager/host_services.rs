@@ -1224,6 +1224,10 @@ impl Manager {
     ) -> anyhow::Result<HostExecution> {
         let caller = host_caller(&self.host_scope());
         let context = CallContext {
+            // Native terminal launches keep host ownership without acquiring command-picker authority.
+            native_waits: Vec::new(),
+            menu: None,
+            origin: crate::plugin_services::InvocationOrigin::Delegated,
             lifetimes: vec![self.host_alive.clone()],
             permissions: caller.permissions.clone(),
             caller,

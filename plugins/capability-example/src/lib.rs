@@ -475,8 +475,9 @@ impl State {
                 }))
                 .map_err(|error| Failure::new(ErrorCode::OperationFailed, error.to_string()))?;
             }
+            // Menu context describes the clicked target; reading owned process events needs only the index.
             api::Input::Event {
-                event: api::Notification::Command { id, arguments },
+                event: api::Notification::Command { id, arguments, .. },
                 ..
             } if id == "process-events" => {
                 // Read one bounded event at a time; native text controls are not bulk byte storage.

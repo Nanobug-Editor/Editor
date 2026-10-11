@@ -12,7 +12,7 @@ Nanobug 是一个使用 Rust 与 GPUI 构建的原生桌面代码编辑器，优
 
 XML 插件提供 Schema 辅助、补全、格式化、配对标签编辑与文档大纲；HTML、JavaScript 提供独立的原生语言服务。新工作区默认隐藏大纲，可从底部窗口控件打开。
 
-[文档](documentation/zh-cn/index.md) · [快速开始](documentation/zh-cn/guide/getting-started.md) · [插件 SDK](documentation/zh-cn/sdk/index.md) · [问题反馈](https://github.com/T-miracle/Editor/issues)
+[文档](docs/README.md) · [快速开始](#开发-nanobug) · [插件 SDK 源码](crates/plugin-protocol/src/lib.rs) · [问题反馈](https://github.com/T-miracle/Editor/issues)
 
 ## 安装
 
@@ -120,7 +120,7 @@ cargo check --workspace
 
 修改 `editor-app` 时还需运行相关 UI 测试与原生交互验收；实际 WASM 包的 ignored 测试需先构建夹具，再显式执行。纯文档变更检查链接、路径及 `git diff --check`。
 
-面向读者的使用说明与 SDK 正文以普通 Markdown 保存在 [documentation/zh-cn/index.md](documentation/zh-cn/index.md)。项目规格、工单与验收记录维护在 `docs/`。本中文 README 与[英文正本](README.md)同步维护。
+基本运行、构建和打包命令维护在本 README。插件接口用法与公开类型共置于[协议源码](crates/plugin-protocol/src/lib.rs)的注释中。独立 SDK 仅导出 Rust 源码、Cargo 清单、WIT 与 JSON 协议资源，不附带 Markdown。项目规格、工单与验收记录维护在 `docs/`。本中文 README 与[英文正本](README.md)同步维护。
 
 ## 许可
 

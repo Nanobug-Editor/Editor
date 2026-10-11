@@ -1,36 +1,20 @@
-//! Supply the editor's compiled-in contract to independent Cargo plugin projects.
+//! Export the host's SDK sources and protocol resources for independent plugin builds.
 //!
-//! The bilingual Markdown under `documentation/` is the single hand-written reader source.
-//! The host embeds its English contract and ships it to independent plugin projects without
-//! requiring a site build, a Node runtime or an online documentation service.
-//!
-//! Established exported filenames stay stable. Shared project packaging documentation ships
-//! alongside the public contract; repository documents keep lower-case filenames.
+//! `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]` prepares a
+//! content-addressed source cache and supplies Cargo's dependency override automatically.
+//! `--export-plugin-sdk <directory>` publishes the same inputs for other toolchains.
+//! Interface guidance stays beside the public Rust types; Markdown is not embedded or exported.
 use anyhow::Context;
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{borrow::Cow, io::Write};
 
 const SDK_FILES: &[(&str, &[u8])] = &[
-    // The reader-facing document contract is exported verbatim with these Rust types.
-    (
-        "DOCUMENTS.md",
-        include_bytes!("../../../documentation/en/sdk/documents.md"),
-    ),
     // Document contracts ship in the exact same SDK used by the host consumer.
     (
         "src/api/documents.rs",
         include_bytes!("../../plugin-protocol/src/api/documents.rs"),
-    ),
-    // Author-facing contract pages ship with the identical independent guest interface.
-    (
-        "COMMANDS.md",
-        include_bytes!("../../../documentation/en/sdk/commands.md"),
-    ),
-    (
-        "INTERACTION.md",
-        include_bytes!("../../../documentation/en/sdk/interaction.md"),
     ),
     // Typed commands and native menu declarations share the actual independent guest SDK.
     (
@@ -42,23 +26,13 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/interaction.rs",
         include_bytes!("../../plugin-protocol/src/interaction.rs"),
     ),
-    // The shared project format is shipped beside the public contract for independent authors.
-    (
-        "PACKAGING.md",
-        include_bytes!("../../../documentation/en/sdk/packaging.md"),
-    ),
     (
         "src/api/preference_binding.rs",
         include_bytes!("../../plugin-protocol/src/api/preference_binding.rs"),
     ),
-    ("TOOLS.md", include_bytes!("../../plugin-protocol/TOOLS.md")),
     (
         "src/ui/layout_tests.rs",
         include_bytes!("../../plugin-protocol/src/ui/layout_tests.rs"),
-    ),
-    (
-        "CONFIGURATIONS.md",
-        include_bytes!("../../../documentation/en/sdk/configurations.md"),
     ),
     // Public configuration providers receive the identical template, native form and validation types.
     (
@@ -68,15 +42,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
     (
         "src/configurations/command_form.rs",
         include_bytes!("../../plugin-protocol/src/configurations/command_form.rs"),
-    ),
-    // Reader-facing English is the canonical documentation exported with the identical public SDK.
-    (
-        "DEBUG.md",
-        include_bytes!("../../../documentation/en/sdk/debug.md"),
-    ),
-    (
-        "TARGETS.md",
-        include_bytes!("../../../documentation/en/sdk/targets.md"),
     ),
     // Independent target providers use the same exact schemas as the host consumer.
     (
@@ -101,42 +66,13 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/execution.rs",
         include_bytes!("../../plugin-protocol/src/execution.rs"),
     ),
-    // Independent consumers receive the same session contract and migration rules as the host.
-    (
-        "SESSIONS.md",
-        include_bytes!("../../../documentation/en/sdk/sessions.md"),
-    ),
-    (
-        "VIEWPORT.md",
-        include_bytes!("../../../documentation/en/sdk/viewport.md"),
-    ),
     (
         "src/api/viewport.rs",
         include_bytes!("../../plugin-protocol/src/api/viewport.rs"),
     ),
     (
-        "CODE_HIGHLIGHTING.md",
-        include_bytes!("../../../documentation/en/sdk/code-highlighting.md"),
-    ),
-    (
-        "NAVIGATION.md",
-        include_bytes!("../../../documentation/en/sdk/navigation.md"),
-    ),
-    (
         "src/api/navigation.rs",
         include_bytes!("../../plugin-protocol/src/api/navigation.rs"),
-    ),
-    (
-        "MIGRATION.md",
-        include_bytes!("../../../documentation/en/sdk/migration.md"),
-    ),
-    (
-        "FAULTS.md",
-        include_bytes!("../../../documentation/en/sdk/faults.md"),
-    ),
-    (
-        "SERVICES.md",
-        include_bytes!("../../../documentation/en/sdk/services.md"),
     ),
     (
         "src/service.rs",
@@ -163,16 +99,8 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../plugin-protocol/src/ui/visual_viewport.rs"),
     ),
     (
-        "DEPENDENCIES.md",
-        include_bytes!("../../../documentation/en/sdk/dependencies.md"),
-    ),
-    (
         "src/dependencies.rs",
         include_bytes!("../../plugin-protocol/src/dependencies.rs"),
-    ),
-    (
-        "LSP.md",
-        include_bytes!("../../../documentation/en/sdk/lsp.md"),
     ),
     (
         "src/language.rs",
@@ -182,10 +110,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
     (
         "src/structure.rs",
         include_bytes!("../../plugin-protocol/src/structure.rs"),
-    ),
-    (
-        "STRUCTURE.md",
-        include_bytes!("../../../documentation/en/sdk/structure.md"),
     ),
     (
         "src/process.rs",
@@ -214,22 +138,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
     (
         "Cargo.toml",
         include_bytes!("../../plugin-protocol/Cargo.toml"),
-    ),
-    (
-        "README.md",
-        include_bytes!("../../../documentation/en/sdk/index.md"),
-    ),
-    (
-        "UI.md",
-        include_bytes!("../../../documentation/en/sdk/ui.md"),
-    ),
-    (
-        "PROCESSES.md",
-        include_bytes!("../../../documentation/en/sdk/processes.md"),
-    ),
-    (
-        "LANGUAGES.md",
-        include_bytes!("../../../documentation/en/sdk/languages.md"),
     ),
     (
         "src/lib.rs",
@@ -350,92 +258,28 @@ pub(crate) fn cargo_config() -> anyhow::Result<PathBuf> {
     Ok(config)
 }
 
-/// Derive offline Markdown from the sole reader source; SDK code and schemas stay byte-identical.
-/// Reader filenames become package-relative links, including any trailing anchor.
-fn exported_bytes<'a>(relative: &str, bytes: &'a [u8]) -> Cow<'a, [u8]> {
-    if !relative.ends_with(".md") {
-        return Cow::Borrowed(bytes);
-    }
-    let mut document = std::str::from_utf8(bytes)
-        .expect("embedded reader documentation is UTF-8")
-        .to_owned();
-    // Optional Markdown metadata does not belong to the standalone public contract.
-    // Keep body line endings intact so Windows checkouts export the same readable content.
-    if let Some(rest) = document
-        .strip_prefix("---\r\n")
-        .or_else(|| document.strip_prefix("---\n"))
-        && let Some(end) = rest.find("\n---")
-    {
-        document = rest[(end + 4)..]
-            .trim_start_matches(['\r', '\n'])
-            .to_owned();
-    }
-    // The exported SDK contains the English contract only; repository translation navigation
-    // resolves online without copying a second mutable source into each independent project.
-    document = document.replace(
-        "](../../zh-cn/sdk/",
-        "](https://github.com/T-miracle/Nanobug/blob/main/documentation/zh-cn/sdk/",
-    );
-    for (route, file) in [
-        // Capability pages must precede the SDK root fallback to retain local exported links.
-        ("commands", "COMMANDS.md"),
-        ("interaction", "INTERACTION.md"),
-        ("packaging", "PACKAGING.md"),
-        ("configurations", "CONFIGURATIONS.md"),
-        ("debug", "DEBUG.md"),
-        ("targets", "TARGETS.md"),
-        ("sessions", "SESSIONS.md"),
-        ("viewport", "VIEWPORT.md"),
-        ("code-highlighting", "CODE_HIGHLIGHTING.md"),
-        ("navigation", "NAVIGATION.md"),
-        ("migration", "MIGRATION.md"),
-        ("faults", "FAULTS.md"),
-        ("services", "SERVICES.md"),
-        ("dependencies", "DEPENDENCIES.md"),
-        ("lsp", "LSP.md"),
-        ("structure", "STRUCTURE.md"),
-        ("ui", "UI.md"),
-        ("processes", "PROCESSES.md"),
-        ("languages", "LANGUAGES.md"),
-        ("documents", "DOCUMENTS.md"),
-        ("", "README.md"),
-    ] {
-        let route = if route.is_empty() {
-            "index.md".to_owned()
-        } else {
-            format!("{route}.md")
-        };
-        document = document.replace(&format!("]({route}"), &format!("]({file}"));
-    }
-    // User guides live in the repository rather than the guest SDK source bundle.
-    document = document.replace(
-        "](../guide/",
-        "](https://github.com/T-miracle/Nanobug/blob/main/documentation/en/guide/",
-    );
-    Cow::Owned(document.into_bytes())
-}
-
 /// Content-addressed caches let different editor versions build plugins independently.
 fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
     let mut digest = Sha256::new();
-    for (name, raw) in SDK_FILES {
-        let bytes = exported_bytes(name, raw);
+    for (name, bytes) in SDK_FILES {
         digest.update((name.len() as u64).to_le_bytes());
         digest.update(name.as_bytes());
         digest.update((bytes.len() as u64).to_le_bytes());
-        digest.update(bytes.as_ref());
+        digest.update(bytes);
     }
     let target = root.join(format!("{:x}", digest.finalize()));
     export(&target)?;
     Ok(target)
 }
 
-/// Preserve unchanged files for Cargo freshness and atomically repair incomplete caches.
+/// Publish Rust sources, Cargo manifests, WIT and JSON protocol resources into `target`.
+///
+/// Existing unrelated files are preserved. Unchanged sources retain Cargo freshness;
+/// incomplete files are atomically repaired. Directory and write failures propagate.
 pub fn export(target: &Path) -> anyhow::Result<()> {
-    for (relative, raw) in SDK_FILES {
-        let bytes = exported_bytes(relative, raw);
+    for (relative, bytes) in SDK_FILES {
         let path = target.join(relative);
-        publish(&path, bytes.as_ref())?;
+        publish(&path, bytes)?;
     }
     Ok(())
 }
@@ -464,6 +308,34 @@ fn publish(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    /// Independent authors receive only compilable sources and protocol resources in a fresh SDK.
+    #[test]
+    fn fresh_sdk_export_is_a_source_package() {
+        let root = tempfile::tempdir().unwrap();
+        export(root.path()).unwrap();
+        for required in ["Cargo.toml", "src/lib.rs", "wit/plugin.wit"] {
+            assert!(root.path().join(required).is_file(), "missing {required}");
+        }
+        let mut directories = vec![root.path().to_path_buf()];
+        while let Some(directory) = directories.pop() {
+            for entry in std::fs::read_dir(directory).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    directories.push(path);
+                } else {
+                    assert!(
+                        matches!(
+                            path.extension().and_then(|extension| extension.to_str()),
+                            Some("rs" | "toml" | "wit" | "json")
+                        ),
+                        "SDK contains a non-source resource: {}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+
     /// Two independent host invocations can publish a fresh SDK concurrently without partial files.
     #[test]
     fn concurrent_sdk_exports_converge() {
@@ -483,103 +355,17 @@ mod tests {
             worker.join().unwrap().unwrap();
         }
         for (relative, bytes) in SDK_FILES {
-            assert_eq!(
-                std::fs::read(root.path().join(relative)).unwrap(),
-                exported_bytes(relative, bytes).as_ref()
-            );
+            assert_eq!(std::fs::read(root.path().join(relative)).unwrap(), *bytes);
         }
     }
 
-    /// Both checkout styles rewrite reader links while retaining body newlines and real separators.
-    #[test]
-    fn reader_export_handles_both_checkout_newlines() {
-        let document = "# Public protocol\n[Services](services.md)\n";
-        let crlf = document.replace('\n', "\r\n");
-        assert_eq!(
-            exported_bytes("README.md", document.as_bytes()).as_ref(),
-            b"# Public protocol\n[Services](SERVICES.md)\n"
-        );
-        assert_eq!(
-            exported_bytes("README.md", crlf.as_bytes()).as_ref(),
-            b"# Public protocol\r\n[Services](SERVICES.md)\r\n"
-        );
-    }
-
-    /// Cross-language and guide links use repository files while capability anchors remain local.
-    #[test]
-    fn reader_export_preserves_anchors_and_resolves_repository_navigation() {
-        let document = "[Services](services.md#permissions)\n[Guide](../guide/plugins.md)\n[中文](../../zh-cn/sdk/services.md)\n";
-        let exported = exported_bytes("README.md", document.as_bytes());
-        assert_eq!(
-            exported.as_ref(),
-            concat!(
-                "[Services](SERVICES.md#permissions)\n",
-                "[Guide](https://github.com/T-miracle/Nanobug/blob/main/documentation/en/guide/plugins.md)\n",
-                "[中文](https://github.com/T-miracle/Nanobug/blob/main/documentation/zh-cn/sdk/services.md)\n",
-            ).as_bytes()
-        );
-    }
-
-    /// Exported Markdown must be navigable from the SDK directory without a documentation server.
-    #[test]
-    fn documents_sdk_exports_stable_contract_and_policy_link() {
-        let root = tempfile::tempdir().unwrap();
-        export(root.path()).unwrap();
-        let readme = std::fs::read_to_string(root.path().join("README.md")).unwrap();
-        let documents = std::fs::read_to_string(root.path().join("DOCUMENTS.md")).unwrap();
-        assert!(
-            readme.contains("](DOCUMENTS.md)"),
-            "README must link to the embedded document contract"
-        );
-        assert_eq!(
-            documents.lines().next(),
-            Some("# Documents and readonly resources")
-        );
-        assert!(documents.contains("are stable core"));
-        assert!(documents.contains("](README.md#stability-and-capability-compatibility)"));
-        assert!(readme.contains("## Stability and capability compatibility"));
-    }
-
-    /// All independently exported pages resolve to the same immutable SDK bundle.
-    #[test]
-    fn exported_reader_documents_resolve_all_local_links() {
-        let root = tempfile::tempdir().unwrap();
-        export(root.path()).unwrap();
-        for (relative, _) in SDK_FILES.iter().filter(|(name, _)| name.ends_with(".md")) {
-            let document = std::fs::read_to_string(root.path().join(relative)).unwrap();
-            assert!(
-                !document.contains("](/en/"),
-                "{relative} still contains a root-relative documentation link"
-            );
-            for link in document
-                .split("](")
-                .skip(1)
-                .filter_map(|tail| tail.split(')').next())
-            {
-                if link.starts_with("https://")
-                    || link.starts_with("http://")
-                    || link.starts_with('#')
-                {
-                    continue;
-                }
-                let path = link.split('#').next().unwrap();
-                assert!(
-                    root.path().join(path).is_file(),
-                    "{relative} points to missing {path}"
-                );
-            }
-        }
-    }
-
+    /// Reuse a complete source cache and repair interrupted files without rewriting good inputs.
     #[test]
     fn cached_contract_is_complete_reused_and_repairs_corruption() {
         let root = tempfile::tempdir().unwrap();
         let sdk = prepare_cache(root.path()).unwrap();
         for (relative, bytes) in SDK_FILES {
-            assert_eq!(
-                std::fs::read(sdk.join(relative)).unwrap(),
-                exported_bytes(relative, bytes).as_ref()
-            );
+            assert_eq!(std::fs::read(sdk.join(relative)).unwrap(), *bytes);
         }
         let manifest = sdk.join("Cargo.toml");
         let modified = manifest.metadata().unwrap().modified().unwrap();
@@ -589,54 +375,7 @@ mod tests {
         std::fs::remove_file(sdk.join("wit/plugin.wit")).unwrap();
         prepare_cache(root.path()).unwrap();
         for (relative, bytes) in SDK_FILES {
-            assert_eq!(
-                std::fs::read(sdk.join(relative)).unwrap(),
-                exported_bytes(relative, bytes).as_ref()
-            );
+            assert_eq!(std::fs::read(sdk.join(relative)).unwrap(), *bytes);
         }
-    }
-
-    #[test]
-    fn exported_documents_start_with_the_contract_heading() {
-        for (relative, bytes) in SDK_FILES {
-            if !relative.ends_with(".md") {
-                continue;
-            }
-            let exported = String::from_utf8(exported_bytes(relative, bytes).into_owned()).unwrap();
-            assert!(
-                exported.starts_with("# "),
-                "{relative} must start with its heading"
-            );
-            assert!(
-                !exported.starts_with("---"),
-                "{relative} must not export Markdown metadata"
-            );
-        }
-    }
-
-    #[test]
-    fn frontmatter_stripping_leaves_other_text_alone() {
-        let with_frontmatter =
-            b"---\ntitle: Example\nalternate: /en/x/\n---\n\n# Heading\n\nBody.\n";
-        assert_eq!(
-            String::from_utf8(exported_bytes("DOC.md", with_frontmatter).into_owned()).unwrap(),
-            "# Heading\n\nBody.\n"
-        );
-        // A Windows checkout must export the same heading, preserving the body's own CRLF.
-        let windows_frontmatter = b"---\r\ntitle: Example\r\n---\r\n\r\n# Heading\r\n\r\nBody.\r\n";
-        assert_eq!(
-            exported_bytes("DOC.md", windows_frontmatter).as_ref(),
-            b"# Heading\r\n\r\nBody.\r\n"
-        );
-        let without_frontmatter = b"# Heading\n\nBody.\n";
-        assert_eq!(
-            exported_bytes("DOC.md", without_frontmatter).as_ref(),
-            without_frontmatter
-        );
-        let horizontal_rule = b"# Heading\n\n---\n\nBody.\n";
-        assert_eq!(
-            exported_bytes("DOC.md", horizontal_rule).as_ref(),
-            horizontal_rule
-        );
     }
 }
