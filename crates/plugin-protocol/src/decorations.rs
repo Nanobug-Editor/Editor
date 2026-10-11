@@ -4,6 +4,8 @@
 //! Stable core `editor.decorations 1.0`, protocol 7/base 1. The minimum host must advertise this
 //! capability; document reads/events additionally negotiate `editor.documents 1.1`. Every call
 //! requires `editor.read`; owned SVG icons also require `ui.icons` and `assets.read`.
+//! Guest messages are platform independent; the current native GPUI implementation is verified on
+//! Windows. Other hosts must provide the same negotiated behavior before advertising this capability.
 //! Collections hold at most 1024 markers/512 KiB metadata and 2 MiB total owned artwork.
 //! One instance holds at most sixteen collections under the common 128-resource quota.
 //! Native documents additionally admit at most 4096 markers across all sources. A collection

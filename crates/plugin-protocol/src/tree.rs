@@ -3,6 +3,8 @@
 //!
 //! Stable core `ui.tree 1.0`, protocol 7/base 1. The minimum compatible host must advertise
 //! `ui.tree`, `ui.panels` and `ui.native`; package versions do not negotiate these capabilities.
+//! Guest messages are platform independent; the current native GPUI implementation is verified on
+//! Windows. Other hosts must provide the same negotiated behavior before advertising this capability.
 //! Allocate with `create`, publish `ui::Kind::Tree` in an owned panel, handle
 //! `ui::Action::Tree(Event::Request(..))`, and call `reply` with provider data or a typed failure.
 //! Give `Kind::Tree` and its surrounding column a growing or explicitly sized layout, so Base's

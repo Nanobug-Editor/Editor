@@ -106,6 +106,24 @@ fn community_database_tree_native_keyboard_waits_for_manual_retry(cx: &mut TestA
     visual.simulate_click(main, Default::default());
     visual.simulate_keystrokes("right");
     frame(visual, &view, &manager);
+    // Observe Base's native tree semantics after a real pointer selection and keyboard expansion.
+    // The local row renderer must preserve these facts rather than replace Base interaction.
+    visual.update(|window, _| {
+        let items = gpui_base::test_support::snapshots(window);
+        assert!(
+            items
+                .iter()
+                .any(|item| item.role() == Some(gpui_kit::Role::Tree))
+        );
+        let main = items
+            .iter()
+            .find(|item| {
+                item.role() == Some(gpui_kit::Role::TreeItem) && item.label() == Some("main")
+            })
+            .expect("expanded provider node has a native accessible name");
+        assert_eq!(main.selected(), Some(true));
+        assert_eq!(main.expanded(), Some(true));
+    });
     let fault = visual
         .debug_bounds("plugin-tree-row-fault-once")
         .unwrap()
