@@ -194,6 +194,19 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "wit/plugin.wit",
         include_bytes!("../../plugin-protocol/wit/plugin.wit"),
     ),
+    // Trees and native marker consumers compile against the same bounded contract as this host.
+    (
+        "src/tree.rs",
+        include_bytes!("../../plugin-protocol/src/tree.rs"),
+    ),
+    (
+        "src/decorations.rs",
+        include_bytes!("../../plugin-protocol/src/decorations.rs"),
+    ),
+    (
+        "src/ui/presentation_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/presentation_tests.rs"),
+    ),
 ];
 
 /// Handle development commands before starting the GUI. Cargo owns build/test options.
@@ -328,6 +341,21 @@ fn publish(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    /// The guest SDK consists solely of the protocol crate's buildable sources and schemas.
+    #[test]
+    fn sdk_contains_only_protocol_source_and_schemas() {
+        assert!(SDK_FILES.iter().all(|(name, _)| *name == "Cargo.toml"
+            || name.ends_with(".rs")
+            || name.ends_with(".wit")
+            || name.ends_with(".json")));
+        assert!(SDK_FILES.iter().any(|(name, _)| *name == "src/tree.rs"));
+        assert!(
+            SDK_FILES
+                .iter()
+                .any(|(name, _)| *name == "src/decorations.rs")
+        );
+    }
+
     use super::*;
 
     /// Independent SDKs carry the guest contract as source comments, never embedded reader Markdown.

@@ -7,6 +7,8 @@ mod commands;
 #[cfg(test)]
 mod community_document_tests;
 #[cfg(test)]
+mod community_presentation_tests;
+#[cfg(test)]
 pub(crate) mod composable_tests;
 pub(crate) mod contributions;
 #[cfg(test)]
@@ -146,6 +148,8 @@ pub struct ExtensionPanel {
     views: HashMap<String, Arc<protocol::ui::Document>>,
     /// Raster images are paired with their exact scene and prepared outside the UI thread.
     images: images::SceneImages,
+    /// Shared generic tree resources are joined by full instance-owned handles at native projection.
+    trees: Vec<Arc<plugin_runtime::TreeResource>>,
     active: Option<String>,
     surface_id: Option<String>,
     /// Editor-local surfaces are selected by the active document instead of the outer dock tree.
@@ -354,6 +358,7 @@ impl ExtensionPanel {
             startup,
             views: HashMap::new(),
             images: Default::default(),
+            trees: Default::default(),
             active: None,
             surface_id: None,
             editor_preview: false,
@@ -458,6 +463,7 @@ impl ExtensionPanel {
             startup: BTreeMap::new(),
             views,
             images: Default::default(),
+            trees: Default::default(),
             active: Some(id),
             surface_id: Some(panel.id),
             editor_preview: panel.position == "editor",
@@ -682,6 +688,7 @@ impl ExtensionPanel {
                 .map(|(id, s)| (id.clone(), s.clone()))
                 .collect();
             self.images = state.images.clone();
+            self.trees = state.trees.clone();
             self.processes = state
                 .processes
                 .iter()

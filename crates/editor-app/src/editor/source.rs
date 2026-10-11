@@ -11,6 +11,16 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
         crate::ui::controls::synchronize_editor_appearance(&self.editor, cx);
+        if let Some(index) = self.active_text_tab_index() {
+            self.tabs[index]
+                .text
+                .as_ref()
+                .expect("text tab")
+                .highlighter
+                .markers()
+                .borrow_mut()
+                .synchronize(None, cx);
+        }
         let style = component_styles(cx, ThemeComponent::Editor).base;
         // Modal surfaces own the window until dismissed; ordinary floating
         // panels can remain below the raised definition details layer.
@@ -215,6 +225,7 @@ impl EditorApp {
             )
             // Paint the drop caret after the text, using the current editor layout.
             .child(self.render_text_drag_caret(cx))
+            .child(self.render_editor_markers(cx))
             .children(self.render_linked_input())
             .children(self.render_rename_prompt(cx))
             .into_any_element()

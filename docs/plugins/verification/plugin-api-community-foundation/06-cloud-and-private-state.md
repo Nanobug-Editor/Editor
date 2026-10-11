@@ -103,7 +103,7 @@ cargo test -p plugin-runtime --test cloud t30_failed_cloud_update_retires_candid
 - 只有成功 OpenTemporary 的实例记录目录归属，关闭 handle 仍保留清理责任；quiesce、stop、Drop 至多领取一次清理权。失败候选没有归属，不会删除旧实例目录。
 - 配置持久写入成功后，Manager 先移除并 stop 旧实例，再开放候选 committed activation 并插入。Manager 串行调用，Broker 只持有调用元数据及队列、不持有 WASM Store；没有两个可执行 owner 同时获得同一临时目录的窗口。
 - Data 的文件、目录、编辑器入口不能访问保留 `.temporary`，同时拒绝 Windows 大小写、尾点、尾空格及现存 8.3 别名。校验只作用于 Data，Cache/Workspace 内同名相对路径仍可用；editor 原生路径解析在协商与 grant 检查之后执行。
-- Data 公共根深度仍为 16，Cache/Temporary 各占一个保留层，没有增加额外 UUID 层。预览 data refresh 可复制旧 Temporary；最终 commit 先 quiesce/snapshot/stop 旧实例，再 refresh 清除预览副本，最后 publish 才 rename backup。恢复公共 Data List 在重新 OpenTemporary **之前**断言没有 `.temporary`，避免重新打开掩盖孤立数据。
+- Data 公共根深度仍为 16，Cache/Temporary 各占一个保留层，没有增加额外 UUID 层。预览 data refresh 可复制旧 Temporary。06 当时独立输入的 cutover 先 quiesce/snapshot/stop；[05 的实际树回归](05-trees-and-decorations-native.md)证明 Snapshot 需要尚有效的资源，后续合并已改为先移除调用入口、在有效旧实例上 Snapshot、再 stop，随后 refresh 清除预览副本，最后 publish 才 rename backup。失败恢复从已提交旧包重建实例，受管数据提交后才开放 committed activation；相关合并实测在[恢复执行记录](2026-10-11-resume.md)单独记录，不把原 06 结果当新顺序通过。恢复公共 Data List 在重新 OpenTemporary **之前**断言没有 `.temporary`，避免重新打开掩盖孤立数据。
 
 新增独立 `temporary-candidate` 0.1.0 由正式 SDK 构建，Prepare/configuration 及 Snapshot 的实际 reply 经生产 `Package` 和 `Manager` 验证。以下失败日志保持原样，准备夹具失败另保留 `temp-publication06-fixture-red.log`，不与行为红灯混记。
 

@@ -231,6 +231,10 @@ pub enum Operation {
     Private {
         operation: crate::storage::Operation,
     },
+    /// Instance-owned lazy tree publication; no editor or file authority is implied.
+    Tree {
+        operation: crate::tree::Operation,
+    },
     /// Typed calls preserve caller ownership through the shared request completion gate.
     Commands {
         operation: crate::commands::Operation,
@@ -608,6 +612,10 @@ pub enum EditorOperation {
     Workspace {
         operation: crate::workspace::Operation,
     },
+    /// Owned point/range/gutter markers; requires editor.decorations and editor.read.
+    Decorations {
+        operation: crate::decorations::Operation,
+    },
     /// Open an existing workspace text resource; local opens also require workspace.read.
     OpenDocument {
         resource: ResourceIdentity,
@@ -720,6 +728,12 @@ pub enum EditorOperation {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EditorValue {
     Workspace(crate::workspace::Value),
+    /// Native current positions are metadata, independent of text, selection or Undo storage.
+    Decorations {
+        handle: ResourceHandle,
+        document: DocumentVersion,
+        positions: Vec<crate::decorations::Position>,
+    },
     /// Open/refresh returns current metadata; EditorState retains the only live text.
     DocumentOpened(DocumentInfo),
     /// Navigation returns the version validated before the native selection.

@@ -116,6 +116,7 @@ fn native_xml_cancelled_parser_preserves_paste_undo_redo(cx: &mut TestAppContext
                         syntax: Rc::new(RefCell::new(syntax)),
                         parser_cancelled: Rc::new(Cell::new(false)),
                         folds: Rc::new(RefCell::new(Some(Vec::new()))),
+                        markers: Rc::new(RefCell::new(Default::default())),
                         generation: Rc::new(Cell::new(0)),
                         pending: None,
                     }))

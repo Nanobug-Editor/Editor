@@ -138,6 +138,7 @@ impl ExtensionPanel {
             view.set_scene_current(interactive, cx);
             view.native_editor = Some(editor);
             view.set_viewport_enabled(self.viewport_sync_enabled, cx);
+            view.update_trees(&self.trees, cx);
             view.update_images(&key, &self.images, window, cx)
         });
         view

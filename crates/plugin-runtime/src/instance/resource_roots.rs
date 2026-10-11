@@ -17,6 +17,10 @@ pub(super) enum RootKind {
     ImageInput,
     /// Readonly text never grants file-root authority.
     VirtualDocument,
+    /// Native tree metadata is not a filesystem root.
+    Tree,
+    /// Point/range metadata grants no file access.
+    Decoration,
     ServiceReference,
     ServiceRequest,
     /// Provider-side deferred reply; it is not a consumer reference or a native process authority.
@@ -89,16 +93,10 @@ impl ResourceRoots {
     pub(super) fn len(&self) -> usize {
         self.slots.len()
     }
-    /// Rollback retains the declared quota while allocating a new owner identity.
-    pub(super) fn renewed(&self, workspace: &str) -> Self {
-        Self::new(workspace, self.application, self.limit)
-    }
-
     /// Quiesce/stop/Drop may all run; only the incarnation which opened Temporary takes cleanup once.
     pub(super) fn take_temporary(&mut self) -> bool {
         std::mem::take(&mut self.temporary_owned)
     }
-
     pub(super) fn resolve(&self, handle: &ResourceHandle) -> Result<RootKind, Failure> {
         if self.retired || handle.instance != self.instance || handle.scope != self.scope {
             return Err(Failure::new(
@@ -164,6 +162,8 @@ impl State {
             | RootKind::Http
             | RootKind::Timer
             | RootKind::VirtualDocument
+            | RootKind::Tree
+            | RootKind::Decoration
             | RootKind::Selected
             | RootKind::ImageInput
             | RootKind::ServiceReference
@@ -308,6 +308,14 @@ impl State {
                 self.subscriptions.remove(&handle.resource);
                 self.document_streams.remove(&handle.resource);
                 self.file_subscriptions.remove(&handle.resource);
+                // Native projections may retain an Arc after the owning handle is closed.
+                // Seal their metadata as well as removing the slot, alongside file/stream cleanup.
+                if let Some(tree) = self.trees.remove(&handle.resource) {
+                    tree.revoke();
+                }
+                if let Some(resource) = self.decorations.remove(&handle.resource) {
+                    resource.revoke();
+                }
                 if let Some(resource) = self.virtual_documents.remove(&handle.resource) {
                     resource.revoke();
                 }
@@ -336,6 +344,7 @@ impl State {
             | api::Operation::Secrets { .. }
             | api::Operation::Timer { .. }
             | api::Operation::Private { .. }
+            | api::Operation::Tree { .. }
             | api::Operation::Commands { .. }
             | api::Operation::DescribeSdk
             | api::Operation::Service { .. }

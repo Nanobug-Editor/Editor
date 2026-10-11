@@ -32,6 +32,11 @@ impl PluginView {
         let id = node.id.clone();
         let native_id = SharedString::from(format!("plugin-ui-{}", node.id));
         match &node.kind {
+            Kind::Tree { .. } => self
+                .trees
+                .get(&node.id)
+                .map(|view| view.clone().into_any_element())
+                .unwrap_or_else(|| div().into_any_element()),
             Kind::SideTabs(_) => self.collections[&node.id].clone().into_any_element(),
             Kind::Canvas(_) => self.canvases[&node.id].clone().into_any_element(),
             Kind::FileImage { alt, sizing } => {

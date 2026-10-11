@@ -1,0 +1,16 @@
+_version: 2
+tree.loading:
+  en: "Loading…"
+  zh-CN: "正在加载…"
+tree.retry:
+  en: "Retry"
+  zh-CN: "重试"
+tree.expand:
+  en: "Expand to load"
+  zh-CN: "展开以加载"
+tree.more:
+  en: "Load more"
+  zh-CN: "加载更多"
+tree.empty:
+  en: "No children"
+  zh-CN: "没有子节点"

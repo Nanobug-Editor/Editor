@@ -1,6 +1,7 @@
 //! Document lifecycle and editor-area presentation.
 
 pub(crate) mod comparison;
+pub(crate) mod decorations;
 #[cfg(test)]
 mod definition_tests;
 pub(crate) mod diagnostics;

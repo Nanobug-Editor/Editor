@@ -34,6 +34,20 @@ fn package_negotiates_required_interfaces_and_ignores_unavailable_optional_ones(
     );
 }
 
+/// Trees and decorations are ordinary negotiated capabilities, independent of package identity.
+#[test]
+fn presentation_interfaces_are_admitted_before_running_any_guest() {
+    let result = package(json!({
+        "base": "^1", "required": {"ui.tree": "^1", "editor.decorations": "^1"},
+        "optional": {"presentation.future": "^9"}
+    }));
+    assert!(
+        result.is_ok(),
+        "presentation contract rejected: {:?}",
+        result.err()
+    );
+}
+
 /// Compatibility is determined per interface, not by the unrelated package version.
 #[test]
 fn cloud_capability_versions_are_admitted_independently_from_package_version() {

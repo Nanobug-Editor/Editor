@@ -47,6 +47,8 @@ pub mod commands;
 /// Public command-template, native-form and validation service contract.
 pub mod configurations;
 pub mod debug;
+/// Native source-owned point and range markers with explicit edit and deletion semantics.
+pub mod decorations;
 pub mod dependencies;
 pub mod execution;
 /// General HTTP streams with target grants, backpressure and cancellation.
@@ -67,6 +69,8 @@ pub mod structure;
 pub mod targets;
 /// Disposable timer and debounce resources revoked with their owning instance.
 pub mod timers;
+/// Generic native lazy trees and their bounded provider callbacks.
+pub mod tree;
 pub mod ui;
 pub mod workspace;
 

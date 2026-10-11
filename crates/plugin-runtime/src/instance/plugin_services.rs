@@ -319,6 +319,22 @@ impl State {
             api::Operation::Timer {
                 operation: plugin_protocol::timers::Operation::Reset { handle, .. },
             } if owned(handle) => return Ok(()),
+            api::Operation::Tree { operation } => {
+                let handle = match operation {
+                    plugin_protocol::tree::Operation::Create => None,
+                    plugin_protocol::tree::Operation::Refresh { tree } => Some(tree),
+                    plugin_protocol::tree::Operation::Reply { request, .. } => Some(&request.tree),
+                };
+                if handle.is_some_and(|handle| !owned(handle))
+                    && !context.direct_host_selection(&self.plugin_services.principal.instance)
+                {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Service source cannot borrow a private provider tree",
+                    ));
+                }
+                "ui.panels"
+            }
             api::Operation::Commands {
                 operation: plugin_protocol::commands::Operation::Reply { .. },
             } => return Ok(()),
