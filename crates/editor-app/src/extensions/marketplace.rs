@@ -1,25 +1,85 @@
 //! Native marketplace uses inert catalog snapshots; consent never constructs a fake Package.
 use super::*;
 use crate::ui::controls::vertical_viewport_scrollbar;
+use gpui_base::DialogClose;
 use gpui_kit::component::WindowExt as _;
-use gpui_kit::component::dialog::{DialogAction, DialogClose, DialogFooter};
+use gpui_kit::component::dialog::{DialogAction, DialogFooter};
 use gpui_kit::component::scroll::ScrollableElement;
-use plugin_runtime::marketplace::{CATALOG_URL, Release, Sort};
+use plugin_runtime::marketplace::{CATALOG_URL, CompatibilityIssue, Release, Sort};
+mod details;
+
+const MARKET_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
 
 /// Local filters survive repaints. The worker owns catalog generation and network results.
 #[derive(Default)]
 pub(super) struct ViewState {
     pub revision: u64,
     started: bool,
+    checked_at: Option<std::time::Instant>,
+    selected_version: Option<String>,
+    history_id: Option<String>,
     category: String,
     tag: String,
     sort: Sort,
 }
 
+impl ViewState {
+    /// Installed-detail navigation opens all reviewed history without retaining earlier search filters.
+    pub(super) fn show_history(&mut self, id: String) {
+        self.category.clear();
+        self.tag.clear();
+        self.selected_version = None;
+        self.history_id = Some(id);
+    }
+
+    /// Ordinary discovery hides fully withdrawn entries, even if a local copy is installed.
+    pub(super) fn leave_history(&mut self) {
+        self.history_id = None;
+        // Version choices belong to the current listing; a new discovery must choose its own compatible default.
+        self.selected_version = None;
+    }
+
+    /// A monotonic clock makes background check timing independent of system clock changes.
+    pub(super) fn needs_check(&self, now: std::time::Instant) -> bool {
+        self.checked_at
+            .is_none_or(|checked| now.saturating_duration_since(checked) >= MARKET_CHECK_INTERVAL)
+    }
+
+    /// Record attempts, including failures, so an outage does not cause a tight retry loop.
+    pub(super) fn mark_check(&mut self, now: std::time::Instant) {
+        self.started = true;
+        self.checked_at = Some(now);
+    }
+}
+
 impl ExtensionPanel {
-    /// Start one refresh per market-window lifetime; further attempts require the refresh button.
-    fn refresh_online_market(&mut self) {
-        self.market_view.started = true;
+    /// Last successfully fetched history keeps an update indicator through a later outage.
+    pub(crate) fn has_market_updates(&self) -> bool {
+        let state = self.worker.state.lock().unwrap();
+        let Some(catalog) = &state.market.catalog else {
+            return false;
+        };
+        let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
+        self.entries.iter().any(|entry| {
+            catalog
+                .plugins
+                .iter()
+                .find(|listing| listing.id == entry.manifest.id)
+                .is_some_and(|listing| {
+                    listing
+                        .upgrade(
+                            &entry.manifest.version,
+                            env!("CARGO_PKG_VERSION"),
+                            &platform,
+                        )
+                        .is_some()
+                })
+        })
+    }
+
+    /// Startup, the six-hour scheduler, manager freshness and explicit refresh share this operation.
+    pub(super) fn refresh_online_market(&mut self) {
+        self.market_view.mark_check(std::time::Instant::now());
         self.worker.refresh_market(
             self.root.join("marketplace/catalog.json"),
             CATALOG_URL.into(),
@@ -38,7 +98,16 @@ impl ExtensionPanel {
                 self.refresh_online_market();
             }
         }
-        let state = self.worker.state.lock().unwrap().market.clone();
+        let (state, statistics, statistics_error, ready) = {
+            let published = self.worker.state.lock().unwrap();
+            (
+                published.market.clone(),
+                published.market_statistics.clone(),
+                published.market_statistics_error.clone(),
+                published.ready,
+            )
+        };
+        let history_ids = self.market_view.history_id.iter().cloned().collect();
         let query = self
             .manager_search
             .as_ref()
@@ -48,11 +117,13 @@ impl ExtensionPanel {
             .catalog
             .as_ref()
             .map(|catalog| {
-                catalog.search(
+                catalog.search_with(
                     &query,
                     &self.market_view.category,
                     &self.market_view.tag,
                     self.market_view.sort,
+                    statistics.as_deref(),
+                    &history_ids,
                 )
             })
             .unwrap_or_default();
@@ -75,7 +146,12 @@ impl ExtensionPanel {
                     .label(row.versions[0].manifest.name.clone())
                     .w_full()
                     .on_click(cx.listener(move |this, _, _, cx| {
+                        // Selecting another row returns to ordinary discovery rather than retaining a withdrawal exception.
+                        if this.manager_selected.as_ref() != Some(&id) {
+                            this.market_view.leave_history();
+                        }
                         this.manager_selected = Some(id.clone());
+                        this.market_view.selected_version = None;
                         this.manager_detail_scroll.set_offset(Default::default());
                         cx.notify();
                     })),
@@ -122,6 +198,7 @@ impl ExtensionPanel {
                     .label(t!("plugins.installed").to_string())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.manager_market = false;
+                        this.market_view.leave_history();
                         this.manager_selected = None;
                         cx.notify();
                     })),
@@ -135,6 +212,7 @@ impl ExtensionPanel {
                 Button::new("market-category")
                     .label(category_label)
                     .on_click(cx.listener(move |this, _, _, cx| {
+                        this.market_view.leave_history();
                         this.market_view.category =
                             next_filter(&this.market_view.category, &categories);
                         this.manager_selected = None;
@@ -145,6 +223,7 @@ impl ExtensionPanel {
                 Button::new("market-tag")
                     .label(tag_label)
                     .on_click(cx.listener(move |this, _, _, cx| {
+                        this.market_view.leave_history();
                         this.market_view.tag = next_filter(&this.market_view.tag, &tags);
                         this.manager_selected = None;
                         cx.notify();
@@ -170,6 +249,7 @@ impl ExtensionPanel {
                     let owner = cx.entity().downgrade();
                     move |index, _, cx| {
                         let _ = owner.update(cx, |this, cx| {
+                            this.market_view.leave_history();
                             this.market_view.sort = sorts[index];
                             cx.notify();
                         });
@@ -228,6 +308,16 @@ impl ExtensionPanel {
                 },
             ));
         }
+        if let Some(statistics) = &statistics {
+            if let Some(at) = &statistics.measured_at {
+                body =
+                    body.child(t!("plugins.market_statistics_at", time = at.clone()).to_string());
+            }
+        }
+        if let Some(error) = &statistics_error {
+            body = body
+                .child(t!("plugins.market_statistics_stale", error = error.clone()).to_string());
+        }
         if let Some(status) = &self.status {
             body = body.child(
                 div()
@@ -236,145 +326,13 @@ impl ExtensionPanel {
             );
         }
         if let Some(listing) = selected {
-            let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-            let compatible = listing.compatible(env!("CARGO_PKG_VERSION"), &platform);
-            let release = compatible.unwrap_or(&listing.versions[0]);
-            let installed = self.entries.iter().any(|e| e.manifest.id == listing.id);
-            let candidate = release.clone();
-            let generation = state.generation();
-            let source = format!("https://github.com/{}", listing.repository);
-            let feedback = format!("{source}/issues");
-            body = body
-                .child(
-                    div()
-                        .text_xl()
-                        .font_semibold()
-                        .child(release.manifest.name.clone()),
-                )
-                .child(format!(
-                    "{} · {} · {}",
-                    release.version,
-                    listing.maintainers.join(", "),
-                    release.license
-                ))
-                .child(listing.summary.clone())
-                .child(
-                    t!(
-                        "plugins.market_published_at",
-                        time = release.published_at.clone()
-                    )
-                    .to_string(),
-                )
-                .child(
-                    h_flex()
-                        .gap_2()
-                        .child(
-                            Button::new("market-source")
-                                .debug_selector(|| "market-source".into())
-                                .label(t!("plugins.market_source").to_string())
-                                .on_click(move |_, _, cx| cx.open_url(&source)),
-                        )
-                        .child(
-                            Button::new("market-feedback")
-                                .debug_selector(|| "market-feedback".into())
-                                .label(t!("plugins.market_feedback").to_string())
-                                .on_click(move |_, _, cx| cx.open_url(&feedback)),
-                        ),
-                )
-                .child(
-                    t!(
-                        "plugins.market_identity",
-                        id = listing.id.clone(),
-                        repository = listing.repository.clone()
-                    )
-                    .to_string(),
-                )
-                .child(
-                    t!(
-                        "plugins.market_compatibility",
-                        host = release.host_version.clone(),
-                        platforms = if release.platforms.is_empty() {
-                            "*".into()
-                        } else {
-                            release.platforms.join(", ")
-                        }
-                    )
-                    .to_string(),
-                )
-                .child(
-                    t!(
-                        "plugins.market_permissions",
-                        permissions = release
-                            .manifest
-                            .permissions
-                            .iter()
-                            .cloned()
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                    .to_string(),
-                )
-                .child(listing.tags.join(" · "))
-                .child(
-                    listing
-                        .downloads
-                        .map(|count| t!("plugins.market_downloads", count = count).to_string())
-                        .unwrap_or_else(|| t!("plugins.market_downloads_unavailable").to_string()),
-                )
-                .child(
-                    Button::new("market-install")
-                        .debug_selector(|| "market-install".into())
-                        .label(if installed {
-                            t!("plugins.installed").to_string()
-                        } else {
-                            t!("plugins.install").to_string()
-                        })
-                        .disabled(
-                            installed
-                                || !self.worker.state.lock().unwrap().ready
-                                || compatible.is_none()
-                                || !state.fresh()
-                                || self.progress.is_some()
-                                || !self
-                                    .worker
-                                    .trusted
-                                    .load(std::sync::atomic::Ordering::Acquire),
-                        )
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.confirm_market_install(candidate.clone(), generation, window, cx);
-                        })),
-                );
-            if compatible.is_none() {
-                body = body.child(t!("plugins.market_incompatible").to_string());
-            }
-            if let Some(bitmap) = self
-                .worker
-                .state
-                .lock()
-                .unwrap()
-                .market_icons
-                .get(&release.sha256)
-            {
-                body = body.child(gpui_kit::img(bitmap.image.clone()).size(px(24.)));
-            }
-            body = body
-                .child(ui::controls::untrusted_markdown_view(
-                    "market-readme",
-                    release.readme.clone(),
-                    typography::font_size(cx),
-                    cx,
-                ))
-                .child(
-                    div()
-                        .font_semibold()
-                        .child(t!("plugins.changes").to_string()),
-                )
-                .child(ui::controls::untrusted_markdown_view(
-                    "market-changelog",
-                    release.changelog.clone(),
-                    typography::font_size(cx),
-                    cx,
-                ));
+            body = body.child(self.market_listing_details(
+                listing,
+                &state,
+                statistics.as_deref(),
+                ready,
+                cx,
+            ));
         } else {
             body = body.child(t!("plugins.empty_market").to_string());
         }
@@ -406,11 +364,13 @@ impl ExtensionPanel {
             .into_any_element()
     }
 
-    /// Show source and every requested permission before any package download can start.
+    /// First installs confirm all permissions; upgrades confirm only grants absent from the old record.
     fn confirm_market_install(
         &mut self,
         release: Release,
         generation: u64,
+        upgrading: bool,
+        permissions: Vec<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -419,8 +379,14 @@ impl ExtensionPanel {
             let release = release.clone();
             let candidate = release.clone();
             let owner = owner.clone();
+            let permissions = permissions.clone();
+            let action = if upgrading {
+                t!("plugins.update").to_string()
+            } else {
+                t!("plugins.install").to_string()
+            };
             dialog
-                .title(t!("plugins.install").to_string())
+                .title(action.clone())
                 .width(px(540.))
                 .overlay_closable(false)
                 .content(move |content, _, _| {
@@ -433,13 +399,7 @@ impl ExtensionPanel {
                             .child(
                                 t!(
                                     "plugins.market_permissions",
-                                    permissions = release
-                                        .manifest
-                                        .permissions
-                                        .iter()
-                                        .cloned()
-                                        .collect::<Vec<_>>()
-                                        .join(", ")
+                                    permissions = permissions.join(", ")
                                 )
                                 .to_string(),
                             )
@@ -460,15 +420,17 @@ impl ExtensionPanel {
                 })
                 .footer(
                     DialogFooter::new()
-                        .child(
-                            DialogClose::new()
-                                .trigger(|b| b.label(t!("plugins.cancel").to_string())),
-                        )
+                        .child(DialogClose::new().trigger(|base| {
+                            Button::new("market-consent-cancel")
+                                .with_base(base)
+                                .debug_selector(|| "market-consent-cancel".into())
+                                .label(t!("plugins.cancel").to_string())
+                        }))
                         .child(
                             DialogAction::new().child(
                                 Button::new("confirm-market-install")
                                     .debug_selector(|| "confirm-market-install".into())
-                                    .label(t!("plugins.install").to_string())
+                                    .label(action)
                                     .primary(),
                             ),
                         ),
@@ -494,4 +456,60 @@ fn next_filter(current: &str, values: &std::collections::BTreeSet<String>) -> St
         .find(|value| value.as_str() > current)
         .cloned()
         .unwrap_or_default()
+}
+
+/// Explain why a historical release cannot be installed without hiding its review history.
+fn market_version_issue(
+    release: &Release,
+    installed: Option<&plugin_runtime::Installed>,
+    platform: &str,
+) -> Option<String> {
+    if release.withdrawn {
+        return Some(
+            t!(
+                "plugins.market_withdrawn",
+                reason = release.withdrawal_reason.as_deref().unwrap_or("")
+            )
+            .to_string(),
+        );
+    }
+    if let Err(error) = release.compatible(env!("CARGO_PKG_VERSION"), platform) {
+        return Some(match error {
+            CompatibilityIssue::Host => t!("plugins.market_host_incompatible").to_string(),
+            CompatibilityIssue::Platform => t!("plugins.market_platform_incompatible").to_string(),
+            CompatibilityIssue::Withdrawn => t!(
+                "plugins.market_withdrawn",
+                reason = release.withdrawal_reason.as_deref().unwrap_or("")
+            )
+            .to_string(),
+            CompatibilityIssue::Capabilities(reason) => {
+                t!("plugins.market_capability_incompatible", reason = reason).to_string()
+            }
+        });
+    }
+    if installed.is_some_and(|entry| {
+        semver::Version::parse(&release.version)
+            .ok()
+            .zip(semver::Version::parse(&entry.manifest.version).ok())
+            .is_none_or(|(candidate, current)| candidate <= current)
+    }) {
+        return Some(t!("plugins.market_not_newer").to_string());
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Startup checks and periodic checks use one monotonic deadline; opening a page does not reset it.
+    #[test]
+    fn update_check_is_due_at_six_hours() {
+        let now = std::time::Instant::now();
+        let mut view = ViewState::default();
+        assert!(view.needs_check(now));
+        view.mark_check(now);
+        assert!(!view.needs_check(now + MARKET_CHECK_INTERVAL - std::time::Duration::from_secs(1)));
+        assert!(view.needs_check(now + MARKET_CHECK_INTERVAL));
+    }
 }

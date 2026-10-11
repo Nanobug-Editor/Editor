@@ -50,6 +50,33 @@ plugins.market_downloads:
 plugins.market_downloads_unavailable:
   en: "Download count unavailable"
   zh-CN: "下载次数暂不可用"
+plugins.market_statistics_at:
+  en: "Downloads measured: %{time}; includes repeat and outside-market downloads."
+  zh-CN: "下载统计时间：%{time}；包含重复下载及市场外下载。"
+plugins.market_statistics_stale:
+  en: "Statistics unavailable; retaining the last measurement. %{error}"
+  zh-CN: "统计暂不可用，保留最后一次结果。%{error}"
+plugins.market_versions:
+  en: "Reviewed version history (select to view notes)"
+  zh-CN: "已审核版本历史（选择以查看更新日志）"
+plugins.market_available:
+  en: "Compatible"
+  zh-CN: "兼容可用"
+plugins.market_withdrawn:
+  en: "Withdrawn: %{reason}"
+  zh-CN: "已撤回：%{reason}"
+plugins.market_host_incompatible:
+  en: "Editor version incompatible"
+  zh-CN: "编辑器版本不兼容"
+plugins.market_platform_incompatible:
+  en: "Platform incompatible"
+  zh-CN: "当前平台不兼容"
+plugins.market_capability_incompatible:
+  en: "Plugin capability incompatible: %{reason}"
+  zh-CN: "插件能力不兼容：%{reason}"
+plugins.market_not_newer:
+  en: "Installed or older version; market upgrades only"
+  zh-CN: "同版或旧版；市场仅支持升级"
 plugins.market_incompatible:
   en: "No compatible reviewed version for this editor and platform."
   zh-CN: "当前编辑器和平台暂无兼容的已审核版本。"

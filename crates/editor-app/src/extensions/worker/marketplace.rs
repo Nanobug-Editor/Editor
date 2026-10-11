@@ -1,6 +1,6 @@
 //! Network preparation feeds immutable packages to the existing serialized installation actor.
 use super::*;
-use plugin_runtime::marketplace::{Catalog, CatalogCache, Release};
+use plugin_runtime::marketplace::{Catalog, CatalogCache, Release, Statistics};
 use rust_i18n::t;
 #[cfg(test)]
 mod tests;
@@ -18,6 +18,28 @@ impl Worker {
         };
         let output = self.state.clone();
         std::thread::spawn(move || {
+            // Counts are a separate advisory snapshot; a failed statistics endpoint cannot
+            // downgrade a successfully refreshed review catalog to browse-only state.
+            let statistics_cache = cache.with_file_name("stats.json");
+            let cached_statistics = std::fs::File::open(&statistics_cache)
+                .ok()
+                .and_then(|file| {
+                    use std::io::Read;
+                    let mut bytes = Vec::new();
+                    file.take(4 * 1024 * 1024 + 1)
+                        .read_to_end(&mut bytes)
+                        .ok()?;
+                    Some(bytes)
+                });
+            if let Some(bytes) = cached_statistics
+                && let Ok(statistics) = Statistics::parse(&bytes)
+            {
+                let mut state = output.lock().unwrap();
+                if state.market.generation() == generation && state.market_statistics.is_none() {
+                    state.market_statistics = Some(Arc::new(statistics));
+                    state.market_revision += 1;
+                }
+            }
             let cached = std::fs::File::open(&cache).ok().and_then(|file| {
                 use std::io::Read;
                 let mut bytes = Vec::new();
@@ -68,6 +90,33 @@ impl Worker {
                 }
                 state.market_revision += 1;
             }
+            drop(state);
+            if let Some(prefix) = url.strip_suffix("catalog.json") {
+                let result = Statistics::fetch(&format!("{prefix}stats.json"))
+                    .map_err(|error| format!("{error:#}"));
+                let mut state = output.lock().unwrap();
+                if state.market.generation() == generation {
+                    match result {
+                        Ok(statistics) => {
+                            // Persistence is best-effort; the current measurement stays visible.
+                            let _ = (|| -> anyhow::Result<()> {
+                                let parent = statistics_cache.parent().ok_or_else(|| {
+                                    anyhow::anyhow!("Missing statistics cache parent")
+                                })?;
+                                std::fs::create_dir_all(parent)?;
+                                let mut file = tempfile::NamedTempFile::new_in(parent)?;
+                                serde_json::to_writer(file.as_file_mut(), &statistics)?;
+                                file.persist(&statistics_cache)?;
+                                Ok(())
+                            })();
+                            state.market_statistics = Some(Arc::new(statistics));
+                            state.market_statistics_error = None;
+                        }
+                        Err(error) => state.market_statistics_error = Some(error),
+                    }
+                    state.market_revision += 1;
+                }
+            }
         });
     }
 
@@ -75,12 +124,25 @@ impl Worker {
     pub fn install_market(&self, release: Release, generation: u64) -> bool {
         let mut state = self.state.lock().unwrap();
         let id = release.manifest.id.clone();
+        let existing = state
+            .entries
+            .iter()
+            .find(|entry| entry.manifest.id == id)
+            .map(|entry| (entry.manifest.version.clone(), entry.digest.clone()));
+        // A market action may only advance the installed version; the captured digest prevents
+        // another local or market operation from silently changing the target during download.
+        let advances = existing.as_ref().is_none_or(|(version, _)| {
+            semver::Version::parse(&release.version)
+                .ok()
+                .zip(semver::Version::parse(version).ok())
+                .is_some_and(|(candidate, current)| candidate > current)
+        });
         if !state.ready
             || state.progress.is_some()
             || !state.market.fresh()
             || state.market.generation() != generation
             || !self.trusted.load(std::sync::atomic::Ordering::Acquire)
-            || state.entries.iter().any(|entry| entry.manifest.id == id)
+            || !advances
             || release
                 .compatible(
                     env!("CARGO_PKG_VERSION"),
@@ -107,7 +169,8 @@ impl Worker {
         let guard_output = Arc::downgrade(&output);
         let trusted = self.trusted.clone();
         let report_output = Arc::downgrade(&output);
-        let first_install_id = id.clone();
+        let guarded_id = id.clone();
+        let guarded_existing = existing.clone();
         let control = plugin_runtime::InstallControl::new(move |stage| {
             if let Some(output) = report_output.upgrade() {
                 if let Some(report) = &mut output.lock().unwrap().installation {
@@ -127,10 +190,12 @@ impl Worker {
                     state.ready
                         && state.market.fresh()
                         && state.market.generation() == generation
-                        && !state
+                        && state
                             .entries
                             .iter()
-                            .any(|e| e.manifest.id == first_install_id)
+                            .find(|e| e.manifest.id == guarded_id)
+                            .map(|entry| (entry.manifest.version.clone(), entry.digest.clone()))
+                            == guarded_existing
                 })
         });
         state.install_control = Some(control.clone());

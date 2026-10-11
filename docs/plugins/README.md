@@ -2,6 +2,8 @@
 
 本目录索引实际维护的插件资料。跨插件平台方案放在本目录的 specs、tickets 与 verification；插件自身的历史专题资料保留在对应包内，不复制正文或继承其他任务的完成状态。
 
+- [独立插件市场规格与工单](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
+
 - [内置终端与运行、调试统一面板方案](specs/builtin-terminal-run-debug.md)、[四张工单与测试安排](tickets/builtin-terminal-run-debug/README.md)：2026-10-09 范围、拆分和测试接缝已批准并发布为 #87–#91，四张工单已逐步完成验收。上游 Alacritty、内置终端、构建和调试统一面板及旧用户迁移已接通；语言与调试器仍由插件提供，平台与历史测试夹具限制见最终记录。
 - [内置终端 02 验收](verification/builtin-terminal-02-2026-10-09.md)：统一构建/运行任务、真实公开消费者、关闭与复用及 Windows 插件开发操作的阶段证据。
 - [内置终端 03 验收](verification/builtin-terminal-03-2026-10-09.md)：唯一真实调试目标的输入、同面板检查、诊断归组和停止清理的阶段证据。

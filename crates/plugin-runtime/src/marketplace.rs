@@ -7,7 +7,12 @@ use std::{collections::BTreeSet, io::Read, sync::Arc, time::Duration};
 
 /// The official reviewed registry; arbitrary user-provided market endpoints are not supported.
 pub const CATALOG_URL: &str = "https://t-miracle.github.io/Nanobug-Plugin-Marketplace/catalog.json";
+/// Advisory counts are fetched separately so statistics failures cannot grant or revoke installs.
+pub const STATISTICS_URL: &str =
+    "https://t-miracle.github.io/Nanobug-Plugin-Marketplace/stats.json";
 const MAX_CATALOG: usize = 16 * 1024 * 1024;
+mod statistics;
+pub use statistics::{PluginStatistics, Statistics, VersionStatistics};
 
 /// Generation-gated publication: cached data is browse-only until the latest refresh succeeds.
 #[derive(Clone, Debug, Default)]
@@ -123,6 +128,9 @@ pub struct Release {
     pub url: String,
     pub asset_id: u64,
     pub withdrawn: bool,
+    /// A reviewed, one-way withdrawal retains the version's immutable history.
+    #[serde(default)]
+    pub withdrawal_reason: Option<String>,
     pub published_at: String,
     pub readme: String,
     pub icon: String,
@@ -187,6 +195,15 @@ impl Catalog {
                         && version.commit.bytes().all(|b| b.is_ascii_hexdigit()),
                     "Missing source commit"
                 );
+                anyhow::ensure!(
+                    (version.withdrawn
+                        && version
+                            .withdrawal_reason
+                            .as_ref()
+                            .is_some_and(|reason| !reason.is_empty() && reason.len() <= 1024))
+                        || (!version.withdrawn && version.withdrawal_reason.is_none()),
+                    "Invalid withdrawal record"
+                );
                 semver::VersionReq::parse(&version.host_version)?;
                 validate_url(&version.url)?;
                 // Loopback is the network test adapter; production release URLs stay in their named repository.
@@ -221,12 +238,26 @@ impl Catalog {
 
     /// Search five declared fields and optionally filter the main category and one tag.
     pub fn search(&self, query: &str, category: &str, tag: &str, sort: Sort) -> Vec<&Listing> {
+        self.search_with(query, category, tag, sort, None, &BTreeSet::new())
+    }
+
+    /// Search reviewed entries, retaining withdrawn history only for explicitly requested identities.
+    pub fn search_with(
+        &self,
+        query: &str,
+        category: &str,
+        tag: &str,
+        sort: Sort,
+        statistics: Option<&Statistics>,
+        history: &BTreeSet<String>,
+    ) -> Vec<&Listing> {
         let query = query.to_lowercase();
         let mut rows: Vec<_> = self
             .plugins
             .iter()
             .filter(|p| {
-                (category.is_empty() || p.category == category)
+                (history.contains(&p.id) || p.versions.iter().any(|v| !v.withdrawn))
+                    && (category.is_empty() || p.category == category)
                     && (tag.is_empty() || p.tags.iter().any(|t| t == tag))
                     && (query.is_empty() || p.score(&query) > 0)
             })
@@ -234,7 +265,9 @@ impl Catalog {
         rows.sort_by(|a, b| {
             let order = match sort {
                 Sort::Relevance if !query.is_empty() => b.score(&query).cmp(&a.score(&query)),
-                Sort::Downloads | Sort::Relevance => b.downloads.cmp(&a.downloads),
+                Sort::Downloads | Sort::Relevance => statistics
+                    .and_then(|s| s.total(&b.id))
+                    .cmp(&statistics.and_then(|s| s.total(&a.id))),
                 Sort::Updated => b
                     .versions
                     .iter()
@@ -276,21 +309,62 @@ impl Listing {
             .filter(|v| v.compatible(host, platform).is_ok())
             .max_by_key(|v| semver::Version::parse(&v.version).ok())
     }
+
+    /// Choose only a strictly newer compatible reviewed release for an existing installation.
+    pub fn upgrade(&self, installed: &str, host: &str, platform: &str) -> Option<&Release> {
+        let current = semver::Version::parse(installed).ok()?;
+        self.versions
+            .iter()
+            .filter(|v| {
+                v.compatible(host, platform).is_ok()
+                    && semver::Version::parse(&v.version).is_ok_and(|version| version > current)
+            })
+            .max_by_key(|v| semver::Version::parse(&v.version).ok())
+    }
 }
+
+/// Stable compatibility categories let native callers translate reasons without parsing diagnostic text.
+#[derive(Debug)]
+pub enum CompatibilityIssue {
+    /// A reviewed release remains visible in history but may no longer be installed.
+    Withdrawn,
+    /// The current host does not satisfy the release's semantic version requirement.
+    Host,
+    /// This operating system and architecture are not among the reviewed targets.
+    Platform,
+    /// Protocol or capability negotiation failed; the diagnostic identifies the missing contract.
+    Capabilities(String),
+}
+
+impl std::fmt::Display for CompatibilityIssue {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Withdrawn => formatter.write_str("Version withdrawn"),
+            Self::Host => formatter.write_str("Host version incompatible"),
+            Self::Platform => formatter.write_str("Platform incompatible"),
+            Self::Capabilities(reason) => formatter.write_str(reason),
+        }
+    }
+}
+impl std::error::Error for CompatibilityIssue {}
 
 impl Release {
     /// Compatibility does not grant permission; Manager rechecks trust and actual package capabilities.
-    pub fn compatible(&self, host: &str, platform: &str) -> anyhow::Result<()> {
-        anyhow::ensure!(!self.withdrawn, "Version withdrawn");
-        anyhow::ensure!(
-            semver::VersionReq::parse(&self.host_version)?.matches(&semver::Version::parse(host)?),
-            "Host version incompatible"
-        );
-        anyhow::ensure!(
-            self.platforms.is_empty() || self.platforms.iter().any(|p| p == platform),
-            "Platform incompatible"
-        );
+    pub fn compatible(&self, host: &str, platform: &str) -> Result<(), CompatibilityIssue> {
+        if self.withdrawn {
+            return Err(CompatibilityIssue::Withdrawn);
+        }
+        let requirement =
+            semver::VersionReq::parse(&self.host_version).map_err(|_| CompatibilityIssue::Host)?;
+        let current = semver::Version::parse(host).map_err(|_| CompatibilityIssue::Host)?;
+        if !requirement.matches(&current) {
+            return Err(CompatibilityIssue::Host);
+        }
+        if !self.platforms.is_empty() && !self.platforms.iter().any(|p| p == platform) {
+            return Err(CompatibilityIssue::Platform);
+        }
         crate::capabilities::require_current(&self.manifest)
+            .map_err(|error| CompatibilityIssue::Capabilities(error.to_string()))
     }
 
     /// Download only after host consent; cancellation, quotas, digest and all manifest claims are checked.

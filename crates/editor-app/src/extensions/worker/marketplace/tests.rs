@@ -2,6 +2,8 @@
 use super::*;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+mod updates;
+mod wasm_updates;
 
 /// Bounded fixture server lets tests observe attempted package downloads and catalog outages.
 struct Server {
@@ -374,6 +376,15 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         )
         .into();
         version["icon"] = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><image href="{}/image.png" width="24" height="24"/><image href="file:///C:/Windows/win.ini" width="24" height="24"/></svg>"#, external.url).into();
+        let mut incompatible = version.clone();
+        incompatible["version"] = "2.0.0".into();
+        incompatible["manifest"]["version"] = "2.0.0".into();
+        incompatible["host_version"] = ">=2.0.0".into();
+        incompatible["changelog"] = "Requires a newer editor".into();
+        catalog["plugins"][0]["versions"]
+            .as_array_mut()
+            .unwrap()
+            .push(incompatible);
         let server = Server::from_bytes(
             &serde_json::to_vec(&catalog).unwrap(),
             include_bytes!("../../../../../plugin-runtime/tests/fixtures/marketplace/notes.zip")
@@ -429,6 +440,23 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         form.run_until_parked();
         form.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(server.downloads.load(Ordering::Acquire), 0);
+        let newer = form
+            .debug_bounds("market-version-2.0.0")
+            .expect("historical version selector");
+        form.simulate_click(newer.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        let disabled_install = form.debug_bounds("market-install").unwrap();
+        form.simulate_click(disabled_install.center(), Default::default());
+        form.run_until_parked();
+        assert!(
+            form.debug_bounds("confirm-market-install").is_none(),
+            "incompatible history cannot install"
+        );
+        let older = form.debug_bounds("market-version-1.0.0").unwrap();
+        form.simulate_click(older.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(
             external.requests.load(Ordering::Acquire),
             0,

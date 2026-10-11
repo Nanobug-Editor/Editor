@@ -75,9 +75,9 @@ fn package_confirmation_labels_cover_install_update_and_downgrade() {
     assert_eq!(surface::package_action("2.0.0", Some("2.0.0")), "已安装");
 }
 
-/// Clicking a market install action must immediately publish an inspecting state.
+/// Local ZIP import still publishes inspection progress while the online market is unavailable.
 #[gpui::test]
-fn market_install_button_reports_loading_before_inspection(cx: &mut TestAppContext) {
+fn local_import_reports_loading_before_inspection(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         typography::init(cx);
@@ -100,7 +100,7 @@ fn market_install_button_reports_loading_before_inspection(cx: &mut TestAppConte
             let manifest: protocol::Manifest = crate::extensions::test_manifest(include_str!(
                 "../../../../plugins/example/manifest.json"
             ));
-            owner.manager_market = true;
+            owner.manager_market = false;
             owner.manager_packages = vec![Package {
                 manifest,
                 files: Default::default(),
@@ -118,13 +118,14 @@ fn market_install_button_reports_loading_before_inspection(cx: &mut TestAppConte
         .unwrap();
     let dialog_cx = VisualTestContext::from_window(dialog_window, cx).into_mut();
     dialog_cx.update(|window, cx| window.draw(cx).clear(cx));
-    let install = dialog_cx
-        .debug_bounds("plugin-install-action-region")
-        .unwrap();
+    let install = dialog_cx.debug_bounds("install-local-plugin").unwrap();
     dialog_cx.simulate_click(install.center(), Default::default());
+    dialog_cx.simulate_path_prompt_response(|_| Some(vec![PathBuf::from("first.zip")]));
+    dialog_cx.run_until_parked();
     let action =
         dialog_cx.update(|_, cx| {
             let owner = app.read(cx).extensions.clone();
+            owner.update(cx, |owner, cx| owner.poll(cx));
             let inspected = owner.read(cx).worker.recorded.lock().unwrap().try_iter()
             .any(|work| matches!(work, Work::Inspect(path) if path == PathBuf::from("first.zip")));
             assert!(inspected, "the first install click must reach the worker");
@@ -140,9 +141,9 @@ fn market_install_button_reports_loading_before_inspection(cx: &mut TestAppConte
     );
 }
 
-/// A second package's consent opens in a dialog above even a long README.
+/// A second local import confirms origin and permissions above an installed plugin's long README.
 #[gpui::test]
-fn second_market_install_shows_visible_consent(cx: &mut TestAppContext) {
+fn second_local_import_shows_visible_consent(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         typography::init(cx);
@@ -182,9 +183,20 @@ fn second_market_install_shows_visible_consent(cx: &mut TestAppContext) {
     editor_cx.update(|window, cx| {
         let owner = app.read(cx).extensions.clone();
         owner.update(cx, |owner, cx| {
-            owner.manager_market = true;
-            owner.manager_selected = Some(second_manifest.id.clone());
+            owner.manager_market = false;
+            owner.manager_selected = Some(first_manifest.id.clone());
             owner.manager_packages = vec![first, second.clone()];
+            let readme = owner
+                .root
+                .join("packages")
+                .join(&first_manifest.id)
+                .join("first");
+            std::fs::create_dir_all(&readme).unwrap();
+            std::fs::write(
+                readme.join("README.md"),
+                format!("# Installed\n\n{}", "A long explanation.\n\n".repeat(160)),
+            )
+            .unwrap();
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
                 manifest: first_manifest.clone(),
@@ -208,10 +220,10 @@ fn second_market_install_shows_visible_consent(cx: &mut TestAppContext) {
         .unwrap();
     let dialog_cx = VisualTestContext::from_window(dialog_window, cx).into_mut();
     dialog_cx.update(|window, cx| window.draw(cx).clear(cx));
-    let install = dialog_cx
-        .debug_bounds("plugin-install-action-region")
-        .unwrap();
+    let install = dialog_cx.debug_bounds("install-local-plugin").unwrap();
     dialog_cx.simulate_click(install.center(), Default::default());
+    dialog_cx.simulate_path_prompt_response(|_| Some(vec![PathBuf::from("second.zip")]));
+    dialog_cx.run_until_parked();
     dialog_cx.update(|_, cx| {
         let owner = app.read(cx).extensions.clone();
         let inspected = owner
@@ -278,10 +290,10 @@ fn second_market_install_shows_visible_consent(cx: &mut TestAppContext) {
     );
     // Reopen the same package to prove cancellation does not block its next install.
     dialog_cx.update(|window, cx| window.draw(cx).clear(cx));
-    let install = dialog_cx
-        .debug_bounds("plugin-install-action-region")
-        .unwrap();
+    let install = dialog_cx.debug_bounds("install-local-plugin").unwrap();
     dialog_cx.simulate_click(install.center(), Default::default());
+    dialog_cx.simulate_path_prompt_response(|_| Some(vec![PathBuf::from("second.zip")]));
+    dialog_cx.run_until_parked();
     dialog_cx.update(|_, cx| {
         let owner = app.read(cx).extensions.clone();
         owner.update(cx, |owner, cx| {

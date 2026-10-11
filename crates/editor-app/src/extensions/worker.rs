@@ -362,6 +362,9 @@ pub(super) struct Published {
     /// Refresh generations authorize downloads; cached catalogs only support browsing.
     pub market: plugin_runtime::marketplace::CatalogState,
     pub market_revision: u64,
+    /// Advisory statistics have their own failure state and cannot authorize market installation.
+    pub market_statistics: Option<Arc<plugin_runtime::marketplace::Statistics>>,
+    pub market_statistics_error: Option<String>,
     /// Bounded, predecoded icons never invoke the UI's ambient file or URL resolver.
     pub market_icons: BTreeMap<String, crate::ui::plugin::bitmap::Bitmap>,
     /// Completion bundles let the session discard only the historical data actually stored.

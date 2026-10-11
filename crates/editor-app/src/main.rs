@@ -150,6 +150,8 @@ struct EditorApp {
     pending_dock_restore: bool,
     /// Generic runtime plugin dock; packages own all feature behavior.
     extensions: Entity<extensions::ExtensionPanel>,
+    /// Catalog and installed-state changes repaint the title-bar update indicator.
+    _extensions_observer: Subscription,
     /// Installed manifests dynamically contribute native dock panel entities.
     plugin_panels: HashMap<String, Entity<extensions::ExtensionPanel>>,
     /// The manager owns a modal window independently from settings and plugin dock surfaces.
@@ -398,6 +400,7 @@ impl EditorApp {
                 cx,
             )
         });
+        let extensions_observer = cx.observe(&extensions, |_, _, cx| cx.notify());
         let messages =
             cx.new(|cx| ui::messages::MessagePanel::new(session_state.messages_visible, cx));
         let terminal = cx.new(|cx| {
@@ -508,6 +511,7 @@ impl EditorApp {
             _terminal_subscription: terminal_subscription,
             pending_dock_restore: session_state.dock_layout.is_some(),
             extensions,
+            _extensions_observer: extensions_observer,
             plugin_panels: HashMap::new(),
             extensions_window: None,
             _extensions_closed_subscription: None,

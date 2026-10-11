@@ -109,6 +109,18 @@ fn searchable_metadata_and_compatible_stable_fallback_are_consistent() {
     catalog.plugins[0].versions.push(newer);
     assert_eq!(
         catalog.plugins[0]
+            .upgrade("1.0.0", "2.0.0", "windows-x86_64")
+            .unwrap()
+            .version,
+        "2.0.0"
+    );
+    assert!(
+        catalog.plugins[0]
+            .upgrade("2.0.0", "2.0.0", "windows-x86_64")
+            .is_none()
+    );
+    assert_eq!(
+        catalog.plugins[0]
             .compatible("0.1.0", "windows-x86_64")
             .unwrap()
             .version,
@@ -122,11 +134,57 @@ fn searchable_metadata_and_compatible_stable_fallback_are_consistent() {
         "2.0.0"
     );
     catalog.plugins[0].versions[1].withdrawn = true;
+    assert!(
+        catalog.plugins[0]
+            .upgrade("1.0.0", "2.0.0", "windows-x86_64")
+            .is_none()
+    );
     assert_eq!(
         catalog.plugins[0]
             .compatible("2.0.0", "windows-x86_64")
             .unwrap()
             .version,
         "1.0.0"
+    );
+}
+
+/// Reviewed history remains readable, while fully withdrawn plugins leave default discovery.
+#[test]
+fn withdrawn_history_and_separate_statistics_preserve_discovery_rules() {
+    use plugin_runtime::marketplace::{Sort, Statistics};
+    let mut catalog = Catalog::parse(include_bytes!("fixtures/marketplace/catalog.json")).unwrap();
+    let statistics = Statistics::parse(
+        br#"{"schema":1,"measured_at":"2026-10-11T01:00:00Z","plugins":[{"id":"test.notes","total":9,"versions":[{"version":"1.0.0","downloads":9}]}]}"#,
+    )
+    .unwrap();
+    assert_eq!(statistics.total("test.notes"), Some(9));
+    assert_eq!(statistics.version("test.notes", "1.0.0"), Some(9));
+    assert_eq!(
+        catalog
+            .search_with(
+                "",
+                "",
+                "",
+                Sort::Downloads,
+                Some(&statistics),
+                &Default::default()
+            )
+            .len(),
+        1
+    );
+    catalog.plugins[0].versions[0].withdrawn = true;
+    catalog.plugins[0].versions[0].withdrawal_reason = Some("Author withdrew ZIP".into());
+    assert!(catalog.search("", "", "", Sort::Name).is_empty());
+    assert!(
+        catalog.plugins[0]
+            .compatible("0.1.0", "windows-x86_64")
+            .is_none()
+    );
+    let installed = ["test.notes".to_string()].into_iter().collect();
+    assert_eq!(
+        catalog
+            .search_with("", "", "", Sort::Name, Some(&statistics), &installed)
+            .len(),
+        1
     );
 }

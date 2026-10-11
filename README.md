@@ -12,6 +12,8 @@ The built-in terminal uses upstream Alacritty and shares one bottom panel with b
 
 The XML plugin provides schema assistance, completion, formatting, paired tag editing, and a document outline. HTML and JavaScript provide independent native language services. New workspaces start with the outline hidden; open it from the bottom window controls.
 
+The native plugin manager reads the [reviewed marketplace](https://github.com/T-miracle/Nanobug-Plugin-Marketplace). Browse historical releases and changelogs, choose a compatible version for first installation, and explicitly install higher compatible versions. A red dot on the plugin button indicates available upgrades. Every download must match the reviewed ZIP SHA-256; updates that request new permissions require consent. Catalog failures leave cached browsing available and disable market installation until a successful refresh. Download counts are advisory and retain their measurement time during outages.
+
 [Documentation](documentation/en/index.md) · [Getting started](documentation/en/guide/getting-started.md) · [Plugin SDK](documentation/en/sdk/index.md) · [Report an issue](https://github.com/T-miracle/Editor/issues)
 
 ## Installation

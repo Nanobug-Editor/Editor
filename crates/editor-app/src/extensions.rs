@@ -308,6 +308,13 @@ impl ExtensionPanel {
             contributions::refresh_entries(&root, &[]);
         }
         let worker = Arc::new(Worker::start(root.clone(), environment, trusted));
+        // The first review/update check is asynchronous and does not require opening management.
+        worker.refresh_market(
+            root.join("marketplace/catalog.json"),
+            plugin_runtime::marketplace::CATALOG_URL.into(),
+        );
+        let mut market_view = marketplace::ViewState::default();
+        market_view.mark_check(std::time::Instant::now());
         // The initial registry snapshot is visible before the background worker starts WASM.
         let (startup, entries) = {
             let state = worker.state.lock().unwrap();
@@ -391,7 +398,7 @@ impl ExtensionPanel {
             manager_detail_tab: management::DetailTab::Overview,
             manager_log_view: None,
             manager_packages: vec![],
-            market_view: Default::default(),
+            market_view,
             confirm: None,
             confirm_dialog_open: false,
             status: None,
@@ -527,6 +534,9 @@ impl ExtensionPanel {
     }
 
     fn poll(&mut self, cx: &mut Context<Self>) {
+        if self.surface_id.is_none() && self.market_view.needs_check(std::time::Instant::now()) {
+            self.refresh_online_market();
+        }
         let mut changed = false;
         let mut contributions_changed = false;
         let editor_requests = {
@@ -1510,19 +1520,53 @@ impl EditorApp {
     }
     /// Places the supplied plugin artwork beside settings in the window title bar.
     pub(crate) fn render_extensions_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        div().debug_selector(|| "extensions-trigger".into()).child(
-            Button::new("open-extensions")
-                .icon(Icon::default().data(include_bytes!("../assets/plugin-status/plugins.svg")))
-                .small()
-                .compact()
-                .ghost()
-                .tooltip("插件管理 Ctrl+`")
-                .on_click(cx.listener(|this, _, window, cx| this.toggle_extensions(window, cx))),
-        )
+        let updates = self.extensions.read(cx).has_market_updates();
+        div()
+            .relative()
+            .debug_selector(|| "extensions-trigger".into())
+            .child(
+                Button::new("open-extensions")
+                    .icon(
+                        Icon::default().data(include_bytes!("../assets/plugin-status/plugins.svg")),
+                    )
+                    .small()
+                    .compact()
+                    .ghost()
+                    .tooltip(t!("plugins.manager_title").to_string())
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.toggle_extensions(window, cx)),
+                    ),
+            )
+            .when(updates, |button| {
+                button.child(
+                    div()
+                        .id("extensions-update-dot")
+                        .debug_selector(|| "extensions-update-dot".into())
+                        .absolute()
+                        .right(px(1.))
+                        .top(px(1.))
+                        .size(px(7.))
+                        .rounded_full()
+                        .bg(cx.theme().danger),
+                )
+            })
     }
 
     /// Opens or activates the manager without recreating any running plugin surface.
     pub(crate) fn toggle_extensions(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        self.extensions.update(cx, |panel, _| {
+            let needs_refresh = {
+                let state = panel.worker.state.lock().unwrap();
+                !state.market.refreshing
+                    && (!state.market.fresh()
+                        || panel.market_view.needs_check(std::time::Instant::now()))
+            };
+            // Reopening stale or failed results retries immediately; a fresh in-flight
+            // check is shared with startup/the scheduler rather than duplicated.
+            if needs_refresh {
+                panel.refresh_online_market();
+            }
+        });
         if let Some(handle) = self.extensions_window
             && handle
                 .update(cx, |_, window, _| window.activate_window())

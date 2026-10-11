@@ -44,6 +44,7 @@ impl ExtensionPanel {
                 Some(cx.subscribe(&input, |this, _, event: &InputEvent, cx| {
                     if matches!(event, InputEvent::Change) {
                         this.manager_selected = None;
+                        this.market_view.leave_history();
                         this.manager_detail_tab = DetailTab::Overview;
                         this.manager_detail_scroll.set_offset(Default::default());
                         cx.notify();
@@ -235,6 +236,7 @@ impl ExtensionPanel {
                                                 this.load_market_packages();
                                             }
                                             this.manager_market = market;
+                                            this.market_view.leave_history();
                                             this.manager_selected = None;
                                             this.manager_detail_tab = DetailTab::Overview;
                                             this.manager_detail_scroll
@@ -256,6 +258,7 @@ impl ExtensionPanel {
                     .border_color(cx.theme().sidebar_border)
                     .child(
                         Button::new("install-local-plugin")
+                            .debug_selector(|| "install-local-plugin".into())
                             .label(t!("plugins.install_local").to_string())
                             .disabled(busy)
                             .on_click(cx.listener(|this, _, _, cx| this.choose_package(cx))),
@@ -287,6 +290,23 @@ impl ExtensionPanel {
         }
         if let Some(manifest) = selected_manifest {
             let id = manifest.id.clone();
+            let (has_history, withdrawal) = {
+                let state = self.worker.state.lock().unwrap();
+                let listing =
+                    state.market.catalog.as_ref().and_then(|catalog| {
+                        catalog.plugins.iter().find(|listing| listing.id == id)
+                    });
+                (
+                    listing.is_some(),
+                    listing
+                        .and_then(|listing| {
+                            listing.versions.iter().find(|version| {
+                                version.version == manifest.version && version.withdrawn
+                            })
+                        })
+                        .and_then(|version| version.withdrawal_reason.clone()),
+                )
+            };
             // Installed preferences survive the protocol transition, but cannot authorize an old component.
             let incompatibility = selected_entry.and_then(Installed::compatibility_error);
             let incompatible = incompatibility.is_some();
@@ -488,6 +508,36 @@ impl ExtensionPanel {
                         .child(format!(
                             "不兼容，请更新。{reason} 原有设置和启用范围已保留。"
                         )),
+                );
+            }
+            if let Some(reason) = withdrawal {
+                // Withdrawal is advisory for existing users; it never changes local enablement or data.
+                detail = detail.child(
+                    div()
+                        .debug_selector(|| "plugin-withdrawn-status".into())
+                        .px_5()
+                        .py_3()
+                        .child(t!("plugins.market_withdrawn", reason = reason).to_string()),
+                );
+            }
+            if has_history {
+                let history_id = id.clone();
+                detail = detail.child(
+                    div().px_5().py_2().child(
+                        Button::new("plugin-market-history")
+                            .debug_selector(|| "plugin-market-history".into())
+                            .label(t!("plugins.market_versions").to_string())
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.manager_market = true;
+                                this.manager_selected = Some(history_id.clone());
+                                this.market_view.show_history(history_id.clone());
+                                if let Some(input) = &this.manager_search {
+                                    input.update(cx, |input, cx| input.set_value("", window, cx));
+                                }
+                                this.manager_detail_scroll.set_offset(Default::default());
+                                cx.notify();
+                            })),
+                    ),
                 );
             }
             let owner = cx.entity().downgrade();

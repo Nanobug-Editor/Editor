@@ -113,6 +113,13 @@ impl Button {
         }
     }
 
+    /// Keep a behavior owner's activation/accessibility state while applying local appearance.
+    /// Dialog and disclosure triggers supply the Base button without supplying product styling.
+    pub(crate) fn with_base(mut self, base: BaseButton) -> Self {
+        self.base = base;
+        self
+    }
+
     pub(crate) fn label(mut self, label: impl Into<SharedString>) -> Self {
         self.label = Some(label.into());
         self

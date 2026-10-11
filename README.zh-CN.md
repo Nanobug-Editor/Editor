@@ -12,6 +12,8 @@ Nanobug 是一个使用 Rust 与 GPUI 构建的原生桌面代码编辑器，优
 
 XML 插件提供 Schema 辅助、补全、格式化、配对标签编辑与文档大纲；HTML、JavaScript 提供独立的原生语言服务。新工作区默认隐藏大纲，可从底部窗口控件打开。
 
+原生插件管理器读取[审核后的插件市场](https://github.com/T-miracle/Nanobug-Plugin-Marketplace)。用户可浏览历史版本和日志，首次安装选择兼容版，已有插件由用户明确升级到更高兼容版；插件按钮红点提示可用升级。下载必须匹配审核 ZIP 的 SHA-256，更新新增权限需再次确认。目录失败时仍可浏览缓存，成功刷新前禁止市场安装；下载次数独立展示测量时间，故障保留旧值。
+
 [文档](documentation/zh-cn/index.md) · [快速开始](documentation/zh-cn/guide/getting-started.md) · [插件 SDK](documentation/zh-cn/sdk/index.md) · [问题反馈](https://github.com/T-miracle/Editor/issues)
 
 ## 安装
