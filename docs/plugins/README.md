@@ -13,6 +13,7 @@
 
 - [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-11 已恢复，源码 SDK 与当前主分支整合见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。01、02 已交付关闭，03、05、06 继续验证，其余按依赖推进。稳定核心＋实验扩展，AI 暂不实现，整批尚未完成。
 - [01 / 02 普通合并连接验证](verification/plugin-api-community-foundation/01-02-integration.md)：真实 SDK 菜单、精确左文档版本、焦点退役回归及新增原生连接已验证，双轴未解决项均为 0；为 03 / 05 提供已修正整合点。
+- [05 通用树与编辑器装饰候选](verification/plugin-api-community-foundation/05-trees-and-decorations.md)：四个独立正式包、真实菜单参数、标记编辑/Undo、源码 SDK 与三门禁已验证；独立复查与主代理桌面验收继续，未关闭议题。
 - [通用插件接口完整性审计](specs/plugin-api-ecosystem-audit/README.md)：2026-10-08 的 58 项历史调查；语言接口已随后整合，当前实施范围见基础社区生态方案，不等于所有检查项获准实施。
 - [XML 插件与通用语言编辑能力方案](specs/xml-language-tools.md) / [#72](https://github.com/T-miracle/Editor/issues/72)，[三个实施工单 #73–#75](tickets/xml-language-tools/README.md)：全部验收、推送并核对关闭；包含可替换格式化、XML/HTML 标签编辑及宿主大纲与停靠，父设计议题保持不变。
 - [XML 语言工单 01 验收记录](verification/xml-language-tools/01-xml-language.md)：记录实际包、原生输入与服务结果，当前状态以记录为准。
@@ -75,7 +76,7 @@ Markdown 插件：[总方案](../../plugins/markdown/docs/spec.md)、[工单目�
 | 最终验收 | [T01–T26 契约验收](verification/plugin-api-contract-verification.md) | 已完成，含真实执行证据与限制 |
 | 运行与构建 | [运行时插件平台](runtime-plugins.md) | 当前使用参考，随平台维护 |
 | 声明式主题 | [主题插件格式](主题插件格式.md) | 格式参考，随契约维护 |
-| 公开 SDK | [协议与 SDK 文档](../../crates/plugin-protocol/README.md) | 当前契约；专题文档保留在源码旁 |
+| 公开 SDK | [协议与 SDK 源码注释](../../crates/plugin-protocol/src/lib.rs) | 只导出源码、Cargo、WIT 与 JSON；Markdown 保留为维护资料 |
 
 ## 分阶段验收记录
 

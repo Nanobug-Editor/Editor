@@ -24,7 +24,7 @@
 | 02 命令与交互 | [#94](https://github.com/T-miracle/Nanobug/issues/94) | 已验收交付，议题已关闭 | `8506cc8f1f9baee3fca030d59b7d1d21b5227763` 已推送并核对远端；双轴未解决项均为 0 |
 | 03 工作区事务 | [#95](https://github.com/T-miracle/Nanobug/issues/95) | 实施中；预重构与 Atomic 行为回归已启动 | T11–T16 及共同完成条件，未验收不关闭 |
 | 04 诊断与语言 | [#96](https://github.com/T-miracle/Nanobug/issues/96) | 等待 03 | T17–T20 及共同完成条件 |
-| 05 树与装饰 | [#97](https://github.com/T-miracle/Nanobug/issues/97) | 实施中，独立工作树依赖已满足 | T21–T24 及共同完成条件 |
+| 05 树与装饰 | [#97](https://github.com/T-miracle/Nanobug/issues/97) | [四个正式包与原生 GPUI 候选已验证](05-trees-and-decorations.md)，当前桌面及独立增量复查中 | T21–T24 及共同完成条件，未完成不关闭 |
 | 06 网络与私有状态 | [#98](https://github.com/T-miracle/Nanobug/issues/98) | 当前候选的 Temporary、Data 保留路径、授权顺序和源码包已验证，双轴归零 | 待当前主分支整合及受影响连接，不提前关闭 |
 | 07 激活与兼容 | [#99](https://github.com/T-miracle/Nanobug/issues/99) | 等待 04、05、06 | T31–T35 及共同完成条件 |
 
