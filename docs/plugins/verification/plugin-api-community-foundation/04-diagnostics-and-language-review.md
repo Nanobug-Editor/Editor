@@ -1,6 +1,6 @@
 # 04：独立规格与规范审查
 
-日期：2026-10-11。状态：固定修复候选已完成双轴独立复查；四项发现闭合，最终交付证据待核对。
+日期：2026-10-11。状态：固定修复候选已完成双轴独立复查，四项发现闭合；生产原生复验与最终完成证据已补齐，推送及议题状态另由交付记录核对。
 
 来源：[04 工单](../../tickets/plugin-api-community-foundation/04-diagnostics-and-language.md)、[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)、[社区方案](../../specs/plugin-api-community-foundation.md)、[平台方案](../../specs/plugin-api-platform.md)。用户当前仓库约定优先，接口用法维护在源码注释，独立 SDK 不导出 Markdown。
 
@@ -53,6 +53,22 @@ git log cb1bdb290555cdfc03654e7b01fe9af6a5826293..5ce40208cfbbd7b114cd38fc7baba3
 
 双来源用例首次追加权限 probe 时，重装保留原 disabled 选择，尚未抵达权限操作，0/1/0、90.08 秒不计为生产行为反例。夹具补公共 `enable` 后完整窄重验通过。配置范围 Green 使用阶段公开 Host 重建的实际检查器包；最终 SDK 改变后仍由负责者统一重建六个受影响消费者，不能沿用该阶段输入充当最终交付证据。
 
-最终复查计数为 Standards **0 硬性违反 / 0 判断性坏味道**，Spec **0 缺失或部分 / 0 范围扩张 / 0 行为错误**。最终 SDK 与正式包、三项门禁和 Windows 原生验收仍待实际结果，当前不宣称工单完成。
+该修复候选复查计数为 Standards **0 硬性违反 / 0 判断性坏味道**，Spec **0 缺失或部分 / 0 范围扩张 / 0 行为错误**。当时最终 SDK 与正式包、三项门禁和 Windows 原生验收仍待实际结果；后续最终证据见主验收及本文末节。
 
 完整行为证据及其真实输入见[04 验收记录](04-diagnostics-and-language.md)。父设计议题 #92 不因本次审查或实施工单交付而修改。
+
+## Problems 初始焦点候选的增量复查
+
+候选为 `fde5a430a5a8ff6f850e567d2206816a8c1d15b2`，树 `5bbdeda19dcffe5d70871875a052d45b832ca6b2`。原两个审查者按 `cc17293..fde5a430` 只读复核，保留原全量审查结论，并检查该范围的四个变更文件（包括主验收记录与本审查记录的阶段更新）。规范轴硬性违反 **0**、判断性坏味道 **0**；规格轴遗漏或部分 **0**、越界 **0**、行为错误 **0**。
+
+`editor/diagnostics/problems.rs` 将初始焦点放到选中行的本地 BaseButton，方向键同步选中、焦点与滚动，Enter/Escape 继续使用 Base 行与 Dialog 行为。仅新增行焦点句柄，没有第二份文本或诊断缓存。真实双检查器包回归为 Red `0/1/0、68.10 秒` → 同用例 Green `1/0/0、68.43 秒`，空列表与 Escape 回归 `1/0/0、0.16 秒`；本阶段 fmt、非 UI workspace 测试、workspace check 均 exit 0，非 UI `253 passed / 0 failed / 231 ignored`。
+
+Root 随后完成该候选的真实 Windows Down、Enter、Escape 及 Direct 首条通知整组 Undo；结果见[原生记录](04-native-desktop.md)。新窗口仍复现 Ctrl+. 无响应，因此该候选的独立审查通过不代表全部原生证据已经完成。
+
+随后通过仅添加日志的诊断宿主确认：默认 Ctrl+. 的句号事件未进入现有 GPUI keystroke intercept；同一文档焦点的参数提示组合键正常。使用现有公开全局快捷键设置重绑定到 Ctrl+Shift+F9 后，Direct 与标准 LSP 均实际显示代码动作，并由 Return/Escape 完成共享预览与取消。该检查没有修改按键传播、上游依赖或提供者行为，默认组合键的本机输入环境限制保留在原生记录。全部 trace 移除后，已核对源码逐字恢复 `fde5a430`；以 SHA-256 `13B45326BC9B0283D466B7C2C056680EA3DE7610A2352AB7BEFEEB461BEBDCA6` 的生产宿主再次完成同样的真实键盘、预览、取消复验，正常 stop、零残留进程、三个原文档摘要不变。
+
+## 最终完成证据核对
+
+最终生产源码仍为 `fde5a430`，没有另增快捷键业务修复。Standards 原复审者和另一位未参与 04 实现的 Spec 审查者独立核对了源码一致性及补充证据：规范轴硬性违反 0、判断性坏味道 0；规格轴新增缺失/部分 0、越界 0、行为错误 0。`cb1bdb2...fde5a430` 实际为 125 文件、5 个提交；前述 123/124 文件是各自历史候选的实际范围，不混用。
+
+最终输入为源码 SDK 49 文件、0 Markdown 与六个正式包；17 个连接 GPUI 用例逐一显式执行通过，三个规定门禁 exit 0（非 UI 253 passed、0 failed、231 ignored），实际运行时及公开准入负面证据见[主验收](04-diagnostics-and-language.md)。ignored 计数不作为通过。生产物理复验结果和默认键的输入环境限制见[原生记录](04-native-desktop.md)；两个轴的零发现不替代行为证据。提交、推送和 #96 关闭须按真实远端状态再核对，父议题 #92 保持开放。
