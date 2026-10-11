@@ -109,9 +109,8 @@ impl Manager {
         let mut snapshot = self.load_snapshot(&id)?;
         let previous = self.installed.get(&id).cloned();
         let mut old = self.live.remove(&id);
-        if let Some(instance) = &mut old {
-            instance.quiesce();
-        }
+        // Removing the actor's ingress blocks new calls without revoking handles used by Snapshot output.
+        // The final snapshot must validate against its live owner before stop seals that incarnation.
         self.retire_language_services(&id);
         self.refresh_services();
         let candidate = prepared.transaction.candidate();
@@ -239,17 +238,27 @@ impl Manager {
                 self.refresh_services();
                 return Err(error);
             }
-            if let Some(mut old) = old {
-                if let Err(recovery) = old.restart(self.environment.clone(), snapshot) {
-                    old.stop();
-                    let message = format!("Update failed: {error:#}; restart failed: {recovery:#}");
-                    if let Some(entry) = self.installed.get_mut(&id) {
-                        entry.error = Some(message.clone());
+            if old.is_some() {
+                // The stopped guest may retain revoked handles in WASM memory. Restore only its logical
+                // checkpoint into a fresh incarnation of the committed package, never renew those handles.
+                let recovery = previous
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Stopped instance has no committed package"))
+                    .and_then(|entry| self.restore_previous_instance(entry, snapshot));
+                match recovery {
+                    Ok(restored) => {
+                        self.live.insert(id, restored);
                     }
-                    self.refresh_services();
-                    return Err(anyhow::anyhow!(message));
+                    Err(recovery) => {
+                        let message =
+                            format!("Update failed: {error:#}; restart failed: {recovery:#}");
+                        if let Some(entry) = self.installed.get_mut(&id) {
+                            entry.error = Some(message.clone());
+                        }
+                        self.refresh_services();
+                        return Err(anyhow::anyhow!(message));
+                    }
                 }
-                self.live.insert(id, old);
             }
             self.refresh_services();
             return Err(error);
@@ -265,6 +274,50 @@ impl Manager {
         }
         self.refresh_services();
         Ok(())
+    }
+
+    /// Recreate the committed guest after data recovery; initialization writes stay staged until activation.
+    /// The caller has already stopped both failed generations, so all projected resources get fresh owners.
+    fn restore_previous_instance(
+        &mut self,
+        entry: &Installed,
+        snapshot: Option<Snapshot>,
+    ) -> anyhow::Result<Instance> {
+        let assets = self
+            .root
+            .join("packages")
+            .join(&entry.manifest.id)
+            .join(&entry.digest);
+        let component = entry
+            .manifest
+            .component
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Stopped instance has no WASM component"))?;
+        let mut restored = Instance::prepare_with_resources(
+            self.engine.as_ref().unwrap(),
+            &std::fs::read(assets.join(component))?,
+            &entry.manifest,
+            &entry.grants,
+            self.environment.clone(),
+            self.instance_data_directory(&entry.manifest),
+            assets,
+            snapshot,
+            self.host_resources.clone(),
+        )?;
+        let result = (|| {
+            self.configure_saved_settings(&mut restored, &entry.manifest)?;
+            restored.connect_services(self.plugin_services.clone())?;
+            restored.connect_diagnostics(self.native_diagnostics.clone());
+            restored.activate()?;
+            restored.commit_data()?;
+            Ok::<_, anyhow::Error>(())
+        })();
+        if let Err(error) = result {
+            // A failed recovery must also revoke any resources created before its activation error.
+            restored.stop();
+            return Err(error);
+        }
+        Ok(restored)
     }
 
     /// Preparation tokens carry no additional authority and are invalid after scope or installed-version changes.

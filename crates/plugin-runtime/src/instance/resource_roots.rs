@@ -83,11 +83,6 @@ impl ResourceRoots {
     pub(super) fn len(&self) -> usize {
         self.slots.len()
     }
-    /// Rollback retains the declared quota while allocating a new owner identity.
-    pub(super) fn renewed(&self, workspace: &str) -> Self {
-        Self::new(workspace, self.application, self.limit)
-    }
-
     pub(super) fn resolve(&self, handle: &ResourceHandle) -> Result<RootKind, Failure> {
         if self.retired || handle.instance != self.instance || handle.scope != self.scope {
             return Err(Failure::new(

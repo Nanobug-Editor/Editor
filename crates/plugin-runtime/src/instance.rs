@@ -641,7 +641,7 @@ impl Instance {
         }
         Ok(())
     }
-    /// Seal already-published work before the final snapshot, while retaining private-file access for serialization.
+    /// Seal published work at retirement, after any final snapshot has used its still-live owned resources.
     pub(crate) fn quiesce(&mut self) {
         self.clear_image_inputs();
         self.store.data_mut().clear_selections();
@@ -686,32 +686,6 @@ impl Instance {
     /// Observable ownership count includes native views and file/process resources.
     pub fn resource_count(&self) -> usize {
         self.store.data().roots.len() + self.views.len() + self.process_count()
-    }
-    /// Rollback is an explicit host transition with fresh ownership, never revival of old handles.
-    pub(crate) fn restart(
-        &mut self,
-        mut environment: Environment,
-        snapshot: Option<Snapshot>,
-    ) -> anyhow::Result<()> {
-        if self.store.data().roots.application {
-            environment.workspace.clear();
-        }
-        let roots = self.store.data().roots.renewed(&environment.workspace);
-        self.store.data_mut().roots = roots;
-        let principal = self.store.data().roots.principal(
-            &self.store.data().plugin_services.principal.plugin,
-            &self.store.data().permissions,
-        );
-        self.store.data_mut().plugin_services.principal = principal;
-        // A restarted owner cannot revive authority captured by an earlier incarnation.
-        self.store.data_mut().plugin_services.alive =
-            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-        self.store.data_mut().staged_writes = Some(std::collections::BTreeMap::new());
-        self.prepare_state(environment, snapshot)?;
-        self.reapply_settings()?;
-        self.activate()?;
-        self.commit_data()?;
-        Ok(())
     }
     pub fn process_ids(&self) -> Vec<u32> {
         self.store.data().processes.ids()

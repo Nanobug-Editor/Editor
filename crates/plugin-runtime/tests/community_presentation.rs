@@ -6,6 +6,9 @@ use plugin_runtime::{
 use std::io::{Cursor, Write};
 use std::sync::Arc;
 
+#[path = "community_presentation/updates.rs"]
+mod updates;
+
 /// Inspect the independently compiled package, keeping its actual component and owned resources.
 fn provider(id: &str) -> Package {
     Package::read(
