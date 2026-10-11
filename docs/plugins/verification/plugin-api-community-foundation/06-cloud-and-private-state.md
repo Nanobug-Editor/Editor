@@ -271,7 +271,7 @@ cargo test --workspace --exclude editor-app
 
 固定普通合并候选 `f2a907a6a6348aedd3b2f1a37681c4fda1f8da7c` 的 Standards 复审指出一项 P3 判断性 `Duplicated Code`：`plugins/cloud-translation/src/lib.rs:299` 和 `plugins/code-host-query/src/lib.rs:297` 各自显式处理 Headers/Chunk/Finished/Failed 流步骤。根代理接受本轮保留：两个包是独立构建、可复制的公开消费者，公开 SDK 已提供通用传输能力；目前不为两个示例增加新的 SDK 抽象，真正形成稳定复用后再提取。此项没有行为违反，也没有通过改源消除重复；记录为已接受的复用权衡。
 
-本次补记只修改验收 Markdown；相对上述固定候选的 `crates/` 与 `plugins/` 差异为零，宿主、SDK 与包指纹及本阶段门禁证据保持对应关系。没有重建产物或重复行为测试，当前正式包的原生短连接及最终交付仍由根代理完成。
+本次补记只修改验收 Markdown；相对上述固定候选的 `crates/` 与 `plugins/` 差异为零，宿主、SDK 与包指纹及本阶段门禁证据保持对应关系。没有重建产物或重复行为测试。根代理已完成当前正式包的原生短连接，见[原生记录](native-06.md)的“2026-10-11”部分；最终推送与议题关闭按远端读回记录。
 
 本执行代理未启动桌面、推送或关闭 issue。根代理完成候选固定点复审及当前正式包的必要原生短连接：新宿主上的云查询/缓存与分块结果、取消资源回落，并与其已验证的原生终端共存；Token、IME、两主题等未变完整 UI 主矩阵维持原证据。
 

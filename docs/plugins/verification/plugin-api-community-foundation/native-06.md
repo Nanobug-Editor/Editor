@@ -55,3 +55,24 @@
 4. 开发控制器和两个自有监听器均正常 `stop`、退出 0，精确宿主副本进程数量为 0，工作区条目为 0。精确 OS API 确认新 QA 命名空间两个键均不存在；普通 profile 与控制器日志扫描无假 Token（`rg` 退出 1，表示无匹配）。
 
 共享桌面验收期间有其他独立 QA 窗口获得焦点，以及 Computer Use 的过期元素/截图或 active-request 提示。主代理丢弃旧输入目标并重新选择精确自有 EXE 后观察，没有操作其他实例；这些工具状态不算应用功能失败。原生大响应覆盖新增滚动接缝，两个消费者的近限额、满限额、无效 UTF-8、取消与完整缓存矩阵由真实 SDK 针对测试承担，未重复未变化的密码输入或网络权限主矩阵。
+
+## 2026-10-11：主分支整合、源码 SDK 与原生终端的当前连接
+
+本轮生产输入固定为 `f2a907a6a6348aedd3b2f1a37681c4fda1f8da7c`；纯文档候选 `f10100b05d74434d2aa4b823c6fc72ba8c406fb5` 的 `crates/`、`plugins/` 与该点完全相同。最终独立双轴审查覆盖 `de5397645d05c5d91e8cd74108d46ad9d7a88ff3...f2a907a6a6348aedd3b2f1a37681c4fda1f8da7c`：Spec 遗漏/范围外/错误为 0/0/0；Standards 硬项 0、判断性 P3 重复实现 1，已按逐单记录保留两个独立示例的复用权衡，没有未解决的行为违反。
+
+- 宿主副本：`C:/Users/Tmiracle/.codex/worktrees/plugin-api-cloud/native-qa-06-main/bin/editor-app-cloud-main.exe`，SHA-256 `4B220DC26957AFE0E181D31187A4F82FF452C7AF495AEF255F81D63CC4003131`。
+- 当前内嵌 SDK 为 42 项源码资源、0 Markdown，摘要 `aa89f9a713a00439bf79c329b9db51758e24d9a1a6b3417f15df963da3208f76`。SDK、正式包和三门禁的完整输入见[逐单记录](06-cloud-and-private-state.md)。
+- 正式 `code-host-query` 0.1.1 ZIP 为 `8E245135A2EC3745B8D5195E3C4F48378DC0746B3156D91B6FEB7E438776A6C4`，WASM 为 `45FE738FDAF9A9EF8A5356F86C0397EC7713F632EEB750C949C4E7EBBA9850CD`；静态开发项目只描述 ZIP 内原始清单与相同 WASM 的资源复制，实际候选 digest 为 `43945449b3a1babc9eb85c5cf43720444c8f157612b31a73dd147ca656c92bd3`。
+- 同一实例通过既有 EXE 相对 `bin/plugins/` 引导正常安装 `cloud-translation` 0.1.1，ZIP 为 `C1D6D01DD5D725F1686E71BEBFFCE8F1CDBD8CFFB8CAED64665314D096A0C67C`。两个面板在同一个公开 Manager、`native-qa-06-main/profile` 和 `native-qa-06-main/workspace` 中共存；不添加安装桥、空组件或专属 API。
+- 单项目开发入口为 `--plugin-dev native-qa-06-main/query-project --release --profile native-qa-06-main/profile --workspace native-qa-06-main/workspace`，逐项授权清单声明的 assets/network/secrets/storage/interaction 权限。控制器使用 TTY 和 `controller-main.log`。受控端点仅监听 loopback 18907，并且只输出计数。
+
+实际操作和读回：
+
+1. 通过正常菜单的密码 Input 输入同一明确合成 Token，遮罩显示，确认后 UIA 和画面均显示“密钥已安全保存”。精确 OS API 后续确认查询插件键 `present=true;fakeMatched=true`，同根翻译插件键不存在。第一轮输入曾在思考期间超过真实 60 秒截止，Dialog 自动退役并显示“密钥输入已取消”；旧元素点击不可用后重新观察、重新发起，未放宽超时或沿用退役句柄。
+2. 真正发起 GET 后，画面和稳定 UIA 显示 `HTTP 200 · 65536 bytes · 已完成`、`BOUNDARY_FIRST 世界😀`；滚动后能看到 `BOU` 与 `NDARY_END 65536 bytes 已完成😀`，分片相接保留所有字符，未出现替换字符。菜单保持可用，服务计数为收到 1、完成 1、假 Authorization 匹配 1、GET 1、POST 0。
+3. 正常 `Read cache` 后画面显示无状态前缀的原始正文，稳定 UIA 包含完整 `BOUNDARY_END 65536 bytes 已完成😀`。请求数保持 1，未再发网络请求。缓存位于宿主私有 `files/.cache/last-query.txt`，长 65,536 字节，SHA-256 `8955D95861D723DF83FCAF8BE5A28F8F89E041133EF1D6895FC9E3425F19F0C3`，与前述独立生成的全部正文相同。该次组合 UI 工具调用曾挂起；停止读取、重置工具绑定、重新枚举唯一自有 EXE 后，同一窗口状态读取正常返回。以上通过依据是恢复后的真实界面、文件和服务计数，不是挂起调用。
+4. 端点首块后等待，再次发起 GET，实际画面显示 `HTTP 200 · 17 bytes`、`first 世界😀` 和具有“取消”名称的进度按钮。点击该按钮后进度撤下、稳定画面/UIA 为“已取消”；服务计数收到 2、完成 1、断开 1、假 Authorization 匹配 2，无迟到完成。成功缓存仍保持上述 hash。
+5. 从本地终端按钮打开原生 PowerShell 标签，实际终端显示当前 QA 工作区的 `PS ...>` 提示符；两插件面板仍共存、查询取消终态仍可见。没有通过 GUI 向 Shell 输入命令。
+6. TTY 控制器和受控监听器均正常 `stop`、退出 0；随后自有 EXE 进程数和窗口数都为 0。精确 OS API 仅在 bytes 匹配合成值后删除查询键，读回两个明确键均 missing；6 个私有数据/控制器日志文件的扫描中，合成 Token 明文匹配文件为 0。
+
+工作区唯一文件 `query-current.txt` 的前后 SHA-256 均为 `134CDC78027819E07CDAF7D3FF2D69337F03BE7F64B03B7C9F4DF770104448E8`。实际中文和 emoji 输入/滚动已观察；未变的完整 IME、深浅主题、HTTP/TLS、权限负面与更新矩阵依照各自固定输入的主责记录复用，本轮不冒称重新执行。该当前连接已经通过，远端推送和议题关闭仍需另行读回。
