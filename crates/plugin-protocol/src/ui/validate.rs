@@ -252,6 +252,16 @@ impl Validator {
         dimension(layout.gap, 0., 256.)?;
         dimension(layout.padding, 0., 256.)?;
         match &node.kind {
+            Kind::Tree { handle } => {
+                if handle.instance.is_empty()
+                    || handle.instance.len() > 256
+                    || handle.scope.is_empty()
+                    || handle.scope.len() > 256
+                    || handle.resource == 0
+                {
+                    return Err("Tree requires a bounded nonzero owned resource handle".into());
+                }
+            }
             Kind::NativeEditor { document } => {
                 self.editors += 1;
                 if !self.allow_editor

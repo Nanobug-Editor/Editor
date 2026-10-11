@@ -161,7 +161,9 @@ impl Declarations {
                             | "ui.interaction"
                             | "commands.call"
                             | "process.exec"
-                    )
+                            | "network.http"
+                    ) && !(p.starts_with("network.http:http://")
+                        || p.starts_with("network.http:https://"))
                 }) {
                     return Err("Unsupported delegated service permission".into());
                 }

@@ -70,12 +70,17 @@ impl EditorApp {
                 }
             }
             if let Some(target) = target {
-                let (_, controller) = self.outline.fold_owner.get_or_insert_with(|| {
-                    (
-                        self.editor.clone(),
-                        folding::Controller::attach(&self.editor, cx),
-                    )
-                });
+                let highlighter = self.tabs
+                    [self.active_text_tab_index().expect("validated text target")]
+                .text
+                .as_ref()
+                .expect("validated text")
+                .highlighter
+                .clone();
+                let (_, controller) = self
+                    .outline
+                    .fold_owner
+                    .get_or_insert_with(|| (self.editor.clone(), highlighter));
                 controller.replace(Vec::new(), &self.editor, cx);
                 let source = SourceSnapshot {
                     document: target.version.clone(),

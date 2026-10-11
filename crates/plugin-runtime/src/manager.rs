@@ -188,9 +188,18 @@ impl Manager {
         root: PathBuf,
         environment: Environment,
         trusted: bool,
-        host_resources: crate::HostResources,
+        mut host_resources: crate::HostResources,
     ) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&root)?;
+        let canonical_root = root.canonicalize()?;
+        // Stable profile identity keeps secrets out of data copies while isolating development hosts.
+        if host_resources.secret_namespace.is_empty() {
+            use sha2::{Digest, Sha256};
+            host_resources.secret_namespace = format!(
+                "{:x}",
+                Sha256::digest(canonical_root.to_string_lossy().as_bytes())
+            );
+        }
         let installed = Self::read_registry(&root)?;
         host_resources
             .terminals
@@ -529,6 +538,8 @@ impl Manager {
             Instance::rollback_data(&originals)?;
             return Err(error);
         }
+        // Initial/re-enabled owners acquire directory and secret mutation authority after registry publication.
+        instance.commit_activation();
         self.live.insert(id.to_owned(), instance);
         Ok(())
     }

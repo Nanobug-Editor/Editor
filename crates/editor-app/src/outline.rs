@@ -1,5 +1,5 @@
 //! Host-owned document structure tree, native navigation and folding; plugins provide only readonly data.
-mod folding;
+pub(crate) mod folding;
 mod model;
 mod panel;
 use crate::*;

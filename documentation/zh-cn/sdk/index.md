@@ -15,6 +15,8 @@
 
 跨插件协作、版本化契约、提供者选择及来源权限见 [SERVICES.md](services.md)。
 
+一般 HTTP 流、独立授权的系统密钥、私有目录及可释放刷新计时器的旧读者资料见[HTTP、密钥与私有状态](cloud.md)。
+
 原生服务、交互式进程、权限与回收契约见 [PROCESSES.md](processes.md)。
 
 纯声明式语言包及独立识别、高亮提供者的格式见 [LANGUAGES.md](languages.md)。无需附带空生命周期组件；安装、启停、更新和卸载会同步到已打开文档。

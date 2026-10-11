@@ -117,6 +117,15 @@ impl EditorApp {
                 .update(cx, |editor, cx| editor.present_diagnostic(diagnostic, cx));
             return;
         }
+        if let Some((range, hover)) = self.plugin_marker_hover(event.position, cx) {
+            self.pointer_hover_generation = self.pointer_hover_generation.wrapping_add(1);
+            self.pointer_hover_symbol = Some(range.clone());
+            self.pointer_hover_pending = false;
+            self.pointer_hover_cached = Some(hover.clone());
+            self.editor
+                .update(cx, |editor, cx| editor.present_hover(range, hover, cx));
+            return;
+        }
         if symbol == self.pointer_hover_symbol {
             if let (Some(symbol), Some(hover)) = (&symbol, &self.pointer_hover_cached) {
                 // Restore the app-owned result in the same event after native

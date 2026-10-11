@@ -19,6 +19,9 @@ impl Worker {
         std::thread::spawn(move || {
             // Prepare the public SDK off the UI thread. A failure is delivered only to guests that request it.
             let resources = plugin_runtime::HostResources {
+                // This explicit host setting never inherits generic HTTP_PROXY or plugin configuration.
+                http: plugin_runtime::HttpConfiguration::default()
+                    .with_proxy(std::env::var("NANOBUG_HTTP_PROXY").ok()),
                 sdk: Some(crate::sdk_export::descriptor().map_err(|error| format!("{error:#}"))),
                 logs: output.lock().unwrap().logs.clone(),
                 ..Default::default()
@@ -904,8 +907,11 @@ impl Worker {
                         .push((*session, *request, result));
                     false
                 });
+                // The public drain includes both WASM and component-free native language requests.
                 let editor_requests = manager.take_editor_requests();
+                let mut trees = Vec::new();
                 for (id, instance) in &mut manager.live {
+                    trees.extend(instance.tree_resources());
                     for (panel, scene) in &instance.views {
                         views.insert(format!("{id}/{panel}"), scene.clone());
                     }
@@ -1173,6 +1179,7 @@ impl Worker {
                     .collect();
                 published.views = views;
                 published.images = images;
+                published.trees = trees;
                 published.processes = processes;
                 published.generation += 1;
             }

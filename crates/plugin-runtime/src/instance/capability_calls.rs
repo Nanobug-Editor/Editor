@@ -62,6 +62,11 @@ impl State {
                 "service",
                 "commands",
                 "diagnostics",
+                "http",
+                "secrets",
+                "timer",
+                "private",
+                "tree",
             ]
             .contains(&method)
             {
@@ -145,6 +150,11 @@ impl State {
             self.check_service_authority(&request.operation)?;
             let result = match request.operation {
                 api::Operation::Diagnostics { operation } => self.create_diagnostics(operation),
+                api::Operation::Http { operation } => self.http_request(operation),
+                api::Operation::Secrets { operation } => self.secret_request(operation),
+                api::Operation::Timer { operation } => self.timer_request(operation),
+                api::Operation::Private { operation } => self.private_request(operation),
+                api::Operation::Tree { operation } => self.tree_request(operation),
                 api::Operation::Commands { operation } => self.command_request(operation),
                 api::Operation::Service { operation } => self.service_request(operation),
                 api::Operation::Process { operation } => self.process_request(operation),
@@ -155,6 +165,12 @@ impl State {
                 }
                 api::Operation::CancelRequest { handle, mode } => {
                     self.roots.resolve(&handle)?;
+                    if let Some(stream) = self.http_streams.get(&handle.resource) {
+                        stream.control.cancel();
+                        return Ok(api::Value::Cancellation(
+                            api::CancellationEffect::WaitingStopped,
+                        ));
+                    }
                     if let Some(request) = self.plugin_services.pending.get(&handle.resource) {
                         return request
                             .call
@@ -617,8 +633,14 @@ impl Instance {
             let mut visual_viewport = false;
             let mut icons = false;
             let mut invalid_icon = None;
+            let mut invalid_tree = None;
             let mut links = view.document.link_events;
             let mut visit = |node: &ui::Node| {
+                if let ui::Kind::Tree { handle } = &node.kind {
+                    if invalid_tree.is_none() {
+                        invalid_tree = self.store.data().owned_tree(handle).err();
+                    }
+                }
                 links |= !node.links.is_empty();
                 if let Some(svg) = &node.button_icon {
                     icons = true;
@@ -652,6 +674,9 @@ impl Instance {
             }
             if let Some(dialog) = &view.document.dialog {
                 dialog.content.visit(&mut visit);
+            }
+            if let Some(error) = invalid_tree {
+                return Err(error.into());
             }
             if resizable
                 && !api

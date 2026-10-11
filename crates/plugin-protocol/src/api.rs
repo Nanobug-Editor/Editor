@@ -222,6 +222,23 @@ pub enum Operation {
     Diagnostics {
         operation: crate::diagnostics::Operation,
     },
+    /// General network access is independently negotiated from image fetching and credentials.
+    Http {
+        operation: crate::http::Operation,
+    },
+    Secrets {
+        operation: crate::secrets::Operation,
+    },
+    Timer {
+        operation: crate::timers::Operation,
+    },
+    Private {
+        operation: crate::storage::Operation,
+    },
+    /// Instance-owned lazy tree publication; no editor or file authority is implied.
+    Tree {
+        operation: crate::tree::Operation,
+    },
     /// Typed calls preserve caller ownership through the shared request completion gate.
     Commands {
         operation: crate::commands::Operation,
@@ -296,13 +313,18 @@ pub struct Request {
 }
 
 /// Result variants carry structured values, never JSON hidden inside a string result.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Value {
     /// A plan's wait can stop independently from its current-session recovery resource.
     BatchAccepted {
         request: ResourceHandle,
         batch: ResourceHandle,
     },
+    Http(Option<crate::http::Event>),
+    /// Credentials are returned only to their owning plugin, never persisted by the host transport.
+    Secret(Option<Vec<u8>>),
+    PrivateEntry(crate::storage::Entry),
+    PrivateListing(crate::storage::Listing),
     Commands(Vec<crate::commands::Descriptor>),
     Preference(PreferenceRead),
     /// process 1.6: an existing native executable, never an execution grant or process handle.
@@ -320,6 +342,40 @@ pub enum Value {
     Resource(ResourceHandle),
     Bytes(Vec<u8>),
     Unit,
+}
+impl std::fmt::Debug for Value {
+    /// Credential bytes must not become an automatic debug field on a correlated transport response.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Secret(_) => f.write_str("Secret(<redacted>)"),
+            Self::Http(value) => f.debug_tuple("Http").field(value).finish(),
+            Self::PrivateEntry(value) => f.debug_tuple("PrivateEntry").field(value).finish(),
+            Self::PrivateListing(value) => f.debug_tuple("PrivateListing").field(value).finish(),
+            Self::Commands(value) => f.debug_tuple("Commands").field(value).finish(),
+            Self::Preference(value) => f.debug_tuple("Preference").field(value).finish(),
+            Self::ResolvedProgram { program } => f
+                .debug_struct("ResolvedProgram")
+                .field("program", program)
+                .finish(),
+            Self::Files(value) => f.debug_tuple("Files").field(value).finish(),
+            Self::Sdk(value) => f.debug_tuple("Sdk").field(value).finish(),
+            Self::Process(value) => f.debug_tuple("Process").field(value).finish(),
+            Self::Cancellation(value) => f.debug_tuple("Cancellation").field(value).finish(),
+            Self::Accepted(value) => f.debug_tuple("Accepted").field(value).finish(),
+            // Batch acceptance contains only correlated handles; credential values keep their redaction.
+            Self::BatchAccepted { request, batch } => f
+                .debug_struct("BatchAccepted")
+                .field("request", request)
+                .field("batch", batch)
+                .finish(),
+            Self::Resource(value) => f.debug_tuple("Resource").field(value).finish(),
+            Self::Asset { bytes } | Self::Bytes(bytes) => f
+                .debug_struct("Bytes")
+                .field("count", &bytes.len())
+                .finish(),
+            Self::Unit => f.write_str("Unit"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -348,6 +404,11 @@ pub enum Input {
 /// Native UI notifications contain no legacy canvas or character-grid fields.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Notification {
+    /// A coalesced tick for a live instance-owned timer; sequence advances only for delivered ticks.
+    Timer {
+        handle: ResourceHandle,
+        sequence: u64,
+    },
     /// Commands with a negotiated signature receive a result-bearing callback and their own reply slot.
     CommandInvocation(crate::commands::Invocation),
     /// Provider-local deferred work must stop under its original sealed source authority.
@@ -561,6 +622,10 @@ pub enum EditorOperation {
     Workspace {
         operation: crate::workspace::Operation,
     },
+    /// Owned point/range/gutter markers; requires editor.decorations and editor.read.
+    Decorations {
+        operation: crate::decorations::Operation,
+    },
     /// Open an existing workspace text resource; local opens also require workspace.read.
     OpenDocument {
         resource: ResourceIdentity,
@@ -673,6 +738,12 @@ pub enum EditorOperation {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EditorValue {
     Workspace(crate::workspace::Value),
+    /// Native current positions are metadata, independent of text, selection or Undo storage.
+    Decorations {
+        handle: ResourceHandle,
+        document: DocumentVersion,
+        positions: Vec<crate::decorations::Position>,
+    },
     /// Open/refresh returns current metadata; EditorState retains the only live text.
     DocumentOpened(DocumentInfo),
     /// Navigation returns the version validated before the native selection.

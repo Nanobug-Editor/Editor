@@ -27,7 +27,7 @@ pub(super) fn read(
     Ok(bytes)
 }
 
-/// Private writes are flat and count all disk/staged records before any mutation or atomic replace.
+/// Private writes count every owned directory, cache and temporary file before atomic replacement.
 pub(super) fn write(
     root: &Path,
     relative: &str,
@@ -36,30 +36,43 @@ pub(super) fn write(
     staged: &mut Option<BTreeMap<PathBuf, Vec<u8>>>,
 ) -> Result<(), Failure> {
     let root = root.canonicalize().map_err(io_failure)?;
-    let path = safe_path(&root, relative, false).map_err(path_failure)?;
-    if path.parent() != Some(root.as_path()) {
+    let path = super::private::checked(&root, relative, false)?;
+    if staged.is_some() && path.parent() != Some(root.as_path()) {
         return Err(Failure::new(
             ErrorCode::InvalidPath,
-            "Private data files must be direct children",
+            "Initialization writes must be direct children",
         ));
     }
+    let mut total = super::private::private_size(&root, limit)?;
     let mut sizes = BTreeMap::new();
-    for entry in std::fs::read_dir(&root).map_err(io_failure)? {
-        let entry = entry.map_err(io_failure)?;
-        sizes.insert(entry.path(), entry.metadata().map_err(io_failure)?.len());
-    }
     if let Some(writes) = staged.as_ref() {
         for (path, bytes) in writes {
+            total =
+                total.saturating_sub(path.metadata().map(|metadata| metadata.len()).unwrap_or(0));
+            total += bytes.len() as u64;
             sizes.insert(path.clone(), bytes.len() as u64);
         }
     }
-    sizes.insert(path.clone(), bytes.len() as u64);
-    if bytes.len() > 1024 * 1024 || sizes.values().sum::<u64>() > limit as u64 {
+    let old = sizes
+        .get(&path)
+        .copied()
+        .unwrap_or_else(|| path.metadata().map(|metadata| metadata.len()).unwrap_or(0));
+    total = total.saturating_sub(old) + bytes.len() as u64;
+    if bytes.len() > 1024 * 1024 || total > limit as u64 {
         return Err(Failure::new(
             ErrorCode::LimitExceeded,
             "Private data quota exceeded",
         ));
     }
+    super::private::reserve_entries(
+        &root,
+        staged
+            .as_ref()
+            .into_iter()
+            .flat_map(|writes| writes.keys().map(PathBuf::as_path))
+            .chain(std::iter::once(path.as_path())),
+        limit,
+    )?;
     if let Some(writes) = staged {
         if writes.len() >= 64 && !writes.contains_key(&path) {
             return Err(Failure::new(

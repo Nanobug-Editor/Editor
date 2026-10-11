@@ -10,6 +10,13 @@ pub struct LocalizedText {
     pub en: String,
 }
 impl LocalizedText {
+    /// Supply English and Simplified Chinese presentation text; validation remains at publication.
+    pub fn new(en: impl Into<String>, zh_cn: impl Into<String>) -> Self {
+        Self {
+            en: en.into(),
+            zh_cn: zh_cn.into(),
+        }
+    }
     /// Resolve host locale; an empty locale follows the established Simplified Chinese default.
     pub fn for_locale(&self, locale: &str) -> &str {
         if locale.is_empty() || locale.starts_with("zh") {
@@ -28,12 +35,19 @@ pub struct ToolIcon {
     pub dark: String,
 }
 impl ToolIcon {
+    /// Refer to owned light/dark SVG paths; construction alone grants no asset authority.
+    pub fn new(light: impl Into<String>, dark: impl Into<String>) -> Self {
+        Self {
+            light: light.into(),
+            dark: dark.into(),
+        }
+    }
     /// Select package artwork for the actual host theme without plugin-specific branches.
     pub fn path(&self, dark: bool) -> &str {
         if dark { &self.dark } else { &self.light }
     }
     /// Validate path syntax here; the runtime rechecks canonical package ownership and SVG contents.
-    pub(super) fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), String> {
         for path in [&self.light, &self.dark] {
             if path.is_empty()
                 || path.len() > 1024

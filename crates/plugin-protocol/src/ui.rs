@@ -22,6 +22,8 @@ mod images_tests;
 #[cfg(test)]
 mod layout_tests;
 #[cfg(test)]
+mod presentation_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tools_tests;
@@ -119,6 +121,9 @@ impl Document {
                 }
                 Kind::SideTabs(_) => {
                     required.insert("ui.collections", semver::Version::new(1, 0, 0));
+                }
+                Kind::Tree { .. } => {
+                    required.insert("ui.tree", semver::Version::new(1, 0, 0));
                 }
                 Kind::Image { .. } => {
                     required.insert("ui.images", semver::Version::new(1, 0, 0));
@@ -331,6 +336,11 @@ pub struct Layout {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Kind {
+    /// Native lazy tree backed by an instance-owned `ui.tree` resource; the handle is not a file grant.
+    Tree {
+        /// Created through the formal tree interface and revoked by CloseResource or owner retirement.
+        handle: crate::api::ResourceHandle,
+    },
     /// Borrow the existing editor of this exact source version; never creates mutable document state.
     /// Only one reference is permitted, in the root of a negotiated file layout.
     NativeEditor {
@@ -485,6 +495,8 @@ pub struct UiEvent {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum Action {
+    /// Owned lazy tree callbacks use both the scene revision and the tree request epoch.
+    Tree(crate::tree::Event),
     /// Input on a visual viewport; guests own zoom, pan, limits and automatic sizing decisions.
     ViewportInput(ViewportInput),
     /// Coalesced live geometry of the bound preview scroll; it never mutates its derived block.
@@ -677,6 +689,7 @@ impl Node {
             return &self.role;
         }
         match &self.kind {
+            Kind::Tree { .. } => "tree",
             Kind::NativeEditor { .. } => "editor",
             Kind::SideTabs(_) => "tab_bar",
             Kind::Canvas(_) => "canvas",

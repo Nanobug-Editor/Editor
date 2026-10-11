@@ -6,6 +6,7 @@ Editor guides and public plugin contracts are plain Markdown. They can be read i
 repository without a site generator, Node dependencies or a deployment workflow.
 English is the authoritative source; update the Chinese translation alongside it.
 
-The editor embeds the English documents in `en/sdk/` and exports them with the public
-plugin SDK. Keep these source paths and the Rust resource references synchronized when
-moving files. Maintainer specifications and verification records remain in `../docs/`.
+Plugin API guidance is maintained in `../crates/plugin-protocol/` source comments.
+The independent SDK exports only Rust sources, its Cargo manifest, WIT and JSON resources;
+these older reader documents are neither embedded nor exported. Maintainer specifications
+and verification records remain in `../docs/`.

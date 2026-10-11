@@ -94,6 +94,8 @@ pub(crate) struct TextTab {
     /// A separate decoration layer keeps a definition jump visible for two seconds.
     pub(crate) definition_highlight: TextDecorationCollection,
     pub(crate) definition_highlight_generation: u64,
+    /// One native adapter shares grammar/fold arbitration and current plugin marker coordinates.
+    pub(crate) highlighter: crate::outline::folding::Controller,
     /// Diagnostics retain only derived parser state; EditorState owns the editable text.
     pub(crate) diagnostics: super::diagnostics::DocumentDiagnostics,
     pub(crate) _subscription: Subscription,
@@ -104,6 +106,12 @@ impl TextTab {
     /// Text-specific operations use the session's canonical path after narrowing the file capability.
     pub(crate) fn path(&self) -> &Path {
         self.session.path()
+    }
+}
+impl Drop for TextTab {
+    /// Closing the document invalidates markers even when another UI entity retains its editor.
+    fn drop(&mut self) {
+        self.highlighter.markers().borrow().revoke();
     }
 }
 

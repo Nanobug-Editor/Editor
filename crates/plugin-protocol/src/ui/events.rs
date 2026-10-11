@@ -38,6 +38,7 @@ impl Document {
             )
         })?;
         let valid = match (&node.kind, &event.action) {
+            (Kind::Tree { handle }, Action::Tree(event)) => handle == event.handle(),
             (
                 Kind::Canvas(_) | Kind::Image { .. } | Kind::FileImage { .. },
                 Action::ViewportInput(input),

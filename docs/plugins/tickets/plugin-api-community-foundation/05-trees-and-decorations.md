@@ -2,7 +2,7 @@
 
 稳定标识：`plugin-api-community-foundation-05-presentation`
 
-状态：已批准，待实施；发布标签 `ready-for-agent`。实际设计议题及依赖编号见发布记录。
+状态：实施候选已提交，四个正式包、真实 GPUI 接入和三门禁已验证；独立复查与主代理桌面验收继续，验收项未完成不关闭。证据见[05 验证记录](../../verification/plugin-api-community-foundation/05-trees-and-decorations.md)。实际设计议题及依赖编号见发布记录。
 
 ## What to build
 
