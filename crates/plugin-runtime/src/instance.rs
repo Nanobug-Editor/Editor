@@ -72,7 +72,8 @@ struct State {
     data: PathBuf,
     assets: PathBuf,
     active: bool,
-    /// The trusted manager opens irreversible credential mutations only after durable publication.
+    /// The trusted manager opens private directory authority and irreversible credential mutations
+    /// only after durable publication.
     /// Flushing staged private files is preparation work and never grants this authority.
     activation_committed: bool,
     /// A bounded discovery invocation can read granted resources without launching native work.
@@ -624,7 +625,11 @@ impl Instance {
     }
     /// Publish authority only after the owner manager has committed its version/configuration.
     pub(crate) fn commit_activation(&mut self) {
-        debug_assert!(self.store.data().active && !self.store.data().roots.retired);
+        debug_assert!(
+            self.store.data().active
+                && !self.store.data().roots.retired
+                && self.store.data().staged_writes.is_none()
+        );
         self.store.data_mut().activation_committed = true;
     }
     /// Restore only files touched by this transaction; unrelated plugin data stays intact.

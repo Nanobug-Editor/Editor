@@ -29,6 +29,9 @@ pub(super) struct ResourceRoots {
     scope: String,
     next: u64,
     slots: BTreeMap<u64, RootKind>,
+    /// The instance retains its temporary-directory ownership after closing the last area handle.
+    /// Unpublished candidates start without ownership and cannot clean a live predecessor's directory.
+    temporary_owned: bool,
     pub(super) application: bool,
     pub(super) retired: bool,
     pub(super) limit: usize,
@@ -67,6 +70,7 @@ impl ResourceRoots {
             },
             next: 1,
             slots: BTreeMap::new(),
+            temporary_owned: false,
             application,
             retired: false,
             limit,
@@ -84,6 +88,11 @@ impl ResourceRoots {
     /// Rollback retains the declared quota while allocating a new owner identity.
     pub(super) fn renewed(&self, workspace: &str) -> Self {
         Self::new(workspace, self.application, self.limit)
+    }
+
+    /// Quiesce/stop/Drop may all run; only the incarnation which opened Temporary takes cleanup once.
+    pub(super) fn take_temporary(&mut self) -> bool {
+        std::mem::take(&mut self.temporary_owned)
     }
 
     pub(super) fn resolve(&self, handle: &ResourceHandle) -> Result<RootKind, Failure> {
@@ -118,6 +127,10 @@ impl ResourceRoots {
         let resource = self.next;
         self.next += 1;
         self.slots.insert(resource, kind);
+        if matches!(kind, RootKind::Temporary) {
+            // Opening succeeds only after native directory validation; released slots do not release its bytes.
+            self.temporary_owned = true;
+        }
         Ok(Value::Resource(ResourceHandle {
             instance: self.instance.clone(),
             scope: self.scope.clone(),

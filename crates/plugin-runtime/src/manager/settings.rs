@@ -232,17 +232,21 @@ impl Manager {
             Instance::rollback_data(&originals)?;
             return Err(error);
         }
-        // Only a durable successful configuration replaces runtime owners; Drop revokes the old handles.
+        // Only a durable successful configuration replaces owners. Stop the predecessor before granting
+        // committed directory authority, so no two incarnations can own the same temporary directory.
         for (owner, mut instance, active) in candidates {
             if !active {
                 continue;
             }
-            instance.commit_activation();
             let instances = if let Some(key) = owner {
                 &mut self.parked.get_mut(&key).unwrap().live
             } else {
                 &mut self.live
             };
+            if let Some(mut old) = instances.remove(id) {
+                old.stop();
+            }
+            instance.commit_activation();
             instances.insert(id.into(), instance);
         }
         // Compute effective plans before retiring transports: unrelated settings must not restart them.

@@ -1,0 +1,27 @@
+{
+  "id": "temporary-candidate",
+  "name": "Temporary owner lifecycle regression",
+  "version": "0.1.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "package.assets": "^1",
+      "storage.private": "^1.2",
+      "configuration": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "temporary-candidate.wasm",
+  "permissions": ["assets.read", "storage"],
+  "storage_limit": 1024,
+  "settings_hook": true,
+  "settings": {
+    "reject": {"title": "Reject configuration candidate", "value_type": {"kind": "boolean"}, "default": false}
+  },
+  "panels": [{"id": "cloud", "title": "Lifecycle receipts", "position": "right"}],
+  "commands": [
+    {"id": "probe", "title": "Probe public private storage"},
+    {"id": "reject-at", "title": "Choose a rejected lifecycle phase"}
+  ]
+}

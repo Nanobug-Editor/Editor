@@ -1,4 +1,48 @@
 //! Stable `network.http` 1.0: owned, pull-based HTTP streams with explicit backpressure and cancellation.
+//!
+//! Minimum host: wire protocol 7, `api.base = ^1`, and negotiated `network.http = ^1`.
+//! Installation must grant both `network.http` and the exact canonical `network.http:<origin>`,
+//! including a nondefault port. Wildcard targets are unavailable; secret consent grants no network
+//! authority. A required missing capability rejects the package; optional absence must disable the
+//! feature or use a plugin fallback. These operations do not provide browser OAuth or AI-specific APIs.
+//!
+//! With the `guest` feature, `start` returns an instance/scope-owned stream. Poll `read` to release
+//! capacity: `None` means
+//! pending; Headers precede Chunks; one Finished/Failed event seals the stream, then reads return
+//! `InvalidState`. Non-2xx responses remain ordinary status metadata. Close the handle using
+//! `api::guest::close_resource` after the terminal event; terminal observation does not release it.
+//! Retain a disposable timer to poll a pending stream rather than blocking a guest invocation.
+//!
+//! Four producer workers are shared by the host HTTP configuration. Each queue has eight events;
+//! chunks are at most 32 KiB. Request bodies are at most 256 KiB; request headers have 64 entries and
+//! 16 KiB total name/value bytes. Response headers have 128 entries and a 32 KiB complete wire block.
+//! The requested response bound is 1 byte–16 MiB. Acceptance starts the 100–120,000 ms deadline,
+//! including slow-consumer queue backpressure. Bounds apply without a trustworthy Content-Length.
+//!
+//! URLs are absolute HTTP(S), at most 4,096 bytes, without user-info, `@`, fragments or controls.
+//! Host framing/connection/proxy headers are not caller-controlled. Every redirect rechecks the next
+//! origin before connecting; at most five hops are allowed. HTTPS-to-HTTP downgrade is denied.
+//! Cross-origin redirects strip all supplied headers and reject forwarding nonempty bodies. A 303,
+//! or POST with 301/302, changes to GET with an empty body before this check. Delegated public services
+//! intersect provider and original caller target permissions; they never borrow stronger grants.
+//!
+//! The host chooses TLS roots and proxy policy; guests cannot disable certificate/hostname checks or
+//! inherit proxy environment variables. The Windows host accepts explicit `NANOBUG_HTTP_PROXY` for
+//! HTTP(S) CONNECT, otherwise connects directly. WebPKI roots apply unless the embedding host supplies
+//! explicit roots. Transport failures expose safe categories without URLs or credential payloads.
+//!
+//! `api::guest::cancel_request` revokes a stream and shuts down its socket; reading returns terminal
+//! `Failed(Cancelled)` while the handle remains owned. CloseResource cancels and releases without a
+//! readable terminal event. Disable, trust revocation and incarnation retirement revoke producers.
+//! Socket IO checks revocation at most every 50 ms, including stalled TLS/CONNECT/body IO. OS DNS
+//! is synchronous: cancellation/deadline is visible immediately, but an already-running DNS call may
+//! occupy one of four workers until the OS returns. It cannot create a late connection or unbounded
+//! helper threads. Cancellation never rolls back HTTP effects already observed by the remote system.
+//!
+//! Missing negotiation returns `CapabilityUnavailable`; missing origin/base consent returns
+//! `PermissionDenied`; malformed bounds return `InvalidRequest`; quota/oversize returns `LimitExceeded`;
+//! retired/foreign handles return `InvalidHandle`. Stream failures carry `TimedOut`, `Cancelled` or
+//! `OperationFailed` as appropriate. Request/Header/Event Debug omit sensitive content.
 use crate::api::{ErrorCode, Failure, ResourceHandle};
 use serde::{Deserialize, Serialize};
 
@@ -122,9 +166,13 @@ impl Request {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Event {
+    /// Response metadata precedes body chunks; non-2xx status is not a transport failure.
     Headers { status: u16, headers: Vec<Header> },
+    /// At most 32 KiB of raw bytes; multibyte text may cross chunk boundaries.
     Chunk { bytes: Vec<u8> },
+    /// Terminal success with total raw bytes; the owned handle still requires release.
     Finished { bytes: u64 },
+    /// Terminal transport, revocation or bounds failure, with a safe typed category.
     Failed { error: Failure },
 }
 impl std::fmt::Debug for Event {
@@ -156,12 +204,15 @@ impl Event {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
+    /// Validate and accept a transfer, returning api::Value::Resource rather than its final response.
     Start { request: Request },
+    /// Pull one event as api::Value::Http; None is pending, not successful completion.
     Read { handle: ResourceHandle },
 }
 
 #[cfg(feature = "guest")]
 /// Start a HTTP stream; errors include missing capability/grant, invalid target and worker quota.
+/// The Request fixes the whole-transfer deadline and bounds; the returned handle belongs to this incarnation.
 pub fn start(request: Request) -> Result<ResourceHandle, Failure> {
     request.validate()?;
     match crate::api::guest::request(crate::api::Operation::Http {
@@ -176,6 +227,7 @@ pub fn start(request: Request) -> Result<ResourceHandle, Failure> {
 }
 #[cfg(feature = "guest")]
 /// Poll one bounded event; use a disposable timer for retries and release the stream when finished.
+/// Returns None while pending, one ordered event when available, and InvalidState after its terminal event.
 pub fn read(handle: &ResourceHandle) -> Result<Option<Event>, Failure> {
     match crate::api::guest::request(crate::api::Operation::Http {
         operation: Operation::Read {

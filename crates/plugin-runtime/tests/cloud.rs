@@ -11,6 +11,8 @@ mod private_depth;
 mod secret_publication;
 #[path = "cloud/security.rs"]
 mod security;
+#[path = "cloud/temporary_ownership.rs"]
+mod temporary_ownership;
 #[path = "support/cloud_tls.rs"]
 mod tls;
 #[path = "cloud/updates.rs"]

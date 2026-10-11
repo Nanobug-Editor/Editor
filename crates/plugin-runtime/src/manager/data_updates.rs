@@ -257,7 +257,7 @@ impl Manager {
         prepared
             .next
             .retarget_data(self.instance_data_directory(manifest));
-        // Snapshot and data swaps precede durable publication; neither opens credential mutation.
+        // Snapshot and data swaps precede durable publication; neither grants directory or credential mutation.
         prepared.next.commit_activation();
         let entry = &self.installed[&id];
         if entry.enabled || entry.project_enabled_in(&self.environment.workspace) {

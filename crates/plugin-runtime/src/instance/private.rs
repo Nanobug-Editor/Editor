@@ -7,6 +7,9 @@ use resource_roots::RootKind;
 impl State {
     /// Cache/temporary roots are subdirectories of this owner, never guest-supplied native paths.
     pub(super) fn private_relative(&self, kind: RootKind, path: &str) -> Result<String, Failure> {
+        if matches!(kind, RootKind::Data) {
+            self.validate_data_path(path)?;
+        }
         let prefix = match kind {
             RootKind::Cache => ".cache/",
             RootKind::Temporary => ".temporary/",
@@ -19,6 +22,41 @@ impl State {
             ));
         }
         Ok(format!("{prefix}{path}"))
+    }
+
+    /// The reserved Temporary area is reachable only through its owned handle, including Windows aliases.
+    /// Data listing may still observe the reserved name; Cache and Workspace have independent relative names.
+    pub(super) fn validate_data_path(&self, path: &str) -> Result<(), Failure> {
+        if path.is_empty() {
+            return Ok(());
+        }
+        let reserved = |name: &str| {
+            name.trim_end_matches([' ', '.'])
+                .eq_ignore_ascii_case(".temporary")
+        };
+        let denied = || {
+            Failure::new(
+                ErrorCode::InvalidPath,
+                "Temporary data requires its owned area handle",
+            )
+        };
+        if path.split('/').next().is_some_and(reserved) {
+            return Err(denied());
+        }
+        // Resolving existing components closes 8.3 aliases as well as case aliases. For new files,
+        // checked canonicalizes the parent, so a reserved directory cannot be reached by a new child.
+        let canonical_root = self.data.canonicalize().map_err(io_failure)?;
+        let target = checked(&canonical_root, path, false)?;
+        if target
+            .strip_prefix(&canonical_root)
+            .ok()
+            .and_then(|relative| relative.components().next())
+            .and_then(|component| component.as_os_str().to_str())
+            .is_some_and(reserved)
+        {
+            return Err(denied());
+        }
+        Ok(())
     }
     pub(super) fn private_request(&mut self, operation: Operation) -> Result<Value, Failure> {
         if !self
@@ -33,8 +71,9 @@ impl State {
             ));
         }
         self.file_authority(RootKind::Data, true)?;
-        // Mutations of committed data must not escape the existing staged initialization transaction.
-        if !self.active || self.staged_writes.is_some() {
+        // Prepare/configuration/Activate and post-flush Snapshot are still unpublished. Only the trusted
+        // manager's durable cutover opens directory authority; staged_writes being empty proves no commit.
+        if !self.activation_committed {
             return Err(Failure::new(
                 ErrorCode::InvalidState,
                 "Private directories require committed activation",
@@ -175,6 +214,9 @@ impl State {
             ));
         }
         self.file_authority(kind, true)?;
+        if matches!(kind, RootKind::Data) {
+            self.validate_data_path(path)?;
+        }
         let prefix = match kind {
             RootKind::Cache => ".cache",
             RootKind::Temporary => ".temporary",
@@ -193,8 +235,12 @@ impl State {
         }
         Ok((root, path.into()))
     }
-    /// Temporary bytes are disposable instance resources; persistent data and cache survive disable.
+    /// Temporary bytes belong to the incarnation which opened the area, even after its handle closes.
+    /// Failed same-root candidates have no ownership; repeated quiesce/stop/Drop cannot delete a successor's bytes.
     pub(super) fn clear_temporary_data(&mut self) {
+        if !self.roots.take_temporary() {
+            return;
+        }
         if let Ok(path) = checked(&self.data, ".temporary", true) {
             if std::fs::remove_dir_all(path).is_err() {
                 // Access is already revoked; retain an observable safe diagnosis if native cleanup fails.
