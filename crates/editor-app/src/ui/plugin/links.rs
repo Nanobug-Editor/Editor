@@ -100,6 +100,11 @@ impl PluginView {
         for (index, link) in node.links.iter().enumerate() {
             let focus = &self.link_focus[&focus_key(&node.id, index, &link.uri)].handle;
             let focused = focus.is_focused(window);
+            // The focused native cue can be taller than one line of prose. Include its full
+            // height in scroll extent so the final target can be revealed without clipping.
+            if focused {
+                body = body.min_h(px(24.));
+            }
             let id = node.id.clone();
             let uri = link.uri.clone();
             let debug_id = format!("plugin-link-focus-{}-{index}", node.id);

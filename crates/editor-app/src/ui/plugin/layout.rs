@@ -203,7 +203,11 @@ impl PluginView {
             offset.y
         };
         let y = desired.max(-scroll.max_offset().y).min(px(0.));
-        self.scene_layout.pending = None;
+        // Offset and virtualized content extents reconcile on the next native layout. Retain a
+        // keyboard reveal through that layout rather than completing against a stale max_offset.
+        if !reveal.focus || y == offset.y {
+            self.scene_layout.pending = None;
+        }
         if y != offset.y {
             scroll.set_offset(point(offset.x, y));
             self.viewport.scroll_changed();
