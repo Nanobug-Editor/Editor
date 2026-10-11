@@ -15,6 +15,7 @@
 - 03 工作树：`C:/Users/Tmiracle/.codex/worktrees/plugin-api-transactions/Editor`，分支 `codex/plugin-api-transactions`；保持行为的预重构从普通整合候选 `ef6fa2d` 开始，最终公开事务交付需接入下述已修正整合点。
 - 05 工作树：`C:/Users/Tmiracle/.codex/worktrees/plugin-api-trees/Editor`，分支 `codex/plugin-api-trees`；从已验证并推送的整合点 `b54aa46931bc24021791456f47fbe894660742ce` 开始。
 - 原项目工作区已有其他任务的未提交改动，本批代码在独立工作树实施；这些已有改动不计入本批成果。
+- 当前主分支加 01/02 的源码 SDK 整合点：`de5397645d05c5d91e8cd74108d46ad9d7a88ff3`，已普通推送并核对远端；当前包与原生连接、三项仓库检查和双轴复审均通过，03/05/06 普通合并该点后验证各自接缝。
 
 ## 当前进度
 
