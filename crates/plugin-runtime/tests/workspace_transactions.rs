@@ -8,43 +8,36 @@ use std::path::Path;
 
 /// Packages are built with the current host --plugin-package; no contract is supplied by test code.
 fn install(manager: &mut Manager, plugin: &str) {
-    install_with_private_grant(manager, plugin, false);
+    let package = contract_package(plugin, |_| {}).unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
 }
 
-/// The authority matrix adds a legitimate private-storage grant to the unchanged real SDK component.
-/// This verifies that even an owned, granted private root cannot be repurposed as a workspace root.
-fn install_with_private_grant(manager: &mut Manager, plugin: &str, private: bool) {
+/// Declaration variants reuse the exact real SDK component and enter ordinary package admission.
+fn contract_package(
+    plugin: &str,
+    edit: impl FnOnce(&mut serde_json::Value),
+) -> anyhow::Result<Package> {
     let package = Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
         "../../target/community-transactions/{plugin}-0.1.0.zip"
     )))
     .unwrap();
-    let package = if private {
-        let mut files = package.files;
-        let mut manifest: serde_json::Value =
-            serde_json::from_slice(&files["manifest.json"]).unwrap();
-        manifest["api"]["required"]["storage.private"] = serde_json::json!("^1");
-        manifest["permissions"]
-            .as_array_mut()
-            .unwrap()
-            .push(serde_json::json!("storage"));
-        files.insert(
-            "manifest.json".into(),
-            serde_json::to_vec(&manifest).unwrap(),
-        );
-        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        for (name, bytes) in files {
-            archive
-                .start_file(name, zip::write::SimpleFileOptions::default())
-                .unwrap();
-            archive.write_all(&bytes).unwrap();
-        }
-        Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap()
-    } else {
-        package
-    };
-    manager
-        .install(&package, package.manifest.permissions.clone())
-        .unwrap();
+    let mut files = package.files;
+    let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
+    edit(&mut manifest);
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
+    let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    for (name, bytes) in files {
+        archive
+            .start_file(name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive.write_all(&bytes).unwrap();
+    }
+    Package::from_bytes(&archive.finish().unwrap().into_inner())
 }
 
 /// The ordinary guest command exposes bounded results through its declared panel.
@@ -123,7 +116,18 @@ fn workspace_transaction_roots_reject_escape_private_peer_and_revoked_authority(
         },
     )
     .unwrap();
-    install_with_private_grant(&mut manager, "workspace-scaffold", true);
+    // A legitimate private grant still cannot repurpose its owned root for workspace file work.
+    let package = contract_package("workspace-scaffold", |manifest| {
+        manifest["api"]["required"]["storage.private"] = serde_json::json!("^1");
+        manifest["permissions"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!("storage"));
+    })
+    .unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
     install(&mut manager, "workspace-converter");
     let handle = root(&mut manager, "workspace-scaffold");
     for path in [
@@ -262,6 +266,93 @@ fn workspace_transaction_roots_reject_escape_private_peer_and_revoked_authority(
         .code,
         api::ErrorCode::InvalidHandle
     );
+}
+
+/// Capability negotiation and installation grants reject writes before allocating native work.
+#[test]
+#[ignore = "build workspace-converter with the current host --plugin-package first"]
+fn workspace_transaction_missing_write_grants_and_unsupported_required_version_have_no_effects() {
+    let workspace = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let mut manager = Manager::open(
+        profile.path().into(),
+        Environment {
+            workspace: workspace.path().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let unsupported = contract_package("workspace-converter", |manifest| {
+        manifest["api"]["required"]["workspace.files"] = serde_json::json!("^99");
+    });
+    // Required-version rejection already happens at public package admission, before Manager install.
+    assert!(unsupported.is_err());
+    assert!(manager.live.is_empty());
+
+    let readonly = contract_package("workspace-converter", |manifest| {
+        manifest["permissions"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|permission| permission != "workspace.write" && permission != "editor.write");
+    })
+    .unwrap();
+    manager
+        .install(&readonly, readonly.manifest.permissions.clone())
+        .unwrap();
+    let root = root(&mut manager, "workspace-converter");
+    let changes = [
+        workspace::Change::Write {
+            target: workspace::FileTarget {
+                root,
+                path: "denied.txt".into(),
+            },
+            expected: Some(workspace::FileStamp::Missing),
+            bytes: b"must not be written".to_vec(),
+        },
+        workspace::Change::EditDocument {
+            document: api::DocumentVersion {
+                id: "versioned-session".into(),
+                path: "owned.txt".into(),
+                revision: 1,
+            },
+            edits: vec![api::TextEdit {
+                range: api::TextRange { start: 0, end: 0 },
+                text: "must not enter native editing".into(),
+            }],
+            selection: api::TextRange { start: 0, end: 0 },
+        },
+    ];
+    for change in changes {
+        assert_eq!(
+            probe(
+                &mut manager,
+                "workspace-converter",
+                api::Operation::Editor {
+                    operation: api::EditorOperation::Workspace {
+                        operation: workspace::Operation::ApplyPlan {
+                            plan: workspace::Plan {
+                                title: "Denied proposal".into(),
+                                changes: vec![change]
+                            },
+                        },
+                    },
+                    timeout_ms: 30_000,
+                },
+            )
+            .unwrap_err()
+            .code,
+            api::ErrorCode::PermissionDenied
+        );
+    }
+    assert!(
+        manager
+            .live
+            .get_mut("workspace-converter")
+            .unwrap()
+            .take_editor_requests()
+            .is_empty()
+    );
+    assert!(!workspace.path().join("denied.txt").exists());
 }
 
 /// Actual guests opt in independently; sequences coalesce, overflow terminates and root release stops.
