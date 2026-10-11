@@ -3,6 +3,7 @@ use super::*;
 use crate::extensions::market_test_server::Server;
 use std::io::Write;
 use std::sync::atomic::Ordering;
+mod official;
 mod updates;
 mod wasm_updates;
 
@@ -83,7 +84,13 @@ fn marketplace_installs_actual_wasm_through_background_preparation() {
 }
 
 fn wait(worker: &Worker, predicate: impl Fn(&Published) -> bool) {
-    let end = Instant::now() + Duration::from_secs(60);
+    wait_with_budget(worker, Duration::from_secs(60), predicate);
+}
+
+/// Rich delivered guests also prepare independent completion/structure instances before publication.
+/// A caller can budget that measured CPU work without changing the ordinary actor-test deadline.
+fn wait_with_budget(worker: &Worker, budget: Duration, predicate: impl Fn(&Published) -> bool) {
+    let end = Instant::now() + budget;
     while !predicate(&worker.state.lock().unwrap()) {
         assert!(
             Instant::now() < end,

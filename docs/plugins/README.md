@@ -4,7 +4,8 @@
 
 - [独立插件市场规格与工单](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
 - [已验收的 Rust 合并方案](specs/rust-plugin-consolidation.md)与[历史验收](verification/rust-plugin-consolidation-2026-10-09.md)：市场工单 03 的外部准入依据；迁移与本次修复的结果另记，不将其他任务成果计为新实现。
-- [市场工单 03 宿主集成记录](verification/plugin-marketplace-03-2026-10-11.md)：公开 SDK、替换确认、依赖所有权与真实包验证的当前证据；正式插件市场交付尚未完成。
+- [市场工单 03 宿主集成记录](verification/plugin-marketplace-03-2026-10-11.md)：七仓稳定 Release、完整 ZIP 摘要、七包原生首次安装与代表功能已验证；正式注册表人工审核及 Pages 交付尚未完成。
+- [市场工单 04 删除前盘点](verification/plugin-marketplace-04-inventory-2026-10-11.md)：实际源码、测试、资源与发行消费者及替代输入安排；尚未删除源码或改变发行。
 
 - [内置终端与运行、调试统一面板方案](specs/builtin-terminal-run-debug.md)、[四张工单与测试安排](tickets/builtin-terminal-run-debug/README.md)：2026-10-09 范围、拆分和测试接缝已批准并发布为 #87–#91，四张工单已逐步完成验收。上游 Alacritty、内置终端、构建和调试统一面板及旧用户迁移已接通；语言与调试器仍由插件提供，平台与历史测试夹具限制见最终记录。
 - [内置终端 02 验收](verification/builtin-terminal-02-2026-10-09.md)：统一构建/运行任务、真实公开消费者、关闭与复用及 Windows 插件开发操作的阶段证据。

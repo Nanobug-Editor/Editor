@@ -37,16 +37,52 @@ Rust 0.6.0 与 Rust Debugger 的业务合并已在其他任务完成，来源、
 
 实际 SDK guest 夹具 ZIP SHA-256 为 `6228ee43d31af039f9dff2483f331f046ff37b70b11de6f3ff49c1258505421a`。CodeLLDB 1.12.3 VSIX SHA-256 为 `a916e509308dac817732f63ca604a8b93ed29cd16f38a2fa9f0b64ed58e8f51a`。旧 Rust 0.5.1 / Rust Debugger 0.2.0 的冻结包只作迁移测试输入，不上架。
 
+## 已公开的独立来源与固定附件
+
+宿主公开 SDK 固定为 [`b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5`](https://github.com/T-miracle/Nanobug/commit/b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5)。七个独立仓库均由 T-miracle 维护，MIT 许可证已经按源码 commit 读回；固定 tag 指向下表源码，稳定 Release 非 draft、非 prerelease。七个源码提交的 CI 均通过独立公开 SDK 构建。Image 保留 `svg` 安装身份，Rust 只发布合并包。
+
+| 独立仓库 | 安装 ID / Release | 源码 commit | 完整 ZIP SHA-256 | 源码 CI |
+| --- | --- | --- | --- | --- |
+| [HTML](https://github.com/T-miracle/Nanobug-Plugin-HTML) | `html` / [0.3.1](https://github.com/T-miracle/Nanobug-Plugin-HTML/releases/tag/v0.3.1) | `68b8c7baabd0790cba884aa19e4f2523b2b2e7ce` | `6f1ad3e33ade378f9fdbdedef5d1d8e6f91b4059f620f7a490f0dd97af4a4f5e` | [通过](https://github.com/T-miracle/Nanobug-Plugin-HTML/actions/runs/38118544496) |
+| [JavaScript](https://github.com/T-miracle/Nanobug-Plugin-JavaScript) | `javascript` / [0.3.1](https://github.com/T-miracle/Nanobug-Plugin-JavaScript/releases/tag/v0.3.1) | `18dc8818787857b75cb1ae1b4ffd88edfa35a631` | `a09afb41de50211e5e0a866d2698dde2a6d524b54dc74149eda573f42eabe144` | [通过](https://github.com/T-miracle/Nanobug-Plugin-JavaScript/actions/runs/38118553877) |
+| [Markdown](https://github.com/T-miracle/Nanobug-Plugin-Markdown) | `markdown` / [0.17.1](https://github.com/T-miracle/Nanobug-Plugin-Markdown/releases/tag/v0.17.1) | `31516790679c2ab591105d11e6fd15e974b72505` | `2438a081165de70acf0c30c560905167d46b44a5c30d7abf856fa420a14a17a3` | [通过](https://github.com/T-miracle/Nanobug-Plugin-Markdown/actions/runs/38118561389) |
+| [Rust](https://github.com/T-miracle/Nanobug-Plugin-Rust) | `rust` / [0.6.1](https://github.com/T-miracle/Nanobug-Plugin-Rust/releases/tag/v0.6.1) | `942a905e4d4dfe02a9b9b162c35e3c2788691d5f` | `9da637f2852318c51fb7b008c1abaefe4848a1d0896d6205210558a561de6867` | [通过](https://github.com/T-miracle/Nanobug-Plugin-Rust/actions/runs/38118570843) |
+| [Image](https://github.com/T-miracle/Nanobug-Plugin-Image) | `svg` / [0.6.1](https://github.com/T-miracle/Nanobug-Plugin-Image/releases/tag/v0.6.1) | `cac09895b6bc9cd227a6e318edb8c868da41084e` | `911932c643bc9b7a538b3f4b5baa34e04a939256b61ee49bf6d2f9e84656a654` | [通过](https://github.com/T-miracle/Nanobug-Plugin-Image/actions/runs/38118577996) |
+| [TOML](https://github.com/T-miracle/Nanobug-Plugin-TOML) | `toml` / [0.2.3](https://github.com/T-miracle/Nanobug-Plugin-TOML/releases/tag/v0.2.3) | `a1a4677118403ac01e6a0fd2f667cfa788aa9bd2` | `2b3dabe0b2f67b2ed2440fe5eb8e7ac2b3e408105accc2f7bbdc9a2ccf6ebeed` | [通过](https://github.com/T-miracle/Nanobug-Plugin-TOML/actions/runs/38118585073) |
+| [XML](https://github.com/T-miracle/Nanobug-Plugin-XML) | `xml` / [0.2.2](https://github.com/T-miracle/Nanobug-Plugin-XML/releases/tag/v0.2.2) | `69749e0d37ca28571e39101678f77a051a939ca8` | `c6bde8af6e724d2c9570502293f4e9d024137761759205baffb6f10a8bd3dd8a` | [通过](https://github.com/T-miracle/Nanobug-Plugin-XML/actions/runs/38118592031) |
+
+最终附件由公开宿主 CLI 按 Windows 平台生成，经惰性 Package 检查后上传；GitHub 读回的附件摘要、文件大小、tag 和发布正文与候选记录一致。随后生产目录构建器使用真实公开 GitHub HTTP、许可证、源码 tag 和 ZIP 重新导出七包候选目录；七个 HTTPS 下载附件全部经过完整 SHA-256 与 Package 校验。该目录位于任务隔离输出中，尚未发布到 Pages，也不视作人工审核。
+
+ZIP 摘要锁定审核过的完整字节，附件被替换会使目录构建或客户端安装失败；相同源码重建仍可能因归档时间戳或构建输入不同产生不同摘要。本次保留上传的固定附件，不通过覆盖 Release 或重建别名改变既有版本；摘要不能单独证明 ZIP 由所列源码构建。
+
+`xml_plugin_package_enters_existing_language_registry --ignored` 使用最终 XML 附件通过：1 passed / 0 ignored，668.67 秒。覆盖真实语言注册、LemMinX、补全、导航、schema 与设置变更。
+
+`cargo test -p editor-app marketplace_official_releases_install_with_native_consent -- --ignored --test-threads=1 --nocapture`：1 passed / 0 ignored，147.81 秒。该单一参数化场景逐包使用隔离工作区和数据目录，经生产市场安装按钮与权限确认、真实 HTTP 下载、完整 ZIP 摘要、公开 Worker/Manager 事务和实际 WASM 激活，并检查六种语言的识别与真实 grammar captures。浏览及确认前下载数为 0，安装后各为 1；安装清单、权限、ID 和摘要与固定包一致。中英文及深浅主题交替执行。
+
+七包从确认到安装、贡献发布和高亮的观测时间依次为 HTML 4.90、JavaScript 4.75、Markdown 22.03、Rust 19.49、Image 20.14、TOML 0.39、XML 69.21 秒。首次执行在 XML 已提交安装记录后超过共享 60 秒预算而失败；实际 XML 对照场景持续推进设置与服务验收，排除了永久安装阻塞。新增七包场景单独使用 180 秒上限以覆盖 debug 构建中安装、补全和结构实例的独立 WASM 编译，普通回归仍用 60 秒；未修改生产行为或把失败那次报告为通过。
+
+其余代表行为使用同次已编译的 `target/debug/deps/editor_app-6b5fbeb5e3fc48db.exe <用例> --ignored --test-threads=1 --nocapture` 逐项运行，固定输入为最终 Release ZIP，避免为每包重新链接宿主。以下均为 1 passed / 0 ignored：
+
+| 原生代表行为 | 实际用例 | 时间 |
+| --- | --- | --- |
+| HTML/XML 配对标签、重命名、中文输入及 Undo | `installed_xml_html_tags_share_native_rename_linked_input_and_undo` | 78.50 秒 |
+| JavaScript 格式化、替换提供者及原分析能力保留 | `installed_javascript_formatter_can_be_replaced_without_changing_analysis` | 7.56 秒 |
+| Markdown 未保存编辑、原生预览及分屏资源回收 | `delivered_markdown_preview_tracks_unsaved_native_edits_and_reclaims_split` | 20.59 秒 |
+| Image 的 PNG/JPEG/GIF/WebP 原生只读绘制 | `image_package_draws_readonly_formats_in_the_native_file_container` | 17.99 秒 |
+| 合并 Rust 的 Cargo 两目标调试、市场替换确认取消及会话回收 | `cargo_artifacts_debug_in_parallel_and_retire_through_native_management` | 55.09 秒 |
+
+新增测试后最后共同门禁再次通过：`cargo fmt --check`；`cargo test --workspace --exclude editor-app` 237 passed / 188 ignored；`cargo check --workspace` 0.96 秒。普通 `marketplace` 组 7 passed / 5 ignored，6.46 秒；新增七包 ignored 场景已单独显式通过，不把其余未执行项算作通过。当前测试变化为 cfg(test)，SDK 与正式包输入仍是 b77e631，无须因此重新发布包。
+
 ## Standards
 
 从固定点 `2cdc683` 审查宿主完整工作区差异和新增文件。硬性违规 0，判断性坏味道 0。复查覆盖缓存租约/收据、事务配额与提交边界、SDK 文档、通用市场确认、本地控件和测试输入路由；复制的外部 Rust 成果有明确来源。
 
 ## Spec
 
-宿主基础及七仓迁移范围复审无未修复阻断；缓存所有权、会话影响、可选能力版本和平台裁剪问题均已修复。通用权限、实例身份、取消及旧数据保护未见退化。本结论不代表七个独立 Release 或正式目录已验收。
+宿主基础及七仓迁移范围复审无未修复阻断；缓存所有权、会话影响、可选能力版本和平台裁剪问题均已修复。通用权限、实例身份、取消及旧数据保护未见退化。追加从固定点 `b77e631` / 市场 `4d7ee9a` 审查七个候选注册记录、批次审核说明与真实七包安装测试，两轴均为 0 个新阻断。源码审查不代替原生行为、人工注册表审核或正式 Pages 验收。
 
 ## 交付边界
 
 七个独立项目已使用公开 `--plugin-package` 入口构建；Markdown 73、Rust 6、Image 8 个 guest 单元测试通过，XML guest 编译通过但无单元测试，XML 行为仍须由宿主真实包场景验证。源码/资源差异审计仅发现 Markdown 的外部文档测试输入改为仓库内冻结夹具；业务内容保持现有成果。冻结文档 SHA-256 为 `4d8b0b633fd38c7e2d2f5e23d87b19e4fe8e8b61576a833d9fac3321c2556b75`。
 
-仍需固定并公开宿主提交、七个插件源码提交和 Release、登记完整 ZIP 摘要、完成注册表 PR 人工审核、七个包的实际市场首次安装及代表行为、真实 Pages/Release 核验。工单 04 删除源码前必须先验证替代测试输入。手工操作系统 IME 和非 Windows 平台未验证。
+七仓、固定源码提交及稳定 Release 已公开，完整 ZIP 摘要已登记在候选注册记录，七包原生首次安装及各自代表行为已通过。仍需完成注册表 PR 人工审核和正式非空 Pages 消费验收。工单 04 删除源码前必须先验证替代测试输入，删除前盘点见[工单 04 准备记录](plugin-marketplace-04-inventory-2026-10-11.md)。手工操作系统 IME 和非 Windows 平台未验证。
