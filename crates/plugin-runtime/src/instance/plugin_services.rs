@@ -331,6 +331,17 @@ impl State {
                 "workspace.read"
             }
             api::Operation::Editor { operation, .. } => match operation {
+                api::EditorOperation::OpenDocument {
+                    resource: api::ResourceIdentity::Local { .. },
+                } => {
+                    if !context.permissions.contains("editor.read") {
+                        return Err(Failure::new(
+                            ErrorCode::PermissionDenied,
+                            "Service source did not delegate editor.read",
+                        ));
+                    }
+                    "workspace.read"
+                }
                 api::EditorOperation::Interaction {
                     operation: plugin_protocol::interaction::Operation::Select { .. },
                 } => {
@@ -377,6 +388,19 @@ impl State {
                     | process::Operation::StartService { .. }
                     | process::Operation::Resolve { .. },
             } => "process.exec",
+            api::Operation::Process {
+                operation:
+                    process::Operation::PresentTerminal { handle, .. }
+                    | process::Operation::TerminalOutput { handle, .. },
+            } if owned(handle) => {
+                if !context.permissions.contains("process.exec") {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Terminal source did not delegate process.exec",
+                    ));
+                }
+                "ui.panels"
+            }
             api::Operation::Process {
                 operation:
                     process::Operation::Write { handle, .. }

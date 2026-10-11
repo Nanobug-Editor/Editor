@@ -10,6 +10,8 @@ mod plugin_development;
 /// Run controls own saved configurations and the sessions launched from them.
 mod run;
 mod sdk_export;
+/// Native terminal state and presentation are independent from the installed plugin registry.
+mod terminal;
 #[cfg(test)]
 mod tests;
 mod ui;
@@ -141,6 +143,9 @@ struct EditorApp {
     /// Host-owned message history is independent from plugin resources and runtime logs.
     messages: Entity<ui::messages::MessagePanel>,
     _messages_subscription: Subscription,
+    /// One bottom dock owns ordinary shells and, subsequently, project task sessions.
+    terminal: Entity<terminal::TerminalPanel>,
+    _terminal_subscription: Subscription,
     /// Saved plugin leaves are restored after the startup registry becomes available.
     pending_dock_restore: bool,
     /// Generic runtime plugin dock; packages own all feature behavior.
@@ -213,6 +218,17 @@ struct EditorApp {
     /// Last published open identities allow versioned close notifications without retaining document text.
     plugin_documents:
         std::collections::BTreeMap<String, plugin_runtime::plugin_protocol::api::DocumentVersion>,
+    /// Immutable metadata watermarks contain no second mutable text or undo model.
+    plugin_document_metadata:
+        std::collections::BTreeMap<String, plugin_runtime::plugin_protocol::api::DocumentInfo>,
+    /// Active changes are observed independently of text revisions.
+    plugin_active_document: Option<plugin_runtime::plugin_protocol::api::DocumentVersion>,
+    /// Sequence numbers preserve ordered source observations across worker publication.
+    plugin_document_sequence: u64,
+    /// A comparison borrows existing native document entities and owns only its decoration layers.
+    document_comparison: Option<editor::comparison::DocumentComparison>,
+    /// Comparison commands capture their own target through the existing local popup control.
+    document_command_menu: Option<extensions::command_menus::DocumentCommandMenu>,
     plugin_popup: Option<(PluginPopupKind, Point<Pixels>)>,
     /// A native file context menu captures the opened identity before presenting provider choices.
     file_view_menu: Option<Entity<ui::controls::menu::PopupMenu>>,
@@ -310,13 +326,23 @@ impl EditorApp {
                 })
                 .placeholder(t!("editor.select_file").to_string())
         });
-        let session_state = SessionState::load(workspace.root());
+        // Finite import must finish before runtime activation or local configuration/layout restoration.
+        let terminal_upgrade_error = terminal::upgrade::prepare(workspace.root())
+            .err()
+            .map(|error| format!("{error:#}"));
+        let mut session_state = SessionState::load(workspace.root());
         // Plugin configurations are host-local per workspace; project settings do not supply run data.
         // A malformed local store is reported rather than silently replaced.
-        let run_controls = run::RunControls::load_plugin_configurations(
+        let mut run_controls = run::RunControls::load_plugin_configurations(
             &workspace.root().display().to_string(),
             editor_core::default_root(),
         );
+        if let Some(error) = &terminal_upgrade_error {
+            // All journal destinations stay immutable during this failed startup, including valid
+            // layout/configuration files that still await the same durable conversion transaction.
+            session_state.block_persistence();
+            run_controls.block_persistence(error.clone());
+        }
         let tree_state = cx.new(|cx| TreeState::new(cx));
         let tree_subscription = cx.subscribe(&tree_state, |this, _, event: &TreeEvent, cx| {
             let id = match event {
@@ -391,6 +417,22 @@ impl EditorApp {
         });
         let messages =
             cx.new(|cx| ui::messages::MessagePanel::new(session_state.messages_visible, cx));
+        let terminal = cx.new(|cx| {
+            terminal::TerminalPanel::new(
+                parent.clone(),
+                extensions.clone(),
+                workspace.root().to_owned(),
+                session_state.workspace_trusted,
+                window,
+                cx,
+            )
+        });
+        terminal.update(cx, |panel, cx| {
+            if let Some(error) = terminal_upgrade_error.clone() {
+                panel.upgrade_failed(error);
+            }
+            panel.set_visible(session_state.native_terminal_visible, cx)
+        });
         dock_area.update(cx, |area, cx| {
             // Explorer and the editor share the center; plugin management has its own window.
             area.set_center(
@@ -437,6 +479,13 @@ impl EditorApp {
             this.persist_session();
             cx.notify();
         });
+        let terminal_subscription = cx.subscribe(&terminal, |this, _, _: &PanelEvent, cx| {
+            this.session_state.native_terminal_visible = this.terminal.read(cx).visible();
+            this.dock_area.update(cx, |_, cx| cx.notify());
+            this.capture_dock_layout(cx);
+            this.persist_session();
+            cx.notify();
+        });
         let dock_subscription = cx.subscribe(&dock_area, |this, _, event, cx| {
             if matches!(event, DockEvent::LayoutChanged) {
                 this.capture_dock_layout(cx);
@@ -472,6 +521,8 @@ impl EditorApp {
             explorer_panel,
             messages,
             _messages_subscription: messages_subscription,
+            terminal,
+            _terminal_subscription: terminal_subscription,
             pending_dock_restore: session_state.dock_layout.is_some(),
             extensions,
             plugin_panels: HashMap::new(),
@@ -515,6 +566,11 @@ impl EditorApp {
             image_drag: None,
             plugin_saves: Default::default(),
             plugin_documents: Default::default(),
+            plugin_document_metadata: Default::default(),
+            plugin_active_document: None,
+            plugin_document_sequence: 0,
+            document_comparison: None,
+            document_command_menu: None,
             plugin_popup: None,
             file_view_menu: None,
             function_context: None,
@@ -544,6 +600,7 @@ impl EditorApp {
             _activation_subscription: None,
         };
         this.restore_dock_layout(window, cx);
+        this.ensure_terminal_dock(window, cx);
         this.refresh_files(cx);
 
         let saved_tabs = this.session_state.open_tabs.clone();
@@ -600,6 +657,11 @@ impl EditorApp {
             }
         })
         .detach();
+        if let Some(error) = terminal_upgrade_error {
+            // File restoration can replace ordinary status text; retain the startup diagnostic in
+            // the first visible frame even when the user has kept the terminal panel hidden.
+            this.status = t!("terminal.error.restore", details = error).to_string();
+        }
         this
     }
 
@@ -647,6 +709,10 @@ impl EditorApp {
     }
 
     fn on_save_action(&mut self, _: &SaveDocument, window: &mut Window, cx: &mut Context<Self>) {
+        // Native focus chooses the readonly source; the active right tab must not borrow a left save.
+        if self.reject_readonly_document_action(window, cx) {
+            return;
+        }
         // The optional formatter must finish for this revision before the existing disk-save path runs.
         self.save_document_with_formatting(window, cx);
     }

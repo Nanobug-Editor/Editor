@@ -4,7 +4,34 @@ use plugin_protocol::api::{
     CancelMode, CancellationEffect, EditorOperation, EditorValue, ErrorCode, Failure,
     RequestUpdate, ResourceHandle,
 };
-use std::time::Instant;
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
+};
+
+/// Runtime-issued, read-only authority for native resources retained after an editor task completes.
+/// It borrows the existing instance and delegated caller lifetimes, never a deadline or result gate.
+/// Private fields prevent guests or native callers from constructing or reviving authority.
+#[derive(Clone)]
+pub struct EditorAuthority {
+    owner: Arc<AtomicBool>,
+    callers: Vec<Arc<AtomicBool>>,
+}
+
+impl EditorAuthority {
+    /// Return whether the initiating instance and every delegated source remain authorized.
+    /// Completing a task does not retire a persistent view; disable/cutover/trust revocation does.
+    pub fn is_live(&self) -> bool {
+        self.owner.load(Ordering::Acquire)
+            && self
+                .callers
+                .iter()
+                .all(|alive| alive.load(Ordering::Acquire))
+    }
+}
 
 /// Clones share one completion gate; dropping an instance seals every outstanding call.
 #[derive(Clone)]
@@ -15,10 +42,14 @@ pub struct EditorRequest {
     /// Trusted runtime metadata; the guest supplies only a relative file name.
     data_root: std::path::PathBuf,
     completion: Completion<EditorValue>,
-    /// Source wait cancellation closes pending UI, while successful calls may retain owned work.
-    parents: Vec<Completion<serde_json::Value>>,
+    /// Persistent views must outlive completion while still observing their initiating authority.
+    authority: EditorAuthority,
     /// Only native-offered bytes can back an image save; the JSON operation contains an opaque handle.
     image_input: Option<std::sync::Arc<crate::ImageInputResource>>,
+    /// Persistent authority is distinct from this transient completion handle.
+    virtual_document: Option<std::sync::Arc<crate::VirtualDocumentResource>>,
+    /// Source wait cancellation closes pending UI, while successful calls may retain owned work.
+    parents: Vec<Completion<serde_json::Value>>,
     /// Native paths never cross the guest transport; the instance issues grants only at delivery.
     selection: std::sync::Arc<std::sync::Mutex<Option<Vec<std::path::PathBuf>>>>,
     /// Replaceable presentation belongs to this one request, never a second cancellable task.
@@ -32,6 +63,7 @@ impl EditorRequest {
         workspace: String,
         data_root: std::path::PathBuf,
         timeout_ms: u32,
+        owner: Arc<AtomicBool>,
         context: Option<&crate::plugin_services::Context>,
     ) -> Self {
         let mut completion = Completion::new(timeout_ms);
@@ -46,8 +78,14 @@ impl EditorRequest {
             workspace,
             data_root,
             completion,
-            parents,
+            authority: EditorAuthority {
+                owner,
+                // Keep the entire delegated chain rather than substituting the final provider.
+                callers: context.map_or_else(Vec::new, |context| context.lifetimes.clone()),
+            },
             image_input: None,
+            virtual_document: None,
+            parents,
             selection: Default::default(),
             progress: Default::default(),
         }
@@ -57,6 +95,23 @@ impl EditorRequest {
     }
     pub fn operation(&self) -> &EditorOperation {
         &self.operation
+    }
+    /// Borrow the unforgeable lifetime authority for an admitted persistent native view.
+    /// Hosts may clone it to observe revocation, but cannot mutate its runtime-owned lifetimes.
+    pub fn authority(&self) -> &EditorAuthority {
+        &self.authority
+    }
+    /// Native virtual opens require runtime-issued owned authority.
+    pub fn virtual_document(&self) -> Option<&std::sync::Arc<crate::VirtualDocumentResource>> {
+        self.virtual_document.as_ref()
+    }
+    /// Attach after the instance admits ownership, permissions and quota.
+    pub(crate) fn with_virtual_document(
+        mut self,
+        resource: std::sync::Arc<crate::VirtualDocumentResource>,
+    ) -> Self {
+        self.virtual_document = Some(resource);
+        self
     }
     /// The native writer borrows immutable authorized pixels and the original document/selection binding.
     pub fn image_input(&self) -> Option<&crate::ImageInputResource> {
@@ -79,6 +134,17 @@ impl EditorRequest {
     }
     pub fn begin(&self) -> bool {
         self.expire_parents();
+        if self
+            .virtual_document
+            .as_ref()
+            .is_some_and(|resource| !resource.is_live())
+        {
+            self.completion.finish(Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Virtual resource was revoked",
+            )));
+            return false;
+        }
         self.completion.begin()
     }
     pub fn finish(&self, result: Result<EditorValue, Failure>) {

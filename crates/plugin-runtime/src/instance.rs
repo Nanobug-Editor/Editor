@@ -28,6 +28,7 @@ mod service_replies;
 mod settings;
 mod stdio;
 mod structure;
+mod terminal_calls;
 mod tools;
 use resource_roots::ResourceRoots;
 wasmtime::component::bindgen!({path:"../plugin-protocol/wit",world:"plugin",require_store_data_send:true});
@@ -57,6 +58,11 @@ struct State {
     /// Auxiliary tools never gain authority to publish the whole file layout.
     declared_layout_panels: BTreeSet<String>,
     subscriptions: std::collections::BTreeMap<u64, crate::document_events::Subscription>,
+    /// Rich events require a separate opt-in handle so older SDKs never see unknown variants.
+    document_streams: std::collections::BTreeMap<u64, crate::document_stream::Subscription>,
+    /// Persistent readonly authority survives request completion but not instance retirement.
+    virtual_documents:
+        std::collections::BTreeMap<u64, std::sync::Arc<crate::VirtualDocumentResource>>,
     preference_subscriptions: std::collections::BTreeMap<u64, preferences::Subscription>,
     wasi: WasiCtx,
     table: ResourceTable,
@@ -66,6 +72,8 @@ struct State {
     /// Service definitions and process handles cannot be retargeted by guest request fields.
     services: std::collections::BTreeMap<String, plugin_protocol::process::Service>,
     process_handles: std::collections::BTreeMap<u64, (api::ResourceHandle, String)>,
+    /// Original calling workspace stays fixed even for resources held by an application provider.
+    process_display_scopes: std::collections::BTreeMap<u64, String>,
     /// Each native process separately pins its immutable runtime files until it exits or is retired.
     process_dependencies: std::collections::BTreeMap<u64, Vec<std::sync::Arc<std::fs::File>>>,
     workspace: PathBuf,
@@ -341,6 +349,8 @@ impl Instance {
             http_streams: Default::default(),
             timers: Default::default(),
             subscriptions: Default::default(),
+            document_streams: Default::default(),
+            virtual_documents: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest
                 .panels
@@ -366,6 +376,7 @@ impl Instance {
             processes: Processes::default(),
             services: manifest.services.clone(),
             process_handles: Default::default(),
+            process_display_scopes: Default::default(),
             process_dependencies: Default::default(),
             workspace: PathBuf::from(&environment.workspace),
             data,
@@ -655,6 +666,11 @@ impl Instance {
         self.store.data_mut().retire_native_processes();
         self.store.data_mut().plugin_services.clear();
         self.store.data_mut().subscriptions.clear();
+        self.store.data_mut().document_streams.clear();
+        for resource in self.store.data_mut().virtual_documents.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().virtual_documents.clear();
         self.store.data_mut().preference_subscriptions.clear();
         for request in self.store.data_mut().editor_requests.values() {
             request.call.retire();
@@ -669,6 +685,7 @@ impl Instance {
         self.views.clear();
         self.store.data_mut().processes.clear();
         self.store.data_mut().process_handles.clear();
+        self.store.data_mut().process_display_scopes.clear();
         self.store.data_mut().process_dependencies.clear();
         self.store.data_mut().active = false;
     }
@@ -719,6 +736,7 @@ impl Instance {
         self.poll_service_requests()?;
         self.poll_editor_requests()?;
         self.poll_document_events()?;
+        self.poll_document_streams()?;
         let preferences_changed = self.poll_preferences()?;
         let timers_changed = self.poll_timers()?;
         let events = self.store.data_mut().poll_processes()?;
@@ -738,7 +756,7 @@ impl Instance {
             if self.store.data_mut().accept_process_event(&event) {
                 let finished = if let api::Notification::Process {
                     handle,
-                    update: process::Update::Exited { .. },
+                    update: process::Update::Exited { .. } | process::Update::Terminated,
                 } = &event
                 {
                     Some(handle.resource)

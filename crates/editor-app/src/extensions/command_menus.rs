@@ -23,9 +23,18 @@ pub(crate) struct Contribution {
 /// An informational native target never becomes file authority or follows a newly active tab.
 #[derive(Clone, Debug, PartialEq, serde::Deserialize)]
 pub(crate) struct Target {
-    path: PathBuf,
+    // A virtual session has an exact document version but never a native filesystem path.
+    path: Option<PathBuf>,
     document: Option<DocumentVersion>,
     directory: bool,
+}
+
+/// A comparison's native popup retains the same exact target and published command incarnations.
+pub(crate) struct DocumentCommandMenu {
+    target: Target,
+    rows: Vec<Contribution>,
+    popup: Entity<crate::ui::controls::menu::PopupMenu>,
+    _dismiss: Subscription,
 }
 
 /// Selection contributions occur only with a real selection; all specified conditions intersect.
@@ -90,8 +99,47 @@ pub(crate) fn contributions(
 }
 
 impl EditorApp {
+    /// Bind a rendered session to its exact version, never infer its identity from a relative name.
+    /// The live Tab supplies a local absolute path only for descriptive menu metadata; a stale
+    /// version retains its original document target so activation cannot fall back to disk.
+    pub(crate) fn plugin_document_menu_target(&self, document: &DocumentVersion) -> Target {
+        let path = (0..self.tabs.len())
+            .find(|index| {
+                self.plugin_document_version(*index)
+                    .is_ok_and(|current| current == *document)
+            })
+            .filter(|index| self.tabs[*index].virtual_document.is_none())
+            .map(|index| self.tabs[index].path().to_path_buf());
+        Target {
+            path,
+            document: Some(document.clone()),
+            directory: false,
+        }
+    }
+
     /// Capture host document identity where available; directory menus retain their clicked path.
     pub(crate) fn plugin_menu_target(&self, path: &Path) -> Target {
+        // Resolve virtual identities before any filesystem operation, including canonicalization.
+        if let Some(index) = self
+            .tabs
+            .iter()
+            .position(|tab| tab.virtual_document.is_some() && tab.path() == path)
+        {
+            return Target {
+                path: None,
+                document: self.plugin_document_version(index).ok(),
+                directory: false,
+            };
+        }
+        // Closed or unknown resource URIs remain non-filesystem targets; a missing tab
+        // must not turn its former resource identity into a Windows path probe.
+        if path.to_string_lossy().contains("://") {
+            return Target {
+                path: None,
+                document: None,
+                directory: false,
+            };
+        }
         // Workspace and open-session paths are canonical; Windows display paths may omit the prefix.
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let document = self
@@ -100,7 +148,7 @@ impl EditorApp {
             .position(|tab| tab.path() == path)
             .and_then(|index| self.plugin_document_version(index).ok());
         Target {
-            path: path.clone(),
+            path: Some(path.clone()),
             document,
             directory: path.is_dir(),
         }
@@ -108,30 +156,51 @@ impl EditorApp {
 
     /// Conditions read native state. Descriptive paths are relative and confer no grants.
     pub(crate) fn plugin_menu_context(&self, target: &Target, cx: &App) -> MenuContext {
-        let current = self.active_path.as_deref() == Some(target.path.as_path());
-        let opened = self.tabs.iter().find(|tab| tab.path() == target.path);
+        let opened = self.tabs.iter().enumerate().find_map(|(index, tab)| {
+            let matches = target.document.as_ref().map_or_else(
+                || target.path.as_ref().is_some_and(|path| tab.path() == path),
+                |document| {
+                    self.plugin_document_version(index)
+                        .is_ok_and(|live| live == *document)
+                },
+            );
+            matches.then_some(tab)
+        });
+        let text = opened
+            .and_then(|tab| tab.text.as_ref())
+            .map(|tab| tab.editor.read(cx));
+        let virtual_document = opened.and_then(|tab| tab.virtual_document.as_ref());
         MenuContext {
-            has_selection: current && !self.editor.read(cx).selected_range().is_empty(),
-            writable: if current {
-                self.editor.read(cx).is_editable()
-            } else if let Some(tab) = opened {
-                tab.text
-                    .as_ref()
-                    .is_some_and(|text| text.editor.read(cx).is_editable())
+            // A focused comparison pane can be nonactive; selection belongs to its own entity.
+            has_selection: text.is_some_and(|editor| !editor.selected_range().is_empty()),
+            writable: if virtual_document.is_some() || target.path.is_none() {
+                false
+            } else if let Some(editor) = text {
+                editor.is_editable()
             } else {
-                std::fs::metadata(&target.path)
-                    .is_ok_and(|metadata| !metadata.permissions().readonly())
+                target.path.as_ref().is_some_and(|path| {
+                    std::fs::metadata(path).is_ok_and(|metadata| !metadata.permissions().readonly())
+                })
             },
             directory: target.directory,
-            language: (!target.directory).then(|| crate::editor::language_for_path(&target.path)),
+            language: virtual_document
+                .map(|tab| tab.language.clone())
+                .or_else(|| {
+                    target
+                        .path
+                        .as_ref()
+                        .filter(|_| !target.directory)
+                        .map(|path| crate::editor::language_for_path(path))
+                }),
             extension: target
                 .path
-                .extension()
+                .as_ref()
+                .and_then(|path| path.extension())
                 .map(|extension| extension.to_string_lossy().to_lowercase()),
             path: target
                 .path
-                .strip_prefix(self.workspace.root())
-                .ok()
+                .as_ref()
+                .and_then(|path| path.strip_prefix(self.workspace.root()).ok())
                 .map(|path| path.to_string_lossy().replace('\\', "/")),
         }
     }
@@ -158,15 +227,7 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(document) = &target.document {
-            // A captured nonactive tab retains its own session identity; focus is not authority.
-            if !(0..self.tabs.len()).any(|index| {
-                self.plugin_document_version(index)
-                    .is_ok_and(|current| current == *document)
-            }) {
-                return;
-            }
-        } else if !target.path.exists() || target.path.is_dir() != target.directory {
+        if !self.plugin_menu_target_is_current(target) {
             return;
         }
         let snapshot = self.extensions.read(cx).shortcut_snapshot();
@@ -212,6 +273,144 @@ impl EditorApp {
             }
         }
         cx.notify();
+    }
+
+    /// Captured versions and virtual liveness are independent of the currently focused tab.
+    fn plugin_menu_target_is_current(&self, target: &Target) -> bool {
+        if let Some(document) = &target.document {
+            // A captured nonactive tab retains its own session identity; focus is not authority.
+            (0..self.tabs.len()).any(|index| {
+                self.plugin_document_version(index)
+                    .is_ok_and(|current| current == *document)
+                    && self.tabs[index]
+                        .virtual_document
+                        .as_ref()
+                        .is_none_or(|tab| tab.resource.is_live())
+            })
+        } else {
+            target
+                .path
+                .as_ref()
+                .is_some_and(|path| path.exists() && path.is_dir() == target.directory)
+        }
+    }
+
+    /// Show readonly-pane commands with the existing local popup's focus, keyboard and appearance.
+    pub(crate) fn open_plugin_document_menu(
+        &mut self,
+        target: Target,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_plugin_document_menu(window, cx);
+        if !self.plugin_menu_target_is_current(&target) {
+            return;
+        }
+        let rows = self.plugin_menu_entries(&target, &[Location::Editor, Location::Selection], cx);
+        if rows.is_empty() {
+            return;
+        }
+        let items = rows
+            .iter()
+            .enumerate()
+            .map(|(index, row)| protocol::ui::MenuItem {
+                id: format!("document-command-{index}"),
+                label: row.label.clone(),
+                disabled: row.disabled,
+                separator_before: index > 0 && rows[index - 1].group != row.group,
+            })
+            .collect();
+        let owner = cx.entity().downgrade();
+        let action_rows = rows.clone();
+        let action_target = target.clone();
+        let popup = cx.new(|cx| {
+            crate::ui::controls::menu::PopupMenu::new(
+                items,
+                MenuStyle::current(cx),
+                position,
+                move |action, window, cx| {
+                    if let protocol::ui::Action::Select(id) = action
+                        && let Some(index) = id
+                            .strip_prefix("document-command-")
+                            .and_then(|id| id.parse::<usize>().ok())
+                        && let Some(row) = action_rows.get(index)
+                    {
+                        let _ = owner.update(cx, |owner, cx| {
+                            owner.invoke_plugin_menu(row, &action_target, window, cx)
+                        });
+                    }
+                },
+                window,
+                cx,
+            )
+        });
+        let popup_id = popup.entity_id();
+        let dismiss = cx.subscribe(&popup, move |owner, _, _: &gpui_kit::DismissEvent, cx| {
+            // Late dismissal cannot dispose a new menu opened in the same native frame.
+            if owner
+                .document_command_menu
+                .as_ref()
+                .is_some_and(|menu| menu.popup.entity_id() == popup_id)
+            {
+                owner.document_command_menu = None;
+                cx.notify();
+            }
+        });
+        self.document_command_menu = Some(DocumentCommandMenu {
+            target,
+            rows,
+            popup,
+            _dismiss: dismiss,
+        });
+        cx.notify();
+    }
+
+    /// Dismiss before the origin comparison is removed, allowing its selective focus repair to run.
+    pub(crate) fn close_plugin_document_menu(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(menu) = self.document_command_menu.take() {
+            menu.popup.update(cx, |popup, cx| popup.dismiss(window, cx));
+            cx.notify();
+        }
+    }
+
+    /// Revoked versions or command incarnations must not leave an actionable captured popup.
+    pub(crate) fn sync_plugin_document_menu(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.document_command_menu.as_ref().is_some_and(|menu| {
+            !self.plugin_menu_target_is_current(&menu.target)
+                || menu.rows.iter().any(|row| {
+                    self.extensions
+                        .read(cx)
+                        .shortcut_epoch(&row.plugin, &row.command)
+                        != Some(row.epoch)
+                })
+        }) {
+            self.close_plugin_document_menu(window, cx);
+        }
+    }
+
+    /// Refresh only local popup appearance; the existing entity owns navigation and scrolling.
+    pub(crate) fn render_plugin_document_menu(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<crate::ui::controls::menu::PopupMenu>> {
+        let menu = self.document_command_menu.as_ref()?;
+        let style = MenuStyle::current(cx);
+        menu.popup.update(cx, |popup, cx| {
+            if popup.style != style {
+                popup.style = style;
+                cx.notify();
+            }
+        });
+        Some(menu.popup.clone())
     }
 }
 

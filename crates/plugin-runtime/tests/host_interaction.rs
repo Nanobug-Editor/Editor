@@ -10,10 +10,10 @@ use std::{
     path::Path,
 };
 
-/// Re-identification changes declarations, never the SDK-built component or request transport.
+/// Re-identify the current 0.19 fixture's declarations, keeping its SDK component and transport.
 fn package(id: &str, edit: impl FnOnce(&mut Value)) -> Package {
     let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/plugin-api-test");
-    let archive = folder.join("capability-example-0.18.0.zip");
+    let archive = folder.join("capability-example-0.19.0.zip");
     let mut files: BTreeMap<_, _> = Package::read(&archive).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);

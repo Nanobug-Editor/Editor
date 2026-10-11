@@ -2,7 +2,7 @@
 
 日期：2026-10-09，续验 2026-10-11。对应 [工单 06](../../tickets/plugin-api-community-foundation/06-cloud-and-private-state.md) / [#98](https://github.com/T-miracle/Nanobug/issues/98)，来源为[社区生态方案](../../specs/plugin-api-community-foundation.md)。
 
-状态：首候选的自动验证与 Windows 原生连接验收通过；固定候选 `69478ced8238e8f2e9ce67d2909e901387ac9109` 的独立审查为 Standards 0 项、Spec 4 项（最高 P1）。四项已在 `d92f79c8957063d1f77a5600f4480baed50859e0` 修复并通过复审，Standards 仍为 0 项；Spec 新发现一项 P2：失败配置候选清理旧实例的 Temporary。续修候选 `a248ccfb1ce9281a989f4888f469a0a25bf47c87` 已补实际 SDK 红绿回归与纯源码出口，固定点双轴复审为 Spec P1/P2/P3 = 0/0/0，Standards = 0/0/1，仅一处注释措辞。注释已修正，独立 Standards 读回及根代理提供的已验证主分支整合尚待完成；本单尚未标记完成或关闭，本文保留各阶段的实际证据。
+状态：首候选的自动验证与 Windows 原生连接验收通过；固定候选 `69478ced8238e8f2e9ce67d2909e901387ac9109` 的独立审查为 Standards 0 项、Spec 4 项（最高 P1）。四项已在 `d92f79c8957063d1f77a5600f4480baed50859e0` 修复并通过复审，Standards 仍为 0 项；Spec 新发现一项 P2：失败配置候选清理旧实例的 Temporary。续修候选 `a248ccfb1ce9281a989f4888f469a0a25bf47c87` 已补实际 SDK 红绿回归与纯源码出口，固定点双轴复审为 Spec P1/P2/P3 = 0/0/0，Standards = 0/0/1，仅一处注释措辞。注释在 `54272a6261a3cd7c9b726aa6578d3a4392d94c47` 修正，独立 Standards 读回为硬项 0 / smell 0，Spec 保持 0/0/0。现整合根代理验证的 `de5397645d05c5d91e8cd74108d46ad9d7a88ff3`；整合候选的固定点复审与当前产物原生短连接仍由根代理完成。本单尚未标记完成或关闭，本文保留各阶段的实际证据。
 
 ## 工作树、版本与构建入口
 
@@ -93,7 +93,7 @@ cargo test -p plugin-runtime --test cloud t30_failed_cloud_update_retires_candid
 | Spec | 0 | 0 | 0 | Temporary 归属、发布、权限与纯源码 SDK 行为符合规格，无新增行为发现 |
 | Standards | 0 | 0 | 1 | `private.rs` 注释误写空 staged_writes 证明未提交，未准确区分 flush 与 committed activation |
 
-唯一 P3 已仅修正为“空 staged_writes 不能证明 activation 已提交”；实际守卫仍是 `activation_committed`，没有修改代码行为、协议源码、SDK 内容或包资源。注释与本记录通过 `git diff --check`，复用上一候选对应行为和 SDK 证据，不重复运行 ignored、SDK 或完整 Rust 套件。根代理另安排独立 Standards 读回，在读回前不将此项记为已复审归零。主分支及 01/02 整合等待根代理给出已验证固定点，本工作树未自行 merge、push 或关闭议题。
+唯一 P3 已仅修正为“空 staged_writes 不能证明 activation 已提交”；实际守卫仍是 `activation_committed`，没有修改代码行为、协议源码、SDK 内容或包资源。注释与本记录通过 `git diff --check`，复用上一候选对应行为和 SDK 证据，不重复运行 ignored、SDK 或完整 Rust 套件。根代理安排独立 Standards 在 `54272a6261a3cd7c9b726aa6578d3a4392d94c47` 读回，硬项 0 / smell 0，原 Spec 0/0/0；该注释项已归零。此阶段未 merge、push 或关闭议题；随后仅收到已验证固定点才开始下述普通主分支整合。
 
 修复复用实例现有 roots 与 committed activation，未新增宿主测试专用 API、独立权限层或 UUID 存储目录：
 
@@ -231,6 +231,45 @@ cargo test -p plugin-runtime --test cloud t27_t29_private_directories_credential
 2026-10-09 的历史交付曾在 `website/src/content/docs/en/sdk/cloud.md` 和中文对应页维护读者正文，并导出英文源为 `CLOUD.md`。2026-10-11 用户更新的 AGENTS 明确替代这个出口：公开使用方法写在源码注释，独立 SDK 不内嵌或导出 Markdown。本次将 HTTP、密钥、私有区域与 timer 说明迁到源码，不继续修改网站正文；仓库 `docs/` 保留方案、工单和执行证据。
 
 已有 Node/npm 执行 `npm ci` 恢复锁定项目依赖，通过；`npm test` 初次 **15 通过、2 个 build/index 前置跳过、0 失败**；随后 `npm run build` 真实构建和搜索索引完成，测试 **17 通过、0 跳过、0 失败**。对应 `website-install06.log`、`website-test06.log`、`website-build06.log`。未使用初次跳过冒充搜索通过。
+
+## 当前主分支与 01/02 普通合并连接（2026-10-11）
+
+普通合并的两父基线为 `54272a6261a3cd7c9b726aa6578d3a4392d94c47` 与根代理已验证的 `de5397645d05c5d91e8cd74108d46ad9d7a88ff3`。不改写历史；保留原生终端主线及 01/02 的文档、比较、菜单和交互。冲突逐段合并，SDK 资源为两侧并集：42 项 Rust/Cargo/WIT/JSON，源码包含当前文档、配置、运行目标、调试与本单四个模块。公开 `lib.rs` 兼容/弃用政策保持根源码注释；SDK 不恢复 Markdown。原双语 cloud 读者稿按主分支目录迁移保留在 `documentation/`，仅修迁移入口，不修改正文或恢复站点构建。
+
+自动合并后的实例初始化与退休同时保留 HTTP、timer、document stream、virtual document 和原生终端资源。`Manager::open_with_resources` 保留 canonical profile secret namespace 及主分支的受管私有数据锁；配置仍先 durable write、再移除并 stop 旧实例、最后 commit_activation 并插入新实例。`data_transaction.rs`、private owner 与 credential mutation 行为未变化；编辑器新增文档操作没有改变 OpenDataFile 的协商/grant 后 reserved-path 校验。
+
+本阶段先 `cargo fmt --check` 退出 0（`fmt06-main-integration.log`），最后源码注释补齐后格式再次退出 0（`fmt06-main-integration-final.log`）；`cargo check --workspace` 首次退出 0、35.10 秒（`check06-main-integration.log`），源码注释补齐后最终检查退出 0、8.01 秒（`check06-main-integration-final.log`）。新宿主 `cargo build -p editor-app` 退出 0、4 分 26 秒（`build-host06-main-integration.log`），仍直接使用当前 Cargo/VS 工具，未安装工具或调用历史脚本。
+
+实际 fresh export 为 `../target06/sdk06-main-integration`：**42 文件、0 非源码资源、与当前 protocol 源和实际 compiler SDK 缓存分别 0 hash 差异**。SDK key 为 `aa89f9a713a00439bf79c329b9db51758e24d9a1a6b3417f15df963da3208f76`；四个 release compiler-artifact 均引用该 key（`export-sdk06-main-integration.log`、`packages06-main-integration.log`、`fingerprints06-main-integration.log`）。正式 0.1.1 translation/query 与 0.1.0 secret/Temporary 夹具分别构建 **21.78 / 21.00 / 20.05 / 20.68 秒**，原 build key 及包版本保持不变，此阶段未修改消费者业务。新增文档类型及其源码字节改变 WASM 身份；当前 Native 短连接必须核对下表，不能复用旧 hash 作为新产物已验收。
+
+| 当前主分支整合产物 | SHA-256 |
+| --- | --- |
+| `../target06/debug/editor-app.exe` | `4B220DC26957AFE0E181D31187A4F82FF452C7AF495AEF255F81D63CC4003131` |
+| translation 0.1.1 ZIP | `C1D6D01DD5D725F1686E71BEBFFCE8F1CDBD8CFFB8CAED64665314D096A0C67C` |
+| ZIP 内 translation WASM，2,459,516 bytes | `D287CB6FB0C5312301121E07C28C7D8959E67367FB639EC7CE3B95D2E7EE674E` |
+| query 0.1.1 ZIP | `8E245135A2EC3745B8D5195E3C4F48378DC0746B3156D91B6FEB7E438776A6C4` |
+| ZIP 内 query WASM，2,455,832 bytes | `45FE738FDAF9A9EF8A5356F86C0397EC7713F632EEB750C949C4E7EBBA9850CD` |
+| secret-candidate 0.1.0 ZIP | `30CEEFF6614A3328CFEE13BF94991CAC82F64558DFEEE53BE5CF1025E6D77CBA` |
+| ZIP 内 secret WASM，2,380,393 bytes | `53EEECEE94B4D64FBD5EE449473248E6218015E178476F873E9E8AF0CC119836` |
+| temporary-candidate 0.1.0 ZIP | `3A1CE3175FF705DCBA1B680F992FC48A10AC0F78E947894AAFA1C75211BEA92E` |
+| ZIP 内 Temporary WASM，2,394,916 bytes | `8FD1F60218112276EB4708A73AB9AB12632E1AD071A3062D6E3AB5E43E5BD387` |
+
+当前 SDK 出口、并发 publication 和缓存修复测试 **3/0、0.12 秒**（`sdk-tests06-main-integration.log`，编译 2 分 14 秒）。实际新 Temporary 包的一条 owner 回归 **1/0、169.65 秒**（`temp-owner06-main-integration.log`，编译 1 分 14 秒），同时验证受管根初始化、Prepare/Validate/Apply 失败候选保留旧文件、正常配置 old.stop→new.commit、CloseResource 后 disable 清理及 host drop/reopen。密钥发布四失败组合的一条新 SDK 回归 **1/0、183.99 秒**（`secret-publication06-main-integration.log`，编译 8.94 秒），覆盖 Snapshot write/delete 失败与 Committing write/delete 取消，保持原系统 Token、退役旧 handle、恢复 Data/Cache 和资源回落。默认并发非 UI 门禁 **247 通过、0 失败、221 ignored，66 个结果 batch**（`workspace-tests06-main-integration.log`；编译 2 分 49 秒），原 HTTP 单元测试也通过；本次没有改其超时或断言，也没有用串行执行代替默认结果。旧阶段的默认 HTTP 时间波动失败和后续串行结果继续保留，未重报为本阶段结果。未重复未变化的完整 Temporary、HTTP/TLS、timer 或 UI 主矩阵；这里只复用它们对应旧阶段的完整证据，不把 ignored 跳过计为通过。
+
+本阶段在同一已初始化的 VS 环境中直接执行以下入口，包构建使用宿主默认 release 与 SDK 缓存，不启动桌面：
+
+```powershell
+cargo fmt --check
+cargo check --workspace
+cargo build -p editor-app
+& ../target06/debug/editor-app.exe --plugin-package plugins/cloud-translation plugins/code-host-query crates/plugin-runtime/tests/fixtures/secret-candidate crates/plugin-runtime/tests/fixtures/temporary-candidate --output target/cloud-api-test
+cargo test -p editor-app sdk_export::tests -- --nocapture
+cargo test -p plugin-runtime --test cloud t29_t30_temporary_owner_survives_rejected_configuration_and_cleans_on_retirement -- --ignored --nocapture --test-threads=1
+cargo test -p plugin-runtime --test cloud t27_t30_unpublished_snapshot_and_publish_failure_preserve_system_token -- --ignored --nocapture --test-threads=1
+cargo test --workspace --exclude editor-app
+```
+
+本执行代理未启动桌面、推送或关闭 issue。根代理完成候选固定点复审及当前正式包的必要原生短连接：新宿主上的云查询/缓存与分块结果、取消资源回落，并与其已验证的原生终端共存；Token、IME、两主题等未变完整 UI 主矩阵维持原证据。
 
 ## 原生连接验收与限制
 

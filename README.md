@@ -8,11 +8,11 @@
 
 Nanobug is a native desktop code editor built with Rust and GPUI, with Windows as its primary platform.
 
-Independent plugins provide language support, a terminal, Markdown and image previews, and run, debug, and build tools. Bundled and third-party plugins use the same public interfaces.
+The built-in terminal uses upstream Alacritty and shares one bottom panel with build, run and debug sessions; no terminal plugin installation is required. Independent plugins provide language support, Markdown and image previews, build rules and debuggers. Bundled and third-party plugins use the same public interfaces.
 
 The XML plugin provides schema assistance, completion, formatting, paired tag editing, and a document outline. HTML and JavaScript provide independent native language services. New workspaces start with the outline hidden; open it from the bottom window controls.
 
-[Documentation](https://t-miracle.github.io/Editor/en/) · [Getting started](https://t-miracle.github.io/Editor/en/guide/getting-started/) · [Plugin SDK](https://t-miracle.github.io/Editor/en/sdk/) · [Report an issue](https://github.com/T-miracle/Editor/issues)
+[Documentation](docs/README.md) · [Getting started](#developing-nanobug) · [Plugin SDK sources](crates/plugin-protocol/src/lib.rs) · [Report an issue](https://github.com/T-miracle/Editor/issues)
 
 ## Installation
 
@@ -99,7 +99,7 @@ cargo build -p editor-app
 
 For CLI development, send `reload` or `stop` on standard input. `--workspace` selects a test workspace (the plugin project by default); `--profile` selects isolated data. Repeat `--grant <permission>` for the permissions declared in the manifest. New permissions require stopping and authorizing another run; changing the plugin ID also requires restarting the configuration. Missing compilers/SDK targets are reported and never installed automatically. Native build steps declare their exact OS/architecture; foreign native artifacts are rejected. Windows is verified; macOS/Linux use portable paths and process interfaces but remain unverified.
 
-Install or update generated ZIPs in the plugin manager and approve their declared permissions. See the [packaging format](https://t-miracle.github.io/Editor/en/sdk/packaging/), [run, debug, and build guide](https://t-miracle.github.io/Editor/en/guide/run-debug-build/) and [Rust debugger README](plugins/rust-debugger/README.md). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
+Install or update generated ZIPs in the plugin manager and approve their declared permissions. See the [packaging format](documentation/en/sdk/packaging.md), [run, debug, and build guide](documentation/en/guide/run-debug-build.md) and [Rust debugger README](plugins/rust-debugger/README.md). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
 
 ## Contributing
 
@@ -120,7 +120,7 @@ cargo check --workspace
 
 Changes to `editor-app` also require relevant UI tests and native interaction checks. Tests marked ignored that use actual WASM packages require their fixtures to be built before explicitly running them. Documentation-only changes require link and path checks plus `git diff --check`.
 
-Reader-facing guides and SDK documentation live in `website/`; see [website/README.md](website/README.md) for the site build. Specifications, tickets, and verification records live in `docs/`. Keep this English README and [its Chinese translation](README.zh-CN.md) in sync.
+Basic run, build, and packaging commands are maintained in this README. Plugin interface usage is documented beside the public types in [the protocol sources](crates/plugin-protocol/src/lib.rs). The independent SDK exports only Rust sources, Cargo manifests, WIT, and JSON protocol resources; it does not bundle Markdown. Specifications, tickets, and verification records live in `docs/`. Keep this English README and [its Chinese translation](README.zh-CN.md) in sync.
 
 ## Licensing
 

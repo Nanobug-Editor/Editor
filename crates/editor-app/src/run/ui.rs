@@ -20,8 +20,8 @@ use gpui_kit::{AnyElement, DismissEvent, WeakEntity, Window, div, px};
 use rust_i18n::t;
 use sha2::{Digest, Sha256};
 
-mod build_output;
 mod configuration;
+mod terminal;
 pub(crate) use configuration::render_run_config_form;
 mod dialog;
 pub(crate) use dialog::RunConfigModal;
@@ -49,7 +49,21 @@ impl EditorApp {
         if !self.run_permitted(cx) {
             self.plugin_configuration_bridge.jobs.stop_all();
         }
+        let ready = self
+            .plugin_configuration_bridge
+            .rerun_jobs
+            .iter()
+            .filter(|(key, _)| !self.plugin_configuration_bridge.jobs.active(key))
+            .map(|(key, workspace)| (key.clone(), workspace.clone()))
+            .collect::<Vec<_>>();
+        for (key, workspace) in ready {
+            self.plugin_configuration_bridge.rerun_jobs.remove(&key);
+            if workspace == self.workspace_key() && self.run_permitted(cx) {
+                self.start_host_configuration(&key, false, window, cx);
+            }
+        }
         let (mut executions, errors, stops, statuses) = self.extensions.read(cx).take_host_runs();
+        self.sync_terminal_messages(window, cx);
         executions.extend(self.plugin_configuration_bridge.jobs.snapshots());
         for (session, request, result) in self.extensions.read(cx).take_run_locations() {
             if self.run_controls.finish_location(session, request) {
@@ -89,6 +103,9 @@ impl EditorApp {
             self.run_controls
                 .observe_provider_preparation(request, &config, snapshot);
         }
+        // Flush the current provider's final stdio bytes before its receipt advances the step.
+        // Otherwise a fast build's tail would appear under the next step's heading.
+        self.sync_terminal_preparation_output(cx);
         for (config, index, request, result) in self.extensions.read(cx).take_target_preparations()
         {
             if self.run_controls.provider_prepared(
@@ -185,12 +202,25 @@ impl EditorApp {
                 self.open_debug_location(source, line, window, cx);
             }
         }
+        // A close confirmed before creation cancels its original host root as soon as its identity
+        // arrives, even if the adapter has not completed initialization.
+        let selected_debug = self
+            .run_controls
+            .debug_session()
+            .map(|(config, _)| config.to_owned());
+        for config in self.run_controls.take_ready_debug_closes() {
+            self.run_controls.select_debug_session(&config);
+            self.force_debug(cx);
+        }
+        if let Some(config) = selected_debug {
+            self.run_controls.select_debug_session(&config);
+        }
         // Inspection belongs to the newly observed pause, never to cached output text.
         // the panel renders frames and variables that nobody ever requested.
         self.fetch_debug_inspection(cx);
         if !self.leave_confirmed && !self.shutting_down {
             for configuration in self.run_controls.take_ready_debug_reruns() {
-                self.debug_configuration(&configuration, cx);
+                self.debug_configuration(&configuration, window, cx);
             }
         }
         // And it is the moment to tell the debugger where to stop: a session that began before the user
@@ -251,7 +281,7 @@ impl EditorApp {
                 let workspace = self.workspace_key();
                 self.run_controls.select(&config, &workspace);
                 if debug {
-                    self.debug_configuration(&config, cx);
+                    self.debug_configuration(&config, window, cx);
                 } else {
                     self.start_configuration_without_environment(&config, window, cx);
                 }
@@ -263,6 +293,8 @@ impl EditorApp {
                 }
             }
         }
+        self.sync_terminal_results(cx);
+        self.sync_debug_inspection(cx);
     }
 
     /// Whether this workspace may start programs at all; a restricted workspace never launches.
@@ -880,7 +912,7 @@ impl EditorApp {
                     .tooltip(
                         debug_blocker.unwrap_or_else(|| t!("run.debug_hint").to_string().into()),
                     )
-                    .on_click(cx.listener(|this, _, _, cx| this.debug_selected(cx)))
+                    .on_click(cx.listener(|this, _, window, cx| this.debug_selected(window, cx)))
             }))
             .child(
                 div().debug_selector(|| "run-stop".into()).child(
@@ -967,6 +999,16 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.run_controls.is_preparing(config_id)
+            || self.run_controls.is_pending(config_id)
+            || self
+                .run_controls
+                .running_for(config_id)
+                .is_some_and(|session| session.is_active())
+        {
+            self.locate_terminal_task(config_id, window, cx);
+            return;
+        }
         if self.start_host_configuration(config_id, false, window, cx) {
             return;
         }
@@ -977,6 +1019,7 @@ impl EditorApp {
         if self.run_controls.debug_target_active(config_id) {
             self.run_controls.select_debug_session(config_id);
             self.debug_panel.open = true;
+            self.locate_terminal_task(config_id, window, cx);
             cx.notify();
             return;
         }
@@ -1028,6 +1071,15 @@ impl EditorApp {
                     return;
                 }
                 let request_id = self.run_controls.begin(&config.id);
+
+                if !self.begin_terminal_task(&config.id, &config.name, request_id, window, cx) {
+                    self.run_controls.reject_start(
+                        &config.id,
+                        request_id,
+                        &t!("terminal.session_limit"),
+                    );
+                    return;
+                }
 
                 self.run_controls
                     .begin_sequence(&config.id, plan, request_id);
@@ -1367,7 +1419,7 @@ impl EditorApp {
     /// The refusal is the point of this method: a debug click that cannot be honoured has to say so,
     /// because running the program without a debugger would look like success while handing the user
     /// something they did not ask for.
-    pub(crate) fn debug_selected(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn debug_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(configuration) = self.run_controls.selected().map(|config| config.id.clone())
         else {
             // An empty native selection is a host refusal, distinct from the debugger's result.
@@ -1379,11 +1431,11 @@ impl EditorApp {
             cx.notify();
             return;
         };
-        self.debug_configuration(&configuration, cx);
+        self.debug_configuration(&configuration, window, cx);
     }
 
     /// Both an explicit Debug and a replacement use the captured owner, even after selection changes.
-    fn debug_configuration(&mut self, id: &str, cx: &mut Context<Self>) {
+    fn debug_configuration(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.guard_plugin_execution(id, plugin_form::Execution::Debug, cx) {
             return;
         }
@@ -1415,6 +1467,7 @@ impl EditorApp {
         {
             self.run_controls.select_debug_session(&configuration.id);
             self.debug_panel.open = true;
+            self.locate_terminal_task(&configuration.id, window, cx);
             cx.notify();
             return;
         }
@@ -1456,8 +1509,22 @@ impl EditorApp {
             .run_controls
             .begin_debug_preparation(&configuration.id, plan, &workspace)
         {
-            Ok(()) => {
+            Ok(request) => {
+                if !self.begin_terminal_task(
+                    &configuration.id,
+                    &configuration.name,
+                    request,
+                    window,
+                    cx,
+                ) {
+                    self.run_controls
+                        .request_configuration_stop(&configuration.id);
+                    return;
+                }
                 self.debug_panel.open = true;
+                self.terminal.update(cx, |panel, _| {
+                    panel.mark_debug_task(&configuration.id, false)
+                });
                 self.status = t!("run.preparing_debug", name = configuration.name.clone()).into();
                 self.drive_preparation(cx);
             }
@@ -1496,6 +1563,11 @@ impl EditorApp {
         let Some(request) = self.run_controls.begin_debug_start_request(configuration) else {
             return;
         };
+        self.terminal.update(cx, |panel, cx| {
+            panel.task_step(configuration, request, &t!("run.debug_panel"), cx)
+        });
+        self.terminal
+            .update(cx, |panel, _| panel.mark_debug_task(configuration, true));
         if !self.stage_validated_run(
             configuration,
             Work::DebugCall {
@@ -1589,6 +1661,10 @@ impl EditorApp {
         }
         let request_id = self.run_controls.begin(&config.id);
         self.run_controls.begin_build(&config.id, &plan, request_id);
+        if !self.begin_terminal_task(&config.id, &config.name, request_id, window, cx) {
+            self.run_controls.request_configuration_stop(&config.id);
+            return;
+        }
         self.status = t!("run.building_named", name = config.name).to_string();
         self.drive_preparation(cx);
     }
@@ -1598,6 +1674,7 @@ impl EditorApp {
     /// This is the only place a preparation step is requested or observed, so the order a user sees
     /// is the order the sequence decides rather than the order events happen to arrive.
     pub(crate) fn drive_preparation(&mut self, cx: &mut Context<Self>) {
+        self.sync_terminal_step_results(cx);
         let configs = self
             .run_controls
             .configurations()
@@ -1671,6 +1748,9 @@ impl EditorApp {
         // The step is owned before the request is staged, so nothing can request it twice.
         self.run_controls
             .note_step_request(config, index, request_id);
+        self.terminal.update(cx, |panel, cx| {
+            panel.task_step(config, request_id, &step.0, cx)
+        });
         let work = if let Some((provider, binding)) = self
             .run_controls
             .preparation(config)
@@ -1748,6 +1828,17 @@ impl EditorApp {
         }) else {
             return;
         };
+        // An early host record owns cancellation before creation, but has no provider handle yet.
+        // Wait for its receipt instead of converting a valid pending start into Unknown failure.
+        if self
+            .run_controls
+            .sessions()
+            .iter()
+            .find(|entry| entry.id == session)
+            .is_some_and(|entry| entry.provider_session.is_none())
+        {
+            return;
+        }
         if self.run_controls.has_poll(config, index) {
             // One outstanding query per step: polling faster would not learn anything sooner.
             return;
@@ -1828,7 +1919,7 @@ impl EditorApp {
         &mut self,
         session: u64,
         config: &str,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(_found) = self
@@ -1842,6 +1933,7 @@ impl EditorApp {
         // Selection follows the session's own configuration so Stop affects exactly this session.
         let key = self.workspace_key();
         self.run_controls.select(config, &key);
+        self.locate_terminal_task(config, window, cx);
         let request = self.run_controls.begin_location(session, config);
         self.status = if self
             .extensions
@@ -1946,6 +2038,16 @@ impl EditorApp {
             self.open_run_config_dialog(window, cx, None);
             return;
         };
+        if self.plugin_configuration_bridge.jobs.active(&config.id) {
+            self.plugin_configuration_bridge
+                .jobs
+                .stop(&config.id, false);
+            self.plugin_configuration_bridge
+                .rerun_jobs
+                .insert(config.id.clone(), self.workspace_key());
+            self.locate_terminal_task(&config.id, window, cx);
+            return;
+        }
         if let Some(request) = self.run_controls.provider_preparation_request(&config.id) {
             let debug = self.run_controls.debug_target_active(&config.id);
             self.run_controls.request_configuration_stop(&config.id);
@@ -2126,7 +2228,7 @@ fn short_label(label: &str) -> String {
 }
 
 /// A visible state word for one session; the host never invents a stronger claim than the provider's.
-fn run_state_label(state: plugin_runtime::ExecutionState) -> String {
+pub(crate) fn run_state_label(state: plugin_runtime::ExecutionState) -> String {
     match state {
         plugin_runtime::ExecutionState::Starting => t!("run.state_starting").to_string().into(),
         plugin_runtime::ExecutionState::Running => t!("run.state_running").to_string().into(),

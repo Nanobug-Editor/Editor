@@ -15,6 +15,8 @@ pub(super) enum RootKind {
     Temporary,
     EditorRequest,
     ImageInput,
+    /// Readonly text never grants file-root authority.
+    VirtualDocument,
     ServiceReference,
     ServiceRequest,
     /// Provider-side deferred reply; it is not a consumer reference or a native process authority.
@@ -159,6 +161,7 @@ impl State {
             RootKind::EditorRequest
             | RootKind::Http
             | RootKind::Timer
+            | RootKind::VirtualDocument
             | RootKind::Selected
             | RootKind::ImageInput
             | RootKind::ServiceReference
@@ -293,6 +296,10 @@ impl State {
                 self.http_streams.remove(&handle.resource);
                 self.timers.remove(&handle.resource);
                 self.subscriptions.remove(&handle.resource);
+                self.document_streams.remove(&handle.resource);
+                if let Some(resource) = self.virtual_documents.remove(&handle.resource) {
+                    resource.revoke();
+                }
                 self.preference_subscriptions.remove(&handle.resource);
                 self.image_inputs.remove(&handle.resource);
                 self.plugin_services.references.remove(&handle.resource);
@@ -323,6 +330,7 @@ impl State {
             | api::Operation::Service { .. }
             | api::Operation::Process { .. }
             | api::Operation::SubscribeDocuments
+            | api::Operation::SubscribeDocumentEvents
             | api::Operation::ReadPreference { .. }
             | api::Operation::WritePreference { .. }
             | api::Operation::Editor { .. }

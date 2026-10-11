@@ -1,4 +1,46 @@
-//! Stable typed command shapes and declarative native contribution points.
+//! Stable `plugin.commands ^1` typed commands and native menu contributions.
+//!
+//! # Declare, discover and invoke
+//!
+//! Protocol `7` and base API `^1` carry this capability. Declare it as required when
+//! exposing typed commands or menus, or optional when a consumer can omit this behavior.
+//! Cross-plugin calls require `commands.call` and the intersected caller/provider method
+//! permissions. Discovery returns live typed descriptors in the negotiated scope, runs no
+//! provider code and grants no authority. Commands without a signature retain their one-way
+//! notification behavior and cannot be discovered as result-bearing typed commands.
+//!
+//! [`crate::Command::signature`] declares bounded null, Boolean, integer, string, array and
+//! closed record shapes through [`crate::service::Method`]. Invoke an explicit descriptor with parameters
+//! satisfying that schema; an accepted handle identifies a pending caller wait. Providers
+//! receive [`crate::api::Notification::CommandInvocation`] with their own reply handle.
+//! They may return `Output.service_reply` immediately or retain the handle for [`crate::commands::Operation::Reply`].
+//! An empty output means deferred work rather than a successful null value. Complete the
+//! caller through `CommandRequest` notifications, and observe `CommandCancelled` on the
+//! provider. Duplicate, foreign, cancelled and expired replies fail.
+//!
+//! Parameters and results are limited to 64 KiB, with at most 32 pending caller waits and
+//! 32 deferred replies per instance. Timeouts range from 1 to 300,000 milliseconds. Nested
+//! calls preserve the origin and permission intersection, reject cycles, and have a maximum
+//! depth of eight. Selected-file authority never transfers through a nested call, even if
+//! both plugins have `files.select`. The first terminal result wins. Cancellation releases
+//! associated native waits; it does not roll back completed effects or kill unrelated owned
+//! processes. Release retained resources on disable, trust loss or replacement.
+//!
+//! # Native menus
+//!
+//! A command can contribute at most 16 [`crate::commands::Menu`] entries at the editor, selection, explorer
+//! or tab location. Group names are bounded at 64 bytes, language conditions at 128 bytes,
+//! and extension conditions at 32 bytes. The host groups and orders entries deterministically
+//! and attributes their source. Every specified condition is combined with AND; `when`
+//! controls visibility and `enabled_when` controls admission. The host rechecks the live
+//! clicked target immediately before invocation, including its exact revision and scope.
+//!
+//! [`crate::commands::Context`] describes that target, which can differ from the active tab. It does not grant
+//! access. Virtual content has no local path or extension, is never a directory, and reports
+//! its declared language, actual selection and readonly status. A comparison's left pane
+//! retains its exact source identity rather than borrowing the active right path. Closed,
+//! stale or revoked targets cannot execute a cached menu entry. Instance retirement removes
+//! its contributions and pending interactions.
 use crate::{
     api::{Failure, ResourceHandle},
     service::{Caller, Method},

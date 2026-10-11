@@ -1,8 +1,9 @@
-//! Supply the editor's compiled-in public protocol to independent Cargo plugin projects.
+//! Export the host's SDK sources and protocol resources for independent plugin builds.
 //!
-//! The independent SDK contains only plugin-protocol Rust source, its Cargo manifest, WIT and
-//! JSON resources. Usage, permission, version, bounds and lifecycle contracts live in source
-//! comments; Markdown and website content are neither embedded nor exported.
+//! `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]` prepares a
+//! content-addressed source cache and supplies Cargo's dependency override automatically.
+//! `--export-plugin-sdk <directory>` publishes the same inputs for other toolchains.
+//! Interface guidance stays beside the public Rust types; Markdown is not embedded or exported.
 use anyhow::Context;
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -10,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // General cloud and private-state contracts accompany every independent guest SDK.
     (
         "src/http.rs",
         include_bytes!("../../plugin-protocol/src/http.rs"),
@@ -25,6 +27,11 @@ const SDK_FILES: &[(&str, &[u8])] = &[
     (
         "src/storage.rs",
         include_bytes!("../../plugin-protocol/src/storage.rs"),
+    ),
+    // Document contracts ship in the exact same SDK used by the host consumer.
+    (
+        "src/api/documents.rs",
+        include_bytes!("../../plugin-protocol/src/api/documents.rs"),
     ),
     (
         "src/commands.rs",
@@ -42,6 +49,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/layout_tests.rs",
         include_bytes!("../../plugin-protocol/src/ui/layout_tests.rs"),
     ),
+    // Public configuration providers receive the identical template, native form and validation types.
     (
         "src/configurations.rs",
         include_bytes!("../../plugin-protocol/src/configurations.rs"),
@@ -50,6 +58,7 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/configurations/command_form.rs",
         include_bytes!("../../plugin-protocol/src/configurations/command_form.rs"),
     ),
+    // Independent target providers use the same exact schemas as the host consumer.
     (
         "src/targets.rs",
         include_bytes!("../../plugin-protocol/src/targets.rs"),
@@ -274,7 +283,10 @@ fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
     Ok(target)
 }
 
-/// Preserve unchanged files for Cargo freshness and atomically repair incomplete caches.
+/// Publish Rust sources, Cargo manifests, WIT and JSON protocol resources into `target`.
+///
+/// Existing unrelated files are preserved. Unchanged sources retain Cargo freshness;
+/// incomplete files are atomically repaired. Directory and write failures propagate.
 pub fn export(target: &Path) -> anyhow::Result<()> {
     for (relative, bytes) in SDK_FILES {
         let path = target.join(relative);
@@ -338,6 +350,13 @@ mod tests {
             "src/secrets.rs",
             "src/storage.rs",
             "src/timers.rs",
+            "src/api/documents.rs",
+            "src/commands.rs",
+            "src/interaction.rs",
+            "src/configurations.rs",
+            "src/configurations/command_form.rs",
+            "src/debug.rs",
+            "src/targets.rs",
             "src/debug-session.json",
             "src/run-targets.json",
         ] {

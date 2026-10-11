@@ -339,9 +339,14 @@ impl Render for EditorApp {
         }
         // Open plugin-owned settings through the normal editor document path.
         self.sync_plugin_panels(window, cx);
+        self.sync_virtual_documents(window, cx);
+        self.sync_plugin_document_menu(window, cx);
+        self.sync_document_comparison(window, cx);
         self.sync_plugin_documents(cx);
         self.sync_run_controls(window, cx);
         self.dispatch_editor_requests(window, cx);
+        self.sync_plugin_document_menu(window, cx);
+        self.sync_document_comparison(window, cx);
         self.sync_outline(window, cx);
         if let Some(path) = self.pending_plugin_file.take() {
             self.open_file(path, window, cx);
@@ -457,12 +462,6 @@ impl Render for EditorApp {
                     .child(self.render_window_controls(window, cx)),
             )
             .child(h_flex().flex_1().min_h_0().child(self.dock_area.clone()))
-            .when_some(self.render_build_output(cx), |shell, panel| {
-                shell.child(panel)
-            })
-            .when_some(self.render_debug_panel(cx), |shell, panel| {
-                shell.child(panel)
-            })
             .child(
                 div()
                     .w_full()
@@ -514,6 +513,9 @@ impl Render for EditorApp {
             .child(self.render_run_menu(window, cx))
             .child(self.render_plugin_popup(window, cx))
             .child(self.render_explorer_menu(window, cx))
+            .when_some(self.render_plugin_document_menu(cx), |shell, menu| {
+                shell.child(menu)
+            })
             .when_some(self.file_view_menu.as_ref(), |body, menu| {
                 body.child(menu.clone())
             })

@@ -4,10 +4,10 @@ use gpui_kit::{TestAppContext, gpui};
 use protocol::api::{self, EditorValue, RequestUpdate};
 use std::io::{Cursor, Write};
 
-/// This independent package retains the real component and passes ordinary package admission.
+/// The current 0.19 package retains its real SDK component and passes ordinary admission.
 fn interaction_package(id: &str) -> Package {
     let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/plugin-api-test");
-    let file = folder.join("capability-example-0.18.0.zip");
+    let file = folder.join("capability-example-0.19.0.zip");
     let mut files = Package::read(&file).unwrap().files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = serde_json::json!(id);

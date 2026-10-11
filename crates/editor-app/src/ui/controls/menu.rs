@@ -10,7 +10,7 @@ use std::rc::Rc;
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct MenuStyle {
     pub surface: Hsla,
     pub foreground: Hsla,
@@ -171,6 +171,14 @@ impl PopupMenu {
         (self.sink)(action, window, cx);
         cx.emit(gpui_kit::DismissEvent);
         cx.notify();
+    }
+    /// Retire an owned popup through its normal dismissal gate. Restore the origin only
+    /// while this popup owns focus; external lifecycle cleanup must not steal a modal's keys.
+    pub(crate) fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.focus.contains_focused(window, cx) {
+            self.previous = None;
+        }
+        self.finish(Action::Dismiss, window, cx);
     }
     /// Configure width without duplicating popup focus, scroll or button behavior in callers.
     pub fn width(mut self, width: f32) -> Self {

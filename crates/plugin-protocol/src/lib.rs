@@ -1,5 +1,42 @@
-//! Versioned, platform-independent messages shared by plugins and their host.
-//! No editor, terminal-emulator or native UI implementation belongs in this crate.
+//! Nanobug's public, platform-independent plugin contracts and optional WASM guest helpers.
+//!
+//! # Building an independent plugin
+//!
+//! Declare a normal `plugin-protocol` Cargo dependency with its `guest` feature, then run
+//! `editor-app --plugin-cargo <Cargo.toml> build --target wasm32-wasip2`. The host supplies
+//! its embedded source cache through Cargo configuration; a plugin must not depend on a
+//! repository checkout or carry a second SDK copy. `--export-plugin-sdk <directory>`
+//! exports the same Rust sources, Cargo manifest, WIT and JSON resources. Interface usage
+//! lives in these source comments; Markdown is not part of the independent SDK.
+//!
+//! # Compatibility and authority
+//!
+//! Package versions, component transport versions and capability versions are separate.
+//! Current executable packages use protocol `7` and declare their base API and required
+//! or optional capability ranges in [`api::Requirements`]. The host negotiates these
+//! before activation: an unavailable required capability rejects the package, while an
+//! unavailable optional capability must disable only the plugin's dependent behavior.
+//! Old component protocols are rejected with an update requirement rather than silently
+//! translated. This crate contains contracts, never editor, terminal or native UI code.
+//!
+//! Stable capabilities preserve their message shapes and meanings within a major version.
+//! A plugin using an added minor feature declares that minimum capability version; a
+//! breaking change requires a new capability major. Deprecation must identify the affected
+//! version range, replacement, minimum replacement capability and migration, while keeping
+//! the current stable major callable. Experimental contracts must be identified explicitly
+//! and do not inherit that stable guarantee. Negotiation never grants permissions: callers
+//! still need installation approval, a trusted scope and ownership of every resource.
+//!
+//! # Starting a call
+//!
+//! Guest helpers under `api::guest` (feature `guest`) return host-issued handles for asynchronous work.
+//! Request acceptance is distinct from completion; consume the corresponding notification,
+//! reject stale target revisions, and release or cancel retained handles when no longer used.
+//! [`commands`] documents typed command composition and native menus; [`interaction`]
+//! documents native dialogs and selected-file authority. Document identities, exact reads,
+//! metadata subscriptions, virtual content and comparisons use [`api::DocumentInfo`],
+//! [`api::DocumentSnapshot`] and [`api::EditorOperation`]. Instance retirement revokes
+//! resources; opaque handles and snapshots cannot restore external side effects.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -12,20 +49,23 @@ pub mod configurations;
 pub mod debug;
 pub mod dependencies;
 pub mod execution;
-/// General HTTP streams, isolated credentials and disposable background scheduling.
+/// General HTTP streams with target grants, backpressure and cancellation.
 pub mod http;
 /// Native host dialogs and instance-bound user-selected file authority.
 pub mod interaction;
 pub mod language;
 pub mod process;
+/// System-protected credentials isolated by host profile and plugin identity.
 pub mod secrets;
 pub mod service;
 pub mod settings;
+/// Managed private data, cache and temporary directories with instance-owned cleanup.
 pub mod storage;
 /// Readonly document trees and fold ranges supplied by isolated, versioned plugin workers.
 pub mod structure;
 /// Dynamic target discovery and build preparation are provider policy, independent of execution.
 pub mod targets;
+/// Disposable timer and debounce resources revoked with their owning instance.
 pub mod timers;
 pub mod ui;
 

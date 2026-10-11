@@ -5,13 +5,13 @@ mod capability_tests;
 pub(crate) mod command_menus;
 mod commands;
 #[cfg(test)]
+mod community_document_tests;
+#[cfg(test)]
 pub(crate) mod composable_tests;
 pub(crate) mod contributions;
 #[cfg(test)]
 mod dependency_tests;
 mod editor_requests;
-#[cfg(test)]
-mod execution_service_tests;
 mod image_input;
 use crate::ui::plugin::images;
 #[cfg(test)]
@@ -38,6 +38,7 @@ mod management;
 mod management_tests;
 #[cfg(test)]
 mod markdown_tests;
+mod marketplace;
 #[cfg(test)]
 mod native_build_tests;
 #[cfg(test)]
@@ -90,12 +91,32 @@ use plugin_runtime::{
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 pub(crate) use worker::DebugAnswerMessage;
+pub(crate) use worker::NativeExecutionMessage;
+pub(crate) use worker::PresentedTerminalMessage;
 pub(crate) use worker::configurations::{ConfigurationCatalog, ConfigurationReply};
 pub(crate) use worker::targets::TargetCatalog;
 pub use worker::{HostRunSnapshot, RunStatus, Work as HostWork};
 use worker::{LifecycleAction, OperationProgress, Work, Worker};
 
 actions!(extensions, [ToggleExtensions, QuitEditor]);
+/// Every startup reader shares the same host-selected runtime root, including offline upgrades.
+pub(crate) fn runtime_root(workspace: &Path) -> PathBuf {
+    #[cfg(test)]
+    {
+        workspace.join(".runtime-plugin-test")
+    }
+    #[cfg(not(test))]
+    {
+        let _ = workspace;
+        std::env::var_os("ME_EDITOR_PLUGIN_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                dirs::config_dir()
+                    .unwrap_or_else(std::env::temp_dir)
+                    .join("MeEditor/runtime-plugins")
+            })
+    }
+}
 /// Opens plugin management independently of plugin-owned panel visibility.
 pub fn init(cx: &mut App) {
     cx.bind_keys([KeyBinding::new(
@@ -106,6 +127,8 @@ pub fn init(cx: &mut App) {
 }
 
 pub struct ExtensionPanel {
+    /// Search filters are local; freshness and installation authority live on the worker.
+    market_view: marketplace::ViewState,
     /// Form observers redraw only when configuration publication changes.
     configuration_revision: u64,
     /// Log arrivals and viewing changes redraw every native consumer of the shared process history.
@@ -279,17 +302,8 @@ impl ExtensionPanel {
         trusted: bool,
         cx: &mut Context<Self>,
     ) -> Self {
-        #[cfg(not(test))]
-        let root = std::env::var_os("ME_EDITOR_PLUGIN_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                dirs::config_dir()
-                    .unwrap_or_else(std::env::temp_dir)
-                    .join("MeEditor/runtime-plugins")
-            });
+        let root = runtime_root(&workspace);
         let environment = environment(&workspace, cx);
-        #[cfg(test)]
-        let root = workspace.join(".runtime-plugin-test");
         // Installed declarations are available before restored editor tabs are opened.
         crate::language::providers::configure(&root, &workspace);
         if trusted {
@@ -383,6 +397,7 @@ impl ExtensionPanel {
             manager_detail_tab: management::DetailTab::Overview,
             manager_log_view: None,
             manager_packages: vec![],
+            market_view: Default::default(),
             confirm: None,
             confirm_dialog_open: false,
             status: None,
@@ -486,6 +501,7 @@ impl ExtensionPanel {
             manager_detail_tab: management::DetailTab::Overview,
             manager_log_view: None,
             manager_packages: vec![],
+            market_view: Default::default(),
             confirm: None,
             confirm_dialog_open: false,
             status: None,
@@ -521,6 +537,10 @@ impl ExtensionPanel {
         let mut contributions_changed = false;
         let editor_requests = {
             let mut state = self.worker.state.lock().unwrap();
+            if self.market_view.revision != state.market_revision {
+                self.market_view.revision = state.market_revision;
+                changed = true;
+            }
             if self.surface_id.is_none() {
                 changed |= self.bundled.ready != state.ready;
                 self.bundled.ready = state.ready;
@@ -724,7 +744,18 @@ impl ExtensionPanel {
             // Defer until this ExtensionPanel borrow ends before reading the shared publication.
             let parent = self.parent.clone();
             cx.defer(move |cx| {
-                let _ = parent.update(cx, |app, cx| app.sync_shortcut_plugins(cx));
+                let _ = parent.update(cx, |app, cx| {
+                    app.sync_shortcut_plugins(cx);
+                    // Explicit resource release may leave package contributions unchanged. Wake the
+                    // native shell so revoked readonly tabs cannot outlive their retained authority.
+                    if app.tabs.iter().any(|tab| {
+                        tab.virtual_document
+                            .as_ref()
+                            .is_some_and(|virtual_tab| !virtual_tab.resource.is_live())
+                    }) {
+                        cx.notify();
+                    }
+                });
             });
         }
         if changed {
@@ -1279,6 +1310,18 @@ impl ExtensionPanel {
             std::mem::take(&mut state.run_status),
         )
     }
+    /// Ordered native bytes are drained once, retaining the launch identity needed to reject old rounds.
+    pub(crate) fn take_native_execution_updates(&self) -> Vec<worker::NativeExecutionMessage> {
+        std::mem::take(&mut self.worker.state.lock().unwrap().native_execution_updates)
+    }
+    /// Presented resources use separate typed publications; adapter protocol bytes never enter the grid.
+    pub(crate) fn take_terminal_presentations(&self) -> Vec<worker::PresentedTerminalMessage> {
+        std::mem::take(&mut self.worker.state.lock().unwrap().terminal_presentations)
+    }
+    /// Inspect lifecycle without consuming command answers belonging to the run coordinator.
+    pub(crate) fn host_run_snapshots(&self) -> Vec<HostRunSnapshot> {
+        self.worker.state.lock().unwrap().host_executions.clone()
+    }
     /// Drain provider location replies once; the window checks whether that session is still selected.
     pub(crate) fn take_run_locations(&self) -> Vec<(u64, u64, Result<(), String>)> {
         std::mem::take(&mut self.worker.state.lock().unwrap().locate_results)
@@ -1302,6 +1345,12 @@ impl EditorApp {
         // File workers and their private backups may outlive the platform's 200 ms quit grace.
         // Share the native close gate's cleanup and prevent new file commands while it runs.
         let file_cleanup = self.shutdown_file_transfers(cx);
+        let native_cleanup = self.terminal.update(cx, |panel, _| panel.shutdown());
+        let native_cleanup = cx.background_executor().spawn(async move {
+            if let Ok(receiver) = native_cleanup {
+                let _ = receiver.recv();
+            }
+        });
         cx.notify();
         let (tx, rx) = futures::channel::oneshot::channel();
         let _ = self
@@ -1312,6 +1361,7 @@ impl EditorApp {
             .send(Work::Shutdown(Some(tx)));
         cx.spawn(async move |_, cx| {
             file_cleanup.await;
+            native_cleanup.await;
             let _ = rx.await;
             let _ = cx.update(|cx| cx.quit());
         })
