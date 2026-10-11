@@ -9,11 +9,12 @@
 //! `editor.write`. External targets use `files.selection 1.1` with an explicit ReadWrite
 //! selection; legacy selections remain read-only. Save permits only the exact Write intent.
 //!
-//! Use [`Operation::Stat`] to capture opaque disk stamps and native document versions, then
-//! [`submit`] a complete [`Plan`]. All targets, permissions and revisions are checked before
-//! preview and again after explicit confirmation. An opened text target uses its unique
-//! DocumentSession and remains unsaved; Copy cannot read a dirty opened source directly,
-//! Delete refuses opened targets, and Rename follows the normal native path reconciliation.
+//! Use [`Operation::Stat`] to capture opaque disk stamps. [`Operation::Read`] also captures the
+//! current contents and native document version for an opened target; a document snapshot can
+//! supply that version too. Then [`submit`] a complete [`Plan`]. All targets, permissions and
+//! revisions are checked before preview and again after explicit confirmation. An opened text
+//! target uses its unique DocumentSession and remains unsaved; Copy cannot read a dirty opened
+//! source directly, Delete refuses opened targets, and Rename follows the normal native path reconciliation.
 //! Use a document snapshot followed by Write when copying current unsaved text.
 //!
 //! Pages contain 1..=256 entries. Read returns at most 1 MiB; directory listing admits at
