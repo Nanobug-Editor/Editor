@@ -197,6 +197,10 @@ impl State {
                 format!("{permission} permission required"),
             ));
         }
+        if let EditorOperation::OpenDataFile { path } = &operation {
+            // Check authority before native path resolution; editor access must also respect Temporary ownership.
+            self.validate_data_path(path)?;
+        }
         validate_edit_request(&operation)?;
         // Progress messages modify their existing owner; they cannot allocate or finish another task.
         if let EditorOperation::Interaction {

@@ -9,9 +9,11 @@ pub use document_stream::DocumentStream;
 mod workspace_events;
 pub use workspace_events::WorkspaceEvents;
 mod editor_requests;
+mod http;
 mod virtual_documents;
 pub use virtual_documents::VirtualDocumentResource;
 mod images;
+pub use http::HttpConfiguration;
 pub use images::{ImageResource, ImageState};
 mod image_input;
 pub use image_input::{
@@ -68,6 +70,11 @@ pub use terminal_presentations::{TerminalOwner, TerminalPresentation, TerminalPr
 /// Host-owned resources travel with every candidate; guests only see negotiated descriptions.
 #[derive(Clone, Debug, Default)]
 pub struct HostResources {
+    /// General HTTP producers share a bounded host budget and host-selected proxy/TLS policy.
+    pub http: HttpConfiguration,
+    /// Trusted host-only profile override; an empty value hashes the canonical manager root.
+    /// Guests and plugin settings cannot select it; update copies never change the namespace.
+    pub secret_namespace: String,
     /// Native terminal projection is shared across providers; it never owns or duplicates a child.
     pub terminals: TerminalPresentations,
     /// Authenticated preparation observation shared with all delegated native-process owners.

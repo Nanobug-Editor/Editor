@@ -61,6 +61,10 @@ impl State {
                 "process",
                 "service",
                 "commands",
+                "http",
+                "secrets",
+                "timer",
+                "private",
             ]
             .contains(&method)
             {
@@ -143,6 +147,10 @@ impl State {
             }
             self.check_service_authority(&request.operation)?;
             let result = match request.operation {
+                api::Operation::Http { operation } => self.http_request(operation),
+                api::Operation::Secrets { operation } => self.secret_request(operation),
+                api::Operation::Timer { operation } => self.timer_request(operation),
+                api::Operation::Private { operation } => self.private_request(operation),
                 api::Operation::Commands { operation } => self.command_request(operation),
                 api::Operation::Service { operation } => self.service_request(operation),
                 api::Operation::Process { operation } => self.process_request(operation),
@@ -153,6 +161,12 @@ impl State {
                 }
                 api::Operation::CancelRequest { handle, mode } => {
                     self.roots.resolve(&handle)?;
+                    if let Some(stream) = self.http_streams.get(&handle.resource) {
+                        stream.control.cancel();
+                        return Ok(api::Value::Cancellation(
+                            api::CancellationEffect::WaitingStopped,
+                        ));
+                    }
                     if let Some(request) = self.plugin_services.pending.get(&handle.resource) {
                         return request
                             .call

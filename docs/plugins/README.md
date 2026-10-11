@@ -11,9 +11,10 @@
 - [插件开发工作区整合主工作区改动](verification/plugin-development-main-integration.md)：2026-10-08 用户授权整合全部未提交改动，包含两侧备份、冲突处理与重新验证；未提交或推送。
 - [缺失项目描述修复与主工作区 Release 交付](verification/plugin-development-main-delivery.md)：截图错误的回归测试、主工作区整合与 Release 启动证据。
 
-- [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-11 已恢复，源码 SDK 与当前主分支整合见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。01、02 已交付关闭，03、05、06 继续验证，其余按依赖推进。稳定核心＋实验扩展，AI 暂不实现，整批尚未完成。
+- [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-11 已恢复，源码 SDK 与当前主分支整合见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。01、02、03、06 已交付并读回关闭；04 实施中，05 修正原生验收发现的缺陷，07 等待 04/05。稳定核心＋实验扩展，AI 暂不实现，整批尚未完成。
 - [01 / 02 普通合并连接验证](verification/plugin-api-community-foundation/01-02-integration.md)：真实 SDK 菜单、精确左文档版本、焦点退役回归及新增原生连接已验证，双轴未解决项均为 0；为 03 / 05 提供已修正整合点。
 - [03 工作区计划与会话恢复验收](verification/plugin-api-community-foundation/03-workspace-transactions.md)、[Windows 原生记录](verification/plugin-api-community-foundation/03-workspace-transactions-native.md)：真实脚手架与分页转换消费者、混合脏文本与磁盘计划、取消及整组 Undo、精确 Native Save、Dark/字号布局和正常停止通过；既有 Settings UIA 崩溃及最终交付状态按记录核对。
+- [工单 06：云查询、密钥与私有状态验收](verification/plugin-api-community-foundation/06-cloud-and-private-state.md)：独立云翻译/托管查询 SDK 包、实际 HTTP/TLS/CONNECT、系统 Credential、四项原审查修复、Temporary 归属续修与纯源码 SDK 证据；当前完成状态及限制以记录为准。
 - [通用插件接口完整性审计](specs/plugin-api-ecosystem-audit/README.md)：2026-10-08 的 58 项历史调查；语言接口已随后整合，当前实施范围见基础社区生态方案，不等于所有检查项获准实施。
 - [XML 插件与通用语言编辑能力方案](specs/xml-language-tools.md) / [#72](https://github.com/T-miracle/Editor/issues/72)，[三个实施工单 #73–#75](tickets/xml-language-tools/README.md)：全部验收、推送并核对关闭；包含可替换格式化、XML/HTML 标签编辑及宿主大纲与停靠，父设计议题保持不变。
 - [XML 语言工单 01 验收记录](verification/xml-language-tools/01-xml-language.md)：记录实际包、原生输入与服务结果，当前状态以记录为准。
@@ -117,6 +118,7 @@ Markdown 插件：[总方案](../../plugins/markdown/docs/spec.md)、[工单目�
 - [Markdown 输入与增量预览验收](../../plugins/markdown/docs/verification/17-incremental-input-viewport.md)（0.15.0：用户实测输入仍卡顿，性能验收重新打开）
 - [Markdown 源码输入与过期视口通知](../../plugins/markdown/docs/verification/18-source-input-and-stale-viewport.md)（宿主跟进修复与实测限制）
 - [能力协议验收夹具](../../plugins/capability-example/README.md)：仅用于验收，不属于发行插件目录。
+- [云翻译](../../plugins/cloud-translation/README.md)、[代码托管查询](../../plugins/code-host-query/README.md)：独立公开 SDK 消费者，共用一般 HTTP、系统密钥、私有缓存、计时器与原生交互。
 
 ## 后续管理约定
 

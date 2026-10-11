@@ -19,6 +19,9 @@ impl Worker {
         std::thread::spawn(move || {
             // Prepare the public SDK off the UI thread. A failure is delivered only to guests that request it.
             let resources = plugin_runtime::HostResources {
+                // This explicit host setting never inherits generic HTTP_PROXY or plugin configuration.
+                http: plugin_runtime::HttpConfiguration::default()
+                    .with_proxy(std::env::var("NANOBUG_HTTP_PROXY").ok()),
                 sdk: Some(crate::sdk_export::descriptor().map_err(|error| format!("{error:#}"))),
                 logs: output.lock().unwrap().logs.clone(),
                 ..Default::default()

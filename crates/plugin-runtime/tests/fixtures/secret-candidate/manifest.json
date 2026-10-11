@@ -1,0 +1,23 @@
+{
+  "id": "secret-candidate",
+  "name": "Unpublished secret mutation regression",
+  "version": "0.1.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "package.assets": "^1",
+      "storage.secrets": "^1",
+      "configuration": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "secret-candidate.wasm",
+  "permissions": ["assets.read", "secrets"],
+  "storage_limit": 1024,
+  "settings": {
+    "flag": {"title": "Candidate lifecycle", "value_type": {"kind": "boolean"}, "default": false}
+  },
+  "panels": [{"id": "cloud", "title": "Safe receipts", "position": "right"}],
+  "commands": [{"id": "probe", "title": "Probe public secret operations"}]
+}

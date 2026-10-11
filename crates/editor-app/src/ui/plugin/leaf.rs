@@ -8,6 +8,17 @@ use gpui_kit::{
 };
 use plugin_runtime::plugin_protocol::ui::Node;
 
+/// Plain plugin text uses the same element for painting and native accessibility metadata.
+fn text_leaf(native_id: SharedString, text: &str) -> gpui_kit::Stateful<gpui_kit::Div> {
+    div()
+        .id(native_id)
+        .role(gpui_kit::Role::Label)
+        .aria_label(text.to_owned())
+        // AccessKit's Windows Label Name is sourced from value, while label serves other consumers.
+        .aria_value(text.to_owned())
+        .child(text.to_owned())
+}
+
 impl PluginView {
     /// Concrete controls share the current scene gate, local appearance and Base interaction behavior.
     pub(super) fn leaf_node(
@@ -26,7 +37,7 @@ impl PluginView {
             Kind::FileImage { alt, sizing } => {
                 self.render_file_image(&node.id, alt, *sizing, node.viewport.clone(), cx)
             }
-            Kind::Text { text } => div().child(text.clone()).into_any_element(),
+            Kind::Text { text } => text_leaf(native_id, text).into_any_element(),
             Kind::Image { source, alt } => {
                 // Direct retained pixels bypass GPUI's ambient file/URL loader. Height follows the image ratio.
                 let photo = self.photos.get(&node.id).filter(|photo| {
@@ -379,6 +390,25 @@ impl PluginView {
                 .into_any_element(),
             Kind::Spacer => div().min_h(px(8.)).into_any_element(),
             _ => unreachable!("recursive geometry is dispatched before leaf controls"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+    use gpui_kit::{Element, Role};
+
+    /// Windows labels obtain their native Name from value; inspect the same element that paints the result.
+    #[test]
+    fn native_text_metadata_exposes_current_result_for_every_plugin() {
+        for text in ["HTTP 200 · 17 bytes\nfirst 世界😀", "Cancelled", "已取消"] {
+            let element = text_leaf("plugin-ui-result".into(), text);
+            assert_eq!(element.a11y_role(), Some(Role::Label));
+            let mut node = gpui_kit::accesskit::Node::new(Role::Label);
+            element.write_a11y_info(&mut node);
+            assert_eq!(node.label(), Some(text));
+            assert_eq!(node.value(), Some(text));
         }
     }
 }

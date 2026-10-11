@@ -49,16 +49,24 @@ pub mod configurations;
 pub mod debug;
 pub mod dependencies;
 pub mod execution;
+/// General HTTP streams with target grants, backpressure and cancellation.
+pub mod http;
 /// Native host dialogs and instance-bound user-selected file authority.
 pub mod interaction;
 pub mod language;
 pub mod process;
+/// System-protected credentials isolated by host profile and plugin identity.
+pub mod secrets;
 pub mod service;
 pub mod settings;
+/// Managed private data, cache and temporary directories with instance-owned cleanup.
+pub mod storage;
 /// Readonly document trees and fold ranges supplied by isolated, versioned plugin workers.
 pub mod structure;
 /// Dynamic target discovery and build preparation are provider policy, independent of execution.
 pub mod targets;
+/// Disposable timer and debounce resources revoked with their owning instance.
+pub mod timers;
 pub mod ui;
 pub mod workspace;
 

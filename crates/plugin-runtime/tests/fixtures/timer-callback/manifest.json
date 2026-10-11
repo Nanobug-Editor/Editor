@@ -1,0 +1,23 @@
+{
+  "id": "timer-callback",
+  "name": "Timer callback regression",
+  "version": "0.1.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "lifecycle.timers": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "timer-callback.wasm",
+  "permissions": [],
+  "storage_limit": 1024,
+  "panels": [
+    { "id": "cloud", "title": "Timer observations", "position": "right" }
+  ],
+  "commands": [
+    { "id": "arm", "title": "Arm two timers" },
+    { "id": "release", "title": "Release pending timers" }
+  ]
+}

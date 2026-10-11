@@ -11,6 +11,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
+mod cloud;
 mod commands;
 mod data_files;
 mod document_events;
@@ -19,6 +20,7 @@ pub(crate) mod file_discovery;
 mod image_inputs;
 mod plugin_services;
 mod preferences;
+mod private;
 mod process_calls;
 mod resource_roots;
 mod selected_resources;
@@ -54,6 +56,9 @@ struct State {
         std::collections::BTreeMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>,
     workspace_batches: std::collections::BTreeMap<u64, std::sync::Arc<crate::WorkspaceBatch>>,
     file_subscriptions: std::collections::BTreeMap<u64, crate::workspace_events::Subscription>,
+    /// Pull streams and timers reuse this instance's revocable handle table.
+    http_streams: std::collections::BTreeMap<u64, crate::http::Stream>,
+    timers: std::collections::BTreeMap<u64, cloud::Timer>,
     declared_panels: BTreeSet<String>,
     /// Editor toolbar authority is confined to this package's declared workspace preview surfaces.
     declared_editor_panels: BTreeSet<String>,
@@ -82,6 +87,10 @@ struct State {
     data: PathBuf,
     assets: PathBuf,
     active: bool,
+    /// The trusted manager opens private directory authority and irreversible credential mutations
+    /// only after durable publication.
+    /// Flushing staged private files is preparation work and never grants this authority.
+    activation_committed: bool,
     /// A bounded discovery invocation can read granted resources without launching native work.
     language_hook: bool,
     /// Separate stateless language workers reject every host operation, including during Prepare.
@@ -116,6 +125,7 @@ pub(crate) fn safe_path(root: &Path, relative: &str, existing: bool) -> anyhow::
     anyhow::ensure!(
         !relative.is_empty()
             && !relative.contains(['\\', ':'])
+            && !relative.split('/').any(api::is_windows_device_segment)
             && Path::new(relative)
                 .components()
                 .all(|c| matches!(c, std::path::Component::Normal(_))),
@@ -346,6 +356,8 @@ impl Instance {
             file_root_lifetimes: Default::default(),
             workspace_batches: Default::default(),
             file_subscriptions: Default::default(),
+            http_streams: Default::default(),
+            timers: Default::default(),
             subscriptions: Default::default(),
             document_streams: Default::default(),
             virtual_documents: Default::default(),
@@ -380,6 +392,7 @@ impl Instance {
             data,
             assets,
             active: false,
+            activation_committed: false,
             language_hook: false,
             language_pure: pure,
             language_completion_call: false,
@@ -631,6 +644,15 @@ impl Instance {
         }
         Ok(originals)
     }
+    /// Publish authority only after the owner manager has committed its version/configuration.
+    pub(crate) fn commit_activation(&mut self) {
+        debug_assert!(
+            self.store.data().active
+                && !self.store.data().roots.retired
+                && self.store.data().staged_writes.is_none()
+        );
+        self.store.data_mut().activation_committed = true;
+    }
     /// Restore only files touched by this transaction; unrelated plugin data stays intact.
     pub(crate) fn rollback_data(originals: &[(PathBuf, Option<Vec<u8>>)]) -> anyhow::Result<()> {
         for (path, bytes) in originals.iter().rev() {
@@ -644,6 +666,10 @@ impl Instance {
     }
     /// Seal already-published work before the final snapshot, while retaining private-file access for serialization.
     pub(crate) fn quiesce(&mut self) {
+        self.store.data_mut().activation_committed = false;
+        self.store.data_mut().http_streams.clear();
+        self.store.data_mut().timers.clear();
+        self.store.data_mut().clear_temporary_data();
         self.clear_image_inputs();
         self.store.data_mut().clear_selections();
         self.store.data_mut().clear_workspace_resources();
@@ -688,6 +714,7 @@ impl Instance {
         mut environment: Environment,
         snapshot: Option<Snapshot>,
     ) -> anyhow::Result<()> {
+        self.store.data_mut().activation_committed = false;
         if self.store.data().roots.application {
             environment.workspace.clear();
         }
@@ -706,6 +733,8 @@ impl Instance {
         self.reapply_settings()?;
         self.activate()?;
         self.commit_data()?;
+        // Recovery resumes an already-published version, after its fresh activation completes.
+        self.commit_activation();
         Ok(())
     }
     pub fn process_ids(&self) -> Vec<u32> {
@@ -722,8 +751,9 @@ impl Instance {
         self.poll_document_streams()?;
         self.poll_workspace_events()?;
         let preferences_changed = self.poll_preferences()?;
+        let timers_changed = self.poll_timers()?;
         let events = self.store.data_mut().poll_processes()?;
-        let changed = revoked || preferences_changed || !events.is_empty();
+        let changed = revoked || preferences_changed || timers_changed || !events.is_empty();
         for event in events {
             // Exit removes its slot, but the last callback still inherits the originating service authority.
             let context = if let api::Notification::Process { handle, .. } = &event {

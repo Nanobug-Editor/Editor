@@ -22,17 +22,32 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/api/edits.rs",
         include_bytes!("../../plugin-protocol/src/api/edits.rs"),
     ),
+    // General cloud and private-state contracts accompany every independent guest SDK.
+    (
+        "src/http.rs",
+        include_bytes!("../../plugin-protocol/src/http.rs"),
+    ),
+    (
+        "src/secrets.rs",
+        include_bytes!("../../plugin-protocol/src/secrets.rs"),
+    ),
+    (
+        "src/timers.rs",
+        include_bytes!("../../plugin-protocol/src/timers.rs"),
+    ),
+    (
+        "src/storage.rs",
+        include_bytes!("../../plugin-protocol/src/storage.rs"),
+    ),
     // Document contracts ship in the exact same SDK used by the host consumer.
     (
         "src/api/documents.rs",
         include_bytes!("../../plugin-protocol/src/api/documents.rs"),
     ),
-    // Typed commands and native menu declarations share the actual independent guest SDK.
     (
         "src/commands.rs",
         include_bytes!("../../plugin-protocol/src/commands.rs"),
     ),
-    // Independent guests receive the identical native interaction types as the runtime.
     (
         "src/interaction.rs",
         include_bytes!("../../plugin-protocol/src/interaction.rs"),
@@ -63,7 +78,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/run-targets.json",
         include_bytes!("../../plugin-protocol/src/run-targets.json"),
     ),
-    // The canonical optional debug signatures are packaged with their Rust SDK accessor.
     (
         "src/debug.rs",
         include_bytes!("../../plugin-protocol/src/debug.rs"),
@@ -72,7 +86,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/debug-session.json",
         include_bytes!("../../plugin-protocol/src/debug-session.json"),
     ),
-    // Independent providers receive the same bounded observation contract as the host.
     (
         "src/execution.rs",
         include_bytes!("../../plugin-protocol/src/execution.rs"),
@@ -117,7 +130,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/language.rs",
         include_bytes!("../../plugin-protocol/src/language.rs"),
     ),
-    // Pure structure providers build independently against the same versioned data types as the host.
     (
         "src/structure.rs",
         include_bytes!("../../plugin-protocol/src/structure.rs"),
@@ -162,7 +174,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/validate.rs",
         include_bytes!("../../plugin-protocol/src/ui/validate.rs"),
     ),
-    // Incremental native publication is part of the same independently exported public SDK.
     (
         "src/ui/incremental.rs",
         include_bytes!("../../plugin-protocol/src/ui/incremental.rs"),
@@ -319,35 +330,55 @@ fn publish(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
-    /// Independent authors receive only compilable sources and protocol resources in a fresh SDK.
+    /// Independent SDKs carry the guest contract as source comments, never embedded reader Markdown.
     #[test]
-    fn fresh_sdk_export_is_a_source_package() {
-        let root = tempfile::tempdir().unwrap();
-        export(root.path()).unwrap();
-        for required in ["Cargo.toml", "src/lib.rs", "wit/plugin.wit"] {
-            assert!(root.path().join(required).is_file(), "missing {required}");
-        }
-        let mut directories = vec![root.path().to_path_buf()];
-        while let Some(directory) = directories.pop() {
-            for entry in std::fs::read_dir(directory).unwrap() {
+    fn independent_sdk_exports_only_protocol_source_resources() {
+        fn inspect(path: &Path) {
+            for entry in std::fs::read_dir(path).unwrap() {
                 let path = entry.unwrap().path();
                 if path.is_dir() {
-                    directories.push(path);
+                    inspect(&path);
                 } else {
                     assert!(
                         matches!(
-                            path.extension().and_then(|extension| extension.to_str()),
+                            path.extension().and_then(|value| value.to_str()),
                             Some("rs" | "toml" | "wit" | "json")
                         ),
-                        "SDK contains a non-source resource: {}",
+                        "Independent SDK contains a non-source resource: {}",
                         path.display()
                     );
                 }
             }
         }
+        let root = tempfile::tempdir().unwrap();
+        export(root.path()).unwrap();
+        inspect(root.path());
+        for required in [
+            "Cargo.toml",
+            "src/lib.rs",
+            "wit/plugin.wit",
+            "src/http.rs",
+            "src/secrets.rs",
+            "src/storage.rs",
+            "src/timers.rs",
+            "src/api/documents.rs",
+            "src/commands.rs",
+            "src/interaction.rs",
+            "src/configurations.rs",
+            "src/configurations/command_form.rs",
+            "src/debug.rs",
+            "src/targets.rs",
+            "src/debug-session.json",
+            "src/run-targets.json",
+        ] {
+            assert!(
+                root.path().join(required).is_file(),
+                "Missing public SDK resource {required}"
+            );
+        }
     }
 
-    /// Two independent host invocations can publish a fresh SDK concurrently without partial files.
+    /// Concurrent first-use exports never publish partial source bytes or divergent resources.
     #[test]
     fn concurrent_sdk_exports_converge() {
         let root = tempfile::tempdir().unwrap();
@@ -370,7 +401,7 @@ mod tests {
         }
     }
 
-    /// Reuse a complete source cache and repair interrupted files without rewriting good inputs.
+    /// Content-addressed caches retain build freshness and repair interrupted source/schema publication.
     #[test]
     fn cached_contract_is_complete_reused_and_repairs_corruption() {
         let root = tempfile::tempdir().unwrap();
