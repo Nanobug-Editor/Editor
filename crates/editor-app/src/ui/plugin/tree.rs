@@ -252,20 +252,20 @@ impl TreeView {
             .cloned()
             .filter(|node| !node.disabled)
         {
-            if let Some(command) = node.activation {
-                self.invoke(id, &command.command, cx);
+            if node.activation.is_some() {
+                self.invoke(id, api::NodeAction::Activation, cx);
             } else if node.branch {
                 self.toggle(id, window, cx);
             }
         }
     }
-    fn invoke(&self, id: &str, command: &str, cx: &mut Context<Self>) {
+    fn invoke(&self, id: &str, action: api::NodeAction, cx: &mut Context<Self>) {
         self.emit(
             api::Event::Invoke {
                 tree: self.resource.handle().clone(),
                 epoch: self.snapshot.epoch,
                 node: id.to_string(),
-                command: command.to_string(),
+                action,
             },
             cx,
         );
@@ -289,8 +289,10 @@ impl TreeView {
         let items = node
             .menu
             .iter()
-            .map(|command| ui::MenuItem {
-                id: command.command.clone(),
+            .enumerate()
+            .map(|(index, command)| ui::MenuItem {
+                // Distinct slots keep separate native row identities even for the same typed command.
+                id: format!("tree-menu-{index}"),
                 label: command.label.for_locale(&self.environment.locale).into(),
                 disabled: false,
                 separator_before: false,
@@ -307,9 +309,14 @@ impl TreeView {
                 position,
                 move |action, _, cx| {
                     let _ = owner.update(cx, |this, cx| {
-                        if let Action::Select(command) = action {
+                        if let Action::Select(item) = action {
                             if this.snapshot.epoch == epoch && this.revision == revision {
-                                this.invoke(&id, &command, cx);
+                                if let Some(index) = item
+                                    .strip_prefix("tree-menu-")
+                                    .and_then(|index| index.parse::<u32>().ok())
+                                {
+                                    this.invoke(&id, api::NodeAction::Menu { index }, cx);
+                                }
                             }
                         }
                         this.popup = None;

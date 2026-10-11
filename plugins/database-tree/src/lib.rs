@@ -96,8 +96,8 @@ impl Catalog {
                     )),
                 );
             }
-            Some("fault-once") => tree::Page {
-                nodes: vec![tree::Node::new(
+            Some("fault-once") => {
+                let mut node = tree::Node::new(
                     "recovered",
                     if self.english {
                         "Recovered"
@@ -105,9 +105,30 @@ impl Catalog {
                         "已恢复"
                     },
                     false,
-                )],
-                next: None,
-            },
+                );
+                // One object exposes distinct views through the same declared typed command.
+                // Activation and each menu item retain their own arguments and translated labels.
+                node.activation = Some(tree::Command {
+                    command: "inspect-object".into(),
+                    label: ui::LocalizedText::new("Inspect summary", "查看摘要"),
+                    arguments: serde_json::json!("recovered:summary"),
+                });
+                node.menu = [
+                    ("Inspect details", "查看详情", "recovered:details"),
+                    ("Inspect schema", "查看结构", "recovered:schema"),
+                ]
+                .into_iter()
+                .map(|(en, zh_cn, object)| tree::Command {
+                    command: "inspect-object".into(),
+                    label: ui::LocalizedText::new(en, zh_cn),
+                    arguments: serde_json::json!(object),
+                })
+                .collect();
+                tree::Page {
+                    nodes: vec![node],
+                    next: None,
+                }
+            }
             Some("slow") => {
                 if self.pending.len() >= 8 {
                     return Err(api::Failure::new(

@@ -201,10 +201,10 @@ impl Manager {
                     tree,
                     epoch,
                     node,
-                    command,
+                    action,
                 } = tree_event
                 {
-                    let command = instance.tree_command(tree, *epoch, node, command)?;
+                    let command = instance.tree_command(tree, *epoch, node, action)?;
                     // A native node menu uses the same declared schema, broker and incarnation as ticket 02.
                     // The node's opaque identifier remains plugin data and grants no path authority.
                     return self.invoke_command(id, &command.command, command.arguments);

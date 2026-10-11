@@ -10,7 +10,7 @@ use std::sync::Arc;
 fn provider(id: &str) -> Package {
     Package::read(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-            "../../target/community-presentation/{id}-0.1.0.zip"
+            "../../target/community-presentation/{id}-0.1.1.zip"
         )),
     )
     .unwrap()
@@ -86,7 +86,7 @@ fn community_database_tree_real_pages_retry_late_callbacks_and_retirement() {
     let workspace = tempfile::tempdir().unwrap();
     let package = Package::read(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/community-presentation/database-tree-0.1.0.zip"),
+            .join("../../target/community-presentation/database-tree-0.1.1.zip"),
     )
     .unwrap();
     let mut manager = Manager::open(
@@ -124,7 +124,7 @@ fn community_database_tree_real_pages_retry_late_callbacks_and_retirement() {
             tree: resource.handle().clone(),
             epoch,
             node: "user-31".into(),
-            command: "inspect-object".into(),
+            action: tree::NodeAction::Activation,
         },
     )
     .unwrap();
@@ -146,6 +146,48 @@ fn community_database_tree_real_pages_retry_late_callbacks_and_retirement() {
     );
     load(&mut manager, &resource, Some("fault-once"), false);
     assert_eq!(resource.snapshot().nodes["recovered"].label, "已恢复");
+    // The real package legally reuses one signature for different action arguments. Admission
+    // resolves the exact owned node slot, rather than picking the first matching command name.
+    for (action, expected) in [
+        (tree::NodeAction::Activation, "recovered:summary"),
+        (tree::NodeAction::Menu { index: 0 }, "recovered:details"),
+        (tree::NodeAction::Menu { index: 1 }, "recovered:schema"),
+    ] {
+        event(
+            &mut manager,
+            tree::Event::Invoke {
+                tree: resource.handle().clone(),
+                epoch,
+                node: "recovered".into(),
+                action,
+            },
+        )
+        .unwrap();
+        manager.poll();
+        let mut delivered = false;
+        manager.live["database-tree"].views["presentation"]
+            .root
+            .visit(&mut |node| {
+                if let ui::Kind::Text { text } = &node.kind {
+                    delivered |= text.ends_with(expected);
+                }
+            });
+        assert!(delivered, "the exact node action must deliver {expected}");
+    }
+    let error = event(
+        &mut manager,
+        tree::Event::Invoke {
+            tree: resource.handle().clone(),
+            epoch,
+            node: "recovered".into(),
+            action: tree::NodeAction::Menu { index: 2 },
+        },
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<api::Failure>().unwrap().code,
+        api::ErrorCode::StaleRevision
+    );
     load(&mut manager, &resource, Some("slow"), false);
     resource.collapse("slow");
     manager
@@ -167,7 +209,7 @@ fn community_database_tree_real_pages_retry_late_callbacks_and_retirement() {
                 tree: resource.handle().clone(),
                 epoch,
                 node: "user-31".into(),
-                command: "inspect-object".into()
+                action: tree::NodeAction::Activation
             }
         )
         .is_err()

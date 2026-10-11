@@ -164,11 +164,11 @@ impl Instance {
         tree: &api::ResourceHandle,
         epoch: u64,
         node: &str,
-        command: &str,
+        action: &tree::NodeAction,
     ) -> Result<tree::Command, Failure> {
         self.store
             .data()
             .owned_tree(tree)?
-            .command(epoch, node, command)
+            .command(epoch, node, action)
     }
 }

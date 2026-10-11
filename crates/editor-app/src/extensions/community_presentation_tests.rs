@@ -20,7 +20,7 @@ fn providers(workspace: &Path, ids: &[&str]) -> (tempfile::TempDir, Manager) {
     .unwrap();
     for id in ids {
         let package = Package::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-            "../../target/community-presentation/{id}-0.1.0.zip"
+            "../../target/community-presentation/{id}-0.1.1.zip"
         )))
         .unwrap();
         manager
@@ -156,7 +156,7 @@ fn community_todos_and_coverage_follow_real_cut_replace_undo_and_close(cx: &mut 
                         tree: resource.handle().clone(),
                         epoch: snapshot.epoch,
                         node: todo.clone(),
-                        command: "locate-todo".into(),
+                        action: tree::NodeAction::Activation,
                     }),
                 }),
             )
@@ -184,7 +184,7 @@ fn community_todos_and_coverage_follow_real_cut_replace_undo_and_close(cx: &mut 
                             tree: resource.handle().clone(),
                             epoch: snapshot.epoch,
                             node: todo,
-                            command: "locate-todo".into()
+                            action: tree::NodeAction::Activation
                         })
                     })
                 )

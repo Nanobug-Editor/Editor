@@ -198,8 +198,14 @@ impl TreeResource {
         state.pending.clear();
         Ok(())
     }
-    /// A command is resolved from current provider data; captured menus cannot invoke removed nodes.
-    pub fn command(&self, epoch: u64, node: &str, command: &str) -> Result<tree::Command, Failure> {
+    /// Resolve complete typed arguments from the current owned node's exact activation or menu slot.
+    /// Refresh, removed/disabled nodes and missing actions reject captured callbacks as stale.
+    pub fn command(
+        &self,
+        epoch: u64,
+        node: &str,
+        action: &tree::NodeAction,
+    ) -> Result<tree::Command, Failure> {
         self.live()?;
         let state = self.state.lock().unwrap();
         if state.snapshot.epoch != epoch {
@@ -211,12 +217,15 @@ impl TreeResource {
             .get(node)
             .filter(|node| !node.disabled)
             .ok_or_else(stale)?;
-        node.activation
-            .iter()
-            .chain(&node.menu)
-            .find(|item| item.command == command)
-            .cloned()
-            .ok_or_else(stale)
+        // Menu ordinal identity remains immutable within an epoch; command names may legitimately repeat.
+        match action {
+            tree::NodeAction::Activation => node.activation.as_ref(),
+            tree::NodeAction::Menu { index } => usize::try_from(*index)
+                .ok()
+                .and_then(|index| node.menu.get(index)),
+        }
+        .cloned()
+        .ok_or_else(stale)
     }
     /// Requests are host issued, but must also still be pending when the worker accepts their UI event.
     pub(crate) fn validate_event(&self, event: &tree::Event) -> Result<(), Failure> {

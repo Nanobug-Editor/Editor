@@ -34,6 +34,21 @@ fn frame(
     visual.update(|window, cx| window.draw(cx).clear(cx));
 }
 
+/// Inspect the real package's public status, so native selections prove the delivered typed arguments.
+fn status(manager: &Rc<RefCell<Manager>>) -> String {
+    let mut status = None;
+    manager.borrow().live["database-tree"].views["presentation"]
+        .root
+        .visit(&mut |node| {
+            if node.id == "catalog-status" {
+                if let Kind::Text { text } = &node.kind {
+                    status = Some(text.clone());
+                }
+            }
+        });
+    status.expect("provider publishes its command result")
+}
+
 /// Native Retry, keyboard paging and menus retain focus through refresh and provider retirement.
 #[gpui::test]
 #[ignore = "package plugins/database-tree through the current host --plugin-package first"]
@@ -47,7 +62,7 @@ fn community_database_tree_native_keyboard_waits_for_manual_retry(cx: &mut TestA
     let workspace = tempfile::tempdir().unwrap();
     let package = Package::read(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/community-presentation/database-tree-0.1.0.zip"),
+            .join("../../target/community-presentation/database-tree-0.1.1.zip"),
     )
     .unwrap();
     let mut manager = Manager::open(
@@ -146,6 +161,35 @@ fn community_database_tree_native_keyboard_waits_for_manual_retry(cx: &mut TestA
     frame(visual, &view, &manager);
     assert_eq!(resource.snapshot().nodes["recovered"].label, "已恢复");
 
+    // Same-command actions are distinct: Enter selects the summary while the two real menu rows
+    // request details and schema. The public Manager must preserve each row's complete arguments.
+    let recovered = visual
+        .debug_bounds("plugin-tree-row-recovered")
+        .unwrap()
+        .center();
+    visual.simulate_click(recovered, Default::default());
+    visual.simulate_keystrokes("enter");
+    frame(visual, &view, &manager);
+    assert!(status(&manager).ends_with("recovered:summary"));
+    for (keys, expected) in [
+        ("enter", "recovered:details"),
+        ("down enter", "recovered:schema"),
+    ] {
+        visual.simulate_mouse_down(recovered, gpui_kit::MouseButton::Right, Default::default());
+        visual.simulate_mouse_up(recovered, gpui_kit::MouseButton::Right, Default::default());
+        frame(visual, &view, &manager);
+        assert!(visual.debug_bounds("native-popup-menu").is_some());
+        assert!(visual.debug_bounds("native-menu-tree-menu-0").is_some());
+        assert!(visual.debug_bounds("native-menu-tree-menu-1").is_some());
+        visual.simulate_keystrokes(keys);
+        frame(visual, &view, &manager);
+        assert!(
+            status(&manager).ends_with(expected),
+            "selected {expected}, got {}",
+            status(&manager)
+        );
+    }
+
     // The first sixteen objects are loaded on expansion; keyboard navigation reaches the native More row.
     let users = visual
         .debug_bounds("plugin-tree-row-users")
@@ -209,7 +253,7 @@ fn community_database_tree_native_keyboard_waits_for_manual_retry(cx: &mut TestA
     visual.simulate_mouse_down(object, gpui_kit::MouseButton::Right, Default::default());
     visual.simulate_mouse_up(object, gpui_kit::MouseButton::Right, Default::default());
     frame(visual, &view, &manager);
-    assert!(visual.debug_bounds("native-menu-inspect-object").is_some());
+    assert!(visual.debug_bounds("native-menu-tree-menu-0").is_some());
     visual.simulate_keystrokes("enter");
     frame(visual, &view, &manager);
     assert_eq!(visual.update(|window, cx| window.focused(cx)), focus);

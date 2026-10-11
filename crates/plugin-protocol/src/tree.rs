@@ -14,6 +14,8 @@
 //! Selection never implicitly executes a command; activation/context commands must be typed,
 //! declared by the package and negotiated through `plugin.commands`. Artwork also needs `ui.icons`
 //! and the `assets.read` grant; each SVG is at most 64 KiB.
+//! Activation and menu slots are separate action identities, even when command names repeat.
+//! The host resolves each slot's complete typed arguments from the current owned node and epoch.
 //! Cursor length is 1..=128 bytes. IDs are unique throughout a refresh epoch and stable for the
 //! same business node across refresh. Provider cursors/IDs are not paths or access grants.
 //! Collapse, refresh, scene removal and owner retirement cancel pending page admission; cancellation
@@ -96,6 +98,7 @@ impl Node {
             icon.validate()
                 .map_err(|error| Failure::new(ErrorCode::InvalidPath, error))?;
         }
+        // Repeated command names are valid; action identity is the activation or exact menu slot.
         for command in self.activation.iter().chain(&self.menu) {
             if !valid_id(&command.command)
                 || command.label.en.is_empty()
@@ -135,6 +138,17 @@ pub struct Request {
     pub max_nodes: u32,
 }
 
+/// One action in an immutable node publication, resolved only inside its current owned tree epoch.
+/// Command names are reusable schema identities; they do not identify a particular menu invocation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum NodeAction {
+    /// Enter or double click selects the node's optional activation command.
+    Activation,
+    /// Zero-based position in `Node.menu` (at most eight items). A missing slot is `StaleRevision`.
+    Menu { index: u32 },
+}
+
 /// Callbacks use an ordinary owning UI node/revision in addition to this tree's epoch.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -146,12 +160,12 @@ pub enum Event {
         epoch: u64,
         node: String,
     },
-    /// The host resolves the current command metadata and uses the existing typed command boundary.
+    /// The host resolves the exact current action metadata and uses the existing typed command boundary.
     Invoke {
         tree: ResourceHandle,
         epoch: u64,
         node: String,
-        command: String,
+        action: NodeAction,
     },
 }
 impl Event {
