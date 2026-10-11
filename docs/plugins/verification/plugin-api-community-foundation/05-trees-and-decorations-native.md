@@ -1,6 +1,6 @@
 # 05：Windows 原生树与文档装饰
 
-日期：2026-10-11。状态：首轮真实操作发现两处缺陷，修复后的当前宿主仍待原生复验；不据本记录关闭 #97。
+日期：2026-10-11。状态：首轮两处真实缺陷已修复，当前宿主原生复验通过；远端交付与 #97 关闭仍按主记录单独核对。
 
 ## 首轮固定输入
 
@@ -30,8 +30,24 @@ Dark、字号 16 下，编辑区真实向下滚动 820，首个可见源行为�
 
 公开 Manager、同一正式数据库 WASM 的最小回归 `community_database_tree_update_captures_live_snapshot_before_retirement` 稳定失败 0/1/0，40.18 秒，排除编辑器布局、其它插件和文档输入。快照前资源撤销修复后为 1/0/0，41.92 秒。另以公开 `InstallControl` 在迁移入口取消，`community_database_tree_failed_cutover_restores_fresh_owned_tree` 真实失败 0/1/0，41.12 秒；从已安装旧包重建 WASM 并恢复逻辑快照后为 1/0/0，58.19 秒。新测试纯归位的 E0583 编译失败另存日志，不记作行为 Red。
 
-当前 marker 行范围修复的真实 GPUI Green 为 1/0/0，39.19 秒：首次可见三个图标，滚出后连续三帧无绘制/命中 bounds，滚回后恢复精确源行几何；SDK 与正式四包未改变。当前宿主 EXE、相关旧热更新回归、规定门禁及两个缺陷的物理复验仍需逐项补入，不沿用旧 EXE 的成功项目冒充新宿主全验收。
+当前 marker 行范围修复的真实 GPUI Green 为 1/0/0，39.19 秒：首次可见三个图标，滚出后连续三帧无绘制/命中 bounds，滚回后恢复精确源行几何；SDK 与正式四包未改变。相关真实数据迁移回归 1/0/0、222.04 秒，mixed-update 回归 1/0/0、164.64 秒；门禁与当前物理复验分别见主记录和下节，不沿用旧 EXE 的结果冒充新输入。
 
 ## 首轮清理
 
 控制器正常 `stop`，退出 0；自有 EXE 窗口列表为空、精确路径进程数为 0。最终 fixture SHA256 仍为 `6DE6707F787B5C592502CD62AB0343F6956C18FD7F474E1AF8088FD4844D0BD0`。所有日志和自有数据保留，没有删除或覆盖首轮失败证据。
+
+## 修复版当前输入与原生复验
+
+- 生产源码固定为 `edb2cd838d5fc5427708498401b9bb8f27a97300` / tree `352912ee584a6c561261929428d17e4b76c97506`；主验收记录的纯文档提交 `372a255b452192aeabe2b4e20f2e0ed5d5ea99cc` 不改变构建输入。
+- 新宿主另存为 `bin/editor-app-trees-corrected.exe`，SHA256 `B5B3D67403836D0BE4A347E822162C2B8117567FF11BEC431BC88A7C3CE2B3B5`；保留旧 EXE。实际新宿主导出 SDK41、0 Markdown、逐文件 hash 差异 0，key 仍为 `93226c2989d2714785bb6d2b9562b5c4afa98e3e191417df8d2fbd127dc34ae2`；四包仍是首轮同一正式 0.1.1 输入，没有无意义重建。
+- 自有 `profile-corrected/` 从已停止的首轮 profile 复制，保留同一正式包与私有状态；`instance.json` 由公开开发控制器重写为当前 profile/session。第一次启动收到用户物理 Escape 后正常 `stop`、退出 0，不计为验收；用户恢复后使用 `controller-corrected-resume.log`、控制器 session `18098`、真实窗口 `1444512` 完成以下操作。
+- 持续 Sky 会话第一次读取了旧 EXE 的 UIA 缓存；重置 JavaScript 会话、重新从实际窗口列表绑定后显示当前 `editor-app-trees-corrected.exe`。旧缓存与即时过渡帧均未当作当前通过结果。
+
+1. 通过当前公开菜单在 byte 0 创建书签、扫描覆盖率；先观察浅色 14px，再以设置截图切换深色与 16px，设置关闭后读取主窗口 UIA。三个图标、源第 3/4 行填色和双语面板状态均可见。继续保留首轮普通中文/非 BMP 输入、Undo 和两语命令证据：本轮没有修改锚点或文档事件代码，没有将它们标成重新手工执行，也没有宣称新测 IME composition 或切换宿主英文 locale。
+2. 在实际编辑区向下滚动 `820`，首个可见源行为 21；旧图标、填色和三项辅助 Label 均不存在。等待 900ms 后再次读取稳定截图/UIA，结果保持。反向滚动 `-820` 后，图标和填色准确恢复到原源行，UIA 重新出现“用户书签”“已覆盖行”“未覆盖行”。真实点击覆盖率 gutter 并等待 900ms，截图显示“已覆盖行”的本地 Tooltip，UIA 出现工具提示节点；即时帧不算 hover 验证。
+3. 文档未修改，真实关闭标签成功；稳定帧中三项装饰 Label 撤下，书签/覆盖率显示文档已关闭，Todo 为 0，数据库目录仍可用。
+4. 控制器真实 `reload` 后记录 generation 1 已准入和 `Development plugin activated: database-tree`，没有首轮 Snapshot/owner 错误。原生窗口显示新树根 `main`，没有插件错误；重新选择根并用 Right 展开，再 Down/Right 展开 `users (512)`，可见 `User 000` 至 `User 005`，UIA 仅包含有限可见子节点。由实际新树请求确认实例可用，不只依赖“版本保留”日志。
+
+规定门禁固定上述源码：格式检查 exit 0，默认非 UI workspace **244 passed / 0 failed / 208 ignored**，workspace check exit 0；ignored 真实包回归另计。独立增量审查基准 `7ab5928..edb2cd8`：Standards 硬性 0 / smell 0，Spec missing 0 / partial 0 / out-of-scope 0 / implementation 0；原始版本的整体审查与本轮增量分开保留。
+
+本轮控制器正常 `stop`、退出 0；按精确 EXE 路径读回进程数为 0，Sky 自有窗口列表为空。磁盘 SHA256 仍为 `6DE6707F787B5C592502CD62AB0343F6956C18FD7F474E1AF8088FD4844D0BD0`。自有 profile、失败与成功日志、两个 EXE 均保留；其他系统平台未执行原生验证。

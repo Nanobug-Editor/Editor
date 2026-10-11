@@ -1,6 +1,6 @@
 # 05：通用树与编辑器装饰实施候选
 
-日期：2026-10-11。状态：正式包、受影响接缝回归、当前宿主构建及三项仓库门禁已通过；新增滚动与更新恢复修复的独立双轴复查、当前宿主物理验收仍待主代理完成。T24/C03 未因此标记完成，议题 [#97](https://github.com/T-miracle/Nanobug/issues/97) 保持开放。
+日期：2026-10-11。状态：正式包、受影响回归、当前宿主构建、三项 Rust 门禁、独立双轴与当前宿主原生复验通过，T21–T24/C01–C06 的行为验收已满足；普通推送与议题 [#97](https://github.com/T-miracle/Nanobug/issues/97) 关闭结果另行读回核对。
 
 依据：[05 工单](../../tickets/plugin-api-community-foundation/05-trees-and-decorations.md)、[社区方案](../../specs/plugin-api-community-foundation.md)、[共同完成条件](../../tickets/plugin-api-community-foundation/README.md)。公开用法、权限、错误、限额、取消与释放说明位于 [Tree 源码](../../../../crates/plugin-protocol/src/tree.rs)和[装饰源码](../../../../crates/plugin-protocol/src/decorations.rs)，不内嵌或导出 Markdown。
 
@@ -120,11 +120,11 @@ cargo build -p editor-app --jobs 2
 - 新更新回归先实际失败：`tree-update-snapshot-red.log` **0/1/0，38.99s**；移除非承重的初次分页后，`tree-update-snapshot-minimal-red.log` **0/1/0，40.18s**，两次均出现与现场相同的 Snapshot `Tree was revoked` 与 restart owner 不可用。Snapshot 改在资源撤销前执行后成功切换 Green 如上。
 - 公开 `InstallControl` 在 `Migrating` 阶段取消的 `tree-failed-cutover-red.log` **0/1/0，41.12s**，恢复沿用旧 WASM 内存里的退役句柄，旧实例未恢复可用。改为从不可变已安装旧包创建新 WASM、恢复逻辑 Snapshot/设置和原 grants 后 Green 如上；相邻测试纯归位曾遗漏 module path，`tree-failed-cutover-green.log` 的 E0583 为编译失败，没有计为行为 Red 或 Green。
 
-## 主代理桌面接入与待验项目
+## 主代理桌面接入与当前复验
 
-### 原生滚动缺陷的补充回归（自动 Green，当前宿主物理复验待做）
+### 原生滚动缺陷的补充回归（自动与当前宿主物理复验通过）
 
-主代理在当前 204 行 CRLF 夹具中先验证中文、非 BMP 输入与 Undo 的 revision/锚点，再向下滚动 820 px；稳定首行已为 21，覆盖率图标却仍留在顶部，三项标记的辅助 Label 也未撤销。关闭文档后的标记和 Todo 清理通过；提供者 reload 另遇 snapshot 资源退役错误，尚未计为 T24 通过。
+主代理首轮在 204 行 CRLF 夹具中先验证中文、非 BMP 输入与 Undo 的 revision/锚点，再向下滚动 820 px；稳定首行已为 21，覆盖率图标却仍留在顶部，三项标记的辅助 Label 也未撤销。关闭文档后的标记和 Todo 清理通过；提供者 reload 另遇 snapshot 资源退役错误。首轮失败和本轮成功分开保存，未把首轮计为 T24 通过。
 
 自动复现命令为 `cargo test -p editor-app community_decorations_hide_offscreen_markers_and_restore_after_scroll -- --ignored --nocapture --test-threads=1`，使用当前两个正式 0.1.1 包、生产 Manager、DocumentSession 与真实 GPUI 滚轮事件。首次实际 **0 passed / 1 failed / 0 ignored，95.32s**，`decorations-scroll-red.log`：原生可见首行已大于 3，但 coverage-line-2 仍有 `12px × 12px` 的绘制/命中 bounds；这属于行为 Red。测试要求连续三帧无三项标记 bounds，并在滚回时校验与原生源行几何一致、磁盘内容不变。Windows UIA Label 另由主代理物理复查，TestPlatform 不冒充其结果。
 
@@ -134,9 +134,9 @@ cargo build -p editor-app --jobs 2
 
 同一收紧命令修复后实际 **1 passed / 0 failed / 0 ignored，39.19s**（构建 55.60s），`decorations-scroll-green.log`：三项标记初次可见，真实向下滚轮 820 px 后连续三帧均没有标记 bounds，滚回后准确对齐原生源行，磁盘文本仍为准备夹具。回归归入相邻 `community_presentation_tests/scroll.rs`，共享已有正式包/原生发布 helpers；没有改动或重复既有菜单、配额、越权与 UTF-8 负面矩阵。SDK 与四个正式插件源包均未改变，沿用上表真实 0.1.1 ZIP。
 
-首次桌面观察、独立的更新 snapshot/回滚修复及其准确制品输入见[主代理原生验收记录](05-trees-and-decorations-native.md)。上述行为 Red 与夹具失败日志均保留；当前 `edb2cd8` 宿主重建、SDK 读回和三门禁已通过。新宿主真实窗口中的原始输入/Undo 后滚动、Windows UIA 撤销与提供者 reload 仍待主代理复验，不以自动 Green 代替物理结果。
+首次桌面观察、独立的更新 snapshot/回滚修复及本轮精确输入见[主代理原生验收记录](05-trees-and-decorations-native.md)。上述行为 Red 与夹具失败日志均保留；当前 `edb2cd8` / `B5B3D674…E2B3B5` 宿主重建、SDK 读回和三门禁已通过。主代理已在修复版真实窗口完成深色 16px 下滚出/滚回、UIA 标签撤销/恢复与 Tooltip 命中、文档关闭、数据库开发 reload 后继续展开和分页；当前控制器正常退出，磁盘 hash 不变。首轮普通输入/Undo 沿用未改变的文档锚点接缝证据，本轮未重复或宣称新测 IME composition。
 
-本阶段不直接操作桌面。主代理已独占原生验收；以下是现有公开入口的操作指引，尚未冒称执行结果。
+本子代理不直接操作桌面；主代理独占原生验收。以下保留现有公开入口的复现指引，逐项真实执行范围以相邻原生记录为准，不把指引本身当作执行结果。
 
 同一隔离 profile 可用现有发行/dev bootstrap：把当前 host 放在独立 `bin/`，把 Todo/Bookmarks/Coverage 三个正式 ZIP 原样放入 `bin/plugins/`；DB 使用 `--plugin-dev <database-tree项目目录> --release --profile <独立目录> --workspace <验收工作区> --grant ui.panels`。首次 bootstrap 从 EXE 相邻的 plugins 目录通过 `Package::read` 与公开 `Manager::install` 装入其余三个包；不编辑安装状态，不增加宿主测试 API。每轮用新 profile，避免先前 `bootstrapped.json` 掩盖输入变化。
 
@@ -153,10 +153,10 @@ cargo build -p editor-app --jobs 2
 
 主代理夹具固定为 `native-qa-05/workspace/community-markers.txt`：204 行 CRLF、UTF-8 无 BOM、6481 bytes，SHA256 `6DE6707F787B5C592502CD62AB0343F6956C18FD7F474E1AF8088FD4844D0BD0`；由主代理维护，本子代理未写入或复用其运行目录。
 
-尚待当前四包同窗口的深浅主题、中英文、中文 IME、滚动/缩放、可见 gutter/range/hover、基础辅助名称与提供者替换确认。当前源码已提供语义颜色/主题图标、本地 Tooltip 和 Base 树语义；这些实现与自动断言没有替代物理原生验收。其他操作系统未执行 native 验证。
+首轮四包同窗口的树键盘、双语命令、普通中文/非 BMP 输入、Undo、关闭和原生提示证据与本轮受影响的滚动/缩放/辅助名称/reload 复验组合覆盖本单原生接缝；真实 IME 行为沿未改变的原生编辑器/01 验收证据，不把普通中文输入称为 composition。旧 Settings UIA HWND 退役问题仍按基线记录，本轮仅用截图操作 Settings、关闭后读取主窗口。其他操作系统未执行 native 验证。
 
 ## 独立审查与交付边界
 
-原固定点 `de539764…a4ad93` / `a4ad93…0d42133` 的 Standards 结论为硬性 0、判断性 1（P3 重复图标准入）；Spec 随后发现 P2 同名节点 action 参数混淆。两项修正后的 `7ab5928` 已由主代理确认独立双轴复查通过。新增 `d9b06d4..edb2cd8` 的通用恢复与 gutter 滚动修复仍待独立增量审查，旧结论不覆盖本轮新输入。
+原固定点 `de539764…a4ad93` / `a4ad93…0d42133` 的 Standards 结论为硬性 0、判断性 1（P3 重复图标准入）；Spec 随后发现 P2 同名节点 action 参数混淆。两项修正后的 `7ab5928` 已由主代理确认独立双轴复查通过。本轮固定 `7ab592878ed71943479a9e20e4423abb27249354..edb2cd838d5fc5427708498401b9bb8f27a97300`，由未参与本轮实现的 03 代理完成 Standards、04 代理完成 Spec 增量审查：硬性 0 / smell 0；missing 0 / partial 0 / out-of-scope 0 / implementation 0。覆盖 live Snapshot、已安装旧包新 WASM 恢复、原生可见源行过滤、真实包及滚轮回归；没有把旧整体结论冒充新输入审查。
 
-本记录与普通候选提交不表示 push、议题关闭、版本发布或 T24/C03 完成。主代理在当前复查、门禁与桌面验收完成后统一集成及交付；07 再补跨能力组合，不重复本单负面矩阵。
+当前针对性验证、三门禁、独立双轴与受影响桌面验收已满足本单交付条件；普通提交不自动表示已 push 或已关闭议题，远端结果仍由主代理核对。后续集成点另记实际 SDK 与资源语义，07 再做跨能力短组合，不重复本单未改变的负面矩阵。
