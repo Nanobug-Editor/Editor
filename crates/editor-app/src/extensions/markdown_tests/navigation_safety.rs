@@ -17,14 +17,42 @@ fn click_link(ui: &mut gpui_kit::VisualTestContext) {
 }
 
 /// Require one actual guest-issued handle, preserving its original instance and request identity.
-fn take_request(fixture: &mut NativeMarkdown, plugin: &str) -> plugin_runtime::EditorRequest {
+fn take_request(
+    fixture: &mut NativeMarkdown,
+    plugin: &str,
+    ui: &mut gpui_kit::VisualTestContext,
+) -> plugin_runtime::EditorRequest {
     let mut requests = fixture
         .manager
         .live
         .get_mut(plugin)
         .unwrap()
         .take_editor_requests();
-    assert_eq!(requests.len(), 1, "one operation admits one request");
+    // Native focus can legitimately queue a synchronized viewport receipt beside navigation.
+    // Execute those through the normal queue; exactly one navigation retains its tested authority.
+    let ancillary: Vec<_> = requests
+        .extract_if(.., |request| {
+            matches!(request.operation(), Op::LocateViewport { .. })
+        })
+        .collect();
+    ui.update(|_, cx| {
+        fixture
+            .app
+            .read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .editor_requests
+            .extend(
+                ancillary
+                    .into_iter()
+                    .map(|request| (plugin.to_owned(), request)),
+            )
+    });
+    assert_eq!(requests.len(), 1, "one navigation admits one request");
     requests.pop().unwrap()
 }
 
@@ -35,7 +63,7 @@ fn pending_navigation(
 ) -> plugin_runtime::EditorRequest {
     click_link(ui);
     super::super::composable_tests::pump(&mut fixture.manager, &fixture.app, ui);
-    let request = take_request(fixture, "markdown");
+    let request = take_request(fixture, "markdown", ui);
     assert!(matches!(
         request.operation(),
         Op::NavigateDocument {
@@ -115,7 +143,7 @@ fn feedback(fixture: &NativeMarkdown, ui: &mut gpui_kit::VisualTestContext) -> S
 
 /// Permission and domain refusals remain visible in both locales without consuming the source or browser.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_link_refusals_preserve_source_and_localize(cx: &mut TestAppContext) {
     let web = "[网页](https://example.com/refused)\n";
     let unsupported = "[邮件](mailto:reader@example.com)\n";
@@ -168,7 +196,7 @@ fn delivered_markdown_link_refusals_preserve_source_and_localize(cx: &mut TestAp
 
 /// Editing, switching, closing and retirement each seal a real admitted browser request before execution.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_pending_links_cannot_follow_edits_tabs_close_or_disable(
     cx: &mut TestAppContext,
 ) {
@@ -240,7 +268,7 @@ fn delivered_markdown_pending_links_cannot_follow_edits_tabs_close_or_disable(
 
 /// Legal parent paths stay within the workspace, encoded percents decode once, and real sibling files stay closed.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_relative_links_decode_once_and_reject_workspace_escape(
     cx: &mut TestAppContext,
 ) {
@@ -317,7 +345,7 @@ fn delivered_markdown_relative_links_decode_once_and_reject_workspace_escape(
 /// A lexical in-workspace link must reject a real Windows junction that resolves to an external document.
 #[cfg(windows)]
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_relative_link_rejects_external_junction(cx: &mut TestAppContext) {
     let source = "[打开](redirect/secret.md)\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", source)]);
@@ -360,12 +388,9 @@ fn delivered_markdown_relative_link_rejects_external_junction(cx: &mut TestAppCo
 
 /// Repackage only declarations: the independent public SDK guest handles ordinary Operation JSON unchanged.
 fn navigation_peer(browser: bool) -> Package {
-    let mut files = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let mut files = Package::read(&crate::test_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = serde_json::json!("navigation-peer");
     manifest["name"] = serde_json::json!("Independent document navigation");
@@ -441,7 +466,7 @@ fn refuse_ungranted_browser(
 
 /// A non-Markdown consumer opens .txt, refuses absent permission and stale sources, then reaches the real browser boundary.
 #[gpui::test]
-#[ignore = "build current markdown and capability-example through the public SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
     cx: &mut TestAppContext,
 ) {
@@ -467,7 +492,7 @@ fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
             path: "next.txt".into(),
         },
     );
-    let request = take_request(&mut fixture, "navigation-peer");
+    let request = take_request(&mut fixture, "navigation-peer", ui);
     execute(&mut fixture, "navigation-peer", &request, ui);
     assert!(
         matches!(request.status(), RequestUpdate::Completed { result: Ok(Value::Opened { ref document }) } if document.path == "next.txt")
@@ -493,7 +518,7 @@ fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
             url: "https://example.com/stale".into(),
         },
     );
-    let stale = take_request(&mut fixture, "navigation-peer");
+    let stale = take_request(&mut fixture, "navigation-peer", ui);
     fixture.focus_editor(ui);
     ui.simulate_keystrokes("ctrl-home");
     ui.simulate_input("变更");
@@ -514,7 +539,7 @@ fn delivered_independent_navigation_peer_guards_txt_browser_grants_and_revision(
         version,
         NavigationTarget::ExternalUrl { url: url.into() },
     );
-    let browser = take_request(&mut fixture, "navigation-peer");
+    let browser = take_request(&mut fixture, "navigation-peer", ui);
     execute(&mut fixture, "navigation-peer", &browser, ui);
     assert!(matches!(
         browser.status(),

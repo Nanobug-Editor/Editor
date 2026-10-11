@@ -313,14 +313,12 @@ fn create_parser(grammar: &LoadedGrammar) -> anyhow::Result<(Parser, tree_sitter
 mod tests {
     use super::*;
 
-    /// Source plugin assets still validate independently before packaging.
+    /// Fixed independent Release packages supply the same dynamic grammars after their source repositories move.
     #[test]
-    fn source_plugins_load_independently() {
+    fn reviewed_plugin_packages_load_independently() {
         for directory in ["rust", "toml", "html", "javascript"] {
             let name = directory;
-            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../plugins")
-                .join(directory);
+            let root = crate::test_packages::root(directory);
             register_plugin(&root)
                 .unwrap_or_else(|error| panic!("{name} failed to load: {error:#}"));
         }
@@ -334,7 +332,7 @@ mod tests {
     /// compiled must stay cheap.
     #[test]
     fn repeated_grammar_loads_reuse_compiled_modules() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/markdown/grammar");
+        let root = crate::test_packages::root("markdown").join("grammar");
         let grammar = fs::read(root.join("markdown.wasm")).unwrap();
         // A private cache directory keeps the first load a real compile regardless of other runs.
         let directory = tempfile::tempdir().unwrap();
@@ -381,12 +379,12 @@ tree_sitter_abi = 15
         assert!(format!("{error:#}").contains("missing.wasm"));
     }
 
-    /// The shipped HTML WASM and query must parse real markup and capture its tokens.
+    /// The reviewed HTML WASM and query must parse real markup and capture its tokens.
     #[test]
     fn bundled_html_plugin_parses_and_highlights_markup() {
         use tree_sitter::StreamingIterator as _;
 
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/html");
+        let root = crate::test_packages::root("html");
         let manifest =
             PluginManifest::parse(&fs::read_to_string(root.join("plugin.toml")).unwrap()).unwrap();
         let (grammar, query) =
@@ -446,12 +444,12 @@ tree_sitter_abi = 15
         );
     }
 
-    /// Validate the shipped JS parser and captures across modules, modern syntax, and JSX.
+    /// Validate the reviewed JS parser and captures across modules, modern syntax, and JSX.
     #[test]
     fn bundled_javascript_plugin_parses_and_highlights_source() {
         use tree_sitter::StreamingIterator as _;
 
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/javascript");
+        let root = crate::test_packages::root("javascript");
         let manifest =
             PluginManifest::parse(&fs::read_to_string(root.join("plugin.toml")).unwrap()).unwrap();
         let (grammar, query) =
@@ -513,10 +511,10 @@ export async function greet(user) {
         }
     }
 
-    /// The bundled Rust plugin must supply a usable WASM parser and highlight query.
+    /// The reviewed Rust package must supply a usable WASM parser and highlight query.
     #[test]
     fn bundled_rust_plugin_parses_source() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/rust");
+        let root = crate::test_packages::root("rust");
         let manifest =
             PluginManifest::parse(&fs::read_to_string(root.join("plugin.toml")).unwrap()).unwrap();
         let contribution = manifest

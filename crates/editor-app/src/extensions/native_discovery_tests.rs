@@ -99,16 +99,13 @@ fn editor_for<'a>(
     )
     .unwrap();
     // Discovery/build rules remain plugins; the terminal is provided by the native application.
-    for name in ["rust-0.6.1", "run-target-example-0.1.0"] {
-        let package = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../dist/plugins/{name}.zip")),
-        )
-        .unwrap();
+    for name in ["rust", "run-target-example"] {
+        let package = Package::read(&crate::test_packages::archive(name)).unwrap();
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();
     }
+    super::test_configurations::install(&mut manager);
     let slot = Rc::new(RefCell::new(None));
     let capture = slot.clone();
     let workspace = Workspace::open(root).unwrap();
@@ -131,37 +128,6 @@ fn editor_for<'a>(
     publish_with_launches(&mut manager, &mut renderer, &app, cx, &[]);
     (manager, app, cx)
 }
-fn form_window<'a>(
-    cx: &'a mut gpui_kit::VisualTestContext,
-    app: &Entity<EditorApp>,
-) -> &'a mut gpui_kit::VisualTestContext {
-    // Use one native test window. Painting the same EditorApp in two test windows causes
-    // its measured layout to alternate indefinitely; this holder mounts exactly one view.
-    cx.update(|window, cx| {
-        let key = app.read(cx).workspace_key();
-        let controls = app.read(cx).run_controls.clone();
-        let form = cx.new(|cx| crate::run::RunConfigForm::open(&controls, &key, None, window, cx));
-        app.update(cx, |state, cx| {
-            state.run_form = Some(form);
-            cx.notify();
-        });
-    });
-    cx.simulate_resize(size(px(900.), px(900.)));
-    cx.run_until_parked();
-    cx.update(|window, cx| window.draw(cx).clear(cx));
-    cx
-}
-/// Return to the actual editor view after confirming/editing the native form.
-fn main_window<'a>(
-    cx: &'a mut gpui_kit::VisualTestContext,
-    app: &Entity<EditorApp>,
-) -> &'a mut gpui_kit::VisualTestContext {
-    let _ = app;
-    cx.simulate_resize(size(px(1400.), px(900.)));
-    cx.run_until_parked();
-    cx.update(|window, cx| window.draw(cx).clear(cx));
-    cx
-}
 /// Click the painted native hit region, never a synthetic action dispatched by selector.
 fn click(cx: &mut gpui_kit::VisualTestContext, selector: &'static str) {
     cx.run_until_parked();
@@ -177,13 +143,6 @@ fn click(cx: &mut gpui_kit::VisualTestContext, selector: &'static str) {
     });
     cx.run_until_parked();
     cx.simulate_click(bounds.center(), Default::default());
-    cx.run_until_parked();
-}
-/// Native focus/Ctrl+A/text input must preserve literal multi-line values.
-fn edit(cx: &mut gpui_kit::VisualTestContext, selector: &'static str, value: &str) {
-    click(cx, selector);
-    cx.simulate_keystrokes("ctrl-a");
-    cx.simulate_input(value);
     cx.run_until_parked();
 }
 /// The final program itself records argv/env so a compiled artifact is distinguishable from Cargo.
@@ -204,9 +163,9 @@ fn a_real_rust_project_is_discovered_built_and_run(cx: &mut TestAppContext) {
     rust_project(root.path(), "delivery-target");
     let (mut manager, app, cx) = editor_for(cx, root.path());
     let mut driver = Driver::default();
-    let cx = form_window(cx, &app);
-
-    click(cx, "run-config-discover");
+    // Discovery remains a public target service. The retired target form is superseded by
+    // plugin-owned configuration windows, whose native editing is covered by rollout_tests.
+    cx.update(|_, cx| app.update(cx, |state, cx| state.discover_run_targets(cx)));
     driver.wait(&mut manager, &app, cx, |state| {
         state.run_controls.discovered_targets().len() == 2
     });
@@ -224,36 +183,41 @@ fn a_real_rust_project_is_discovered_built_and_run(cx: &mut TestAppContext) {
             .unwrap()
             .clone()
     });
-    let selector = Box::leak(format!("run-config-target-{}", target.id).into_boxed_str());
-    click(cx, selector);
-
-    let stored = cx.update(|_, cx| {
+    let mut draft = cx.update(|_, cx| {
         assert!(
             app.read(cx).run_controls.configurations().is_empty(),
             "a plugin choice is only a draft until Save"
         );
         app.read(cx)
-            .run_form
-            .as_ref()
+            .run_controls
+            .target_template(&target.id, &app.read(cx).workspace_key())
             .unwrap()
-            .read(cx)
-            .draft()
-            .id
-            .clone()
     });
-    edit(cx, "run-config-name", "用户保留的名称");
-    click(cx, "run-config-arguments-edit");
-    edit(
-        cx,
-        "run-config-arguments",
-        "literal space\nquote\"value\n中文;&|",
-    );
-    click(cx, "run-config-detail-done");
-    click(cx, "run-config-more");
-    click(cx, "run-config-environment-edit");
-    edit(cx, "run-config-environment", "RUN_ENV=本机环境");
-    click(cx, "run-config-detail-done");
-    click(cx, "run-config-save");
+    let stored = draft.id.clone();
+    draft.name = "用户保留的名称".into();
+    draft.env.insert("RUN_ENV".into(), "本机环境".into());
+    let editor_core::RunTarget::Provided { args, .. } = &mut draft.target else {
+        panic!("expected discovered target")
+    };
+    *args = vec![
+        "literal space".into(),
+        "quote\"value".into(),
+        "中文;&|".into(),
+    ];
+    cx.update(|_, cx| {
+        app.update(cx, |state, cx| {
+            // Save the current opaque envelope, then recompute its launch through the real SDK
+            // provider at execution time. This preserves exact discovered-artifact coverage.
+            super::test_configurations::accept(&mut state.run_controls, draft);
+            let set = state.run_controls.configuration_set();
+            state
+                .run_controls
+                .commit_configuration_set(set, &state.workspace_key())
+                .unwrap();
+            state.run_controls.select(&stored, &state.workspace_key());
+            cx.notify();
+        })
+    });
     let config = cx.update(|_, cx| {
         app.read(cx)
             .run_controls
@@ -271,39 +235,40 @@ fn a_real_rust_project_is_discovered_built_and_run(cx: &mut TestAppContext) {
         config.target,
         editor_core::RunTarget::Provided { .. }
     ));
-    let cx = main_window(cx, &app);
     click(cx, "run-build");
     driver.wait(&mut manager, &app, cx, |state| {
-        !state.run_controls.is_pending(&stored) && !state.run_controls.is_preparing(&stored)
+        state.run_controls.preparation(&stored).is_some()
+            && !state.run_controls.is_pending(&stored)
+            && !state.run_controls.is_preparing(&stored)
     });
     assert!(driver.launches.is_empty(), "Build creates no final program");
     assert!(!root.path().join("program-ran.txt").exists());
-    assert!(cx.debug_bounds("run-build-output").is_some());
-    click(cx, "run-build-hide");
+    // Build history now belongs to the built-in terminal's task tab, not the retired overlay.
+    assert!(cx.debug_bounds("terminal-task-rerun").is_some());
+    let build_history = super::native_run_tests::painted_text(&app, cx);
+    assert!(
+        build_history.contains("Finished"),
+        "Cargo output was not retained: {build_history}"
+    );
+    click(cx, "native-terminal-hide");
     cx.update(|window, cx| window.draw(cx).clear(cx));
-    assert!(cx.debug_bounds("run-build-output").is_none());
-    cx.update(|_, cx| {
+    assert!(cx.debug_bounds("terminal-task-rerun").is_none());
+    cx.update(|window, cx| {
         app.update(cx, |state, cx| {
-            let request = state
-                .run_controls
-                .menu_entries()
-                .iter()
-                .find_map(|row| match row {
-                    crate::run::RunMenuEntry::Action { id, .. } => id
-                        .strip_prefix("run-preparation-")
-                        .and_then(|id| id.parse().ok()),
-                    _ => None,
-                })
-                .unwrap();
-            state.run_controls.show_preparation_output(request);
-            cx.notify();
+            state.toggle_terminal(window, cx);
         })
     });
     driver.frame(&mut manager, &app, cx);
-    assert!(cx.debug_bounds("run-build-output").is_some());
+    assert!(cx.debug_bounds("terminal-task-rerun").is_some());
+    assert_eq!(
+        super::native_run_tests::painted_text(&app, cx),
+        build_history
+    );
     click(cx, "run-start");
     driver.wait(&mut manager, &app, cx, |state| {
-        !state.run_controls.is_pending(&stored) && !state.run_controls.is_preparing(&stored)
+        root.path().join("program-ran.txt").exists()
+            && !state.run_controls.is_pending(&stored)
+            && !state.run_controls.is_preparing(&stored)
     });
     assert_eq!(driver.launches.len(), 1, "the artifact is executed once");
     let request = manager
@@ -403,25 +368,70 @@ fn a_discovered_project_is_confirmed_built_run_and_offered_for_debugging(cx: &mu
     assert_eq!(repaired.name, "My retained edits");
     assert_eq!(repaired.env["RUN_ENV"], "RETAINED");
     assert_eq!(repaired.literal_arguments(), ["user argv"]);
+    assert!(cx.update(|_, cx| {
+        !app.read(cx)
+            .run_controls
+            .configuration_set()
+            .plugin_configurations
+            .contains_key(&stored)
+    }));
+    click(cx, "run-start");
+    driver.frame(&mut manager, &app, cx);
+    assert!(
+        driver.launches.is_empty() && !root.path().join("program-ran.txt").exists(),
+        "legacy records cannot execute before current provider validation"
+    );
+    cx.update(|_, cx| {
+        app.update(cx, |state, cx| {
+            super::test_configurations::accept(&mut state.run_controls, repaired);
+            let set = state.run_controls.configuration_set();
+            state
+                .run_controls
+                .commit_configuration_set(set, &state.workspace_key())
+                .unwrap();
+            state.run_controls.select(&stored, &state.workspace_key());
+            cx.notify();
+        })
+    });
     let count = cx.update(|_, cx| app.read(cx).run_controls.configurations().len());
     click(cx, "run-start");
     driver.wait(&mut manager, &app, cx, |state| {
-        !state.run_controls.is_pending(&stored) && !state.run_controls.is_preparing(&stored)
+        root.path().join("program-ran.txt").exists()
+            && !state.run_controls.is_pending(&stored)
+            && !state.run_controls.is_preparing(&stored)
     });
     assert_eq!(driver.launches.len(), 1);
-    assert!(cx.update(|_, cx| app.read(cx).run_controls.debug_blocker(&stored).is_some()));
+    assert!(
+        cx.update(|_, cx| app.read(cx).run_controls.debug_blocker(&stored).is_none()),
+        "the unified Rust package also offers debugging for the repaired target"
+    );
     assert_eq!(
         std::fs::read_to_string(root.path().join("program-ran.txt")).unwrap(),
         "[\"user argv\"] / RETAINED"
     );
-    let cx = form_window(cx, &app);
-    let selector = Box::leak(format!("run-config-target-{}", independent.id).into_boxed_str());
-    click(cx, selector);
+    let draft = cx.update(|_, cx| {
+        app.read(cx)
+            .run_controls
+            .target_template(&independent.id, &app.read(cx).workspace_key())
+            .unwrap()
+    });
     assert_eq!(
         cx.update(|_, cx| app.read(cx).run_controls.configurations().len()),
         count
     );
-    click(cx, "run-config-save");
+    cx.update(|_, cx| {
+        app.update(cx, |state, cx| {
+            let id = draft.id.clone();
+            super::test_configurations::accept(&mut state.run_controls, draft);
+            let set = state.run_controls.configuration_set();
+            state
+                .run_controls
+                .commit_configuration_set(set, &state.workspace_key())
+                .unwrap();
+            state.run_controls.select(&id, &state.workspace_key());
+            cx.notify();
+        })
+    });
     assert!(cx.update(|_,cx|matches!(app.read(cx).run_controls.selected().unwrap().target,editor_core::RunTarget::Program {ref program,..} if program=="powershell.exe")));
     assert_eq!(
         cx.update(|_, cx| app.read(cx).run_controls.configurations().len()),

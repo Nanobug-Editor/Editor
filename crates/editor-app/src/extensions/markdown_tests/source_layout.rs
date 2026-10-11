@@ -5,7 +5,7 @@ use harness::NativeMarkdown;
 /// A long delivered document exposes collapsed input even when the outer split and toolbar exist.
 /// Native resize, mode clicks and wheel input exercise the same layout as the desktop window.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_source_fills_height_below_toolbar(cx: &mut TestAppContext) {
     let original = (0..160)
         .map(|index| format!("第 {index:03} 行：Markdown 编辑区应显示多行。\n"))
@@ -35,9 +35,13 @@ fn delivered_markdown_source_fills_height_below_toolbar(cx: &mut TestAppContext)
             let panel = ui.debug_bounds("editor-panel-content").unwrap();
             let source = ui.debug_bounds("editor-source-pane").unwrap();
             let toolbar = ui.debug_bounds("editor-source-toolbar").unwrap();
-            let (input, visible) = ui.update(|_, cx| {
+            let (input, visible, line_height) = ui.update(|_, cx| {
                 let editor = fixture.app.read(cx).editor.read(cx);
-                (editor.input_bounds(), editor.visible_row_range().unwrap())
+                (
+                    editor.input_bounds(),
+                    editor.visible_row_range().unwrap(),
+                    editor.line_height().unwrap(),
+                )
             });
             // Check the native input, not only the container: a one-row input still has a toolbar.
             let available = panel.bottom() - toolbar.bottom();
@@ -48,8 +52,10 @@ fn delivered_markdown_source_fills_height_below_toolbar(cx: &mut TestAppContext)
             assert!(input.top() >= toolbar.bottom() - px(2.));
             assert!(input.bottom() <= panel.bottom() + px(2.));
             assert!(
-                visible.len() > 10,
-                "native viewport must reveal multiple rows"
+                // Narrow panes wrap a logical row across several visual lines; count the native
+                // line capacity instead of requiring eleven unwrapped source rows at every width.
+                visible.len() > 1 && input.size.height / line_height > 10.,
+                "native viewport must reveal multiple rows: window={width}x{height}; input={input:?}; rows={visible:?}"
             );
 
             // Click below the first line to prove that the lower area is part of the input target.
@@ -104,7 +110,7 @@ fn delivered_markdown_source_fills_height_below_toolbar(cx: &mut TestAppContext)
 /// Empty Markdown and toolbar-free SVG must keep a full input target, as must ordinary text tabs.
 /// The two delivered packages enter through Manager instead of a language-specific layout fixture.
 #[gpui::test]
-#[ignore = "build markdown and svg through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_source_height_survives_empty_documents_and_toolbar_free_previews(
     cx: &mut TestAppContext,
 ) {
@@ -117,21 +123,17 @@ fn delivered_source_height_survives_empty_documents_and_toolbar_free_previews(
             false,
         ),
     ] {
-        let package = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../dist/plugins/{package_name}.zip")),
-        )
-        .unwrap();
+        let package = Package::read(&crate::test_packages::archive(package_name)).unwrap();
         let (mut fixture, ui) = NativeMarkdown::mount_package(
             cx,
             &[(name, original), ("plain.txt", "ordinary text\n")],
             &package,
         );
         fixture.open(name, ui);
-        for mode in [
-            "plugin-tool-markdown/preview/display-split",
-            "plugin-tool-markdown/preview/display-source",
-        ] {
+        // Tool identity follows the installed package, including the toolbar-free image provider.
+        for mode in ["display-split", "display-source"] {
+            let mode =
+                Box::leak(format!("plugin-tool-{package_name}/preview/{mode}").into_boxed_str());
             fixture.click(mode, ui);
             let panel = ui.debug_bounds("editor-panel-content").unwrap();
             let source = ui.debug_bounds("editor-source-pane").unwrap();

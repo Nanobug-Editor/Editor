@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 /// Exercise actual ConPTY through a separately built guest, including incomplete startup teardown.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn cursor_handshake_is_public_and_unanswered_queries_release_native_resources() {
     // Bound the entire fixture even if an OS call accidentally blocks the manager thread again.
     let (done, result) = std::sync::mpsc::channel();

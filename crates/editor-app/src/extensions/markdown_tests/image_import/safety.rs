@@ -5,7 +5,7 @@ use protocol::api::{EditorOperation, EditorValue, RequestUpdate};
 
 /// Native host menus and popups block external drops instead of editing the source beneath their overlay.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_drop_respects_host_popup_and_explorer_menu(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "source")]);
     fixture.open("notes.md", ui);
@@ -160,7 +160,7 @@ fn perform_save(
 
 /// A completed file remains when its source changes or closes before the guest receives the save receipt.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_saved_receipts_survive_revision_and_close_without_reference(
     cx: &mut TestAppContext,
 ) {
@@ -257,7 +257,7 @@ fn delivered_markdown_image_saved_receipts_survive_revision_and_close_without_re
 /// Installed grants, late selection changes, native write errors and preedit all refuse dangling references.
 #[cfg(windows)]
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_import_rejects_grants_selection_composition_and_write_failures(
     cx: &mut TestAppContext,
 ) {
@@ -368,7 +368,7 @@ fn delivered_markdown_image_import_rejects_grants_selection_composition_and_writ
 /// Save-first must reject a directory replaced with a junction before creating the missing source or its images.
 #[cfg(windows)]
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_save_first_rejects_redirected_parent(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[]);
     let parent = fixture.directory.path().join("sub");

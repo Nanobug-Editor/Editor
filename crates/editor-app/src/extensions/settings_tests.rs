@@ -3,7 +3,7 @@ use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
 #[gpui::test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn native_plugin_settings_apply_and_show_effective_source(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -13,11 +13,7 @@ fn native_plugin_settings_apply_and_show_effective_source(cx: &mut TestAppContex
     });
     let directory = tempfile::tempdir().unwrap();
     let workspace = Workspace::open(directory.path()).unwrap();
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     let mut manager = plugin_runtime::Manager::open(
         directory.path().join("runtime"),
         protocol::Environment {

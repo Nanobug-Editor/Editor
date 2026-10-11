@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// A preview gesture during the publication delay outranks the earlier source edit, even after catch-up.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_preview_scroll_during_pending_edit_keeps_latest_owner(
     cx: &mut TestAppContext,
 ) {
@@ -30,7 +30,7 @@ fn delivered_markdown_preview_scroll_during_pending_edit_keeps_latest_owner(
 /// Even a one-pixel preview gesture owns scrolling after the source was the previous driver.
 /// Observe actual source pixels and rendered paragraph bounds through the delivered package.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_small_preview_scroll_moves_source_without_bouncing(cx: &mut TestAppContext) {
     let source = "![大图](large.png)\n\n".to_owned()
         + &(0..100)
@@ -76,7 +76,7 @@ fn delivered_markdown_small_preview_scroll_moves_source_without_bouncing(cx: &mu
 
 /// Wrapped table cells also turn small preview deltas into source subpixels, without returning to the old anchor.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_small_table_scroll_retains_manual_preview_position(cx: &mut TestAppContext) {
     let cell = "正文与`行内代码`需要在窄表格中换行。".repeat(55);
     let source = format!("| 内容 | 说明 |\n| --- | --- |\n| {cell} | 说明 |\n\n")

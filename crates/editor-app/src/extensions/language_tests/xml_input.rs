@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 /// A Chinese attribute typed after emoji selects a genuine installed guest proposal via Enter.
 #[gpui::test]
-#[ignore = "build current xml package with scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn installed_xml_completion_applies_through_native_input(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -27,10 +27,7 @@ fn installed_xml_completion_applies_through_native_input(cx: &mut TestAppContext
         },
     )
     .unwrap();
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/xml.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("xml")).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();

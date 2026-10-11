@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 /// Install an unfamiliar provider and edit an external file through the normal native key path.
 #[gpui::test]
-#[ignore = "build current capability-example and native lsp_fixture first"]
+#[ignore = "requires frozen Package/WASM inputs and native lsp_fixture; build native examples directly with Cargo"]
 fn native_completion_remains_available_outside_guest_workspace(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);

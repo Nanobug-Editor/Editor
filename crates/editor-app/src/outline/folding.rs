@@ -241,7 +241,7 @@ mod tests {
             .name("bounded-grammar-fold-walk".into())
             .stack_size(2 * 1024 * 1024)
             .spawn(|| {
-                let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/rust");
+                let root = crate::test_packages::root("rust");
                 crate::language::plugins::register_plugin(&root).unwrap();
                 let depth = 1000;
                 // Rust blocks produce genuinely nested syntax here; very deep XML recovers into a shallow error tree.

@@ -73,7 +73,7 @@ fn published_pixels(
 
 /// Retiring a delivered plugin must release the actual atlas entry, beyond dropping the worker's bytes.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_atlas_released_on_disable(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "![image](img.png)")]);
     std::fs::write(fixture.directory.path().join("img.png"), png(160, 120)).unwrap();
@@ -92,7 +92,7 @@ fn delivered_markdown_image_atlas_released_on_disable(cx: &mut TestAppContext) {
 
 /// Native source replacement retires the old texture even while this test still owns its immutable pixels.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_atlas_retires_on_source_revision(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "![old](first.png)")]);
     for name in ["first.png", "second.png"] {
@@ -122,7 +122,7 @@ fn delivered_markdown_image_atlas_retires_on_source_revision(cx: &mut TestAppCon
 
 /// A toolbar/dialog projection can borrow the same worker pixels without owning the preview's atlas lifetime.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_atlas_survives_another_projection_release(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "![image](img.png)")]);
     std::fs::write(fixture.directory.path().join("img.png"), png(160, 120)).unwrap();
@@ -176,7 +176,7 @@ fn delivered_markdown_image_atlas_survives_another_projection_release(cx: &mut T
 
 /// Native pixels, image height and localized per-image failures leave the surrounding source intact.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_images_render_native_pixels_and_individual_errors(cx: &mut TestAppContext) {
     let text = "before **bold** ![中文图](img.png) after\n\n![缺图](missing.png)\n\n![坏图](broken.png)\n\n![越界](/outside.png)\n\nend";
     let (mut fixture, ui) =
@@ -256,7 +256,7 @@ fn delivered_markdown_images_render_native_pixels_and_individual_errors(cx: &mut
 
 /// A wide bitmap follows preview width while preserving its ratio before and after native divider dragging.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_wide_image_height_follows_the_native_preview_width(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", "![宽图](wide.png)")]);
     std::fs::write(fixture.directory.path().join("wide.png"), png(2000, 1000)).unwrap();
@@ -294,7 +294,7 @@ fn delivered_markdown_wide_image_height_follows_the_native_preview_width(cx: &mu
 
 /// A held local HTTP response proves that image I/O neither blocks editing nor targets the next document.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_late_network_images_cannot_replace_a_new_document(cx: &mut TestAppContext) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();

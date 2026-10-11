@@ -29,7 +29,7 @@ mod task_safety;
 
 /// Inspect the editable package resources without inventing a special host API for this plugin.
 fn language_package() -> Package {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/markdown");
+    let root = crate::test_packages::root("markdown");
     let mut files = BTreeMap::new();
     for path in [
         "manifest.json",
@@ -61,15 +61,12 @@ fn language_package() -> Package {
 
 /// A delivered guest parses unsaved prose and the host displays the native split without disk reads.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_preview_tracks_unsaved_native_edits_and_reclaims_split(
     cx: &mut TestAppContext,
 ) {
     use super::composable_tests::{publish, pump};
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/markdown.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("markdown")).unwrap();
     assert!(
         package.manifest.component.is_some(),
         "the preview requires the independently built guest"

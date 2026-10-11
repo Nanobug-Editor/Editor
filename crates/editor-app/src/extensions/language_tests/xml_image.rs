@@ -5,7 +5,7 @@ use gpui_kit::VisualTestContext;
 
 /// Install, revoke and reinstall each actual package without a plugin-to-plugin dependency.
 #[gpui::test]
-#[ignore = "build current xml and svg packages with scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn xml_and_image_packages_share_unsaved_svg_and_independent_lifecycles(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -27,12 +27,7 @@ fn xml_and_image_packages_share_unsaved_svg_and_independent_lifecycles(cx: &mut 
         },
     )
     .unwrap();
-    let package = |id: &str| {
-        Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dist/plugins/{id}.zip")),
-        )
-        .unwrap()
-    };
+    let package = |id: &str| Package::read(&crate::test_packages::archive(id)).unwrap();
     let image = package("svg");
     let xml = package("xml");
     manager

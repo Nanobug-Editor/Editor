@@ -109,8 +109,7 @@ impl EditorApp {
                     renamed_editors.push((text.editor.clone(), target.clone()));
                 }
                 if self.active_path.as_ref() == Some(&previous) {
-                    // The actor can finish before a shell repaint; renaming immediately revokes old consent paths.
-                    self.withdraw_bundled_request(cx);
+                    // Publish the renamed source identity before the next document synchronization.
                     self.active_path = Some(target);
                 }
                 renamed = true;
@@ -785,13 +784,6 @@ impl EditorApp {
         let editor = tab.text.as_ref().map(|text| text.editor.clone());
         let file_id = tab.file_id;
 
-        if editor.as_ref() != Some(&self.editor)
-            || self.active_path.as_deref() != Some(path.as_path())
-        {
-            // Revoke queued first-use installation before a different native document becomes active.
-            // Re-activating this same document preserves a permission dialog that is already on screen.
-            self.withdraw_bundled_request(cx);
-        }
         self.active_path = Some(path.clone());
         if let Some(editor) = editor {
             self.editor = editor;
@@ -907,10 +899,6 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) {
         let was_active = self.active_path.as_ref() == Some(&path);
-        if was_active {
-            // Retire the active tab's ownership before any background cutover can race its removal.
-            self.withdraw_bundled_request(cx);
-        }
         self.close_language_document(&path, cx);
         self.tabs.remove(index);
         self.sync_watched_documents();

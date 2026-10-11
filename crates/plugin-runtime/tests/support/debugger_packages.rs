@@ -1,4 +1,7 @@
 //! Real public-SDK debug packages reuse verified official bytes locally to keep acceptance offline.
+/// Only checked-in, hash-checked Package inputs are used after plugin-source removal.
+#[path = "packages.rs"]
+mod frozen_packages;
 use plugin_runtime::Package;
 use serde_json::{Value, json};
 use sha2::Digest;
@@ -10,7 +13,7 @@ use std::{
 /// Change only acquisition to the exact already verified VSIX; identity, hash and private DAG remain.
 pub fn rust_package(id: &str) -> Package {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let files = Package::read(&root.join("dist/plugins/rust-0.6.1.zip"))
+    let files = Package::read(&frozen_packages::archive("rust"))
         .unwrap()
         .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
@@ -103,8 +106,7 @@ pub fn initialization_failure_adapter(id: &str, directory: &Path) -> Package {
 
 /// Package a compiled instrument as an ordinary controlled dependency, without host test hooks.
 fn instrument(id: &str, directory: &Path, instrument_source: &str) -> Package {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut files = Package::read(&root.join("dist/plugins/rust-0.6.1.zip"))
+    let mut files = Package::read(&frozen_packages::archive("rust"))
         .unwrap()
         .files;
     let source = directory.join("fault_adapter.rs");

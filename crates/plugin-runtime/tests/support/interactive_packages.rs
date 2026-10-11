@@ -1,10 +1,12 @@
 //! Independent consumers describe the contract, never the terminal package or its private state.
+/// Only checked-in, hash-checked Package inputs are used after plugin-source removal.
+#[path = "packages.rs"]
+mod frozen_packages;
 use plugin_runtime::Package;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
     io::{Cursor, Write},
-    path::Path,
 };
 
 pub const CONTRACT: &str = "interactive.execute";
@@ -149,12 +151,9 @@ pub fn provider_methods() -> Value {
 
 /// An independently packaged provider that declares exactly what this host calls.
 pub fn provider(id: &str) -> Package {
-    let files = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let files = Package::read(&frozen_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
     manifest["name"] = json!(id);
@@ -195,12 +194,9 @@ pub fn debug_provides(omit: &[&str]) -> Value {
 
 /// An independently packaged debug provider that declares the host's own shape.
 pub fn debug_provider(id: &str, omit: &[&str]) -> Package {
-    let files = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let files = Package::read(&frozen_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
     manifest["name"] = json!(id);
@@ -218,12 +214,9 @@ pub fn debug_provider(id: &str, omit: &[&str]) -> Package {
 /// The example guest already knows how to call a contract by name, so this only states what it is
 /// allowed to open; it is a real package built from the public SDK, not a stub.
 pub fn session_consumer(id: &str) -> Package {
-    let files = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let files = Package::read(&frozen_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
     manifest["name"] = json!(id);
@@ -335,12 +328,9 @@ pub fn archive(files: BTreeMap<String, Vec<u8>>, manifest: Value) -> Package {
 
 /// The same SDK guest calls any selected implementation, including a separately packaged alternative.
 pub fn fixture(id: &str, provider: bool, execution: bool) -> Package {
-    let files = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let files = Package::read(&frozen_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
     manifest["name"] = json!(id);

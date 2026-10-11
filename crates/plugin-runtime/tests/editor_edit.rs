@@ -1,4 +1,7 @@
 //! Selection edits and source toolbars cross an independently named actual SDK package boundary.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api, ui::Kind},
@@ -13,8 +16,7 @@ use std::{
 fn package(
     edit: impl FnOnce(&mut Value, &mut BTreeMap<String, Vec<u8>>),
 ) -> anyhow::Result<Package> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let mut files = Package::read(&path)?.files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"])?;
     manifest["id"] = json!("edit-fixture");
@@ -68,7 +70,7 @@ fn toolbar_package(
 
 /// Unknown asset metadata cannot opt an independent guest into host-owned footer behavior.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn legacy_toolbar_asset_cannot_publish_a_host_toggle() {
     let package = toolbar_package(|_, files| {
         let mut document: Value = serde_json::from_slice(&files["composed-ui.json"]).unwrap();
@@ -113,7 +115,7 @@ fn preview(manager: &mut Manager) -> anyhow::Result<()> {
 
 /// The independent package can negotiate editor.edit without any Markdown-specific host dependency.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn edit_capability_negotiates_on_independent_real_guest() {
     let package = package(|_, _| {}).unwrap();
     let root = tempfile::tempdir().unwrap();
@@ -126,7 +128,7 @@ fn edit_capability_negotiates_on_independent_real_guest() {
 
 /// Explicit target versions and UTF-8 byte selections survive asynchronous SDK request/completion routing.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn edit_requests_use_their_own_capability_and_preserve_target_and_byte_ranges() {
     let package = package(|_, _| {}).unwrap();
     let root = tempfile::tempdir().unwrap();
@@ -197,7 +199,7 @@ fn edit_requests_use_their_own_capability_and_preserve_target_and_byte_ranges() 
 
 /// A malformed edit is refused before a host request handle can be allocated.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn edit_requests_reject_inverted_ranges_and_oversized_replacements() {
     let package = package(|_, _| {}).unwrap();
     let root = tempfile::tempdir().unwrap();
@@ -254,7 +256,7 @@ fn edit_requests_reject_inverted_ranges_and_oversized_replacements() {
 
 /// An independently named WASM guest negotiates and routes a toolbar through its owning editor panel.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn toolbar_capability_negotiates_and_routes_source_bound_native_events() {
     use plugin_runtime::plugin_protocol::ui::{Action, UiEvent};
     let package = toolbar_package(|_, _| {}).unwrap();
@@ -300,7 +302,7 @@ fn toolbar_capability_negotiates_and_routes_source_bound_native_events() {
 
 /// A source version alone never grants the capability to publish controls above the editor.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn toolbar_publication_requires_its_own_negotiated_capability() {
     let package = toolbar_package(|manifest, _| {
         manifest["api"]["required"]
@@ -327,7 +329,7 @@ fn toolbar_publication_requires_its_own_negotiated_capability() {
 
 /// Reading and replacing selections require distinct grants and never borrow application editor authority.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn edit_requests_require_capability_workspace_and_the_matching_read_write_grant() {
     for case in ["capability", "read", "write", "application"] {
         let package = package(|manifest, _| match case {
@@ -400,7 +402,7 @@ fn edit_requests_require_capability_workspace_and_the_matching_read_write_grant(
 
 /// Revoking a queued range edit seals the shared side-effect gate and discards late completion data.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn edit_cancellation_and_retirement_block_pending_range_writes() {
     let package = package(|_, _| {}).unwrap();
     let root = tempfile::tempdir().unwrap();
@@ -446,7 +448,7 @@ fn edit_cancellation_and_retirement_block_pending_range_writes() {
 
 /// Additional drawing and text capabilities apply equally to toolbar descendants and preview content.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn toolbar_nodes_share_negotiated_capability_checks() {
     for kind in [
         json!({"type":"rich_text","html":"<p>你好</p>"}),
@@ -483,7 +485,7 @@ fn toolbar_nodes_share_negotiated_capability_checks() {
 
 /// Negotiating toolbar controls never creates preview read authority or cross-panel ownership.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn toolbar_preview_admission_and_ingress_preserve_scope_permissions_and_panel_ownership() {
     for case in ["read", "application"] {
         let error = toolbar_package(|manifest, _| {
@@ -542,7 +544,7 @@ fn toolbar_preview_admission_and_ingress_preserve_scope_permissions_and_panel_ow
 
 /// Closing overlays preserves the source-bound toolbar and dismisses only the current modal target.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn toolbar_overlay_dismissal_preserves_source_and_modal_priority() {
     use plugin_runtime::plugin_protocol::ui::{Action, UiEvent};
     let package = toolbar_package(|manifest, files| {

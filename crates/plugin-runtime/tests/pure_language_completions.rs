@@ -1,4 +1,7 @@
 //! Real public SDK guest packages exercise pure authority, result validation and provider retirement.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{
@@ -8,17 +11,11 @@ use plugin_runtime::{
     },
 };
 use serde_json::json;
-use std::{
-    io::{Cursor, Write},
-    path::PathBuf,
-};
+use std::io::{Cursor, Write};
 
 /// Repackage the formal independent fixture with a novel provider; package inspection remains the gate.
 fn package(read: bool, capability: bool) -> anyhow::Result<Package> {
-    let original = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )?;
+    let original = Package::read(&test_packages::archive("capability-example"))?;
     let mut manifest = serde_json::to_value(&original.manifest)?;
     manifest["api"]["required"]["language.lsp"] = json!("^1");
     manifest["api"]["required"]["process"] = json!("^1");
@@ -66,7 +63,7 @@ fn snapshot(text: &str) -> SourceSnapshot {
 
 /// Permission/capability gates, actual denied IO, hostile replies and revocation share one installation.
 #[test]
-#[ignore = "build-capability-example.ps1 with the current host first; uses its real SDK WASM component"]
+#[ignore = "opt-in real SDK/WASM integration; uses fixed hash-checked Package fixtures"]
 fn pure_language_completion_package_enforces_authority_and_source_identity() {
     assert!(
         package(false, true).is_err(),

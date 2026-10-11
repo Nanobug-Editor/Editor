@@ -1,9 +1,11 @@
 //! Install a package built outside the repository using only the distributed editor SDK.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, ui::Kind},
 };
-use std::path::Path;
 
 /// Observe the public native view produced by the real component, not its internal guest state.
 fn panel_text<'a>(manager: &'a Manager, plugin_id: &str) -> &'a str {
@@ -21,10 +23,7 @@ fn externally_built_sdk_package_includes_readme_and_runs_through_public_manager(
     // Explicit external fixtures allow the current CLI to replace the retired SDK helper script.
     let path = std::env::var_os("NANOBUG_SDK_PACKAGE")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/plugin-sdk-test/capability-example.zip")
-        });
+        .unwrap_or_else(|| test_packages::archive("capability-example"));
     let package = Package::read(&path).expect("read the package built outside the repository");
     assert_eq!(package.manifest.protocol, 7);
     assert_eq!(

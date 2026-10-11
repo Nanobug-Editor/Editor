@@ -1,5 +1,8 @@
 //! Unified public-SDK Rust package acceptance: offline Cargo, lazy preparation, replacement and load cost.
 #![cfg(windows)]
+/// Historical migration inputs retain their exact bytes and versions, independently of the removed source trees.
+#[path = "support/packages.rs"]
+mod frozen_packages;
 #[path = "support/debugger_packages.rs"]
 mod packages;
 use plugin_runtime::{
@@ -401,8 +404,7 @@ fn debug_answer(manager: &mut Manager, request: plugin_runtime::DebugRequest) ->
 /// Use the saved pre-merge distribution, so migration covers the real 0.2.0 guest rather than an alias.
 fn legacy_debugger(id: &str) -> Package {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let old =
-        Package::read(&repo.join("target/rust-merge-baseline/rust-debugger-0.2.0.zip")).unwrap();
+    let old = Package::read(&frozen_packages::archive("rust-debugger-0.2.0")).unwrap();
     let mut manifest: Value = serde_json::from_slice(&old.files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
     manifest["services"]["adapter"]["installation"]["artifacts"][0]["source"] = json!({"kind":"local",
@@ -491,8 +493,7 @@ fn failed_replacement_restores_metadata_and_keeps_an_alternative_choice() {
 #[test]
 #[ignore = "save pre-merge 0.5.1/0.2.0 distributions; build unified rust and prepare the pinned VSIX"]
 fn compare_plugin_activation_without_language_server_or_adapter_startup() {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let language = Package::read(&repo.join("target/rust-merge-baseline/rust-0.5.1.zip")).unwrap();
+    let language = Package::read(&frozen_packages::archive("rust-0.5.1")).unwrap();
     let debug = legacy_debugger("rust-debugger");
     let unified = packages::rust_package("rust");
     for (label, packages) in [

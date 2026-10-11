@@ -9,10 +9,7 @@ use std::{
 
 /// Repackage only declarations: the actual independent guest/grammar remain the product's distributed bytes.
 fn package(novel: bool) -> plugin_runtime::Package {
-    let original = plugin_runtime::Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/xml.zip"),
-    )
-    .unwrap();
+    let original = plugin_runtime::Package::read(&crate::test_packages::archive("xml")).unwrap();
     let mut manifest = serde_json::to_value(&original.manifest).unwrap();
     manifest["language_servers"] = serde_json::json!([]);
     manifest["services"] = serde_json::json!({});

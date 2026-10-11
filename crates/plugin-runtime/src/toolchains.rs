@@ -111,7 +111,34 @@ fn expand_pattern(
 
 /// Bare tools search only absolute PATH entries; extensions are executable formats, never scripts.
 pub(crate) fn resolve(program: &str) -> anyhow::Result<PathBuf> {
-    for candidate in program_candidates(program)? {
+    resolve_in_path(program, &std::env::var_os("PATH").unwrap_or_default())
+}
+
+/// Trusted native requests resolve against the same explicit PATH their child receives.
+/// Relative entries remain excluded, and this never mutates the host process environment.
+pub(crate) fn resolve_with_environment(
+    program: &str,
+    env: &std::collections::BTreeMap<String, String>,
+) -> anyhow::Result<PathBuf> {
+    let mut paths = env.iter().filter(|(name, _)| {
+        if cfg!(windows) {
+            name.eq_ignore_ascii_case("PATH")
+        } else {
+            name.as_str() == "PATH"
+        }
+    });
+    let explicit = paths.next().map(|(_, value)| value);
+    anyhow::ensure!(paths.next().is_none(), "Ambiguous native PATH entries");
+    let ambient = std::env::var_os("PATH").unwrap_or_default();
+    resolve_in_path(
+        program,
+        explicit.map_or(ambient.as_os_str(), |value| std::ffi::OsStr::new(value)),
+    )
+}
+
+/// Canonicalize a selected executable before either pipe or PTY creation can inherit it.
+fn resolve_in_path(program: &str, path: &std::ffi::OsStr) -> anyhow::Result<PathBuf> {
+    for candidate in program_candidates_in_path(program, path)? {
         if candidate.is_file() {
             let path = candidate.canonicalize()?;
             #[cfg(windows)]
@@ -130,6 +157,14 @@ pub(crate) fn resolve(program: &str) -> anyhow::Result<PathBuf> {
 
 /// Explicit absolute paths have one candidate; bare names never consult project-relative PATH entries.
 fn program_candidates(program: &str) -> anyhow::Result<Vec<PathBuf>> {
+    program_candidates_in_path(program, &std::env::var_os("PATH").unwrap_or_default())
+}
+
+/// Explicit PATH is a list of directories, not a shell expression or an implicit cwd search.
+fn program_candidates_in_path(
+    program: &str,
+    path: &std::ffi::OsStr,
+) -> anyhow::Result<Vec<PathBuf>> {
     let requested = Path::new(program);
     let candidates = if requested.is_absolute() {
         vec![requested.to_path_buf()]
@@ -138,7 +173,7 @@ fn program_candidates(program: &str) -> anyhow::Result<Vec<PathBuf>> {
             !program.contains(['/', '\\', ':']),
             "Tool path must be absolute or a bare name"
         );
-        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        std::env::split_paths(path)
             .filter(|path| path.is_absolute())
             .flat_map(|path| {
                 let candidate = path.join(program);

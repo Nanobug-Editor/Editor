@@ -1,4 +1,7 @@
 //! Real independent SDK packages exercise opt-in code requests at the ZIP/Manager publication boundary.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{
@@ -16,8 +19,7 @@ const LANGUAGE: &str = "independent-code-language";
 
 /// Keep the actual externally built component while selecting only public declarations and its UI asset.
 fn package(edit: impl FnOnce(&mut Value, &mut Value)) -> Package {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let mut files = Package::read(&path).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(PLUGIN);
@@ -129,7 +131,7 @@ fn refusal(result: anyhow::Result<()>, expected: ErrorCode) {
 
 /// Legacy code remains inert without opting in or acquiring document/highlighting authority.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_defaults_to_inert_without_extra_grants() {
     let package = package(|manifest, document| {
         manifest["api"]["required"]
@@ -170,7 +172,7 @@ fn code_highlighting_defaults_to_inert_without_extra_grants() {
 
 /// A legal owned request preserves readable text even when no package contributes its language highlighter.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_publishes_without_a_language_provider() {
     let package = package(|_, _| {});
     let (_root, mut manager) = install(&package);
@@ -200,7 +202,7 @@ fn code_highlighting_publishes_without_a_language_provider() {
 
 /// A real bound opt-in publication cannot borrow the older rich-text capability as highlighting authority.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_opt_in_requires_its_negotiated_capability() {
     let package = package(|manifest, _| {
         manifest["api"]["required"]
@@ -221,7 +223,7 @@ fn code_highlighting_opt_in_requires_its_negotiated_capability() {
 
 /// The public input gate protects unsaved code before it can reach an ungranted guest.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_source_requires_editor_read() {
     let package = package(|manifest, _| {
         manifest["permissions"] = json!(["assets.read"]);
@@ -252,7 +254,7 @@ fn code_highlighting_source_requires_editor_read() {
 
 /// Read grants and the capability do not make a right-hand panel or an application instance a workspace preview.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_source_requires_an_owned_workspace_editor_panel() {
     for application in [false, true] {
         let package = package(|manifest, _| {
@@ -277,7 +279,7 @@ fn code_highlighting_source_requires_an_owned_workspace_editor_panel() {
 
 /// A guest's ordinary command cannot manufacture code authority by opting in without any source.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_opt_in_without_source_is_not_published() {
     let package = package(|_, _| {});
     let (_root, mut manager) = install(&package);
@@ -287,7 +289,7 @@ fn code_highlighting_opt_in_without_source_is_not_published() {
 
 /// Opt-in is additive: the original CodeBlock rendering contract must still be negotiated independently.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_does_not_replace_the_richtext_capability() {
     let package = package(|manifest, _| {
         manifest["api"]["required"]
@@ -306,7 +308,7 @@ fn code_highlighting_does_not_replace_the_richtext_capability() {
 
 /// Even a currently empty code scene must negotiate both contracts before opting in.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_text_scene_still_requires_richtext() {
     let package = package(|manifest, document| {
         manifest["api"]["required"]
@@ -326,7 +328,7 @@ fn code_highlighting_text_scene_still_requires_richtext() {
 
 /// Real WASM output cannot revive an edited, closed or reopened source merely because a path/revision matches.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn code_highlighting_late_publication_cannot_reclaim_changed_source() {
     let original = source();
     for next in [

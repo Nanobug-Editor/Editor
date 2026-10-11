@@ -1,4 +1,4 @@
-//! Fresh native installations exercise the shipped catalog, public Manager and real consent gestures.
+//! Fresh native installations ignore old bundle files; explicit consent still exercises public Manager and native controls.
 use super::super::harness::NativeMarkdown;
 use super::*;
 use gpui_kit::VisualTestContext;
@@ -15,7 +15,7 @@ pub(super) fn archive(package: &Package) -> Vec<u8> {
     zip.finish().unwrap().into_inner()
 }
 
-/// Test catalogs have an isolated location admitted only by cfg(test); production ignores project paths.
+/// Retain old bundle files as upgrade input; the source-free host must ignore them completely.
 pub(super) fn catalog(directory: &Path, bytes: &[u8], extension: &str) {
     let root = directory.join(".bundled-plugin-test");
     std::fs::create_dir_all(&root).unwrap();
@@ -98,42 +98,30 @@ impl Fresh {
             });
             for work in work {
                 match work {
-                    Work::InspectBundle(request) => {
-                        let token = request.token;
-                        let result = bundled::prepare_offer(&mut self.native.manager, &request)
-                            .map_err(|error| format!("{error:#}"));
-                        ui.update(|_, cx| {
-                            self.native
-                                .app
-                                .read(cx)
-                                .extensions
-                                .read(cx)
+                    Work::Install(package) => {
+                        let (trusted, control) = ui.update(|_, cx| {
+                            let owner = self.native.app.read(cx).extensions.read(cx);
+                            let trusted = owner
+                                .worker
+                                .trusted
+                                .load(std::sync::atomic::Ordering::Acquire);
+                            let control = owner
                                 .worker
                                 .state
                                 .lock()
                                 .unwrap()
-                                .bundle_reply = Some(bundled::Reply { token, result })
+                                .install_control
+                                .clone()
+                                .unwrap_or_default();
+                            (trusted, control)
                         });
-                    }
-                    Work::InstallBundle(candidate) => {
-                        let trusted = ui.update(|_, cx| {
-                            self.native
-                                .app
-                                .read(cx)
-                                .extensions
-                                .read(cx)
-                                .worker
-                                .trusted
-                                .load(std::sync::atomic::Ordering::Acquire)
-                        });
-                        if trusted
-                            && bundled::validate_candidate(&self.native.manager, &candidate).is_ok()
-                        {
+                        if trusted {
                             self.native
                                 .manager
-                                .install(
-                                    candidate.package.as_ref(),
-                                    candidate.package.manifest.permissions.clone(),
+                                .install_with_control(
+                                    &package,
+                                    package.manifest.permissions.clone(),
+                                    &control,
                                 )
                                 .unwrap();
                             language_tests::publish_languages(
@@ -149,12 +137,6 @@ impl Fresh {
                             state.installation = None;
                             state.install_control = None;
                         });
-                    }
-                    Work::DeclineBundle(candidate) => {
-                        self.native
-                            .manager
-                            .record_bundle_decline(&candidate.package.manifest.id)
-                            .unwrap();
                     }
                     Work::SetTrust(trusted) => {
                         self.native.manager.set_workspace_trust(trusted).unwrap()
@@ -193,7 +175,24 @@ impl Fresh {
         }
     }
 
-    /// Open through the explorer/tab path while leaving the production inspection request queued.
+    /// The existing native permission builder receives an explicitly inspected local import, never a file-open offer.
+    pub(super) fn request_import(&self, bytes: &[u8], ui: &mut VisualTestContext) {
+        let package = Arc::new(Package::from_bytes(bytes).unwrap());
+        ui.update(|window, cx| {
+            self.native
+                .app
+                .read(cx)
+                .extensions
+                .clone()
+                .update(cx, |panel, cx| {
+                    panel.open_install_dialog(package, window, cx);
+                });
+        });
+        ui.run_until_parked();
+        ui.update(|window, cx| window.draw(cx).clear(cx));
+    }
+
+    /// Open through the real explorer/tab path; no package request may be created by source activation.
     pub(super) fn open(&mut self, name: &str, ui: &mut VisualTestContext) {
         let path = self.native.directory.path().join(name);
         ui.update(|window, cx| {
@@ -205,7 +204,7 @@ impl Fresh {
         self.settle(ui);
     }
 
-    /// Inspect the real Base overlay inside the editor Root, without setting a pending package in the test.
+    /// Observe the real Base consent overlay for the explicit import in the editor Root.
     pub(super) fn consent(&self, ui: &mut VisualTestContext) -> bool {
         ui.debug_bounds("plugin-install-consent").is_some()
     }
@@ -254,12 +253,9 @@ impl Fresh {
 
 /// Reuse the actual external SDK component with a native preview declaration for any unfamiliar extension.
 pub(super) fn independent_preview(extension: &str) -> Package {
-    let mut files = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-sdk-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let mut files = Package::read(&crate::test_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = serde_json::json!("bundled-opaque-preview");
     manifest["settings_hook"] = serde_json::json!(false);
@@ -305,6 +301,5 @@ pub(super) fn independent_preview(extension: &str) -> Package {
 
 /// Read the physically delivered SDK-built ZIP; all UI tests are opt-in until that artifact exists.
 pub(super) fn delivered() -> Vec<u8> {
-    std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/markdown.zip"))
-        .unwrap()
+    std::fs::read(crate::test_packages::archive("markdown")).unwrap()
 }

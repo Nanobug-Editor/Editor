@@ -278,14 +278,15 @@ fn project_rust_registry(workspace: &Workspace) -> PathBuf {
     // This fixture exercises declaration and scope resolution; grammar is already validated below.
     std::fs::write(
         package.join("plugin.toml"),
-        include_str!("../../../../../plugins/rust/plugin.toml")
+        &crate::test_packages::text("rust", "plugin.toml")
             .replace("file_icons = \"icons.json\"", ""),
     )
     .unwrap();
     let installed = plugin_runtime::Installed {
         replaced_by: None,
-        manifest: crate::extensions::test_manifest(include_str!(
-            "../../../../../plugins/rust/manifest.json"
+        manifest: crate::extensions::test_manifest(&crate::test_packages::text(
+            "rust",
+            "manifest.json",
         )),
         digest,
         grants: Default::default(),

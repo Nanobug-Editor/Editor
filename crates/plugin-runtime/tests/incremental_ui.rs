@@ -1,4 +1,7 @@
 //! Delivered incremental scenes use the public installed-package and revision admission boundary.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api},
@@ -6,14 +9,11 @@ use plugin_runtime::{
 
 /// Removing negotiation from the same independent guest rejects its first incremental activation.
 #[test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn incremental_scene_requires_explicit_capability() {
     use std::io::{Cursor, Write};
     let root = tempfile::tempdir().unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/markdown.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("markdown")).unwrap();
     let mut files = package.files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["api"]["required"]
@@ -44,13 +44,10 @@ fn incremental_scene_requires_explicit_capability() {
 
 /// One paragraph replacement preserves the rendered tail, then a hidden preview pauses derived content.
 #[test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_incremental_scene_restores_content_and_suspends_hidden_derivation() {
     let root = tempfile::tempdir().unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/markdown.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("markdown")).unwrap();
     let mut manager = Manager::open(
         root.path().join("plugins"),
         Environment {

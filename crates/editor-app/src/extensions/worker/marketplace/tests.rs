@@ -3,9 +3,28 @@ use super::*;
 use crate::extensions::market_test_server::Server;
 use std::io::Write;
 use std::sync::atomic::Ordering;
+mod delivery;
 mod official;
 mod updates;
 mod wasm_updates;
+
+/// A recorded UI actor stays inert for ambient startup checks but keeps real controlled HTTP coverage.
+#[test]
+fn recorded_ui_transport_isolates_ambient_market_checks() {
+    let server = Server::new();
+    let home = tempfile::tempdir().unwrap();
+    let worker = Worker::start(home.path().join("runtime"), Environment::default(), true);
+    let cache = home.path().join("catalog.json");
+    worker.refresh_market(
+        cache.clone(),
+        plugin_runtime::marketplace::CATALOG_URL.into(),
+    );
+    assert_eq!(worker.state.lock().unwrap().market.generation(), 0);
+    worker.refresh_market(cache, format!("{}/catalog.json", server.url));
+    wait(&worker, |state| state.market.fresh());
+    assert!(server.requests.load(Ordering::Acquire) > 0);
+    assert!(!worker.state.lock().unwrap().ready);
+}
 
 /// The catalog may arrive before manager recovery; a genuine unstarted actor cannot authorize installs.
 #[test]

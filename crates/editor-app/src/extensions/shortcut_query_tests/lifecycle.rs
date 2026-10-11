@@ -155,7 +155,7 @@ fn save_document(visual: &mut VisualTestContext, fixture: &Fixture, keys: &str, 
 
 /// Retirement refreshes an open catalog/draft, retains settings, and restores only live commands.
 #[gpui::test]
-#[ignore = "build the real SDK fixture with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn shortcuts_real_plugin_lifecycle_disable_removes_open_rows(cx: &mut TestAppContext) {
     with_plugin(cx, false, |visual, fixture| {
         rebind(
@@ -241,7 +241,7 @@ fn shortcuts_real_plugin_lifecycle_disable_removes_open_rows(cx: &mut TestAppCon
 
 /// Exact and prefix conflicts pause returning plugins without stealing an existing save key.
 #[gpui::test]
-#[ignore = "build the real SDK fixture with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn shortcuts_real_plugin_lifecycle_restoration_conflicts_require_decision(cx: &mut TestAppContext) {
     with_plugin(cx, true, |visual, fixture| {
         for (plugin_keys, native_key) in [("ctrl-alt-v", "ctrl-alt-v"), ("ctrl-j ctrl-v", "ctrl-j")]
@@ -310,7 +310,7 @@ fn shortcuts_real_plugin_lifecycle_restoration_conflicts_require_decision(cx: &m
 
 /// Same-digest replacement retires waiting/deferred/queued commands, and restriction cannot restart it.
 #[gpui::test]
-#[ignore = "build the real SDK fixture with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn shortcuts_real_plugin_lifecycle_epochs_and_restricted_workspace(cx: &mut TestAppContext) {
     with_plugin(cx, false, |visual, fixture| {
         // Actual guest text proves the command ran, independently of the host revealing its panel.

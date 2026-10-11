@@ -8,7 +8,7 @@ use std::io::Cursor;
 
 /// Layout buttons and provider recovery preserve dirty text, selection and native Undo/Redo.
 #[gpui::test]
-#[ignore = "build actual independent fixture with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn real_layout_packages_preserve_native_edits_and_explicit_provider_choice(
     cx: &mut TestAppContext,
 ) {
@@ -208,7 +208,7 @@ fn image_views_withdraw_files_before_svg(
     manager: &mut Manager,
     visual: &mut VisualTestContext,
 ) {
-    let image_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/svg.zip");
+    let image_path = crate::test_packages::archive("svg");
     for (id, name) in [("image-a", "A Image"), ("image-b", "B Image")] {
         let package = identify(Package::read(&image_path).unwrap(), id, name);
         manager

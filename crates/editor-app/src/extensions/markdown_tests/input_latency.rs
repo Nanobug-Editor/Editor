@@ -5,7 +5,7 @@ use harness::NativeMarkdown;
 /// Compare identical mixed Markdown as plain text and as a highlighted source document.
 /// Keep background draining separate: its wall time is diagnostic, not a claimed input-thread stall.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_input_to_frame_latency(cx: &mut TestAppContext) {
     let source = include_str!("../../../../../documentation/en/sdk/ui.md")
         .lines()

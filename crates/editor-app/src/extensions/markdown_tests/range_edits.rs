@@ -7,12 +7,9 @@ use std::io::{Cursor, Write};
 
 /// Only the declared capabilities change; WASM dispatch remains the independently built public example.
 fn edit_peer() -> Package {
-    let mut files = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap()
-    .files;
+    let mut files = Package::read(&crate::test_packages::archive("capability-example"))
+        .unwrap()
+        .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["api"]["required"]["editor.edit"] = serde_json::json!("^1");
     files.insert(
@@ -77,7 +74,7 @@ fn execute(
 
 /// Malformed or obsolete offsets must produce typed failures without editing or consuming undo history.
 #[gpui::test]
-#[ignore = "build markdown and current capability-example through the public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_range_edits_guard_utf8_selection_revision_and_cancellation(cx: &mut TestAppContext) {
     let original = "甲😀乙\n第二行";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);

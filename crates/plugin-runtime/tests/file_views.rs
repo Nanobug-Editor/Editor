@@ -1,17 +1,19 @@
 //! Real Image packages exercise file-only authority through the public manager.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     ImageState, Manager, Package,
     plugin_protocol::{Environment, api, ui},
 };
 use std::{
     io::{Cursor, Write},
-    path::Path,
     time::{Duration, Instant},
 };
 
 /// An image consumer cannot publish visual viewports without negotiating the public capability.
 #[test]
-#[ignore = "build current Image package with scripts/build-plugins.ps1 -Packages svg first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn visual_viewport_requires_negotiation_for_every_provider() {
     let workspace = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
@@ -53,9 +55,9 @@ fn visual_viewport_requires_negotiation_for_every_provider() {
 
 /// An alternative package identity proves that file routing does not depend on a bundled ID.
 fn image_package(id: &str, viewport: bool) -> Package {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/svg.zip");
+    let path = test_packages::archive("svg");
     let mut files = Package::read(&path)
-        .expect("build Image with build-plugins.ps1 -Packages svg")
+        .expect("frozen Image package must match its recorded digest")
         .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = id.into();
@@ -104,7 +106,7 @@ fn ready(manager: &mut Manager, key: &str) -> std::sync::Arc<Vec<u8>> {
 
 /// Closing, retrying, replacing and revoking a viewer all retain exact file-resource ownership.
 #[test]
-#[ignore = "build current Image package with scripts/build-plugins.ps1 -Packages svg first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn image_file_resources_follow_public_file_context_and_permissions() {
     let workspace = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();

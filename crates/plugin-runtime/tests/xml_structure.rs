@@ -1,4 +1,7 @@
 //! The shipped XML component supplies structure through public Manager, without a native LSP.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api::DocumentVersion, language::SourceSnapshot},
@@ -6,16 +9,12 @@ use plugin_runtime::{
 use serde_json::json;
 use std::{
     io::{Cursor, Write},
-    path::PathBuf,
     sync::Arc,
 };
 
 /// Keep the actual WASM/resources but remove process declarations; structure must be an independent capability.
 fn structure_package() -> Package {
-    let original = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/xml.zip"),
-    )
-    .unwrap();
+    let original = Package::read(&test_packages::archive("xml")).unwrap();
     let mut manifest = serde_json::to_value(&original.manifest).unwrap();
     manifest["language_servers"] = json!([]);
     manifest["services"] = json!({});

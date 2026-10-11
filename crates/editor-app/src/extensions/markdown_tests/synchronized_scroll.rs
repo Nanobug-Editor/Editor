@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// Compare source and preview content after actual source wheel input, not two internal offsets.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_source_scroll_reveals_the_corresponding_native_block(
     cx: &mut TestAppContext,
 ) {
@@ -144,7 +144,7 @@ fn assert_source_matches_preview(fixture: &NativeMarkdown, ui: &mut gpui_kit::Vi
 
 /// The visible chain has the same Base keyboard behavior and workspace restoration as mode buttons.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_sync_scroll_control_remembers_workspace_and_withdraws_on_disable(
     cx: &mut TestAppContext,
 ) {
@@ -231,7 +231,7 @@ fn delivered_markdown_sync_scroll_control_remembers_workspace_and_withdraws_on_d
 
 /// The last manual source driver survives a delayed tall image, table layout, wrapping and divider reflow.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_sync_scroll_refreshes_image_table_wrap_and_divider_geometry(
     cx: &mut TestAppContext,
 ) {
@@ -360,14 +360,10 @@ fn delivered_markdown_sync_scroll_refreshes_image_table_wrap_and_divider_geometr
 
 /// A valid independent SDK panel can expose and disable synchronization without optional presentation icons.
 #[gpui::test]
-#[ignore = "verify the current public SDK with scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn independent_viewport_without_tools_adds_no_host_functions(cx: &mut TestAppContext) {
     use serde_json::json;
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     let mut files = package.files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!("independent-viewport");
@@ -441,7 +437,7 @@ fn independent_viewport_without_tools_adds_no_host_functions(cx: &mut TestAppCon
 
 /// Revoking a source observer ends its pointer ownership even when release occurs in an ordinary file.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_sync_scroll_hidden_source_does_not_keep_a_released_pointer(
     cx: &mut TestAppContext,
 ) {
@@ -470,7 +466,7 @@ fn delivered_markdown_sync_scroll_hidden_source_does_not_keep_a_released_pointer
 
 /// Edits, switches, closes and retirement seal genuine reverse-scroll requests before host execution.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_sync_scroll_late_locations_cannot_follow_changed_or_retired_sources(
     cx: &mut TestAppContext,
 ) {

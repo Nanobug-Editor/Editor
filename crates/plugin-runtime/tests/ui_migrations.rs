@@ -1,4 +1,7 @@
 //! Delivered UI packages cross the same installed-package and addressed-event boundary as third parties.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, Paint, api, ui},
@@ -6,10 +9,7 @@ use plugin_runtime::{
 use std::path::Path;
 
 fn package(id: &str) -> Package {
-    Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../dist/plugins/{id}.zip")),
-    )
-    .unwrap()
+    Package::read(&test_packages::archive(id)).unwrap()
 }
 fn manager(root: &Path) -> Manager {
     Manager::open(
@@ -72,7 +72,7 @@ fn svg_preview(manager: &mut Manager, document: Option<api::DocumentVersion>, te
 
 /// No native permission is needed for snapshots, counters, notes or standard controls.
 #[test]
-#[ignore = "build example and svg packages through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn example_installs_without_grants_and_restores_notes_and_count() {
     let package = package("example");
     assert_eq!(package.manifest.protocol, 7);
@@ -136,7 +136,7 @@ fn example_installs_without_grants_and_restores_notes_and_count() {
 const SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"100\"><circle r=\"30\"/></svg>";
 /// Memory text is explicitly authorized and echoed with the exact source identity, never read from disk.
 #[test]
-#[ignore = "build example and svg packages through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn svg_uses_versioned_memory_and_discards_obsolete_content() {
     let package = package("svg");
     assert!(
@@ -290,7 +290,7 @@ fn svg_uses_versioned_memory_and_discards_obsolete_content() {
 
 /// Quotas apply to the complete split scene; an oversized preview must leave its editor and guest alive.
 #[test]
-#[ignore = "build markdown through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn markdown_composed_quota_preserves_editor_and_recovers_after_shortening() {
     let package = package("markdown");
     let root = tempfile::tempdir().unwrap();

@@ -3,7 +3,7 @@ use super::*;
 
 /// A late body cannot replace a freshly loaded image from a newer source revision with the same node/URI.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn ui_images_revision_changes_discard_late_http_completion() {
     let server = PausedServer::new();
     let mut harness = Harness::new(vec![image("picture", &server.url())], &["network.images"]);
@@ -38,7 +38,7 @@ fn ui_images_revision_changes_discard_late_http_completion() {
 
 /// Save As can change a source path without editing text; relative resources must retire on that identity change.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn ui_images_document_path_change_retires_same_revision_resources() {
     let mut harness = Harness::new(vec![image("picture", "photo.png")], &["workspace.read"]);
     std::fs::write(harness.workspace.join("notes/photo.png"), b"old-location").unwrap();
@@ -77,7 +77,7 @@ fn ui_images_document_path_change_retires_same_revision_resources() {
 
 /// Closing a document retires its images before a guest can emit the next empty preview.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn ui_images_document_close_and_disable_cancel_consumers() {
     let server = PausedServer::with_paused(2);
     let mut harness = Harness::new(vec![image("picture", &server.url())], &["network.images"]);
@@ -123,7 +123,7 @@ fn ui_images_document_close_and_disable_cancel_consumers() {
 
 /// Parked instances do not publish a late image into the selected workspace or borrow its root.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn ui_images_workspace_switch_retires_old_publication() {
     let server = PausedServer::new();
     let mut harness = Harness::new(vec![image("picture", &server.url())], &["network.images"]);
@@ -158,7 +158,7 @@ fn ui_images_workspace_switch_retires_old_publication() {
 
 /// The production 30-second deadline seals failure before a delayed HTTP body can publish success.
 #[test]
-#[ignore = "build current capability-example through the host SDK first; exercises the real 30s deadline"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md; exercises the real 30s deadline"]
 fn ui_images_http_deadline_is_terminal_for_late_bodies() {
     let server = PausedServer::new();
     let mut harness = Harness::new(vec![image("picture", &server.url())], &["network.images"]);

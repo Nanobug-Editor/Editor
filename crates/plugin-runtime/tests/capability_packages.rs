@@ -1,4 +1,7 @@
 //! Package-boundary checks for capability negotiation before any guest can run.
+/// Only checked-in, hash-checked Package inputs are used after plugin-source removal.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::Package;
 use serde_json::json;
 use std::io::{Cursor, Write};
@@ -65,11 +68,10 @@ fn incompatible_required_capabilities_and_base_versions_are_rejected_at_inspecti
 
 /// Run the independently compiled component through the real package manager boundary.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn capability_guest_installs_reads_assets_displays_fallback_and_uninstalls() {
     use plugin_runtime::{Manager, plugin_protocol::Environment};
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let package = Package::read(&path).expect("read independently built package");
     let directory = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(directory.path().into(), Environment::default()).unwrap();
@@ -111,11 +113,10 @@ fn capability_guest_installs_reads_assets_displays_fallback_and_uninstalls() {
 
 /// Repack the same real guest: an undeclared permission or interface must fail at its actual call.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn capability_guest_cannot_borrow_undeclared_permissions_or_interfaces() {
     use plugin_runtime::{Manager, plugin_protocol::Environment};
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let original = Package::read(&path).unwrap();
     for (remove_permission, expected) in [
         (

@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "measured_at": "2026-10-11T07:53:39Z",
+  "plugins": [
+    {
+      "id": "html",
+      "total": 2,
+      "versions": [
+        {
+          "version": "0.3.1",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "id": "javascript",
+      "total": 2,
+      "versions": [
+        {
+          "version": "0.3.1",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "id": "markdown",
+      "total": 2,
+      "versions": [
+        {
+          "version": "0.17.1",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "id": "rust",
+      "total": 2,
+      "versions": [
+        {
+          "version": "0.6.1",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "id": "svg",
+      "total": 2,
+      "versions": [
+        {
+          "version": "0.6.1",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "id": "toml",
+      "total": 2,
+      "versions": [
+        {
+          "version": "0.2.3",
+          "downloads": 2
+        }
+      ]
+    },
+    {
+      "id": "xml",
+      "total": 2,
+      "versions": [
+        {
+          "version": "0.2.2",
+          "downloads": 2
+        }
+      ]
+    }
+  ]
+}

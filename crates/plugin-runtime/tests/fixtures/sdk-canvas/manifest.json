@@ -1,0 +1,20 @@
+{
+  "id": "sdk-canvas-fixture",
+  "name": "SDK canvas regression fixture",
+  "version": "1.0.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "editor.documents": "^1",
+      "editor.layout": "^1",
+      "ui.native": ">=1.1,<2",
+      "ui.panels": "^1",
+      "ui.canvas": "^1"
+    }
+  },
+  "component": "sdk-canvas-fixture.wasm",
+  "permissions": ["editor.read", "ui.panels"],
+  "panels": [{"id": "welcome", "title": "Canvas fixture", "position": "editor", "file_extensions": ["svg"]}],
+  "storage_limit": 1024
+}

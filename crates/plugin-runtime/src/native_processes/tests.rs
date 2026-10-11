@@ -2,6 +2,107 @@
 
 use super::*;
 
+/// A trusted literal launch resolves its explicitly supplied PATH for both transports without
+/// changing the host environment; the normal trust gate still rejects the same request first.
+#[test]
+#[cfg(windows)]
+fn literal_launch_uses_its_owned_absolute_path_for_stdio_and_pty() {
+    let directory = tempfile::tempdir().unwrap();
+    let binary = directory.path().join("market-path-probe.exe");
+    let source = directory.path().join("probe.rs");
+    // A minimal native executable avoids copied Windows tools' adjacent MUI/runtime dependencies.
+    std::fs::write(&source, "use std::io::Write; fn main() { assert_eq!(std::env::args().nth(1).as_deref(), Some(\"literal 中文;&\")); print!(\"PATH_LITERAL_OK\"); std::io::stdout().flush().unwrap(); std::thread::sleep(std::time::Duration::from_secs(60)); }").unwrap();
+    let build = std::process::Command::new(resolve_program("rustc").unwrap())
+        .arg(&source)
+        .args(["--crate-name", "market_path_probe", "--edition=2024", "-o"])
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "native probe compilation failed: {}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let ambient = std::env::var_os("PATH");
+    for transport in [
+        Transport::Stdio,
+        Transport::Pty {
+            columns: 80,
+            rows: 24,
+            inherit_cursor: false,
+        },
+    ] {
+        let group = NativeProcessGroup::new(false);
+        let launch = NativeLaunch {
+            program: "market-path-probe.exe".into(),
+            // Literal punctuation remains one argument, and shutdown owns the live probe's retirement.
+            args: vec!["literal 中文;&".into()],
+            cwd: directory.path().display().to_string(),
+            // Windows child environments treat PATH names case-insensitively.
+            env: BTreeMap::from([("pAtH".into(), directory.path().display().to_string())]),
+            transport,
+        };
+        assert!(
+            group.launch(1, launch.clone()).is_err(),
+            "restricted authority cannot search project tools"
+        );
+        group.set_trusted(true).unwrap();
+        group.launch(1, launch).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut output = Vec::new();
+        loop {
+            for event in group.poll() {
+                match event {
+                    NativeProcessEvent::Update {
+                        update: Update::Output { bytes, .. },
+                        ..
+                    } => output.extend(bytes),
+                    NativeProcessEvent::Failed { message, .. } => {
+                        panic!("explicit PATH launch failed: {message}")
+                    }
+                    _ => {}
+                }
+            }
+            if String::from_utf8_lossy(&output).contains("PATH_LITERAL_OK") {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "owned PATH program produced no output: {:?}; output={:?}",
+                binary,
+                String::from_utf8_lossy(&output)
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        group
+            .shutdown()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
+    }
+    assert_eq!(
+        std::env::var_os("PATH"),
+        ambient,
+        "launch resolution cannot mutate global PATH"
+    );
+    assert!(
+        crate::toolchains::resolve_with_environment(
+            "market-path-probe.exe",
+            &BTreeMap::from([("PATH".into(), ".".into())])
+        )
+        .is_err(),
+        "a relative PATH entry grants no tool discovery"
+    );
+    assert!(
+        crate::toolchains::resolve_with_environment(
+            "cmd.exe",
+            &BTreeMap::from([("PATH".into(), "a".into()), ("Path".into(), "b".into())])
+        )
+        .is_err(),
+        "ambiguous Windows PATH cannot retarget resolution"
+    );
+}
+
 /// Retiring one origin must bypass diagnostic backpressure while another owned process keeps running.
 #[test]
 #[cfg(windows)]

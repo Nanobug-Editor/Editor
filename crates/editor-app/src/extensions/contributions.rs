@@ -502,9 +502,8 @@ mod tests {
     /// A differently named resource-only provider uses the same catalog and stable source identity.
     #[test]
     fn an_independent_declaration_offers_distinct_sources_without_language_rules() {
-        let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
         let example = Contribution::read(
-            &plugins.join("run-target-example"),
+            &crate::test_packages::root("run-target-example"),
             "plugin.toml",
             "run-target-example",
             &"b".repeat(64),
@@ -598,9 +597,8 @@ mod tests {
     /// JavaScript aliases resolve from the installed manifest and carry valid themed icons.
     #[test]
     fn javascript_package_resolves_extensions_and_icons() {
-        let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
         let javascript = Contribution::read(
-            &plugins.join("javascript"),
+            &crate::test_packages::root("javascript"),
             "plugin.toml",
             "javascript",
             &"a".repeat(64),
@@ -629,23 +627,37 @@ mod tests {
         assert!(language_for_path_in_catalog(&catalog, Path::new("main.js")).is_none());
     }
 
-    /// Source assets use the same validated directory format copied into each ZIP.
+    /// Fixed official Package resources retain the declaration, icon and grammar behavior after source removal.
     #[test]
     fn declarative_language_packages_expose_their_distinct_resources() {
-        let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
         let digest = "a".repeat(64);
-        let rust =
-            Contribution::read(&plugins.join("rust"), "plugin.toml", "rust", &digest).unwrap();
+        let rust = Contribution::read(
+            &crate::test_packages::root("rust"),
+            "plugin.toml",
+            "rust",
+            &digest,
+        )
+        .unwrap();
         assert_eq!(rust.manifest.language_definitions[0].id, "rust");
         assert!(!rust.assets.is_empty());
-        let toml =
-            Contribution::read(&plugins.join("toml"), "plugin.toml", "toml", &digest).unwrap();
+        let toml = Contribution::read(
+            &crate::test_packages::root("toml"),
+            "plugin.toml",
+            "toml",
+            &digest,
+        )
+        .unwrap();
         assert_eq!(toml.manifest.language_definitions[0].id, "toml");
         assert!(rust.theme.is_none() && toml.theme.is_none());
 
         // Both HTML suffixes resolve to one language and ship valid theme-specific icons.
-        let html =
-            Contribution::read(&plugins.join("html"), "plugin.toml", "html", &digest).unwrap();
+        let html = Contribution::read(
+            &crate::test_packages::root("html"),
+            "plugin.toml",
+            "html",
+            &digest,
+        )
+        .unwrap();
         assert_eq!(html.assets.len(), 2);
         assert_eq!(
             html.icons.as_ref().unwrap().icons[0].extensions,

@@ -9,10 +9,9 @@ fn pending_task(
     fixture: &mut NativeMarkdown,
     ui: &mut gpui_kit::VisualTestContext,
 ) -> plugin_runtime::EditorRequest {
-    let position = ui
-        .debug_bounds("plugin-checkbox-marker-b-2-task")
-        .unwrap()
-        .center();
+    let selector =
+        Box::leak(format!("plugin-checkbox-marker-{}", fixture.task_id(0)).into_boxed_str());
+    let position = ui.debug_bounds(selector).unwrap().center();
     ui.simulate_click(position, Default::default());
     ui.run_until_parked();
     super::super::composable_tests::pump(&mut fixture.manager, &fixture.app, ui);
@@ -55,7 +54,7 @@ fn execute(
 
 /// Rapid native typing and Chinese composition invalidate earlier task offsets rather than overwrite text.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_task_requests_reject_rapid_edits_and_preserve_ime(cx: &mut TestAppContext) {
     let original = "- [ ] 原始任务\n";
     let (mut fixture, ui) =
@@ -128,7 +127,7 @@ fn delivered_markdown_task_requests_reject_rapid_edits_and_preserve_ime(cx: &mut
 
 /// Switching/closing a source and withdrawing its plugin cancel admitted work before any text effect.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_task_requests_cannot_follow_tabs_close_or_disable(cx: &mut TestAppContext) {
     let first = "- [ ] 第一份\n";
     let second = "- [ ] 第二份\n";

@@ -3,23 +3,19 @@ use super::{
     language_editing::{open, shell},
     tag_editing::{assert_text, await_condition, await_text, text},
 };
-use crate::*;
 use gpui_kit::{TestAppContext, gpui};
 use plugin_runtime::{Package, plugin_protocol::settings::Scope};
 use serde_json::json;
 
 /// Mixed text, xml:space, indentation, attributes and empty-element styles use the current public package.
 #[gpui::test]
-#[ignore = "build current xml.zip; prepares the approved private native LemMinX service"]
+#[ignore = "requires the fixed reviewed XML Package; prepares the approved private native LemMinX service"]
 fn installed_xml_formatting_preserves_text_and_honors_project_options(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("format.xml");
     let source = "<root a=\"1\" b=\"2\"><mixed>Hello <b>world</b> !</mixed><space xml:space=\"preserve\">  中文🙂\n x  </space><empty/></root>";
     std::fs::write(&path, source).unwrap();
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/xml.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("xml")).unwrap();
     let (app, visual, mut manager) = shell(cx, directory.path(), vec![package]);
     open(&app, &path, visual);
     let server = visual.update(|_, cx| app.read(cx).language_edits.formatters["xml"].clone());

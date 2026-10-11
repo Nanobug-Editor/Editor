@@ -20,8 +20,7 @@ fn query_package(fixture: &Fixture, query: &str) -> (tempfile::TempDir, Highligh
 #[test]
 fn readonly_code_highlighting_static_injections_follow_independent_selected_wasm() {
     let fixture = Fixture::new();
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../plugins/markdown")
+    let root = crate::test_packages::root("markdown")
         .canonicalize()
         .unwrap();
     let manifest =

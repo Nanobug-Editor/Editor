@@ -215,9 +215,7 @@ mod tests {
 
     /// Register source WASM assets so tests exercise plugin parsing, not native grammars.
     fn check(language: &str, source: &str) -> (Rope, Vec<Diagnostic>) {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../plugins")
-            .join(language);
+        let root = crate::test_packages::root(language);
         crate::language::plugins::register_plugin(&root).unwrap();
         let text = Rope::from(source);
         let diagnostics = SyntaxDiagnostics::default().check(language, &text);

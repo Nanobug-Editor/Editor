@@ -1,4 +1,7 @@
 //! Real guest requests cross the same asynchronous host boundary used by the editor worker.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api, ui::Kind},
@@ -23,15 +26,11 @@ fn text(manager: &Manager, id: &str) -> String {
 
 /// Acceptance must precede execution and a correlated final result must return to the guest.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn editor_request_is_accepted_then_completed_through_the_host() {
     let root = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let id = &package.manifest.id;
     let mut manager = Manager::open(
         root.path().into(),
@@ -117,15 +116,11 @@ fn editor_request_is_accepted_then_completed_through_the_host() {
 
 /// Cancellation, deadlines and retirement seal queued callbacks before they can execute.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn cancelled_expired_and_retired_requests_cannot_publish_late_results() {
     let root = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let id = &package.manifest.id;
     let mut manager = Manager::open(
         root.path().into(),
@@ -182,15 +177,11 @@ fn cancelled_expired_and_retired_requests_cannot_publish_late_results() {
 
 /// Document notifications coalesce by identity, retain the newest revision and fail explicitly on overflow.
 #[test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn document_subscriptions_are_bounded_versioned_and_disposable() {
     let root = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let id = &package.manifest.id;
     let mut manager = Manager::open(
         root.path().into(),

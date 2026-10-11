@@ -135,14 +135,24 @@ impl Driver {
             }
             assert!(
                 Instant::now() < deadline,
-                "configuration flow timed out: {}; debug={:?}; providers={:?}",
+                "configuration flow timed out: {}; debug={:?}; providers={:?}; blocker={:?}; availability={:?}",
                 cx.update(|_, cx| app.read(cx).status.clone()),
                 manager.debug_observations(),
                 manager
                     .published_entries()
                     .iter()
                     .map(|entry| (&entry.manifest.id, &entry.error))
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>(),
+                cx.update(|_, cx| app
+                    .read(cx)
+                    .run_controls
+                    .selected()
+                    .map(|config| app.read(cx).run_controls.debug_blocker(&config.id))),
+                cx.update(|_, cx| app
+                    .read(cx)
+                    .run_controls
+                    .debug_availability()
+                    .map(str::to_owned))
             );
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -173,12 +183,9 @@ pub(crate) fn fixture<'a>(
         },
     )
     .unwrap();
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for path in [
-        repo.join("target/run-config-plugin-tree/configuration-alpha.zip"),
-        repo.join("target/run-config-plugin-tree/configuration-beta.zip"),
-    ] {
-        let package = Package::read(&path).unwrap();
+    for id in ["configuration-alpha", "configuration-beta"] {
+        // Preserve original acceptance bytes; equivalence cannot be inferred by re-identifying the generic example.
+        let package = crate::test_packages::package(id);
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();

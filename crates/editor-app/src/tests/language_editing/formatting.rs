@@ -11,10 +11,7 @@ fn installed_javascript_formatter_can_be_replaced_without_changing_analysis(
     let path = directory.path().join("sample.js");
     let source = "const answer={value:1};\n";
     std::fs::write(&path, source).unwrap();
-    let javascript = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/javascript.zip"),
-    )
-    .unwrap();
+    let javascript = Package::read(&crate::test_packages::archive("javascript")).unwrap();
     let primary = editing_fixture::package(
         "separate-analysis",
         "javascript",

@@ -18,11 +18,7 @@ fn host_command_reveals_real_panel_and_preserves_arguments(cx: &mut TestAppConte
             },
         )
         .unwrap();
-        let package = Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../../target/plugin-api-test/capability-example.zip"),
-        )
-        .unwrap();
+        let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();
@@ -217,7 +213,7 @@ fn native_panel_clicks_are_scoped_to_the_declared_surface(cx: &mut TestAppContex
     });
     let app = slot.borrow_mut().take().unwrap();
     let manifest: protocol::Manifest =
-        crate::extensions::test_manifest(include_str!("../../../../plugins/example/manifest.json"));
+        crate::extensions::test_manifest(&crate::test_packages::text("example", "manifest.json"));
     let scene =
         protocol::ui::Document::new(protocol::ui::Node::button("increment", "增加")).revision(42);
     let owner = cx.update(|window, cx| {

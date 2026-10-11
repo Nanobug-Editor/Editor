@@ -1,17 +1,16 @@
 //! Package-owned function artwork keeps its resource boundary after fixed host modes are removed.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{Manager, Package, plugin_protocol::Environment};
 use serde_json::{Value, json};
-use std::{
-    io::{Cursor, Write},
-    path::Path,
-};
+use std::io::{Cursor, Write};
 
 const ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16" fill="none" stroke="#000"/></svg>"##;
 
 /// Repack the independently built guest under a different identity through normal archive admission.
 fn package() -> Package {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let path = test_packages::archive("capability-example");
     let mut files = Package::read(&path).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!("artwork-fixture");
@@ -39,7 +38,7 @@ fn package() -> Package {
 
 /// Installed artwork rechecks bytes, quotas and resolved ownership rather than trusting an earlier inspection.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn installed_tool_icons_reject_unsafe_bytes_and_resolved_ownership_escape() {
     let package = package();
     let temp = tempfile::tempdir().unwrap();

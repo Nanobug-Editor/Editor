@@ -97,7 +97,7 @@ pub(crate) fn atomic_json(path: &Path, value: &impl Serialize) -> anyhow::Result
     file.persist(path)?;
     Ok(())
 }
-/// Load shipped packages only on first creation. Personal installation records are never copied.
+/// Initialize only the isolated development profile; existing installed records and data are retained.
 pub(crate) fn bootstrap(descriptor: &Descriptor, development_id: &str) -> anyhow::Result<()> {
     #[derive(Serialize, Deserialize)]
     struct Baseline {
@@ -136,29 +136,8 @@ pub(crate) fn bootstrap(descriptor: &Descriptor, development_id: &str) -> anyhow
         }
     }
     manager.set_workspace_trust(true)?;
-    let mut identities = BTreeSet::new();
-    for root in super::shipped_roots() {
-        if let Ok(entries) = std::fs::read_dir(root) {
-            for entry in entries {
-                let path = entry?.path();
-                if path.extension().is_some_and(|extension| extension == "zip") {
-                    let package = plugin_runtime::Package::read(&path)?;
-                    if package.manifest.id != development_id
-                        && identities.insert(package.manifest.id.clone())
-                    {
-                        println!("Preparing shipped plugin: {}", package.manifest.id);
-                        manager.install(&package, package.manifest.permissions.clone())?;
-                        if previous
-                            .as_ref()
-                            .is_some_and(|previous| previous.development == package.manifest.id)
-                        {
-                            manager.enable(&package.manifest.id)?;
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Fresh development profiles start empty; existing profiles retain installed packages and private data.
+    let identities = BTreeSet::new();
     manager.shutdown();
     atomic_json(
         &marker,

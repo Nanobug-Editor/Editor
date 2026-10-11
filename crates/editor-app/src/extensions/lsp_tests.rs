@@ -62,8 +62,7 @@ fn arbitrary_client_capabilities_reach_the_native_lsp_handshake() {
 
 /// Preserve package inspection and explicit grants while supplying the user-selected local fixture.
 pub(crate) fn package(exe: &Path, log: &Path) -> Package {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let root = crate::test_packages::archive("capability-example");
     let mut files = Package::read(&root).unwrap().files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["api"]["required"]["language.lsp"] = json!("^1");
@@ -115,7 +114,7 @@ pub(crate) fn publish(
 }
 
 #[gpui::test]
-#[ignore = "build capability-example and cargo build -p plugin-runtime --example lsp_fixture first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn installed_hook_starts_unknown_lsp_for_unsaved_open_document_and_retires_it(
     cx: &mut TestAppContext,
 ) {

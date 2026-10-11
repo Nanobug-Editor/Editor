@@ -4,7 +4,7 @@ use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
 /// The fixture must be compiled by the public host SDK before this explicit integration test.
 #[gpui::test]
-#[ignore = "build with scripts/build-capability-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn capability_package_consent_displays_native_text_and_uninstall_reclaims_panel(
     cx: &mut TestAppContext,
 ) {
@@ -16,11 +16,7 @@ fn capability_package_consent_displays_native_text_and_uninstall_reclaims_panel(
     });
     let directory = tempfile::tempdir().unwrap();
     let workspace = Workspace::open(directory.path()).unwrap();
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     let mut manager = plugin_runtime::Manager::open(
         directory.path().join("runtime"),
         protocol::Environment::default(),

@@ -2,7 +2,7 @@
 
 [English](../../en/sdk/ui.md)
 
-底栏 `Document.tools`、窗口／文件目标、包内图标、双语提示与偏好 CAS／watch 见 SDK 随附的 `TOOLS.md`。
+底栏 `Document.tools`、窗口／文件目标、包内图标、双语提示与偏好 CAS／watch 见 仓库中的 [TOOLS.md](../../../crates/plugin-protocol/TOOLS.md)。协议文档不随 SDK 导出。
 
 ## 文件中心布局（editor.layout 1.0）
 
@@ -71,11 +71,11 @@
 字体配额，IME 组合文字限制在该范围。图片变换超过绘图范围时不绘制，但仍提供输入，
 允许插件修正变换。已有图片权限与解码配额继续生效。
 
-`Document.editor_viewport` 以活动 Scroll ID 绑定源视口通知及 `Action::Viewport`。需要 `editor.viewport`、`ui.richtext`、`editor.read` 和精确 source；分栏、同步开关、来源标记、定位与撤销契约见 SDK 随附的 `VIEWPORT.md`。
+`Document.editor_viewport` 以活动 Scroll ID 绑定源视口通知及 `Action::Viewport`。需要 `editor.viewport`、`ui.richtext`、`editor.read` 和精确 source；分栏、同步开关、来源标记、定位与撤销契约见 仓库中的 [VIEWPORT.md](../../../crates/plugin-protocol/VIEWPORT.md)。
 
-`ui.code_highlighting ^1` 通过默认关闭的 `Document.code_highlighting` 请求已选动态 WASM 语言提供者高亮只读 CodeBlock；仍需 `ui.richtext`、`editor.read`、当前 source 与本实例工作区编辑区面板。缺失、失败或停用提供者降级为等宽文字，不拒绝整份合法视图。版本、取消、预算与原生主题绘制契约见 SDK 随附的 `CODE_HIGHLIGHTING.md`。
+`ui.code_highlighting ^1` 通过默认关闭的 `Document.code_highlighting` 请求已选动态 WASM 语言提供者高亮只读 CodeBlock；仍需 `ui.richtext`、`editor.read`、当前 source 与本实例工作区编辑区面板。缺失、失败或停用提供者降级为等宽文字，不拒绝整份合法视图。版本、取消、预算与原生主题绘制契约见 仓库中的 [CODE_HIGHLIGHTING.md](../../../crates/plugin-protocol/CODE_HIGHLIGHTING.md)。
 
-`ui.links ^1` 允许 `Document.link_events` 启用实际富文本链接事件 `Action::Link { uri }`；默认惰性，不在解析或绘制时打开地址。节点、UI revision、模态、禁用与实例归属门禁仍有效。事件与版本化 `editor.navigation` 请求的权限、目标及取消契约见 SDK 随附的 `NAVIGATION.md`。
+`ui.links ^1` 允许 `Document.link_events` 启用实际富文本链接事件 `Action::Link { uri }`；默认惰性，不在解析或绘制时打开地址。节点、UI revision、模态、禁用与实例归属门禁仍有效。事件与版本化 `editor.navigation` 请求的权限、目标及取消契约见 仓库中的 [NAVIGATION.md](../../../crates/plugin-protocol/NAVIGATION.md)。
 
 ## 可组合布局（清单 protocol 7）
 
@@ -131,7 +131,7 @@ SDK 提供 compact/restore。已协商增量能力的文本提供者使用首次
 `Installed::preview_mode_icon` 已移除。使用当前 SDK 将中心内容改为 `editor.layout`，
 用 `Kind::NativeEditor` 引用唯一编辑会话，省略引用即可只展示插件内容。
 `Command.toolbar`／`toolbar_icon` 同样已移除；命令继续提供菜单、快捷键与调用入口，
-插件功能按钮通过 `ui.tools` 的 `Document.tools` 提供，详见 SDK 随附的 `TOOLS.md`。
+插件功能按钮通过 `ui.tools` 的 `Document.tools` 提供，详见 仓库中的 [TOOLS.md](../../../crates/plugin-protocol/TOOLS.md)。
 Panel 与 Command 拒绝未知字段；含退役字段或要求退役能力的包明确提示更新，宿主不解释旧业务。
 有限旧显示偏好导入只写入已授权插件私有记录，不恢复旧运行协议。
 
@@ -143,7 +143,7 @@ Panel 与 Command 拒绝未知字段；含退役字段或要求退役能力的�
 不存在、不安全、超限、路径或 junction 越界均返回 `None`，不授予访客额外文件或网络权限。
 实例／场景失效撤销工具事件与资源，旧只读树可以保留绘制，但不能执行排队定位。
 
-独立 SDK 示例见 `plugins/capability-example/src/composition.rs` 与同目录 `composed-ui.json`；将示例的 `label` 配置为 `composable-ui` 可展示组合界面，`ui-layout` 命令参数 `form/canvas/combined` 切换三种布局。
+独立访客示例保留在历史源码提交 `b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5` 的 [composition.rs](https://github.com/T-miracle/Nanobug/blob/b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5/plugins/capability-example/src/composition.rs) 和 [composed-ui.json](https://github.com/T-miracle/Nanobug/blob/b77e6317bf7e3d3d3d0fe9490cabd362d266e0a5/plugins/capability-example/composed-ui.json)。该历史版本的 `label=composable-ui` 展示组合界面，`ui-layout` 参数 `form/canvas/combined` 切换布局。固定 ZIP 作为[回归夹具](../../../crates/plugin-runtime/tests/fixtures/packages/README.md)保留；当前宿主 checkout 和导出的 SDK 不再包含这份示例源码。
 
 ## 源码工具栏（editor.toolbar 1.0）
 
@@ -208,7 +208,7 @@ Panel 与 Command 拒绝未知字段；含退役字段或要求退役能力的�
 
 富文本控件必须覆盖默认链接点击与图片资源加载回调：出现 `href` 或 `src` 不自动打开浏览器，不读取本地文件、网络或 data URL，也不借用宿主加载器绕过插件权限。这一能力本身不提供链接导航、图片访问或预览写入。授权图片使用独立 Image 节点，缺少该能力时插件以替代文字表示图片。任务框通过普通原生 `Checkbox` 节点表达；只读任务应设置 `disabled=true`，不能依赖 HTML `<input>` 自动变成可交互控件。
 
-需要链接交互时另行协商 `ui.links`，显式开启 `Document.link_events`，并用 `Node.links` 提供图片外层链接与文字键盘目标。声明不会获得浏览器或文件授权；版本化事件、原生焦点与共享配额见 SDK 随附的 `NAVIGATION.md`。
+需要链接交互时另行协商 `ui.links`，显式开启 `Document.link_events`，并用 `Node.links` 提供图片外层链接与文字键盘目标。声明不会获得浏览器或文件授权；版本化事件、原生焦点与共享配额见 仓库中的 [NAVIGATION.md](../../../crates/plugin-protocol/NAVIGATION.md)。
 
 `CodeBlock.text` 是无需转义的原始代码，空白与换行按原样显示；可选 `language` 是 1–100 个 ASCII 字母、数字或 `._+-#` 的标识，允许 `c++`、`c#` 等名称。单独声明语言不启动工具或授予高亮能力；基础呈现为等宽文字，显式开启 `Document.code_highlighting` 后才经独立能力复用已选动态 WASM 高亮提供者。插件负责把业务别名归一为提供者的公开语言身份，未知或不可用语言继续显示等宽代码。
 

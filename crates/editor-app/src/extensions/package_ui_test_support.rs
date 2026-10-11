@@ -6,11 +6,8 @@ use std::io::{Cursor, Write};
 
 /// Repack one independent component under two identities through the ordinary package validator.
 pub(super) fn package(id: &str, name: &str) -> Package {
-    let package = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-layout-test/layout-example.zip"),
-    )
-    .expect("build-layout-example.ps1 first");
+    let package = Package::read(&crate::test_packages::archive("layout-example"))
+        .expect("frozen layout package must be present and match its ledger");
     identify(package, id, name)
 }
 
@@ -122,7 +119,8 @@ pub(super) fn pump(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App)
     let pixels = images::VectorRenderer::default().prepare_resources(&views, &resources);
     owner.update(cx, |owner, cx| {
         let mut state = owner.worker.state.lock().unwrap();
-        state.entries = manager.installed.values().cloned().collect();
+        // Publish recovered ownership/readiness through the same Manager projection as the real actor.
+        state.publish_manager(manager);
         state.views = views;
         state.images = pixels;
         drop(state);

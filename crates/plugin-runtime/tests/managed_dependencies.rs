@@ -1,4 +1,7 @@
 //! Install dependency plans through the same package/manager boundary used by the editor worker.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{Manager, Package, plugin_protocol::Environment};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -412,11 +415,10 @@ fn waiting_for_another_installation_is_cancellable() {
 
 /// Reinstalling an identical WASM package with a different resolved plan must preserve inactive rollback pins.
 #[test]
-#[ignore = "build capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn hook_plan_receipts_accumulate_and_dynamic_program_skips_unused_downloads() {
     let temp = tempfile::tempdir().unwrap();
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let root = test_packages::archive("capability-example");
     let mut files = Package::read(&root).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["api"]["required"]["language.lsp"] = json!("^1");

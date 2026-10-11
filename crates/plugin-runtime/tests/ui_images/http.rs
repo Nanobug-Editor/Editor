@@ -164,7 +164,9 @@ impl PausedServer {
             }
             assert!(
                 std::time::Instant::now() < deadline,
-                "image worker did not reach the controlled HTTP fixture"
+                "image worker did not reach the controlled HTTP fixture; connections={}; resources={:?}",
+                self.server.requests.load(Ordering::Acquire),
+                manager.image_resources()
             );
             thread::sleep(Duration::from_millis(5));
         }

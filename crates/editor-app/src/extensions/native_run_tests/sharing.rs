@@ -1,8 +1,9 @@
-//! Real B1 sharing, separate project-local overrides, hand edits and a pinned active launch snapshot.
+//! Current workspace-local configuration storage, literal process inputs and fail-closed reloads.
 use super::*;
 use std::time::{Duration, Instant};
 
-/// Each isolated project records its own literal argv/cwd/environment through the public terminal.
+/// The historical sharing scenario now exercises the accepted local-only contract in both workspaces.
+/// Keep literal argv/cwd/environment and pinned active execution coverage without restoring the retired selector.
 #[gpui::test]
 #[ignore = "requires a native rustc instrument; no terminal package is used"]
 fn native_shared_configuration_runs_in_two_isolated_projects(cx: &mut TestAppContext) {
@@ -29,148 +30,193 @@ fn native_shared_configuration_runs_in_two_isolated_projects(cx: &mut TestAppCon
         String::from_utf8_lossy(&build.stderr)
     );
     std::fs::copy(&executable, second.join("personal-bin/share-probe.exe")).unwrap();
-    let (mut manager, app, window) = fixture(
-        cx,
-        &first,
-        "share-probe.exe",
-        vec!["literal space".into(), "quote\"中文;&|".into()],
-    );
-    let id = window.update(|_, cx| {
-        app.update(cx, |state, _| {
-            let key = state.workspace_key();
-            let mut config = state.run_controls.selected().unwrap().clone();
-            config.directory = Some(first.display().to_string());
-            config
-                .env
-                .insert("LOCAL_VALUE".into(), "first-private".into());
-            config.tool_paths = vec![first.join("personal-bin").display().to_string()];
-            let id = config.id.clone();
-            state.run_controls.upsert(config, &key).unwrap();
-            id
-        })
-    });
-    window.update(|window, cx| {
-        app.update(cx, |state, cx| {
-            state.open_run_config_dialog(window, cx, Some(id.clone()))
-        })
-    });
-    window.run_until_parked();
-    click(window, "run-config-save-location");
-    click(window, "native-menu-shared");
-    click(window, "run-config-save");
-    assert!(window.update(|_, cx| app.read(cx).run_form.is_none()));
-    let shared_path = editor_core::project_path(&first);
-    let bytes = std::fs::read(&shared_path).unwrap();
-    let text = String::from_utf8(bytes.clone()).unwrap();
-    assert!(
-        !text.contains("first-private")
-            && !text.contains("personal-bin")
-            && !text.contains(&first.display().to_string())
-    );
-    let shared = editor_core::SharedSet::from_json(&bytes).unwrap();
-    editor_core::save_shared(&second, &shared).unwrap();
-    let mut renderer = images::VectorRenderer::default();
-    let mut launches = Vec::new();
-    click(window, "run-start");
-    wait_for_file(
-        &mut manager,
-        &app,
-        window,
-        &mut renderer,
-        &mut launches,
-        &first.join("observed.txt"),
-    );
-    let original = std::fs::read_to_string(first.join("observed.txt")).unwrap();
-    assert!(
-        original.contains("literal space")
-            && original.contains("quote\\\"中文;&|")
-            && original.ends_with("|first-private"),
-        "{original}"
-    );
-    assert_eq!(
-        std::path::Path::new(original.rsplit('|').nth(1).unwrap())
-            .canonicalize()
-            .unwrap(),
-        first
-    );
-    // The hand edit controls future launches, while the active process remains on its original argv.
-    let mut edited = editor_core::load_shared(&first).unwrap();
-    edited.configurations[0].target = editor_core::RunTarget::Program {
-        program: "share-probe.exe".into(),
-        args: vec!["hand edited".into()],
-    };
-    editor_core::save_shared(&first, &edited).unwrap();
-    click(window, "run-start");
-    pump_recording(&mut manager, &app, window, &mut launches);
-    publish_with_launches(&mut manager, &mut renderer, &app, window, &launches);
-    assert_eq!(launches.len(), 1);
-    assert_eq!(
-        std::fs::read_to_string(first.join("observed.txt")).unwrap(),
-        original
-    );
-    manager.shutdown();
-    // Reopening the first project uses the external edit and its preserved host-local environment.
-    let reopened = crate::run::RunControls::load_with_project(
-        &state_key(&first),
-        Some(first.join("private-runs")),
-        Some(first.clone()),
-    );
-    assert_eq!(
-        reopened.configuration(&id).unwrap().literal_arguments(),
-        ["hand edited"]
-    );
-    assert_eq!(
-        reopened.configuration(&id).unwrap().env["LOCAL_VALUE"],
-        "first-private"
-    );
-    editor_core::save_shared(&second, &edited).unwrap();
-    let (mut manager, app, window) = fixture(cx, &second, "share-probe.exe", vec![]);
-    window.update(|_, cx| {
-        app.update(cx, |state, cx| {
-            let key = state.workspace_key();
-            let mut config = state.run_controls.configuration(&id).unwrap().clone();
-            assert!(config.env.is_empty() && config.tool_paths.is_empty());
-            assert_eq!(config.directory.as_deref(), Some(second.to_str().unwrap()));
-            config
-                .env
-                .insert("LOCAL_VALUE".into(), "second-private".into());
-            config.tool_paths = vec![second.join("personal-bin").display().to_string()];
-            state.run_controls.upsert(config, &key).unwrap();
-            state.run_controls.select(&id, &key);
-            cx.notify();
-        })
-    });
-    let mut renderer = images::VectorRenderer::default();
-    let mut launches = Vec::new();
-    click(window, "run-start");
-    wait_for_file(
-        &mut manager,
-        &app,
-        window,
-        &mut renderer,
-        &mut launches,
-        &second.join("observed.txt"),
-    );
-    let result = std::fs::read_to_string(second.join("observed.txt")).unwrap();
-    assert!(
-        result.contains("hand edited") && result.ends_with("|second-private"),
-        "{result}"
-    );
-    assert!(!result.contains("first-private"));
-    manager.shutdown();
-    // Publish actual retirement before testing a future launch; locating a live snapshot is allowed.
-    publish_with_launches(&mut manager, &mut renderer, &app, window, &launches);
-    // An invalid direct edit is visible in B1 and cannot execute the previous cached command.
-    std::fs::write(editor_core::project_path(&second), b"{ broken").unwrap();
-    window.update(|window, cx| app.update(cx, |state, cx| state.start_selected_run(window, cx)));
-    pump_recording(&mut manager, &app, window, &mut launches);
-    assert_eq!(launches.len(), 1);
-    assert!(window.update(|_, cx| {
-        app.read(cx)
-            .run_controls
-            .launch_plan(&id, &state_key(&second))
-            .is_err()
-    }));
+    for (root, private_value) in [(&first, "first-private"), (&second, "second-private")] {
+        let (mut manager, app, window) = fixture(
+            cx,
+            root,
+            "share-probe.exe",
+            vec!["literal space".into(), "quote\"中文;&|".into()],
+        );
+        let id = window.update(|_, cx| {
+            app.update(cx, |state, _| {
+                let key = state.workspace_key();
+                let mut config = state.run_controls.selected().unwrap().clone();
+                config.directory = Some(root.display().to_string());
+                config
+                    .env
+                    .insert("LOCAL_VALUE".into(), private_value.into());
+                config.tool_paths = vec![root.join("personal-bin").display().to_string()];
+                let id = config.id.clone();
+                super::super::test_configurations::accept(&mut state.run_controls, config);
+                state.run_controls.select(&id, &key);
+                id
+            })
+        });
+        let base = root.join("private-runs");
+        let key = state_key(root);
+        let stored = editor_core::load(&base, &key).unwrap();
+        assert!(stored.plugin_configurations.contains_key(&id));
+        assert!(
+            !editor_core::project_path(root).exists(),
+            "current configuration must not write a shared project file"
+        );
+        let foreign = state_key(if root == &first { &second } else { &first });
+        assert!(
+            editor_core::load(&base, &foreign)
+                .unwrap()
+                .configurations
+                .is_empty(),
+            "workspace identity must prevent implicit cross-project configuration reuse"
+        );
+        let mut renderer = images::VectorRenderer::default();
+        let mut launches = Vec::new();
+        click(window, "run-start");
+        wait_for_file(
+            &mut manager,
+            &app,
+            window,
+            &mut renderer,
+            &mut launches,
+            &root.join("observed.txt"),
+        );
+        let original = std::fs::read_to_string(root.join("observed.txt")).unwrap();
+        assert!(
+            original.contains("literal space")
+                && original.contains("quote\\\"中文;&|")
+                && original.ends_with(&format!("|{private_value}")),
+            "{original}"
+        );
+        assert_eq!(
+            std::path::Path::new(original.rsplit('|').nth(1).unwrap())
+                .canonicalize()
+                .unwrap(),
+            *root
+        );
+
+        // Editing future provider values cannot retarget the active native process or create another launch.
+        let mut edited = stored.clone();
+        let data = edited.plugin_configurations.get_mut(&id).unwrap();
+        let mut values: serde_json::Value = serde_json::from_str(&data.values).unwrap();
+        values["target"]["args"] = serde_json::json!(["hand edited"]);
+        data.values = values.to_string();
+        editor_core::save(&base, &key, &edited).unwrap();
+        click(window, "run-start");
+        pump_recording(&mut manager, &app, window, &mut launches);
+        publish_with_launches(&mut manager, &mut renderer, &app, window, &launches);
+        assert_eq!(
+            launches.len(),
+            1,
+            "an active configuration keeps its original target"
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("observed.txt")).unwrap(),
+            original
+        );
+        let reopened =
+            crate::run::RunControls::load_plugin_configurations(&key, Some(base.clone()));
+        let values: serde_json::Value =
+            serde_json::from_str(&reopened.configuration_set().plugin_configurations[&id].values)
+                .unwrap();
+        assert_eq!(values["target"]["args"], serde_json::json!(["hand edited"]));
+        assert_eq!(values["env"]["LOCAL_VALUE"], private_value);
+        // The accepted local-only contract still guarantees that edits affect the next real run.
+        // Stop through the native action before replacing controls; the active target stays pinned above.
+        click(window, "run-stop");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut forced = false;
+        loop {
+            // Native lifecycle/status timers use the dispatcher clock, independently of child wall time.
+            window.executor().advance_clock(Duration::from_millis(30));
+            window.run_until_parked();
+            // Forward the real stop/status answers just as the worker does; dropping a receipt
+            // would strand the native controller in its pending state after the child has exited.
+            let (statuses, stops) = pump_recording(&mut manager, &app, window, &mut launches);
+            // The production actor polls the manager between dispatch and publication so
+            // asynchronous native exit receipts can complete the accepted stop request.
+            manager.poll();
+            super::super::composable_tests::publish_frame(
+                &mut manager,
+                &mut renderer,
+                &app,
+                window,
+                &launches,
+                statuses,
+                stops,
+            );
+            if window.update(|_, cx| app.read(cx).run_controls.running_for(&id).is_none()) {
+                break;
+            }
+            if !forced && window.debug_bounds("run-terminate").is_some() {
+                // The fixture deliberately sleeps without consuming stdin; use the visible
+                // explicit force action if the first graceful request cannot finish it.
+                click(window, "run-terminate");
+                forced = true;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the original native run must stop: sessions={:?}, pending={:?}, control={:?}",
+                manager
+                    .executions()
+                    .iter()
+                    .map(|session| (session.id(), session.state()))
+                    .collect::<Vec<_>>(),
+                window.update(|_, cx| app.read(cx).run_controls.provider_preparation_request(&id)),
+                window.update(|_, cx| app.read(cx).run_controls.sessions_for(&id))
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        window.update(|_, cx| {
+            app.update(cx, |state, _| {
+                state.run_controls = reopened;
+                state.run_controls.select(&id, &key);
+            })
+        });
+        std::fs::remove_file(root.join("observed.txt")).unwrap();
+        click(window, "run-start");
+        wait_for_file(
+            &mut manager,
+            &app,
+            window,
+            &mut renderer,
+            &mut launches,
+            &root.join("observed.txt"),
+        );
+        let next = std::fs::read_to_string(root.join("observed.txt")).unwrap();
+        assert!(next.starts_with("[\"hand edited\"]|"), "{next}");
+        assert!(next.ends_with(&format!("|{private_value}")), "{next}");
+        assert_eq!(
+            std::path::Path::new(next.rsplit('|').nth(1).unwrap())
+                .canonicalize()
+                .unwrap(),
+            *root,
+        );
+        assert_eq!(
+            launches.len(),
+            2,
+            "the reopened values must start exactly one new run"
+        );
+        manager.shutdown();
+        publish_with_launches(&mut manager, &mut renderer, &app, window, &launches);
+
+        // An unreadable local file must report failure and block execution, preserving the exact corrupt bytes.
+        let path = editor_core::configuration_path(&base, &key);
+        std::fs::write(&path, b"{ broken").unwrap();
+        window.update(|window, cx| {
+            app.update(cx, |state, cx| {
+                state.run_controls =
+                    crate::run::RunControls::load_plugin_configurations(&key, Some(base.clone()));
+                state.start_selected_run(window, cx);
+            })
+        });
+        pump_recording(&mut manager, &app, window, &mut launches);
+        assert_eq!(
+            launches.len(),
+            2,
+            "a malformed reload must not execute a cached command"
+        );
+        assert!(window.update(|_, cx| app.read(cx).run_controls.launch_plan(&id, &key).is_err()));
+        assert_eq!(std::fs::read(path).unwrap(), b"{ broken");
+    }
 }
 
 /// Click a real painted local button, respecting its normal enabled and focus behavior.

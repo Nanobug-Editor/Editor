@@ -1,0 +1,41 @@
+# Native installer consent remains explicit and accessible in both supported UI languages.
+_version: 2
+plugin_installation.finished:
+  en: "Installation has finished."
+  zh-CN: "安装操作已结束。"
+plugin_installation.title:
+  en: "Plugin installation progress"
+  zh-CN: "插件安装进度"
+plugin_installation.source:
+  en: "Download source: %{value}"
+  zh-CN: "下载来源：%{value}"
+plugin_installation.purpose:
+  en: "Purpose: %{value}"
+  zh-CN: "用途：%{value}"
+plugin_installation.program:
+  en: "Program: %{value}"
+  zh-CN: "程序：%{value}"
+plugin_installation.arguments:
+  en: "Arguments: %{value}"
+  zh-CN: "参数：%{value}"
+plugin_installation.target:
+  en: "Private target: %{value}"
+  zh-CN: "私有目标：%{value}"
+plugin_installation.native_notice:
+  en: "Native programs run with your OS permissions; a private directory is not a system sandbox. Cancellation stops managed processes and cleans temporary directories, but cannot undo external effects."
+  zh-CN: "原生程序以当前用户的 OS 权限运行，私有目录不是系统沙箱。取消会终止受管进程并清理临时目录，不能撤销程序已产生的外部影响。"
+plugin_installation.sdk_opt_in:
+  en: "Download and prepare this project's SDK / compiler"
+  zh-CN: "主动下载并准备此项目 SDK / 编译器"
+plugin_installation.confirm_sdk:
+  en: "Confirm SDK preparation"
+  zh-CN: "确认准备 SDK"
+plugin_installation.confirm_step:
+  en: "Confirm this installation step"
+  zh-CN: "确认执行此安装步骤"
+plugin_installation.cancel:
+  en: "Cancel installation"
+  zh-CN: "取消安装"
+plugin_installation.close:
+  en: "Close"
+  zh-CN: "关闭"

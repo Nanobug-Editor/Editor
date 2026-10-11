@@ -6,7 +6,7 @@ use plugin_runtime::Manager;
 
 /// A real WASM trap withdraws the center and functions, with different recovery for text and binary files.
 #[gpui::test]
-#[ignore = "build current layout-example through scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn real_layout_fault_preserves_native_text_and_binary_retry(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -89,9 +89,32 @@ fn real_layout_fault_preserves_native_text_and_binary_retry(cx: &mut TestAppCont
         visual.update(|_, cx| app.read(cx).editor.read(cx).text().to_string()),
         draft
     );
-    manager.restart_plugin("fault-layout").unwrap();
+    let previous_locale = rust_i18n::locale().to_string();
+    for (locale, dark, font_size, keyboard) in
+        [("zh-CN", false, 14., false), ("en", true, 24., true)]
+    {
+        rust_i18n::set_locale(locale);
+        visual.update(|window, cx| {
+            typography::set_font_size(cx, font_size);
+            apply_theme(builtin_theme(dark), cx);
+            theme::sync_font_sizes(cx);
+            window.refresh();
+        });
+        manager.restart_plugin("fault-layout").unwrap();
+        draw(&app, &mut manager, visual);
+        binary_fault_retains_tab_and_retries(
+            &app,
+            &mut manager,
+            image_path.clone(),
+            visual,
+            keyboard,
+        );
+    }
+    rust_i18n::set_locale(&previous_locale);
+    manager.uninstall("fault-layout", true).unwrap();
     draw(&app, &mut manager, visual);
-    binary_fault_retains_tab_and_retries(&app, &mut manager, image_path, visual);
+    assert!(manager.image_resources().is_empty());
+    assert!(visual.debug_bounds("editor-tab-1").is_some());
 }
 
 /// Binary recovery uses the visible retry control and the ordinary runtime lifecycle operation.
@@ -100,6 +123,7 @@ fn binary_fault_retains_tab_and_retries(
     manager: &mut Manager,
     image_path: PathBuf,
     visual: &mut VisualTestContext,
+    keyboard: bool,
 ) {
     visual.update(|window, cx| app.update(cx, |app, cx| app.open_file(image_path, window, cx)));
     draw(app, manager, visual);
@@ -111,10 +135,58 @@ fn binary_fault_retains_tab_and_retries(
     assert!(visual.debug_bounds("editor-source-pane").is_none());
     assert!(manager.image_resources().is_empty());
     let retry = visual
-        .debug_bounds("file-view-retry")
+        .debug_bounds("file-view-retry-button")
         .expect("binary fault must offer native retry");
-    visual.simulate_click(retry.center(), Modifiers::default());
+    visual.update(|window, _| window.activate_window());
+    let before = visual
+        .update(|_, cx| app.read(cx).tabs[app.read(cx).active_tab_index().unwrap()].file_revision);
+    let viewport = visual.debug_bounds("file-view-unavailable").unwrap();
+    assert!(
+        viewport.contains(&retry.origin) && viewport.contains(&retry.bottom_right()),
+        "long diagnostics cannot push Retry outside its visible viewport"
+    );
+    let diagnostic = visual.debug_bounds("file-view-diagnostic").unwrap();
+    visual.simulate_event(gpui_kit::ScrollWheelEvent {
+        position: diagnostic.center(),
+        delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-400.))),
+        touch_phase: gpui_kit::TouchPhase::Moved,
+        modifiers: Default::default(),
+    });
+    visual.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(
+        visual.debug_bounds("file-view-retry-button").unwrap(),
+        retry
+    );
+    if keyboard {
+        // A native mouse-down gives the base button focus; Enter activates it before mouse-up.
+        visual.simulate_mouse_down(retry.center(), MouseButton::Left, Modifiers::default());
+        let key = gpui_kit::Keystroke::parse("enter").unwrap();
+        visual.simulate_event(gpui_kit::KeyDownEvent {
+            keystroke: key.clone(),
+            is_held: false,
+            prefer_character_input: false,
+        });
+        visual.simulate_event(gpui_kit::KeyUpEvent { keystroke: key });
+        visual.run_until_parked();
+        // Check before release: a fallback mouse click must not hide a broken Enter action.
+        assert_eq!(
+            visual.update(
+                |_, cx| app.read(cx).tabs[app.read(cx).active_tab_index().unwrap()].file_revision
+            ),
+            before + 1,
+            "Enter itself must enqueue Retry before the mouse is released"
+        );
+        visual.simulate_mouse_up(retry.center(), MouseButton::Left, Modifiers::default());
+    } else {
+        visual.simulate_click(retry.center(), Modifiers::default());
+    }
     visual.run_until_parked();
+    assert_eq!(
+        visual.update(
+            |_, cx| app.read(cx).tabs[app.read(cx).active_tab_index().unwrap()].file_revision
+        ),
+        before + 1
+    );
     let restart = visual
         .update(|_, cx| {
             app.read(cx)
@@ -136,14 +208,22 @@ fn binary_fault_retains_tab_and_retries(
         .expect("actual retry button must enqueue the standard lifecycle operation");
     assert_eq!(restart, "fault-layout");
     manager.restart_plugin(&restart).unwrap();
+    // The controlled manager has completed the real lifecycle operation. Publish its completion
+    // just as the actor does, so a later native retry is not blocked by the previous pending marker.
+    visual.update(|_, cx| {
+        app.read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .progress = None;
+    });
     draw(app, manager, visual);
     assert!(visual.debug_bounds("plugin-file-image").is_some());
     assert!(visual.debug_bounds("file-view-unavailable").is_none());
     assert!(visual.debug_bounds("editor-source-pane").is_none());
-    manager.uninstall("fault-layout", true).unwrap();
-    draw(app, manager, visual);
-    assert!(manager.image_resources().is_empty());
-    assert!(visual.debug_bounds("editor-tab-1").is_some());
 }
 
 /// A guest diagnostic trap passes through declared command dispatch and normal runtime fault retirement.

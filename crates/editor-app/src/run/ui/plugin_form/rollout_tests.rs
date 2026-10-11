@@ -17,10 +17,7 @@ fn project(root: &Path, source: &str) {
     std::fs::write(root.join("src/main.rs"), source).unwrap();
 }
 fn rust_package(manager: &mut Manager, identity: &str) {
-    let mut package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust.zip"),
-    )
-    .unwrap();
+    let mut package = Package::read(&crate::test_packages::archive("rust")).unwrap();
     if identity != "rust" {
         // Ordinary package metadata exercises identity replacement without changing guest or host code.
         let mut manifest: serde_json::Value =
@@ -179,7 +176,9 @@ fn plugin_configuration_rollout_cargo_and_local_shell_execute(cx: &mut TestAppCo
     );
     click(cx, "run-start");
     driver.wait(&mut manager, &app, cx, |_| {
-        root.path().join("cargo-args.txt").exists()
+        // Creation precedes closing the child's Windows file handle; wait for the complete receipt.
+        std::fs::read_to_string(root.path().join("cargo-args.txt"))
+            .is_ok_and(|value| value == format!("{:?}", ["two words", "中文 & ; \"quotes\""]))
     });
     assert_eq!(
         std::fs::read_to_string(root.path().join("cargo-args.txt")).unwrap(),
@@ -196,7 +195,7 @@ fn plugin_configuration_rollout_cargo_and_local_shell_execute(cx: &mut TestAppCo
         &mut manager,
         &app,
         cx,
-        "run-template-terminal-PowerShell",
+        "run-template-$nanobug.shell-PowerShell",
     );
     let script = "Set-Content -LiteralPath 'shell-result.txt' -Value '原生脚本' -Encoding UTF8\nWrite-Output 'done'";
     reveal(cx, "plugin-ui-script");
@@ -205,7 +204,9 @@ fn plugin_configuration_rollout_cargo_and_local_shell_execute(cx: &mut TestAppCo
     save(&mut driver, &mut manager, &app, cx, parent);
     click(cx, "run-start");
     driver.wait(&mut manager, &app, cx, |_| {
-        root.path().join("shell-result.txt").exists()
+        // Set-Content creates the file before finishing UTF-8 output; existence is not completion.
+        std::fs::read_to_string(root.path().join("shell-result.txt"))
+            .is_ok_and(|value| value.contains("原生脚本"))
     });
     assert!(
         std::fs::read_to_string(root.path().join("shell-result.txt"))
@@ -231,7 +232,7 @@ fn plugin_configuration_rollout_templates_filter_tools_without_execution(cx: &mu
     rust_package(&mut manager, "rust");
     let mut driver = Driver::default();
     driver.frame(&mut manager, &app, cx);
-    let existing_shells = manager.live["terminal"].process_count();
+    let existing_shells = manager.executions().len();
     open_form(&app, cx);
     click(cx, "run-config-add");
     driver.wait(&mut manager, &app, cx, |cx| {
@@ -274,7 +275,7 @@ fn plugin_configuration_rollout_templates_filter_tools_without_execution(cx: &mu
     }));
     let shells: Vec<_> = catalog
         .iter()
-        .filter(|(provider, _)| provider == "terminal")
+        .filter(|(provider, _)| provider == crate::terminal::configurations::PROVIDER)
         .map(|(_, template)| template.id.as_str())
         .collect();
     assert!(
@@ -288,7 +289,11 @@ fn plugin_configuration_rollout_templates_filter_tools_without_execution(cx: &mu
     );
     assert_eq!(manager.live["rust"].process_count(), 0);
     // Activation preserves the existing interactive terminal; catalog resolution adds no interpreter.
-    assert_eq!(manager.live["terminal"].process_count(), existing_shells);
+    assert_eq!(manager.executions().len(), existing_shells);
+    assert!(
+        !manager.live.contains_key("terminal"),
+        "native Shell templates need no terminal package"
+    );
     assert!(driver.launches.is_empty());
     manager.shutdown();
 }
@@ -302,10 +307,11 @@ fn plugin_configuration_rollout_real_cargo_debug_pause_inspect_step_and_stop(
     let source = "#[inline(never)]\nfn calculate(value: i32) -> i32 {\n    let doubled = value * 2;\n    println!(\"{doubled}\");\n    doubled\n}\nfn main() {\n    let answer = calculate(21);\n    println!(\"{answer}\");\n}\n";
     project(root.path(), source);
     let (mut manager, app, cx) = fixture(cx, root.path());
-    rust_package(&mut manager, "renamed-cargo");
-    let debugger = debugger_packages::debugger("configuration-debugger");
+    // The unified package provides both Cargo forms and debugging. Use the same renamed public
+    // package with its verified local CodeLLDB acquisition, retaining its original dependency hash.
+    let package = debugger_packages::rust_package("renamed-cargo");
     manager
-        .install(&debugger, debugger.manifest.permissions.clone())
+        .install(&package, package.manifest.permissions.clone())
         .unwrap();
     let mut driver = Driver::default();
     driver.frame(&mut manager, &app, cx);
@@ -329,6 +335,10 @@ fn plugin_configuration_rollout_real_cargo_debug_pause_inspect_step_and_stop(
                 .upsert(config, &app.workspace_key())
                 .unwrap();
         })
+    });
+    // The visible control is disabled until real provider discovery finishes; an early click is not queued.
+    driver.wait(&mut manager, &app, cx, |cx| {
+        cx.update(|_, cx| app.read(cx).run_controls.debug_blocker(&id).is_none())
     });
     click(cx, "run-debug");
     driver.wait(&mut manager, &app, cx, |cx| {
@@ -396,7 +406,7 @@ fn plugin_configuration_rollout_locales_themes_and_font_sizes(cx: &mut TestAppCo
         &mut manager,
         &app,
         cx,
-        "run-template-terminal-PowerShell",
+        "run-template-$nanobug.shell-PowerShell",
     );
     for (locale, dark, font_size) in [
         ("zh-CN", false, 14.),

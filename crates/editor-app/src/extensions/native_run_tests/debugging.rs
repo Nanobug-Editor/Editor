@@ -291,11 +291,7 @@ fn real_wasm_fault_paints_its_native_error_and_preserves_unrelated_work(cx: &mut
             "Start-Sleep -Seconds 60".into(),
         ],
     );
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();

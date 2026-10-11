@@ -6,7 +6,9 @@
 
 ## 安装与热生效
 
-标题栏“插件管理”提供已安装列表、本机随附市场、README、安装、更新和卸载。确认来源、权限及所需原生安装步骤后，成功安装即可启用，无需重启编辑器；全局禁用时可明确在当前项目启用。LSP 依赖未就绪时单独显示原因，不把安装成功当作服务就绪。
+官方插件源码已迁入七个独立 X-for-Nanobug 仓库。全新安装仅含纯文本编辑、内置终端和默认主题，不扫描同级插件目录、不主动推荐；首次离线且无目录缓存时显示市场获取失败。既有安装、身份、配置与私有数据仍由原管理器读取，删除仓库示例源码不自动卸载用户实例。审核、版本和 ZIP SHA-256 规则见[市场规格](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/blob/main/docs/specs/plugin-marketplace.md)。
+
+标题栏“插件管理”提供已安装列表、审核后的在线市场、README、本地 ZIP 导入、安装、更新和卸载。确认来源、权限及所需原生安装步骤后，成功安装即可启用，无需重启编辑器；全局禁用时可明确在当前项目启用。LSP 依赖未就绪时单独显示原因，不把安装成功当作服务就绪。
 
 语言、主题、图标与面板随安装、启停、更新和卸载同步到已打开的文档。面板隐藏、停用和卸载会释放原生输入目标并回收停靠空间。插件命令按清单注册；未安装或未启用时不会偷偷安装或扩大权限。
 
@@ -26,7 +28,7 @@ WIT 世界 `editor:plugin/plugin@0.1.0` 提供 host.request 导入与 dispatch �
 
 公开接口的现行说明见源码注释：[SDK](../../crates/plugin-protocol/src/lib.rs)、[UI](../../crates/plugin-protocol/src/ui.rs)、[语言](../../crates/plugin-protocol/src/language.rs)、[进程](../../crates/plugin-protocol/src/process.rs)、[服务](../../crates/plugin-protocol/src/service.rs)。宿主只导出 SDK 源码、Cargo 清单、WIT 和 JSON 协议资源；仓库 Markdown 不内嵌或随 SDK 导出。
 
-文件预览可以通过公开 `editor.presentation` 声明源码／分栏／预览三态，通过 `editor.toolbar` 提供源码顶部操作；版本化范围编辑、图片输入、导航及视口请求分别核对文档身份、revision 和来源权限。Markdown 使用这些通用接口提供实时原生预览、任务框写回、同级图片导入和双向内容块滚动；SVG 使用同一底栏三态入口。详见[Markdown 使用说明](../../plugins/markdown/README.md)、[导航](../../crates/plugin-protocol/NAVIGATION.md)、[视口](../../crates/plugin-protocol/VIEWPORT.md)和[代码块高亮](../../crates/plugin-protocol/CODE_HIGHLIGHTING.md)。新增插件仍只使用公开契约，不需要宿主按插件名称分支。
+文件预览可以通过公开 `editor.presentation` 声明源码／分栏／预览三态，通过 `editor.toolbar` 提供源码顶部操作；版本化范围编辑、图片输入、导航及视口请求分别核对文档身份、revision 和来源权限。Markdown 使用这些通用接口提供实时原生预览、任务框写回、同级图片导入和双向内容块滚动；SVG 使用同一底栏三态入口。详见[Markdown 使用说明](https://github.com/T-miracle/Markdown-for-Nanobug)、[导航](../../crates/plugin-protocol/NAVIGATION.md)、[视口](../../crates/plugin-protocol/VIEWPORT.md)和[代码块高亮](../../crates/plugin-protocol/CODE_HIGHLIGHTING.md)。新增插件仍只使用公开契约，不需要宿主按插件名称分支。
 
 ## 权限与原生执行
 
@@ -72,9 +74,9 @@ cargo build -p editor-app
 # LSP、安装器与进程契约使用本地原生夹具。
 cargo build -p plugin-runtime --examples
 # 完整构建 WASM／原生产物、资源和 ZIP。
-.\target\debug\editor-app.exe --plugin-package plugins/capability-example plugins/example --output dist/plugins
+.\target\debug\editor-app.exe --plugin-package ../Rust-for-Nanobug --output target/plugin-build
 # 仅准备开发目录；实际重载测试使用此命令打印的目录作为夹具。
-.\target\debug\editor-app.exe --plugin-build plugins/example
+.\target\debug\editor-app.exe --plugin-build ../Rust-for-Nanobug
 .\target\debug\editor-app.exe --export-plugin-sdk .\target\sdk-export
 cargo fmt --check
 cargo check --workspace
@@ -85,7 +87,7 @@ cargo test -p editor-app plugin_development -- --test-threads=1
 cargo test -p editor-app sdk_export -- --test-threads=1
 ```
 
-实际 WASM 测试须先准备对应夹具，再显式执行所选 `--ignored` 测试。目录候选的 `NANOBUG_DEVELOPMENT_CANDIDATE` 和 SDK ZIP 的 `NANOBUG_SDK_PACKAGE` 命令见[本次验收记录](verification/plugin-development-packaging.md)；不得用普通 workspace 测试的跳过结果替代真实验收。
+真实 Package 测试输入已经按版本/摘要固定在 `crates/plugin-runtime/tests/fixtures/packages/`，准备或更换方法见其 README。实际 WASM 测试仍需显式执行所选 `--ignored` 场景；需要原生依赖时准备记录中的固定制品，不能以普通 workspace 测试的跳过结果计通过。目录候选的 `NANOBUG_DEVELOPMENT_CANDIDATE` 和 SDK ZIP 的 `NANOBUG_SDK_PACKAGE` 命令见[本次验收记录](verification/plugin-development-packaging.md)；不得用普通 workspace 测试的跳过结果替代真实验收。
 
 现行插件项目均提供共享描述并独立打包，每包包含其 README。XML 包含结构回调、grammar 与 SVG 辅助 Schema；HTML、JavaScript 包含已构建的原生服务及许可。Rust 包附带公开 LSP 钩子，仅提供语言资源的包无需空生命周期组件。Markdown 包同时包含两份 WASM grammar 和独立解析组件。终端为宿主内置原生模块，直接使用上游 alacritty_terminal；不构建或加载独立终端包，基础主题内置。
 

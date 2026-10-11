@@ -28,7 +28,7 @@ fn activate_first_link(fixture: &mut NativeMarkdown, ui: &mut gpui_kit::VisualTe
 
 /// A normal relative Markdown link opens its existing target through the editor, without editing the source.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_relative_link_opens_native_document(cx: &mut TestAppContext) {
     let original = "[打开](next.md)\n";
     let (mut fixture, ui) =
@@ -75,7 +75,7 @@ fn delivered_markdown_relative_link_opens_native_document(cx: &mut TestAppContex
 
 /// A duplicate Unicode heading has a stable suffix and navigation makes that actual native title visible.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_heading_link_reveals_duplicate_title(cx: &mut TestAppContext) {
     let original = format!(
         "[跳转](#标题-1)\n\n{}# 标题\n\n正文\n\n# 标题\n\n{}",
@@ -114,7 +114,7 @@ fn delivered_markdown_heading_link_reveals_duplicate_title(cx: &mut TestAppConte
 
 /// A relative fragment must wait for the real opened document and reveal its own Unicode heading.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_relative_fragment_uses_opened_target(cx: &mut TestAppContext) {
     let original = "[打开](next.md#%E7%9B%AE%E6%A0%87)\n";
     let target = format!(
@@ -155,7 +155,7 @@ fn delivered_markdown_relative_fragment_uses_opened_target(cx: &mut TestAppConte
 
 /// A real loaded image preserves its parsed outer document link without mutating the source.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_image_link_opens_its_outer_target(cx: &mut TestAppContext) {
     let (mut fixture, ui) = NativeMarkdown::mount(
         cx,
@@ -192,7 +192,7 @@ fn delivered_markdown_image_link_opens_its_outer_target(cx: &mut TestAppContext)
 
 /// Preview-only links expose individual visible focus targets for native Tab and Enter/Space.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_links_activate_each_href_from_keyboard(cx: &mut TestAppContext) {
     let original = "[甲](https://example.com/one) 与 [乙](https://example.com/two)\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);
@@ -238,7 +238,7 @@ fn delivered_markdown_links_activate_each_href_from_keyboard(cx: &mut TestAppCon
 
 /// Tab reveals a distant target's actual native cue before that target can be activated.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_keyboard_link_focus_reveals_the_distant_target(cx: &mut TestAppContext) {
     let original = "前文\n\n".repeat(80) + "[尾部](https://example.com/late)\n";
     assert_eq!(original.find("[尾部]"), Some(640));
@@ -277,7 +277,7 @@ fn delivered_markdown_keyboard_link_focus_reveals_the_distant_target(cx: &mut Te
 
 /// A hidden source toolbar cannot swallow navigation failures in the legitimate preview-only mode.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_preview_only_link_failures_remain_visible_in_both_locales(
     cx: &mut TestAppContext,
 ) {
@@ -343,7 +343,7 @@ fn delivered_markdown_preview_only_link_failures_remain_visible_in_both_locales(
 
 /// Merely rendering or right-clicking a URL cannot launch the browser; an intentional link click can.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_web_link_opens_only_at_native_click(cx: &mut TestAppContext) {
     let url = "https://example.com/guide?lang=zh#title";
     let original = format!("[网页]({url})\n");

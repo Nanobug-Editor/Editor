@@ -66,7 +66,7 @@ fn activate(path: &Path, app: &Entity<EditorApp>, visual: &mut VisualTestContext
 
 /// Layout and auxiliary tools coexist, window functions keep their focus target, and each group overflows.
 #[gpui::test]
-#[ignore = "build actual public-SDK packages with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn real_plugin_tools_preserve_context_shared_intent_and_separate_overflow(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -88,11 +88,7 @@ fn real_plugin_tools_preserve_context_shared_intent_and_separate_overflow(cx: &m
         },
     )
     .unwrap();
-    let tools = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-layout-test/tools-example.zip"),
-    )
-    .unwrap();
+    let tools = Package::read(&crate::test_packages::archive("tools-example")).unwrap();
     for package in [package("layout-example", "Layout Example"), tools] {
         manager
             .install(&package, package.manifest.permissions.clone())
@@ -303,7 +299,31 @@ fn real_plugin_tools_preserve_context_shared_intent_and_separate_overflow(cx: &m
             .items
             .clone()
     });
-    assert!(items.iter().all(|item| item.label.starts_with("Window ")));
+    // Native Explorer/Terminal/Outline belong to the same window group. Selection adds a
+    // checkmark; the popup must retain all five plugin windows and exclude function actions.
+    let labels: Vec<_> = items
+        .iter()
+        .map(|item| item.label.trim_start_matches('✓').trim())
+        .collect();
+    let builtins = [
+        t!("panel.explorer").to_string(),
+        t!("terminal.title").to_string(),
+        t!("panel.outline").to_string(),
+    ];
+    assert_eq!(
+        labels
+            .iter()
+            .filter(|label| label.starts_with("Window "))
+            .count(),
+        5
+    );
+    assert!(
+        labels
+            .iter()
+            .all(|label| label.starts_with("Window ")
+                || builtins.iter().any(|builtin| builtin == label)),
+        "{labels:?}"
+    );
     visual.simulate_keystrokes("end enter");
     draw(&app, &mut manager, visual);
     assert!(

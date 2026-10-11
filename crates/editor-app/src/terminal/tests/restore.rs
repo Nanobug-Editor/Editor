@@ -124,9 +124,8 @@ fn native_terminal_reopen_preserves_history_and_resize(cx: &mut TestAppContext) 
     // Output and the next prompt can arrive in separate PTY chunks; compare the state actually saved.
     let before = painted(&app, visual);
     let before_last = visual.update(|_, cx| {
-        app.read(cx).terminal.read(cx).sessions[0]
-            .engine
-            .snapshot()
+        let saved = app.read(cx).terminal.read(cx).sessions[0].engine.snapshot();
+        saved
             .lines
             .iter()
             .rposition(|row| row.iter().any(|cell| cell.c != ' '))
@@ -153,7 +152,11 @@ fn native_terminal_reopen_preserves_history_and_resize(cx: &mut TestAppContext) 
     }
     // The original old output must stay single even after ConPTY's coalesced resize redraw.
     let deadline = Instant::now() + Duration::from_millis(400);
-    wait(visual, &app, |_| Instant::now() >= deadline);
+    // ConPTY first removes the inherited empty prompt, then the newly owned Shell redraws it.
+    // A timer alone can sample that intermediate frame; wait for the complete original transcript.
+    wait(visual, &app, |visual| {
+        Instant::now() >= deadline && painted(&app, visual).contains(&before)
+    });
     assert_eq!(
         painted(&app, visual).matches("preserved-history").count(),
         1

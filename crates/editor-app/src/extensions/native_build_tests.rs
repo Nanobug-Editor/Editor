@@ -54,31 +54,18 @@ fn runtime(root: &std::path::Path) -> plugin_runtime::Manager {
         },
     )
     .unwrap();
+    super::test_configurations::install(&mut manager);
     manager
 }
 
 /// Open the editor on a workspace holding these configurations, the last one selected.
 ///
-/// The editor's own run controls are replaced with a set loaded the way the application loads them:
-/// this machine's record plus whatever the project shares, so an acceptance can start from a project
-/// file rather than from configurations handed to it directly.
+/// The current workspace's private store retains opaque provider values; ordinary execution
+/// validates those values with the real independent provider before any preparation starts.
 fn editor_on<'a>(
     cx: &'a mut TestAppContext,
     root: &std::path::Path,
     configurations: Vec<editor_core::RunConfig>,
-) -> (Entity<EditorApp>, &'a mut gpui_kit::VisualTestContext) {
-    editor_loaded(cx, root, configurations, false)
-}
-
-/// Open the editor with its run controls loaded from the workspace's own storage.
-///
-/// `shared` selects the load path the application uses: reading this machine's record together with
-/// the project's shared file.
-fn editor_loaded<'a>(
-    cx: &'a mut TestAppContext,
-    root: &std::path::Path,
-    configurations: Vec<editor_core::RunConfig>,
-    from_storage: bool,
 ) -> (Entity<EditorApp>, &'a mut gpui_kit::VisualTestContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -90,28 +77,17 @@ fn editor_loaded<'a>(
     let root = root.to_path_buf();
     let slot = Rc::new(RefCell::new(None));
     let capture = slot.clone();
-    let opening = root.clone();
-    // The controls are loaded before the window opens, so the editor starts from the same state the
-    // application starts from rather than having them replaced while it is being built.
-    let loaded = from_storage.then(|| {
-        let local = tempfile::tempdir().unwrap().keep();
-        crate::run::RunControls::load_with_project(
-            &opening.display().to_string(),
-            Some(local),
-            Some(opening.clone()),
-        )
-    });
     let workspace = Workspace::open(&root).unwrap();
     let (_, cx) = cx.add_window_view(move |window, cx| {
         let app = cx.new(|cx| EditorApp::new(workspace, None, window, cx));
         app.update(cx, |app, cx| {
             let key = app.workspace_key();
-            if let Some(loaded) = loaded {
-                app.run_controls = loaded;
-            } else {
-                for configuration in configurations {
-                    app.run_controls.upsert(configuration, &key).unwrap();
-                }
+            app.run_controls = crate::run::RunControls::load_plugin_configurations(
+                &key,
+                Some(app.workspace.root().join("private-runs")),
+            );
+            for configuration in configurations {
+                super::test_configurations::accept(&mut app.run_controls, configuration);
             }
             if let Some(selected) = &selected {
                 app.run_controls.select(selected, &key);
@@ -140,7 +116,7 @@ fn fixture<'a>(
 ) {
     let mut manager = runtime(root);
     let key = root.display().to_string();
-    let mut set = editor_core::RunConfigSet::default();
+    let set = editor_core::RunConfigSet::default();
     let id = set.generate_id(&key);
     let configuration = configuration(
         &id,
@@ -184,7 +160,9 @@ fn run_until(
     let mut launches = Vec::new();
     for _ in 0..300 {
         frame(manager, &mut renderer, app, cx, &mut launches);
-        if done(app, cx) {
+        // Validation is asynchronous now: an absent preparation is not completion. First observe
+        // an actual admitted native launch, then apply the same finished/blocked predicate.
+        if !launches.is_empty() && done(app, cx) {
             return launches;
         }
     }
@@ -638,14 +616,13 @@ fn a_step_that_references_a_build_tracks_its_current_definition(cx: &mut TestApp
     // command anywhere in the referencing configuration.
     cx.update(|_, cx| {
         app.update(cx, |app, cx| {
-            let key = app.workspace_key();
             let mut updated = app.run_controls.configuration("lib").cloned().unwrap();
             updated.build = crate::run::parse_steps(&action(
                 "编译库",
                 &format!("Set-Content -Path '{}' -Value v2", second.display()),
             ))
             .unwrap();
-            app.run_controls.upsert(updated, &key).unwrap();
+            super::test_configurations::accept(&mut app.run_controls, updated);
             // The referencing step still says only `@库配置`.
             let step = app.run_controls.configuration(&running).unwrap();
             assert_eq!(

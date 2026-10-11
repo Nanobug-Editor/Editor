@@ -1,4 +1,7 @@
 //! Actual public-SDK packages exercise tool authority and workspace/file-type preference persistence.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, api, ui},
@@ -10,12 +13,9 @@ use std::{
 
 /// Admission variants pass through the archive validator and execute the unchanged independent guest.
 fn package(variant: &str) -> Package {
-    let mut files = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-layout-test/layout-example.zip"),
-    )
-    .expect("build-layout-example.ps1 first")
-    .files;
+    let mut files = Package::read(&test_packages::archive("layout-example"))
+        .expect("frozen layout package must match its recorded digest")
+        .files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     match variant {
         "unnegotiated" => {
@@ -97,7 +97,7 @@ fn selected(manager: &Manager) -> String {
 
 /// Missing capability, consent or owned artwork must fail before any invalid tool scene publishes.
 #[test]
-#[ignore = "build actual SDK fixture with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn tools_require_negotiation_storage_consent_and_safe_owned_icons() {
     let workspace = tempfile::tempdir().unwrap();
     for (variant, code) in [
@@ -124,7 +124,7 @@ fn tools_require_negotiation_storage_consent_and_safe_owned_icons() {
 
 /// Same-type files converge, other workspaces remain independent, and reopening restores guest intent.
 #[test]
-#[ignore = "build actual SDK fixture with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn tools_persist_private_intent_and_reject_late_file_events() {
     let workspace = tempfile::tempdir().unwrap();
     let other = tempfile::tempdir().unwrap();
@@ -182,7 +182,7 @@ fn tools_persist_private_intent_and_reject_late_file_events() {
 
 /// A captured file button cannot reuse publication-time consent after the current grant is revoked.
 #[test]
-#[ignore = "build actual SDK fixture with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn captured_file_tools_recheck_current_editor_read_grant() {
     let workspace = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
@@ -214,7 +214,7 @@ fn captured_file_tools_recheck_current_editor_read_grant() {
 
 /// One-time native data import obeys plugin storage consent and never overwrites existing intent.
 #[test]
-#[ignore = "build actual SDK fixture with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn private_preference_import_preserves_existing_values_and_requires_consent() {
     let workspace = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();
@@ -258,7 +258,7 @@ fn private_preference_import_preserves_existing_values_and_requires_consent() {
 
 /// A live scoped watch observes a newer record; corrupt external writes are preserved and terminate it.
 #[test]
-#[ignore = "build actual SDK fixture with scripts/build-layout-example.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn private_preference_watch_converges_and_reports_corruption() {
     let workspace = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();

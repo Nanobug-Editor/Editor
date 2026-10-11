@@ -8,7 +8,7 @@
 
 Nanobug is a native desktop code editor built with Rust and GPUI, with Windows as its primary platform.
 
-The built-in terminal uses upstream Alacritty and shares one bottom panel with build, run and debug sessions; no terminal plugin installation is required. Independent plugins provide language support, Markdown and image previews, build rules and debuggers. Bundled and third-party plugins use the same public interfaces.
+The built-in terminal uses upstream Alacritty and shares one bottom panel with build, run and debug sessions; no terminal plugin installation is required. Independent plugins provide language support, Markdown and image previews, build rules and debuggers. Official and third-party plugins use the same public interfaces. Fresh installations contain no plugins or automatic recommendations: plain-text editing, the native terminal and the default theme are available immediately.
 
 The XML plugin provides schema assistance, completion, formatting, paired tag editing, and a document outline. HTML and JavaScript provide independent native language services. New workspaces start with the outline hidden; open it from the bottom window controls.
 
@@ -18,7 +18,7 @@ The native plugin manager reads the [reviewed marketplace](https://github.com/T-
 
 ## Installation
 
-Nanobug is under active development. On Windows, run `Nanobug-Setup-<version>-x64.exe` to install for your user account. The installer creates a Start menu entry, offers an optional desktop shortcut, and registers an uninstaller. It installs separate program and plugin files under `%LOCALAPPDATA%\Programs\Nanobug`; Rust and Cargo are not required to use them.
+Nanobug is under active development. On Windows, run `Nanobug-Setup-<version>-x64.exe` to install for your user account. The installer creates a Start menu entry, offers an optional desktop shortcut, and registers an uninstaller. It installs the program, icon and host licenses under `%LOCALAPPDATA%\Programs\Nanobug`; Rust and Cargo are not required to use them.
 
 Exit Nanobug before installing an update or uninstalling. Settings, history, and installed plugin data in the existing `MeEditor` directories are preserved. Windows installers include English and Simplified Chinese.
 
@@ -30,7 +30,7 @@ cargo build -p editor-app --release
 cargo run --release
 ```
 
-Prepare the executable, plugin ZIPs, first-use catalog, icon, and licenses as described in [native packaging](installer/README.md). Then compile the prepared Windows payload directly from the repository root:
+Prepare the executable, icon and host licenses as described in [native packaging](installer/README.md). Then compile the prepared Windows payload directly from the repository root:
 
 ```powershell
 # Read the actual host version and invoke the native installer compiler directly.
@@ -41,15 +41,15 @@ $output = Join-Path $PWD 'dist/installers'
 ISCC.exe "/DPayloadDir=$payload" "/DInstallerDir=$output" "/DAppVersion=$version" .\installer\windows\nanobug.iss
 ```
 
-Installers are written to `dist/installers/`; prepared runtime files remain in `dist/editor/`. Specify the compiler's full path if ISCC is not on PATH. Keep adjacent `plugins/` and `licenses/` directories for a portable copy.
+Installers are written to `dist/installers/`; prepared runtime files remain in `dist/editor/`. Specify the compiler's full path if ISCC is not on PATH. Keep the adjacent `licenses/` directory for a portable copy. Plugin ZIPs and first-use catalogs do not belong in the payload; plugins are installed into the existing private user store.
 
 The repository contains no helper-script directory. Packaging must call Cargo, the host's public CLI, archive tools, and native installer tools directly; it must not invoke archived Codex helper scripts, including through wrappers.
 
-Phase one validated Windows installation, in-place repair, running-app protection, and uninstall. macOS application bundles, DMG/PKG, and Linux DEB/RPM use direct native tools; preparation and commands are documented in [native packaging](installer/README.md). Those platforms are **not built or installation-tested in this phase**. Signing/notarization and platform-specific plugin dependencies require separate release work.
+The earlier installer phase validated Windows installation, in-place repair, running-app protection, and uninstall. macOS application bundles, DMG/PKG, and Linux DEB/RPM use direct native tools; preparation and commands are documented in [native packaging](installer/README.md). Those platforms are **not built or installation-tested in this phase**. Signing/notarization and platform-specific plugin dependencies require separate release work.
 
 ## Developing Nanobug
 
-On Windows, development requires the Rust MSVC toolchain (Rust 1.95 or newer), C++ build tools, and the Windows SDK. Building plugins and the complete distribution also requires the `wasm32-wasip2` target. See [Cargo.toml](Cargo.toml), [rust-toolchain.toml](rust-toolchain.toml), and [Cargo.lock](Cargo.lock) for version and dependency constraints.
+On Windows, development requires the Rust MSVC toolchain (Rust 1.95 or newer), C++ build tools, and the Windows SDK. Building WASM plugins separately requires the `wasm32-wasip2` target. See [Cargo.toml](Cargo.toml), [rust-toolchain.toml](rust-toolchain.toml), and [Cargo.lock](Cargo.lock) for version and dependency constraints.
 
 Run from the repository root:
 
@@ -66,7 +66,7 @@ cargo run --release -- C:\path\to\project
 
 Debug builds are unoptimized; window movement and editing may be slower. Use Release for everyday evaluation.
 
-The six workspace crates cover the application, document core, platform integration, plugin schema, public protocol, and plugin runtime. Independent plugins live in `plugins/`; native packaging configuration and instructions live in `installer/`. See the [maintainer documentation index](docs/README.md) for details.
+The six workspace crates cover the application, document core, platform integration, plugin schema, public protocol, and plugin runtime. Official plugin sources live in the independent [X-for-Nanobug repositories](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/registry); fixed test-only Package inputs live in `crates/plugin-runtime/tests/fixtures/packages/`; native packaging configuration and instructions live in `installer/`. See the [maintainer documentation index](docs/README.md) for details.
 
 The Cargo package remains `editor-app`. Existing `MeEditor` data directories, `ME_EDITOR_*` environment variables, and persisted command identifiers are retained to preserve settings, history, and installed plugins.
 
@@ -74,26 +74,26 @@ The Cargo package remains `editor-app`. Existing `MeEditor` data directories, `M
 
 Each plugin project uses a versioned `nanobug-plugin.json` to declare its manifest, optional WASM/native builds and explicit assets. GUI and CLI share this policy. ZIPs default to **each plugin project root**; a local configuration or `--output` can override the directory. A successful build atomically replaces `<id>-<version>.zip`; failure retains the previous ZIP. Packaging does not bump the manifest version.
 
-In **Edit configurations → Add → Nanobug**, choose **Plugin Packaging** or **Plugin Development** to create a draft. Packaging supports several projects and an output-directory picker. Development opens an isolated editor with shipped plugins plus the development version, without creating a ZIP. Its logs offer manual reload; automatic reload is optional. Build only prepares artifacts, and WASM source breakpoints are unavailable. Settings, installed plugins, private data and history are isolated and retained per configuration; resetting the environment starts afresh.
+In **Edit configurations → Add → Nanobug**, choose **Plugin Packaging** or **Plugin Development** to create a draft. Packaging supports several projects and an output-directory picker. Development opens an isolated editor with the development version; a new profile contains no other plugins, without creating a ZIP. Its logs offer manual reload; automatic reload is optional. Build only prepares artifacts, and WASM source breakpoints are unavailable. Settings, installed plugins, private data and history are isolated and retained per configuration; resetting the environment starts afresh.
 
 ```powershell
 # Build a host that provides the current SDK.
 cargo build -p editor-app
 
 # Build and ZIP a plugin, using its project root as output.
-.\target\debug\editor-app.exe --plugin-package plugins/example
+.\target\debug\editor-app.exe --plugin-package ../Rust-for-Nanobug
 
 # Batch packaging; relative --output is resolved from the current directory.
-.\target\debug\editor-app.exe --plugin-package plugins/toml plugins/html --output dist/plugins
+.\target\debug\editor-app.exe --plugin-package ../TOML-for-Nanobug ../HTML-for-Nanobug --output target/plugin-build
 
 # Prepare a directory candidate without ZIP or launching a development window.
-.\target\debug\editor-app.exe --plugin-build plugins/example
+.\target\debug\editor-app.exe --plugin-build ../Rust-for-Nanobug
 
-# Run an isolated development instance (this example declares no permissions).
-.\target\debug\editor-app.exe --plugin-dev plugins/example --watch
+# Prepare the development instance; add explicit --grant arguments for the manifest's declared permissions.
+.\target\debug\editor-app.exe --plugin-dev ../Rust-for-Nanobug --watch --grant workspace.read --grant process.exec --grant ui.panels --grant process.service.analysis --grant process.service.adapter --grant dependencies.prepare
 
 # Low-level independent Cargo builds still use the host's embedded SDK.
-.\target\debug\editor-app.exe --plugin-cargo plugins/example/Cargo.toml check --target wasm32-wasip2
+.\target\debug\editor-app.exe --plugin-cargo ../Rust-for-Nanobug/Cargo.toml check --target wasm32-wasip2
 
 # Export the embedded SDK directly for inspection or an external toolchain.
 .\target\debug\editor-app.exe --export-plugin-sdk .\target\sdk-export
@@ -101,7 +101,7 @@ cargo build -p editor-app
 
 For CLI development, send `reload` or `stop` on standard input. `--workspace` selects a test workspace (the plugin project by default); `--profile` selects isolated data. Repeat `--grant <permission>` for the permissions declared in the manifest. New permissions require stopping and authorizing another run; changing the plugin ID also requires restarting the configuration. Missing compilers/SDK targets are reported and never installed automatically. Native build steps declare their exact OS/architecture; foreign native artifacts are rejected. Windows is verified; macOS/Linux use portable paths and process interfaces but remain unverified.
 
-Install or update generated ZIPs in the plugin manager and approve their declared permissions. See the [packaging format](documentation/en/sdk/packaging.md), [run, debug, and build guide](documentation/en/guide/run-debug-build.md) and [Rust debugger README](plugins/rust-debugger/README.md). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
+Install or update generated ZIPs in the plugin manager and approve their declared permissions. See the [packaging format](documentation/en/sdk/packaging.md), [run, debug, and build guide](documentation/en/guide/run-debug-build.md) and [Rust debugger README](https://github.com/T-miracle/Rust-for-Nanobug). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
 
 ## Contributing
 
@@ -126,4 +126,4 @@ Reader-facing guides and SDK documentation are plain Markdown in [documentation/
 
 ## Licensing
 
-Workspace packages declare the MIT license in [Cargo.toml](Cargo.toml). Third-party dependencies and plugin grammars, icons, and other assets retain their respective licenses; see the corresponding plugin directories and distribution packages for attribution and license texts.
+Workspace packages declare the MIT license in [Cargo.toml](Cargo.toml). Third-party dependencies and plugin grammars, icons, and other assets retain their respective licenses; see the independent plugin repositories and their reviewed Release packages for attribution and license texts.

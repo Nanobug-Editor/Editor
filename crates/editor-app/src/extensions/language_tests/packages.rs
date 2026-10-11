@@ -25,7 +25,7 @@ tree_sitter_abi = 15
     );
     let manifest = serde_json::json!({"id":id,"name":"Novel language","version":"1.0.0",
         "protocol":7,"api":{"base":"^1"},"contributions":"plugin.toml","storage_limit":1024});
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/toml");
+    let root = crate::test_packages::root("toml");
     let legacy = plugin_schema::PluginManifest::parse(
         &std::fs::read_to_string(root.join("plugin.toml")).unwrap(),
     )
@@ -80,7 +80,7 @@ pub(in crate::extensions) fn repack(files: BTreeMap<String, Vec<u8>>) -> anyhow:
 
 /// A current resource-only package retains the current grammar declaration without a lifecycle component.
 pub(crate) fn rust_resource_package() -> Package {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugins/rust");
+    let root = crate::test_packages::root("rust");
     let source = std::fs::read_to_string(root.join("plugin.toml")).unwrap();
     let source = source
         .lines()

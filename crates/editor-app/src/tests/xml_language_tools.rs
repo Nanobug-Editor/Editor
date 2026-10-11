@@ -11,7 +11,7 @@ use std::{
 
 /// Exercise the shared document at the installed-package seam without replaying the detailed matrices.
 #[gpui::test]
-#[ignore = "build current XML and SVG ZIPs with the current public SDK first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -35,10 +35,7 @@ fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppCont
     )
     .unwrap();
     for id in ["svg", "xml"] {
-        let package = plugin_runtime::Package::read(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dist/plugins/{id}.zip")),
-        )
-        .unwrap();
+        let package = plugin_runtime::Package::read(&crate::test_packages::archive(id)).unwrap();
         if id == "xml" {
             // The default private preparation is already covered; reuse its approved exact binary for this short composition.
             super::editing_fixture::install_xml(&mut manager, &package);
@@ -61,6 +58,10 @@ fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppCont
     visual.update(|window, cx| {
         window.activate_window();
         app.update(cx, |app, cx| app.open_file(path.clone(), window, cx));
+        // Outline defaults hidden in a new workspace; this combination explicitly requests both surfaces.
+        app.update(cx, |app, cx| {
+            app.toggle_outline(&crate::outline::ToggleOutline, window, cx)
+        });
     });
     let mut renderer = VectorRenderer::default();
     wait(
@@ -238,10 +239,13 @@ fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppCont
         },
     );
     let actual = restored_visual.update(|_, cx| restored.read(cx).dock_area.read(cx).dump(cx));
-    assert_eq!(
-        serde_json::to_value(actual).unwrap(),
-        serde_json::to_value(saved).unwrap()
-    );
+    // The restored window first measures its initial viewport and rescales saved pixel sizes.
+    // Preserve every panel/axis/selection and split proportion rather than absolute old pixels.
+    let mut actual = serde_json::to_value(actual).unwrap();
+    let mut expected = serde_json::to_value(saved).unwrap();
+    normalize_split_proportions(&mut actual);
+    normalize_split_proportions(&mut expected);
+    assert_eq!(actual, expected);
     assert!(
         restored_visual.debug_bounds("outline-empty").is_some()
             || restored_visual.debug_bounds("outline-tree").is_some()
@@ -251,6 +255,31 @@ fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppCont
             .debug_bounds("explorer-reveal-active-file")
             .is_some()
     );
+}
+
+/// Compare persisted split ratios across viewport reconciliation; all other fields remain exact.
+fn normalize_split_proportions(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(fields) => {
+            if let Some(serde_json::Value::Array(sizes)) = fields.get_mut("sizes") {
+                let total: f64 = sizes.iter().map(|size| size.as_f64().unwrap()).sum();
+                assert!(total > 0. && total.is_finite(), "invalid split extent");
+                for size in sizes {
+                    let proportion = size.as_f64().unwrap() / total;
+                    *size = serde_json::json!((proportion * 10_000.).round());
+                }
+            }
+            for child in fields.values_mut() {
+                normalize_split_proportions(child);
+            }
+        }
+        serde_json::Value::Array(children) => {
+            for child in children {
+                normalize_split_proportions(child);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Drive the existing worker publication and actual raster renderer until an observable native result.

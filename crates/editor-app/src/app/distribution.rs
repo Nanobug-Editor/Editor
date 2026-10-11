@@ -1,47 +1,4 @@
-//! Locate installed resources and protect a running GUI from installer replacement.
-
-use std::path::{Path, PathBuf};
-
-/// Return shipped plugin directories before the source-tree fallback used by direct Cargo launches.
-/// macOS bundles store resources outside `MacOS`; Windows and Linux keep them beside the binary.
-pub(crate) fn shipped_plugin_roots() -> Vec<PathBuf> {
-    preferred_root(resource_roots(
-        std::env::current_exe().ok().as_deref(),
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins"),
-    ))
-}
-
-/// An installed resource directory is authoritative, even if damaged; never mix old developer ZIPs.
-/// The last candidate is always the source fallback, used only when no installed location exists.
-fn preferred_root(candidates: Vec<PathBuf>) -> Vec<PathBuf> {
-    let installed = candidates
-        .iter()
-        .take(candidates.len().saturating_sub(1))
-        .find(|path| path.is_dir());
-    installed
-        .or_else(|| candidates.last())
-        .cloned()
-        .into_iter()
-        .collect()
-}
-
-/// Infer only our explicit bundle layout; project settings cannot redirect installation resources.
-fn resource_roots(executable: Option<&Path>, development: PathBuf) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(parent) = executable.and_then(Path::parent) {
-        if parent.file_name().is_some_and(|name| name == "MacOS")
-            && let Some(contents) = parent.parent()
-            && contents.file_name().is_some_and(|name| name == "Contents")
-        {
-            roots.push(contents.join("Resources/plugins"));
-        }
-        roots.push(parent.join("plugins"));
-    }
-    if !roots.contains(&development) {
-        roots.push(development);
-    }
-    roots
-}
+//! Protect a running GUI from installer replacement; plugin resources remain in the private store.
 
 /// Retain the Windows installer mutex until the last GUI process exits.
 /// This guard signals installation safety, and does not impose a single-instance application policy.
@@ -124,35 +81,5 @@ mod windows {
             drop(second);
             assert!(!exists(&name));
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn distribution_prefers_installed_resources_and_keeps_direct_launch_fallback() {
-        let development = PathBuf::from("source/dist/plugins");
-        assert_eq!(
-            resource_roots(
-                Some(Path::new("installed/Nanobug.exe")),
-                development.clone()
-            ),
-            vec![PathBuf::from("installed/plugins"), development.clone()]
-        );
-        assert_eq!(resource_roots(None, development.clone()), vec![development]);
-    }
-
-    #[test]
-    fn distribution_never_mixes_installed_packages_with_old_development_packages() {
-        let fixture = tempfile::tempdir().unwrap();
-        let installed = fixture.path().join("installed/plugins");
-        let development = fixture.path().join("source/dist/plugins");
-        std::fs::create_dir_all(&development).unwrap();
-        let candidates = vec![installed.clone(), development.clone()];
-        assert_eq!(preferred_root(candidates.clone()), vec![development]);
-        std::fs::create_dir_all(&installed).unwrap();
-        assert_eq!(preferred_root(candidates), vec![installed]);
     }
 }

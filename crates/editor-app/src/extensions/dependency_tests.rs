@@ -64,7 +64,7 @@ fn wasm_dependency_plan_downloads_verifies_unpacks_and_starts_lsp(cx: &mut TestA
 }
 
 #[gpui::test]
-#[ignore = "build current capability-example SDK guest, lsp_fixture and installer_fixture first"]
+#[ignore = "requires frozen Package/WASM inputs and native lsp_fixture/installer_fixture; build native examples directly with Cargo"]
 fn wasm_installer_plan_requires_consent_then_starts_private_lsp(cx: &mut TestAppContext) {
     run_dependency_install(cx, true);
 }

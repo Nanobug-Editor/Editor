@@ -1,4 +1,7 @@
 //! Real SDK guests exercise bounded faults and manual recovery through the public package manager.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, ui::Kind},
@@ -12,11 +15,7 @@ mod service_packages;
 #[ignore = "build the SDK capability-example first"]
 fn wasm_fault_is_scoped_visible_and_independently_restartable() {
     let directory = tempfile::tempdir().unwrap();
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let workspace = directory.path().join("workspace");
     std::fs::create_dir(&workspace).unwrap();
     std::fs::write(workspace.join("source.txt"), "workspace").unwrap();

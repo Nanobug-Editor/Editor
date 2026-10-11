@@ -29,6 +29,15 @@ impl Server {
     /// Serve caller-owned controlled catalog/ZIP bytes, returning a loopback base URL and request counters.
     /// Only the first listing's download URL changes; no guest code is executed by this transport.
     pub(crate) fn from_bytes(catalog_bytes: &[u8], package: Vec<u8>) -> Self {
+        Self::with_statistics(catalog_bytes, package, None)
+    }
+    /// Serve an optional measured statistics snapshot independently of the reviewed download catalog.
+    /// This keeps real catalog/outage/ZIP transport while exercising the native statistics display.
+    pub(crate) fn with_statistics(
+        catalog_bytes: &[u8],
+        package: Vec<u8>,
+        statistics: Option<Vec<u8>>,
+    ) -> Self {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
@@ -55,11 +64,14 @@ impl Server {
                             .unwrap();
                         let mut request = [0; 4096];
                         let count_read = socket.read(&mut request).unwrap();
-                        let zip =
-                            String::from_utf8_lossy(&request[..count_read]).contains("/notes.zip");
+                        let request = String::from_utf8_lossy(&request[..count_read]);
+                        let zip = request.contains("/notes.zip");
+                        let stats = request.contains("/stats.json");
                         let bytes: &[u8] = if zip {
                             count.fetch_add(1, Ordering::AcqRel);
                             &package
+                        } else if stats && statistics.is_some() {
+                            statistics.as_ref().unwrap()
                         } else {
                             &catalog
                         };

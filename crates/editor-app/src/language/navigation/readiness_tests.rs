@@ -1,15 +1,24 @@
 //! Actual installed Rust policy and native analysis verify the public SDK discovery path.
 use super::*;
 
-/// Exercise the terminal import from the full editor workspace without a local SDK.
+/// Exercise public UI imports from an independent fixture inside the full editor workspace without a local SDK.
 #[test]
 #[ignore = "requires local Rust Analyzer and the editor workspace dependencies"]
-fn host_sdk_completes_terminal_from_editor_workspace() {
+fn host_sdk_completes_independent_fixture_from_editor_workspace() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let (_storage, _manager, server) = installed_rust_server(&root);
     server.prepare_until_ready().unwrap();
-    let path = root.join("plugins/capability-example/src/lib.rs");
+    let path = root.join("crates/plugin-runtime/tests/fixtures/sdk-completion/src/lib.rs");
     let uri = file_uri(&path.canonicalize().unwrap()).unwrap();
+    // A missing completion should expose the server's actual linked-project view, not a guessed fixture state.
+    let analysis_status = server
+        .connection
+        .lock()
+        .unwrap()
+        .as_mut()
+        .unwrap()
+        .request("rust-analyzer/analyzerStatus", json!({}))
+        .unwrap();
     for name in [
         "Action",
         "Canvas",
@@ -30,10 +39,14 @@ fn host_sdk_completes_terminal_from_editor_workspace() {
         };
         assert!(
             items.iter().any(|item| item.label == name),
-            "missing {name}: {items:?}"
+            "missing {name}: {items:?}; server status: {analysis_status}"
         );
     }
-    assert!(!root.join("plugins/capability-example/sdk").exists());
+    assert!(
+        !root
+            .join("crates/plugin-runtime/tests/fixtures/sdk-completion/sdk")
+            .exists()
+    );
 }
 
 /// Resolve completion and definition through the host cache for an excluded, SDK-free guest.
@@ -116,9 +129,9 @@ plugin-protocol = { version = "=0.2.0", features = ["guest"] }
     assert!(!plugin.join(".cargo").exists());
 }
 
-/// Exercises the bundled plugin against the locally installed server and workspace.
+/// Exercises the reviewed independent plugin against the locally installed server and workspace.
 #[test]
-#[ignore = "run scripts/rust-readiness-smoke.ps1 with a local Rust language server"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn local_rust_server_readiness() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let (_storage, _manager, server) = installed_rust_server(&root);
@@ -130,10 +143,8 @@ pub(super) fn installed_rust_server(
     root: &Path,
 ) -> (tempfile::TempDir, plugin_runtime::Manager, LanguageServer) {
     let storage = tempfile::tempdir().unwrap();
-    let package = plugin_runtime::Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/rust.zip"),
-    )
-    .expect("build the Rust package with scripts/build-plugins.ps1");
+    let package = plugin_runtime::Package::read(&crate::test_packages::archive("rust"))
+        .expect("frozen reviewed package must be present and match its ledger");
     let resources = plugin_runtime::HostResources {
         sdk: Some(crate::sdk_export::descriptor().map_err(|error| format!("{error:#}"))),
         ..Default::default()

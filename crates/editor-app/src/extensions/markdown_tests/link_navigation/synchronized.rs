@@ -36,6 +36,30 @@ fn open_fragment_in_order(
         .get_mut("markdown")
         .unwrap()
         .take_editor_requests();
+    // Pointer focus can also request native scroll synchronization. Keep those real handles in the
+    // actor queue while this scenario reorders only the one navigation completion.
+    let ancillary: Vec<_> = requests
+        .extract_if(.., |request| {
+            matches!(request.operation(), EditorOperation::LocateViewport { .. })
+        })
+        .collect();
+    ui.update(|_, cx| {
+        fixture
+            .app
+            .read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .editor_requests
+            .extend(
+                ancillary
+                    .into_iter()
+                    .map(|request| ("markdown".into(), request)),
+            )
+    });
     assert_eq!(requests.len(), 1, "one actual link issues one owned open");
     let request = requests.pop().unwrap();
     assert!(
@@ -125,7 +149,7 @@ fn visible_anchor(
 /// Initial source probes cannot replace either arrival order's actual middle/EOF navigation.
 /// Resizing preserves this fixture's short top block and its source correspondence, not a pinned EOF title.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_fragment_sync_preserves_both_arrival_orders_and_clamped_tail(
     cx: &mut TestAppContext,
 ) {
@@ -220,7 +244,7 @@ fn delivered_markdown_fragment_sync_preserves_both_arrival_orders_and_clamped_ta
 /// A queued source-driven locate is cancelled while its original source is still active.
 /// Replaying the same owned handle proves cancellation, rather than a later stale-document refusal.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_link_cancels_queued_sync_before_opening_target(cx: &mut TestAppContext) {
     let source =
         "[打开](next.md#%E7%9B%AE%E6%A0%87)\n\n".to_owned() + &"源侧长段落。\n\n".repeat(70);
@@ -292,7 +316,34 @@ fn delivered_markdown_link_cancels_queued_sync_before_opening_target(cx: &mut Te
         .get_mut("markdown")
         .unwrap()
         .take_editor_requests();
-    assert_eq!(requests.len(), 1);
+    // A new focus receipt is independent of the cancelled older source-driven locate.
+    let ancillary: Vec<_> = requests
+        .extract_if(.., |request| {
+            matches!(request.operation(), EditorOperation::LocateViewport { .. })
+        })
+        .collect();
+    ui.update(|_, cx| {
+        fixture
+            .app
+            .read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .editor_requests
+            .extend(
+                ancillary
+                    .into_iter()
+                    .map(|request| ("markdown".into(), request)),
+            )
+    });
+    assert_eq!(
+        requests.len(),
+        1,
+        "navigation cancellation must still admit exactly one open"
+    );
     let open = requests.pop().unwrap();
     assert!(
         matches!(open.operation(), EditorOperation::NavigateDocument {

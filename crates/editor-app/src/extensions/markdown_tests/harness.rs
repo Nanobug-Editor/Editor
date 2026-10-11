@@ -4,10 +4,7 @@ use gpui_kit::VisualTestContext;
 
 /// Inspect the delivered ZIP so all native scenarios execute its real component and resources.
 fn delivered_package() -> Package {
-    Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/markdown.zip"),
-    )
-    .unwrap()
+    Package::read(&crate::test_packages::archive("markdown")).unwrap()
 }
 
 /// Remove one declared permission before public installation, preserving the actual guest and assets.
@@ -119,7 +116,9 @@ impl NativeMarkdown {
     /// Let source notifications and rendered trees cross the existing worker seam in both directions.
     pub fn settle(&mut self, cx: &mut VisualTestContext) {
         use super::super::composable_tests::{publish, pump};
-        for _ in 0..5 {
+        // Real selection → edit → source publications span several actor iterations. Wait for
+        // matching source authority instead of ending with an earlier readonly checkbox scene.
+        for iteration in 0..16 {
             // Advance the real publication cadence deterministically instead of sleeping in native tests.
             cx.executor().advance_clock(Duration::from_millis(160));
             cx.run_until_parked();
@@ -138,6 +137,7 @@ impl NativeMarkdown {
                 .collect::<Vec<_>>();
             // The production worker hands these owned handles to its deferred editor queue.
             // Tests drive that same queue; they never apply text or synthesize request results.
+            let no_requests = requests.is_empty();
             cx.update(|_, cx| {
                 self.app
                     .read(cx)
@@ -151,6 +151,22 @@ impl NativeMarkdown {
                     .extend(requests);
             });
             publish(&mut self.manager, &mut self.renderer, &self.app, cx);
+            let current = cx.update(|_, cx| {
+                let app = self.app.read(cx);
+                let Some(preview) = app.active_editor_preview(cx) else {
+                    return true;
+                };
+                let expected = app
+                    .active_text_tab_index()
+                    .and_then(|index| app.plugin_document_version(index).ok());
+                let panel = preview.read(cx);
+                panel
+                    .current_document()
+                    .is_some_and(|document| document.source == expected)
+            });
+            if iteration >= 4 && current && no_requests {
+                break;
+            }
         }
     }
 
@@ -182,5 +198,18 @@ impl NativeMarkdown {
                 .clone()
                 .update(cx, |editor, cx| editor.focus(window, cx))
         });
+    }
+
+    /// Locate a task by its public tree order, independently of parser-internal offsets and stable-key allocation.
+    pub fn task_id(&self, index: usize) -> String {
+        let mut tasks = Vec::new();
+        self.manager.live["markdown"].views["preview"]
+            .root
+            .visit(&mut |node| {
+                if matches!(node.kind, protocol::ui::Kind::Checkbox { .. }) {
+                    tasks.push(node.id.clone());
+                }
+            });
+        tasks.get(index).expect("public task node").clone()
     }
 }

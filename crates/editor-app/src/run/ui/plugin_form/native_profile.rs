@@ -35,7 +35,7 @@ fn prepare_native_configuration_profile() {
     )
     .unwrap();
     for name in ["rust"] {
-        let package = Package::read(&repo.join(format!("dist/plugins/{name}.zip"))).unwrap();
+        let package = Package::read(&crate::test_packages::archive(name)).unwrap();
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();

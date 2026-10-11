@@ -380,6 +380,7 @@ impl DockPanel for TerminalPanel {
                     )
                     .child(
                         Button::new("native-terminal-hide")
+                            .debug_selector(|| "native-terminal-hide".into())
                             .icon(Icon::new(IconName::Minus).small())
                             .small()
                             .compact()

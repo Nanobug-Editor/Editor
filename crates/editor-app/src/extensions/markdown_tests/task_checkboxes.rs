@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// Every blank marker admitted by the installed parser is editable, preserving its original byte on undo.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_parser_blank_tasks_toggle_and_undo(cx: &mut TestAppContext) {
     let original = "- [\t] 制表符\n- [\u{b}] 垂直空白\n- [\u{c}] 换页空白\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);
@@ -27,7 +27,7 @@ fn delivered_markdown_parser_blank_tasks_toggle_and_undo(cx: &mut TestAppContext
 
 /// A Chinese task changes only its marker and one undo restores the complete original document.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_task_click_updates_source_with_one_undo(cx: &mut TestAppContext) {
     let original = "- [ ] 第一项\n  - [x] 子项\n- [X] 第三项\n";
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", original)]);
@@ -93,7 +93,7 @@ fn delivered_markdown_task_click_updates_source_with_one_undo(cx: &mut TestAppCo
 
 /// Nested/uppercase markers stay independent; native keyboard activation also works with source hidden.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_content_readonly(
     cx: &mut TestAppContext,
 ) {
@@ -113,7 +113,9 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
         task_count, 3,
         "plain prose and literal code cannot become editable tasks"
     );
-    fixture.click("plugin-checkbox-marker-b-20-task", ui);
+    let nested = fixture.task_id(1);
+    let selector = Box::leak(format!("plugin-checkbox-marker-{nested}").into_boxed_str());
+    fixture.click(selector, ui);
     let unchecked =
         "- [ ] 父任务\n  - [ ] 子任务\n- [x] 末项\n\n普通文字 [ ]\n\n```\n- [ ] 代码\n```\n";
     assert_eq!(
@@ -123,7 +125,7 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
     );
     fixture.click("plugin-tool-markdown/preview/display-preview", ui);
     assert!(ui.debug_bounds("editor-source-pane").is_none());
-    fixture.click("plugin-checkbox-marker-b-20-task", ui);
+    fixture.click(selector, ui);
     assert_eq!(
         ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).text().to_string()),
         unchecked.replacen("[ ] 子任务", "[x] 子任务", 1)
@@ -146,11 +148,11 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
     for dark in [true, false] {
         ui.update(|_, cx| apply_theme(builtin_theme(dark), cx));
         fixture.settle(ui);
-        let marker = ui.debug_bounds("plugin-checkbox-marker-b-20-task").unwrap();
+        let marker = ui.debug_bounds(selector).unwrap();
         assert_eq!(marker.size, size(px(16.), px(16.)));
         assert!(matches!(
             fixture.manager.live["markdown"].views["preview"]
-                .active_node("b-20-task")
+                .active_node(&nested)
                 .map(|node| &node.kind),
             Some(protocol::ui::Kind::Checkbox { checked: false, .. })
         ));
@@ -169,7 +171,7 @@ fn delivered_markdown_nested_tasks_support_preview_keyboard_and_keep_other_conte
 
 /// Editing through a preview control must retain its keyboard target while source remains visible.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_split_task_retains_focus_for_successive_keyboard_toggles(
     cx: &mut TestAppContext,
 ) {

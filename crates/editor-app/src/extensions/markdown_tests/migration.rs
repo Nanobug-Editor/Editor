@@ -4,7 +4,7 @@ use harness::NativeMarkdown;
 
 /// The actual platform specification must survive ZIP installation and native layout without losing its end.
 #[gpui::test]
-#[ignore = "build markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_platform_specification_previews_and_scrolls_to_end(cx: &mut TestAppContext) {
     let text = include_str!("../../../../../docs/plugins/specs/plugin-api-platform.md");
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("platform.md", text)]);
@@ -80,7 +80,7 @@ fn delivered_markdown_platform_specification_previews_and_scrolls_to_end(cx: &mu
 
 /// Native text and IME keep their mounted surface while the background guest has not caught up.
 #[gpui::test]
-#[ignore = "build migrated markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn migrated_markdown_keeps_native_input_visible_during_pending_guest_refresh(
     cx: &mut TestAppContext,
 ) {
@@ -153,12 +153,9 @@ fn migrated_markdown_keeps_native_input_visible_during_pending_guest_refresh(
 
 /// An imported SVG source choice remains local to text-capable SVG, while PNG keeps preview-only geometry.
 #[gpui::test]
-#[ignore = "build migrated Image through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn migrated_image_keeps_svg_intent_separate_from_raster_files(cx: &mut TestAppContext) {
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dist/plugins/svg.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("svg")).unwrap();
     let (mut fixture, ui) = NativeMarkdown::mount_package(
         cx,
         &[(
@@ -199,7 +196,7 @@ fn migrated_image_keeps_svg_intent_separate_from_raster_files(cx: &mut TestAppCo
 
 /// Session import preserves unrelated data, restores all guest switches, and never overrides new intent.
 #[gpui::test]
-#[ignore = "build migrated markdown through scripts/build-plugins.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn migrated_markdown_imports_legacy_intent_once_and_restores_after_restart(
     cx: &mut TestAppContext,
 ) {

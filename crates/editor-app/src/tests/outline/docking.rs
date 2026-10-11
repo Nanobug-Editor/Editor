@@ -134,8 +134,10 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
         });
         let initial_outline = panel_bounds(&app, outline, visual, false);
         let initial_explorer = panel_bounds(&app, explorer, visual, false);
-        close(initial_outline.size.height, initial_explorer.size.height);
+        // The default layout reserves a smaller outline pane; equal halves are not a layout contract.
+        assert!(initial_outline.size.height > px(0.) && initial_explorer.size.height > px(0.));
         close(initial_outline.left(), initial_explorer.left());
+        close(initial_outline.size.width, initial_explorer.size.width);
         let target = panel_bounds(&app, editor, visual, false);
         let destination = match placement {
             Placement::Left => point(target.left() + px(10.), target.center().y),
@@ -163,12 +165,13 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
         if vertical {
             close(outline_bounds.left(), explorer_bounds.left());
             close(outline_bounds.size.width, explorer_bounds.size.width);
-            close(outline_bounds.size.height, explorer_bounds.size.height);
+            // Joining retains the upstream pane ratios; the shared band axis must still align.
+            assert!(outline_bounds.size.height > px(0.) && explorer_bounds.size.height > px(0.));
             assert!(outline_bounds.bottom() <= explorer_bounds.top() + px(2.));
         } else {
             close(outline_bounds.top(), explorer_bounds.top());
             close(outline_bounds.size.height, explorer_bounds.size.height);
-            close(outline_bounds.size.width, explorer_bounds.size.width);
+            assert!(outline_bounds.size.width > px(0.) && explorer_bounds.size.width > px(0.));
             assert!(outline_bounds.right() <= explorer_bounds.left() + px(2.));
         }
         // Resize the actual split divider to a deliberately unequal ratio, then persist the resulting measurements.
@@ -203,8 +206,12 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
             }
         };
         assert!(
-            (extent(resized_outline) - extent(resized_explorer)).abs() > px(40.),
+            (extent(resized_outline) - extent(outline_bounds)).abs() > px(20.),
             "real divider dragging must change the ratio"
+        );
+        close(
+            extent(resized_outline) + extent(resized_explorer),
+            extent(outline_bounds) + extent(explorer_bounds),
         );
         visual.update(|window, cx| {
             app.read(cx).editor.clone().update(cx, |editor, cx| {

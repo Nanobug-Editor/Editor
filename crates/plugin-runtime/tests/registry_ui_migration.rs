@@ -1,4 +1,7 @@
 //! Retired UI metadata imports preserve installation preferences without admitting executable old contracts.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{Environment, settings::Scope},
@@ -165,13 +168,9 @@ fn retired_ui_import_does_not_accept_unknown_current_fields() {
 
 /// A current independent component stays dormant behind imported metadata until a verified SDK package replaces it.
 #[test]
-#[ignore = "build current capability-example with scripts/verify-plugin-sdk.ps1 first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn retired_ui_install_updates_through_sdk_and_preserves_private_data() {
-    let package = Package::read(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-sdk-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     let id = &package.manifest.id;

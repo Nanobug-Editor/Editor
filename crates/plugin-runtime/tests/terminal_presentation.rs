@@ -2,6 +2,9 @@
 #![cfg(windows)]
 #[path = "support/debugger_packages.rs"]
 mod packages;
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{
     Manager, Package,
     plugin_protocol::{self as protocol, api, process},
@@ -14,11 +17,7 @@ use std::{
 
 /// Repackaging changes only public manifest identity and capability declarations, never native code paths.
 fn consumer(id: &str) -> Package {
-    let base = Package::read(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let base = Package::read(&test_packages::archive("capability-example")).unwrap();
     let mut manifest: Value = serde_json::from_slice(&base.files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);
     manifest["api"]["required"]["process"] = json!(">=1.7,<2");
@@ -83,7 +82,7 @@ fn launch(manager: &mut Manager, id: &str, pty: bool) -> api::ResourceHandle {
 }
 /// Foreign/stale and pipe handles fail; retiring one consumer keeps the peer's input and output alive.
 #[test]
-#[ignore = "build capability-example through the current embedded SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn public_terminal_presentations_validate_ownership_transport_and_retirement() {
     let root = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(

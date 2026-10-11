@@ -1,4 +1,7 @@
 //! New UI capabilities enter through inspected independent SDK packages, never plugin-specific host hooks.
+/// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
+#[path = "support/packages.rs"]
+mod test_packages;
 use plugin_runtime::{Manager, Package, plugin_protocol::Environment};
 use serde_json::{Value, json};
 use std::io::{Cursor, Write};
@@ -7,7 +10,7 @@ mod ui_icons;
 
 /// Owned content defaults and adjustable native panes are independently negotiated before publication.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn content_defaults_require_capability_and_adjustable_panes_use_current_native_version() {
     for negotiated in [false, true] {
         let package = package_with_ui(
@@ -54,8 +57,7 @@ fn package(edit: impl FnOnce(&mut Value)) -> Package {
 
 /// Package mutations remain at the installed ZIP boundary rather than bypassing negotiation.
 fn package_with_ui(edit: impl FnOnce(&mut Value), edit_ui: impl FnOnce(&mut Value)) -> Package {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let root = test_packages::archive("capability-example");
     let mut files = Package::read(&root).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     // Each test explicitly chooses its drawing capability contract.
@@ -120,7 +122,7 @@ fn richtext_package(node: Value, negotiated: bool, preview: bool) -> Package {
 
 /// Both new node kinds require their own capability without changing the existing UI document version.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn richtext_nodes_negotiate_independently_of_markdown() {
     use plugin_runtime::plugin_protocol::api::{ErrorCode, Failure};
     for kind in [
@@ -155,7 +157,7 @@ fn richtext_nodes_negotiate_independently_of_markdown() {
 
 /// Source mappings need the rich-text capability even when attached to an otherwise ordinary text node.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn richtext_source_ranges_require_capability_and_preserve_utf8_byte_offsets() {
     use plugin_runtime::plugin_protocol::{
         api::{DocumentVersion, ErrorCode, Failure, Notification},
@@ -212,7 +214,7 @@ fn richtext_source_ranges_require_capability_and_preserve_utf8_byte_offsets() {
 
 /// Malformed guest mappings are rejected at the public manager boundary before publishing a view.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn richtext_source_ranges_reject_inverted_and_over_quota_bounds() {
     use plugin_runtime::plugin_protocol::api::{DocumentVersion, ErrorCode, Failure, Notification};
     for (start, end) in [(6, 0), (0, 1024 * 1024 + 1)] {
@@ -253,7 +255,7 @@ fn richtext_source_ranges_reject_inverted_and_over_quota_bounds() {
 
 /// Canvas drawing and character measurements are independently negotiated capabilities.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn canvas_and_grid_cannot_be_used_without_their_negotiated_capabilities() {
     for (canvas, grid, succeed) in [
         (false, false, false),
@@ -291,7 +293,7 @@ fn canvas_and_grid_cannot_be_used_without_their_negotiated_capabilities() {
 
 /// UI-only packages compose native controls and drawing without acquiring document/process authority.
 #[test]
-#[ignore = "build capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn composed_native_and_canvas_tree_requires_no_editor_or_process_grants() {
     let package = package(|manifest| {
         manifest["api"]["required"] =
@@ -313,7 +315,7 @@ fn composed_native_and_canvas_tree_requires_no_editor_or_process_grants() {
 
 /// Events queued before a tree replacement cannot be retargeted to its current nodes or kill the guest.
 #[test]
-#[ignore = "build capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn stale_and_missing_native_nodes_return_typed_errors_without_retiring_the_instance() {
     use plugin_runtime::plugin_protocol::{
         api::{ErrorCode, Failure, Notification as Event},
@@ -369,7 +371,7 @@ fn stale_and_missing_native_nodes_return_typed_errors_without_retiring_the_insta
 
 /// Preview text is separately authorized and its source version is echoed in the resulting native tree.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn preview_notifications_require_read_grants_and_preserve_document_identity() {
     use plugin_runtime::plugin_protocol::api::{self, DocumentVersion};
     let package = package(|manifest| {
@@ -421,7 +423,7 @@ fn preview_notifications_require_read_grants_and_preserve_document_identity() {
 
 /// A versioned native preview needs explicit read authority, not the legacy broad editor command grant.
 #[test]
-#[ignore = "build capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn native_canvas_preview_negotiates_without_legacy_editor_commands() {
     let package = package(|manifest| {
         manifest["api"]["required"]["ui.canvas"] = json!("^1");
@@ -450,7 +452,7 @@ fn native_canvas_preview_negotiates_without_legacy_editor_commands() {
 
 /// A real guest changes layout and vector geometry through the same nodes used by native controls.
 #[test]
-#[ignore = "build current capability-example through the host SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn toolbar_updates_unsaved_vector_preview_and_all_three_layouts() {
     use plugin_runtime::plugin_protocol::{
         Paint,

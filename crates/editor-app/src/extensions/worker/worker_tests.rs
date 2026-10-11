@@ -128,7 +128,7 @@ fn operation_errors_retain_plugin_ownership_through_worker_publication() {
 
 /// Obsolete native revisions and incarnations remain rejected without faulting a healthy real guest.
 #[test]
-#[ignore = "build capability-example through the public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn obsolete_ui_callbacks_are_information_but_real_rejections_are_errors() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("plugins");
@@ -136,11 +136,7 @@ fn obsolete_ui_callbacks_are_information_but_real_rejections_are_errors() {
         workspace: directory.path().display().to_string(),
         ..Default::default()
     };
-    let package = Package::read(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/plugin-api-test/capability-example.zip"),
-    )
-    .unwrap();
+    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
     let mut manager = Manager::open(root.clone(), environment.clone()).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())
@@ -231,14 +227,14 @@ fn obsolete_ui_callbacks_are_information_but_real_rejections_are_errors() {
 
 /// Both old-version writes and typed editor completions must progress before the download is released.
 #[test]
-#[ignore = "build capability-example through the public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn background_preparation_keeps_old_plugin_commands_and_requests_running() {
     run_preparation(false);
 }
 
 /// A grant queued before a later revocation must not revive the old plugin after cancellation finishes.
 #[test]
-#[ignore = "build capability-example through the public SDK first"]
+#[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn cancelled_preparation_does_not_replay_an_older_trust_grant() {
     run_preparation(true);
 }
@@ -252,8 +248,7 @@ fn run_preparation(restrict: bool) {
         workspace: directory.path().display().to_string(),
         ..Default::default()
     };
-    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/plugin-api-test/capability-example.zip");
+    let source = crate::test_packages::archive("capability-example");
     let old = Package::read(&source).unwrap();
     let mut manager = Manager::open(root.clone(), environment.clone()).unwrap();
     manager

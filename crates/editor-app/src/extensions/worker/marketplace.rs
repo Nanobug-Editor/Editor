@@ -8,6 +8,12 @@ mod tests;
 impl Worker {
     /// Restore bounded inert cache, then fetch without occupying the actor or UI thread.
     pub fn refresh_market(&self, cache: PathBuf, url: String) {
+        // Recorded UI tests must not spend bounded download slots on an ambient public endpoint.
+        // Explicit fixture URLs and real background actors still use the ordinary HTTP adapter.
+        #[cfg(test)]
+        if self.recording && url == plugin_runtime::marketplace::CATALOG_URL {
+            return;
+        }
         let generation = {
             let mut state = self.state.lock().unwrap();
             if state.market.refreshing {

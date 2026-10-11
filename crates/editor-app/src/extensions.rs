@@ -1,5 +1,4 @@
 //! Generic runtime-plugin dock and manager. Feature behavior arrives from installed packages.
-mod bundled;
 #[cfg(test)]
 mod capability_tests;
 mod commands;
@@ -53,6 +52,8 @@ mod preview;
 #[cfg(test)]
 mod preview_tests;
 mod recovery;
+#[cfg(all(test, windows))]
+mod test_configurations;
 mod tools;
 #[cfg(test)]
 mod tools_tests;
@@ -197,8 +198,7 @@ pub struct ExtensionPanel {
     pending: Option<Package>,
     /// Prevent repainting from opening the same installation dialog repeatedly.
     pending_dialog_open: bool,
-    /// First-use candidates belong to the active source, independently of the manager's manual ZIP flow.
-    bundled: bundled::State,
+    /// Explicit installations publish preparation and cutover progress to the native manager.
     installation: Option<worker::InstallationProgress>,
     installation_dialog_open: bool,
     /// Search and selection belong to the manager window, not a plugin surface.
@@ -264,25 +264,9 @@ impl ExtensionPanel {
             .structure_providers
             .clone()
     }
-    /// Discover shipped ZIPs for the local market tab and inspect their manifests once.
+    /// The online catalog is the only market source; refresh never scans executable or developer directories.
     fn load_market_packages(&mut self) {
-        let roots = crate::app::distribution::shipped_plugin_roots();
-        let mut paths = Vec::new();
-        for root in roots {
-            if let Ok(files) = std::fs::read_dir(root) {
-                paths.extend(
-                    files.flatten().map(|file| file.path()).filter(|path| {
-                        path.extension().is_some_and(|extension| extension == "zip")
-                    }),
-                );
-            }
-        }
-        paths.sort();
-        paths.dedup();
-        self.manager_packages = paths
-            .into_iter()
-            .filter_map(|path| Package::read(&path).ok())
-            .collect();
+        self.manager_packages.clear();
     }
     /// Select the plugin's cached SVG for the active editor palette.
     fn panel_icon(&self, dark: bool) -> Option<Icon> {
@@ -387,7 +371,6 @@ impl ExtensionPanel {
             command_popup: None,
             pending: None,
             pending_dialog_open: false,
-            bundled: Default::default(),
             installation: None,
             installation_dialog_open: false,
             manager_search: None,
@@ -491,7 +474,6 @@ impl ExtensionPanel {
             command_popup: None,
             pending: None,
             pending_dialog_open: false,
-            bundled: Default::default(),
             installation: None,
             installation_dialog_open: false,
             manager_search: None,
@@ -523,7 +505,6 @@ impl ExtensionPanel {
     /// Apply host-local authority before accepting further worker views or contributions.
     pub(crate) fn set_workspace_trusted(&mut self, trusted: bool, cx: &mut Context<Self>) {
         if !trusted {
-            self.bundled.cancel_request();
             self.worker.cancel_installation();
             // Startup declarations can exist before the worker publishes any installed entries.
             contributions::refresh_entries(&self.root, &[]);
@@ -546,20 +527,6 @@ impl ExtensionPanel {
             if self.market_view.revision != state.market_revision {
                 self.market_view.revision = state.market_revision;
                 changed = true;
-            }
-            if self.surface_id.is_none() {
-                changed |= self.bundled.ready != state.ready;
-                self.bundled.ready = state.ready;
-                if let Some(reply) = state.bundle_reply.take() {
-                    if let Some(message) = self.bundled.accept(reply) {
-                        // Integrity/recovery errors use the existing manager status; stale replies cannot set it.
-                        state.status = Some(worker::OperationStatus {
-                            plugin: None,
-                            message,
-                        });
-                    }
-                    changed = true;
-                }
             }
             let log_generation = state.logs.generation();
             if self.log_generation != log_generation {
@@ -803,7 +770,7 @@ impl ExtensionPanel {
     }
     /// Queue a plugin lifecycle operation and expose its waiting state on this frame.
     fn queue_lifecycle(&mut self, work: Work) -> bool {
-        let installing = matches!(&work, Work::Install(_) | Work::InstallBundle(_));
+        let installing = matches!(&work, Work::Install(_));
         if self.worker.queue_lifecycle(work) {
             if installing {
                 self.installation_dialog_open = false;
