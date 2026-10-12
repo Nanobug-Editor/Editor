@@ -119,6 +119,62 @@ fn explorer_transfer_paste_shortcut_follows_tree_focus(cx: &mut TestAppContext) 
 }
 
 #[gpui::test]
+fn explorer_transfer_cancel_uses_localized_labels(cx: &mut TestAppContext) {
+    // Locale is process-wide; restore it even when a visible-label assertion fails.
+    struct RestoreLocale(String);
+    impl Drop for RestoreLocale {
+        fn drop(&mut self) {
+            rust_i18n::set_locale(&self.0);
+        }
+    }
+    let _locale = RestoreLocale(rust_i18n::locale().to_string());
+    for (locale, expected) in [("en", "Cancel"), ("zh-CN", "取消")] {
+        rust_i18n::set_locale(locale);
+        let project = tempfile::tempdir().unwrap();
+        let external = tempfile::tempdir().unwrap();
+        let target = project.path().join("same.txt");
+        let source = external.path().join("same.txt");
+        std::fs::write(&target, "original").unwrap();
+        std::fs::write(&source, "imported").unwrap();
+        let (_, visual) = mount(cx, Workspace::open(project.path()).unwrap(), None);
+        paste(visual, vec![source.clone()], 0);
+        // Waiting at the real conflict also exposes the delayed progress cancellation control.
+        visual.executor().advance_clock(Duration::from_millis(400));
+        redraw(visual);
+        let progress_label = visual.update(|window, _| {
+            gpui_base::test_support::snapshots(window)
+                .into_iter()
+                .find(|item| {
+                    item.role() == Some(gpui_kit::Role::Button)
+                        && item.path().contains(&"transfer-cancel".into())
+                })
+                .unwrap()
+                .label()
+                .map(str::to_owned)
+        });
+        assert_eq!(progress_label.as_deref(), Some(expected));
+        let cancel = visual.debug_bounds("transfer-conflict-cancel").unwrap();
+        let label = visual.update(|window, _| {
+            gpui_base::test_support::snapshots(window)
+                .into_iter()
+                .find(|item| {
+                    item.role() == Some(gpui_kit::Role::Button)
+                        && item.bounds().contains(&cancel.center())
+                })
+                .unwrap()
+                .label()
+                .map(str::to_owned)
+        });
+        assert_eq!(label.as_deref(), Some(expected));
+        visual.simulate_click(cancel.center(), Modifiers::default());
+        redraw(visual);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "original");
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), "imported");
+        assert!(visual.debug_bounds("transfer-conflict-cancel").is_none());
+    }
+}
+
+#[gpui::test]
 fn explorer_transfer_paste_conflict_keeps_both(cx: &mut TestAppContext) {
     let project = tempfile::tempdir().unwrap();
     let external = tempfile::tempdir().unwrap();
