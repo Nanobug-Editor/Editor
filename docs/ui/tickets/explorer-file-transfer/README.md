@@ -1,18 +1,18 @@
 # 资源管理器文件转移实施工单
 
-状态：三张工单已发布并按 01 → 02 → 03 完成代码与自动验证；Windows 原生联合验收尚未完成，议题保持打开。
+状态：基础实现已合并主分支；2026-10-12 复制/剪切、联合操作、主题及退出清理已复验。#78、#80 的本票验收已满足，待本次修复推送及核对关闭；#79 与父方案 #76 仍待 Windows OS 跨窗口原生多项拖入。以[验收记录](../../verification/explorer-file-transfer.md)的实际证据与读回状态为准。
 
 来源：[资源管理器文件转移规格](../../specs/explorer-file-transfer.md)。产品交互与主要测试接缝均已确认。
 
-设计议题：[GitHub #76](https://github.com/T-miracle/Editor/issues/76)；[发布记录](publication.json)保存已读回核对的真实映射。三张工单均使用 `ready-for-agent`。
+设计议题：[GitHub #76](https://github.com/T-miracle/Nanobug/issues/76)；[发布记录](publication.json)保存已读回核对的真实映射。三张工单均使用 `ready-for-agent`。
 
 按较粗的端到端功能拆成 3 张工单，不按平台、单个按钮、底层模块或单条测试拆票。
 
 | 序号 | 工单 | 阻塞项 | 可演示结果 |
 | --- | --- | --- | --- |
-| 01 / [#78](https://github.com/T-miracle/Editor/issues/78) | [外部粘贴与可靠文件转移](01-file-paste.md) | 无 | 系统复制/剪切后粘贴，完成冲突处理、后台执行、取消及标签同步 |
-| 02 / [#79](https://github.com/T-miracle/Editor/issues/79) | [目录树拖放与目标导航](02-tree-drag-drop.md) | #78 | 树内移动/复制、外部拖入，以及目标高亮、悬停展开和边缘滚动 |
-| 03 / [#80](https://github.com/T-miracle/Editor/issues/80) | [文件操作撤销、重做与冲突恢复](03-file-undo-redo.md) | #78 | 从菜单及快捷键撤销、重做，处理后续变化与强制撤销确认 |
+| 01 / [#78](https://github.com/T-miracle/Nanobug/issues/78) | [外部粘贴与可靠文件转移](01-file-paste.md) | 无 | 系统复制/剪切后粘贴，完成冲突处理、后台执行、取消及标签同步 |
+| 02 / [#79](https://github.com/T-miracle/Nanobug/issues/79) | [目录树拖放与目标导航](02-tree-drag-drop.md) | #78 | 树内移动/复制、外部拖入，以及目标高亮、悬停展开和边缘滚动 |
+| 03 / [#80](https://github.com/T-miracle/Nanobug/issues/80) | [文件操作撤销、重做与冲突恢复](03-file-undo-redo.md) | #78 | 从菜单及快捷键撤销、重做，处理后续变化与强制撤销确认 |
 
 ```mermaid
 flowchart LR

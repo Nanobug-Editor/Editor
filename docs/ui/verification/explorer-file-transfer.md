@@ -2,9 +2,59 @@
 
 日期：2026-10-07。工作分支：`codex/explorer-file-transfer`；基线：`main` 的 `ae63225afd6e8a362c6f186d7374323e97405469`。
 
-规格：[explorer-file-transfer](../specs/explorer-file-transfer.md)。实施顺序：[外部粘贴 #78](https://github.com/T-miracle/Editor/issues/78)、[拖放 #79](https://github.com/T-miracle/Editor/issues/79)、[撤销重做 #80](https://github.com/T-miracle/Editor/issues/80)。
+规格：[explorer-file-transfer](../specs/explorer-file-transfer.md)。实施顺序：[外部粘贴 #78](https://github.com/T-miracle/Nanobug/issues/78)、[拖放 #79](https://github.com/T-miracle/Nanobug/issues/79)、[撤销重做 #80](https://github.com/T-miracle/Nanobug/issues/80)。
 
-状态：代码与自动验证已完成，待 Windows 原生联合验收；未完成的检查不标记为通过。
+状态：基础实现已合并主分支；2026-10-12 已补 Windows 复制/剪切回归、跨入口联合操作、中英文明暗主题及最终退出清理。系统文件管理器跨窗口原生多项拖入仍待人工操作结果，不能据此关闭 #79 或父方案 #76。下文保留 2026-10-07 的历史记录，最新证据见本次复验章节。
+
+## 2026-10-12 原生复验
+
+- 起点为已重新 fetch 核对的 `origin/main`：`4d172b97cbbf7aff2bbcd986116321e3566023b9`。`origin/codex/explorer-file-transfer` 为 `b0b601d81f2f7ebfb63efe4697169a8e24bf1ed3`，已包含在该主分支中。
+- 使用独立工作树 `codex/explorer-native-acceptance`，没有纳入主工作区的既有改动。验收资料根目录为 `C:/Users/Tmiracle/.codex/worktrees/explorer-native-acceptance/Editor/target/native-20261012/`；工作区为其 `project/`，来源为 `external/` 与 `windows-drag/`。`ME_EDITOR_PROFILE_HOME`、`ME_EDITOR_PLUGIN_HOME`、TEMP/TMP 及应用数据均定向到本任务目录。
+- 最终中文原生二进制 SHA-256：`C3C3A9E18800AD195A9EB5DBC7039023D6C55C1A0A118BC524ED091D39C28600`。所有最终中文复验使用该独立副本，不使用来源不明或仍在运行的其他实例。
+
+### 实际通过的原生操作
+
+| 场景 | 实际输入与观察结果 | 本地证据 |
+| --- | --- | --- |
+| 多项外部复制 | 系统文件资源管理器选中文件及目录，Ctrl+C；资源树选中 `01-target` 后 Ctrl+V。源文件保留，目标字节哈希一致，原有 anchor 保留 | `evidence/after-system-copy.json` |
+| 系统剪切回归 | 最终二进制中，以系统 Ctrl+X 和资源树 Ctrl+V 把 `cut-file.txt` 移入 `02-moved`。源路径消失，目标内容正确 | `evidence/final-system-cut.json` |
+| 外部导入 → 树内移动 → 撤销 → 重做 | 打开已导入文件，输入中文未保存内容；真实树内拖动到 `02-moved`。目录树 Ctrl+Z 恢复旧路径，Ctrl+Shift+Z 再次移动；内容、标签和文本历史保留 | `evidence/after-tree-move.json`、`after-file-undo.json`、`after-file-redo.json`、`joint-text-preserved.png` |
+| 标签路径与文本历史 | 会话文件的 open_tabs 包含迁移后的 `02-moved/native-file.txt`；编辑区文本撤销不改变磁盘位置。发现并修复文本 Ctrl+Shift+Z 缺失后，在最终构建实际输入、撤销及重做成功，再保存到新路径 | `evidence/final-text-redo.png`、`final-session.json` |
+| 中英文、明暗主题 | 原生菜单显示文件操作及具体对象；同名选择、恢复冲突、未保存内容二次确认、进度取消及持续消息均可读，无翻译键泄漏 | `evidence/final-zh-*.png`、`en-*.png` |
+| 二次确认拒绝与接受 | 中文与英文实例均先拒绝二次确认，未保存文本保留；重新执行并明确确认后才丢弃内容并恢复文件 | `evidence/final-discard-cancel-preserved.png`、`final-zh-*-discard.png`、`en-*-discard.png` |
+| 冲突等待中退出 | 最终中文实例在文件冲突弹窗和后台等待任务存在时 Alt+F4；退出码 0，stderr 为空，已完成操作的项目外备份和等待任务清理，源及项目文件保留 | `evidence/final-exit-waiting-conflict.png`、`final-backups-before-exit.json`、`final-exit.json`、`final-cleanup.json` |
+
+英文原生验收构建只临时将启动 locale 从 `zh-CN` 改为 `en`，其余源码与最终修复一致；SHA-256 为 `6B7CF728616DD996F03AF7790026E929620CD7D475C1169F078899CD1686A95F`。构建后已用补丁恢复启动代码，`main.rs` 无本次差异。该证据验证英文资源及原生布局，**不代表产品已经提供运行时语言切换**。
+
+### 本次修复、回归与审查
+
+1. 编辑区 Windows 默认只有 Ctrl+Y 重做，Ctrl+Shift+Z 未恢复文本。扩展已有目录移动/文件历史测试后先失败（`saved` 与 `saveddraft` 不符）；给既有 Base Redo 动作补 `Input` 范围的 Ctrl+Shift+Z 默认绑定后通过，继续保留 Ctrl+Y。文件和文本历史仍按焦点分开处理。
+2. 冲突及进度取消按钮引用不存在的 `common.cancel`，原生显示该键。复用已有 `explorer.cancel` 双语资源，并用同一显示文字发布原生无障碍标签；从真实冲突等待入口检查两种语言的弹窗与延迟进度取消按钮。修复前测试失败（`common.cancel` 与 `Cancel` 不符），修复后通过；取消仍保留源、目标内容。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| `cargo test -p editor-app explorer_transfer_ -- --test-threads=1` | 29 通过、0 失败、0 ignored；含两个退出清理用例及本次两项回归 |
+| `cargo test -p editor-app shortcuts -- --test-threads=1` | 22 通过、0 失败、5 ignored；未构建该过滤范围中无关的真实插件夹具 |
+| `cargo test -p editor-app leave -- --test-threads=1` | 4 通过、0 失败、1 ignored（既有 LSP 日志夹具）；不是全部 UI 测试 |
+| `cargo fmt --check` | 初次指出新增断言格式；已按提示修正，最终通过 |
+| `cargo check --workspace` | 最终通过；保留既有 warnings |
+| `cargo test --workspace --exclude editor-app` | 首次链接失败：找不到已安装的 `msvcrt.lib`。给该进程设置已有 MSVC/UCRT/UM 的 LIB 目录后以 `-j 2` 复跑通过，238 通过、0 失败、188 ignored；未修改或安装全局工具链 |
+| `cargo build -p editor-app` | 最终中文及临时英文原生构建均通过；未依赖退役 scripts |
+| 两轴独立代码审查 | 固定 `4d172b9` 到本次五文件差异。Standards：0 硬性违规、0 需处理的判断性坏味道；Spec：0 剩余代码发现 |
+
+日志位于上述 `evidence/`。188 项非 UI ignored 和额外 UI ignored 均未报告为通过；本次文件转移验收不依赖实际 WASM 包，不扩大为无关插件夹具构建。未重复完整 UI 套件。
+
+### 剩余原生步骤与平台限制
+
+- **待人工：Windows 系统文件管理器到 Nanobug 的多项跨窗口原生拖入。** 当前 computer-use 的 drag 仅针对单个窗口；未调用自制输入接口，也未用 GPUI 合成事件代替 OS 协议。已打开本任务两个专用窗口，选中 `windows-drag/native-file.txt` 与 `native-folder`，落点为资源树 `03-os-drop`。该目录目前只有 anchor；收到实际拖入反馈后再核对来源保留、目标字节、目录树及操作提示。样例与窗口保留，等待结果。
+- 基线中文实例和英文验收实例关闭时，AccessKit Windows UIA 线程曾记录 `ClientToScreen` 的无效窗口句柄 panic。该现象在本次修复前已出现；最终中文退出复验 stderr 为空，退出码 0 且文件操作资源全部清理。英文实例也返回退出码 0、备份清零，但保留其原始 stderr，不把它称为无异常退出。未修改上游依赖，该 UIA 生命周期现象仍需平台专项排查。
+- macOS/Linux 没有原生运行环境，仍维持下文实际支持范围；Windows 结果不代表其他平台验收通过。
+
+### 本次交付状态
+
+两项修复已分别普通提交：`19f5b40`（文本 Ctrl+Shift+Z）和 `c3d4461`（取消文案及无障碍标签）。第一项提交还以仅含该 index 的隔离源码导出复跑格式和目录移动/文本历史回归，1 通过；第二项对应已验证的最终五文件代码树。交付分支为 `codex/explorer-native-acceptance`，推送及议题读回结果随后核对。
+
+#78、#80 的本票矩阵已满足，关闭前仍核对推送和议题读回状态；#79、#76 保持打开，等待上述 Windows OS 拖入证据。不得用此次审查、自动测试或已完成的粘贴联合操作替代该缺口。
 
 ## 测试入口
 
@@ -28,8 +78,7 @@
 
 ## 待执行
 
-- Windows 系统文件管理器跨窗口原生拖入，等待人工操作结果；自动化 API 不允许跨窗口 drag，相关越界调用未执行输入。
-- Windows 原生“外部导入 → 树内移动 → 撤销 → 重做”联合场景、明暗主题反馈及最终版本的原生退出清理。验收窗口与样例保留在 `target/explorer-native/`，不操作其他任务的编辑器窗口。
+- Windows 系统文件管理器跨窗口原生多项拖入，等待本次专用窗口的人工操作结果；原生联合操作、主题和最终退出清理已按上文复验，不再沿用历史未执行状态。
 - macOS/Linux 原生运行验收没有环境，本轮不宣称通过；实际支持范围见下文。
 
 ## 审查修复

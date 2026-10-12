@@ -4,7 +4,7 @@
 
 整理日期：2026-10-07。
 
-状态：产品交互与测试接缝均已确认；已发布为 GitHub [#76](https://github.com/T-miracle/Editor/issues/76)。三张实施工单已完成代码、自动验证及两轴审查；Windows 原生联合验收尚未完成，实施议题保持打开。实际通过范围见[验收记录](../verification/explorer-file-transfer.md)。
+状态：产品交互与测试接缝均已确认；已发布为 GitHub [#76](https://github.com/T-miracle/Nanobug/issues/76)。基础实现已合并主分支；2026-10-12 补充 Windows 复制/剪切、联合操作、中英文明暗主题及退出清理复验，并修复文本重做快捷键和取消文案。系统跨窗口原生多项拖入仍待人工结果，父方案保持打开。实际通过范围与交付状态见[验收记录](../verification/explorer-file-transfer.md)。
 
 ## Problem Statement
 
@@ -203,6 +203,6 @@
 - 未在访谈中指定的细节包括保留两份的命名形式、进度显示阈值、撤销记录容量及备份限额。本规格不把这些参数伪称为已确认，也不自行承诺跨重启恢复或无限备份。
 - 文档供 AI 与维护者使用，实际交付后的读者使用说明应在网站文档面维护，不复制本规格正文作为用户手册。
 
-相关依据：[需求基线](../../需求整理.md)、[开发计划](../../开发计划.md)、[领域文档约定](../../agents/domain.md)、[议题工作流](../../agents/issue-tracker.md)、[分诊标签](../../agents/triage-labels.md)。
+相关依据：[需求基线](../../project/需求整理.md)、[开发计划](../../project/开发计划.md)、[领域文档约定](../../agents/domain.md)、[议题工作流](../../agents/issue-tracker.md)、[分诊标签](../../agents/triage-labels.md)。
 
 返回[原生 UI 文档目录](../README.md)。
