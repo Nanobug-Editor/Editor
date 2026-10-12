@@ -33,4 +33,21 @@
 
 延迟失败在原样本基线上也存在，不放宽 60/100 ms 门槛，不以合并任务扩大修改渲染器。当前结果不表示该 ignored 性能用例通过，也不表示整个 UI 或所有真实包测试均已重跑。
 
-原始日志、index 导出与源码摘要快照位于 `C:/Users/Tmiracle/.codex/workspaces/Nanobug/all-branches-20261012/`。资源管理器原生行为证据继续见[文件转移验收](../ui/verification/explorer-file-transfer.md)；主分支合并与最终推送结果在完成后补充。
+## 主分支整合
+
+收尾提交为 `1a40704`（截图删除）、`1a78b6a`（安装替代断言）、`a358574`（文档与夹具收尾）。先执行普通 `git push origin --all`，再通过 `git ls-remote --heads origin` 逐一核对全部 23 个本地分支 HEAD。新增远端 `codex/main-community-integration-20261012`，未强制推送或改写历史。
+
+唯一未包含的 `codex/explorer-native-acceptance` / `b100b75` 以 `--no-ff --no-commit` 普通合并到当前主分支，自动合并无冲突。合并后同步原生 UI 总入口，保留现行社区能力与无随附插件布局。
+
+| 合并候选检查 | 实际结果 |
+| --- | --- |
+| `cargo fmt --check` | 通过 |
+| `cargo test --workspace --exclude editor-app -j 2` | 266 通过、0 失败、254 ignored |
+| `cargo check --workspace` | 通过 |
+| `cargo test -p editor-app explorer_transfer_ -- --test-threads=1` | 29 通过、0 失败、0 ignored |
+| `cargo test -p editor-app shortcuts -- --test-threads=1` | 22 通过、0 失败、5 ignored |
+| `cargo test -p editor-app second_local_import_shows_visible_consent -- --test-threads=1` | 1 通过 |
+
+交付最后核对普通合并提交与 `origin/main` 相同、所有本地及远端分支均为主分支祖先、工作区干净且没有 `plugins/` 跟踪文件或目录；不删除历史分支、发布版本或改写其他议题。
+
+原始日志、index 导出与源码摘要快照位于 `C:/Users/Tmiracle/.codex/workspaces/Nanobug/all-branches-20261012/`。资源管理器原生行为证据继续见[文件转移验收](../ui/verification/explorer-file-transfer.md)；本轮只补整合后的代码回归，没有把旧 Windows 原生结果称为新一次 UI 运行。

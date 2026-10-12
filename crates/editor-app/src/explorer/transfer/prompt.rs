@@ -89,7 +89,7 @@ impl EditorApp {
                     ),
                     (
                         "transfer-conflict-cancel",
-                        t!("common.cancel").to_string(),
+                        t!("explorer.cancel").to_string(),
                         Choice::Cancel,
                         true,
                     ),
@@ -121,7 +121,7 @@ impl EditorApp {
                     ),
                     (
                         "transfer-conflict-cancel",
-                        t!("common.cancel").to_string(),
+                        t!("explorer.cancel").to_string(),
                         Choice::Cancel,
                         true,
                     ),

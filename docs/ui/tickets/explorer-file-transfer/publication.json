@@ -1,14 +1,16 @@
 {
-  "repository": "T-miracle/Editor",
+  "repository": "T-miracle/Nanobug",
   "feature": "explorer-file-transfer",
-  "updated_at": "2026-10-07",
+  "updated_at": "2026-10-12",
   "label": "ready-for-agent",
   "spec": {
     "number": 76,
     "id": 5742116671,
     "node_id": "I_kwDOUnHq-M8AAAABVkG_Pw",
-    "url": "https://github.com/T-miracle/Editor/issues/76",
-    "state": "open",
+    "url": "https://github.com/T-miracle/Nanobug/issues/76",
+    "state": "closed",
+    "state_reason": "completed",
+    "closed_at": "2026-10-12T02:22:50Z",
     "publication_status": "published",
     "readback_verified": true
   },
@@ -22,8 +24,10 @@
       "publication_status": "published",
       "number": 78,
       "id": 5742262029,
-      "url": "https://github.com/T-miracle/Editor/issues/78",
-      "state": "open",
+      "url": "https://github.com/T-miracle/Nanobug/issues/78",
+      "state": "closed",
+      "state_reason": "completed",
+      "closed_at": "2026-10-12T02:04:50Z",
       "readback_verified": true
     },
     {
@@ -36,8 +40,10 @@
       "publication_status": "published",
       "number": 79,
       "id": 5742262700,
-      "url": "https://github.com/T-miracle/Editor/issues/79",
-      "state": "open",
+      "url": "https://github.com/T-miracle/Nanobug/issues/79",
+      "state": "closed",
+      "state_reason": "completed",
+      "closed_at": "2026-10-12T02:22:45Z",
       "readback_verified": true
     },
     {
@@ -50,8 +56,10 @@
       "publication_status": "published",
       "number": 80,
       "id": 5742317614,
-      "url": "https://github.com/T-miracle/Editor/issues/80",
-      "state": "open",
+      "url": "https://github.com/T-miracle/Nanobug/issues/80",
+      "state": "closed",
+      "state_reason": "completed",
+      "closed_at": "2026-10-12T02:04:52Z",
       "readback_verified": true
     }
   ]

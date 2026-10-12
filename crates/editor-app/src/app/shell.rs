@@ -24,6 +24,8 @@ pub(crate) fn bind_editor_shell_keys(cx: &mut App) {
         KeyBinding::new("shift-alt-f", FormatDocument, document_context),
         KeyBinding::new("f2", RenameSymbol, document_context),
         KeyBinding::new("ctrl-s", SaveDocument, document_context),
+        // Match the tree's redo chord when text input owns focus; Base keeps its existing Ctrl+Y binding.
+        KeyBinding::new("ctrl-shift-z", gpui_base::input::Redo, Some("Input")),
         KeyBinding::new("ctrl-shift-r", RefreshWorkspace, document_context),
         KeyBinding::new("ctrl-alt-t", ToggleTheme, Some("EditorShell")),
         KeyBinding::new("f12", NavigateToDefinition, document_context),

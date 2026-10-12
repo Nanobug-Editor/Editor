@@ -8,7 +8,7 @@
 | 产品品牌 | [Nanobug 名称、图标与兼容标识](project/branding.md) | 当前品牌入口与保留旧数据、开发和仓库标识的依据 |
 | 安装与分发 | [安装包目录](distribution/README.md) | 第一期 Windows 安装器与验收；macOS/Linux 兼容打包入口不验收 |
 | 插件系统 | [插件文档目录](plugins/README.md) | 方案、工单与验收；原平台 20 张工单已完成，社区基础能力七单的状态见对应验收入口 |
-| 原生 UI | [UI 文档目录](ui/README.md) | 原生 UI 方案与 GPUI 交互调研；快捷键面板已交付，资源管理器文件转移代码与自动化验证已完成，原生验收待补充 |
+| 原生 UI | [UI 文档目录](ui/README.md) | 原生 UI 方案与 GPUI 交互调研；快捷键面板已交付，资源管理器文件转移 Windows 原生及联合验收已完成，平台限制见验收记录 |
 | 运行与公开 SDK | [英文 README](../README.md)、[中文 README](../README.zh-CN.md)、[协议源码](../crates/plugin-protocol/src/lib.rs) | 双语运行、构建与打包入口；接口使用、权限和释放义务维护在源码注释 |
 | 历史文档站点 | [静态文档站点方案](website/specs/static-docs-site.md)、[规格](website/specs/docs-site.md)、[实施工单](website/tickets/README.md)、[交接说明](website/handoff/static-docs-site-handoff.md)、[移除验收](website/verification/removal-2026-10-09.md) | 2026-10-09 按用户要求移除站点、发布工作流、文档内嵌与独立读者文档目录；旧方案、工单及验收仅供追溯 |
 | 协作约定 | [领域术语](agents/domain.md)、[议题工作流](agents/issue-tracker.md)、[分诊标签](agents/triage-labels.md) | AI 与维护者的协作依据；仓库入口为 [AGENTS.md](../AGENTS.md) |

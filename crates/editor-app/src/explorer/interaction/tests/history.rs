@@ -80,6 +80,20 @@ fn explorer_transfer_undo_move_directory_preserves_dirty_session(cx: &mut TestAp
         "text undo must leave the disk move in place"
     );
     ui.update(|_, cx| assert_eq!(app.read(cx).editor.read(cx).value().to_string(), "saved"));
+    // The same redo chord must restore text when Input owns focus, without redoing disk history.
+    ui.simulate_keystrokes("ctrl-shift-z");
+    redraw(ui);
+    assert!(
+        moved.exists(),
+        "text redo must leave the disk move in place"
+    );
+    assert!(!original.exists());
+    ui.update(|_, cx| {
+        assert_eq!(
+            app.read(cx).editor.read(cx).value().to_string(),
+            "saveddraft"
+        )
+    });
 }
 
 #[gpui::test]

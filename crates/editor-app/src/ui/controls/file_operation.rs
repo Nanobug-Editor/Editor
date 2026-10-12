@@ -83,6 +83,8 @@ pub(crate) fn conflict_prompt(
                     .debug_selector(move || choice.id.into())
                     .child(
                         Button::new(choice.id)
+                            // Native accessibility exposes the same choice that is painted on screen.
+                            .accessibility_label(choice.label.clone())
                             .label(choice.label)
                             .disabled(!choice.enabled)
                             .on_click(move |_, window, cx| (choice.activate)(window, cx)),
@@ -119,6 +121,8 @@ pub(crate) fn progress(
     cancel: impl Fn(&mut Window, &mut App) + 'static,
     cx: &mut App,
 ) -> AnyElement {
+    // Both visible text and native accessibility use the existing bilingual explorer cancellation label.
+    let cancel_label = t!("explorer.cancel").to_string();
     h_flex()
         .id("transfer-progress")
         .debug_selector(|| "transfer-progress".into())
@@ -140,7 +144,8 @@ pub(crate) fn progress(
         .child(div().flex_1().text_sm().child(message))
         .child(
             Button::new("transfer-cancel")
-                .label(t!("common.cancel").to_string())
+                .accessibility_label(cancel_label.clone())
+                .label(cancel_label)
                 .on_click(move |_, window, cx| cancel(window, cx)),
         )
         .into_any_element()
