@@ -1,0 +1,18 @@
+{
+  "repository": "T-miracle/Nanobug",
+  "stable_id": "ui-project-windows",
+  "spec": {
+    "number": 102,
+    "id": 5810381767,
+    "url": "https://github.com/T-miracle/Nanobug/issues/102",
+    "state": "open",
+    "labels": ["ready-for-agent"],
+    "title_verified": true,
+    "body_verified": true,
+    "label_verified": true,
+    "verified_on": "2026-10-12"
+  },
+  "test_boundaries_confirmed_on": "2026-10-12",
+  "implementation_status": "not_started",
+  "tickets": []
+}
