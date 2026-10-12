@@ -10,6 +10,31 @@ which are optional, and the editor checks those declarations before an instance 
 plugin that requires a capability the editor cannot provide is rejected with a reason rather
 than started in a degraded state.
 
+## Stability and capability compatibility
+
+Each capability page states its version and whether it is stable or experimental. A stable
+capability keeps existing operation shapes and meaning compatible within one major version;
+minor releases may add features. A plugin using a later addition must declare that feature's
+minimum capability version and check the negotiated result. Experimental capabilities are
+explicitly labelled and do not carry the stable compatibility promise; permission, ownership
+and resource cleanup rules still apply.
+
+An unknown, unavailable or mismatched `api.required` capability rejects the package before
+activation. An unavailable `api.optional` capability is omitted from the prepare negotiation,
+including an unknown optional ID; the plugin must disable that feature or provide its own
+fallback. Optional negotiation does not grant permission or make an unsupported operation
+callable.
+
+The minimum host is determined by its supported wire/base protocol and required capability
+versions, rather than a guessed Nanobug product version. The current SDK uses `protocol = 7`
+and `api.base = ^1`; a capability page supplies the additional minimum range. Package, SDK,
+wire protocol and capability versions are managed separately. This policy introduces no
+support for future or historical wire protocols.
+
+A breaking change requires a new capability major version. Before removing a stable API,
+publish its deprecation, affected version range, replacement, minimum replacement capability
+and migration steps; it remains compatible through its current major.
+
 Cross-plugin collaboration, versioned contracts, provider selection and origin permissions
 are described in [Plugin services](services.md). Native services, interactive
 processes, permissions and reclamation are described in
@@ -21,6 +46,9 @@ Private storage, data-format migration and the transactional cutover that replac
 instance are described in [Private data and migration](migration.md). The budgets
 applied to guest execution, and what recovery does and does not promise, are described in
 [Execution limits and recovery](faults.md).
+
+General HTTP streaming, separately authorized system credentials, private directories and
+disposable refresh timers are described in [HTTP, secrets and private state](/en/sdk/cloud/).
 
 ## Service discovery and language.lsp 1.1
 
@@ -99,6 +127,8 @@ execution.
 [Run sessions](sessions.md) specify public input, presentation, output subscriptions and normal/forced stopping. [Debug sessions](debug.md) specify pause generations, real inspection and breakpoint verification. [Run target providers](targets.md) contribute portable bindings and controlled artifact preparation.
 
 [Configuration templates](configurations.md) provide plugin-owned defaults, native forms and validation for local configuration drafts.
+
+[Typed commands and native menus](/en/sdk/commands/) provide checked parameters, results and original-source permissions. [Native interactions](/en/sdk/interaction/) provide confirmed input, messages, cancellable progress and restricted external selection.
 
 ## workspace.files 1.1 and host.sdk 1.0
 
@@ -244,3 +274,5 @@ no SDK, no Cargo configuration and no path into host sources; go-to-definition o
 protocol sources in the host cache. This needs the Rust language plugin enabled and Rust
 Analyzer installed.
 [Semantic viewports](viewport.md), [links and navigation](navigation.md) and [read-only code highlighting](code-highlighting.md) add versioned native preview interactions without creating another mutable document.
+
+[Documents and readonly resources](documents.md) cover exact unsaved snapshots, ordered metadata subscriptions, instance-owned virtual Tabs and native comparison.

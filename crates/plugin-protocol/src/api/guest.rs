@@ -132,6 +132,45 @@ pub fn editor(operation: EditorOperation, timeout_ms: u32) -> Result<ResourceHan
     }
 }
 
+/// Observe ordered document metadata with an eight-subscription, 128-event budget.
+/// Release with close_resource; a terminal SubscriptionFailed requires enumerating and resubscribing.
+/// WillSave is observational and cannot intercept or delay the host's save.
+pub fn subscribe_document_events() -> Result<ResourceHandle, Failure> {
+    match request(Operation::SubscribeDocumentEvents)? {
+        Value::Resource(handle) => Ok(handle),
+        _ => Err(wire_error("Expected detailed document subscription")),
+    }
+}
+
+/// Start a bounded live-document enumeration; consume its Documents result with EditorTask::update.
+///
+/// `timeout_ms` is 1..=300,000. Requires `editor.documents >=1.1,<2` and `editor.read`;
+/// negotiation or permission failures occur before acceptance. The terminal result contains
+/// at most 128 readable live identities, including unsaved state and excluding foreign virtuals.
+/// Retain an exact returned version for a subsequent read rather than guessing from a path.
+pub fn list_documents(timeout_ms: u32) -> Result<EditorTask, Failure> {
+    EditorTask::start(EditorOperation::ListDocuments, timeout_ms)
+}
+
+/// Read current unsaved text at an exact revision, optionally in strict UTF-8/UTF-16 coordinates.
+/// Completed snapshots are immutable; stale or closed targets fail with StaleRevision.
+///
+/// `document` must be a freshly observed readable identity, `range` is half-open (None means
+/// the complete text), and `timeout_ms` is 1..=300,000. Requires `editor.documents >=1.1,<2`
+/// and `editor.read`. The accepted task completes with a DocumentSnapshot of at most 256 KiB;
+/// larger reads fail with LimitExceeded rather than truncating. Split character/surrogate
+/// endpoints fail with InvalidRequest. Release/cancel retained waits and ignore late results.
+pub fn read_document(
+    document: DocumentVersion,
+    range: Option<DocumentRange>,
+    timeout_ms: u32,
+) -> Result<EditorTask, Failure> {
+    EditorTask::start(
+        EditorOperation::ReadDocument { document, range },
+        timeout_ms,
+    )
+}
+
 /// Correlation IDs are transport details; callers receive typed values or failures.
 pub fn request(operation: Operation) -> Result<Value, Failure> {
     let id = NEXT_ID.with(|next| {

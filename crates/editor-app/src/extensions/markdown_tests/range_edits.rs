@@ -28,6 +28,13 @@ fn edit_peer() -> Package {
 
 /// Request handles originate in real WASM, retaining its grant, workspace, deadline and retirement gates.
 fn request(fixture: &mut NativeMarkdown, operation: Op) -> plugin_runtime::EditorRequest {
+    // This actual SDK edit probe, rather than installation of its peer package, is the demand.
+    super::super::package_ui_test_support::demand(
+        &mut fixture.manager,
+        "capability-example",
+        plugin_runtime::DemandReason::Command("scope-probe".into()),
+    )
+    .unwrap();
     fixture
         .manager
         .invoke_command(

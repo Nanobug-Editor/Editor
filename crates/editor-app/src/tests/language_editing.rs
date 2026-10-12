@@ -6,6 +6,7 @@ use super::{
 use crate::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 mod formatting;
+mod language_features;
 mod linked;
 mod persisted;
 mod queue;

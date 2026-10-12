@@ -25,6 +25,8 @@ fn main() {
     )
     .unwrap();
     let mut input = std::io::BufReader::new(std::io::stdin().lock());
+    // Only the first reference is withheld; the same live server must accept cancellation and reuse.
+    let mut reference_ignored = false;
     loop {
         let mut length = 0;
         loop {
@@ -69,7 +71,7 @@ fn main() {
         }
         let result = match method {
             "initialize" => {
-                json!({"capabilities":{"completionProvider":{},"definitionProvider":true,"textDocumentSync":{"openClose":true,"change":1,"save":true}}})
+                json!({"capabilities":{"completionProvider":{},"definitionProvider":true,"referencesProvider":true,"signatureHelpProvider":{},"codeActionProvider":true,"textDocumentSync":{"openClose":true,"change":1,"save":true}}})
             }
             "initialized" => {
                 send(
@@ -106,6 +108,28 @@ fn main() {
             "textDocument/completion" => json!([{"label":"fixture-completion"}]),
             "textDocument/definition" => {
                 json!({"uri":params["textDocument"]["uri"],"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}})
+            }
+            "textDocument/references" => {
+                if !reference_ignored && args.iter().any(|arg| arg == "--ignore-references-once") {
+                    reference_ignored = true;
+                    continue;
+                }
+                // The returned strict UTF-16 coordinate is resolved against the supplied dirty source.
+                json!([{"uri":params["textDocument"]["uri"],"range":{"start":{"line":0,"character":2},"end":{"line":0,"character":4}}}])
+            }
+            "textDocument/signatureHelp" => {
+                // UTF-16 spans include one surrogate pair. Signature-local parameter wins over help.
+                json!({"signatures":[
+                    {"label":"f(🙂, 参数)","parameters":[{"label":[2,4]},{"label":[6,8]}]},
+                    {"label":"f(🙂, 参数)","parameters":[{"label":[2,4]},{"label":[6,8]}],"activeParameter":0}
+                ],"activeSignature":1,"activeParameter":1})
+            }
+            "textDocument/codeAction" => {
+                // The standard edit remains bound to the requested URI; no command is executed.
+                let uri = params["textDocument"]["uri"].as_str().unwrap();
+                json!([{"title":"Fix Unicode","edit":{"changes":{
+                    (uri):[{"range":{"start":{"line":0,"character":2},"end":{"line":0,"character":4}},"newText":"新🙂"}]
+                }}}])
             }
             "fixture/notifications" => {
                 // Exercise real server notifications without adding any host-side test-only operation.

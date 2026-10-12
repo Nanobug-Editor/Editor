@@ -1,5 +1,10 @@
 //! Language protocol declarations remain generic and bounded at the public package inspection seam.
-use plugin_runtime::Package;
+#[path = "support/demand.rs"]
+mod demand_support;
+use plugin_runtime::{
+    DemandReason, LanguageRole, Manager, Package,
+    plugin_protocol::{Environment, api},
+};
 use serde_json::{Value, json};
 use std::io::{Cursor, Write};
 
@@ -35,10 +40,22 @@ host_version = ">=0.1.0"
     Package::from_bytes(&archive.finish()?.into_inner())
 }
 
+/// Tool search belongs to an explicitly selected role, not cold metadata publication.
+/// Preserve the original availability and expose preparation failures alongside their catalog entry.
+fn selected_analysis(manager: &mut Manager) -> Result<(), api::Failure> {
+    demand_support::try_ready(
+        manager,
+        "unfamiliar-language",
+        DemandReason::Language {
+            provider: "unfamiliar-language/analysis".into(),
+            role: LanguageRole::Lsp,
+        },
+    )
+}
+
 /// A broken higher-priority candidate cannot hide the next working approved native tool.
 #[test]
 fn declared_tool_search_checks_candidates_without_using_a_shell() {
-    use plugin_runtime::{Manager, plugin_protocol::Environment};
     let root = tempfile::tempdir().unwrap();
     let tools = root.path().join("tools");
     for version in ["1", "9"] {
@@ -69,6 +86,8 @@ fn declared_tool_search_checks_candidates_without_using_a_shell() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    assert!(manager.language_services().is_empty());
+    selected_analysis(&mut manager).unwrap();
     let services = manager.language_services();
     let plan = services["unfamiliar-language/analysis"]
         .as_ref()
@@ -89,6 +108,8 @@ fn declared_tool_search_checks_candidates_without_using_a_shell() {
     manager
         .install(&explicit, explicit.manifest.permissions.clone())
         .unwrap();
+    // The changed explicit plan must fail its own role demand, without borrowing the old good tool.
+    assert!(selected_analysis(&mut manager).is_err());
     assert!(manager.language_services()["unfamiliar-language/analysis"].is_err());
 }
 
@@ -118,6 +139,8 @@ fn empty_tool_search_still_accounts_for_visited_directories() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // A failed selected role still publishes its bounded-search error for this exact provider key.
+    assert!(selected_analysis(&mut manager).is_err());
     let plans = manager.language_services();
     let error = plans["unfamiliar-language/analysis"]
         .as_ref()

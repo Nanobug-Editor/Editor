@@ -65,6 +65,9 @@ pub(super) fn provider(
         plugin_protocol::execution::terminal_execute_method(),
     );
     Provider {
+        // Native participants are already owned by the host; they never request guest activation.
+        availability: None,
+        owner_alive: None,
         caller,
         alive,
         contracts: [(

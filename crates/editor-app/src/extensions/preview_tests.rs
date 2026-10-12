@@ -321,6 +321,7 @@ fn svg_preview_follows_open_documents_and_unsaved_edits(cx: &mut TestAppContext)
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: None,
                     documents: vec![(
                         reload_path.canonicalize().unwrap(),

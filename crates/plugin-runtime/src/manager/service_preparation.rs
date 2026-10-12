@@ -87,10 +87,23 @@ impl Manager {
             ));
         let completion = call.completion.clone();
         let lifetime = call.completion.clone();
+        let source = call.context.clone();
         let control = InstallControl::new(move |stage| {
             completion.progress(format!("Preparing native service: {stage:?}"))
         })
-        .with_guard(move || !lifetime.status().is_terminal());
+        .with_guard(move || {
+            // Download/receipt publication observes the same original ancestry as activation, even
+            // before the actor polls. Completed parents remain valid; cancellation/deadlines do not.
+            !lifetime.status().is_terminal()
+                && source
+                    .lifetimes
+                    .iter()
+                    .all(|alive| alive.load(std::sync::atomic::Ordering::Acquire))
+                && source
+                    .native_waits
+                    .iter()
+                    .all(|wait| !matches!(wait.status(), api::RequestUpdate::Cancelled { .. }))
+        });
         let worker_control = control.clone();
         let (send, ready) = mpsc::sync_channel(1);
         std::thread::Builder::new()

@@ -4,12 +4,37 @@ use plugin_schema::{FileIconConfig, PluginManifest, ThemeFile};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Read},
     path::Path,
 };
 mod atomic_file;
 pub(crate) mod icons;
 pub(crate) use atomic_file::atomic_write;
+
+/// Parse only the actual installed contribution bytes for static discovery and package admission.
+/// The caller validates the package-relative path/owner; this gate checks identity, version and
+/// the author's host range without reading grammar assets or starting a business instance.
+pub(crate) fn compatible_contributions(
+    manifest: &Manifest,
+    bytes: &[u8],
+) -> anyhow::Result<PluginManifest> {
+    let contributions = PluginManifest::parse(std::str::from_utf8(bytes)?)?;
+    let host = semver::Version::parse(env!("CARGO_PKG_VERSION"))?;
+    let supported = semver::VersionReq::parse(&contributions.plugin.host_version)?;
+    anyhow::ensure!(
+        supported.matches(&host),
+        "Unsupported host version: requires {supported}, host {host}"
+    );
+    anyhow::ensure!(
+        contributions.plugin.id == manifest.id,
+        "Contribution manifest identity differs from package identity"
+    );
+    anyhow::ensure!(
+        contributions.plugin.version == manifest.version,
+        "Contribution manifest version differs from package version"
+    );
+    Ok(contributions)
+}
 
 /// LSP declarations carry exactly the native service authority that the host will exercise.
 fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
@@ -219,6 +244,7 @@ impl Package {
         super::capabilities::require_current(&manifest)?;
         validate_language_services(&manifest)?;
         crate::structure::validate_manifest(&manifest)?;
+        crate::direct::validate_manifest(&manifest)?;
         manifest
             .plugin_services
             .validate()
@@ -465,7 +491,9 @@ impl Package {
                 "Expected a WebAssembly component, not a core module"
             );
         } else {
-            // Host-managed packages cannot declare executable UI or privileged operations.
+            // Declarative native language consumers have their own sealed runtime lease.
+            // Their original document/navigation grants need no empty guest component;
+            // executable UI, commands and unrestricted process calls still require one.
             anyhow::ensure!(
                 manifest.panels.is_empty()
                     && manifest.commands.is_empty()
@@ -474,6 +502,14 @@ impl Package {
                             permission.as_str(),
                             "dependencies.prepare" | "dependencies.install"
                         ) {
+                            return true;
+                        }
+                        if !manifest.language_servers.is_empty()
+                            && matches!(
+                                permission.as_str(),
+                                "editor.read" | "editor.write" | "workspace.read"
+                            )
+                        {
                             return true;
                         }
                         permission
@@ -492,7 +528,9 @@ impl Package {
             // Validate every declarative reference before installation can mutate the registry.
             validate_relative(path)?;
             let source = package_text(&files, path)?;
-            let contributions = PluginManifest::parse(source)?;
+            // Local ZIP/development admission enforces the author's same host range as remote
+            // discovery, before extracting files or mutating any installed registry/data.
+            let contributions = compatible_contributions(&manifest, source.as_bytes())?;
             if !contributions.language_definitions.is_empty()
                 || !contributions.highlighters.is_empty()
             {
@@ -509,14 +547,6 @@ impl Package {
                     package_text(&files, &path.to_string_lossy())?;
                 }
             }
-            anyhow::ensure!(
-                contributions.plugin.id == manifest.id,
-                "Contribution manifest identity differs from package identity"
-            );
-            anyhow::ensure!(
-                contributions.plugin.version == manifest.version,
-                "Contribution manifest version differs from package version"
-            );
             if let Some(theme) = &contributions.theme {
                 ThemeFile::parse(package_text(&files, &theme.file.to_string_lossy())?)?;
                 if let Some(path) = &theme.file_icons {
@@ -533,19 +563,29 @@ impl Package {
                     "workspace.read",
                     "workspace.write",
                     "network.images",
+                    "network.http",
+                    "secrets",
                     "navigation.external",
                     "storage",
                     "clipboard",
                     "assets.read",
                     "editor.read",
+                    "editor.diagnostics",
                     "editor.write",
                     "ui.panels",
+                    "ui.interaction",
+                    "files.select",
+                    "commands.call",
                     "services.call",
                     "process.exec",
                     "dependencies.prepare",
                     "dependencies.install"
                 ]
                 .contains(&permission.as_str())
+                    || permission
+                        .strip_prefix("network.http:")
+                        .is_some_and(|target| crate::http::origin(target)
+                            .is_ok_and(|origin| origin == target))
                     || permission
                         .strip_prefix("process.service.")
                         .is_some_and(|id| manifest.services.contains_key(id)),
@@ -629,11 +669,47 @@ impl Package {
         }
         ids.clear();
         for command in &manifest.commands {
+            command.validate().map_err(anyhow::Error::msg)?;
             anyhow::ensure!(
-                !command.id.is_empty() && command.id.len() <= 128 && ids.insert(command.id.clone()),
+                !command.id.is_empty()
+                    && command.id.len() <= 128
+                    && !command.id.contains('/')
+                    && ids.insert(command.id.clone()),
                 "Invalid or duplicate command ID"
             );
+            if let Some(signature) = &command.signature {
+                anyhow::ensure!(
+                    manifest.component.is_some()
+                        && manifest
+                            .api
+                            .as_ref()
+                            .is_some_and(|api| api.required.contains_key("plugin.commands")),
+                    "Typed command declarations require a component and plugin.commands"
+                );
+                anyhow::ensure!(
+                    signature.permissions.is_subset(&manifest.permissions),
+                    "Command signature cannot grant undeclared permissions"
+                );
+            }
+            anyhow::ensure!(
+                command.menus.is_empty()
+                    || (manifest.component.is_some()
+                        && manifest
+                            .api
+                            .as_ref()
+                            .is_some_and(|api| api.required.contains_key("plugin.commands"))),
+                "Native menu contributions require a component and plugin.commands"
+            );
         }
+        anyhow::ensure!(
+            !manifest
+                .plugin_services
+                .provides
+                .keys()
+                .chain(manifest.plugin_services.requires.keys())
+                .any(|id| id.starts_with(plugin_protocol::commands::CONTRACT_PREFIX)),
+            "Command transport contracts are reserved"
+        );
         Ok(Self {
             manifest,
             files,
@@ -716,6 +792,7 @@ pub(crate) fn validate_relative(name: &str) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     /// Inspection rejects retired wire formats before any component can be installed or activated.
     #[test]

@@ -63,7 +63,7 @@ impl Schema {
         }
     }
     /// Reject pathological schemas during package inspection, before payload validation can recurse.
-    fn validate(&self, depth: usize) -> Result<(), String> {
+    pub(crate) fn validate(&self, depth: usize) -> Result<(), String> {
         if depth > 8 {
             return Err("Service schema nesting exceeds 8".into());
         }
@@ -175,8 +175,12 @@ impl Declarations {
                             | "editor.read"
                             | "editor.write"
                             | "ui.panels"
+                            | "ui.interaction"
+                            | "commands.call"
                             | "process.exec"
-                    )
+                            | "network.http"
+                    ) && !(p.starts_with("network.http:http://")
+                        || p.starts_with("network.http:https://"))
                 }) {
                     return Err("Unsupported delegated service permission".into());
                 }

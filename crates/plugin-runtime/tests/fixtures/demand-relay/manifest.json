@@ -1,0 +1,38 @@
+{
+  "id": "demand-relay",
+  "name": "Deferred service demand ancestry",
+  "version": "0.1.0",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {"plugin.services": "^1.1", "ui.native": "^1"}
+  },
+  "component": "demand-relay.wasm",
+  "permissions": ["services.call"],
+  "storage_limit": 1024,
+  "panels": [{"id":"receipt","title":"Service ancestry receipts","position":"right"}],
+  "plugin_services": {
+    "provides": {
+      "example.echo": {
+        "version":"1.0.0",
+        "methods": {
+          "relay": {
+            "parameters":{"type":"string","max_bytes":2048},
+            "result":{"type":"string","max_bytes":4096}
+          }
+        }
+      }
+    },
+    "requires": {
+      "example.inner": {
+        "version":"^1",
+        "methods": {
+          "echo": {
+            "parameters":{"type":"string","max_bytes":2048},
+            "result":{"type":"string","max_bytes":4096}
+          }
+        }
+      }
+    }
+  }
+}

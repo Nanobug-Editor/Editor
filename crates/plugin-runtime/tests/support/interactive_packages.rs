@@ -151,7 +151,8 @@ pub fn provider_methods() -> Value {
 
 /// An independently packaged provider that declares exactly what this host calls.
 pub fn provider(id: &str) -> Package {
-    let files = Package::read(&frozen_packages::archive("capability-example"))
+    // The current service incarnation/ancestry regressions use the explicit community SDK input.
+    let files = Package::read(&frozen_packages::archive("capability-example-0.19.0"))
         .unwrap()
         .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
@@ -194,7 +195,8 @@ pub fn debug_provides(omit: &[&str]) -> Value {
 
 /// An independently packaged debug provider that declares the host's own shape.
 pub fn debug_provider(id: &str, omit: &[&str]) -> Package {
-    let files = Package::read(&frozen_packages::archive("capability-example"))
+    // Source and forwarding commands belong to the version-pinned community consumer.
+    let files = Package::read(&frozen_packages::archive("capability-example-0.19.0"))
         .unwrap()
         .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
@@ -214,7 +216,8 @@ pub fn debug_provider(id: &str, omit: &[&str]) -> Package {
 /// The example guest already knows how to call a contract by name, so this only states what it is
 /// allowed to open; it is a real package built from the public SDK, not a stub.
 pub fn session_consumer(id: &str) -> Package {
-    let files = Package::read(&frozen_packages::archive("capability-example"))
+    // Preserve the same real SDK provider bytes across native session ownership cases.
+    let files = Package::read(&frozen_packages::archive("capability-example-0.19.0"))
         .unwrap()
         .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
@@ -328,7 +331,8 @@ pub fn archive(files: BTreeMap<String, Vec<u8>>, manifest: Value) -> Package {
 
 /// The same SDK guest calls any selected implementation, including a separately packaged alternative.
 pub fn fixture(id: &str, provider: bool, execution: bool) -> Package {
-    let files = Package::read(&frozen_packages::archive("capability-example"))
+    // Terminal projection tests share the exact provider component, not a latest-directory fallback.
+    let files = Package::read(&frozen_packages::archive("capability-example-0.19.0"))
         .unwrap()
         .files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();

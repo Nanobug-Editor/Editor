@@ -14,7 +14,7 @@ The XML plugin provides schema assistance, completion, formatting, paired tag ed
 
 The native plugin manager reads the [reviewed marketplace](https://github.com/T-miracle/Nanobug-Plugin-Marketplace). Browse historical releases and changelogs, choose a compatible version for first installation, and explicitly install higher compatible versions. A red dot on the plugin button indicates available upgrades. Every download must match the reviewed ZIP SHA-256; updates that request new permissions require consent. Catalog failures leave cached browsing available and disable market installation until a successful refresh. Download counts are advisory and retain their measurement time during outages.
 
-[Documentation](documentation/en/index.md) · [Getting started](documentation/en/guide/getting-started.md) · [Plugin SDK](documentation/en/sdk/index.md) · [Report an issue](https://github.com/T-miracle/Editor/issues)
+[Documentation](documentation/en/index.md) · [Getting started](documentation/en/guide/getting-started.md) · [Plugin SDK sources](crates/plugin-protocol/src/lib.rs) · [Maintainer documents](docs/README.md) · [Report an issue](https://github.com/T-miracle/Editor/issues)
 
 ## Installation
 
@@ -122,7 +122,7 @@ cargo check --workspace
 
 Changes to `editor-app` also require relevant UI tests and native interaction checks. Tests marked ignored that use actual WASM packages require their fixtures to be built before explicitly running them. Documentation-only changes require link and path checks plus `git diff --check`.
 
-Reader-facing guides and SDK documentation are plain Markdown in [documentation/en/index.md](documentation/en/index.md). Specifications, tickets, and verification records live in `docs/`. Keep this English README and [its Chinese translation](README.zh-CN.md) in sync.
+Basic run, build, and packaging commands are maintained in this README. Plugin interface usage is documented beside the public types in [the protocol sources](crates/plugin-protocol/src/lib.rs). The independent SDK exports only Rust sources, Cargo manifests, WIT, and JSON protocol resources; it does not bundle Markdown. Specifications, tickets, and verification records live in `docs/`. Keep this English README and [its Chinese translation](README.zh-CN.md) in sync.
 
 ## Licensing
 

@@ -67,6 +67,12 @@ pub(crate) fn render_settings(view: &Entity<EditorApp>, cx: &App) -> AnyElement 
             t!("settings.provider_formatter")
         } else if row.key.starts_with("structure:") {
             t!("settings.provider_structure")
+        } else if row.key.starts_with("references:") {
+            t!("language_features.references")
+        } else if row.key.starts_with("code-actions:") {
+            t!("language_features.code_actions")
+        } else if row.key.starts_with("signature-help:") {
+            t!("language_features.signature_help")
         } else {
             t!("settings.provider_recognition")
         };

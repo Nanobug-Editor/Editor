@@ -7,15 +7,38 @@ use plugin_runtime::{
     },
 };
 
+mod decorations;
+mod documents;
 mod edits;
 mod images;
+mod interaction;
 mod navigation;
 mod viewport;
 
 impl EditorApp {
     /// Drain requests in effect order so each edit's native Change event advances its revision first.
     pub(crate) fn dispatch_editor_requests(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Closed prompts release their input state and subscriptions, and only their own focus lease.
+        self.plugin_interactions
+            .retain(|entity| entity.update(cx, |prompt, cx| !prompt.prune(window, cx)));
         if self.editor_request_dispatch_scheduled || self.pending_editor_requests.is_empty() {
+            return;
+        }
+        if matches!(
+            self.pending_editor_requests[0].1.operation(),
+            Op::Interaction {
+                operation: plugin_runtime::plugin_protocol::interaction::Operation::Input { .. }
+                    | plugin_runtime::plugin_protocol::interaction::Operation::QuickPick { .. }
+                    | plugin_runtime::plugin_protocol::interaction::Operation::Confirm { .. }
+                    | plugin_runtime::plugin_protocol::interaction::Operation::Select { .. }
+                    | plugin_runtime::plugin_protocol::interaction::Operation::SelectWithAccess { .. }
+            }
+        ) && (self.plugin_picker_pending
+            || self
+                .plugin_interactions
+                .iter()
+                .any(|entity| entity.read(cx).is_modal()))
+        {
             return;
         }
         // A redraw may occur while effects are queued. Keep it from executing a second stale request.
@@ -34,9 +57,23 @@ impl EditorApp {
     pub(crate) fn sync_plugin_documents(&mut self, cx: &mut Context<Self>) {
         if !self.session_state.workspace_trusted {
             self.plugin_documents.clear();
+            self.plugin_document_metadata.clear();
+            self.plugin_active_document = None;
             return;
         }
+        self.sync_plugin_document_metadata(cx);
+        for index in 0..self.tabs.len() {
+            if let Ok(document) = self.plugin_document_version(index) {
+                if let Some(text) = &self.tabs[index].text {
+                    text.highlighter
+                        .markers()
+                        .borrow_mut()
+                        .synchronize(Some(&document), cx);
+                }
+            }
+        }
         let current = (0..self.tabs.len())
+            .filter(|index| self.tabs[*index].virtual_document.is_none())
             .filter_map(|index| self.plugin_document_version(index).ok())
             .map(|document| (document.id.clone(), document))
             .collect::<BTreeMap<_, _>>();
@@ -72,6 +109,19 @@ impl EditorApp {
                 "File has no text editing capability",
             )
         })?;
+        if let Some(virtual_tab) = &tab.virtual_document {
+            if !virtual_tab.resource.is_live() {
+                return Err(Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Virtual document was revoked",
+                ));
+            }
+            return Ok(DocumentVersion {
+                id: format!("{:?}", text.editor.entity_id()),
+                path: virtual_tab.resource.uri(),
+                revision: text.capability_revision,
+            });
+        }
         // OpenTab already stores its resolved path. Disk deletion does not end the editor entity's lifetime.
         let path = tab
             .path()
@@ -110,12 +160,75 @@ impl EditorApp {
             )));
             return;
         }
+        if let Err(error) = self.check_virtual_request(&request) {
+            request.finish(Err(error));
+            return;
+        }
+        // Legacy selection/navigation consumers understand workspace paths only. New document
+        // reads explicitly opt into ResourceIdentity and never lend a virtual provider's text.
+        if self
+            .active_tab_index()
+            .is_some_and(|index| self.tabs[index].virtual_document.is_some())
+            && matches!(
+                request.operation(),
+                Op::ReadSelection
+                    | Op::ActiveDirectory
+                    | Op::ReadDocumentSelection { .. }
+                    | Op::NavigateDocument { .. }
+                    | Op::LocateViewport { .. }
+                    | Op::SaveImageInput { .. }
+            )
+        {
+            request.finish(Err(Failure::new(
+                ErrorCode::UnsupportedOperation,
+                "Use the resource-aware document API for virtual content",
+            )));
+            return;
+        }
+        if matches!(request.operation(), Op::RefreshVirtualDocument { .. }) {
+            self.refresh_plugin_virtual(request, window, cx);
+            return;
+        }
         if let Op::SaveDocument { document } = request.operation() {
             self.save_plugin_document(document.clone(), request, cx);
             return;
         }
+        if let Op::Interaction { .. } = request.operation() {
+            if matches!(
+                request.operation(),
+                Op::Interaction {
+                    operation: plugin_runtime::plugin_protocol::interaction::Operation::Select { .. }
+                        | plugin_runtime::plugin_protocol::interaction::Operation::SelectWithAccess { .. }
+                }
+            ) {
+                self.select_plugin_resource(plugin, request, window, cx);
+                return;
+            }
+            self.plugin_interactions.push(cx.new(|cx| {
+                crate::ui::controls::interaction::HostInteraction::new(
+                    plugin.to_owned(),
+                    request,
+                    window,
+                    cx,
+                )
+            }));
+            cx.notify();
+            return;
+        }
         if matches!(request.operation(), Op::ReplaceDocumentRange { .. }) {
             self.replace_plugin_document(request, window, cx);
+            return;
+        }
+        if matches!(request.operation(), Op::ApplyEdits { .. }) {
+            self.apply_plugin_edits(request, window, cx);
+            return;
+        }
+        if matches!(request.operation(), Op::Workspace { .. }) {
+            self.perform_workspace_request(plugin, request, window, cx);
+            return;
+        }
+        if matches!(request.operation(), Op::Diagnostics { .. }) {
+            self.publish_plugin_diagnostics(request, cx);
             return;
         }
         if matches!(request.operation(), Op::SaveImageInput { .. }) {
@@ -131,6 +244,55 @@ impl EditorApp {
             return;
         }
         let result = (|| match request.operation() {
+            Op::Decorations { operation } => {
+                self.perform_plugin_decorations(operation, &request, cx)
+            }
+            Op::OpenDocument { resource } => {
+                self.open_plugin_resource(resource, &request, window, cx)
+            }
+            Op::OpenVirtualDocument {
+                title,
+                language,
+                text,
+            } => self.open_plugin_virtual(title, language.as_deref(), text, &request, window, cx),
+            Op::LocateDocument { document, position } => {
+                self.locate_plugin_resource(document, *position, &request, window, cx)
+            }
+            Op::CompareDocuments { left, right } => {
+                self.compare_plugin_documents(left, right, &request, window, cx)
+            }
+            Op::ReadDocument { document, range } => self.read_plugin_document(document, *range, cx),
+            Op::ListDocuments => {
+                let documents = (0..self.tabs.len())
+                    .filter(|index| {
+                        self.tabs[*index]
+                            .virtual_document
+                            .as_ref()
+                            .is_none_or(|virtual_tab| {
+                                virtual_tab.resource.handle().instance == request.handle().instance
+                            })
+                    })
+                    .filter_map(|index| self.plugin_document_info(index, cx).ok())
+                    .collect::<Vec<_>>();
+                if documents.len() > 128 {
+                    return Err(Failure::new(
+                        ErrorCode::LimitExceeded,
+                        "Open document enumeration exceeds 128 documents",
+                    ));
+                }
+                let active = self
+                    .active_tab_index()
+                    .filter(|index| {
+                        self.tabs[*index]
+                            .virtual_document
+                            .as_ref()
+                            .is_none_or(|virtual_tab| {
+                                virtual_tab.resource.handle().instance == request.handle().instance
+                            })
+                    })
+                    .and_then(|index| self.plugin_document_version(index).ok());
+                Ok(Value::Documents { documents, active })
+            }
             Op::OpenDataFile { path } => {
                 // The owning runtime supplies this root. Resolve aliases again immediately before opening.
                 let root = request
@@ -253,10 +415,15 @@ impl EditorApp {
                 })
             }
             Op::SaveDocument { .. }
+            | Op::RefreshVirtualDocument { .. }
+            | Op::Interaction { .. }
             | Op::ReplaceDocumentRange { .. }
+            | Op::ApplyEdits { .. }
+            | Op::Workspace { .. }
             | Op::SaveImageInput { .. }
             | Op::NavigateDocument { .. }
-            | Op::LocateViewport { .. } => unreachable!(),
+            | Op::LocateViewport { .. }
+            | Op::Diagnostics { .. } => unreachable!(),
         })();
         request.finish(result);
     }
@@ -285,6 +452,13 @@ impl EditorApp {
             )));
             return;
         };
+        if tab.session.is_readonly() {
+            request.finish(Err(Failure::new(
+                ErrorCode::PermissionDenied,
+                "Readonly documents cannot be saved",
+            )));
+            return;
+        }
         let path = tab.path().to_path_buf();
         if let Err(error) = self.check_plugin_save_path(&path) {
             request.finish(Err(error));
@@ -377,14 +551,22 @@ impl EditorApp {
         if !request.enter_side_effect() {
             return Err(Failure::new(ErrorCode::Cancelled, "Save did not execute"));
         }
-        tab.session
+        self.publish_document_save(index, None, cx);
+        let tab = self.text_tab_mut(index).expect("validated save target");
+        let saved = tab
+            .session
             .save(&prepared, prepared.contents())
-            .map_err(|e| Failure::new(ErrorCode::OperationFailed, e.to_string()))?;
+            .map_err(|e| Failure::new(ErrorCode::OperationFailed, e.to_string()));
+        if let Err(error) = saved {
+            self.publish_document_save(index, Some(Err(error.clone())), cx);
+            return Err(error);
+        }
         tab.disk_digest = Sha256::digest(prepared.contents().as_bytes()).into();
         tab.disk_state = DiskState::Synced;
         tab.last_saved_at = Instant::now();
         tab.overwrite_confirmed = false;
         self.notify_language_document_saved(&path, prepared.contents().to_owned(), cx);
+        self.publish_document_save(index, Some(Ok(())), cx);
         Ok(Value::Saved {
             document: document.clone(),
         })

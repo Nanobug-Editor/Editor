@@ -1,0 +1,46 @@
+{
+  "id": "bookmarks",
+  "name": "Bookmarks",
+  "version": "0.1.1",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "editor.decorations": "^1",
+      "editor.documents": "^1.1",
+      "editor.edit": "^1",
+      "ui.icons": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "bookmarks.wasm",
+  "permissions": [
+    "ui.panels",
+    "editor.read",
+    "assets.read"
+  ],
+  "panels": [
+    {
+      "id": "presentation",
+      "title": "Bookmarks",
+      "position": "right"
+    }
+  ],
+  "commands": [
+    {
+      "id": "bookmark-line",
+      "title": "Bookmark current position / 标记当前位置",
+      "menu": true
+    },
+    {
+      "id": "probe",
+      "title": "Inspect public contract"
+    },
+    {
+      "id": "read-bookmarks",
+      "title": "Read bookmark positions / 读取书签位置",
+      "menu": true
+    }
+  ],
+  "storage_limit": 4096
+}

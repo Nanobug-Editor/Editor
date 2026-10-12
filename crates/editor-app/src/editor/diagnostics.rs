@@ -2,7 +2,11 @@
 
 use crate::*;
 use gpui_base::input::{Diagnostic, DiagnosticEntry};
-use std::sync::Mutex;
+use std::{collections::BTreeMap, sync::Mutex};
+
+pub(crate) mod problems;
+mod publications;
+pub(crate) use publications::OwnedDiagnostics;
 
 #[cfg(test)]
 mod tests;
@@ -16,10 +20,12 @@ pub(crate) struct DocumentDiagnostics {
     /// Keep independent producers from overwriting one another's latest results.
     syntax: Vec<Diagnostic>,
     semantic: Vec<Diagnostic>,
+    /// Owned direct publications share this document's model, never an independent Problems cache.
+    pub(crate) direct: BTreeMap<String, OwnedDiagnostics>,
 }
 
 impl EditorApp {
-    /// Coalesce typing bursts while clearing markers from the previous text immediately.
+    /// Coalesce typing bursts while clearing obsolete markers and retaining exact-current owners.
     pub(crate) fn refresh_syntax_diagnostics(
         &mut self,
         editor_id: gpui_kit::EntityId,
@@ -38,12 +44,21 @@ impl EditorApp {
             .as_ref()
             .and_then(|language| self.language_servers.get(language))
             .cloned();
+        let version = self.plugin_document_version(index).ok();
+        let trusted = self.session_state.workspace_trusted;
         let Some(tab) = self.tabs[index].text.as_mut() else {
             return;
         };
         tab.diagnostics.task = None;
         tab.diagnostics.syntax.clear();
         tab.diagnostics.semantic.clear();
+        // Grammar/contribution refresh does not own another checker's result. Actual edits,
+        // retirement and trust changes still invalidate its full native incarnation/revision.
+        tab.diagnostics.direct.retain(|_, publication| {
+            trusted
+                && publication.collection.is_live()
+                && version.as_ref() == Some(&publication.document)
+        });
         tab.diagnostics.generation = tab.diagnostics.generation.wrapping_add(1);
         let generation = tab.diagnostics.generation;
         let plugin_generation = self.plugin_loading_generation;
@@ -58,6 +73,7 @@ impl EditorApp {
         });
         let Some(language) = language else {
             tab.diagnostics.parser = Default::default();
+            self.publish_document_diagnostics(editor_id, cx);
             cx.notify();
             return;
         };
@@ -150,6 +166,9 @@ impl EditorApp {
                     .await;
             }
         }));
+        // Clearing the legacy parser/server pair must immediately re-project preserved owners,
+        // including plain documents that will not receive another syntax or LSP publication.
+        self.publish_document_diagnostics(editor_id, cx);
         cx.notify();
     }
 
@@ -204,7 +223,11 @@ impl EditorApp {
     }
 
     /// Publish a sorted union; prefer the server's precise explanation for overlapping errors.
-    fn publish_document_diagnostics(&self, editor_id: gpui_kit::EntityId, cx: &mut Context<Self>) {
+    pub(crate) fn publish_document_diagnostics(
+        &self,
+        editor_id: gpui_kit::EntityId,
+        cx: &mut Context<Self>,
+    ) {
         let Some(tab) = self
             .tabs
             .iter()
@@ -213,22 +236,19 @@ impl EditorApp {
         else {
             return;
         };
-        let mut diagnostics = tab.diagnostics.semantic.clone();
-        diagnostics.extend(
-            tab.diagnostics
-                .syntax
-                .iter()
-                .filter(|syntax| {
-                    !tab.diagnostics.semantic.iter().any(|semantic| {
-                        semantic.severity == gpui_base::input::DiagnosticSeverity::Error
-                            && semantic.range.start < syntax.range.end
-                            && syntax.range.start < semantic.range.end
-                    })
-                })
-                .cloned(),
-        );
+        let mut diagnostics = tab.diagnostics.legacy_projection();
+        // Only the legacy syntax/LSP fallback pair is deduplicated. Independent collection owners
+        // must both remain visible even when their ranges and messages are exactly the same.
+        let text = tab.editor.read(cx).text();
+        for publication in tab
+            .diagnostics
+            .direct
+            .values()
+            .filter(|item| item.collection.is_live())
+        {
+            diagnostics.extend(publication.project(text));
+        }
         diagnostics.sort_by_key(|diagnostic| (diagnostic.range.start, diagnostic.range.end));
-        diagnostics.dedup();
         tab.editor.update(cx, |state, cx| {
             let text = state.text().clone();
             if let Some(set) = state.diagnostics_mut() {
@@ -357,9 +377,7 @@ impl EditorApp {
             .text_color(cx.theme().danger)
             .cursor_pointer()
             .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-            .on_click(
-                cx.listener(|app, _, window, cx| app.navigate_syntax_error(false, window, cx)),
-            )
+            .on_click(cx.listener(|app, _, window, cx| app.show_problems(window, cx)))
             .child(label)
     }
 }

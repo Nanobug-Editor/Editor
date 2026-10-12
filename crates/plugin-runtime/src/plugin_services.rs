@@ -9,16 +9,22 @@ use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
 };
+mod availability;
+mod registry;
 
 pub(crate) type Shared = Arc<Mutex<Broker>>;
 
 #[derive(Clone)]
 pub(crate) struct Provider {
+    /// Static guest intent; host participants use their sealed incarnation without a guest demand.
+    pub availability: Option<crate::Availability>,
     pub alive: Arc<AtomicBool>,
+    /// The exact running guest's lifetime is additional to its logical metadata lifetime.
+    pub owner_alive: Option<Arc<AtomicBool>>,
     pub caller: Caller,
     pub contracts: BTreeMap<String, Contract>,
 }
@@ -30,6 +36,13 @@ pub(crate) struct Reference {
     revision: u64,
     /// A live session keeps its provider after the user's choice changes for future launches.
     pinned: bool,
+    /// Clones of one open share first birth; a retired binding is never reset to an unbound reference.
+    binding: Arc<OnceLock<BoundOwner>>,
+}
+/// One immutable first owner makes references and pending native sessions observe the same birth.
+struct BoundOwner {
+    instance: String,
+    alive: Arc<AtomicBool>,
 }
 /// A selection revision never rolls back when a provider is removed and later selected again.
 #[derive(Default)]
@@ -38,22 +51,59 @@ struct Selection {
     preference: Option<String>,
     revision: u64,
 }
+/// Only the Manager's typed command route creates a host origin; guest caller strings are descriptive.
+#[derive(Clone)]
+pub(crate) enum InvocationOrigin {
+    Delegated,
+    HostCommand { target: String },
+}
+
 /// The original source and shrinking authority survive nested calls; ancestry bounds asynchronous cycles.
 #[derive(Clone)]
 pub(crate) struct Context {
     pub lifetimes: Vec<Arc<AtomicBool>>,
+    /// Pending native interactions observe source waits without revoking already owned programs.
+    pub native_waits: Vec<Completion<Value>>,
+    /// A native menu target is descriptive context, separate from schema-checked arguments.
+    pub menu: Option<plugin_protocol::commands::Context>,
+    /// An internal admission record is never serialized to, or accepted from, a guest.
+    pub origin: InvocationOrigin,
     pub caller: Caller,
     pub ancestry: Vec<String>,
     pub permissions: BTreeSet<String>,
 }
 impl Context {
+    /// A directly invoked provider may use its own picker permission, never through another hop.
+    pub(crate) fn direct_host_selection(&self, instance: &str) -> bool {
+        matches!(&self.origin, InvocationOrigin::HostCommand { target } if target == instance)
+            && self.ancestry.len() == 1
+            && self.ancestry[0] == instance
+            && self.permissions.contains("files.select")
+            && self
+                .lifetimes
+                .iter()
+                .all(|alive| alive.load(Ordering::Acquire))
+            && self.native_waits.iter().all(|wait| {
+                !matches!(
+                    wait.status(),
+                    plugin_protocol::api::RequestUpdate::Cancelled { .. }
+                )
+            })
+    }
+
     /// Each hop keeps the original owner, shrinks authority and adds the target's revocation boundary.
     pub(crate) fn delegate(
         &self,
         provider: &Provider,
         signature: &Method,
     ) -> Result<Self, Failure> {
-        if self.ancestry.len() >= 8 || self.ancestry.contains(&provider.caller.instance) {
+        if self.ancestry.len() >= 8
+            || self.ancestry.contains(&provider.caller.instance)
+            || self.ancestry.contains(&provider.identity())
+            || (provider.availability.is_some()
+                && self.caller.plugin == provider.caller.plugin
+                && self.caller.scope == provider.caller.scope)
+        {
             return Err(Failure::new(
                 ErrorCode::Conflict,
                 "Service call cycle or depth limit detected",
@@ -73,6 +123,11 @@ impl Context {
         next.permissions = signature.permissions.clone();
         next.ancestry.push(provider.caller.instance.clone());
         next.lifetimes.push(provider.alive.clone());
+        // Logical availability survives HotApply. An already running participant also seals
+        // continuations with its exact owner, so a trap cannot lend authority to a late callback.
+        if let Some(alive) = &provider.owner_alive {
+            next.lifetimes.push(alive.clone());
+        }
         Ok(next)
     }
 }
@@ -80,6 +135,9 @@ impl Context {
 pub(crate) struct Call {
     pub handle: ResourceHandle,
     pub reference: Reference,
+    /// First enqueue seals this invocation's configuration, independently of a reusable open reference.
+    /// Shared clones and a demand requeue cannot replace it with a later hot configuration.
+    pub availability: Arc<OnceLock<Option<crate::Availability>>>,
     pub method: String,
     pub signature: Method,
     pub arguments: Value,
@@ -90,6 +148,13 @@ pub(crate) struct Pending {
     pub return_context: Option<Context>,
     pub call: Call,
     pub reported: u64,
+}
+
+/// Activation waits retain literal calls and their original deadline; no guest callback runs under this lock.
+pub(crate) struct Waiting {
+    pub call: Call,
+    pub token: crate::Availability,
+    pub demand: crate::DemandRequest,
 }
 
 /// Only host UI writes choices; project files and plugin requests have no setter.
@@ -104,6 +169,8 @@ pub(crate) struct Preferences {
 pub(crate) struct Broker {
     providers: BTreeMap<String, Provider>,
     queue: VecDeque<Call>,
+    /// These slots also count toward the existing 256-call queue and Manager's shared 64 activation waits.
+    waiting: VecDeque<Waiting>,
     /// Deferred callbacks are observed by the manager on its next tick, outside the guest's lock.
     completed: VecDeque<(Call, Result<Value, Failure>)>,
     pub preferences: Preferences,
@@ -112,6 +179,59 @@ pub(crate) struct Broker {
     host_defaults: BTreeMap<(String, String), String>,
 }
 impl Broker {
+    /// Discovery exposes static typed command metadata in the caller's original logical scope.
+    pub(crate) fn commands(&self, caller: &Caller) -> Vec<plugin_protocol::commands::Descriptor> {
+        self.providers
+            .values()
+            .filter(|provider| {
+                provider.alive.load(Ordering::Acquire) && provider.caller.scope == caller.scope
+            })
+            .flat_map(|provider| {
+                provider.contracts.iter().filter_map(|(id, contract)| {
+                    let command = id
+                        .strip_prefix(plugin_protocol::commands::CONTRACT_PREFIX)?
+                        .split_once('/')?
+                        .1;
+                    Some(plugin_protocol::commands::Descriptor {
+                        plugin: provider.caller.plugin.clone(),
+                        command: command.into(),
+                        signature: contract.methods.get("invoke")?.clone(),
+                    })
+                })
+            })
+            .collect()
+    }
+
+    /// An explicitly named command retains its logical publication and one first birth, without preferences.
+    pub(crate) fn command_reference(
+        &self,
+        caller: &Caller,
+        plugin: &str,
+        command: &str,
+    ) -> Result<Reference, Failure> {
+        let id = plugin_protocol::commands::contract(plugin, command);
+        let provider = self
+            .providers
+            .values()
+            .find(|provider| {
+                provider.caller.plugin == plugin
+                    && provider.caller.scope == caller.scope
+                    && provider.alive.load(Ordering::Acquire)
+                    && provider.contracts.contains_key(&id)
+            })
+            .ok_or_else(|| {
+                Failure::new(
+                    ErrorCode::CapabilityUnavailable,
+                    "Typed command is unavailable in this caller scope",
+                )
+            })?;
+        let dependency = Dependency {
+            version: semver::VersionReq::parse("^1").unwrap(),
+            optional: false,
+            methods: provider.contracts[&id].methods.clone(),
+        };
+        Ok(Reference::new(provider.clone(), id, dependency, 0, true))
+    }
     /// Reply admission validates unchanged source authority, original shape and the 64 KiB bound.
     pub(crate) fn complete_deferred(
         &mut self,
@@ -158,6 +278,12 @@ impl Broker {
             .lifetimes
             .iter()
             .all(|alive| alive.load(Ordering::Acquire))
+            && context.native_waits.iter().all(|wait| {
+                !matches!(
+                    wait.status(),
+                    plugin_protocol::api::RequestUpdate::Cancelled { .. }
+                )
+            })
     }
     pub fn new(preferences: Preferences) -> Self {
         Self {
@@ -165,231 +291,13 @@ impl Broker {
             ..Default::default()
         }
     }
-    /// Every participant that offers contracts, whether a runtime instance or the host itself.
-    ///
-    /// A guest is discoverable because its instance is alive and active; the host's own session
-    /// services are offered for as long as the runtime they belong to is alive. Both are published
-    /// through this one list, so a consumer's selection and this registry cannot disagree about who
-    /// offers a contract.
-    pub fn reconcile(&mut self, guests: Vec<Provider>, host: Vec<Provider>) {
-        let mut defaults = BTreeMap::<(String, String), BTreeSet<String>>::new();
-        for provider in &host {
-            for contract in provider.contracts.keys() {
-                defaults
-                    .entry((provider.caller.scope.clone(), contract.clone()))
-                    .or_default()
-                    .insert(provider.caller.plugin.clone());
-            }
-        }
-        // Several host providers for one contract require explicit selection too; order is never authority.
-        self.host_defaults = defaults
-            .into_iter()
-            .filter_map(|(key, choices)| {
-                (choices.len() == 1).then(|| (key, choices.into_iter().next().unwrap()))
-            })
-            .collect();
-        self.providers = guests
-            .into_iter()
-            .chain(host)
-            .map(|p| (p.caller.instance.clone(), p))
-            .collect();
-        self.refresh_selections();
-        self.queue.retain(|call| {
-            let alive = self.providers.contains_key(&call.handle.instance)
-                && self
-                    .providers
-                    .contains_key(&call.reference.provider.caller.instance);
-            if !alive {
-                call.completion.finish(Err(Failure::new(
-                    ErrorCode::InvalidHandle,
-                    "Service participant exited or was replaced",
-                )));
-            }
-            alive
-        });
-    }
-    /// Track changes per contract and logical scope, without invalidating unrelated service handles.
-    pub fn refresh_selections(&mut self) {
-        let mut available: BTreeMap<(String, String), Vec<String>> = self
-            .selections
-            .keys()
-            .cloned()
-            .map(|key| (key, Vec::new()))
-            .collect();
-        for provider in self.providers.values() {
-            for contract in provider.contracts.keys() {
-                available
-                    .entry((provider.caller.scope.clone(), contract.clone()))
-                    .or_default()
-                    .push(provider.caller.instance.clone());
-            }
-        }
-        for ((scope, contract), providers) in available {
-            let preference = self.preference(&scope, &contract).cloned();
-            let selection = self.selections.entry((scope, contract)).or_default();
-            if selection.providers != providers || selection.preference != preference {
-                selection.revision = selection
-                    .revision
-                    .checked_add(1)
-                    .expect("Service selection revision exhausted");
-                selection.providers = providers;
-                selection.preference = preference;
-            }
-        }
-    }
-    fn preference(&self, scope: &str, contract: &str) -> Option<&String> {
-        self.preferences
-            .projects
-            .get(scope)
-            .and_then(|map| map.get(contract))
-            .or_else(|| self.preferences.user.get(&choice_key(scope, contract)))
-            .or_else(|| self.host_defaults.get(&(scope.into(), contract.into())))
-    }
-    /// Package identity of the provider a start in this scope would use; descriptive, never routing.
-    pub fn selected_provider(&self, scope: &str, contract: &str) -> Option<String> {
-        if let Some(id) = self.preference(scope, contract)
-            && self
-                .providers
-                .values()
-                .any(|provider| &provider.caller.plugin == id)
-        {
-            return Some(id.clone());
-        }
-        let mut candidates = self
-            .providers
-            .values()
-            .filter(|provider| {
-                provider.caller.scope == scope && provider.contracts.contains_key(contract)
-            })
-            .map(|provider| provider.caller.plugin.clone());
-        let first = candidates.next()?;
-        // An ambiguous contract has no single owner; report nothing rather than guessing one.
-        candidates.next().is_none().then_some(first)
-    }
-    pub fn resolve(
-        &self,
-        caller: &Caller,
-        contract: &str,
-        dependency: &Dependency,
-    ) -> Result<Reference, Failure> {
-        let candidates: Vec<_> = self
-            .providers
-            .values()
-            .filter(|p| {
-                p.alive.load(Ordering::Acquire)
-                    && p.caller.scope == caller.scope
-                    && p.contracts
-                        .get(contract)
-                        .is_some_and(|c| dependency.matches(c))
-            })
-            .collect();
-        let selected = if let Some(id) = self.preference(&caller.scope, contract) {
-            candidates
-                .iter()
-                .find(|p| &p.caller.plugin == id)
-                .copied()
-                .ok_or_else(|| {
-                    Failure::new(
-                        ErrorCode::CapabilityUnavailable,
-                        "Selected service provider is unavailable or incompatible",
-                    )
-                })?
-        } else if candidates.len() == 1 {
-            candidates[0]
-        } else {
-            return Err(Failure::new(
-                if candidates.is_empty() {
-                    ErrorCode::CapabilityUnavailable
-                } else {
-                    ErrorCode::Conflict
-                },
-                format!(
-                    "Service {contract} has {} compatible providers; choose one in plugin settings",
-                    candidates.len()
-                ),
-            ));
-        };
-        Ok(Reference {
-            provider: selected.clone(),
-            contract: contract.into(),
-            dependency: dependency.clone(),
-            revision: self
-                .selections
-                .get(&(caller.scope.clone(), contract.into()))
-                .map_or(0, |selection| selection.revision),
-            pinned: false,
-        })
-    }
-    /// Resolve an existing session's exact incarnation without consulting future-launch preferences.
-    pub fn resolve_pinned(
-        &self,
-        caller: &Caller,
-        contract: &str,
-        dependency: &Dependency,
-        instance: &str,
-    ) -> Result<Reference, Failure> {
-        let provider = self
-            .providers
-            .get(instance)
-            .filter(|provider| {
-                provider.caller.scope == caller.scope
-                    && provider.alive.load(Ordering::Acquire)
-                    && provider
-                        .contracts
-                        .get(contract)
-                        .is_some_and(|shape| dependency.matches(shape))
-            })
-            .ok_or_else(|| {
-                Failure::new(
-                    ErrorCode::InvalidHandle,
-                    "Session provider exited or changed its contract",
-                )
-            })?;
-        Ok(Reference {
-            provider: provider.clone(),
-            contract: contract.into(),
-            dependency: dependency.clone(),
-            revision: 0,
-            pinned: true,
-        })
-    }
-    /// Open references retain their provider incarnation; changed user choices cannot retarget them.
-    pub fn validate_reference(
-        &self,
-        caller: &Caller,
-        reference: &Reference,
-    ) -> Result<(), Failure> {
-        if reference.pinned {
-            self.resolve_pinned(
-                caller,
-                &reference.contract,
-                &reference.dependency,
-                &reference.provider.caller.instance,
-            )?;
-            return Ok(());
-        }
-        let current = self
-            .resolve(caller, &reference.contract, &reference.dependency)
-            .map_err(|_| {
-                Failure::new(
-                    ErrorCode::InvalidHandle,
-                    "Service reference is no longer available",
-                )
-            })?;
-        if current.revision != reference.revision
-            || current.provider.caller.instance != reference.provider.caller.instance
-        {
-            return Err(Failure::new(
-                ErrorCode::InvalidHandle,
-                "Service provider changed; open a new reference",
-            ));
-        }
-        Ok(())
-    }
     pub fn enqueue(&mut self, call: Call) -> Result<(), Failure> {
+        let provider = self.reference_provider(&call.reference)?;
+        let _ = call.availability.set(provider.availability.clone());
+        self.validate_call(&call)?;
         self.queue
             .retain(|call| !call.completion.update().1.is_terminal());
-        if self.queue.len() >= 256 {
+        if self.queue.len() + self.waiting.len() >= 256 {
             return Err(Failure::new(
                 ErrorCode::LimitExceeded,
                 "Service queue is full",
@@ -403,55 +311,21 @@ impl Broker {
         let count = self.queue.len().min(32);
         self.queue.drain(..count).collect()
     }
-    /// Describe active scoped participants without granting a reference or changing selection.
-    pub(crate) fn participants(&self, scope: &str, contract: &str) -> Vec<Provider> {
-        self.providers
-            .values()
-            .filter(|provider| {
-                provider.caller.scope == scope && provider.contracts.contains_key(contract)
-            })
-            .cloned()
-            .collect()
+    /// Transfer bounded waits to the Manager; status/admission and new demands run outside this lock.
+    pub(crate) fn take_waiting(&mut self) -> Vec<Waiting> {
+        let count = self.waiting.len().min(32);
+        self.waiting.drain(..count).collect()
     }
-    pub fn choices(&self, scope: &str) -> Vec<Choice> {
-        let mut contracts: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-        for provider in self.providers.values().filter(|p| p.caller.scope == scope) {
-            for contract in provider.contracts.keys() {
-                contracts
-                    .entry(contract.clone())
-                    .or_default()
-                    .insert(provider.caller.plugin.clone());
-            }
+    /// A pending activation replaces the taken call's queue slot instead of opening an unbounded queue.
+    pub(crate) fn wait(&mut self, waiting: Waiting) -> Result<(), Failure> {
+        if self.queue.len() + self.waiting.len() >= 256 {
+            return Err(Failure::new(
+                ErrorCode::LimitExceeded,
+                "Service queue is full",
+            ));
         }
-        contracts
-            .into_iter()
-            .map(|(contract, candidates)| {
-                let selected = self.preference(scope, &contract).cloned().or_else(|| {
-                    (candidates.len() == 1).then(|| candidates.iter().next().unwrap().clone())
-                });
-                Choice {
-                    user: self
-                        .preferences
-                        .user
-                        .get(&choice_key(scope, &contract))
-                        .cloned(),
-                    project: self
-                        .preferences
-                        .projects
-                        .get(scope)
-                        .and_then(|values| values.get(&contract))
-                        .cloned(),
-                    scope: if scope == "application" {
-                        plugin_protocol::api::InstanceScope::Application
-                    } else {
-                        plugin_protocol::api::InstanceScope::Workspace
-                    },
-                    contract,
-                    candidates: candidates.into_iter().collect(),
-                    selected,
-                }
-            })
-            .collect()
+        self.waiting.push_back(waiting);
+        Ok(())
     }
 }
 

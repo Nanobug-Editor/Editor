@@ -4,8 +4,24 @@ mod dependencies;
 pub use dependencies::{InstallControl, InstallStage, InstallerPrompt};
 mod data_transaction;
 mod document_events;
+mod document_stream;
+pub use document_stream::DocumentStream;
+mod workspace_events;
+pub use workspace_events::WorkspaceEvents;
+mod diagnostics;
 mod editor_requests;
+pub use diagnostics::DiagnosticCollection;
+mod direct;
+pub use direct::{DirectProvider, LanguageFixOrigin, RequestCancellation};
+mod decorations;
+mod http;
+mod trees;
+mod virtual_documents;
+pub use decorations::DecorationResource;
+pub use trees::{TreeBranch, TreeResource, TreeSnapshot};
+pub use virtual_documents::VirtualDocumentResource;
 mod images;
+pub use http::HttpConfiguration;
 pub use images::{ImageResource, ImageState};
 mod image_input;
 pub use image_input::{
@@ -18,7 +34,11 @@ pub mod logs;
 pub use logs::{LogLevel, LogRecord, RuntimeLogs};
 mod request_state;
 pub use document_events::DocumentEvents;
-pub use editor_requests::EditorRequest;
+pub use editor_requests::{EditorAuthority, EditorRequest};
+mod workspace_resources;
+pub use workspace_resources::{AuthorizedFile, FileGuard, WorkspaceBatch, WorkspaceRequest};
+/// Secure disk preparation and current-session recovery do not own native document text or history.
+pub mod workspace_io;
 /// A caller-owned gate for one request; public so a host caller can await its own answer.
 pub use plugin_protocol::api::RequestUpdate;
 pub use request_state::Completion;
@@ -41,12 +61,14 @@ mod process;
 mod toolchains;
 pub use instance::Instance;
 pub use manager::{
-    DEBUG_CONTRACT, DEFAULT_STOP_GRACE_MS, DebugAbilities, DebugAnswer, DebugBreakpoint,
-    DebugFrame, DebugRequest, DebugSession, DebugState, DebugVariable, EXECUTION_CONTRACT,
+    ActivationReceipt, Availability, DEBUG_CONTRACT, DEFAULT_STOP_GRACE_MS, DebugAbilities,
+    DebugAnswer, DebugBreakpoint, DebugFrame, DebugRequest, DebugSession, DebugState,
+    DebugVariable, DemandPreparation, DemandReason, DemandRequest, EXECUTION_CONTRACT,
     EXECUTION_START_TIMEOUT_MS, ExecutionFailure, ExecutionSnapshot, ExecutionState, HostExecution,
-    InstallationPreparation, Installed, Manager, NativeExecutionUpdate, PreparedInstallation,
-    ProviderCandidate, RunEnvEntry, RunRequest, StopOptions, TargetOrigin, TargetRequest,
-    debug_dependency_for_test, frames_from_value, variables_from_value,
+    InstallationPreparation, Installed, LanguageRole, Manager, NativeExecutionUpdate,
+    PreparedDemand, PreparedInstallation, ProviderCandidate, RunEnvEntry, RunRequest, StopOptions,
+    TargetOrigin, TargetRequest, debug_dependency_for_test, frames_from_value,
+    variables_from_value,
 };
 mod native_work;
 mod terminal_presentations;
@@ -58,6 +80,11 @@ pub use terminal_presentations::{TerminalOwner, TerminalPresentation, TerminalPr
 /// Host-owned resources travel with every candidate; guests only see negotiated descriptions.
 #[derive(Clone, Debug, Default)]
 pub struct HostResources {
+    /// General HTTP producers share a bounded host budget and host-selected proxy/TLS policy.
+    pub http: HttpConfiguration,
+    /// Trusted host-only profile override; an empty value hashes the canonical manager root.
+    /// Guests and plugin settings cannot select it; update copies never change the namespace.
+    pub secret_namespace: String,
     /// Native terminal projection is shared across providers; it never owns or duplicates a child.
     pub terminals: TerminalPresentations,
     /// Authenticated preparation observation shared with all delegated native-process owners.
@@ -67,3 +94,4 @@ pub struct HostResources {
     /// One process-local log owner is shared by live, prepared and retired sources; never exposed to WASI.
     pub logs: RuntimeLogs,
 }
+mod native_path;

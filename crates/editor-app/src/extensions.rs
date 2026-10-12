@@ -1,7 +1,20 @@
 //! Generic runtime-plugin dock and manager. Feature behavior arrives from installed packages.
+mod activation;
+#[cfg(test)]
+// Keep the cross-feature GPUI scenario in tests/, with existing private extension helpers.
+#[path = "tests/activation_combination.rs"]
+mod activation_combination_tests;
+#[cfg(test)]
+mod activation_tests;
 #[cfg(test)]
 mod capability_tests;
+pub(crate) mod command_intents;
+pub(crate) mod command_menus;
 mod commands;
+#[cfg(test)]
+mod community_document_tests;
+#[cfg(test)]
+mod community_presentation_tests;
 #[cfg(test)]
 pub(crate) mod composable_tests;
 pub(crate) mod contributions;
@@ -9,6 +22,9 @@ pub(crate) mod contributions;
 mod dependency_tests;
 mod editor_requests;
 mod image_input;
+#[cfg(test)]
+mod workspace_transaction_tests;
+pub(crate) mod workspace_transactions;
 use crate::ui::plugin::images;
 #[cfg(test)]
 mod dock_tests;
@@ -19,6 +35,8 @@ mod hot_update_tests;
 mod installation;
 #[cfg(test)]
 mod installer_tests;
+#[cfg(test)]
+mod interaction_tests;
 #[cfg(test)]
 pub(crate) mod language_tests;
 #[cfg(test)]
@@ -48,6 +66,9 @@ mod native_run_tests;
 mod native_ui_tests;
 #[cfg(test)]
 mod package_ui_test_support;
+/// Cross-feature native fixtures consume the same public, bounded demand path as plugin UI tests.
+#[cfg(test)]
+pub(crate) use package_ui_test_support::demand as demand_plugin_fixture;
 mod preview;
 #[cfg(test)]
 mod preview_tests;
@@ -67,6 +88,8 @@ mod request_tests;
 mod service_tests;
 mod settings;
 #[cfg(test)]
+mod settings_hot_tests;
+#[cfg(test)]
 mod settings_tests;
 #[cfg(test)]
 mod shortcut_query_tests;
@@ -79,19 +102,23 @@ mod tests;
 mod worker;
 use crate::ui::controls::Input;
 use crate::*;
+
+#[cfg(test)]
+mod community_language_tests;
+mod diagnostics;
 use gpui_base::input::InputState;
 use gpui_kit::{AnyElement, ClipboardItem, PathPromptOptions, SharedString};
 use plugin_runtime::{
     Installed, Package,
     plugin_protocol::{self as protocol, api::Notification as PluginEvent},
 };
-#[cfg(test)]
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 pub(crate) use worker::DebugAnswerMessage;
 pub(crate) use worker::NativeExecutionMessage;
 pub(crate) use worker::PresentedTerminalMessage;
 pub(crate) use worker::configurations::{ConfigurationCatalog, ConfigurationReply};
+pub(crate) use worker::demands::DemandWait;
 pub(crate) use worker::targets::TargetCatalog;
 pub use worker::{HostRunSnapshot, RunStatus, Work as HostWork};
 use worker::{LifecycleAction, OperationProgress, Work, Worker};
@@ -141,6 +168,8 @@ pub struct ExtensionPanel {
     views: HashMap<String, Arc<protocol::ui::Document>>,
     /// Raster images are paired with their exact scene and prepared outside the UI thread.
     images: images::SceneImages,
+    /// Shared generic tree resources are joined by full instance-owned handles at native projection.
+    trees: Vec<Arc<plugin_runtime::TreeResource>>,
     active: Option<String>,
     surface_id: Option<String>,
     /// Editor-local surfaces are selected by the active document instead of the outer dock tree.
@@ -187,6 +216,7 @@ pub struct ExtensionPanel {
     focus: FocusHandle,
     /// Keep the footer control's keyboard focus stable when source toolbars change the render tree.
     footer_focus: FocusHandle,
+    /// Actual command trigger bounds in window coordinates, refreshed during native prepaint.
     bounds: Bounds<Pixels>,
     /// Keyed native controls own text editing, canvas input and composition.
     native_ui: Option<Entity<crate::ui::plugin::PluginView>>,
@@ -228,11 +258,65 @@ pub struct ExtensionPanel {
     last_size: (f32, f32, f32, f32),
     /// Last plugin instance generation measured against this panel's native canvas.
     instance_epoch: u64,
+    /// Paint/show demand is independent of default visibility and survives only its original wait.
+    view_demand: RefCell<activation::ViewDemand>,
     /// Wait for the final snapshot before the native app shutdown deadline.
     _quit: Option<Subscription>,
     _focus_events: Vec<Subscription>,
 }
 impl ExtensionPanel {
+    /// Native consumers retain one original static identity and cancellation guard through activation.
+    /// Preparation remains in the Manager; the returned wait owns only this caller's receipt.
+    pub(crate) fn demand_entry(
+        &self,
+        availability: plugin_runtime::Availability,
+        reason: plugin_runtime::DemandReason,
+        guard: Option<command_intents::CommandGuard>,
+    ) -> Result<DemandWait, protocol::api::Failure> {
+        self.worker.demand(availability, reason, guard)
+    }
+
+    /// Metadata discovery never compiles a guest; native requests retain this original identity.
+    pub(crate) fn availability(&self, plugin: &str) -> Option<plugin_runtime::Availability> {
+        self.worker
+            .trusted
+            .load(std::sync::atomic::Ordering::Acquire)
+            .then(|| {
+                self.worker
+                    .state
+                    .lock()
+                    .unwrap()
+                    .availabilities
+                    .get(plugin)
+                    .cloned()
+            })
+            .flatten()
+    }
+
+    /// Demand precisely one selected language provider/role, leaving every unrelated server cold.
+    pub(crate) fn demand_language(
+        &self,
+        key: &str,
+        role: plugin_runtime::LanguageRole,
+        guard: Option<command_intents::CommandGuard>,
+    ) -> Result<worker::demands::DemandWait, protocol::api::Failure> {
+        let plugin = key.split_once('/').map_or(key, |(plugin, _)| plugin);
+        let availability = self.availability(plugin).ok_or_else(|| {
+            protocol::api::Failure::new(
+                protocol::api::ErrorCode::CapabilityUnavailable,
+                "Selected language provider unavailable",
+            )
+        })?;
+        self.worker.demand(
+            availability,
+            plugin_runtime::DemandReason::Language {
+                provider: key.to_owned(),
+                role,
+            },
+            guard,
+        )
+    }
+
     /// Protocol preparation runs on the worker; UI consumers receive only immutable approved leases.
     pub(crate) fn language_services(
         &self,
@@ -263,6 +347,45 @@ impl ExtensionPanel {
             .unwrap()
             .structure_providers
             .clone()
+    }
+    /// Native language consumers receive only trusted immutable pure provider leases.
+    pub(crate) fn direct_language_providers(
+        &self,
+    ) -> BTreeMap<String, Result<Arc<plugin_runtime::DirectProvider>, String>> {
+        if !self
+            .worker
+            .trusted
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return BTreeMap::new();
+        }
+        self.worker
+            .state
+            .lock()
+            .unwrap()
+            .direct_language_providers
+            .clone()
+    }
+    /// Route a visible fix to its original provider; the worker rechecks its lifetime and grants.
+    pub(crate) fn submit_language_fix(
+        &self,
+        origin: plugin_runtime::LanguageFixOrigin,
+        document: protocol::api::DocumentVersion,
+        fix: protocol::diagnostics::Fix,
+    ) -> Result<(), protocol::api::Failure> {
+        self.worker
+            .tx
+            .send(worker::Work::LanguageFix {
+                origin,
+                document,
+                fix,
+            })
+            .map_err(|_| {
+                protocol::api::Failure::new(
+                    protocol::api::ErrorCode::OperationFailed,
+                    "Plugin worker is unavailable",
+                )
+            })
     }
     /// The online catalog is the only market source; refresh never scans executable or developer directories.
     fn load_market_packages(&mut self) {
@@ -338,6 +461,7 @@ impl ExtensionPanel {
             startup,
             views: HashMap::new(),
             images: Default::default(),
+            trees: Default::default(),
             active: None,
             surface_id: None,
             editor_preview: false,
@@ -394,6 +518,7 @@ impl ExtensionPanel {
             last_theme: None,
             last_size: (0., 0., 0., 0.),
             instance_epoch: 0,
+            view_demand: Default::default(),
             _quit: Some(quit),
             _focus_events: vec![],
         }
@@ -441,6 +566,7 @@ impl ExtensionPanel {
             startup: BTreeMap::new(),
             views,
             images: Default::default(),
+            trees: Default::default(),
             active: Some(id),
             surface_id: Some(panel.id),
             editor_preview: panel.position == "editor",
@@ -497,6 +623,7 @@ impl ExtensionPanel {
             last_theme: None,
             last_size: (0., 0., 0., 0.),
             instance_epoch: 0,
+            view_demand: Default::default(),
             _quit: None,
             _focus_events: vec![],
         }
@@ -652,6 +779,7 @@ impl ExtensionPanel {
                 .map(|(id, s)| (id.clone(), s.clone()))
                 .collect();
             self.images = state.images.clone();
+            self.trees = state.trees.clone();
             self.processes = state
                 .processes
                 .iter()
@@ -682,6 +810,7 @@ impl ExtensionPanel {
                 vec![]
             }
         };
+        self.poll_view_demand(cx);
         if !editor_requests.is_empty() {
             let parent = self.parent.clone();
             cx.defer(move |cx| {
@@ -717,7 +846,18 @@ impl ExtensionPanel {
             // Defer until this ExtensionPanel borrow ends before reading the shared publication.
             let parent = self.parent.clone();
             cx.defer(move |cx| {
-                let _ = parent.update(cx, |app, cx| app.sync_shortcut_plugins(cx));
+                let _ = parent.update(cx, |app, cx| {
+                    app.sync_shortcut_plugins(cx);
+                    // Explicit resource release may leave package contributions unchanged. Wake the
+                    // native shell so revoked readonly tabs cannot outlive their retained authority.
+                    if app.tabs.iter().any(|tab| {
+                        tab.virtual_document
+                            .as_ref()
+                            .is_some_and(|virtual_tab| !virtual_tab.resource.is_live())
+                    }) {
+                        cx.notify();
+                    }
+                });
             });
         }
         if changed {
@@ -791,6 +931,7 @@ impl ExtensionPanel {
         self.send(PluginEvent::Command {
             id,
             arguments: None,
+            context: None,
         });
     }
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
@@ -800,7 +941,7 @@ impl ExtensionPanel {
     /// Plugins decide whether opening an empty view requires new state or process resources.
     pub(crate) fn show(&self, window: &mut Window, cx: &mut App) {
         self.visible.set(true);
-        self.command("panel.opened".into());
+        self.demand_view();
         self.focus(window, cx);
     }
     /// Preview publication state for native tests: the revision sent and the one the guest echoed.
@@ -976,13 +1117,25 @@ impl dock::BasePanel for ExtensionPanel {
     fn visible(&self, _: &App) -> bool {
         self.visible.get()
     }
+    /// Base owns dock activation; deselection cancels a pending demand without starting other tabs.
+    fn set_active(&mut self, active: bool, _: &mut Window, _: &mut Context<Self>) {
+        if !active {
+            self.view_demand.borrow_mut().cancel();
+        }
+    }
+    /// Removal is Base's close signal, including an active panel removed without set_active(false).
+    fn on_removed(&mut self, _: &mut Window, _: &mut Context<Self>) {
+        self.view_demand.borrow_mut().cancel();
+    }
 }
 impl DockPanel for ExtensionPanel {
     /// Native window chrome remains generic; domain functions are drawn from the plugin's live tools.
     fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_base::ElementExt as _;
         let title = self.panel_title.clone();
         let icon = self.panel_icon(cx.theme().is_dark());
         let controls = h_flex().items_center();
+        let command_owner = cx.entity().downgrade();
         h_flex()
             .w_full()
             .justify_between()
@@ -996,16 +1149,28 @@ impl DockPanel for ExtensionPanel {
             .child(
                 controls
                     .child(
-                        Button::new("plugin-command-menu")
-                            .icon(Icon::default().path("icons/menu.svg"))
-                            .tooltip(t!("plugins.command_menu").to_string())
-                            .small()
-                            .compact()
-                            .ghost()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.commands_open = !this.commands_open;
-                                cx.notify();
-                            })),
+                        div()
+                            .id("plugin-command-menu-anchor")
+                            .on_prepaint(move |bounds, _, cx| {
+                                let _ = command_owner.update(cx, |this, cx| {
+                                    this.bounds = bounds;
+                                    if let Some(popup) = &this.command_popup {
+                                        popup.update(cx, |popup, cx| popup.anchor_to(bounds, cx));
+                                    }
+                                });
+                            })
+                            .child(
+                                Button::new("plugin-command-menu")
+                                    .icon(Icon::default().path("icons/menu.svg"))
+                                    .tooltip(t!("plugins.command_menu").to_string())
+                                    .small()
+                                    .compact()
+                                    .ghost()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.commands_open = !this.commands_open;
+                                        cx.notify();
+                                    })),
+                            ),
                     )
                     .child(
                         Button::new("plugin-hide")

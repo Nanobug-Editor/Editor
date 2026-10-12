@@ -1,0 +1,5 @@
+{
+  "version":1,"manifest":"manifest.json","output":".","wasm":{"manifest":"Cargo.toml"},
+  "native":[{"program":"cargo","args":["build","--release","--manifest-path","{project}/server/Cargo.toml","--target-dir","{build}/server"],"platform":"windows-x86_64"}],
+  "assets":[{"source":"plugin.toml","destination":"plugin.toml"},{"source":"{build}/server/release/keyvalue-server.exe","destination":"native/keyvalue-server.exe"}]
+}

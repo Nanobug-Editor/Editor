@@ -7,7 +7,12 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
+mod activation;
 mod artwork;
+pub use activation::{
+    ActivationReceipt, Availability, DemandPreparation, DemandReason, DemandRequest, LanguageRole,
+    PreparedDemand,
+};
 mod bundles;
 mod data_updates;
 mod debug_services;
@@ -20,6 +25,7 @@ mod native_execution;
 mod service_preparation;
 mod terminal_presentations;
 pub use native_execution::NativeExecutionUpdate;
+mod direct;
 mod plugin_services;
 mod preferences;
 mod preparation;
@@ -116,9 +122,13 @@ pub struct Manager {
     parked: BTreeMap<String, ParkedWorkspace>,
     trusted: bool,
     workspace_open: bool,
+    /// Static intent and bounded preparation are owned by this Manager, not a second lifecycle registry.
+    activation: activation::State,
     language_services: BTreeMap<String, language::Prepared>,
     /// Pure snapshot workers share plugin lifecycle, without owning native LSP processes.
     structure_providers: BTreeMap<String, structure::Prepared>,
+    /// Experimental language roles share lifecycle but do not replace the primary LSP choice.
+    direct_language_providers: BTreeMap<String, direct::Prepared>,
     /// Byte producers are independent of WASM calls and retained only for current preview identities.
     images: BTreeMap<String, crate::images::Entry>,
     image_budget: std::sync::Arc<std::sync::atomic::AtomicUsize>,
@@ -198,14 +208,24 @@ impl Manager {
         root: PathBuf,
         environment: Environment,
         trusted: bool,
-        host_resources: crate::HostResources,
+        mut host_resources: crate::HostResources,
     ) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&root)?;
+        let canonical_root = root.canonicalize()?;
+        // Stable profile identity keeps secrets out of data copies while isolating development hosts.
+        if host_resources.secret_namespace.is_empty() {
+            use sha2::{Digest, Sha256};
+            host_resources.secret_namespace = format!(
+                "{:x}",
+                Sha256::digest(canonical_root.to_string_lossy().as_bytes())
+            );
+        }
         let installed = Self::read_registry(&root)?;
         host_resources
             .terminals
             .select_scope(scopes::workspace_key(&environment.workspace));
         let host_alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let activation = activation::State::new(&environment.workspace);
         let mut manager = Self {
             _runtime_lock: None,
             diagnostic_history: BTreeMap::new(),
@@ -225,8 +245,10 @@ impl Manager {
             parked: BTreeMap::new(),
             trusted,
             workspace_open: true,
+            activation,
             language_services: BTreeMap::new(),
             structure_providers: BTreeMap::new(),
+            direct_language_providers: BTreeMap::new(),
             images: BTreeMap::new(),
             image_budget: Default::default(),
             image_input_budget: Default::default(),
@@ -253,8 +275,8 @@ impl Manager {
             })
             .map(|(id, p)| (id.clone(), p.enabled))
             .collect();
-        manager.activate_saved_plugins(ids);
-        // Startup activation may temporarily persist an enabled value; restore global defaults.
+        manager.restore_saved_plugins(ids);
+        // Metadata restoration may temporarily persist an enabled value; restore global defaults.
         manager.save_registry()?;
         Ok(manager)
     }
@@ -411,7 +433,7 @@ impl Manager {
         }
         Ok(())
     }
-    /// Re-enable from the last committed version and plugin-owned snapshot.
+    /// Persist enabled availability without running business code; actual consumption demands an owner.
     pub fn enable(&mut self, id: &str) -> anyhow::Result<()> {
         // A prior failed rollback must finish before any instance can touch the formal data directory.
         drop(crate::data_transaction::recover(&self.root)?);
@@ -423,6 +445,7 @@ impl Manager {
         if let Some(error) = entry.compatibility_error() {
             anyhow::bail!(error);
         }
+        self.revalidate_installed_metadata(entry)?;
         anyhow::ensure!(
             self.trusted && self.workspace_open,
             "Workspace is restricted or closed"
@@ -446,7 +469,7 @@ impl Manager {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Unknown plugin"))?
             .clone();
-        let Some(component_path) = &entry.manifest.component else {
+        let Some(_component_path) = &entry.manifest.component else {
             let contribution_path = entry
                 .manifest
                 .contributions
@@ -478,13 +501,6 @@ impl Manager {
             }
             return Ok(());
         };
-        let component = std::fs::read(
-            self.root
-                .join("packages")
-                .join(id)
-                .join(&entry.digest)
-                .join(component_path),
-        )?;
         // Dormant scopes import historical data through the same transaction as explicit format migrations.
         let scope = self.data_directory(id).parent().unwrap().to_owned();
         let needs_import = crate::migration::needs_legacy_import(&self.root, id, &scope);
@@ -500,12 +516,9 @@ impl Manager {
                 .as_ref()
                 .map_or(1, |format| format.version);
             if needs_import || from != target {
-                let package = Package {
-                    manifest: entry.manifest.clone(),
-                    digest: entry.digest.clone(),
-                    files: [(component_path.clone(), component)].into(),
-                    source: None,
-                };
+                let (_, mut package) = self.read_installed_assets(&entry)?;
+                // Directory and ZIP hashes use different encodings; migration retains the admitted version path.
+                package.digest = entry.digest.clone();
                 let control = crate::InstallControl::default();
                 let mut prepared =
                     self.prepare_installation(&package, entry.grants.clone(), &control)?;
@@ -513,38 +526,21 @@ impl Manager {
                 return self.commit_installation(prepared, &control);
             }
         }
-        if self.engine.is_none() {
-            self.engine = Some(Instance::engine()?);
-        }
-        let mut instance = Instance::prepare_with_resources(
-            self.engine.as_ref().unwrap(),
-            &component,
-            &entry.manifest,
-            &entry.grants,
-            self.environment.clone(),
-            self.data_directory(id),
-            self.root.join("packages").join(id).join(&entry.digest),
-            self.load_snapshot(id)?,
-            self.host_resources.clone(),
-        )?;
-        self.configure_saved_settings(&mut instance, &entry.manifest)?;
-        self.refresh_services();
-        instance.connect_services(self.plugin_services.clone())?;
-        instance.connect_diagnostics(self.native_diagnostics.clone());
-        instance.activate()?;
-        let originals = instance.commit_data()?;
+        // An enabled preference is static metadata, including for packages built with an older SDK.
+        // Migration above may prepare an isolated guest; it does not turn preference into consumption.
         self.installed.get_mut(id).unwrap().enabled = true;
         self.installed.get_mut(id).unwrap().error = None;
         if let Err(error) = self.save_registry() {
             self.installed.insert(id.into(), entry);
-            Instance::rollback_data(&originals)?;
             return Err(error);
         }
-        self.live.insert(id.to_owned(), instance);
         Ok(())
     }
     /// UI confirmation occurs before calling this when process_count is nonzero.
     pub fn disable(&mut self, id: &str) -> anyhow::Result<()> {
+        // A global preference revokes every logical scope before retiring any live incarnation.
+        self.activation.invalidate(id, None);
+        self.cancel_pending_demands(id, None);
         let result = self.disable_current(id);
         self.retire_parked_plugin(id);
         self.refresh_services();
@@ -552,6 +548,18 @@ impl Manager {
     }
     /// Project overrides retire only their owner; global disable additionally retires parked owners.
     fn disable_current(&mut self, id: &str) -> anyhow::Result<()> {
+        // Disable is a real availability retirement, even when an undelivered demand had no live owner.
+        let scope = if self
+            .installed
+            .get(id)
+            .is_some_and(|entry| entry.manifest.scope == api::InstanceScope::Application)
+        {
+            "application".into()
+        } else {
+            scopes::workspace_key(&self.environment.workspace)
+        };
+        self.activation.invalidate(id, Some(&scope));
+        self.cancel_pending_demands(id, Some(&scope));
         self.retire_plugin_images(id);
         self.retire_language_services(id);
         let snapshot = self.live.get_mut(id).map(Instance::snapshot);
@@ -659,6 +667,17 @@ impl Manager {
         command: &str,
         arguments: serde_json::Value,
     ) -> anyhow::Result<()> {
+        self.invoke_command_with_context(plugin, command, arguments, None)
+    }
+    /// A native command may carry an informational target independently of its checked arguments.
+    /// The host validates the native target before calling; this metadata grants no resource access.
+    pub fn invoke_command_with_context(
+        &mut self,
+        plugin: &str,
+        command: &str,
+        arguments: serde_json::Value,
+        context: Option<plugin_protocol::commands::Context>,
+    ) -> anyhow::Result<()> {
         anyhow::ensure!(
             self.live.contains_key(plugin),
             "Plugin is not running: {plugin}"
@@ -667,6 +686,11 @@ impl Manager {
             .installed
             .get(plugin)
             .ok_or_else(|| anyhow::anyhow!("Plugin is not installed: {plugin}"))?;
+        let context = if entry.manifest.scope == api::InstanceScope::Application {
+            None
+        } else {
+            context
+        };
         anyhow::ensure!(
             entry
                 .manifest
@@ -679,16 +703,55 @@ impl Manager {
             serde_json::to_vec(&arguments)?.len() <= 65536,
             "Plugin command arguments exceed 64 KiB"
         );
+        if entry
+            .manifest
+            .commands
+            .iter()
+            .any(|item| item.id == command && item.signature.is_some())
+        {
+            self.live
+                .get_mut(plugin)
+                .unwrap()
+                .queue_host_command(command, arguments, 30000, context)?;
+            return Ok(());
+        }
         self.event(
             plugin,
             None,
             api::Notification::Command {
                 id: command.into(),
                 arguments: (!arguments.is_null()).then_some(arguments),
+                context,
             },
         )
     }
+    /// Result-bearing host calls return an immutable gate; legacy commands retain event semantics.
+    pub fn invoke_typed_command(
+        &mut self,
+        plugin: &str,
+        command: &str,
+        arguments: serde_json::Value,
+        timeout_ms: u32,
+    ) -> Result<crate::Completion<serde_json::Value>, api::Failure> {
+        self.live
+            .get_mut(plugin)
+            .ok_or_else(|| {
+                api::Failure::new(
+                    api::ErrorCode::CapabilityUnavailable,
+                    "Command target is not running",
+                )
+            })?
+            .queue_host_command(command, arguments, timeout_ms, None)
+    }
     pub fn poll(&mut self) {
+        self.poll_demands();
+        for service in self
+            .language_services
+            .values()
+            .filter_map(|prepared| prepared.service.as_ref().ok())
+        {
+            service.poll_requests();
+        }
         self.advance_terminal_exits();
         self.native_executions.poll(&self.plugin_services);
         self.route_services();
@@ -773,10 +836,14 @@ mod icon_tests {
             replaced_by: None,
             manifest: Manifest {
                 replaces: Vec::new(),
+                // Test metadata follows the same omitted-policy demand default as released packages.
+                minimum_host: None,
+                activation: Default::default(),
                 data_format: None,
                 plugin_services: Default::default(),
                 language_servers: Default::default(),
                 structure_providers: Default::default(),
+                direct_language_providers: Default::default(),
                 services: Default::default(),
                 settings: Default::default(),
                 settings_hook: false,
@@ -827,7 +894,7 @@ mod icon_tests {
 mod scope_tests {
     use super::*;
 
-    /// A project override starts its plugin without rewriting the global default.
+    /// A project override publishes static availability without rewriting the global default.
     #[test]
     fn project_override_survives_reopen() {
         let directory = tempfile::tempdir().unwrap();
@@ -838,13 +905,23 @@ mod scope_tests {
             .join(&digest)
             .join("plugin.toml");
         std::fs::create_dir_all(contribution.parent().unwrap()).unwrap();
-        std::fs::write(contribution, "").unwrap();
+        // Saved contributions are now checked before publication, even without a guest demand.
+        // Use an admitted declaration rather than an empty file that bypassed the old eager path.
+        std::fs::write(
+            contribution,
+            "[plugin]\nid=\"example\"\nname=\"Example\"\nversion=\"1.0.0\"\nhost_version=\"^0.1\"\n",
+        )
+        .unwrap();
         let manifest = Manifest {
             replaces: Vec::new(),
+            // Declarative contributions need no business activation or additional host floor.
+            minimum_host: None,
+            activation: Default::default(),
             data_format: None,
             plugin_services: Default::default(),
             language_servers: Default::default(),
             structure_providers: Default::default(),
+            direct_language_providers: Default::default(),
             services: Default::default(),
             settings: Default::default(),
             settings_hook: false,

@@ -1,8 +1,14 @@
 //! Install dependency plans through the same package/manager boundary used by the editor worker.
+/// Selected roles consume real dependency plans only through their original activation receipt.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
-use plugin_runtime::{Manager, Package, plugin_protocol::Environment};
+use plugin_runtime::{
+    DemandReason, LanguageRole, Manager, Package,
+    plugin_protocol::{Environment, api},
+};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io::{Cursor, Write};
@@ -44,6 +50,19 @@ fn package_with(
     Package::from_bytes(&archive.finish()?.into_inner())
 }
 
+/// Borrow the selected analysis plan through its original receipt, including typed tool errors.
+/// Installation may prepare dependency bytes but cold metadata must not materialize the language role.
+fn selected_analysis(manager: &mut Manager) -> Result<(), api::Failure> {
+    demand_support::try_ready(
+        manager,
+        "private-analysis",
+        DemandReason::Language {
+            provider: "private-analysis/analysis".into(),
+            role: LanguageRole::Lsp,
+        },
+    )
+}
+
 /// A package-contained dependency is prepared offline without searching or modifying global PATH.
 #[test]
 fn bundled_service_is_prepared_in_a_private_cache() {
@@ -61,6 +80,8 @@ fn bundled_service_is_prepared_in_a_private_cache() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    assert!(manager.language_services().is_empty());
+    selected_analysis(&mut manager).unwrap();
     assert!(manager.language_services()["private-analysis/analysis"].is_ok());
     assert_eq!(std::env::var_os("PATH"), before);
 }
@@ -81,6 +102,7 @@ fn native_installer_requires_separate_permission_and_concrete_consent() {
     manager
         .install(&original, original.manifest.permissions.clone())
         .unwrap();
+    selected_analysis(&mut manager).unwrap();
     let candidate = package_with(
         json!({"kind":"package","path":"tool.exe"}),
         b"installer",
@@ -155,6 +177,7 @@ fn downloaded_service_is_verified_and_reused_offline() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    selected_analysis(&mut manager).unwrap();
     assert!(manager.language_services()["private-analysis/analysis"].is_ok());
 }
 
@@ -172,7 +195,9 @@ fn another_workspace_lease_protects_uninstalled_dependency_files() {
     first
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    selected_analysis(&mut first).unwrap();
     let mut second = Manager::open(root, env).unwrap();
+    selected_analysis(&mut second).unwrap();
     let borrowed = second.language_services()["private-analysis/analysis"]
         .as_ref()
         .unwrap()
@@ -202,6 +227,7 @@ fn checksum_network_and_cancel_failures_leave_the_old_version_available() {
     manager
         .install(&original, original.manifest.permissions.clone())
         .unwrap();
+    selected_analysis(&mut manager).unwrap();
     let old = manager.language_services()["private-analysis/analysis"]
         .as_ref()
         .unwrap()
@@ -305,6 +331,7 @@ fn explicit_local_executable_wins_and_bad_explicit_paths_do_not_fallback() {
     manager
         .install(&original, original.manifest.permissions.clone())
         .unwrap();
+    selected_analysis(&mut manager).unwrap();
     manager
         .update_setting(
             "private-analysis",
@@ -322,6 +349,7 @@ fn explicit_local_executable_wins_and_bad_explicit_paths_do_not_fallback() {
     manager
         .install(&offline, offline.manifest.permissions.clone())
         .unwrap();
+    selected_analysis(&mut manager).unwrap();
     assert!(manager.language_services()["private-analysis/analysis"].is_ok());
     manager
         .update_setting(
@@ -331,6 +359,8 @@ fn explicit_local_executable_wins_and_bad_explicit_paths_do_not_fallback() {
             Some(json!(temp.path().join("missing.exe"))),
         )
         .unwrap();
+    // The selected role must reject the new explicit path instead of borrowing the retired old plan.
+    assert!(selected_analysis(&mut manager).is_err());
     // Discovery may reject a missing or unusable executable; the explicit path must remain the failure.
     assert!(
         manager.language_services()["private-analysis/analysis"]
@@ -418,7 +448,8 @@ fn waiting_for_another_installation_is_cancellable() {
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn hook_plan_receipts_accumulate_and_dynamic_program_skips_unused_downloads() {
     let temp = tempfile::tempdir().unwrap();
-    let root = test_packages::archive("capability-example");
+    // The explicit community version supplies the real dynamic dependency-plan hook under test.
+    let root = test_packages::archive("capability-example-0.19.0");
     let mut files = Package::read(&root).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["api"]["required"]["language.lsp"] = json!("^1");
@@ -469,9 +500,16 @@ fn hook_plan_receipts_accumulate_and_dynamic_program_skips_unused_downloads() {
         },
     )
     .unwrap();
+    // Each consumption captures its current original availability; changing settings does not
+    // automatically publish this role or reuse a receipt from the previous configuration.
+    let analysis = DemandReason::Language {
+        provider: "capability-example/analysis".into(),
+        role: LanguageRole::Lsp,
+    };
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    demand_support::ready(&mut manager, "capability-example", analysis.clone());
     let scope = plugin_runtime::plugin_protocol::settings::Scope::Project;
     manager
         .update_setting(
@@ -484,6 +522,8 @@ fn hook_plan_receipts_accumulate_and_dynamic_program_skips_unused_downloads() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // Consume the alternate plan before retirement, preserving both prepared rollback receipts.
+    demand_support::ready(&mut manager, "capability-example", analysis.clone());
     manager.disable("capability-example").unwrap();
     assert_eq!(manager.collect_dependency_cache().unwrap(), 0);
     manager.enable("capability-example").unwrap();
@@ -495,6 +535,8 @@ fn hook_plan_receipts_accumulate_and_dynamic_program_skips_unused_downloads() {
             Some(json!("managed-dependency")),
         )
         .unwrap();
+    // Enable/Restart keeps metadata available; this new role demand makes the saved primary plan ready.
+    demand_support::ready(&mut manager, "capability-example", analysis.clone());
     assert!(manager.language_services()["capability-example/analysis"].is_ok());
     manager
         .update_setting(
@@ -508,5 +550,6 @@ fn hook_plan_receipts_accumulate_and_dynamic_program_skips_unused_downloads() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    demand_support::ready(&mut manager, "capability-example", analysis);
     assert!(manager.language_services()["capability-example/analysis"].is_ok());
 }

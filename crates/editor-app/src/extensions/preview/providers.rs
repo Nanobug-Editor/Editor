@@ -69,6 +69,15 @@ impl EditorApp {
     }
     /// The same file type shares one selection in this private workspace session.
     fn file_provider_type(&self) -> Option<String> {
+        // File providers and their remembered choices describe local files, never provider-owned URIs.
+        if self
+            .tabs
+            .get(self.active_tab_index()?)?
+            .virtual_document
+            .is_some()
+        {
+            return None;
+        }
         Some(
             self.active_path
                 .as_ref()?
@@ -252,6 +261,20 @@ impl EditorApp {
             });
             choices.push(FileProviderChoice::Plugin(candidate.key));
         }
+        let target = self.plugin_menu_target(self.active_path.as_deref().unwrap());
+        let command_rows =
+            self.plugin_menu_entries(&target, &[protocol::commands::Location::Tab], cx);
+        let mut group = None;
+        for (index, row) in command_rows.iter().enumerate() {
+            let separator_before = group.as_ref() != Some(&row.group);
+            group = Some(row.group.clone());
+            items.push(protocol::ui::MenuItem {
+                id: format!("plugin-command-{index}"),
+                label: row.label.clone(),
+                disabled: row.disabled,
+                separator_before,
+            });
+        }
         let parent = cx.entity().downgrade();
         // Escape restores the clicked file's input target, rather than a previously active Tab.
         // A content-only layout has no mounted native handler and will retire this focus on redraw.
@@ -273,6 +296,15 @@ impl EditorApp {
                             .as_ref()
                             != Some(&file)
                         {
+                            return;
+                        }
+                        if let protocol::ui::Action::Select(id) = &action
+                            && let Some(index) = id
+                                .strip_prefix("plugin-command-")
+                                .and_then(|id| id.parse::<usize>().ok())
+                            && let Some(row) = command_rows.get(index)
+                        {
+                            app.invoke_plugin_menu(row, &target, window, cx);
                             return;
                         }
                         if let protocol::ui::Action::Select(id) = action

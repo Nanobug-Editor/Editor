@@ -7,8 +7,27 @@ members = [
     "crates/plugin-protocol",
     "crates/plugin-runtime",
 ]
-# The source-free host retains one SDK completion consumer, built through the managed public SDK cache.
-exclude = ["crates/plugin-runtime/tests/fixtures/sdk-completion"]
+# Test-only SDK consumers build independently through the host-managed public SDK cache.
+# Cargo exclusions name each actual package root; excluding only their parent does not detach guests.
+exclude = [
+    "crates/plugin-runtime/tests/fixtures/sdk-completion",
+    "crates/plugin-runtime/tests/fixtures/community/bookmarks",
+    "crates/plugin-runtime/tests/fixtures/community/capability-example",
+    "crates/plugin-runtime/tests/fixtures/community/cloud-translation",
+    "crates/plugin-runtime/tests/fixtures/community/code-host-query",
+    "crates/plugin-runtime/tests/fixtures/community/config-check",
+    "crates/plugin-runtime/tests/fixtures/community/coverage",
+    "crates/plugin-runtime/tests/fixtures/community/database-tree",
+    "crates/plugin-runtime/tests/fixtures/community/expression-language",
+    "crates/plugin-runtime/tests/fixtures/community/generated-preview",
+    "crates/plugin-runtime/tests/fixtures/community/history-preview",
+    "crates/plugin-runtime/tests/fixtures/community/keyvalue-language",
+    "crates/plugin-runtime/tests/fixtures/community/keyvalue-language/server",
+    "crates/plugin-runtime/tests/fixtures/community/spell-check",
+    "crates/plugin-runtime/tests/fixtures/community/todo-tree",
+    "crates/plugin-runtime/tests/fixtures/community/workspace-converter",
+    "crates/plugin-runtime/tests/fixtures/community/workspace-scaffold",
+]
 resolver = "2"
 
 [workspace.package]

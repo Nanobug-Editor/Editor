@@ -5,6 +5,7 @@ mod admission;
 mod bundled_tests;
 mod command_epochs;
 pub(super) mod configurations;
+pub(crate) mod demands;
 mod marketplace;
 mod preparation;
 #[cfg(all(test, windows))]
@@ -68,6 +69,12 @@ impl RunStatus {
 }
 
 pub enum Work {
+    /// User-selected language data goes back to the sealed original provider's ordinary plan admission.
+    LanguageFix {
+        origin: plugin_runtime::LanguageFixOrigin,
+        document: api::DocumentVersion,
+        fix: diagnostics::Fix,
+    },
     /// Native terminal input retains a guest's authenticated presentation handle, not an OS handle.
     PresentedInput {
         handle: api::ResourceHandle,
@@ -216,8 +223,23 @@ pub enum Work {
         plugin: String,
         command: String,
         arguments: serde_json::Value,
+        /// Native context is informational and travels separately from the typed command parameters.
+        context: Option<plugin_runtime::plugin_protocol::commands::Context>,
         /// Capture once when the host accepts this command; never retarget it after a restart.
         expected_epoch: u64,
+        /// Static identity and native target survive demand; absent origins cannot borrow a replacement.
+        origin: Option<demands::CommandOrigin>,
+    },
+    /// Only consuming an actual entry starts a guest; immutable discovery never queues this work.
+    Demand {
+        plugin: String,
+        availability: plugin_runtime::Availability,
+        reason: plugin_runtime::DemandReason,
+        guard: Option<super::command_intents::CommandGuard>,
+        cancellation: plugin_runtime::RequestCancellation,
+        reply: futures::channel::oneshot::Sender<
+            Result<plugin_runtime::ActivationReceipt, api::Failure>,
+        >,
     },
     /// The editor's run controls start a program through the public execution contract.
     ///
@@ -265,6 +287,7 @@ impl Work {
             Self::SetSetting { plugin, .. }
             | Self::ImportPreference { plugin, .. }
             | Self::Invoke { plugin, .. }
+            | Self::Demand { plugin, .. }
             | Self::ImageInput { plugin, .. } => Some(plugin),
             Self::Install(package) => Some(&package.manifest.id),
             // A status query observes a program another owner already has, so it claims no plugin.
@@ -368,11 +391,18 @@ pub(super) struct Published {
     /// Readonly structure workers publish independently of native language-service availability.
     pub structure_providers:
         BTreeMap<String, Result<Arc<plugin_runtime::StructureProvider>, String>>,
+    /// Experimental language role leases remain separate from the single selected native LSP.
+    pub direct_language_providers:
+        BTreeMap<String, Result<Arc<plugin_runtime::DirectProvider>, String>>,
     pub configurations: BTreeMap<String, Result<settings::Effective, String>>,
     pub configuration_result: Option<(u64, Result<(), String>)>,
     pub configuration_revision: u64,
     /// UI document ingress is bounded independently of the worker's command channel.
     pub document_events: plugin_runtime::DocumentEvents,
+    /// Ordered metadata is opt-in and must not be merged with legacy version coalescing.
+    pub document_stream: plugin_runtime::DocumentStream,
+    /// The shared watcher covers unopened files and explicitly fails bounded ingress on overflow.
+    pub file_events: plugin_runtime::WorkspaceEvents,
     /// Bounded typed work has a completion gate that survives queue transfer and rejects stale callbacks.
     pub editor_requests: Vec<(String, plugin_runtime::EditorRequest)>,
     pub entries: Vec<Installed>,
@@ -437,12 +467,18 @@ pub(super) struct Published {
     pub views: BTreeMap<String, Arc<ui::Document>>,
     /// Each scene's full-color image operations are ready before the UI observes that scene.
     pub images: super::images::SceneImages,
+    /// Native trees borrow current runtime resources; their pages remain bounded and owner checked.
+    pub trees: Vec<Arc<plugin_runtime::TreeResource>>,
     pub pending: Option<Package>,
     pub status: Option<OperationStatus>,
     pub progress: Option<OperationProgress>,
     pub generation: u64,
     /// Changes when a plugin instance is replaced, even by the same package digest.
     pub instance_epochs: BTreeMap<String, u64>,
+    /// Discoverable entry identity remains stable across its first cold birth.
+    pub command_epochs: BTreeMap<String, u64>,
+    /// Opaque metadata identities confer no execution or file authority.
+    pub availabilities: BTreeMap<String, plugin_runtime::Availability>,
     /// Real runtime identities stay private; consumers receive only published epochs.
     instance_ids: BTreeMap<String, String>,
     pub processes: BTreeMap<String, usize>,

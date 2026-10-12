@@ -266,8 +266,10 @@ pub struct HostExecution {
     /// Stop admission, deadline and force escalation never replace the observed final result.
     stop: Arc<Mutex<Option<stop::StopState>>>,
     plugin: String,
-    /// Exact provider incarnation pinned at start time; its retirement fails this session.
+    /// Descriptive pending identity; a cold start shares its reference's one exact first birth below.
     provider_instance: String,
+    /// Native requests and their service calls share one immutable binding, never a future default.
+    provider_reference: Option<Reference>,
     provider_alive: Arc<AtomicBool>,
     dedup_key: String,
     request: RunRequest,
@@ -285,7 +287,7 @@ impl std::fmt::Debug for HostExecution {
             .debug_struct("HostExecution")
             .field("id", &self.id)
             .field("plugin", &self.plugin)
-            .field("provider_instance", &self.provider_instance)
+            .field("provider_instance", &self.provider_instance())
             .field("dedup_key", &self.dedup_key)
             .field("request", &self.request)
             .field("provider_active", &self.provider_active())
@@ -320,19 +322,27 @@ impl HostExecution {
             self.completion.status()
         }
     }
-    /// The provider incarnation this session is bound to; later selections never retarget it.
+    /// Exact first-born incarnation, or the original logical publication while creation is pending.
+    /// Once bound, later selections or a replacement instance never retarget this session.
     pub fn provider_instance(&self) -> &str {
-        &self.provider_instance
+        self.provider_reference
+            .as_ref()
+            .and_then(Reference::owner)
+            .unwrap_or(&self.provider_instance)
     }
     /// Match a provider-local session only in its pinned incarnation. Local IDs can repeat across
     /// providers or after a provider update, so output routing must compare both parts of identity.
     pub fn owns_provider_session(&self, instance: &str, session: &str) -> bool {
-        self.provider_instance == instance
+        self.provider_instance() == instance
             && self.snapshot().provider_session.as_deref() == Some(session)
     }
     /// Whether the pinned provider is still the live incarnation that answered this session.
     pub fn provider_active(&self) -> bool {
         self.provider_alive.load(Ordering::Acquire)
+            && self
+                .provider_reference
+                .as_ref()
+                .is_none_or(Reference::owner_alive)
             && !self.provider_retired.load(Ordering::Acquire)
             && self
                 .origin
@@ -348,7 +358,7 @@ impl HostExecution {
     }
     /// The provider incarnation this session is pinned to, for diagnostics and host publications.
     pub fn provider_identity(&self) -> (&str, &str) {
-        (&self.plugin, &self.provider_instance)
+        (&self.plugin, self.provider_instance())
     }
     /// Publishable view for the run controls; derived without mutating the session.
     pub fn snapshot(&self) -> ExecutionSnapshot {
@@ -511,6 +521,7 @@ impl HostSessions {
         dedup_key: String,
         completion: Completion<Value>,
         mut origin: CallContext,
+        provider_reference: Option<Reference>,
     ) -> Result<HostExecution, Failure> {
         self.reserve_capacity()?;
         let id = self.next_id;
@@ -528,6 +539,7 @@ impl HostSessions {
             stop: Arc::new(Mutex::new(None)),
             plugin: provider.caller.plugin.clone(),
             provider_instance: provider.caller.instance.clone(),
+            provider_reference,
             provider_alive: provider.alive.clone(),
             dedup_key,
             request,
@@ -586,7 +598,7 @@ impl HostSessions {
             return;
         }
         for entry in self.entries.values().filter(|entry| {
-            entry.provider_instance == call.reference.provider.caller.instance
+            entry.provider_instance() == call.reference.provider.caller.instance
                 && entry.origin.caller.instance == call.context.caller.instance
                 && entry.snapshot().provider_session.as_deref() == Some(session)
         }) {
@@ -606,7 +618,7 @@ impl HostSessions {
             return;
         };
         for entry in self.entries.values().filter(|entry| {
-            entry.provider_instance == call.reference.provider.caller.instance
+            entry.provider_instance() == call.reference.provider.caller.instance
                 && entry.origin.caller.instance == call.context.caller.instance
                 && entry.snapshot().provider_session.as_deref() == Some(session)
                 && entry.snapshot().state.is_active()
@@ -623,7 +635,12 @@ impl HostSessions {
     /// liveness once per frame.
     pub(crate) fn retire_absent_providers(&mut self, present: &dyn Fn(&str) -> bool) {
         for entry in self.entries.values() {
-            if !present(&entry.provider_instance) {
+            // Before first birth, the queued request is governed by logical revocation and its
+            // original deadline. After birth, absence of its exact incarnation is irreversible.
+            let waiting_for_birth = entry.provider_reference.as_ref().is_some_and(|reference| {
+                reference.provider.availability.is_some() && reference.owner().is_none()
+            });
+            if !waiting_for_birth && !present(entry.provider_instance()) {
                 entry.provider_retired.store(true, Ordering::Release);
             }
         }
@@ -858,6 +875,9 @@ pub(crate) fn session_provider(
     );
     methods.extend(subscriptions::methods());
     crate::plugin_services::Provider {
+        // The sealed host session participant is live for this runtime's existing lifetime.
+        availability: None,
+        owner_alive: None,
         alive,
         caller: host_caller(scope),
         contracts: [(
@@ -1083,27 +1103,6 @@ pub(crate) fn session_answer(
     }
 }
 
-/// Assemble the broker call for a host start from an already resolved reference.
-pub(crate) fn host_call(
-    caller: &Caller,
-    reference: Reference,
-    request: &RunRequest,
-    dependency: &Dependency,
-    completion: Completion<Value>,
-    alive: Arc<AtomicBool>,
-) -> Result<Call, Failure> {
-    host_method_call(
-        caller,
-        reference,
-        "execute",
-        serde_json::to_value(request)
-            .map_err(|error| Failure::new(ErrorCode::InvalidRequest, error.to_string()))?,
-        dependency,
-        completion,
-        alive,
-    )
-}
-
 /// Assemble a call for one method of the execution contract.
 ///
 /// The declared method shape travels with the call, so a provider can only be asked for operations
@@ -1131,6 +1130,9 @@ pub(crate) fn host_method_call(
         resource: 0,
     };
     let context = CallContext {
+        native_waits: Vec::new(),
+        menu: None,
+        origin: crate::plugin_services::InvocationOrigin::Delegated,
         lifetimes: vec![alive],
         caller: caller.clone(),
         ancestry: Vec::new(),
@@ -1139,6 +1141,7 @@ pub(crate) fn host_method_call(
     .delegate(&reference.provider, &signature)?;
     signature.parameters.accepts(&arguments)?;
     Ok(Call {
+        availability: Default::default(),
         handle,
         reference,
         method: method.into(),
@@ -1186,6 +1189,9 @@ impl Manager {
     pub fn start_execution(&mut self, request: RunRequest) -> anyhow::Result<HostExecution> {
         let caller = host_caller(&self.host_scope());
         let context = CallContext {
+            native_waits: Vec::new(),
+            menu: None,
+            origin: crate::plugin_services::InvocationOrigin::Delegated,
             lifetimes: vec![self.host_alive.clone()],
             permissions: caller.permissions.clone(),
             caller,
@@ -1202,6 +1208,9 @@ impl Manager {
     ) -> anyhow::Result<HostExecution> {
         let caller = host_caller(&self.host_scope());
         let context = CallContext {
+            native_waits: Vec::new(),
+            menu: None,
+            origin: crate::plugin_services::InvocationOrigin::Delegated,
             lifetimes: vec![self.host_alive.clone()],
             permissions: caller.permissions.clone(),
             caller,
@@ -1219,6 +1228,10 @@ impl Manager {
     ) -> anyhow::Result<HostExecution> {
         let caller = host_caller(&self.host_scope());
         let context = CallContext {
+            // Native terminal launches keep host ownership without acquiring command-picker authority.
+            native_waits: Vec::new(),
+            menu: None,
+            origin: crate::plugin_services::InvocationOrigin::Delegated,
             lifetimes: vec![self.host_alive.clone()],
             permissions: caller.permissions.clone(),
             caller,
@@ -1267,11 +1280,11 @@ impl Manager {
                 .plugin_services
                 .lock()
                 .unwrap()
-                .resolve_pinned(
+                .resolve_named(
                     caller,
                     EXECUTION_CONTRACT,
                     &dependency,
-                    &provider.caller.instance,
+                    &provider.caller.plugin,
                 )
                 .map_err(start_failure)?;
             "execute_terminal"
@@ -1288,6 +1301,7 @@ impl Manager {
                 dedup_key,
                 completion.clone(),
                 context,
+                Some(reference.clone()),
             )
             .map_err(start_failure)?;
         let queued = (|| {
@@ -1693,6 +1707,9 @@ mod tests {
         .unwrap();
         let scope = manager.host_scope().to_owned();
         let context = CallContext {
+            native_waits: Vec::new(),
+            menu: None,
+            origin: crate::plugin_services::InvocationOrigin::Delegated,
             caller: host_caller(&scope),
             permissions: host_caller(&scope).permissions,
             lifetimes: vec![manager.host_alive.clone()],

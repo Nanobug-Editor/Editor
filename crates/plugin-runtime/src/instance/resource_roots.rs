@@ -8,14 +8,29 @@ use std::collections::BTreeMap;
 pub(super) enum RootKind {
     Workspace,
     Data,
+    Selected,
+    Http,
+    Timer,
+    Cache,
+    Temporary,
     EditorRequest,
     ImageInput,
+    /// Readonly text never grants file-root authority.
+    VirtualDocument,
+    /// Diagnostic handles contain no file access or independent mutable text.
+    DiagnosticCollection,
+    /// Native tree metadata is not a filesystem root.
+    Tree,
+    /// Point/range metadata grants no file access.
+    Decoration,
     ServiceReference,
     ServiceRequest,
     /// Provider-side deferred reply; it is not a consumer reference or a native process authority.
     ServiceInvocation,
     Subscription,
     PreferenceSubscription,
+    WorkspaceBatch,
+    FileSubscription,
     Process(u64),
 }
 
@@ -24,6 +39,9 @@ pub(super) struct ResourceRoots {
     scope: String,
     next: u64,
     slots: BTreeMap<u64, RootKind>,
+    /// The instance retains its temporary-directory ownership after closing the last area handle.
+    /// Unpublished candidates start without ownership and cannot clean a live predecessor's directory.
+    temporary_owned: bool,
     pub(super) application: bool,
     pub(super) retired: bool,
     pub(super) limit: usize,
@@ -62,6 +80,7 @@ impl ResourceRoots {
             },
             next: 1,
             slots: BTreeMap::new(),
+            temporary_owned: false,
             application,
             retired: false,
             limit,
@@ -76,11 +95,10 @@ impl ResourceRoots {
     pub(super) fn len(&self) -> usize {
         self.slots.len()
     }
-    /// Rollback retains the declared quota while allocating a new owner identity.
-    pub(super) fn renewed(&self, workspace: &str) -> Self {
-        Self::new(workspace, self.application, self.limit)
+    /// Quiesce/stop/Drop may all run; only the incarnation which opened Temporary takes cleanup once.
+    pub(super) fn take_temporary(&mut self) -> bool {
+        std::mem::take(&mut self.temporary_owned)
     }
-
     pub(super) fn resolve(&self, handle: &ResourceHandle) -> Result<RootKind, Failure> {
         if self.retired || handle.instance != self.instance || handle.scope != self.scope {
             return Err(Failure::new(
@@ -113,6 +131,10 @@ impl ResourceRoots {
         let resource = self.next;
         self.next += 1;
         self.slots.insert(resource, kind);
+        if matches!(kind, RootKind::Temporary) {
+            // Opening succeeds only after native directory validation; released slots do not release its bytes.
+            self.temporary_owned = true;
+        }
         Ok(Value::Resource(ResourceHandle {
             instance: self.instance.clone(),
             scope: self.scope.clone(),
@@ -139,12 +161,21 @@ impl State {
         }
         let (capability, permission, root) = match kind {
             RootKind::EditorRequest
+            | RootKind::Http
+            | RootKind::Timer
+            | RootKind::VirtualDocument
+            | RootKind::DiagnosticCollection
+            | RootKind::Tree
+            | RootKind::Decoration
+            | RootKind::Selected
             | RootKind::ImageInput
             | RootKind::ServiceReference
             | RootKind::ServiceRequest
             | RootKind::ServiceInvocation
             | RootKind::Subscription
             | RootKind::PreferenceSubscription
+            | RootKind::WorkspaceBatch
+            | RootKind::FileSubscription
             | RootKind::Process(_) => {
                 return Err(Failure::new(ErrorCode::InvalidHandle, "Not a file handle"));
             }
@@ -168,7 +199,9 @@ impl State {
                     self.workspace.as_path(),
                 )
             }
-            RootKind::Data => ("storage.private", "storage", self.data.as_path()),
+            RootKind::Data | RootKind::Cache | RootKind::Temporary => {
+                ("storage.private", "storage", self.data.as_path())
+            }
         };
         if !self.api.capabilities.contains_key(capability) {
             return Err(Failure::new(
@@ -220,7 +253,14 @@ impl State {
             }
             api::Operation::ReadFile { handle, path } => {
                 let kind = self.roots.resolve(&handle)?;
+                if matches!(kind, RootKind::Selected) {
+                    return self.read_selection(&handle, &path).map(Value::Bytes);
+                }
                 let root = self.file_authority(kind, false)?;
+                let path = self.private_relative(kind, &path)?;
+                if !matches!(kind, RootKind::Workspace) {
+                    super::private::checked(root, &path, false)?;
+                }
                 data_files::read(root, &path, &self.staged_writes).map(Value::Bytes)
             }
             api::Operation::WriteFile {
@@ -229,7 +269,15 @@ impl State {
                 bytes,
             } => {
                 let kind = self.roots.resolve(&handle)?;
+                if matches!(kind, RootKind::Selected) {
+                    self.check_selection_authority()?;
+                    return Err(Failure::new(
+                        ErrorCode::UnsupportedOperation,
+                        "Selected writes require the host document transaction capability",
+                    ));
+                }
                 let root = self.file_authority(kind, true)?.to_path_buf();
+                let path = self.private_relative(kind, &path)?;
                 data_files::write(
                     &root,
                     &path,
@@ -241,6 +289,16 @@ impl State {
             }
             api::Operation::CloseResource { handle } => {
                 self.roots.resolve(&handle)?;
+                if let Some(alive) = self.file_root_lifetimes.remove(&handle.resource) {
+                    alive.store(false, std::sync::atomic::Ordering::Release);
+                }
+                if let Some(batch) = self.workspace_batches.remove(&handle.resource) {
+                    batch.revoke();
+                }
+                if matches!(self.roots.resolve(&handle)?, RootKind::Selected) {
+                    self.check_selection_authority()?;
+                    self.selected_resources.remove(&handle.resource);
+                }
                 // Process termination still needs the original context for its native receipt.
                 if let RootKind::Process(_) = self.roots.resolve(&handle)? {
                     return self
@@ -248,7 +306,25 @@ impl State {
                         .map(|_| Value::Unit);
                 }
                 self.plugin_services.resources.remove(&handle.resource);
+                self.http_streams.remove(&handle.resource);
+                self.timers.remove(&handle.resource);
                 self.subscriptions.remove(&handle.resource);
+                self.document_streams.remove(&handle.resource);
+                self.file_subscriptions.remove(&handle.resource);
+                // Native projections may retain an Arc after the owning handle is closed.
+                // Seal their metadata as well as removing the slot, alongside file/stream cleanup.
+                if let Some(tree) = self.trees.remove(&handle.resource) {
+                    tree.revoke();
+                }
+                if let Some(resource) = self.decorations.remove(&handle.resource) {
+                    resource.revoke();
+                }
+                if let Some(resource) = self.virtual_documents.remove(&handle.resource) {
+                    resource.revoke();
+                }
+                if let Some(collection) = self.diagnostic_collections.remove(&handle.resource) {
+                    collection.revoke();
+                }
                 self.preference_subscriptions.remove(&handle.resource);
                 self.image_inputs.remove(&handle.resource);
                 self.plugin_services.references.remove(&handle.resource);
@@ -270,10 +346,19 @@ impl State {
                 Ok(Value::Unit)
             }
             api::Operation::ReadAsset { .. }
+            | api::Operation::Diagnostics { .. }
+            | api::Operation::Http { .. }
+            | api::Operation::Secrets { .. }
+            | api::Operation::Timer { .. }
+            | api::Operation::Private { .. }
+            | api::Operation::Tree { .. }
+            | api::Operation::Commands { .. }
             | api::Operation::DescribeSdk
             | api::Operation::Service { .. }
             | api::Operation::Process { .. }
             | api::Operation::SubscribeDocuments
+            | api::Operation::SubscribeDocumentEvents
+            | api::Operation::SubscribeWorkspaceFiles { .. }
             | api::Operation::ReadPreference { .. }
             | api::Operation::WritePreference { .. }
             | api::Operation::Editor { .. }

@@ -69,6 +69,22 @@ impl Fixture {
         serde_json::to_string(&self.manager.live[PLUGIN].views["welcome"]).unwrap()
     }
 
+    /// Restart retires the old owner but stays cold; an independent view consumes the replacement.
+    /// This public demand never drains queued shortcuts or invokes their check-errors command.
+    fn materialize_replacement(&mut self, previous_instance: &str) {
+        assert!(
+            self.manager.instance_id(PLUGIN).is_none(),
+            "restart must leave the replacement cold until a real consumer asks"
+        );
+        package_ui_test_support::demand(
+            &mut self.manager,
+            PLUGIN,
+            plugin_runtime::DemandReason::View("welcome".into()),
+        )
+        .unwrap();
+        assert_ne!(self.manager.instance_id(PLUGIN).unwrap(), previous_instance);
+    }
+
     /// Inspect durable storage, rather than the engine's in-memory override map.
     fn saved_binding(&self, command: &str) -> serde_json::Value {
         let profile: serde_json::Value =
@@ -351,21 +367,19 @@ fn shortcuts_real_plugin_lifecycle_epochs_and_restricted_workspace(cx: &mut Test
         let previous_instance = fixture.manager.instance_id(PLUGIN).unwrap().to_owned();
         fixture.manager.restart_plugin(PLUGIN).unwrap();
         assert_eq!(fixture.manager.installed[PLUGIN].digest, digest);
-        assert_ne!(
-            fixture.manager.instance_id(PLUGIN).unwrap(),
-            previous_instance
-        );
         fixture.publish(visual);
         assert!(
             visual.debug_bounds("shortcuts-pending").is_none(),
             "replacement immediately clears its prefix"
         );
+        fixture.materialize_replacement(&previous_instance);
         visual.simulate_keystrokes("ctrl-alt-9");
         draw(visual);
         fixture.settle(visual);
         assert!(!fixture.guest_text().contains(CHECK_RESULT));
 
         // Host callers retain their original epoch until the worker admits the queued command.
+        let previous_instance = fixture.manager.instance_id(PLUGIN).unwrap().to_owned();
         visual.update(|window, cx| {
             fixture.app.update(cx, |app, cx| {
                 app.invoke_plugin_command(
@@ -379,6 +393,7 @@ fn shortcuts_real_plugin_lifecycle_epochs_and_restricted_workspace(cx: &mut Test
             })
         });
         fixture.manager.restart_plugin(PLUGIN).unwrap();
+        fixture.materialize_replacement(&previous_instance);
         fixture.settle(visual);
         assert!(
             !fixture.guest_text().contains(CHECK_RESULT),
@@ -393,6 +408,7 @@ fn shortcuts_real_plugin_lifecycle_epochs_and_restricted_workspace(cx: &mut Test
             CHECK_BINDING,
             "ctrl-alt-8",
         );
+        let previous_instance = fixture.manager.instance_id(PLUGIN).unwrap().to_owned();
         visual.update(|window, cx| {
             window.dispatch_event(
                 PlatformInput::KeyDown(KeyDownEvent {
@@ -410,10 +426,11 @@ fn shortcuts_real_plugin_lifecycle_epochs_and_restricted_workspace(cx: &mut Test
                     .state
                     .lock()
                     .unwrap()
-                    .publish_manager(&fixture.manager);
+                    .publish_manager(&mut fixture.manager);
                 owner.poll(cx);
             });
         });
+        fixture.materialize_replacement(&previous_instance);
         fixture.settle(visual);
         assert!(
             !fixture.guest_text().contains(CHECK_RESULT),

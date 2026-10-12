@@ -10,6 +10,8 @@ use std::{
     sync::mpsc::{self as sync_mpsc, RecvTimeoutError, Sender},
     time::{Duration, Instant},
 };
+mod observations;
+use observations::record_file_observation;
 
 /// Watch metadata chooses the authorized file model before any text decoding.
 #[derive(Clone)]
@@ -42,6 +44,8 @@ const EVENT_DEBOUNCE: Duration = Duration::from_millis(180);
 
 /// The editor applies a completed scan only after the worker finishes reading disk state.
 pub(crate) struct Reconciliation {
+    /// Bounded unopened-file observations share the existing native watcher and scan publication.
+    pub(crate) file_events: Vec<plugin_runtime::plugin_protocol::workspace::FileEventKind>,
     pub(crate) snapshot: Option<WorkspaceSnapshot>,
     pub(crate) documents: Vec<(PathBuf, std::io::Result<DiskContent>, Instant)>,
     pub(crate) renames: Vec<(PathBuf, PathBuf)>,
@@ -117,6 +121,7 @@ fn run_worker(
     };
     let mut scan_interval = RETRY_INTERVAL;
     let mut pending_renames = Vec::new();
+    let mut pending_file_events = Vec::new();
     let mut rename_sources = HashMap::new();
     let mut last_snapshot = None;
     // The first scan establishes the tree after the UI has restored its tabs.
@@ -124,6 +129,7 @@ fn run_worker(
         &workspace,
         &documents,
         &mut pending_renames,
+        &mut pending_file_events,
         watcher.is_some(),
         true,
         &mut last_snapshot,
@@ -156,6 +162,7 @@ fn run_worker(
                         &workspace,
                         &documents,
                         &mut pending_renames,
+                        &mut pending_file_events,
                         watcher.is_some(),
                         true,
                         &mut last_snapshot,
@@ -183,6 +190,7 @@ fn run_worker(
                     &workspace,
                     &documents,
                     &mut pending_renames,
+                    &mut pending_file_events,
                     watcher.is_some(),
                     false,
                     &mut last_snapshot,
@@ -196,6 +204,7 @@ fn run_worker(
                     &workspace,
                     &documents,
                     &mut pending_renames,
+                    &mut pending_file_events,
                     watcher.is_some(),
                     true,
                     &mut last_snapshot,
@@ -205,6 +214,7 @@ fn run_worker(
                 }
             }
             Command::Event(result) => {
+                record_file_observation(&result, &root, &rename_sources, &mut pending_file_events);
                 let Some(mut scan_tree) = record_event(
                     result,
                     &root,
@@ -220,6 +230,12 @@ fn run_worker(
                 while let Some(wait) = until.checked_duration_since(Instant::now()) {
                     match receiver.recv_timeout(wait) {
                         Ok(Command::Event(result)) => {
+                            record_file_observation(
+                                &result,
+                                &root,
+                                &rename_sources,
+                                &mut pending_file_events,
+                            );
                             scan_tree |= record_event(
                                 result,
                                 &root,
@@ -251,6 +267,7 @@ fn run_worker(
                     &workspace,
                     &documents,
                     &mut pending_renames,
+                    &mut pending_file_events,
                     watcher.is_some(),
                     scan_tree,
                     &mut last_snapshot,
@@ -379,6 +396,7 @@ fn send_snapshot(
     workspace: &Workspace,
     documents: &[WatchedFile],
     renames: &mut Vec<(PathBuf, PathBuf)>,
+    file_events: &mut Vec<plugin_runtime::plugin_protocol::workspace::FileEventKind>,
     native: bool,
     scan_tree: bool,
     last_snapshot: &mut Option<WorkspaceSnapshot>,
@@ -398,6 +416,12 @@ fn send_snapshot(
     let documents = read_documents(documents);
     updates
         .unbounded_send(Reconciliation {
+            // Full/fallback scans repair unknown transitions; consumers reread their bounded targets.
+            file_events: if file_events.is_empty() && scan_tree {
+                vec![plugin_runtime::plugin_protocol::workspace::FileEventKind::RescanRequired]
+            } else {
+                std::mem::take(file_events)
+            },
             snapshot,
             documents,
             renames: std::mem::take(renames),
@@ -447,6 +471,100 @@ mod tests {
     use super::*;
     use futures::StreamExt;
 
+    /// Failed observation assertions must still stop the production thread before deleting its workspace.
+    struct NativeWorker {
+        commands: sync_mpsc::Sender<Command>,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl Drop for NativeWorker {
+        fn drop(&mut self) {
+            let _ = self.commands.send(Command::Stop);
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
+        }
+    }
+
+    /// A bounded wait observes production worker output, without replacing notify or native IO.
+    fn wait_for_observation(
+        receiver: &mut UnboundedReceiver<Reconciliation>,
+        transition: &str,
+        expected: impl Fn(&plugin_runtime::plugin_protocol::workspace::FileEventKind) -> bool,
+    ) -> Vec<plugin_runtime::plugin_protocol::workspace::FileEventKind> {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut observed = Vec::new();
+        while Instant::now() < deadline {
+            if let Ok(update) = receiver.try_recv() {
+                observed.extend(update.file_events);
+                if observed.iter().any(&expected) {
+                    return observed;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("native worker did not publish {transition}; observed {observed:?}")
+    }
+
+    /// Real notify events for unopened files reuse the normal worker and explorer publication channel.
+    #[test]
+    fn workspace_transaction_native_watch_observes_unopened_create_modify_rename_and_delete() {
+        use plugin_runtime::plugin_protocol::workspace::FileEventKind;
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = Workspace::open(directory.path()).unwrap();
+        let (commands, incoming_commands) = sync_mpsc::channel();
+        let (updates, mut incoming_updates) = mpsc::unbounded();
+        let worker_sender = commands.clone();
+        let mut worker = NativeWorker {
+            commands,
+            thread: Some(std::thread::spawn(move || {
+                run_worker(workspace, incoming_commands, worker_sender, updates)
+            })),
+        };
+        // Initial reconciliation is published after native registration, preventing a startup race.
+        wait_for_observation(&mut incoming_updates, "initial rescan", |event| {
+            matches!(event, FileEventKind::RescanRequired)
+        });
+        let before = directory.path().join("unopened.txt");
+        let after = directory.path().join("renamed.txt");
+        std::fs::write(&before, "first 中😀\r\n").unwrap();
+        wait_for_observation(
+            &mut incoming_updates,
+            "unopened create",
+            |event| matches!(event, FileEventKind::Created { path } if path == "unopened.txt"),
+        );
+        std::fs::write(&before, "second 中😀\r\n").unwrap();
+        wait_for_observation(
+            &mut incoming_updates,
+            "unopened modify",
+            |event| matches!(event, FileEventKind::Modified { path } if path == "unopened.txt"),
+        );
+        std::fs::rename(&before, &after).unwrap();
+        let renamed = wait_for_observation(
+            &mut incoming_updates,
+            "paired or ambiguous rename",
+            |event| {
+                matches!(event, FileEventKind::Renamed { source, target } if source == "unopened.txt" && target == "renamed.txt")
+                    || matches!(event, FileEventKind::Created { path } if path == "renamed.txt")
+            },
+        );
+        // Windows notify may omit a rename tracker; those halves must remain explicit delete/create.
+        assert!(
+            renamed.iter().any(|event| matches!(event, FileEventKind::Renamed { source, target } if source == "unopened.txt" && target == "renamed.txt"))
+                || (renamed.iter().any(|event| matches!(event, FileEventKind::Deleted { path } if path == "unopened.txt"))
+                    && renamed.iter().any(|event| matches!(event, FileEventKind::Created { path } if path == "renamed.txt"))),
+            "rename must retain both real transitions: {renamed:?}"
+        );
+        std::fs::remove_file(&after).unwrap();
+        wait_for_observation(
+            &mut incoming_updates,
+            "unopened delete",
+            |event| matches!(event, FileEventKind::Deleted { path } if path == "renamed.txt"),
+        );
+        worker.commands.send(Command::Stop).unwrap();
+        worker.thread.take().unwrap().join().unwrap();
+    }
+
     #[test]
     fn background_scan_emits_tree_only_when_paths_change() {
         let directory = tempfile::tempdir().unwrap();
@@ -454,11 +572,13 @@ mod tests {
         let (sender, mut receiver) = mpsc::unbounded();
         let mut renames = Vec::new();
         let mut previous = None;
+        let mut observations = Vec::new();
         for _ in 0..2 {
             assert!(send_snapshot(
                 &workspace,
                 &[],
                 &mut renames,
+                &mut observations,
                 true,
                 true,
                 &mut previous,
@@ -476,6 +596,7 @@ mod tests {
             &workspace,
             &[],
             &mut renames,
+            &mut observations,
             true,
             true,
             &mut previous,

@@ -1856,6 +1856,7 @@ dependencies = [
  "platform-windows",
  "plugin-runtime",
  "plugin-schema",
+ "raw-window-handle",
  "regex",
  "resvg 0.45.1",
  "rust-i18n",
@@ -5577,6 +5578,7 @@ dependencies = [
  "editor-core",
  "tempfile",
  "thiserror 2.0.20",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -5594,15 +5596,18 @@ name = "plugin-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "bytes",
  "dirs 6.0.0",
  "glob",
  "globset",
  "ignore",
+ "platform-windows",
  "plugin-protocol",
  "plugin-schema",
  "portable-pty",
  "roxmltree 0.21.1",
+ "rustls",
  "semver",
  "serde",
  "serde_json",
@@ -5610,6 +5615,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "ureq",
+ "url",
  "uuid",
  "wasmtime",
  "wasmtime-wasi",

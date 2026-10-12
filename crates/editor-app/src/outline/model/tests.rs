@@ -1,8 +1,13 @@
 //! Native presentation regression after a validated structure snapshot reaches the outline model.
+//! The shared package lifetime fixture is mounted here to inspect completion state without a host API.
 use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use plugin_runtime::plugin_protocol::structure::Proposal;
 use std::{cell::RefCell, rc::Rc};
+
+// Keep the cross-feature fixture in src/tests while granting ordinary descendant access to this model.
+#[path = "../../tests/outline/lifetime.rs"]
+mod lifetime;
 
 const SOURCE: &str = "<root><first><inner><leaf/></inner></first><second><other/></second></root>";
 

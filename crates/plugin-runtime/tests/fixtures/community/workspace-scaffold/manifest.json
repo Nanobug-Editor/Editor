@@ -1,0 +1,22 @@
+{
+  "id": "workspace-scaffold",
+  "name": "Workspace Scaffold",
+  "version": "0.1.1",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": { "ui.native": "^1", "editor.documents": "^1.1", "editor.edit": "^1.1", "workspace.files": "^1.2", "files.selection": "^1.1" }
+  },
+  "component": "workspace-scaffold.wasm",
+  "permissions": ["workspace.read", "workspace.write", "editor.read", "editor.write", "files.select", "ui.panels"],
+  "panels": [{ "id": "scaffold", "title": "Workspace Scaffold", "position": "right" }],
+  "commands": [
+    { "id": "scaffold", "title": "Scaffold workspace / 生成工作区", "menu": true },
+    { "id": "cancel", "title": "Cancel pending change / 取消后续修改", "menu": true },
+    { "id": "undo", "title": "Undo latest batch / 撤销上一批修改", "menu": true },
+    { "id": "status", "title": "Inspect latest receipt / 查看批次结果", "menu": true },
+    { "id": "probe", "title": "Inspect workspace contract" },
+    { "id": "events", "title": "Inspect workspace observations / 查看文件变化", "menu": true }
+  ],
+  "storage_limit": 4096
+}

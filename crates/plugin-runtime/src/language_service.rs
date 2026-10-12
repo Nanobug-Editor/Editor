@@ -4,12 +4,23 @@ mod completion;
 pub(crate) use completion::CompletionHook;
 use plugin_protocol::language::Provider;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::PathBuf,
     process::{ChildStdin, ChildStdout},
     sync::{Arc, Condvar, Mutex, Weak},
     time::Duration,
 };
+
+/// Only the public Manager supplies negotiated contracts, original grants and immutable scope.
+/// Optional WASM authority extends this native owner, never requires an empty guest component.
+pub(crate) struct LanguagePolicy {
+    pub(crate) capabilities: BTreeMap<String, semver::Version>,
+    pub(crate) permissions: BTreeSet<String>,
+    pub(crate) workspace: PathBuf,
+    pub(crate) data: PathBuf,
+    pub(crate) application: bool,
+    pub(crate) inherited: Option<crate::EditorAuthority>,
+}
 
 /// Validated immutable plan. Consumers cannot mutate the command behind an approved lease.
 pub struct LanguageService {
@@ -17,7 +28,14 @@ pub struct LanguageService {
     pub provider: Provider,
     pub root: PathBuf,
     /// The package's negotiated versions remain immutable for this service incarnation.
-    capabilities: BTreeMap<String, semver::Version>,
+    policy: LanguagePolicy,
+    /// Native feature actions must return to the sealed original instance, never a matching replacement ID.
+    authority: crate::EditorAuthority,
+    /// Resource-only packages have no WASM instance. Their immutable native plan issues one sealed
+    /// lifetime that is revoked by the same preparation-cache retirement as its controlled processes.
+    native_lifetime: Arc<std::sync::atomic::AtomicBool>,
+    /// The common request/batch arena stores handles and receipts, never native text or Undo entries.
+    native_requests: Mutex<crate::instance::NativeDocumentRequests>,
     pub(crate) program: PathBuf,
     pub(crate) args: Vec<String>,
     state: Mutex<Lease>,
@@ -138,13 +156,27 @@ impl LanguageService {
         program: PathBuf,
         args: Vec<String>,
         runtime_logs: crate::RuntimeLogs,
-        capabilities: BTreeMap<String, semver::Version>,
+        policy: LanguagePolicy,
     ) -> Self {
+        let native_lifetime = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let authority = policy.inherited.as_ref().map_or_else(
+            || crate::EditorAuthority::new(native_lifetime.clone(), None),
+            |original| original.with_native_owner(native_lifetime.clone()),
+        );
+        let native_requests = Mutex::new(crate::instance::NativeDocumentRequests::new(
+            &policy.workspace,
+            policy.data.clone(),
+            policy.application,
+            authority.clone(),
+        ));
         Self {
             owner,
             provider,
             root,
-            capabilities,
+            policy,
+            authority,
+            native_lifetime,
+            native_requests,
             program,
             args,
             state: Mutex::new(Lease::default()),
@@ -157,7 +189,48 @@ impl LanguageService {
     /// This read-only lookup grants neither execution nor additional file access; consumers still
     /// validate their provider declaration, current lease and operation-specific permissions.
     pub fn capability(&self, name: &str) -> Option<&semver::Version> {
-        self.capabilities.get(name)
+        self.policy.capabilities.get(name)
+    }
+    /// Borrow original instance authority without extending its permissions or lifetime.
+    pub fn authority(&self) -> &crate::EditorAuthority {
+        &self.authority
+    }
+    /// A reference path is data; opening it additionally requires this original read grant.
+    pub fn can_read_workspace(&self) -> bool {
+        self.policy.permissions.contains("workspace.read")
+    }
+    /// The current Manager-published incarnation alone enters this original policy. The lease lock
+    /// serializes issuance with retirement; preview, revision checks and Undo remain native host work.
+    pub(crate) fn submit_language_fix(
+        &self,
+        document: plugin_protocol::api::DocumentVersion,
+        fix: plugin_protocol::diagnostics::Fix,
+    ) -> Result<plugin_protocol::api::Value, plugin_protocol::api::Failure> {
+        let state = self.state.lock().unwrap();
+        if state.retired || !self.authority.is_live() {
+            return Err(plugin_protocol::api::Failure::new(
+                plugin_protocol::api::ErrorCode::InvalidHandle,
+                "Native language service retired",
+            ));
+        }
+        let plan = crate::workspace_resources::language_plan(document, fix.plan)?;
+        self.native_requests.lock().unwrap().submit(
+            plan,
+            &self.policy.capabilities,
+            &self.policy.permissions,
+        )
+    }
+    /// Transfer calls through the public Manager and its existing serialized native dispatcher.
+    pub(crate) fn take_editor_requests(&self) -> Vec<crate::EditorRequest> {
+        self.native_requests.lock().unwrap().take()
+    }
+    /// Reclaim transient terminal slots without discarding retained native recovery receipts.
+    pub(crate) fn poll_requests(&self) {
+        self.native_requests.lock().unwrap().poll();
+    }
+    /// Lifecycle diagnostics count this real owner alongside its controlled process.
+    pub(crate) fn request_resource_count(&self) -> usize {
+        self.native_requests.lock().unwrap().resource_count()
     }
     /// Borrow the shared run history without transferring authority to launch or modify this plan.
     pub fn runtime_logs(&self) -> crate::RuntimeLogs {
@@ -239,7 +312,7 @@ impl LanguageService {
         Ok((ServiceProcess { child, stderr }, input, output))
     }
     pub fn is_active(&self) -> bool {
-        !self.state.lock().unwrap().retired
+        !self.state.lock().unwrap().retired && self.authority.is_live()
     }
     /// Consent and lifecycle diagnostics include host-owned transports as well as guest-created processes.
     pub fn process_count(&self) -> usize {
@@ -251,19 +324,35 @@ impl LanguageService {
             .filter(|lease| lease.child.strong_count() > 0)
             .count()
     }
+    /// Actual plan equality permits same-owner hot revalidation to retain the existing transport.
+    /// A matching package name never substitutes for inherited exact authority or active native seals.
     pub(crate) fn same_plan(&self, other: &Self) -> bool {
-        self.owner == other.owner
+        let same_inherited = match (&self.policy.inherited, &other.policy.inherited) {
+            (Some(original), Some(candidate)) => original.same_owner(candidate),
+            (None, None) => true,
+            _ => false,
+        };
+        self.is_active()
+            && other.is_active()
+            && same_inherited
+            && self.owner == other.owner
             && self.provider == other.provider
             && self.root == other.root
             && self.program == other.program
             && self.args == other.args
-            && self.capabilities == other.capabilities
+            && self.policy.capabilities == other.policy.capabilities
+            && self.policy.permissions == other.policy.permissions
+            && self.policy.workspace == other.policy.workspace
+            && self.policy.data == other.policy.data
+            && self.policy.application == other.policy.application
             && self.completion.as_ref().map(|hook| &hook.settings)
                 == other.completion.as_ref().map(|hook| &hook.settings)
     }
     pub(crate) fn retire(&self) {
         let mut state = self.state.lock().unwrap();
         state.retired = true;
+        self.native_lifetime
+            .store(false, std::sync::atomic::Ordering::Release);
         for lease in state.children.drain(..) {
             if let Some(child) = lease.child.upgrade() {
                 ServiceProcess {
@@ -275,6 +364,7 @@ impl LanguageService {
         }
         // Mark retired before waiting for a bounded pure call; its eventual result is rejected.
         drop(state);
+        self.native_requests.lock().unwrap().retire();
         if let Some(hook) = &self.completion
             && let Some(mut instance) = hook.instance.lock().unwrap().take()
         {
@@ -293,6 +383,13 @@ impl LanguageService {
                 .stop();
             }
         }
+    }
+}
+
+impl Drop for LanguageService {
+    /// Last-owner drop follows the same unconditional cleanup as replacement and disable.
+    fn drop(&mut self) {
+        self.retire();
     }
 }
 
@@ -415,7 +512,17 @@ mod tests {
             PathBuf::new(),
             vec![],
             logs.clone(),
-            BTreeMap::new(),
+            LanguagePolicy {
+                capabilities: BTreeMap::new(),
+                permissions: BTreeSet::new(),
+                workspace: PathBuf::new(),
+                data: PathBuf::new(),
+                application: false,
+                inherited: Some(crate::EditorAuthority::new(
+                    Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                    None,
+                )),
+            },
         );
         let retired = std::sync::atomic::AtomicBool::new(false);
         let id = plan

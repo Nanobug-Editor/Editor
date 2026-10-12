@@ -361,10 +361,18 @@ impl ShortcutRuntime {
                             && let Some(epoch) =
                                 epochs.get(&(plugin.clone(), command.clone())).copied()
                         {
+                            // Freeze native document/selection before deferred focus and demand.
+                            // This key gesture can never borrow the next tab's source on resume.
+                            let guard =
+                                owner.update(cx, |app, cx| app.capture_current_command_guard(cx));
+                            let Ok(guard) = guard else {
+                                return;
+                            };
                             let extension = owner.read(cx).extensions.clone();
                             extension.update(cx, |panel, cx| {
-                                panel
-                                    .invoke_shortcut_at_epoch(&plugin, &command, epoch, window, cx);
+                                panel.invoke_shortcut_at_epoch(
+                                    &plugin, &command, epoch, guard, window, cx,
+                                );
                             });
                         }
                     }

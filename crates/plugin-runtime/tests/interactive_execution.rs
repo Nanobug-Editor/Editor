@@ -180,7 +180,7 @@ fn session_result(
 
 /// Two separately installed real WASM callers share the native default without sharing authority.
 #[test]
-#[ignore = "package capability-example with the current host SDK into target/plugin-api-test first"]
+#[ignore = "opt-in fixed capability-example-0.19.0 SDK package; see fixtures/packages/README.md"]
 fn native_execution_two_consumers_have_isolated_input_and_retirement() {
     let root = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(

@@ -1,0 +1,45 @@
+{
+  "id": "coverage",
+  "name": "Coverage",
+  "version": "0.1.1",
+  "protocol": 7,
+  "api": {
+    "base": "^1",
+    "required": {
+      "editor.decorations": "^1",
+      "editor.documents": "^1.1",
+      "ui.icons": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "coverage.wasm",
+  "permissions": [
+    "ui.panels",
+    "editor.read",
+    "assets.read"
+  ],
+  "panels": [
+    {
+      "id": "presentation",
+      "title": "Coverage",
+      "position": "right"
+    }
+  ],
+  "commands": [
+    {
+      "id": "scan-coverage",
+      "title": "Scan coverage / 扫描覆盖率",
+      "menu": true
+    },
+    {
+      "id": "probe",
+      "title": "Inspect public contract"
+    },
+    {
+      "id": "read-coverage",
+      "title": "Read coverage positions / 读取覆盖率位置",
+      "menu": true
+    }
+  ],
+  "storage_limit": 4096
+}

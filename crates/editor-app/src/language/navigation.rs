@@ -5,6 +5,7 @@ mod definitions;
 mod diagnostics;
 mod documents;
 pub(crate) mod editing;
+mod features;
 pub(crate) use documents::DocumentLease;
 mod recovery;
 pub(crate) use recovery::RecoveryState;
@@ -17,6 +18,7 @@ use anyhow::{Context as _, anyhow, ensure};
 use gpui_base::input::{DefinitionProvider, Rope};
 use gpui_kit::gpui::{App, Task, Window};
 use lsp_types::{CompletionResponse, Hover, Location, LocationLink, Position, Uri};
+use plugin_runtime::RequestCancellation;
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
@@ -275,6 +277,8 @@ struct LanguageServerConnection {
     linked_editing_provider: bool,
     /// Set only after the authorized editing 1.1 client marker and matching server handshake.
     semantic_linked_editing_provider: bool,
+    /// Optional readonly features reuse this connection and its synchronized document versions.
+    language_features: std::collections::BTreeSet<plugin_runtime::plugin_protocol::direct::Feature>,
     /// Keep host-injected options available for subsequent workspace/configuration requests.
     configuration: Value,
     /// Fault teardown permits a bounded stderr EOF drain; ordinary retirement cuts off alerts first.
@@ -330,6 +334,18 @@ impl LanguageServerConnection {
 
     /// Wait for the matching response while processing retained diagnostic pushes and server requests.
     fn request(&mut self, method: &str, params: Value) -> anyhow::Result<Value> {
+        self.request_cancellable(method, params, &RequestCancellation::default())
+    }
+
+    /// Cancelling one wait sends standard JSON-RPC cancellation and preserves the shared service.
+    /// Replies for an abandoned request cannot satisfy a later request with its distinct ID.
+    fn request_cancellable(
+        &mut self,
+        method: &str,
+        params: Value,
+        cancellation: &RequestCancellation,
+    ) -> anyhow::Result<Value> {
+        cancellation.check()?;
         ensure!(self.service.is_active(), "LSP provider has been retired");
         let id = self.next_id;
         self.next_id += 1;
@@ -338,6 +354,12 @@ impl LanguageServerConnection {
             json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }),
         )?;
         loop {
+            if let Err(error) = cancellation.check() {
+                let _ = self.input.enqueue(
+                    json!({"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":id}}),
+                );
+                return Err(error);
+            }
             let remaining = deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() {
                 let _ = self.input.enqueue(
@@ -345,8 +367,12 @@ impl LanguageServerConnection {
                 );
                 anyhow::bail!("language server {method} request timed out");
             }
-            let message = match self.output.recv_timeout(remaining) {
+            let message = match self
+                .output
+                .recv_timeout(remaining.min(Duration::from_millis(50)))
+            {
                 Ok(message) => message?,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
                 Err(error) => {
                     // Stop waiting is explicit JSON-RPC cancellation, never a claim of server rollback.
                     let _ = self.input.enqueue(
@@ -360,7 +386,19 @@ impl LanguageServerConnection {
             if message.get("method").is_none()
                 && message.get("id").and_then(Value::as_u64) == Some(id)
             {
+                cancellation.check()?;
                 if let Some(error) = message.get("error") {
+                    // These are per-request outcomes, not a broken transport or a reason to replay.
+                    use plugin_runtime::plugin_protocol::api::{ErrorCode, Failure};
+                    let code = match error["code"].as_i64() {
+                        Some(-32800) => Some(ErrorCode::Cancelled),
+                        Some(-32801) => Some(ErrorCode::StaleRevision),
+                        Some(-32601) => Some(ErrorCode::UnsupportedOperation),
+                        _ => None,
+                    };
+                    if let Some(code) = code {
+                        return Err(Failure::new(code, format!("LSP {method}: {error}")).into());
+                    }
                     anyhow::bail!("language server {method} request failed: {error}");
                 }
                 ensure!(self.service.is_active(), "LSP provider has been retired");

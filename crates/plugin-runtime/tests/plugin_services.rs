@@ -60,10 +60,140 @@ fn service_contract_rejects_unbounded_shapes_and_malformed_names() {
 mod service_packages;
 use service_packages::package;
 
+/// Cold service discovery preserves platform and per-project configuration gates after the merge.
+/// The real frozen component is admitted, but these catalog/settings operations never demand it.
+#[test]
+#[ignore = "opt-in frozen Package/WASM fixture; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
+fn cold_service_publication_respects_platform_and_original_project_settings() {
+    let profile = tempfile::tempdir().unwrap();
+    let first = tempfile::tempdir().unwrap();
+    let second = tempfile::tempdir().unwrap();
+    let mut files = package("gated-provider", true, false, "1.0.0").files;
+    let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
+    manifest["api"]["required"]["dependencies"] = json!(">=1.2,<2");
+    manifest["settings"]["gate.enabled"] = json!({
+        "title":"Enable shared provider", "value_type":{"kind":"boolean"},
+        "default":true, "scope":"project"
+    });
+    let contract = &mut manifest["plugin_services"]["provides"]["example.echo"];
+    contract["enabled_setting"] = json!("gate.enabled");
+    contract["platforms"] = json!([plugin_runtime::development::platform()]);
+    let mut unsupported = contract.clone();
+    unsupported["platforms"] = json!([if cfg!(target_os = "windows") {
+        "linux-x86_64"
+    } else {
+        "windows-x86_64"
+    }]);
+    manifest["plugin_services"]["provides"]["unavailable.echo"] = unsupported;
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
+    let package = Package::from_files(files).unwrap();
+    let environment = |workspace: &std::path::Path| Environment {
+        workspace: workspace.display().to_string(),
+        ..Default::default()
+    };
+    let mut manager = Manager::open(profile.path().into(), environment(first.path())).unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+    let choices = manager.service_choices();
+    assert!(
+        choices
+            .iter()
+            .any(|choice| choice.contract == "example.echo"
+                && choice.candidates == ["gated-provider"])
+    );
+    assert!(
+        !choices
+            .iter()
+            .any(|choice| choice.contract == "unavailable.echo")
+    );
+    manager
+        .update_setting(
+            "gated-provider",
+            Scope::Project,
+            "gate.enabled",
+            Some(json!(false)),
+        )
+        .unwrap();
+    assert!(
+        !manager
+            .service_choices()
+            .iter()
+            .any(|choice| choice.contract == "example.echo"
+                && choice.candidates.contains(&"gated-provider".into()))
+    );
+    // A confirmed override belongs to its captured project, not the next selected workspace.
+    manager
+        .switch_workspace(environment(second.path()), true)
+        .unwrap();
+    assert!(
+        manager
+            .service_choices()
+            .iter()
+            .any(|choice| choice.contract == "example.echo"
+                && choice.candidates.contains(&"gated-provider".into()))
+    );
+    manager
+        .switch_workspace(environment(first.path()), true)
+        .unwrap();
+    assert!(
+        !manager
+            .service_choices()
+            .iter()
+            .any(|choice| choice.contract == "example.echo"
+                && choice.candidates.contains(&"gated-provider".into()))
+    );
+    assert!(
+        manager.live.is_empty(),
+        "discovery/configuration must remain cold"
+    );
+    assert_eq!(manager.resource_count(), 0);
+    manager.shutdown();
+}
+
 fn install(manager: &mut Manager, package: Package) {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // These existing authority/cleanup scenarios observe the real status view. Showing that view
+    // is their explicit demand; separate service_activation tests assert installation stays cold.
+    demand(manager, &package.manifest.id).unwrap();
+}
+/// Drive a public view demand without turning installation or metadata discovery into activation.
+fn demand(
+    manager: &mut Manager,
+    id: &str,
+) -> Result<(), plugin_runtime::plugin_protocol::api::Failure> {
+    let token = manager.availability(id)?;
+    let request = manager.begin_demand(
+        &token,
+        plugin_runtime::DemandReason::View("welcome".into()),
+        120_000,
+    )?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    loop {
+        manager.poll();
+        match request.status() {
+            plugin_runtime::plugin_protocol::api::RequestUpdate::Completed { result } => {
+                return result.and_then(|receipt| manager.admit_receipt(&token, &receipt));
+            }
+            plugin_runtime::plugin_protocol::api::RequestUpdate::Cancelled { reason, .. } => {
+                return Err(plugin_runtime::plugin_protocol::api::Failure::new(
+                    reason,
+                    "Service fixture demand ended",
+                ));
+            }
+            _ => {}
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Service fixture activation timed out"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }
 fn text(manager: &Manager, id: &str) -> String {
     let document = manager.live[id].views["welcome"].as_ref();
@@ -337,6 +467,7 @@ fn deferred_replies_release_their_slots_on_cancel_timeout_and_source_retirement(
         resources
     );
     manager.enable("service-consumer").unwrap();
+    demand(&mut manager, "service-consumer").unwrap();
     command(
         &mut manager,
         "service-consumer",
@@ -454,10 +585,21 @@ fn unique_and_selected_providers_are_interchangeable_and_old_references_expire()
         Some("z-provider-b")
     );
     drop(manager);
-    let manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
     assert!(
-        manager.live.contains_key("service-consumer"),
-        "required consumer must restart after its later-sorted provider"
+        manager
+            .published_entries()
+            .iter()
+            .any(|entry| entry.manifest.id == "service-consumer" && entry.enabled),
+        "required consumer remains discoverable independently of its later-sorted cold provider"
+    );
+    assert!(
+        manager.live.is_empty(),
+        "reopen is static discovery, not a demand"
+    );
+    assert_eq!(
+        manager.service_choices()[0].selected.as_deref(),
+        Some("z-provider-b")
     );
 }
 
@@ -468,12 +610,15 @@ fn missing_and_incompatible_services_do_not_activate_required_consumers() {
     let temp = tempfile::tempdir().unwrap();
     let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
     let required = package("required-consumer", false, false, "^1");
+    manager
+        .install(&required, required.manifest.permissions.clone())
+        .unwrap();
     assert!(
-        manager
-            .install(&required, required.manifest.permissions.clone())
-            .is_err()
+        demand(&mut manager, "required-consumer").is_err(),
+        "required dependency fails at the actual demand"
     );
-    assert!(!manager.installed.contains_key("required-consumer"));
+    assert!(manager.installed.contains_key("required-consumer"));
+    assert!(!manager.live.contains_key("required-consumer"));
     install(&mut manager, package("service-consumer", false, true, "^1"));
     assert!(
         command(
@@ -495,9 +640,8 @@ fn missing_and_incompatible_services_do_not_activate_required_consumers() {
         .contains("CapabilityUnavailable")
     );
     assert!(
-        manager
-            .install(&required, required.manifest.permissions.clone())
-            .is_err()
+        demand(&mut manager, "required-consumer").is_err(),
+        "incompatible dependencies cannot become a live provider"
     );
 }
 
@@ -612,8 +756,12 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
         .unwrap();
     assert!(request.begin());
     request.finish(Ok(api::EditorValue::Directory { path: "src".into() }));
+    let completed_authority = request.authority().clone();
     manager.poll();
     assert!(text(&manager, "provider-a").contains("PermissionDenied"));
+    // A completed native resource can survive its transient task deadline, but not its source.
+    request.expire(std::time::Instant::now() + std::time::Duration::from_secs(60));
+    assert!(completed_authority.is_live());
     call(&mut manager, "editor-continuation", json!(""), 30000);
     manager.poll();
     let request = manager
@@ -625,6 +773,10 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
         .unwrap();
     assert!(request.begin());
     manager.disable("service-consumer").unwrap();
+    assert!(
+        !completed_authority.is_live(),
+        "retiring the original caller revokes completed native resources"
+    );
     assert!(
         !request.enter_side_effect(),
         "revoked source cannot execute already-published editor work"
@@ -642,6 +794,8 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
     manager
         .set_project_enabled("service-consumer", true)
         .unwrap();
+    // Enabling retains a cold installation; the status view supplies this scenario's next demand.
+    demand(&mut manager, "service-consumer").unwrap();
     command(
         &mut manager,
         "service-consumer",
@@ -667,6 +821,8 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
     manager
         .set_project_enabled("service-consumer", true)
         .unwrap();
+    // Re-enabling changes availability without eagerly creating a replacement instance.
+    demand(&mut manager, "service-consumer").unwrap();
     command(
         &mut manager,
         "service-consumer",
@@ -694,4 +850,32 @@ fn delegated_resources_and_async_continuations_follow_the_original_source_lifeti
     assert!(!request.enter_side_effect());
     manager.poll();
     assert_eq!(manager.live["provider-a"].resource_count(), resources);
+    // A fresh delegated request also retains the provider's own instance boundary.
+    // The fixture keeps the legacy Restart policy, so its new instance also needs an explicit demand.
+    demand(&mut manager, "service-consumer").unwrap();
+    command(
+        &mut manager,
+        "service-consumer",
+        "service-open",
+        json!("example.echo"),
+    );
+    call(&mut manager, "editor-continuation", json!(""), 30000);
+    manager.poll();
+    let request = manager
+        .live
+        .get_mut("provider-a")
+        .unwrap()
+        .take_editor_requests()
+        .pop()
+        .unwrap();
+    assert!(request.begin());
+    request.finish(Ok(api::EditorValue::Directory { path: "src".into() }));
+    let provider_authority = request.authority().clone();
+    manager.poll();
+    assert!(provider_authority.is_live());
+    manager.disable("provider-a").unwrap();
+    assert!(
+        !provider_authority.is_live(),
+        "retiring the provider revokes completed native resources"
+    );
 }

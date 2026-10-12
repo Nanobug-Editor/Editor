@@ -12,6 +12,8 @@ pub(crate) static NEXT_FILE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic
 
 /// A file tab owns its identity independently of native text editing resources.
 pub(crate) struct OpenTab {
+    /// Virtual identities carry revocable ownership and never represent a backing disk file.
+    pub(crate) virtual_document: Option<VirtualTab>,
     pub(crate) path: PathBuf,
     pub(crate) file_id: u64,
     pub(crate) file_revision: u64,
@@ -25,6 +27,19 @@ pub(crate) struct OpenTab {
 }
 
 impl OpenTab {
+    /// Native presentation uses the provider's title independently of the opaque resource URI.
+    pub(crate) fn title(&self) -> String {
+        self.virtual_document
+            .as_ref()
+            .map(|virtual_tab| virtual_tab.title.clone())
+            .unwrap_or_else(|| {
+                self.path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+    }
     /// File navigation does not require consulting a text editing session.
     pub(crate) fn path(&self) -> &Path {
         &self.path
@@ -49,6 +64,20 @@ impl OpenTab {
     }
 }
 
+/// Provider metadata contains authority and display hints, never a second mutable document value.
+pub(crate) struct VirtualTab {
+    pub(crate) resource: std::sync::Arc<plugin_runtime::VirtualDocumentResource>,
+    pub(crate) title: String,
+    pub(crate) language: String,
+}
+
+impl Drop for VirtualTab {
+    /// Window/workspace teardown seals authority even without an explicit user close operation.
+    fn drop(&mut self) {
+        self.resource.revoke();
+    }
+}
+
 /// Native text state retains its session, selection/IME entity and derived diagnostics.
 pub(crate) struct TextTab {
     /// Unlike the dirty revision, this also advances on disk reloads and other programmatic changes.
@@ -65,6 +94,8 @@ pub(crate) struct TextTab {
     /// A separate decoration layer keeps a definition jump visible for two seconds.
     pub(crate) definition_highlight: TextDecorationCollection,
     pub(crate) definition_highlight_generation: u64,
+    /// One native adapter shares grammar/fold arbitration and current plugin marker coordinates.
+    pub(crate) highlighter: crate::outline::folding::Controller,
     /// Diagnostics retain only derived parser state; EditorState owns the editable text.
     pub(crate) diagnostics: super::diagnostics::DocumentDiagnostics,
     pub(crate) _subscription: Subscription,
@@ -75,6 +106,12 @@ impl TextTab {
     /// Text-specific operations use the session's canonical path after narrowing the file capability.
     pub(crate) fn path(&self) -> &Path {
         self.session.path()
+    }
+}
+impl Drop for TextTab {
+    /// Closing the document invalidates markers even when another UI entity retains its editor.
+    fn drop(&mut self) {
+        self.highlighter.markers().borrow().revoke();
     }
 }
 

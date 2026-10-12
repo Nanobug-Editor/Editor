@@ -114,6 +114,51 @@ text, the host checks every UTF-16 boundary, ordering, overlap and quota, then a
 atomic native edit. At most 10,000 edits and 16 MiB per replacement are accepted; the merged
 replacement is bounded to 32 MiB. No valid prefix of an invalid proposal is committed.
 
+## Native references, code actions and signatures
+
+Require `language.lsp: ">=1.4, <2"` when depending on the native References (`Shift+F12`),
+Code Actions (`Ctrl+.`) or Signature Help (`Ctrl+Shift+Space`) consumers. The same selected
+primary LSP must advertise `referencesProvider`, `codeActionProvider` or
+`signatureHelpProvider` respectively. There is still one primary LSP per language; new
+diagnostic sources and direct roles do not override a valid selection.
+
+References resolve standard UTF-16 locations against the current unsaved native document.
+Targets are local workspace files; reading another document needs the original owner's
+`workspace.read` permission. Code actions currently accept complete literal text edits for
+the current source, through `changes` or ordinary versioned `TextDocumentEdit`. They reject
+commands, resource operations, other-document edits, annotations, disabled or unresolved
+actions as complete unsupported proposals. Accepted fixes retain that original owner and
+use the ordinary `workspace.files >=1.3` plan preview, confirmation, conflict checks and
+group Undo. A plan's optional `origin` is a readonly document-incarnation/revision precondition,
+not a file or edit grant. It is checked again after preview even when only another file changes.
+
+A declarative LSP requires no WASM to apply those current-document fixes. It must actually
+negotiate `language.lsp >=1.4`, `editor.edit >=1.1` and `workspace.files >=1.3`, and hold the
+original `editor.read` and `editor.write` grants. Its native service seal owns the ordinary
+request and batch receipt; an optional lifecycle guest adds its own authority to that chain.
+The native issuer retains at most eight batch receipts and 32 pending requests, and cannot
+authorize file operations or other-document edits. Disable, replacement, workspace revocation
+and manager shutdown retire the original seal immediately, including already published calls.
+The last native receipt holder releases its quota slot; cancellation alone keeps a retained
+receipt available to the ordinary native Undo control. Missing grants and capabilities return
+`PermissionDenied` and `CapabilityUnavailable` respectively.
+
+The experimental `language.direct: ">=0.1, <0.2"` role provides these three result kinds
+without a native server. Its pure callback receives immutable source/version/caret/settings,
+cannot call host operations, and returns a bounded matching request and document proposal.
+An unavailable optional capability omits its dependent role; required capabilities reject
+admission. Denied permissions never grant authority. Direct and LSP results use the same
+native navigation, named result controls, plain signature cards and ordinary fix transaction.
+Stable `editor.diagnostics: ^1` independently publishes owner-bound collections into the
+existing native Problems projection; equal diagnostics from separate owners remain separate.
+
+Closing results cancels their readonly wait and rejects delayed delivery after tab changes,
+reopening, source edits or provider replacement. Standard requests send `$/cancelRequest`;
+user cancellation keeps the healthy shared connection and does not consume its finite retry
+budget. All source quotas, errors and resource-release rules are documented beside the public
+types in `direct.rs`, `diagnostics.rs`, `language.rs` and `workspace.rs`. Those source comments
+travel with the standalone SDK; repository Markdown does not.
+
 ## Optional WASM hook
 
 With `hook: true` the host sends `Notification::LanguageService(language::Context)` to an

@@ -128,9 +128,11 @@ impl Manager {
         let mut snapshot = self.load_snapshot(&id)?;
         let previous = self.installed.get(&id).cloned();
         let mut old = self.live.remove(&id);
-        if let Some(instance) = &mut old {
-            instance.quiesce();
-        }
+        // Cold installation and dormant replacement commit validated data without business activation.
+        // A running predecessor retains the established transactional live cutover and fresh recovery.
+        let activate_business = old.is_some();
+        // Removing the actor's ingress blocks new calls without revoking handles used by Snapshot output.
+        // The final snapshot must validate against its live owner before stop seals that incarnation.
         self.retire_language_services(&id);
         self.refresh_services();
         let candidate = prepared.transaction.candidate();
@@ -186,7 +188,8 @@ impl Manager {
             // Final discovery sees current data/configuration. Changed plans must be prepared anew, outside cutover.
             prepared
                 .next
-                .prepare_state(self.environment.clone(), migrated)?;
+                .prepare_state(self.environment.clone(), migrated.clone())?;
+            // Replacement settings merge only approved logical overrides, never the retired owner's data.
             prepared.next.configure_settings(
                 manifest,
                 self.replacement_settings(manifest)?
@@ -203,24 +206,32 @@ impl Manager {
                 serde_json::to_vec(&plans)? == serde_json::to_vec(&prepared.dependency_plans)?,
                 "Dependency selection changed during preparation; prepare the update again"
             );
-            prepared
-                .next
-                .connect_services(self.plugin_services.clone())?;
             control.check()?;
-            prepared
-                .next
-                .connect_diagnostics(self.native_diagnostics.clone());
-            prepared.next.activate()?;
+            if activate_business {
+                prepared
+                    .next
+                    .connect_services(self.plugin_services.clone())?;
+                prepared
+                    .next
+                    .connect_diagnostics(self.native_diagnostics.clone());
+                prepared.next.activate()?;
+            }
             prepared.next.commit_data()?;
-            let checkpoint = prepared.next.snapshot()?;
-            anyhow::ensure!(
-                checkpoint.data.len() <= manifest.storage_limit,
-                "Snapshot exceeds declared quota"
-            );
-            atomic_write(
-                &candidate.join("state.json"),
-                &serde_json::to_vec(&checkpoint)?,
-            )?;
+            let checkpoint = if activate_business {
+                Some(prepared.next.snapshot()?)
+            } else {
+                migrated
+            };
+            if let Some(checkpoint) = checkpoint {
+                anyhow::ensure!(
+                    checkpoint.data.len() <= manifest.storage_limit,
+                    "Snapshot exceeds declared quota"
+                );
+                atomic_write(
+                    &candidate.join("state.json"),
+                    &serde_json::to_vec(&checkpoint)?,
+                )?;
+            }
             atomic_write(
                 &candidate.join("data-format.json"),
                 &serde_json::to_vec(&target)?,
@@ -271,18 +282,27 @@ impl Manager {
                     self.refresh_services();
                     return Err(error);
                 }
-                if let Some(mut old) = old {
-                    if let Err(recovery) = old.restart(self.environment.clone(), snapshot) {
-                        old.stop();
-                        let message =
-                            format!("Update failed: {error:#}; restart failed: {recovery:#}");
-                        if let Some(entry) = self.installed.get_mut(&id) {
-                            entry.error = Some(message.clone());
+                if old.is_some() {
+                    // Stopped WASM memory may retain revoked handles. Restore the committed package's
+                    // checkpoint into a fresh incarnation after the transaction recovers its private data.
+                    let recovery = previous
+                        .as_ref()
+                        .ok_or_else(|| anyhow::anyhow!("Stopped instance has no committed package"))
+                        .and_then(|entry| self.restore_previous_instance(entry, snapshot));
+                    match recovery {
+                        Ok(restored) => {
+                            self.live.insert(id, restored);
                         }
-                        self.refresh_services();
-                        return Err(anyhow::anyhow!(message));
+                        Err(recovery) => {
+                            let message =
+                                format!("Update failed: {error:#}; restart failed: {recovery:#}");
+                            if let Some(entry) = self.installed.get_mut(&id) {
+                                entry.error = Some(message.clone());
+                            }
+                            self.refresh_services();
+                            return Err(anyhow::anyhow!(message));
+                        }
                     }
-                    self.live.insert(id, old);
                 }
                 self.refresh_services();
                 return Err(error);
@@ -293,6 +313,10 @@ impl Manager {
             .retarget_data(self.instance_data_directory(manifest));
         // A failed candidate leaves every replaced owner alive. Retire only after the durable commit.
         for old_id in prepared.replaced_records.keys() {
+            // Cold publications also own original source seals and queued demands. Replacement
+            // withdraws those identities only after commit, even if the retired package never ran.
+            self.activation.invalidate(old_id, None);
+            self.cancel_pending_demands(old_id, None);
             self.retire_language_services(old_id);
             if let Some(mut old) = self.live.remove(old_id) {
                 old.stop();
@@ -302,14 +326,63 @@ impl Manager {
             // This typed candidate was validated before the durable commit; publication cannot fail here.
             self.plugin_services.lock().unwrap().preferences = preferences;
         }
+        // Unpublished preparation never gains Temporary/Secret mutation authority, even after flushing data.
+        if activate_business {
+            prepared.next.commit_activation();
+        }
         let entry = &self.installed[&id];
-        if entry.enabled || entry.project_enabled_in(&self.environment.workspace) {
+        if activate_business
+            && (entry.enabled || entry.project_enabled_in(&self.environment.workspace))
+        {
             self.live.insert(id.clone(), prepared.next);
         } else {
             prepared.next.stop();
         }
         self.refresh_services();
         Ok(())
+    }
+
+    /// Recreate the committed guest after data recovery; initialization writes precede committed authority.
+    /// The caller has already stopped both failed generations, so all projected resources get fresh owners.
+    fn restore_previous_instance(
+        &mut self,
+        entry: &Installed,
+        snapshot: Option<Snapshot>,
+    ) -> anyhow::Result<Instance> {
+        let (assets, package) = self.read_installed_assets(entry)?;
+        let component = entry
+            .manifest
+            .component
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Stopped instance has no WASM component"))?;
+        let mut restored = Instance::prepare_with_resources(
+            self.engine.as_ref().unwrap(),
+            &package.files[component],
+            &entry.manifest,
+            &entry.grants,
+            self.environment.clone(),
+            self.instance_data_directory(&entry.manifest),
+            assets,
+            snapshot,
+            self.host_resources.clone(),
+        )?;
+        let result = (|| {
+            self.configure_saved_settings(&mut restored, &entry.manifest)?;
+            restored.connect_services(self.plugin_services.clone())?;
+            restored.connect_diagnostics(self.native_diagnostics.clone());
+            restored.activate()?;
+            restored.commit_data()?;
+            // Registry/settings and recovered data already select this package. Publish its fresh owner
+            // only after staged writes succeed, so Temporary and credential mutations regain authority.
+            restored.commit_activation();
+            Ok::<_, anyhow::Error>(())
+        })();
+        if let Err(error) = result {
+            // A failed recovery must also revoke any resources created before its activation error.
+            restored.stop();
+            return Err(error);
+        }
+        Ok(restored)
     }
 
     /// Preparation tokens carry no additional authority and are invalid after scope or installed-version changes.

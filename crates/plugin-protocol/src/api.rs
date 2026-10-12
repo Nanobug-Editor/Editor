@@ -3,7 +3,16 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+mod documents;
+mod edits;
+#[cfg(feature = "guest")]
+pub use edits::apply_edits;
+pub use edits::{TextEdit, validate_text_edits};
 mod navigation;
+pub use documents::{
+    DocumentAccess, DocumentEncoding, DocumentEol, DocumentEvent, DocumentEventKind, DocumentInfo,
+    DocumentRange, DocumentSnapshot, ResourceIdentity, TextPosition, VisibleRows,
+};
 pub use navigation::{
     NavigationTarget, decode_uri_component, document_relative_path, is_windows_device_segment,
 };
@@ -209,6 +218,31 @@ pub struct SdkDescriptor {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
+    /// Stable diagnostic collection creation; publication uses versioned native editor requests.
+    Diagnostics {
+        operation: crate::diagnostics::Operation,
+    },
+    /// General network access is independently negotiated from image fetching and credentials.
+    Http {
+        operation: crate::http::Operation,
+    },
+    Secrets {
+        operation: crate::secrets::Operation,
+    },
+    Timer {
+        operation: crate::timers::Operation,
+    },
+    Private {
+        operation: crate::storage::Operation,
+    },
+    /// Instance-owned lazy tree publication; no editor or file authority is implied.
+    Tree {
+        operation: crate::tree::Operation,
+    },
+    /// Typed calls preserve caller ownership through the shared request completion gate.
+    Commands {
+        operation: crate::commands::Operation,
+    },
     Service {
         operation: crate::service::Operation,
     },
@@ -216,6 +250,12 @@ pub enum Operation {
         operation: crate::process::Operation,
     },
     SubscribeDocuments,
+    /// Opt into ordered metadata notifications; requires editor.documents 1.1 and editor.read.
+    SubscribeDocumentEvents,
+    /// workspace.files 1.2: observe this exact workspace root, including unopened file changes.
+    SubscribeWorkspaceFiles {
+        root: ResourceHandle,
+    },
     CancelRequest {
         handle: ResourceHandle,
         mode: CancelMode,
@@ -273,8 +313,19 @@ pub struct Request {
 }
 
 /// Result variants carry structured values, never JSON hidden inside a string result.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Value {
+    /// A plan's wait can stop independently from its current-session recovery resource.
+    BatchAccepted {
+        request: ResourceHandle,
+        batch: ResourceHandle,
+    },
+    Http(Option<crate::http::Event>),
+    /// Credentials are returned only to their owning plugin, never persisted by the host transport.
+    Secret(Option<Vec<u8>>),
+    PrivateEntry(crate::storage::Entry),
+    PrivateListing(crate::storage::Listing),
+    Commands(Vec<crate::commands::Descriptor>),
     Preference(PreferenceRead),
     /// process 1.6: an existing native executable, never an execution grant or process handle.
     ResolvedProgram {
@@ -291,6 +342,40 @@ pub enum Value {
     Resource(ResourceHandle),
     Bytes(Vec<u8>),
     Unit,
+}
+impl std::fmt::Debug for Value {
+    /// Credential bytes must not become an automatic debug field on a correlated transport response.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Secret(_) => f.write_str("Secret(<redacted>)"),
+            Self::Http(value) => f.debug_tuple("Http").field(value).finish(),
+            Self::PrivateEntry(value) => f.debug_tuple("PrivateEntry").field(value).finish(),
+            Self::PrivateListing(value) => f.debug_tuple("PrivateListing").field(value).finish(),
+            Self::Commands(value) => f.debug_tuple("Commands").field(value).finish(),
+            Self::Preference(value) => f.debug_tuple("Preference").field(value).finish(),
+            Self::ResolvedProgram { program } => f
+                .debug_struct("ResolvedProgram")
+                .field("program", program)
+                .finish(),
+            Self::Files(value) => f.debug_tuple("Files").field(value).finish(),
+            Self::Sdk(value) => f.debug_tuple("Sdk").field(value).finish(),
+            Self::Process(value) => f.debug_tuple("Process").field(value).finish(),
+            Self::Cancellation(value) => f.debug_tuple("Cancellation").field(value).finish(),
+            Self::Accepted(value) => f.debug_tuple("Accepted").field(value).finish(),
+            // Batch acceptance contains only correlated handles; credential values keep their redaction.
+            Self::BatchAccepted { request, batch } => f
+                .debug_struct("BatchAccepted")
+                .field("request", request)
+                .field("batch", batch)
+                .finish(),
+            Self::Resource(value) => f.debug_tuple("Resource").field(value).finish(),
+            Self::Asset { bytes } | Self::Bytes(bytes) => f
+                .debug_struct("Bytes")
+                .field("count", &bytes.len())
+                .finish(),
+            Self::Unit => f.write_str("Unit"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -319,6 +404,23 @@ pub enum Input {
 /// Native UI notifications contain no legacy canvas or character-grid fields.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Notification {
+    /// A coalesced tick for a live instance-owned timer; sequence advances only for delivered ticks.
+    Timer {
+        handle: ResourceHandle,
+        sequence: u64,
+    },
+    /// Commands with a negotiated signature receive a result-bearing callback and their own reply slot.
+    CommandInvocation(crate::commands::Invocation),
+    /// Provider-local deferred work must stop under its original sealed source authority.
+    CommandCancelled {
+        request: ResourceHandle,
+        reason: Failure,
+    },
+    /// Only the original caller receives its own typed command request updates.
+    CommandRequest {
+        handle: ResourceHandle,
+        update: RequestUpdate<serde_json::Value>,
+    },
     /// A selected file provider receives a host-issued file identity, independent of text editing.
     /// Requires `editor.files` and `editor.read`; clearing the context revokes its resource access.
     FilePreview {
@@ -352,10 +454,14 @@ pub enum Notification {
     LanguageCompletion(crate::language::CompletionRequest),
     /// language.structure: describe a readonly snapshot; the host owns outline UI and navigation.
     LanguageStructure(crate::structure::Request),
+    /// language.direct 0.1 experimental: readonly references, actions or parameter help.
+    LanguageDirect(crate::direct::Request),
     Process {
         handle: ResourceHandle,
         update: crate::process::Update,
     },
+    /// configuration 1.0 supplies Validate/Apply; 1.1 opts into Changed for suitable hot values.
+    /// The full map carries plugin-only scope/provenance and never secret credential bytes.
     Configuration {
         phase: crate::settings::Phase,
         values: crate::settings::Effective,
@@ -364,9 +470,19 @@ pub enum Notification {
         subscription: ResourceHandle,
         change: DocumentChange,
     },
+    /// Only explicitly opted-in subscriptions receive this richer versioned stream.
+    DocumentEvent {
+        subscription: ResourceHandle,
+        event: DocumentEvent,
+    },
     SubscriptionFailed {
         subscription: ResourceHandle,
         error: Failure,
+    },
+    /// Opt-in workspace observations are distinct from document revision notifications.
+    WorkspaceFile {
+        subscription: ResourceHandle,
+        event: crate::workspace::FileEvent,
     },
     /// Shared private intent changed; delivery belongs to this exact live watch, not a document session.
     PreferenceChanged {
@@ -385,6 +501,9 @@ pub enum Notification {
     Command {
         id: String,
         arguments: Option<serde_json::Value>,
+        /// Native menu metadata remains descriptive and does not change one-way command semantics.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        context: Option<crate::commands::Context>,
     },
     Focus(bool),
     Resize {
@@ -497,6 +616,59 @@ pub struct DocumentChange {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditorOperation {
+    /// Replace or clear only this instance's collection at the exact open document revision.
+    Diagnostics {
+        publication: crate::diagnostics::Publication,
+    },
+    /// workspace.files 1.2: resource queries and previewed native mixed plans.
+    Workspace {
+        operation: crate::workspace::Operation,
+    },
+    /// Owned point/range/gutter markers; requires editor.decorations and editor.read.
+    Decorations {
+        operation: crate::decorations::Operation,
+    },
+    /// Open an existing workspace text resource; local opens also require workspace.read.
+    OpenDocument {
+        resource: ResourceIdentity,
+    },
+    /// Create readonly instance-owned content; requires editor.virtual and editor.read.
+    OpenVirtualDocument {
+        title: String,
+        #[serde(default)]
+        language: Option<String>,
+        text: String,
+    },
+    /// Refresh owned readonly content at its exact revision without a user edit or undo entry.
+    RefreshVirtualDocument {
+        document: DocumentVersion,
+        text: String,
+    },
+    /// Reveal a strict zero-based UTF-16 position, including in readonly content.
+    LocateDocument {
+        document: DocumentVersion,
+        position: TextPosition,
+    },
+    /// Compare two exact versions in native panes; requires editor.diff and editor.read.
+    CompareDocuments {
+        left: DocumentVersion,
+        right: DocumentVersion,
+    },
+    /// Enumerate up to 128 currently open readable text sessions; requires editor.documents 1.1.
+    ListDocuments,
+    /// Read up to 256 KiB from this exact open identity/revision; omitted range reads the full text.
+    /// Requires editor.documents 1.1 and editor.read. Large documents can be read in bounded ranges.
+    ReadDocument {
+        document: DocumentVersion,
+        #[serde(default)]
+        range: Option<DocumentRange>,
+    },
+    /// Stable host-owned interaction, admitted according to the selected variant.
+    /// `Select` requires the `files.selection` capability and `files.select` installation grant;
+    /// all other variants require the `ui.interaction` capability and installation grant.
+    Interaction {
+        operation: crate::interaction::Operation,
+    },
     /// Locate a viewport in the exact active source/UI scene; requires editor.viewport and editor.read.
     /// Nonzero origins identify programmatic movement so a guest cannot create a feedback loop.
     LocateViewport {
@@ -546,6 +718,14 @@ pub enum EditorOperation {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         expected_selection: Option<TextRange>,
     },
+    /// A complete original-revision proposal for any opened local text session, including background tabs.
+    /// Requires editor.edit 1.1 and editor.write. One native Undo changes this document alone.
+    /// Cross-resource proposals use workspace.files plans with preview, consent and explicit group Undo.
+    ApplyEdits {
+        document: DocumentVersion,
+        edits: Vec<TextEdit>,
+        selection: TextRange,
+    },
     ActiveDirectory,
     SaveDocument {
         document: DocumentVersion,
@@ -559,6 +739,33 @@ pub enum EditorOperation {
 /// Values describe the actual document and revision observed or saved, rather than an acknowledgement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EditorValue {
+    Workspace(crate::workspace::Value),
+    /// Native current positions are metadata, independent of text, selection or Undo storage.
+    Decorations {
+        handle: ResourceHandle,
+        document: DocumentVersion,
+        positions: Vec<crate::decorations::Position>,
+    },
+    /// Open/refresh returns current metadata; EditorState retains the only live text.
+    DocumentOpened(DocumentInfo),
+    /// Navigation returns the version validated before the native selection.
+    DocumentLocated {
+        document: DocumentVersion,
+    },
+    /// Both visible comparison sources remain bound to these exact versions.
+    DocumentsCompared {
+        left: DocumentVersion,
+        right: DocumentVersion,
+    },
+    /// A complete bounded enumeration; large tab sets fail explicitly instead of silently truncating.
+    Documents {
+        documents: Vec<DocumentInfo>,
+        active: Option<DocumentVersion>,
+    },
+    /// Immutable current native text; the range is expressed in UTF-8 bytes after strict conversion.
+    DocumentSnapshot(DocumentSnapshot),
+    /// The user's actual confirmed choice; dismissal returns Cancelled through the completion gate.
+    Interaction(crate::interaction::Value),
     /// Actual identity/version opened by a controlled relative navigation, for optional follow-up anchors.
     Opened {
         document: DocumentVersion,
@@ -662,13 +869,16 @@ pub struct ViewPatch {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Output {
+    /// Accepted only by the negotiated experimental pure language callback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_direct: Option<crate::direct::Proposal>,
     /// Returned only by the negotiated pure completion callback, with its source and request identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language_completion: Option<crate::language::CompletionProposal>,
     /// Accepted only from the corresponding negotiated pure structure callback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language_structure: Option<crate::structure::Proposal>,
-    /// Only a service invocation may return this contract-validated result.
+    /// Only a service or typed command invocation may return this contract-validated result.
     #[serde(default)]
     pub service_reply: Option<Result<serde_json::Value, Failure>>,
     #[serde(default)]

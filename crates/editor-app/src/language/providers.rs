@@ -41,6 +41,8 @@ struct Registry {
     /// Invalid explicit formatting values retain their scope without poisoning other preference edits.
     formatter_preference_errors: BTreeMap<String, FormatterPreferenceError>,
     structure_providers: BTreeMap<String, Vec<String>>,
+    /// Experimental direct feature roles share persistent choice without starting another LSP.
+    language_features: BTreeMap<String, Vec<String>>,
     /// Retain a valid selected provider when another package joins the candidate set.
     selected: BTreeMap<String, String>,
     /// Never reuse an earlier selection generation, including disable/re-enable and A/B/A choices.
@@ -84,7 +86,37 @@ pub(crate) fn refresh_with_structures(
         Vec<plugin_runtime::plugin_protocol::structure::Provider>,
     )>,
 ) {
+    refresh_with_language_features(root, entries, services, structures, Vec::new());
+}
+
+/// Publish every language role atomically so registration order cannot override a valid choice.
+pub(crate) fn refresh_with_language_features(
+    root: &Path,
+    entries: Vec<(String, PathBuf, Vec<LanguageDefinition>, Vec<Highlighter>)>,
+    services: Vec<(
+        String,
+        Vec<plugin_runtime::plugin_protocol::language::Provider>,
+    )>,
+    structures: Vec<(
+        String,
+        Vec<plugin_runtime::plugin_protocol::structure::Provider>,
+    )>,
+    direct: Vec<(
+        String,
+        Vec<plugin_runtime::plugin_protocol::direct::Provider>,
+    )>,
+) {
     let mut next = Registry::default();
+    for (owner, providers) in direct {
+        for provider in providers {
+            for feature in provider.features {
+                next.language_features
+                    .entry(format!("{}:{}", feature.role(), provider.language))
+                    .or_default()
+                    .push(format!("{owner}/{}", provider.id));
+            }
+        }
+    }
     for (owner, providers) in services {
         for provider in providers {
             let key = format!("{owner}/{}", provider.id);
@@ -162,6 +194,7 @@ pub(crate) fn refresh_with_structures(
         && registry.workspace == next.workspace
         && registry.recognizers == next.recognizers
         && registry.highlighters == next.highlighters
+        && registry.language_features == next.language_features
         && registry.selected == next.selected
     {
         registry.highlight_epoch
@@ -214,7 +247,7 @@ impl Registry {
     }
     /// Selection keys separate file recognition from the language's highlight provider.
     fn candidates(&self) -> BTreeMap<String, Vec<String>> {
-        let mut rows = BTreeMap::new();
+        let mut rows = self.language_features.clone();
         for (role, declarations) in [
             ("formatter", &self.formatters),
             ("structure", &self.structure_providers),
@@ -538,6 +571,31 @@ pub(crate) fn structure_provider(language: &str) -> Option<String> {
         .cloned()
 }
 
+/// A feature's direct provider choice is independent from the single primary LSP and grammar.
+pub(crate) fn language_feature_provider(
+    language: &str,
+    feature: plugin_runtime::plugin_protocol::direct::Feature,
+) -> Option<String> {
+    REGISTRY
+        .read()
+        .unwrap()
+        .selected
+        .get(&format!("{}:{language}", feature.role()))
+        .cloned()
+}
+
+/// Presence is distinct from selection: ambiguous direct candidates must not silently fall back.
+pub(crate) fn has_language_feature(
+    language: &str,
+    feature: plugin_runtime::plugin_protocol::direct::Feature,
+) -> bool {
+    REGISTRY
+        .read()
+        .unwrap()
+        .language_features
+        .contains_key(&format!("{}:{language}", feature.role()))
+}
+
 /// A removed or replaced provider cannot register a parser after its task completes.
 pub(crate) fn is_current(provider: &GrammarProvider) -> bool {
     grammars().contains(provider)
@@ -555,6 +613,11 @@ pub(super) fn code_provider(language: &str) -> Option<(GrammarProvider, u64)> {
 
 /// Native owners observe this generation even when no grammar is currently available.
 pub(super) fn code_epoch() -> u64 {
+    REGISTRY.read().unwrap().highlight_epoch
+}
+
+/// Native language requests capture this monotonic selection generation, including A→B→A changes.
+pub(crate) fn feature_generation() -> u64 {
     REGISTRY.read().unwrap().highlight_epoch
 }
 

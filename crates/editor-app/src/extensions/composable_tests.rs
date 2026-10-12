@@ -360,6 +360,15 @@ pub(super) fn pump_recording_all(
     // A status query observes one step's program, so the harness asks the same runtime the
     // production worker would ask and records the answer where the worker publishes it.
     let published = cx.update(|_, cx| app.read(cx).extensions.read(cx).worker.state.clone());
+    let trusted = cx.update(|_, cx| {
+        app.read(cx)
+            .extensions
+            .read(cx)
+            .worker
+            .trusted
+            .load(std::sync::atomic::Ordering::Acquire)
+    });
+    let mut demands = super::worker::demands::Demands::default();
     work = work
         .into_iter()
         .filter_map(|work| work.admit(manager, &published))
@@ -628,6 +637,13 @@ pub(super) fn pump_recording_all(
             }
             work => work,
         };
+        let work = match work {
+            work @ (Work::Demand { .. } | Work::Invoke { .. }) => {
+                demands.dispatch(work, manager, &published, trusted);
+                continue;
+            }
+            other => other,
+        };
         // Lifecycle UI acceptance uses the same ordinary manager entries as the worker actor.
         // These branches never manufacture a session state or reach into provider internals.
         match &work {
@@ -637,45 +653,6 @@ pub(super) fn pump_recording_all(
             }
             Work::Uninstall(id, delete_data) => {
                 manager.uninstall(id, *delete_data).unwrap();
-                continue;
-            }
-            Work::Invoke {
-                plugin,
-                command,
-                arguments,
-                expected_epoch,
-            } => {
-                // Use the actor's real-instance admission after any earlier lifecycle work in
-                // this batch; a queued callback must not borrow the replacement's ownership.
-                let accepted = cx.update(|_, cx| {
-                    let worker = &app.read(cx).extensions.read(cx).worker;
-                    worker
-                        .state
-                        .lock()
-                        .unwrap()
-                        .admit_command(
-                            manager,
-                            worker.trusted.load(std::sync::atomic::Ordering::Acquire),
-                            plugin,
-                            command,
-                            *expected_epoch,
-                        )
-                        .is_ok()
-                });
-                if !accepted {
-                    continue;
-                }
-                let result = manager.invoke_command(plugin, command, arguments.clone());
-                // Fault acceptance still uses the ordinary typed callback and published failure.
-                if let Err(error) = result {
-                    assert!(
-                        manager
-                            .published_entries()
-                            .iter()
-                            .any(|entry| &entry.manifest.id == plugin && entry.error.is_some()),
-                        "{error:#}"
-                    );
-                }
                 continue;
             }
             _ => {}
@@ -697,10 +674,16 @@ pub(super) fn pump_recording_all(
             drop(reservation);
             continue;
         }
-        if let Work::Event(id, _, panel, event) = work {
+        if let Work::Event(id, epoch, panel, event) = work {
             // A surface can enqueue its last resize before retirement publication, just as in
             // production. The retired provider never receives that stale callback.
-            if !manager.live.contains_key(&id) {
+            let mut state = published.lock().unwrap();
+            state.reconcile_instances(manager);
+            let current = manager
+                .instance_id(&id)
+                .and_then(|owner| state.owner_epoch(&id, owner));
+            drop(state);
+            if current != Some(epoch) {
                 continue;
             }
             if let Err(error) = manager.event(&id, panel, event) {
@@ -710,6 +693,19 @@ pub(super) fn pump_recording_all(
                 );
             }
         }
+    }
+    // The harness drives the public Manager's real preparation, using the same actor dispatcher.
+    // No fixture is marked background merely to recover the old eager behavior.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !demands.is_empty() {
+        demands.poll(manager, &published, trusted);
+        manager.poll();
+        demands.poll(manager, &published, trusted);
+        assert!(
+            std::time::Instant::now() < deadline,
+            "native demand did not complete"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
     (statuses, stop_results)
 }
@@ -814,6 +810,13 @@ pub(super) fn publish_frame(
             // A successfully opened Manager, rather than fabricated readiness or epochs,
             // supplies the same complete ownership publication as the production actor.
             state.publish_manager(manager);
+            super::package_ui_test_support::publish_catalog(&mut state, manager);
+            // Native tree projection joins only the actual Manager-owned resources in this frame.
+            state.trees = manager
+                .live
+                .values()
+                .flat_map(|instance| instance.tree_resources())
+                .collect();
             state.native_execution_updates.extend(native_updates);
             let messages = presentations
                 .into_iter()

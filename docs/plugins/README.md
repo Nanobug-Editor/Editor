@@ -16,7 +16,14 @@
 - [插件开发工作区整合主工作区改动](verification/plugin-development-main-integration.md)：2026-10-08 用户授权整合全部未提交改动，包含两侧备份、冲突处理与重新验证；未提交或推送。
 - [缺失项目描述修复与主工作区 Release 交付](verification/plugin-development-main-delivery.md)：截图错误的回归测试、主工作区整合与 Release 启动证据。
 
-- [通用插件接口完整性审计](specs/plugin-api-ecosystem-audit/README.md)：2026-10-08 对照 VS Code、IntelliJ Platform 与 Zed；区分当前 main、分支已有能力和剩余缺口，包含 58 项检查、优先级及一手来源，尚未确认实施范围。
+- [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-12，七单全部验收交付、普通提交和推送，#93–#99均已读回closed/completed。最后07源码交付 `8ee28952014a6533253fc83e17c3410d88a76e48` 已推送核对，最终两轴未解决项均0；源码SDK与主分支整合的历史输入见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。稳定核心＋实验扩展，AI暂不实现，父设计议题#92保持开放且未修改。
+- [01 / 02 普通合并连接验证](verification/plugin-api-community-foundation/01-02-integration.md)：真实 SDK 菜单、精确左文档版本、焦点退役回归及新增原生连接已验证，双轴未解决项均为 0；为 03 / 05 提供已修正整合点。
+- [03 工作区计划与会话恢复验收](verification/plugin-api-community-foundation/03-workspace-transactions.md)、[Windows 原生记录](verification/plugin-api-community-foundation/03-workspace-transactions-native.md)：真实脚手架与分页转换消费者、混合脏文本与磁盘计划、取消及整组 Undo、精确 Native Save、Dark/字号布局和正常停止通过；既有 Settings UIA 崩溃及最终交付状态按记录核对。
+- [04 多来源诊断与共享语言结果验收](verification/plugin-api-community-foundation/04-diagnostics-and-language.md)：独立检查器、直接结果与标准 LSP 的原生呈现、事务和资源退役已验收交付，#96 已读回关闭；49 文件源码 SDK、六包、17 项连接回归、规定门禁及两语言生产键盘流程通过，本机默认快捷键限制保留在记录中。
+- [工单 06：云查询、密钥与私有状态验收](verification/plugin-api-community-foundation/06-cloud-and-private-state.md)：独立云翻译/托管查询 SDK 包、实际 HTTP/TLS/CONNECT、系统 Credential、四项原审查修复、Temporary 归属续修与纯源码 SDK 证据；当前完成状态及限制以记录为准。
+- [07 按需激活、热配置与兼容升级验收](verification/plugin-api-community-foundation/07-activation-and-compatibility.md)、[Windows 原生记录](verification/plugin-api-community-foundation/native-07.md)、[双轴审查](verification/plugin-api-community-foundation/07-activation-and-compatibility-review.md)：实际新旧SDK、按需启动、配置热应用、退役清理与T35包组合通过；Runtime19、额外Query1、App12、最终三门禁与Windows新增原生交互已实际通过，两轴均零未解决项；源码交付已推送核对，#99已关闭。
+- [05 通用树与编辑器装饰验收](verification/plugin-api-community-foundation/05-trees-and-decorations.md)、[Windows 原生记录](verification/plugin-api-community-foundation/05-trees-and-decorations-native.md)：四个独立正式包、菜单参数、编辑/Undo、屏外标记撤销、树开发重载与失败恢复通过；独立双轴归零、交付分支 `6940380` 已推送核对，#97 已读回关闭。集成点的资源和 SDK 联合验证另记。
+- [通用插件接口完整性审计](specs/plugin-api-ecosystem-audit/README.md)：2026-10-08 的 58 项历史调查；语言接口已随后整合，当前实施范围见基础社区生态方案，不等于所有检查项获准实施。
 - [XML 插件与通用语言编辑能力方案](specs/xml-language-tools.md) / [#72](https://github.com/T-miracle/Editor/issues/72)，[三个实施工单 #73–#75](tickets/xml-language-tools/README.md)：全部验收、推送并核对关闭；包含可替换格式化、XML/HTML 标签编辑及宿主大纲与停靠，父设计议题保持不变。
 - [XML 语言工单 01 验收记录](verification/xml-language-tools/01-xml-language.md)：记录实际包、原生输入与服务结果，当前状态以记录为准。
 - [格式化与标签编辑工单 02 验收记录](verification/xml-language-tools/02-format-and-tags.md)：独立提供者、XML/HTML 配对编辑及原生输入顺序。
@@ -78,7 +85,7 @@ Markdown 插件：[总方案](https://github.com/T-miracle/Markdown-for-Nanobug/
 | 最终验收 | [T01–T26 契约验收](verification/plugin-api-contract-verification.md) | 已完成，含真实执行证据与限制 |
 | 运行与构建 | [运行时插件平台](runtime-plugins.md) | 当前使用参考，随平台维护 |
 | 声明式主题 | [主题插件格式](主题插件格式.md) | 格式参考，随契约维护 |
-| 公开 SDK | [协议与 SDK 文档](../../crates/plugin-protocol/README.md) | 当前契约；专题文档保留在源码旁 |
+| 公开 SDK | [协议与 SDK 源码注释](../../crates/plugin-protocol/src/lib.rs) | 只导出源码、Cargo、WIT 与 JSON；Markdown 保留为维护资料 |
 
 ## 分阶段验收记录
 
@@ -120,6 +127,8 @@ Markdown 插件：[总方案](https://github.com/T-miracle/Markdown-for-Nanobug/
 - [冻结 Package/SDK 验收夹具](../../crates/plugin-runtime/tests/fixtures/packages/README.md)：保留示例覆盖，不属于应用、安装器、SDK 或市场发行目录。
 - [插件市场 04 删除盘点](verification/plugin-marketplace-04-inventory-2026-10-11.md)：源码迁移与受影响消费者的对应关系。
 - [插件市场 04 最终实施与验收](verification/plugin-marketplace-04-2026-10-11.md)：无随附产物、686 项应用和 188 项实际 WASM 回归、失败历史及 M01–M26 汇总；GitHub 交付状态以所链接 PR 和工单读回为准。
+- [社区公开 SDK 消费夹具](../../crates/plugin-runtime/tests/fixtures/community/README.md)：保留本批文档、语言、树、云查询与生命周期的构建源码和固定版本ZIP，不进入宿主、安装器、SDK或市场发行。
+- [2026-10-12 社区分支合并主分支](verification/plugin-api-community-foundation/main-integration-2026-10-12.md)：双方契约、无随附发行、当前 SDK 构建输入、合并回归和原工作区恢复记录。
 
 ## 后续管理约定
 

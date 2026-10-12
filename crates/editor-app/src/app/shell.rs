@@ -31,6 +31,10 @@ pub(crate) fn bind_editor_shell_keys(cx: &mut App) {
         // Error navigation follows the active document and wraps at either end.
         KeyBinding::new("f8", NextSyntaxError, document_context),
         KeyBinding::new("shift-f8", PreviousSyntaxError, document_context),
+        KeyBinding::new("ctrl-shift-m", ShowProblems, document_context),
+        KeyBinding::new("shift-f12", ShowReferences, document_context),
+        KeyBinding::new("ctrl-.", ShowCodeActions, document_context),
+        KeyBinding::new("ctrl-shift-space", ShowSignatureHelp, document_context),
     ]);
     cx.set_global(ShellBindingsInitialized);
 }
@@ -339,10 +343,17 @@ impl Render for EditorApp {
         }
         // Open plugin-owned settings through the normal editor document path.
         self.sync_plugin_panels(window, cx);
+        self.sync_virtual_documents(window, cx);
+        self.sync_plugin_document_menu(window, cx);
+        self.sync_document_comparison(window, cx);
         self.sync_plugin_documents(cx);
+        self.sync_dynamic_language_servers(cx);
         self.sync_run_controls(window, cx);
         self.dispatch_editor_requests(window, cx);
+        self.sync_plugin_document_menu(window, cx);
+        self.sync_document_comparison(window, cx);
         self.sync_outline(window, cx);
+        self.prune_direct_diagnostics(cx);
         if let Some(path) = self.pending_plugin_file.take() {
             self.open_file(path, window, cx);
         }
@@ -357,6 +368,7 @@ impl Render for EditorApp {
         v_flex()
             .id("editor-shell")
             .key_context("EditorShell")
+            .capture_key_down(cx.listener(Self::cancel_pending_language_feature))
             .relative()
             .on_mouse_down(
                 MouseButton::Left,
@@ -391,6 +403,30 @@ impl Render for EditorApp {
             .on_action(cx.listener(Self::format_document_action))
             .on_action(cx.listener(Self::rename_symbol_action))
             .on_action(cx.listener(Self::toggle_outline))
+            .on_action(
+                cx.listener(|app, _: &ShowProblems, window, cx| app.show_problems(window, cx)),
+            )
+            .on_action(cx.listener(|app, _: &ShowReferences, window, cx| {
+                app.request_language_feature(
+                    plugin_runtime::plugin_protocol::direct::Feature::References,
+                    window,
+                    cx,
+                )
+            }))
+            .on_action(cx.listener(|app, _: &ShowCodeActions, window, cx| {
+                app.request_language_feature(
+                    plugin_runtime::plugin_protocol::direct::Feature::CodeActions,
+                    window,
+                    cx,
+                )
+            }))
+            .on_action(cx.listener(|app, _: &ShowSignatureHelp, window, cx| {
+                app.request_language_feature(
+                    plugin_runtime::plugin_protocol::direct::Feature::SignatureHelp,
+                    window,
+                    cx,
+                )
+            }))
             .on_action(cx.listener(|app, _: &NextSyntaxError, window, cx| {
                 app.navigate_syntax_error(false, window, cx);
             }))
@@ -506,6 +542,9 @@ impl Render for EditorApp {
             .child(self.render_run_menu(window, cx))
             .child(self.render_plugin_popup(window, cx))
             .child(self.render_explorer_menu(window, cx))
+            .when_some(self.render_plugin_document_menu(cx), |shell, menu| {
+                shell.child(menu)
+            })
             .when_some(self.file_view_menu.as_ref(), |body, menu| {
                 body.child(menu.clone())
             })
@@ -515,6 +554,34 @@ impl Render for EditorApp {
             .child(self.render_explorer_edit(cx))
             .child(self.render_explorer_delete(cx))
             .child(self.render_file_transfer(cx))
+            .child(self.render_workspace_receipts(cx))
+            .child(self.render_workspace_plan(window, cx))
+            .child(self.render_problems(window, cx))
+            .children(self.render_language_features(window, cx))
+            .child(
+                div()
+                    .id("plugin-notice-stack")
+                    .absolute()
+                    .bottom(px(36.))
+                    .right(px(12.))
+                    .max_h(px(420.))
+                    .overflow_y_scroll()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .children(
+                        self.plugin_interactions
+                            .iter()
+                            .filter(|prompt| !prompt.read(cx).is_modal())
+                            .cloned(),
+                    ),
+            )
+            .children(
+                self.plugin_interactions
+                    .iter()
+                    .filter(|prompt| prompt.read(cx).is_modal())
+                    .cloned(),
+            )
             .when_some(self.notification.as_ref(), |this, notification| {
                 // Center the card near the top, keeping a margin when the window is narrow.
                 let width = px(380.).min((window.viewport_size().width - px(24.)).max(px(0.)));

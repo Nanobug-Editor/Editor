@@ -2,6 +2,7 @@
 use super::*;
 use plugin_protocol::settings::{Effective, EffectiveValue, Scope, Source};
 use serde_json::Value;
+mod hot;
 
 /// Installation migration and ordinary edits must remain readable by the same settings store.
 pub(super) const MAX_SETTINGS_BYTES: usize = 1024 * 1024;
@@ -89,8 +90,15 @@ fn validate_value(
 impl Manager {
     /// Candidates use their own declarations while sharing only user-approved persistent overrides.
     pub(super) fn saved_settings(&self, manifest: &Manifest) -> anyhow::Result<Effective> {
-        SavedSettings::read(&self.settings_path(&manifest.id))?
-            .resolve(manifest, &self.environment.workspace)
+        self.settings_for_workspace(manifest, &self.environment.workspace)
+    }
+    /// Background demands resolve the captured scope rather than whichever workspace is selected later.
+    pub(super) fn settings_for_workspace(
+        &self,
+        manifest: &Manifest,
+        workspace: &str,
+    ) -> anyhow::Result<Effective> {
+        SavedSettings::read(&self.settings_path(&manifest.id))?.resolve(manifest, workspace)
     }
     /// Return effective plugin values and provenance through the same manager used by the settings UI.
     pub fn effective_settings(&self, id: &str) -> anyhow::Result<Effective> {
@@ -138,6 +146,7 @@ impl Manager {
         if let Some(error) = entry.compatibility_error() {
             anyhow::bail!(error);
         }
+        self.revalidate_installed_metadata(&entry)?;
         let manifest = &entry.manifest;
         let definition = manifest
             .settings
@@ -166,11 +175,15 @@ impl Manager {
         saved.resolve(manifest, &self.environment.workspace)?;
         let bytes = serde_json::to_vec_pretty(&saved)?;
         anyhow::ensure!(bytes.len() <= MAX_SETTINGS_BYTES, "Settings exceed 1 MiB");
+        if definition.apply == plugin_protocol::settings::Apply::HotApply {
+            return self.apply_hot_setting(&entry, scope, &saved, &path, &bytes);
+        }
         // Prepare all affected owners first; one rejected workspace leaves every prior owner alive.
         let mut candidates = Vec::new();
         if let Some(component) = &manifest.component {
-            let assets = self.root.join("packages").join(id).join(&entry.digest);
-            let wasm = std::fs::read(assets.join(component))?;
+            // Reopened registry hints never bypass actual stored package/host-version admission.
+            let (assets, package) = self.read_installed_assets(&entry)?;
+            let wasm = &package.files[component];
             if self.engine.is_none() {
                 self.engine = Some(Instance::engine()?);
             }
@@ -207,7 +220,7 @@ impl Manager {
                 let values = saved.resolve(manifest, &environment.workspace)?;
                 let mut instance = Instance::prepare_with_resources(
                     self.engine.as_ref().unwrap(),
-                    &wasm,
+                    wasm,
                     manifest,
                     &entry.grants,
                     environment.clone(),
@@ -239,8 +252,15 @@ impl Manager {
             Instance::rollback_data(&originals)?;
             return Err(error);
         }
-        // Only a durable successful configuration replaces runtime owners; Drop revokes the old handles.
-        for (owner, instance, active) in candidates {
+        // A durable configuration invalidates queued original intent in its affected logical scopes.
+        let project_scope = scopes::workspace_key(&self.environment.workspace);
+        self.cancel_pending_demands(
+            id,
+            (scope == Scope::Project).then_some(project_scope.as_str()),
+        );
+        // Only a durable successful configuration replaces owners. Stop the predecessor before granting
+        // committed directory authority, so no two incarnations can own the same temporary directory.
+        for (owner, mut instance, active) in candidates {
             if !active {
                 continue;
             }
@@ -249,12 +269,21 @@ impl Manager {
             } else {
                 &mut self.live
             };
+            if let Some(mut old) = instances.remove(id) {
+                old.stop();
+            }
+            instance.commit_activation();
             instances.insert(id.into(), instance);
         }
         // Compute effective plans before retiring transports: unrelated settings must not restart them.
         self.language_services();
+        self.direct_language_providers();
         // A new effective configuration retires only structure workers whose settings changed.
         self.structure_providers();
+        if let Some(entry) = self.installed.get_mut(id) {
+            entry.error = None;
+        }
+        self.refresh_services();
         Ok(())
     }
 

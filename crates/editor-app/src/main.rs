@@ -98,7 +98,11 @@ actions!(
         NavigateToDefinition,
         ShowDefinitionDetails,
         NextSyntaxError,
-        PreviousSyntaxError
+        PreviousSyntaxError,
+        ShowProblems,
+        ShowReferences,
+        ShowCodeActions,
+        ShowSignatureHelp
     ]
 );
 
@@ -110,6 +114,10 @@ struct EditorApp {
     language_servers: HashMap<String, Arc<language_navigation::LanguageServer>>,
     /// Formatting jobs and linked ranges retain identities; EditorState remains the sole text/undo owner.
     language_edits: editor::language_edits::State,
+    /// Readonly language results retain exact source/provider metadata and one shared native view.
+    language_features: editor::language_features::State,
+    /// Native Problems keeps focus/selection only and reads the existing document diagnostics model.
+    problems: editor::diagnostics::problems::ProblemsState,
     file_store: NativeFileStore,
     history: Option<LocalHistory>,
     editor: Entity<EditorState>,
@@ -192,6 +200,8 @@ struct EditorApp {
     explorer_menu: Option<ExplorerMenu>,
     /// Background disk batches and their session-only recovery records.
     file_transfers: explorer::transfer::TransferState,
+    /// Generic plugin plans keep bounded immutable preimages, with each native session still owning Undo.
+    workspace_changes: extensions::workspace_transactions::WorkspaceChanges,
     /// Temporary navigation belongs to one pointer gesture, rather than the persisted session.
     explorer_drag: explorer::drag::DragState,
     tabs: Vec<OpenTab>,
@@ -224,6 +234,21 @@ struct EditorApp {
     /// Last published open identities allow versioned close notifications without retaining document text.
     plugin_documents:
         std::collections::BTreeMap<String, plugin_runtime::plugin_protocol::api::DocumentVersion>,
+    /// Immutable metadata watermarks contain no second mutable text or undo model.
+    plugin_document_metadata:
+        std::collections::BTreeMap<String, plugin_runtime::plugin_protocol::api::DocumentInfo>,
+    /// Active changes are observed independently of text revisions.
+    plugin_active_document: Option<plugin_runtime::plugin_protocol::api::DocumentVersion>,
+    /// Sequence numbers preserve ordered source observations across worker publication.
+    plugin_document_sequence: u64,
+    /// The native window revokes original command waits without retaining another text model.
+    plugin_command_intents: extensions::command_intents::CommandIntents,
+    /// Only original open documents retain primary LSP preparation waits.
+    language_server_demands: app::language_servers::DemandState,
+    /// A comparison borrows existing native document entities and owns only its decoration layers.
+    document_comparison: Option<editor::comparison::DocumentComparison>,
+    /// Comparison commands capture their own target through the existing local popup control.
+    document_command_menu: Option<extensions::command_menus::DocumentCommandMenu>,
     plugin_popup: Option<(PluginPopupKind, Point<Pixels>)>,
     /// A native file context menu captures the opened identity before presenting provider choices.
     file_view_menu: Option<Entity<ui::controls::menu::PopupMenu>>,
@@ -235,6 +260,12 @@ struct EditorApp {
     tool_overflow: Option<Entity<ui::controls::menu::PopupMenu>>,
     /// An immutable summary boundary separates reminder confirmation from visible-record reading.
     plugin_popup_snapshot: Option<PluginPopupSnapshot>,
+    /// Native prompts retain the runtime gate and are discarded once their owner retires.
+    plugin_interactions: Vec<Entity<ui::controls::interaction::HostInteraction>>,
+    /// Serialize OS picker ownership with native modal prompts; late picker results cannot grant access.
+    plugin_picker_pending: bool,
+    /// Dropping the window's sole controller actively closes its owned native selection dialog.
+    plugin_file_picker: Option<platform_windows::file_picker::FilePickerControl>,
     dark_theme: bool,
     session_state: SessionState,
     /// Saved run configurations and the sessions this editor launched from them.
@@ -488,6 +519,8 @@ impl EditorApp {
             workspace_snapshot: None,
             language_servers: HashMap::new(),
             language_edits: Default::default(),
+            language_features: Default::default(),
+            problems: Default::default(),
             file_store: NativeFileStore,
             history: LocalHistory::for_current_user().ok(),
             editor,
@@ -557,12 +590,23 @@ impl EditorApp {
             image_drag: None,
             plugin_saves: Default::default(),
             plugin_documents: Default::default(),
+            plugin_document_metadata: Default::default(),
+            plugin_active_document: None,
+            plugin_document_sequence: 0,
+            plugin_command_intents: Default::default(),
+            language_server_demands: Default::default(),
+            document_comparison: None,
+            document_command_menu: None,
             plugin_popup: None,
             file_view_menu: None,
             function_context: None,
             toolbar_focus: cx.focus_handle(),
             tool_overflow: None,
             plugin_popup_snapshot: None,
+            plugin_interactions: Vec::new(),
+            workspace_changes: Default::default(),
+            plugin_picker_pending: false,
+            plugin_file_picker: None,
             dark_theme: false,
             session_state,
             run_controls,
@@ -692,6 +736,10 @@ impl EditorApp {
     }
 
     fn on_save_action(&mut self, _: &SaveDocument, window: &mut Window, cx: &mut Context<Self>) {
+        // Native focus chooses the readonly source; the active right tab must not borrow a left save.
+        if self.reject_readonly_document_action(window, cx) {
+            return;
+        }
         // The optional formatter must finish for this revision before the existing disk-save path runs.
         self.save_document_with_formatting(window, cx);
     }

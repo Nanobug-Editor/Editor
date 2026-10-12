@@ -3,7 +3,7 @@ use super::*;
 
 pub(super) struct ParkedWorkspace {
     pub(super) environment: Environment,
-    trusted: bool,
+    pub(super) trusted: bool,
     pub(super) live: BTreeMap<String, Instance>,
 }
 
@@ -28,6 +28,38 @@ fn scoped_files(root: &Path, manifest: &Manifest, workspace: &str) -> PathBuf {
 }
 
 impl Manager {
+    /// Publish portable unopened-file observations only to the current trusted workspace.
+    /// Events are data and do not grant paths, content reads or access to parked/application instances.
+    pub fn workspace_file_event(&mut self, event: plugin_protocol::workspace::FileEvent) {
+        if self.trusted && self.workspace_open {
+            for instance in self.live.values_mut() {
+                instance.workspace_file_event(event.clone());
+            }
+        }
+    }
+
+    /// An overflow rejects partial history explicitly; guests recover through bounded rereads.
+    pub fn workspace_events_failed(&mut self, error: api::Failure) {
+        for instance in self.live.values_mut() {
+            instance.workspace_events_failed(error.clone());
+        }
+    }
+    /// Publish ordered metadata only to the current trusted workspace's explicitly opted-in streams.
+    pub fn document_event(&mut self, event: api::DocumentEvent) {
+        if self.trusted && self.workspace_open {
+            for instance in self.live.values_mut() {
+                instance.document_event(event.clone());
+            }
+        }
+    }
+
+    /// Source overflow terminates the rich stream independently of legacy revision subscriptions.
+    pub fn document_stream_failed(&mut self, error: api::Failure) {
+        for instance in self.live.values_mut() {
+            instance.document_stream_failed(error.clone());
+        }
+    }
+
     /// Resolve an installation's persisted files without activating a component or granting access.
     /// `root` is the host's plugin store; `workspace` uses the same canonical identity as live instances.
     /// Invalid path-component identities are rejected. The result is metadata, not a guest capability.
@@ -49,6 +81,10 @@ impl Manager {
     }
     /// Only the selected trusted workspace can publish document events to its owners.
     pub fn document_changed(&mut self, change: api::DocumentChange) {
+        // Legacy SDK subscriptions know only local workspace-relative paths.
+        if change.document.path.starts_with("nanobug-virtual://") {
+            return;
+        }
         self.invalidate_document_images(&change);
         if self.trusted && self.workspace_open {
             for instance in self.live.values_mut() {
@@ -84,11 +120,12 @@ impl Manager {
         self.images.len()
             + self.native_executions.resource_count()
             + self.structure_resource_count()
+            + self.direct_resource_count()
             + self
                 .language_services
                 .values()
                 .filter_map(|item| item.service.as_ref().ok())
-                .map(|service| service.process_count())
+                .map(|service| service.process_count() + service.request_resource_count())
                 .sum::<usize>()
             + self
                 .live
@@ -148,6 +185,7 @@ impl Manager {
             // Host protocol transports are recreated when this window selects another workspace.
             self.language_services.clear();
             self.clear_structure_providers();
+            self.clear_direct_providers();
             self.parked.insert(
                 old_key,
                 ParkedWorkspace {
@@ -158,6 +196,7 @@ impl Manager {
             );
         }
         self.environment = environment;
+        self.activation.select_scope(&next_key);
         self.host_resources.terminals.select_scope(next_key.clone());
         self.trusted = trusted;
         self.workspace_open = true;
@@ -205,7 +244,7 @@ impl Manager {
             })
             .map(|(id, entry)| (id.clone(), entry.enabled))
             .collect::<Vec<_>>();
-        self.activate_saved_plugins(entries);
+        self.restore_saved_plugins(entries);
         if let Err(error) = self.save_registry() {
             for entry in self.installed.values_mut() {
                 entry.error = Some(format!("{error:#}"));
@@ -216,6 +255,8 @@ impl Manager {
     /// Closing one scope removes only its views and resources, never the application singleton.
     pub fn close_workspace(&mut self, workspace: &str) -> anyhow::Result<()> {
         let key = workspace_key(workspace);
+        // A reopened path gets a new static generation; old preparations never borrow its new lease.
+        self.activation.invalidate_scope(&key);
         let current = workspace_key(&self.environment.workspace) == key;
         if current {
             self.native_executions.set_trusted(false);
@@ -230,6 +271,7 @@ impl Manager {
             self.retire_workspace_image_inputs();
             self.language_services.clear();
             self.clear_structure_providers();
+            self.clear_direct_providers();
         }
         let (environment, mut live) = if current {
             self.workspace_open = false;
@@ -318,6 +360,9 @@ impl Manager {
 
     /// Shutdown retires application resources as well as all workspace resources.
     pub fn shutdown(&mut self) {
+        // Detached preparation observes this seal before activation and cannot publish after shutdown.
+        self.host_alive
+            .store(false, std::sync::atomic::Ordering::Release);
         self.retire_workspace_images();
         self.retire_workspace_image_inputs();
         // Programs get a shared bounded cleanup window and then forceful tree termination. The UI
@@ -325,7 +370,11 @@ impl Manager {
         self.stop_owned_programs();
         self.native_executions.shutdown();
         // Revocation must invalidate workers retained by a host before its last Arc is released.
+        // Declarative services have no Main WASM in `live`; dropping cached preparations
+        // retires their native seals, published requests and retained batch receipts now.
+        self.language_services.clear();
         self.clear_structure_providers();
+        self.clear_direct_providers();
         // Host execution sessions end with the window that owns them; no start is left queued.
         self.host_sessions.retire();
         let _ = self.checkpoint();

@@ -1,5 +1,6 @@
 //! Host-owned document structure tree, native navigation and folding; plugins provide only readonly data.
-mod folding;
+mod demand;
+pub(crate) mod folding;
 mod model;
 mod panel;
 use crate::*;
@@ -45,6 +46,8 @@ pub(crate) struct OutlineState {
     pending: Option<gpui_kit::Task<()>>,
     /// The controller belongs to exactly one native editor; no source or Undo state is copied.
     fold_owner: Option<(Entity<EditorState>, folding::Controller)>,
+    /// Structure materialization retains one frozen source for the actual current document.
+    demand: Option<demand::Demand>,
 }
 impl OutlineState {
     /// Keep one Base interaction state throughout repaint, panel dragging and workspace layout restoration.
@@ -62,6 +65,7 @@ impl OutlineState {
             error: false,
             pending: None,
             fold_owner: None,
+            demand: None,
         }
     }
 }

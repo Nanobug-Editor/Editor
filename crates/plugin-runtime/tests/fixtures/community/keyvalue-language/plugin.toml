@@ -1,0 +1,11 @@
+# This language uses a controlled standard stdio server, without a host-specific language branch.
+[plugin]
+id = "keyvalue-language"
+name = "Key-value Language"
+version = "0.1.0"
+host_version = ">=0.1.0"
+
+[[language_definitions]]
+id = "keyvalue"
+name = "Key-value"
+extensions = ["nbkv"]

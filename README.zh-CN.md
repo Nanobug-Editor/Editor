@@ -14,7 +14,7 @@ XML 插件提供 Schema 辅助、补全、格式化、配对标签编辑与文�
 
 原生插件管理器读取[审核后的插件市场](https://github.com/T-miracle/Nanobug-Plugin-Marketplace)。用户可浏览历史版本和日志，首次安装选择兼容版，已有插件由用户明确升级到更高兼容版；插件按钮红点提示可用升级。下载必须匹配审核 ZIP 的 SHA-256，更新新增权限需再次确认。目录失败时仍可浏览缓存，成功刷新前禁止市场安装；下载次数独立展示测量时间，故障保留旧值。
 
-[文档](documentation/zh-cn/index.md) · [快速开始](documentation/zh-cn/guide/getting-started.md) · [插件 SDK](documentation/zh-cn/sdk/index.md) · [问题反馈](https://github.com/T-miracle/Editor/issues)
+[文档](documentation/zh-cn/index.md) · [快速开始](documentation/zh-cn/guide/getting-started.md) · [插件 SDK 源码](crates/plugin-protocol/src/lib.rs) · [维护者资料](docs/README.md) · [问题反馈](https://github.com/T-miracle/Editor/issues)
 
 ## 安装
 
@@ -122,7 +122,7 @@ cargo check --workspace
 
 修改 `editor-app` 时还需运行相关 UI 测试与原生交互验收；实际 WASM 包的 ignored 测试需先构建夹具，再显式执行。纯文档变更检查链接、路径及 `git diff --check`。
 
-面向读者的使用说明与 SDK 正文以普通 Markdown 保存在 [documentation/zh-cn/index.md](documentation/zh-cn/index.md)。项目规格、工单与验收记录维护在 `docs/`。本中文 README 与[英文正本](README.md)同步维护。
+基本运行、构建和打包命令维护在本 README。插件接口用法与公开类型共置于[协议源码](crates/plugin-protocol/src/lib.rs)的注释中。独立 SDK 仅导出 Rust 源码、Cargo 清单、WIT 与 JSON 协议资源，不附带 Markdown。项目规格、工单与验收记录维护在 `docs/`。本中文 README 与[英文正本](README.md)同步维护。
 
 ## 许可
 

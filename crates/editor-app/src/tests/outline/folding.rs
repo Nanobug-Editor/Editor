@@ -137,7 +137,7 @@ fn native_structure_folds_refresh_without_clearing_unrelated_rust(cx: &mut TestA
     );
     visual
         .update(|window, cx| app.update(cx, |app, cx| app.open_file(xml_path.clone(), window, cx)));
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     assert!(
         fold_at(&app, 1, 2, visual),
         "XML comment must be a provider-confirmed native fold"
@@ -150,7 +150,7 @@ fn native_structure_folds_refresh_without_clearing_unrelated_rust(cx: &mut TestA
     });
     // Native multi-line input creates a new revision and changes the comment's complete coverage.
     visual.simulate_input("新的行\n");
-    wait_outline(visual);
+    wait_outline(visual, &app, &mut manager);
     let until = Instant::now() + Duration::from_millis(300);
     while Instant::now() < until {
         visual.executor().advance_clock(Duration::from_millis(10));

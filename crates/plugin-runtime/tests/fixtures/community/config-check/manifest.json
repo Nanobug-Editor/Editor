@@ -1,0 +1,13 @@
+{
+  "id": "config-check", "name": "Configuration Checker", "version": "0.1.0", "protocol": 7,
+  "api": {"base": "^1", "required": {"ui.native": "^1", "editor.documents": "^1.1", "editor.diagnostics": "^1", "workspace.files": "^1.3"}},
+  "component": "config-check.wasm",
+  "permissions": ["editor.read", "editor.diagnostics", "workspace.read", "workspace.write", "ui.panels"],
+  "panels": [{"id": "checker", "title": "Configuration / 配置检查", "position": "right"}],
+  "commands": [
+    {"id": "check", "title": "Check configuration / 检查配置", "menu": true},
+    {"id": "clear", "title": "Clear configuration problems / 清除配置问题", "menu": true},
+    {"id": "probe", "title": "Inspect diagnostic contract"}
+  ],
+  "storage_limit": 1024
+}

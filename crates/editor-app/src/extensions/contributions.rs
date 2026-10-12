@@ -103,7 +103,7 @@ pub fn refresh_entries(root: &Path, installed: &[Installed]) {
         }
     }
     catalog.icon_rules = Arc::new(rules);
-    crate::language::providers::refresh_with_structures(
+    crate::language::providers::refresh_with_language_features(
         root,
         catalog
             .plugins
@@ -138,6 +138,23 @@ pub fn refresh_entries(root: &Path, installed: &[Installed]) {
                 (
                     entry.manifest.id.clone(),
                     entry.manifest.structure_providers.clone(),
+                )
+            })
+            .collect(),
+        // An omitted optional contract contributes no direct role. Publishing its declaration
+        // without an admitted executor would shadow a valid selected standard LSP provider.
+        installed
+            .iter()
+            .filter(|entry| {
+                entry.enabled
+                    && entry.error.is_none()
+                    && entry.compatibility_error().is_none()
+                    && entry.supports_capability("language.direct")
+            })
+            .map(|entry| {
+                (
+                    entry.manifest.id.clone(),
+                    entry.manifest.direct_language_providers.clone(),
                 )
             })
             .collect(),

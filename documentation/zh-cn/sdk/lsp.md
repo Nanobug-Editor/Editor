@@ -96,6 +96,42 @@
 重叠及配额，再应用一次原生原子编辑。最多接受 10000 项，每项替换不超过 16 MiB，
 合并后的替换不超过 32 MiB；无效方案不会部分提交有效前缀。
 
+## 原生引用、代码修复与参数提示
+
+依赖引用查找（`Shift+F12`）、代码修复（`Ctrl+.`）或参数提示（`Ctrl+Shift+Space`）的
+原生消费者时，必需声明 `language.lsp: ">=1.4, <2"`。同一个有效主 LSP 还应分别宣告
+`referencesProvider`、`codeActionProvider`、`signatureHelpProvider`。每种语言仍只有一个
+主 LSP；新增诊断来源与直接角色不会覆盖已有有效选择。
+
+引用的标准 UTF-16 位置针对当前未保存的原生文档解析。目标必须是工作区本地文件，
+读取另一份文档仍需原 owner 的 `workspace.read` 权限。代码动作首发支持完整的当前
+源文档文本修改，可使用 `changes` 或普通带版本 `TextDocumentEdit`。命令、资源操作、
+跨文档修改、annotations、disabled 与未 resolve 的动作作为整体明确拒绝。可接受的
+修复保留原 owner，进入普通 `workspace.files >=1.3` 计划的预览、确认、冲突校验与
+分组撤销。计划可选的 `origin` 仅是只读文档 incarnation/revision 前提，不授予文件或
+编辑权限；即使只改另一个文件，预览确认后也会再次校验源文档。
+
+声明式 LSP 执行上述当前文档修复无需附带 WASM。它必须实际协商 `language.lsp >=1.4`、
+`editor.edit >=1.1`、`workspace.files >=1.3`，并持有原 owner 的 `editor.read`、
+`editor.write` 授权。原生服务 seal 归属普通请求与批次回执；可选生命周期 guest 还把
+自己的 authority 加入同一链。原生发行者最多保留 8 个批次回执、32 个待处理请求，
+不能授权文件操作或另一文档的修改。禁用、替换、工作区撤权和管理器关闭即刻退役原
+seal，包括已经交付的调用。最后一个原生回执持有者释放配额槽；仅取消等待仍保留
+回执供原生 Undo 使用。缺少权限与协商能力分别返回 `PermissionDenied`、
+`CapabilityUnavailable`。
+
+实验角色 `language.direct: ">=0.1, <0.2"` 可在没有原生服务器时提供这三种结果。纯回调
+只接收不可变的文本、版本、光标与设置，不能调用宿主操作；回复须在配额内并匹配原
+请求和文档。不可用的可选能力省略其依赖角色，必需能力不满足则拒绝准入；权限被拒
+不会授予 authority。直接结果与 LSP 复用原生导航、有名称的结果控件、纯文本参数卡
+及普通修复事务。稳定的 `editor.diagnostics: ^1` 可独立发布归属明确的集合，投影到
+已有诊断模型的原生 Problems；两个 owner 的相同诊断仍分别保留。
+
+关闭结果会取消只读等待，切换标签、关闭重开、改源或替换提供者后拒绝迟到交付。
+标准请求发送 `$/cancelRequest`，用户取消保留健康的共享连接，不消耗有限重试次数。
+配额、错误与资源释放的完整契约写在 `direct.rs`、`diagnostics.rs`、`language.rs` 和
+`workspace.rs` 公开类型旁的源码注释中；独立 SDK 导出这些注释，不携带仓库 Markdown。
+
 ## 可选 WASM 钩子
 
 设置 `hook: true` 后，宿主向该包的活动实例发送

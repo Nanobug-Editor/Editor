@@ -8,7 +8,8 @@ use std::io::{Cursor, Write};
 
 /// Test packages use the actual SDK-built component and differ only in declared contracts and assets.
 pub fn package(id: &str, provider: bool, optional: bool, version: &str) -> Package {
-    let archive = frozen_packages::archive("capability-example");
+    // These service/source regressions require the real 0.19 SDK commands, not main's older bare-ID input.
+    let archive = frozen_packages::archive("capability-example-0.19.0");
     let mut files = Package::read(&archive).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!(id);

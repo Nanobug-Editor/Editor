@@ -25,6 +25,7 @@ fn provider_local_session_ids_never_merge_execution_owners() {
                 incarnation.into(),
                 completion,
                 origin,
+                None,
             )
             .unwrap();
     }
@@ -123,6 +124,7 @@ fn a_full_session_table_never_discards_running_executions() {
             index.to_string(),
             completion,
             context_for(&provider.caller, &provider.alive),
+            None,
         );
         if index < MAX_HOST_EXECUTIONS {
             assert!(result.is_ok());
@@ -167,6 +169,7 @@ fn switching_workspaces_does_not_publish_the_previous_session_table() {
             "first-workspace".into(),
             Completion::new(5_000),
             origin,
+            None,
         )
         .unwrap();
     manager
@@ -187,6 +190,9 @@ fn switching_workspaces_does_not_publish_the_previous_session_table() {
 /// Build an ordinary delegation source; no resource or reference internals are opened for tests.
 fn context_for(caller: &Caller, alive: &Arc<AtomicBool>) -> CallContext {
     CallContext {
+        native_waits: Vec::new(),
+        menu: None,
+        origin: crate::plugin_services::InvocationOrigin::Delegated,
         caller: caller.clone(),
         permissions: caller.permissions.clone(),
         lifetimes: vec![alive.clone()],
@@ -250,6 +256,7 @@ fn a_consumer_cannot_list_query_or_stop_another_consumers_session() {
             "one".into(),
             Completion::new(5_000),
             owner.clone(),
+            None,
         )
         .unwrap();
     let mut stranger = owner;
@@ -294,6 +301,7 @@ fn finished_executions_release_capacity_for_later_programs() {
                 index.to_string(),
                 completion,
                 origin.clone(),
+                None,
             )
             .unwrap();
         // Production flips this flag only after a validated pinned-provider status response.

@@ -251,6 +251,7 @@ impl Worker {
             self.watched = watched;
         }
         Reconciliation {
+            file_events: Vec::new(),
             snapshot: Some(self.workspace.snapshot()),
             documents: read_documents(&self.watched),
             renames: Vec::new(),

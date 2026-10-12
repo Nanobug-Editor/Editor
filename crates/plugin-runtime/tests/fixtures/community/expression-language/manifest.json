@@ -1,0 +1,9 @@
+{
+  "id": "expression-language", "name": "Expression Language", "version": "0.1.0", "protocol": 7,
+  "api": {"base": "^1", "required": {"ui.native": "^1", "editor.edit": "^1.1", "language.direct": ">=0.1,<0.2", "workspace.files": "^1.3"}},
+  "contributions": "plugin.toml", "component": "expression-language.wasm",
+  "permissions": ["editor.read", "editor.write", "workspace.read", "ui.panels"],
+  "panels": [{"id": "language", "title": "Expressions / 表达式", "position": "right"}],
+  "direct_language_providers": [{"id": "expressions", "language": "expression", "features": ["references", "code_actions", "signature_help"]}],
+  "storage_limit": 1024
+}

@@ -16,6 +16,9 @@ pub struct Completion<T> {
     wait_alive: Arc<AtomicBool>,
     /// Instance retirement revokes queued native work even before the manager's next polling tick.
     pub(crate) lifetimes: Vec<Arc<AtomicBool>>,
+    /// Ancestor waits observe their real status, including deadlines that elapsed without a poll.
+    /// Completed sources stay valid; only cancellation seals their downstream admissions.
+    wait_sources: Vec<Arc<dyn Fn() -> bool + Send + Sync>>,
 }
 impl<T: Clone> Completion<T> {
     pub fn new(timeout_ms: u32) -> Self {
@@ -24,6 +27,7 @@ impl<T: Clone> Completion<T> {
             deadline: Instant::now() + Duration::from_millis(timeout_ms.into()),
             wait_alive: Arc::new(AtomicBool::new(true)),
             lifetimes: Vec::new(),
+            wait_sources: Vec::new(),
         }
     }
     /// Begin and finish are idempotent even if a publication or completion arrives twice.
@@ -80,6 +84,7 @@ impl<T: Clone> Completion<T> {
             .lifetimes
             .iter()
             .any(|alive| !alive.load(Ordering::Acquire))
+            || self.wait_sources.iter().any(|source_alive| !source_alive())
         {
             let _ = self.cancel(CancelMode::TryTerminate, ErrorCode::InvalidHandle);
             return;
@@ -114,8 +119,30 @@ impl<T: Clone> Completion<T> {
     pub(crate) fn wait_lifetime(&self) -> Arc<AtomicBool> {
         self.wait_alive.clone()
     }
-    /// A forwarded operation cannot admit effects after the original invocation's deadline.
-    pub(crate) fn constrain_deadline(&mut self, parent: &Self) {
+    /// Observe an ancestor's original completion at worker and final-publication admission.
+    /// Service ancestry is acyclic and bounded; observing a completed source does not reuse its
+    /// expired transient deadline or clone its potentially large successful result.
+    pub(crate) fn bind_wait_source<U: Clone + Send + 'static>(&mut self, source: &Completion<U>) {
+        let source = source.clone();
+        self.wait_sources.push(Arc::new(move || {
+            source.expire(Instant::now());
+            !matches!(
+                &source.state.lock().unwrap().1,
+                RequestUpdate::Cancelled { .. }
+            )
+        }));
+    }
+    /// Forwarded activation keeps the original absolute deadline; ceil avoids rounding a live wait to zero.
+    pub(crate) fn remaining_timeout_ms(&self) -> u32 {
+        let remaining = self.deadline.saturating_duration_since(Instant::now());
+        remaining
+            .as_millis()
+            .saturating_add(u128::from(remaining.subsec_nanos() % 1_000_000 != 0))
+            .min(u32::MAX.into()) as u32
+    }
+    /// A forwarded operation cannot admit effects after the original invocation's deadline,
+    /// even when activation and the outer service call return different payload types.
+    pub(crate) fn constrain_deadline<U>(&mut self, parent: &Completion<U>) {
         self.deadline = self.deadline.min(parent.deadline);
     }
     /// Detach a caller's wait while an entered service continues to report owned native work.

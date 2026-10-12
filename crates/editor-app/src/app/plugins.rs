@@ -56,6 +56,9 @@ impl EditorApp {
     /// Persist authority outside the repository and immediately withdraw all workspace presentation.
     pub(crate) fn set_workspace_trusted(&mut self, trusted: bool, cx: &mut Context<Self>) {
         self.session_state.workspace_trusted = trusted;
+        if !trusted {
+            self.plugin_command_intents.revoke();
+        }
         self.persist_session();
         self.extensions
             .update(cx, |panel, cx| panel.set_workspace_trusted(trusted, cx));

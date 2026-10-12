@@ -11,22 +11,34 @@ use wasmtime::{
 };
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
+mod cloud;
+mod commands;
 mod data_files;
+mod decorations;
+mod diagnostics;
+mod direct;
 mod document_events;
 mod editor_requests;
-mod file_discovery;
+pub(crate) mod file_discovery;
+mod icons;
 mod image_inputs;
 mod plugin_services;
 mod preferences;
+mod private;
 mod process_calls;
 mod resource_roots;
+mod selected_resources;
 mod service_replies;
 mod settings;
 mod stdio;
 mod structure;
 mod terminal_calls;
 mod tools;
+mod trees;
+mod workspace_events;
+mod workspace_files;
 use resource_roots::ResourceRoots;
+pub(crate) use workspace_files::NativeDocumentRequests;
 wasmtime::component::bindgen!({path:"../plugin-protocol/wit",world:"plugin",require_store_data_send:true});
 
 struct State {
@@ -43,12 +55,34 @@ struct State {
     editor_requests: std::collections::BTreeMap<u64, crate::editor_requests::PendingRequest>,
     /// Native inputs and their slots share this incarnation; pending writers retain their own immutable payload.
     image_inputs: std::collections::BTreeMap<u64, image_inputs::Input>,
+    /// User-selected targets remain separate from workspace and private-data roots.
+    selected_resources: std::collections::BTreeMap<u64, selected_resources::Selection>,
+    /// IO leases and recovery slots remain separate from mutable native document state.
+    file_root_lifetimes:
+        std::collections::BTreeMap<u64, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    workspace_batches: std::collections::BTreeMap<u64, std::sync::Arc<crate::WorkspaceBatch>>,
+    file_subscriptions: std::collections::BTreeMap<u64, crate::workspace_events::Subscription>,
+    /// Pull streams and timers reuse this instance's revocable handle table.
+    http_streams: std::collections::BTreeMap<u64, crate::http::Stream>,
+    timers: std::collections::BTreeMap<u64, cloud::Timer>,
     declared_panels: BTreeSet<String>,
     /// Editor toolbar authority is confined to this package's declared workspace preview surfaces.
     declared_editor_panels: BTreeSet<String>,
     /// Auxiliary tools never gain authority to publish the whole file layout.
     declared_layout_panels: BTreeSet<String>,
     subscriptions: std::collections::BTreeMap<u64, crate::document_events::Subscription>,
+    /// Rich events require a separate opt-in handle so older SDKs never see unknown variants.
+    document_streams: std::collections::BTreeMap<u64, crate::document_stream::Subscription>,
+    /// Persistent readonly authority survives request completion but not instance retirement.
+    virtual_documents:
+        std::collections::BTreeMap<u64, std::sync::Arc<crate::VirtualDocumentResource>>,
+    /// The native document owns diagnostic data; runtime slots retain only source authority.
+    diagnostic_collections:
+        std::collections::BTreeMap<u64, std::sync::Arc<crate::DiagnosticCollection>>,
+    /// Owned metadata survives UI publication, while retirement seals every native projection.
+    trees: std::collections::BTreeMap<u64, std::sync::Arc<crate::TreeResource>>,
+    /// Marker collections retain only unforgeable lifetime/document metadata; native text owns positions.
+    decorations: std::collections::BTreeMap<u64, std::sync::Arc<crate::DecorationResource>>,
     preference_subscriptions: std::collections::BTreeMap<u64, preferences::Subscription>,
     wasi: WasiCtx,
     table: ResourceTable,
@@ -66,6 +100,10 @@ struct State {
     data: PathBuf,
     assets: PathBuf,
     active: bool,
+    /// The trusted manager opens private directory authority and irreversible credential mutations
+    /// only after durable publication.
+    /// Flushing staged private files is preparation work and never grants this authority.
+    activation_committed: bool,
     /// A bounded discovery invocation can read granted resources without launching native work.
     language_hook: bool,
     /// Separate stateless language workers reject every host operation, including during Prepare.
@@ -74,6 +112,8 @@ struct State {
     language_completion_call: bool,
     /// Only this callback may publish a structure proposal; it cannot impersonate completion data.
     language_structure_call: bool,
+    /// Only the experimental pure callback may return direct feature data.
+    language_direct_call: bool,
     /// Read-only discovery can release only the file roots allocated by its own hook.
     language_hook_checkpoint: Option<u64>,
     /// Migration grants access exclusively to a transaction's isolated private-data copy.
@@ -100,6 +140,7 @@ pub(crate) fn safe_path(root: &Path, relative: &str, existing: bool) -> anyhow::
     anyhow::ensure!(
         !relative.is_empty()
             && !relative.contains(['\\', ':'])
+            && !relative.split('/').any(api::is_windows_device_segment)
             && Path::new(relative)
                 .components()
                 .all(|c| matches!(c, std::path::Component::Normal(_))),
@@ -326,7 +367,18 @@ impl Instance {
             roots: ResourceRoots::new(&environment.workspace, application, manifest.storage_limit),
             editor_requests: Default::default(),
             image_inputs: Default::default(),
+            selected_resources: Default::default(),
+            file_root_lifetimes: Default::default(),
+            workspace_batches: Default::default(),
+            file_subscriptions: Default::default(),
+            http_streams: Default::default(),
+            timers: Default::default(),
             subscriptions: Default::default(),
+            document_streams: Default::default(),
+            virtual_documents: Default::default(),
+            diagnostic_collections: Default::default(),
+            trees: Default::default(),
+            decorations: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest
                 .panels
@@ -358,10 +410,12 @@ impl Instance {
             data,
             assets,
             active: false,
+            activation_committed: false,
             language_hook: false,
             language_pure: pure,
             language_completion_call: false,
             language_structure_call: false,
+            language_direct_call: false,
             language_hook_checkpoint: None,
             migrating: false,
             staged_writes: Some(Default::default()),
@@ -369,6 +423,16 @@ impl Instance {
         state.plugin_services.principal =
             state.roots.principal(&manifest.id, &manifest.permissions);
         state.plugin_services.declarations = manifest.plugin_services.clone();
+        state.plugin_services.commands = manifest
+            .commands
+            .iter()
+            .filter_map(|command| {
+                command
+                    .signature
+                    .clone()
+                    .map(|method| (command.id.clone(), method))
+            })
+            .collect();
         let mut store = Store::new(engine, state);
         store.limiter(|s| &mut s.limits);
         store.set_fuel(100_000_000)?;
@@ -599,6 +663,15 @@ impl Instance {
         }
         Ok(originals)
     }
+    /// Publish authority only after the owner manager has committed its version/configuration.
+    pub(crate) fn commit_activation(&mut self) {
+        debug_assert!(
+            self.store.data().active
+                && !self.store.data().roots.retired
+                && self.store.data().staged_writes.is_none()
+        );
+        self.store.data_mut().activation_committed = true;
+    }
     /// Restore only files touched by this transaction; unrelated plugin data stays intact.
     pub(crate) fn rollback_data(originals: &[(PathBuf, Option<Vec<u8>>)]) -> anyhow::Result<()> {
         for (path, bytes) in originals.iter().rev() {
@@ -610,13 +683,37 @@ impl Instance {
         }
         Ok(())
     }
-    /// Seal already-published work before the final snapshot, while retaining private-file access for serialization.
+    /// Seal published work at retirement, after any final snapshot has used its still-live owned resources.
     pub(crate) fn quiesce(&mut self) {
+        self.store.data_mut().activation_committed = false;
+        self.store.data_mut().http_streams.clear();
+        self.store.data_mut().timers.clear();
+        self.store.data_mut().clear_temporary_data();
         self.clear_image_inputs();
+        self.store.data_mut().clear_selections();
+        self.store.data_mut().clear_workspace_resources();
+        self.store.data_mut().file_subscriptions.clear();
         // Native cleanup keeps its original observer before quiesce seals delegated service roots.
         self.store.data_mut().retire_native_processes();
         self.store.data_mut().plugin_services.clear();
         self.store.data_mut().subscriptions.clear();
+        self.store.data_mut().document_streams.clear();
+        for resource in self.store.data_mut().virtual_documents.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().virtual_documents.clear();
+        for collection in self.store.data_mut().diagnostic_collections.values() {
+            collection.revoke();
+        }
+        self.store.data_mut().diagnostic_collections.clear();
+        for tree in self.store.data().trees.values() {
+            tree.revoke();
+        }
+        self.store.data_mut().trees.clear();
+        for resource in self.store.data().decorations.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().decorations.clear();
         self.store.data_mut().preference_subscriptions.clear();
         for request in self.store.data_mut().editor_requests.values() {
             request.call.retire();
@@ -642,31 +739,9 @@ impl Instance {
     pub fn resource_count(&self) -> usize {
         self.store.data().roots.len() + self.views.len() + self.process_count()
     }
-    /// Rollback is an explicit host transition with fresh ownership, never revival of old handles.
-    pub(crate) fn restart(
-        &mut self,
-        mut environment: Environment,
-        snapshot: Option<Snapshot>,
-    ) -> anyhow::Result<()> {
-        if self.store.data().roots.application {
-            environment.workspace.clear();
-        }
-        let roots = self.store.data().roots.renewed(&environment.workspace);
-        self.store.data_mut().roots = roots;
-        let principal = self.store.data().roots.principal(
-            &self.store.data().plugin_services.principal.plugin,
-            &self.store.data().permissions,
-        );
-        self.store.data_mut().plugin_services.principal = principal;
-        // A restarted owner cannot revive authority captured by an earlier incarnation.
-        self.store.data_mut().plugin_services.alive =
-            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-        self.store.data_mut().staged_writes = Some(std::collections::BTreeMap::new());
-        self.prepare_state(environment, snapshot)?;
-        self.reapply_settings()?;
-        self.activate()?;
-        self.commit_data()?;
-        Ok(())
+    /// Immutable instance authority is shared by every native language/diagnostic consumer.
+    pub(crate) fn editor_authority(&self) -> crate::EditorAuthority {
+        crate::EditorAuthority::new(self.store.data().plugin_services.alive.clone(), None)
     }
     pub fn process_ids(&self) -> Vec<u32> {
         self.store.data().processes.ids()
@@ -674,14 +749,20 @@ impl Instance {
     pub fn poll(&mut self) -> anyhow::Result<bool> {
         self.reconcile_image_inputs();
         self.retire_service_sources();
+        let trees_changed = self.prune_trees()?;
         self.poll_service_replies()?;
         let revoked = self.poll_service_revocations()?;
         self.poll_service_requests()?;
         self.poll_editor_requests()?;
         self.poll_document_events()?;
+        self.poll_document_streams()?;
+        self.poll_workspace_events()?;
         let preferences_changed = self.poll_preferences()?;
+        let timers_changed = self.poll_timers()?;
         let events = self.store.data_mut().poll_processes()?;
-        let changed = revoked || preferences_changed || !events.is_empty();
+        // Tree retirement and timer callbacks both change the instance's published native state.
+        let changed =
+            revoked || trees_changed || preferences_changed || timers_changed || !events.is_empty();
         for event in events {
             // Exit removes its slot, but the last callback still inherits the originating service authority.
             let context = if let api::Notification::Process { handle, .. } = &event {

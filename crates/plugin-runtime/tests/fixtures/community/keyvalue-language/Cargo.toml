@@ -1,0 +1,16 @@
+[package]
+name = "keyvalue-language-guest"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+
+# Service configuration is a real public language hook, built using the host SDK cache.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1.0"

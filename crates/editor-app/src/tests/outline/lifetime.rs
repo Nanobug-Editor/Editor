@@ -1,5 +1,15 @@
 //! A real independent WASM failure revokes the current native tree without a subsequent user event.
-use super::*;
+//! Mounted under the model's tests so completion ownership can be inspected before any final paint.
+use crate::extensions::lsp_tests::publish;
+use crate::tests::wait_outline_node;
+use crate::*;
+use gpui_kit::{TestAppContext, gpui};
+use std::{
+    cell::{Cell, RefCell},
+    io::{Cursor, Write},
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 /// Add recognition to the independently SDK-built hostile guest; no fake LSP or grammar is needed for structure.
 fn hostile_package() -> plugin_runtime::Package {
@@ -67,7 +77,18 @@ fn native_structure_trap_clears_tree_without_another_document_event(cx: &mut Tes
     let app = slot.borrow_mut().take().unwrap();
     publish(&app, &mut manager, visual);
     visual.update(|window, cx| app.update(cx, |app, cx| app.open_file(path.clone(), window, cx)));
-    wait_node(visual, "outline-node-/0");
+    wait_outline_node(visual, &app, &mut manager, "outline-node-/0");
+    // Retain the actual healthy lease so a later catalog replacement cannot stand in for its retirement.
+    let provider = manager.structure_providers()["capability-example/definitions"]
+        .as_ref()
+        .unwrap()
+        .clone();
+    assert!(provider.is_active());
+    let original = visual.update(|_, cx| {
+        let app = app.read(cx);
+        app.plugin_document_version(app.active_text_tab_index().unwrap())
+            .unwrap()
+    });
     visual.update(|window, cx| {
         app.read(cx).editor.clone().update(cx, |editor, cx| {
             editor.set_selected_range(0..editor.text().len(), cx);
@@ -75,24 +96,81 @@ fn native_structure_trap_clears_tree_without_another_document_event(cx: &mut Tes
         })
     });
     visual.simulate_input("trap");
-    // This one input frame starts the new immutable request; later failure must invalidate it on its own completion.
+    // Prove native input changed this document before investigating a guest or completion failure.
+    let changed = visual.update(|_, cx| {
+        let app = app.read(cx);
+        assert_eq!(app.editor.read(cx).text().to_string(), "trap");
+        app.plugin_document_version(app.active_text_tab_index().unwrap())
+            .unwrap()
+    });
+    assert_eq!(changed.id, original.id);
+    assert_eq!(changed.path, original.path);
+    assert!(changed.revision > original.revision);
+    // Each new source version needs a receipt even for a warm provider. The test Worker records
+    // messages instead of running an actor, so deliver this original demand before description.
+    // Only this launch phase pumps/draws; the later trap must clear itself without another event.
+    visual.update(|window, cx| window.draw(cx).clear(cx));
+    publish(&app, &mut manager, visual);
+    assert!(std::sync::Arc::ptr_eq(
+        &provider,
+        manager.structure_providers()["capability-example/definitions"]
+            .as_ref()
+            .unwrap()
+    ));
+    // The initial version transition already clears the old tree. Observe the window's real
+    // application notification only after this original request's target and task are retired;
+    // an extra paint must not repair a missing completion cleanup or notification.
+    let completion_notified = Rc::new(Cell::new(false));
+    let _completion_subscription = visual.update(|window, cx| {
+        let notified = completion_notified.clone();
+        let expected = changed.clone();
+        let provider = provider.clone();
+        window.observe(&app, cx, move |app, _, cx| {
+            let app = app.read(cx);
+            let current = app
+                .active_text_tab_index()
+                .and_then(|index| app.plugin_document_version(index).ok());
+            if current.as_ref() == Some(&expected)
+                && !provider.is_active()
+                && app.outline.target.is_none()
+                && app.outline.pending.is_none()
+                && app.outline.tree.read(cx).entry(0).is_none()
+            {
+                notified.set(true);
+            }
+        })
+    });
     visual.update(|window, cx| window.draw(cx).clear(cx));
     let deadline = Instant::now() + Duration::from_secs(8);
     loop {
         visual.executor().advance_clock(Duration::from_millis(10));
         visual.run_until_parked();
-        let empty = visual.update(|_, cx| app.read(cx).outline.tree.read(cx).entry(0).is_none());
-        let active = manager.structure_providers()["capability-example/definitions"]
-            .as_ref()
-            .unwrap()
-            .is_active();
+        let (empty, target_clear, pending_clear, current) = visual.update(|_, cx| {
+            let app = app.read(cx);
+            (
+                app.outline.tree.read(cx).entry(0).is_none(),
+                app.outline.target.is_none(),
+                app.outline.pending.is_none(),
+                app.active_text_tab_index()
+                    .and_then(|index| app.plugin_document_version(index).ok()),
+            )
+        });
+        let active = provider.is_active();
+        let notified = completion_notified.get();
         // Do not force another frame while the callback is running: its own notification must revoke this target.
-        if empty && !active {
+        if empty
+            && target_clear
+            && pending_clear
+            && !active
+            && current.as_ref() == Some(&changed)
+            && notified
+        {
             break;
         }
         assert!(
             Instant::now() < deadline,
-            "trapped structure did not revoke its native outline"
+            "trapped structure did not revoke and notify its native outline: empty={empty}; target_clear={target_clear}; pending_clear={pending_clear}; provider_active={active}; notified={notified}; expected={changed:?}; current={current:?}; actual_text={:?}",
+            visual.update(|_, cx| app.read(cx).editor.read(cx).text().to_string())
         );
         std::thread::sleep(Duration::from_millis(15));
     }

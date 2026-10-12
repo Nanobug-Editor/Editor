@@ -1,7 +1,7 @@
 //! Immutable jobs replace the tree only after checking the current target, revision and provider lease.
 use super::*;
 use gpui_base::input::{FoldRange, RopeExt as _};
-use plugin_runtime::plugin_protocol::{language::SourceSnapshot, structure::Node};
+use plugin_runtime::plugin_protocol::structure::Node;
 
 impl EditorApp {
     /// Resolve the independent structure role without tying it to a grammar or native language service.
@@ -12,6 +12,10 @@ impl EditorApp {
         let index = self.active_text_tab_index()?;
         let language = language::providers::language_for_path(self.tabs[index].path())?;
         let choice = language::providers::structure_provider(&language)?;
+        let original = self.outline.demand.as_ref().filter(|demand| demand.ready)?;
+        if self.plugin_document_version(index).ok().as_ref() != Some(&original.source.document) {
+            return None;
+        }
         let provider = self
             .extensions
             .read(cx)
@@ -31,6 +35,7 @@ impl EditorApp {
 
     /// Called from the shell; unchanged snapshots do no background work and never reset dock proportions.
     pub(crate) fn sync_outline(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_outline_demand(cx);
         let target = self.outline_target(cx);
         if target != self.outline.target {
             let retain_browsing = matches!((&target, &self.outline.target), (Some(next), Some(previous))
@@ -70,17 +75,26 @@ impl EditorApp {
                 }
             }
             if let Some(target) = target {
-                let (_, controller) = self.outline.fold_owner.get_or_insert_with(|| {
-                    (
-                        self.editor.clone(),
-                        folding::Controller::attach(&self.editor, cx),
-                    )
-                });
+                let highlighter = self.tabs
+                    [self.active_text_tab_index().expect("validated text target")]
+                .text
+                .as_ref()
+                .expect("validated text")
+                .highlighter
+                .clone();
+                let (_, controller) = self
+                    .outline
+                    .fold_owner
+                    .get_or_insert_with(|| (self.editor.clone(), highlighter));
                 controller.replace(Vec::new(), &self.editor, cx);
-                let source = SourceSnapshot {
-                    document: target.version.clone(),
-                    text: self.editor.read(cx).text().to_string(),
-                };
+                let source = self
+                    .outline
+                    .demand
+                    .as_ref()
+                    .filter(|demand| demand.source.document == target.version)
+                    .expect("receipt-bound original structure source")
+                    .source
+                    .clone();
                 let provider = target.provider.clone();
                 self.outline.pending = Some(cx.spawn_in(window, async move |owner, cx| {
                     let response = cx
@@ -111,6 +125,17 @@ impl EditorApp {
                     });
                 }));
             }
+            self.outline_panel.update(cx, |_, cx| cx.notify());
+        }
+        // Clearing a previous live tree must not erase a cold activation's original failure.
+        if self
+            .outline
+            .demand
+            .as_ref()
+            .is_some_and(|demand| demand.failed)
+            && !self.outline.error
+        {
+            self.outline.error = true;
             self.outline_panel.update(cx, |_, cx| cx.notify());
         }
         self.follow_outline_cursor(cx);

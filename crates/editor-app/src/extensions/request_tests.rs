@@ -40,6 +40,19 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
         Root::new(app, window, cx)
     });
     let app = slot.borrow_mut().take().unwrap();
+    // This solo-panel fixture measures the plugin panel's width. Default-visible messages
+    // share its right dock and legitimately retain that region when only the plugin is hidden.
+    // Remove this unrelated native leaf through Base's public layout API rather than changing
+    // production shared-dock policy or assuming that a hidden peer has no retained identity.
+    cx.update(|window, cx| {
+        app.update(cx, |owner, cx| {
+            let messages = owner.messages.clone();
+            messages.update(cx, |panel, cx| panel.set_visible(false, cx));
+            owner
+                .dock_area
+                .update(cx, |area, cx| area.remove_panel(messages, window, cx));
+        });
+    });
     cx.simulate_resize(size(px(1200.), px(800.)));
     cx.run_until_parked();
     cx.update(|window, cx| {
@@ -62,6 +75,12 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
     });
     cx.run_until_parked();
     let request = |manager: &mut plugin_runtime::Manager, operation| {
+        super::package_ui_test_support::demand(
+            manager,
+            &package.manifest.id,
+            plugin_runtime::DemandReason::Command("scope-probe".into()),
+        )
+        .unwrap();
         manager
             .invoke_command(
                 &package.manifest.id,
@@ -199,6 +218,7 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: vec![(
                         path.canonicalize().unwrap(),
@@ -273,6 +293,7 @@ fn typed_editor_requests_read_selection_and_save_without_switching_documents(
             std::fs::rename(&path, &renamed).unwrap();
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: Some(app.workspace.snapshot()),
                     documents: Vec::new(),
                     renames: vec![(old, renamed.canonicalize().unwrap())],

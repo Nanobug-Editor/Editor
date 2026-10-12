@@ -1,5 +1,7 @@
 //! Document lifecycle and editor-area presentation.
 
+pub(crate) mod comparison;
+pub(crate) mod decorations;
 #[cfg(test)]
 mod definition_tests;
 pub(crate) mod diagnostics;
@@ -12,10 +14,14 @@ mod file_watch_tests;
 #[cfg(test)]
 mod hover_hit_test;
 pub(crate) mod language_edits;
+pub(crate) mod language_features;
 pub(crate) mod linked_input;
 mod pointer_hover;
+mod resources;
 mod source;
 pub(crate) mod tabs;
+mod text_session;
+pub(crate) mod text_transactions;
 pub(crate) use popovers::{CompletionPopupState, DefinitionPopupFocus};
 mod popovers;
 pub(crate) use text_drag::TextDragState;

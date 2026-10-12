@@ -1,8 +1,11 @@
 # Plugin SDK
 
-现行公开契约以源码注释及 WIT/JSON 资源为准；SDK 仅导出构建输入，不包含仓库 Markdown 文档。下列链接保留既有资料入口。
+公开契约的用途、权限、错误、限额、兼容与释放义务维护在 [Rust 源码注释](src/lib.rs)，供宿主和独立访客使用。多来源诊断见 [diagnostics](src/diagnostics.rs)，实验直接语言结果见 [direct](src/direct.rs)，标准 LSP 的实际能力边界见 [language](src/language.rs)，预览修复与只读源前提见 [workspace](src/workspace.rs)。
 
-- [English](../../documentation/en/sdk/index.md)
-- [简体中文](../../documentation/zh-cn/sdk/index.md)
+SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 或其他仓库读者资料。
 
-本目录保留版本化 Rust 类型、WIT 与 JSON 方法结构，供宿主和独立访客使用；本文仅作为迁移入口。
+HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 [http](src/http.rs)、[secrets](src/secrets.rs)、[storage](src/storage.rs)、[timers](src/timers.rs)、[tree](src/tree.rs) 与 [decorations](src/decorations.rs)。
+
+默认按命令、语言、视图或服务需求启动，后台用途须明确声明，见 [activation](src/activation.rs)。结构化配置、变化通知、适用的热应用与密钥引用见 [settings](src/settings.rs)；宿主版本下限、稳定同 major 演进、实验能力及迁移义务见 [lib](src/lib.rs)。包版本、传输协议、能力版本和宿主版本分别处理。
+
+独立 SDK 只导出本 crate 的源码、Cargo 清单、WIT 与 JSON 协议资源，不内嵌或导出 Markdown。旧双语读者资料保留在 [documentation](../../documentation/README.md)，不替代当前源码契约。

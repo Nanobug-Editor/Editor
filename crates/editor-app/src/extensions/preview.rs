@@ -250,6 +250,7 @@ impl EditorApp {
         let selected = self.active_editor_preview(cx);
         let version = self
             .active_tab_index()
+            .filter(|index| self.tabs[*index].virtual_document.is_none())
             .and_then(|index| self.plugin_document_version(index).ok());
         let expected_file = self
             .active_tab_index()
@@ -257,6 +258,7 @@ impl EditorApp {
             .map(|file| file.version);
         let context = self
             .active_text_tab_index()
+            .filter(|index| self.tabs[*index].virtual_document.is_none())
             .and_then(|index| self.text_tab(index))
             .map(|text| (text.path().to_path_buf(), text.session.revision()));
         for panel in self.plugin_panels.values() {
@@ -265,6 +267,17 @@ impl EditorApp {
             }
             let active = self.file_panel_is_active(panel, &selected, cx);
             panel.update(cx, |panel, cx| {
+                // The same preview panel can stay selected across a tab switch. Withdraw the
+                // original wait before the next document is allowed to demand this view.
+                if !active
+                    || panel
+                        .preview_version
+                        .as_ref()
+                        .zip(version.as_ref())
+                        .is_some_and(|(old, next)| old != next)
+                {
+                    panel.view_demand.borrow_mut().cancel();
+                }
                 // File identity and text are one ordered publication. Do not send new text while
                 // its FilePreview is still waiting for the previous parse or the cadence timer.
                 let file_bound = panel.entries.iter().any(|entry| {
@@ -398,6 +411,9 @@ impl EditorApp {
                 });
             let active = context.is_some() && participates && file_contract;
             panel.update(cx, |panel, cx| {
+                if !active {
+                    panel.view_demand.borrow_mut().cancel();
+                }
                 if active {
                     let file = context
                         .as_ref()
@@ -405,6 +421,14 @@ impl EditorApp {
                         .cloned();
                     let version = file.as_ref().map(|file| file.version.clone());
                     let source = file.as_ref().and_then(|file| file.text.clone());
+                    if panel
+                        .preview_file
+                        .as_ref()
+                        .zip(version.as_ref())
+                        .is_some_and(|(old, next)| old != next)
+                    {
+                        panel.view_demand.borrow_mut().cancel();
+                    }
                     if let Some(source) = &source
                         && panel.preview_version.as_ref() != Some(source)
                         && panel.defer_source_publication(source, cx)
@@ -488,6 +512,13 @@ impl EditorApp {
         let file = self.tabs.get(index).ok_or_else(|| {
             protocol::api::Failure::new(protocol::api::ErrorCode::NotFound, "File is closed")
         })?;
+        // Legacy file previews promise a local FileVersion; only new resource APIs opt into virtual text.
+        if file.virtual_document.is_some() {
+            return Err(protocol::api::Failure::new(
+                protocol::api::ErrorCode::UnsupportedOperation,
+                "Virtual resources have no local FileContext",
+            ));
+        }
         let relative = file
             .path()
             .strip_prefix(self.workspace.root())

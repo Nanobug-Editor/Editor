@@ -1,9 +1,10 @@
-//! Export the host's SDK sources and protocol resources to independent plugin builds.
+//! Export the host's SDK sources and protocol resources for independent plugin builds.
 //!
 //! `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]` prepares a
-//! content-addressed SDK cache and supplies Cargo's dependency override automatically.
-//! `--export-plugin-sdk <directory>` publishes the same sources for other toolchains.
-//! Usage guidance lives in Rust comments; Markdown documents are never bundled here.
+//! content-addressed source cache and supplies Cargo's dependency override automatically.
+//! `--export-plugin-sdk <directory>` publishes the same inputs for other toolchains.
+//! Only protocol Rust sources, Cargo metadata, WIT and JSON resources are embedded.
+//! Interface guidance stays beside the public Rust types; Markdown is not embedded or exported.
 use anyhow::Context;
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -11,6 +12,60 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // Old and new independent guests share the same documented demand/default lifecycle contract.
+    (
+        "src/activation.rs",
+        include_bytes!("../../plugin-protocol/src/activation.rs"),
+    ),
+    // Stable diagnostics and experimental direct callbacks ship the identical versioned contracts.
+    (
+        "src/diagnostics.rs",
+        include_bytes!("../../plugin-protocol/src/diagnostics.rs"),
+    ),
+    (
+        "src/direct.rs",
+        include_bytes!("../../plugin-protocol/src/direct.rs"),
+    ),
+    // Files and recovery receipts use the same public contract in every independent consumer.
+    (
+        "src/workspace.rs",
+        include_bytes!("../../plugin-protocol/src/workspace.rs"),
+    ),
+    // Independent projects receive the host's exact original-revision multi-range contract.
+    (
+        "src/api/edits.rs",
+        include_bytes!("../../plugin-protocol/src/api/edits.rs"),
+    ),
+    // General cloud and private-state contracts accompany every independent guest SDK.
+    (
+        "src/http.rs",
+        include_bytes!("../../plugin-protocol/src/http.rs"),
+    ),
+    (
+        "src/secrets.rs",
+        include_bytes!("../../plugin-protocol/src/secrets.rs"),
+    ),
+    (
+        "src/timers.rs",
+        include_bytes!("../../plugin-protocol/src/timers.rs"),
+    ),
+    (
+        "src/storage.rs",
+        include_bytes!("../../plugin-protocol/src/storage.rs"),
+    ),
+    // Document contracts ship in the exact same SDK used by the host consumer.
+    (
+        "src/api/documents.rs",
+        include_bytes!("../../plugin-protocol/src/api/documents.rs"),
+    ),
+    (
+        "src/commands.rs",
+        include_bytes!("../../plugin-protocol/src/commands.rs"),
+    ),
+    (
+        "src/interaction.rs",
+        include_bytes!("../../plugin-protocol/src/interaction.rs"),
+    ),
     (
         "src/api/preference_binding.rs",
         include_bytes!("../../plugin-protocol/src/api/preference_binding.rs"),
@@ -37,7 +92,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/run-targets.json",
         include_bytes!("../../plugin-protocol/src/run-targets.json"),
     ),
-    // The canonical optional debug signatures are packaged with their Rust SDK accessor.
     (
         "src/debug.rs",
         include_bytes!("../../plugin-protocol/src/debug.rs"),
@@ -46,7 +100,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/debug-session.json",
         include_bytes!("../../plugin-protocol/src/debug-session.json"),
     ),
-    // Independent providers receive the same bounded observation contract as the host.
     (
         "src/execution.rs",
         include_bytes!("../../plugin-protocol/src/execution.rs"),
@@ -91,7 +144,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/language.rs",
         include_bytes!("../../plugin-protocol/src/language.rs"),
     ),
-    // Pure structure providers build independently against the same versioned data types as the host.
     (
         "src/structure.rs",
         include_bytes!("../../plugin-protocol/src/structure.rs"),
@@ -136,7 +188,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/validate.rs",
         include_bytes!("../../plugin-protocol/src/ui/validate.rs"),
     ),
-    // Incremental native publication is part of the same independently exported public SDK.
     (
         "src/ui/incremental.rs",
         include_bytes!("../../plugin-protocol/src/ui/incremental.rs"),
@@ -156,6 +207,19 @@ const SDK_FILES: &[(&str, &[u8])] = &[
     (
         "wit/plugin.wit",
         include_bytes!("../../plugin-protocol/wit/plugin.wit"),
+    ),
+    // Trees and native marker consumers compile against the same bounded contract as this host.
+    (
+        "src/tree.rs",
+        include_bytes!("../../plugin-protocol/src/tree.rs"),
+    ),
+    (
+        "src/decorations.rs",
+        include_bytes!("../../plugin-protocol/src/decorations.rs"),
+    ),
+    (
+        "src/ui/presentation_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/presentation_tests.rs"),
     ),
 ];
 
@@ -260,10 +324,10 @@ fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
     Ok(target)
 }
 
-/// Publish SDK source and protocol resources into `target`, without Markdown documents.
+/// Publish Rust sources, Cargo manifests, WIT and JSON protocol resources into `target`.
 ///
-/// Existing unrelated files are preserved. Unchanged SDK files retain Cargo freshness;
-/// incomplete files are atomically repaired. Directory creation and write failures propagate.
+/// Existing unrelated files are preserved. Unchanged sources retain Cargo freshness;
+/// incomplete files are atomically repaired. Directory and write failures propagate.
 pub fn export(target: &Path) -> anyhow::Result<()> {
     for (relative, bytes) in SDK_FILES {
         let path = target.join(relative);
@@ -294,9 +358,77 @@ fn publish(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    /// The guest SDK consists solely of the protocol crate's buildable sources and schemas.
+    #[test]
+    fn sdk_contains_only_protocol_source_and_schemas() {
+        assert!(SDK_FILES.iter().all(|(name, _)| *name == "Cargo.toml"
+            || name.ends_with(".rs")
+            || name.ends_with(".wit")
+            || name.ends_with(".json")));
+        assert!(SDK_FILES.iter().any(|(name, _)| *name == "src/tree.rs"));
+        assert!(
+            SDK_FILES
+                .iter()
+                .any(|(name, _)| *name == "src/decorations.rs")
+        );
+    }
+
     use super::*;
 
-    /// Two independent host invocations can publish a fresh SDK concurrently without partial files.
+    /// Independent SDKs carry the guest contract as source comments, never embedded reader Markdown.
+    #[test]
+    fn independent_sdk_exports_only_protocol_source_resources() {
+        fn inspect(path: &Path) {
+            for entry in std::fs::read_dir(path).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    inspect(&path);
+                } else {
+                    assert!(
+                        matches!(
+                            path.extension().and_then(|value| value.to_str()),
+                            Some("rs" | "toml" | "wit" | "json")
+                        ),
+                        "Independent SDK contains a non-source resource: {}",
+                        path.display()
+                    );
+                }
+            }
+        }
+        let root = tempfile::tempdir().unwrap();
+        export(root.path()).unwrap();
+        inspect(root.path());
+        for required in [
+            "Cargo.toml",
+            "src/lib.rs",
+            "src/activation.rs",
+            "src/settings.rs",
+            "wit/plugin.wit",
+            "src/http.rs",
+            "src/secrets.rs",
+            "src/storage.rs",
+            "src/timers.rs",
+            "src/diagnostics.rs",
+            "src/direct.rs",
+            "src/workspace.rs",
+            "src/api/documents.rs",
+            "src/commands.rs",
+            "src/interaction.rs",
+            "src/configurations.rs",
+            "src/configurations/command_form.rs",
+            "src/debug.rs",
+            "src/targets.rs",
+            "src/debug-session.json",
+            "src/run-targets.json",
+        ] {
+            assert!(
+                root.path().join(required).is_file(),
+                "Missing public SDK resource {required}"
+            );
+        }
+    }
+
+    /// Concurrent first-use exports never publish partial source bytes or divergent resources.
     #[test]
     fn concurrent_sdk_exports_converge() {
         let root = tempfile::tempdir().unwrap();
@@ -371,7 +503,7 @@ mod tests {
         assert_eq!(std::fs::read(note).unwrap(), b"caller-owned notes");
     }
 
-    /// Cache repair keeps its identity and avoids rewriting intact compilation inputs.
+    /// Content-addressed caches retain build freshness and repair interrupted source/schema publication.
     #[test]
     fn cached_contract_is_complete_reused_and_repairs_corruption() {
         let root = tempfile::tempdir().unwrap();

@@ -1,12 +1,15 @@
 //! Unified public-SDK Rust package acceptance: offline Cargo, lazy preparation, replacement and load cost.
 #![cfg(windows)]
+/// Explicit consumption replaces retired eager installation assumptions in real package regressions.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Historical migration inputs retain their exact bytes and versions, independently of the removed source trees.
 #[path = "support/packages.rs"]
 mod frozen_packages;
 #[path = "support/debugger_packages.rs"]
 mod packages;
 use plugin_runtime::{
-    InstallControl, Manager, Package, TargetRequest,
+    DemandReason, InstallControl, Manager, Package, TargetRequest,
     plugin_protocol::{
         Environment,
         api::{self, RequestUpdate},
@@ -85,13 +88,17 @@ fn lazy_failure_keeps_cargo_and_the_language_contributions_available() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
-    assert_eq!(manager.live["rust"].process_count(), 0);
+    assert!(
+        !manager.live.contains_key("rust"),
+        "installation stays cold"
+    );
     assert_eq!(manager.installed["rust"].manifest.language_servers.len(), 1);
     assert!(package.files.contains_key("grammar/rust.wasm"));
     let request = manager
         .begin_debug_call("start", json!({"program":"missing.exe","args":[]}))
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(10);
+    // The first explicit debug request includes cold guest compilation within its original deadline.
+    let deadline = Instant::now() + Duration::from_secs(120);
     loop {
         manager.poll();
         if let RequestUpdate::Completed { result } = request.status() {
@@ -144,7 +151,8 @@ fn cancelled_dependency_download_allows_concurrent_cargo_and_never_starts_a_targ
     let request = manager
         .begin_debug_call("start", json!({"program":"missing.exe","args":[]}))
         .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(10);
+    // Cold birth may compile the real WASM before the retained start begins dependency acquisition.
+    let deadline = Instant::now() + Duration::from_secs(120);
     loop {
         manager.poll();
         if receiver.try_recv().is_ok() {
@@ -423,6 +431,14 @@ fn failed_replacement_restores_metadata_and_keeps_an_alternative_choice() {
     manager
         .install(&old, old.manifest.permissions.clone())
         .unwrap();
+    assert!(!manager.live.contains_key("retired-debugger"));
+    // This scenario needs an actual preexisting owner to prove failed replacement preserves it.
+    // Consuming its declared service starts the guest without invoking the adapter's start method.
+    demand_support::ready(
+        &mut manager,
+        "retired-debugger",
+        DemandReason::Service("debug.session".into()),
+    );
     manager
         .install(&alternative, alternative.manifest.permissions.clone())
         .unwrap();
@@ -448,6 +464,8 @@ fn failed_replacement_restores_metadata_and_keeps_an_alternative_choice() {
     let package = packages::package(package.files, manifest);
     let path = root.path().join("plugins/service-providers.json");
     let preferences = std::fs::read(&path).unwrap();
+    let original = manager.availability("retired-debugger").unwrap();
+    let owner = manager.instance_id("retired-debugger").unwrap().to_owned();
     let candidate = manager
         .prepare_installation(
             &package,
@@ -468,12 +486,28 @@ fn failed_replacement_restores_metadata_and_keeps_an_alternative_choice() {
     assert!(manager.commit_installation(candidate, &control).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), preferences);
     assert!(manager.live.contains_key("retired-debugger"));
+    assert_eq!(
+        manager.instance_id("retired-debugger"),
+        Some(owner.as_str())
+    );
+    assert_eq!(manager.availability("retired-debugger").unwrap(), original);
     assert!(manager.installed["retired-debugger"].replaced_by.is_none());
     assert!(!manager.installed.contains_key("rust"));
     let accepted = InstallControl::default().with_replacements(["retired-debugger".into()]);
     manager
         .install_with_control(&package, package.manifest.permissions.clone(), &accepted)
         .unwrap();
+    // Durable replacement revokes the original publication and its pending-entry authority.
+    assert!(
+        manager
+            .begin_demand(
+                &original,
+                DemandReason::Service("debug.session".into()),
+                120_000
+            )
+            .is_err()
+    );
+    assert!(manager.instance_id("retired-debugger").is_none());
     let preferences: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     assert_eq!(preferences["user"]["workspace/debug.session"], "rust");
     assert!(
@@ -492,7 +526,7 @@ fn failed_replacement_restores_metadata_and_keeps_an_alternative_choice() {
 
 #[test]
 #[ignore = "save pre-merge 0.5.1/0.2.0 distributions; build unified rust and prepare the pinned VSIX"]
-fn compare_plugin_activation_without_language_server_or_adapter_startup() {
+fn compare_cold_plugin_discovery_without_language_server_or_adapter_startup() {
     let language = Package::read(&frozen_packages::archive("rust-0.5.1")).unwrap();
     let debug = legacy_debugger("rust-debugger");
     let unified = packages::rust_package("rust");
@@ -516,8 +550,11 @@ fn compare_plugin_activation_without_language_server_or_adapter_startup() {
             let start = Instant::now();
             let mut runtime = manager(root.path());
             times.push(start.elapsed().as_secs_f64() * 1000.0);
-            // A failed restore must not look faster by silently omitting an expected component.
-            assert_eq!(runtime.live.len(), packages.len());
+            // Cold startup restores every installation and static contribution, without compiling
+            // a component merely to improve an activation benchmark or starting native providers.
+            assert!(runtime.live.is_empty());
+            assert_eq!(runtime.published_entries().len(), packages.len());
+            assert_eq!(runtime.resource_count(), 0);
             assert!(
                 runtime
                     .installed
@@ -538,7 +575,7 @@ fn compare_plugin_activation_without_language_server_or_adapter_startup() {
             .map(|package| package.files[package.manifest.component.as_ref().unwrap()].len())
             .sum();
         eprintln!(
-            "activation {label}: median={:.2} ms; min={:.2}; max={:.2}; wasm={wasm_bytes} bytes; instances={}",
+            "cold discovery {label}: median={:.2} ms; min={:.2}; max={:.2}; wasm={wasm_bytes} bytes; installations={}",
             times[3],
             times[0],
             times[6],

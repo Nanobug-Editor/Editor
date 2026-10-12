@@ -13,6 +13,8 @@ pub(super) struct Services {
     pub broker: broker::Shared,
     pub principal: Caller,
     pub declarations: service::Declarations,
+    /// Typed commands use the broker's existing bounded call and source authority machinery.
+    pub commands: BTreeMap<String, service::Method>,
     pub references: BTreeMap<u64, Reference>,
     pub pending: BTreeMap<u64, Pending>,
     /// At most 32 provider callbacks may await a later event, under their original call authority.
@@ -23,7 +25,7 @@ pub(super) struct Services {
     /// Final cleanup notifications retain revoked authority and are drained outside broker reconciliation.
     pub revoked_processes: Vec<(api::ResourceHandle, CallContext)>,
     /// Retired invocation cleanup must also reach the guest without restoring source authority.
-    pub revoked_invocations: Vec<(api::ResourceHandle, CallContext)>,
+    pub revoked_invocations: Vec<(api::ResourceHandle, CallContext, bool)>,
 }
 impl Default for Services {
     fn default() -> Self {
@@ -37,6 +39,7 @@ impl Default for Services {
                 permissions: Default::default(),
             },
             declarations: Default::default(),
+            commands: Default::default(),
             references: Default::default(),
             pending: Default::default(),
             incoming: Default::default(),
@@ -168,24 +171,31 @@ impl State {
                         )
                     })?;
                 signature.parameters.accepts(&arguments)?;
-                let context = self
-                    .plugin_services
-                    .context
-                    .clone()
-                    .unwrap_or_else(|| CallContext {
-                        lifetimes: vec![self.plugin_services.alive.clone()],
-                        caller: self.plugin_services.principal.clone(),
-                        ancestry: vec![self.plugin_services.principal.instance.clone()],
-                        permissions: self.permissions.clone(),
-                    });
-                let context = context.delegate(&reference.provider, &signature)?;
+                let mut source =
+                    self.plugin_services
+                        .context
+                        .clone()
+                        .unwrap_or_else(|| CallContext {
+                            native_waits: Vec::new(),
+                            menu: None,
+                            origin: crate::plugin_services::InvocationOrigin::Delegated,
+                            lifetimes: vec![self.plugin_services.alive.clone()],
+                            caller: self.plugin_services.principal.clone(),
+                            ancestry: vec![self.plugin_services.principal.instance.clone()],
+                            permissions: self.permissions.clone(),
+                        });
+                // A peer call receives its own parameters, never another command's native target.
+                source.menu = None;
+                let context = source.delegate(&reference.provider, &signature)?;
                 let Value::Resource(handle) = self.roots.open(RootKind::ServiceRequest)? else {
                     unreachable!()
                 };
                 let mut completion = crate::request_state::Completion::new(timeout_ms);
-                // The callee may trap while producing the final failure; only the requesting chain owns this wait.
-                completion.lifetimes = context.lifetimes[..context.lifetimes.len() - 1].to_vec();
+                // The result belongs to the original caller chain. Callee retirement may produce
+                // an explicit failure, while its logical/exact seals separately revoke effects.
+                completion.lifetimes = source.lifetimes.clone();
                 let call = Call {
+                    availability: Default::default(),
                     handle: handle.clone(),
                     reference,
                     method,
@@ -216,7 +226,7 @@ impl State {
             }
         }
     }
-    /// Delegation never grants access to a provider's private files or its pre-existing resource handles.
+    /// Delegation never borrows private resources; a genuine direct host command may use its own selection.
     pub(super) fn check_service_authority(
         &self,
         operation: &api::Operation,
@@ -237,6 +247,29 @@ impl State {
             | api::Operation::CancelRequest { handle, .. } if owned(handle))
         {
             return Ok(());
+        }
+        // This is checked by an internal Manager origin and exact one-hop instance identity,
+        // not by the guest-visible caller name. Selected roots remain bound to this provider.
+        if context.direct_host_selection(&self.plugin_services.principal.instance) {
+            match operation {
+                api::Operation::ReadFile { handle, .. }
+                | api::Operation::WriteFile { handle, .. }
+                | api::Operation::CloseResource { handle }
+                    if matches!(self.roots.resolve(handle)?, RootKind::Selected) =>
+                {
+                    return self.check_selection_authority();
+                }
+                api::Operation::Editor {
+                    operation:
+                        api::EditorOperation::Interaction {
+                            operation:
+                                plugin_protocol::interaction::Operation::Select { .. }
+                                | plugin_protocol::interaction::Operation::SelectWithAccess { .. },
+                        },
+                    ..
+                } => return self.check_selection_authority(),
+                _ => {}
+            }
         }
         // A normal preparation stop keeps existing processes owned until actual exit, while sealing
         // new allocations. Existing protocol writes let an approved DAP disconnect settle normally.
@@ -270,16 +303,79 @@ impl State {
             ));
         }
         let permission = match operation {
+            api::Operation::Http {
+                operation: plugin_protocol::http::Operation::Start { .. },
+            } => "network.http",
+            api::Operation::Http {
+                operation: plugin_protocol::http::Operation::Read { handle },
+            } if owned(handle) => "network.http",
+            // Secret namespaces are private even when both caller and provider have secrets consent.
+            api::Operation::Secrets { .. }
+                if context.direct_host_selection(&self.plugin_services.principal.instance) =>
+            {
+                "secrets"
+            }
+            api::Operation::Timer {
+                operation: plugin_protocol::timers::Operation::Start { .. },
+            } => return Ok(()),
+            api::Operation::Timer {
+                operation: plugin_protocol::timers::Operation::Reset { handle, .. },
+            } if owned(handle) => return Ok(()),
+            api::Operation::Tree { operation } => {
+                let handle = match operation {
+                    plugin_protocol::tree::Operation::Create => None,
+                    plugin_protocol::tree::Operation::Refresh { tree } => Some(tree),
+                    plugin_protocol::tree::Operation::Reply { request, .. } => Some(&request.tree),
+                };
+                if handle.is_some_and(|handle| !owned(handle))
+                    && !context.direct_host_selection(&self.plugin_services.principal.instance)
+                {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Service source cannot borrow a private provider tree",
+                    ));
+                }
+                "ui.panels"
+            }
+            api::Operation::Commands {
+                operation: plugin_protocol::commands::Operation::Reply { .. },
+            } => return Ok(()),
+            api::Operation::Commands { .. } => "commands.call",
             api::Operation::ReadAsset { .. }
             | api::Operation::Service { .. }
             | api::Operation::DescribeSdk => return Ok(()),
             api::Operation::OpenWorkspace => "workspace.read",
+            api::Operation::SubscribeWorkspaceFiles { .. } => "workspace.read",
             api::Operation::ReadFile { handle, .. } | api::Operation::FindFiles { handle, .. }
                 if matches!(self.roots.resolve(handle)?, RootKind::Workspace) =>
             {
                 "workspace.read"
             }
             api::Operation::Editor { operation, .. } => match operation {
+                // Workspace admission checks every root direction and every delegated grant together.
+                api::EditorOperation::Workspace { .. } => return Ok(()),
+                api::EditorOperation::OpenDocument {
+                    resource: api::ResourceIdentity::Local { .. },
+                } => {
+                    if !context.permissions.contains("editor.read") {
+                        return Err(Failure::new(
+                            ErrorCode::PermissionDenied,
+                            "Service source did not delegate editor.read",
+                        ));
+                    }
+                    "workspace.read"
+                }
+                api::EditorOperation::Interaction {
+                    operation:
+                        plugin_protocol::interaction::Operation::Select { .. }
+                        | plugin_protocol::interaction::Operation::SelectWithAccess { .. },
+                } => {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "User selected file authority cannot be delegated",
+                    ));
+                }
+                api::EditorOperation::Interaction { .. } => "ui.interaction",
                 api::EditorOperation::NavigateDocument { target, .. } => {
                     // A service source must delegate both base editor access and the target grant.
                     // External navigation remains unavailable through the current service whitelist.
@@ -307,7 +403,8 @@ impl State {
                 }
                 // Delegated range edits cannot borrow the provider's stronger write grant.
                 api::EditorOperation::SaveDocument { .. }
-                | api::EditorOperation::ReplaceDocumentRange { .. } => "editor.write",
+                | api::EditorOperation::ReplaceDocumentRange { .. }
+                | api::EditorOperation::ApplyEdits { .. } => "editor.write",
                 api::EditorOperation::SetPanelVisibility { .. } => "ui.panels",
                 _ => "editor.read",
             },
@@ -370,6 +467,19 @@ impl Instance {
             let kind = self.store.data().roots.resolve(&handle);
             let process = matches!(kind, Ok(RootKind::Process(_)));
             let invocation = matches!(kind, Ok(RootKind::ServiceInvocation));
+            let command = self
+                .store
+                .data()
+                .plugin_services
+                .incoming
+                .get(&handle.resource)
+                .is_some_and(|incoming| {
+                    incoming
+                        .call
+                        .reference
+                        .contract
+                        .starts_with(plugin_protocol::commands::CONTRACT_PREFIX)
+                });
             let released = self
                 .store
                 .data_mut()
@@ -387,7 +497,7 @@ impl Instance {
                     .data_mut()
                     .plugin_services
                     .revoked_invocations
-                    .push((handle, context));
+                    .push((handle, context, command));
             }
         }
     }
@@ -409,15 +519,28 @@ impl Instance {
                 },
             )?;
         }
-        for (request, context) in invocations {
+        for (request, context, command) in invocations {
             self.call_for_retirement(
                 context,
                 api::Input::Event {
                     panel: None,
-                    event: api::Notification::Service(service::Notification::InvocationCancelled {
-                        request,
-                        reason: Failure::new(ErrorCode::InvalidHandle, "Service source retired"),
-                    }),
+                    event: if command {
+                        api::Notification::CommandCancelled {
+                            request,
+                            reason: Failure::new(
+                                ErrorCode::InvalidHandle,
+                                "Command source retired",
+                            ),
+                        }
+                    } else {
+                        api::Notification::Service(service::Notification::InvocationCancelled {
+                            request,
+                            reason: Failure::new(
+                                ErrorCode::InvalidHandle,
+                                "Service source retired",
+                            ),
+                        })
+                    },
                 },
             )?;
         }
@@ -470,12 +593,10 @@ impl Instance {
         result
     }
     pub(crate) fn service_provider(&self) -> Option<Provider> {
-        (!self.store.data().roots.retired && self.store.data().active).then(|| Provider {
-            alive: self.store.data().plugin_services.alive.clone(),
-            caller: self.store.data().plugin_services.principal.clone(),
-            contracts: self
-                .store
-                .data()
+        (!self.store.data().roots.retired && self.store.data().active).then(|| {
+            let state = self.store.data();
+            // Service gates remain effective after first birth; commands have their own public contracts.
+            let mut contracts = state
                 .plugin_services
                 .declarations
                 .provides
@@ -490,7 +611,30 @@ impl Instance {
                         })
                 })
                 .map(|(id, contract)| (id.clone(), contract.clone()))
-                .collect(),
+                .collect::<BTreeMap<_, _>>();
+            for (id, signature) in &state.plugin_services.commands {
+                contracts.insert(
+                    plugin_protocol::commands::contract(
+                        &state.plugin_services.principal.plugin,
+                        id,
+                    ),
+                    service::Contract {
+                        // Package commands need no provider-owned dependency or contribution gate.
+                        preparation: BTreeMap::new(),
+                        enabled_setting: None,
+                        platforms: Vec::new(),
+                        version: semver::Version::new(1, 0, 0),
+                        methods: BTreeMap::from([("invoke".into(), signature.clone())]),
+                    },
+                );
+            }
+            Provider {
+                availability: None,
+                owner_alive: Some(self.store.data().plugin_services.alive.clone()),
+                alive: self.store.data().plugin_services.alive.clone(),
+                caller: self.store.data().plugin_services.principal.clone(),
+                contracts,
+            }
         })
     }
     /// Resolve preparation against this exact incarnation, including a parked older package version.
@@ -559,10 +703,15 @@ impl Instance {
                     pending.call.handle.clone(),
                     update,
                     pending.return_context.clone(),
+                    pending
+                        .call
+                        .reference
+                        .contract
+                        .starts_with(plugin_protocol::commands::CONTRACT_PREFIX),
                 ))
             })
             .collect::<Vec<_>>();
-        for (slot, handle, update, context) in updates {
+        for (slot, handle, update, context, command) in updates {
             if !self
                 .store
                 .data()
@@ -585,10 +734,14 @@ impl Instance {
                 context,
                 api::Input::Event {
                     panel: None,
-                    event: api::Notification::Service(service::Notification::Request {
-                        handle,
-                        update,
-                    }),
+                    event: if command {
+                        api::Notification::CommandRequest { handle, update }
+                    } else {
+                        api::Notification::Service(service::Notification::Request {
+                            handle,
+                            update,
+                        })
+                    },
                 },
             )?;
         }

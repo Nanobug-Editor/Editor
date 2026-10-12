@@ -19,6 +19,9 @@ impl Worker {
         std::thread::spawn(move || {
             // Prepare the public SDK off the UI thread. A failure is delivered only to guests that request it.
             let resources = plugin_runtime::HostResources {
+                // This explicit host setting never inherits generic HTTP_PROXY or plugin configuration.
+                http: plugin_runtime::HttpConfiguration::default()
+                    .with_proxy(std::env::var("NANOBUG_HTTP_PROXY").ok()),
                 sdk: Some(crate::sdk_export::descriptor().map_err(|error| format!("{error:#}"))),
                 logs: output.lock().unwrap().logs.clone(),
                 ..Default::default()
@@ -59,6 +62,7 @@ impl Worker {
                 BTreeMap::<(u64, u64), plugin_runtime::Completion<serde_json::Value>>::new();
             let mut target_calls = super::targets::TargetCalls::default();
             let mut configuration_calls = super::configurations::ConfigurationCalls::default();
+            let mut demands = super::demands::Demands::default();
             loop {
                 // Development candidates use the live actor's transaction and private data owner.
                 if preparation.is_none() && deferred.is_empty() {
@@ -154,7 +158,17 @@ impl Worker {
                     vec![id.clone()]
                 } else {
                     match &work {
-                        Some(Work::SetSetting { plugin, .. }) => vec![plugin.clone()],
+                        Some(Work::SetSetting { plugin, key, .. })
+                            if manager
+                                .installed
+                                .get(plugin)
+                                .and_then(|entry| entry.manifest.settings.get(key))
+                                .is_none_or(|definition| {
+                                    definition.apply != settings::Apply::HotApply
+                                }) =>
+                        {
+                            vec![plugin.clone()]
+                        }
                         Some(
                             Work::Restart(id)
                             | Work::Disable(id)
@@ -165,7 +179,7 @@ impl Worker {
                             vec![package.manifest.id.clone()]
                         }
                         Some(Work::SetTrust(false) | Work::Shutdown(_)) => {
-                            manager.live.keys().cloned().collect()
+                            manager.installed.keys().cloned().collect()
                         }
                         _ => Vec::new(),
                     }
@@ -642,23 +656,22 @@ impl Worker {
                             drop(reservation);
                             result
                         }
-                        Some(Work::Invoke {
-                            plugin,
-                            command,
-                            arguments,
-                            expected_epoch,
-                        }) => {
-                            // Release publication ownership before entering WASM; guest execution
-                            // cannot hold the mutex needed by the native publication consumer.
-                            let admission = output.lock().unwrap().admit_command(
-                                &manager,
+                        Some(Work::LanguageFix {
+                            origin,
+                            document,
+                            fix,
+                        }) => manager
+                            .submit_language_fix(&origin, document, fix)
+                            .map(|_| ())
+                            .map_err(anyhow::Error::from),
+                        Some(work @ (Work::Invoke { .. } | Work::Demand { .. })) => {
+                            demands.dispatch(
+                                work,
+                                &mut manager,
+                                &output,
                                 authority.load(std::sync::atomic::Ordering::Acquire),
-                                &plugin,
-                                &command,
-                                expected_epoch,
                             );
-                            admission
-                                .and_then(|()| manager.invoke_command(&plugin, &command, arguments))
+                            Ok(())
                         }
                         None => Ok(()),
                     }
@@ -671,7 +684,34 @@ impl Worker {
                     }
                     Err(error) => manager.document_events_failed(error),
                 }
+                match output.lock().unwrap().document_stream.take_batch(64) {
+                    Ok(events) => {
+                        for event in events {
+                            manager.document_event(event);
+                        }
+                    }
+                    Err(error) => manager.document_stream_failed(error),
+                }
+                match output.lock().unwrap().file_events.take_batch(64) {
+                    Ok(events) => {
+                        for event in events {
+                            manager.workspace_file_event(event);
+                        }
+                    }
+                    Err(error) => manager.workspace_events_failed(error),
+                }
+                // Withdraw cancelled native waiters before Manager can commit a completed preparation.
+                demands.poll(
+                    &mut manager,
+                    &output,
+                    authority.load(std::sync::atomic::Ordering::Acquire),
+                );
                 manager.poll();
+                demands.poll(
+                    &mut manager,
+                    &output,
+                    authority.load(std::sync::atomic::Ordering::Acquire),
+                );
                 if output.lock().unwrap().terminal_presentations.len() < 240 {
                     let messages = manager
                         .take_terminal_presentations()
@@ -745,7 +785,7 @@ impl Worker {
                         .extend(messages);
                 }
                 target_calls.poll(&manager, &output);
-                configuration_calls.poll(&manager, &output);
+                configuration_calls.poll(&mut manager, &output);
                 debug_requests.retain(|request, (method, pending)| {
                     let result = match pending.status() {
                         api::RequestUpdate::Accepted | api::RequestUpdate::Progress { .. } => {
@@ -802,14 +842,11 @@ impl Worker {
                         .push((*session, *request, result));
                     false
                 });
-                let mut editor_requests = Vec::new();
+                // The public drain includes both WASM and component-free native language requests.
+                let editor_requests = manager.take_editor_requests();
+                let mut trees = Vec::new();
                 for (id, instance) in &mut manager.live {
-                    editor_requests.extend(
-                        instance
-                            .take_editor_requests()
-                            .into_iter()
-                            .map(|request| (id.clone(), request)),
-                    );
+                    trees.extend(instance.tree_resources());
                     for (panel, scene) in &instance.views {
                         views.insert(format!("{id}/{panel}"), scene.clone());
                     }
@@ -841,6 +878,7 @@ impl Worker {
                     .collect::<BTreeMap<_, _>>();
                 let language_services = manager.language_services();
                 let structure_providers = manager.structure_providers();
+                let direct_language_providers = manager.direct_language_providers();
                 for service in language_services
                     .values()
                     .filter_map(|service| service.as_ref().ok())
@@ -929,6 +967,19 @@ impl Worker {
                         }
                     }
                     published.structure_providers = structure_providers;
+                    published.configuration_revision += 1;
+                }
+                let direct_changed = direct_language_providers.len()
+                    != published.direct_language_providers.len()
+                    || direct_language_providers.iter().any(|(key, value)| {
+                        match (value, published.direct_language_providers.get(key)) {
+                            (Ok(current), Some(Ok(old))) => !Arc::ptr_eq(current, old),
+                            (Err(current), Some(Err(old))) => current != old,
+                            _ => true,
+                        }
+                    });
+                if direct_changed {
+                    published.direct_language_providers = direct_language_providers;
                     published.configuration_revision += 1;
                 }
                 // Host executions are published as views; the launch identity joins each answer to
@@ -1055,7 +1106,7 @@ impl Worker {
                 }
                 // Recovery also changes ownership when installation returns Err; the same
                 // real-instance publication is used by application-level Manager fixtures.
-                published.publish_manager(&manager);
+                published.publish_manager(&mut manager);
                 published.diagnostics = manager
                     .installed
                     .keys()
@@ -1063,6 +1114,7 @@ impl Worker {
                     .collect();
                 published.views = views;
                 published.images = images;
+                published.trees = trees;
                 published.processes = processes;
                 published.generation += 1;
             }
@@ -1088,4 +1140,5 @@ impl Worker {
 /// Native callbacks retain their original owner; replacement advances the publication epoch.
 fn retire_publication(published: &mut Published, id: &str) {
     published.retire_instance(id);
+    published.retire_commands(id);
 }

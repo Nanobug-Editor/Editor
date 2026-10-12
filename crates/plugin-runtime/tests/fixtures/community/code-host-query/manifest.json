@@ -1,0 +1,99 @@
+{
+  "id": "code-host-query",
+  "name": "代码托管查询",
+  "version": "0.1.2",
+  "protocol": 7,
+  "minimum_host": "0.1.0",
+  "api": {
+    "base": "^1",
+    "required": {
+      "package.assets": "^1",
+      "configuration": ">=1.1,<2",
+      "network.http": "^1",
+      "storage.secrets": "^1",
+      "lifecycle.timers": "^1",
+      "storage.private": "^1.2",
+      "ui.interaction": "^1",
+      "ui.native": "^1"
+    }
+  },
+  "component": "code-host-query.wasm",
+  "settings_hook": true,
+  "settings": {
+    "poll_interval": {
+      "title": "拉取间隔（毫秒） / Poll interval (ms)",
+      "value_type": { "kind": "integer", "min": 10, "max": 1000 },
+      "default": 25,
+      "scope": "project",
+      "apply": "hot_apply"
+    },
+    "timeout": {
+      "title": "HTTP 超时（毫秒） / HTTP timeout (ms)",
+      "value_type": { "kind": "integer", "min": 100, "max": 120000 },
+      "default": 30000,
+      "scope": "project",
+      "apply": "hot_apply"
+    },
+    "keyRef": {
+      "title": "私有密钥引用 / Private secret reference",
+      "value_type": { "kind": "secret_reference" },
+      "default": "api-token",
+      "scope": "user",
+      "apply": "hot_apply"
+    }
+  },
+  "permissions": [
+    "assets.read",
+    "network.http",
+    "network.http:http://127.0.0.1:18906",
+    "network.http:http://127.0.0.1:18907",
+    "secrets",
+    "storage",
+    "ui.interaction"
+  ],
+  "storage_limit": 1048576,
+  "panels": [
+    {
+      "id": "cloud",
+      "title": "代码托管查询",
+      "position": "right"
+    }
+  ],
+  "commands": [
+    {
+      "id": "set-token",
+      "title": "安全输入密钥 / Set token",
+      "menu": true
+    },
+    {
+      "id": "delete-token",
+      "title": "删除密钥 / Delete token",
+      "menu": true
+    },
+    {
+      "id": "query",
+      "title": "代码托管查询 / Code hosting query",
+      "menu": true
+    },
+    {
+      "id": "refresh",
+      "title": "合并刷新 / Refresh",
+      "menu": true
+    },
+    {
+      "id": "cancel",
+      "title": "取消查询 / Cancel query",
+      "menu": true
+    },
+    {
+      "id": "read-cache",
+      "title": "读取缓存 / Read cache",
+      "menu": true
+    },
+    {
+      "id": "probe",
+      "title": "契约诊断 / Contract probe",
+      "menu": false
+    }
+  ]
+}

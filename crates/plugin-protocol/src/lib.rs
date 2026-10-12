@@ -1,31 +1,88 @@
-//! Versioned, platform-independent messages shared by plugins and their host.
-//! No editor, terminal-emulator or native UI implementation belongs in this crate.
+//! Nanobug's public, platform-independent plugin contracts and optional WASM guest helpers.
 //!
-//! Independent Rust plugins declare `plugin-protocol = { version = "=0.2.0", features = ["guest"] }`.
-//! Build with the host's `--plugin-cargo <Cargo.toml> <build|check|test> [Cargo options]`
-//! entry point so Cargo resolves the matching SDK cache without a repository path dependency.
-//! The `guest` feature generates component bindings from `wit/plugin.wit`; public modules
-//! document their arguments, capability negotiation and permission requirements in comments.
-//! Explicit SDK exports contain source, Cargo and protocol resources, without Markdown files.
+//! # Building an independent plugin
+//!
+//! Declare `plugin-protocol = { version = "=0.2.0", features = ["guest"] }`, then run
+//! `editor-app --plugin-cargo <Cargo.toml> build --target wasm32-wasip2`. The host supplies
+//! its embedded source cache through Cargo configuration; a plugin must not depend on a
+//! repository checkout or carry a second SDK copy. `--export-plugin-sdk <directory>`
+//! exports the same Rust sources, Cargo manifest, WIT and JSON resources. Interface usage
+//! lives in these source comments; Markdown is not part of the independent SDK.
+//!
+//! # Compatibility and authority
+//!
+//! Package versions, component transport versions and capability versions are separate.
+//! The current host release is 0.1.0. [`Manifest::minimum_host`] is an optional SemVer
+//! floor, not a capability version or an upper-bound range. It is checked for both package
+//! admission and restored records; a future floor diagnoses an update requirement without
+//! deleting saved settings/data. Declarative `plugin.toml` host ranges are checked separately.
+//! Current executable packages use protocol `7` and declare their base API and required
+//! or optional capability ranges in [`api::Requirements`]. The host negotiates these
+//! before activation: an unavailable required capability rejects the package, while an
+//! unavailable optional capability must disable only the plugin's dependent behavior.
+//! Old component protocols are rejected with an update requirement rather than silently
+//! translated. This crate contains contracts, never editor, terminal or native UI code.
+//!
+//! Stable capabilities preserve their message shapes and meanings within a major version.
+//! A plugin using an added minor feature declares that minimum capability version; a
+//! breaking change requires a new capability major. Deprecation must identify the affected
+//! version range, replacement, minimum replacement capability and migration, while keeping
+//! the current stable major callable. Experimental contracts must be identified explicitly
+//! and do not inherit that stable guarantee. Negotiation never grants permissions: callers
+//! still need installation approval, a trusted scope and ownership of every resource.
+//!
+//! # Starting a call
+//!
+//! Guest helpers under `api::guest` (feature `guest`) return host-issued handles for asynchronous work.
+//! Request acceptance is distinct from completion; consume the corresponding notification,
+//! reject stale target revisions, and release or cancel retained handles when no longer used.
+//! [`commands`] documents typed command composition and native menus; [`interaction`]
+//! documents native dialogs and selected-file authority. Document identities, exact reads,
+//! metadata subscriptions, virtual content and comparisons use [`api::DocumentInfo`],
+//! [`api::DocumentSnapshot`] and [`api::EditorOperation`]. Instance retirement revokes
+//! resources; opaque handles and snapshots cannot restore external side effects.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
+/// Visible declarations, demand reasons and explicit continuous-work policy.
+pub mod activation;
 /// Capability-based lifecycle, notifications and correlated host operations.
 pub mod api;
+/// Typed command composition and stable native menu locations.
+pub mod commands;
 /// Public command-template, native-form and validation service contract.
 pub mod configurations;
 pub mod debug;
+/// Native source-owned point and range markers with explicit edit and deletion semantics.
+pub mod decorations;
 pub mod dependencies;
+/// Owned multi-source diagnostics and native, previewed business fixes.
+pub mod diagnostics;
+/// Experimental pure language features consumed by the native editor.
+pub mod direct;
 pub mod execution;
+/// General HTTP streams with target grants, backpressure and cancellation.
+pub mod http;
+/// Native host dialogs and instance-bound user-selected file authority.
+pub mod interaction;
 pub mod language;
 pub mod process;
+/// System-protected credentials isolated by host profile and plugin identity.
+pub mod secrets;
 pub mod service;
 pub mod settings;
+/// Managed private data, cache and temporary directories with instance-owned cleanup.
+pub mod storage;
 /// Readonly document trees and fold ranges supplied by isolated, versioned plugin workers.
 pub mod structure;
 /// Dynamic target discovery and build preparation are provider policy, independent of execution.
 pub mod targets;
+/// Disposable timer and debounce resources revoked with their owning instance.
+pub mod timers;
+/// Generic native lazy trees and their bounded provider callbacks.
+pub mod tree;
 pub mod ui;
+pub mod workspace;
 
 /// Guest imports and exports use the WIT contract supplied by the building editor.
 #[cfg(feature = "guest")]
@@ -45,6 +102,14 @@ pub struct Manifest {
     /// Explicitly approved, finite package consolidation; it grants no cross-plugin file access.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub replaces: Vec<Replacement>,
+    /// Optional minimum host release as a full SemVer of at most 128 bytes (for example `0.1.0`).
+    /// This is a floor, not `^0.1`; comparison ignores build metadata and retains prerelease precedence.
+    /// Omission retains capability-based compatibility; unsupported floors reject before activation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum_host: Option<String>,
+    /// Business instances default to demand activation; static contributions remain discoverable.
+    #[serde(default, skip_serializing_if = "activation::Policy::is_default")]
+    pub activation: activation::Policy,
     /// Opt-in private-data format; the host never interprets the plugin's business fields.
     #[serde(default)]
     pub data_format: Option<DataFormat>,
@@ -57,6 +122,9 @@ pub struct Manifest {
     /// Pure structure contributors are independent of the selected native language service.
     #[serde(default)]
     pub structure_providers: Vec<structure::Provider>,
+    /// Experimental readonly language providers; independent of the selected native LSP.
+    #[serde(default)]
+    pub direct_language_providers: Vec<direct::Provider>,
     /// Fixed native service definitions; each key requires its own installation grant.
     #[serde(default)]
     pub services: std::collections::BTreeMap<String, process::Service>,
@@ -159,6 +227,12 @@ pub struct Command {
     pub shortcut: Option<String>,
     #[serde(default)]
     pub menu: bool,
+    /// Opt-in typed result contract; absent signatures preserve the existing one-way event behavior.
+    #[serde(default)]
+    pub signature: Option<service::Method>,
+    /// Native contribution points are independent of plugin-owned footer tools.
+    #[serde(default)]
+    pub menus: Vec<commands::Menu>,
 }
 
 /// Opaque plugin-owned data; the host never interprets or migrates its contents.

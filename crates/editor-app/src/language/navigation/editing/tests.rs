@@ -14,7 +14,7 @@ fn standard_rename_forms_preserve_one_complete_document_plan() {
         json!({"documentChanges":[{"textDocument":{"uri":uri,"version":7},"edits":changes.clone()}]}),
         json!({"documentChanges":[{"textDocument":{"uri":uri,"version":null},"edits":changes}]}),
     ] {
-        let edits = rename_edits(response, &uri, 7, Clone::clone).unwrap();
+        let edits = document_edits(response, &uri, 7, Clone::clone).unwrap();
         assert_eq!(edits.len(), 2);
         let merged = merge_edits("<one>x</one>", &edits).unwrap().unwrap();
         assert_eq!(merged.new_text, "renamed>x</renamed");
@@ -41,7 +41,7 @@ fn rename_rejects_stale_foreign_resource_mixed_and_annotated_plans() {
         json!({"documentChanges":[good,annotated]}),
         json!({"changes":{uri.as_str():[{"range":range,"newText":"renamed","annotationId":"needs-confirmation"}]}}),
     ] {
-        assert!(rename_edits(response, &uri, 7, Clone::clone).is_err());
+        assert!(document_edits(response, &uri, 7, Clone::clone).is_err());
     }
 }
 
@@ -53,6 +53,6 @@ fn versioned_rename_overlap_still_fails_before_native_application() {
         {"range":{"start":{"line":0,"character":1},"end":{"line":0,"character":4}},"newText":"renamed"},
         {"range":{"start":{"line":0,"character":3},"end":{"line":0,"character":5}},"newText":"bad suffix"}
     ]}]});
-    let edits = rename_edits(response, &uri, 7, Clone::clone).unwrap();
+    let edits = document_edits(response, &uri, 7, Clone::clone).unwrap();
     assert!(merge_edits("<one>x</one>", &edits).is_err());
 }

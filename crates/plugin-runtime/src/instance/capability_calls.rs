@@ -55,8 +55,18 @@ impl State {
                 "editor",
                 "cancel_request",
                 "subscribe_documents",
+                "subscribe_document_events",
+                // Workspace observations are an opt-in public operation, not an editor text stream.
+                "subscribe_workspace_files",
                 "process",
                 "service",
+                "commands",
+                "diagnostics",
+                "http",
+                "secrets",
+                "timer",
+                "private",
+                "tree",
             ]
             .contains(&method)
             {
@@ -139,11 +149,28 @@ impl State {
             }
             self.check_service_authority(&request.operation)?;
             let result = match request.operation {
+                api::Operation::Diagnostics { operation } => self.create_diagnostics(operation),
+                api::Operation::Http { operation } => self.http_request(operation),
+                api::Operation::Secrets { operation } => self.secret_request(operation),
+                api::Operation::Timer { operation } => self.timer_request(operation),
+                api::Operation::Private { operation } => self.private_request(operation),
+                api::Operation::Tree { operation } => self.tree_request(operation),
+                api::Operation::Commands { operation } => self.command_request(operation),
                 api::Operation::Service { operation } => self.service_request(operation),
                 api::Operation::Process { operation } => self.process_request(operation),
                 api::Operation::SubscribeDocuments => self.subscribe_documents(),
+                api::Operation::SubscribeDocumentEvents => self.subscribe_document_stream(),
+                api::Operation::SubscribeWorkspaceFiles { root } => {
+                    self.subscribe_workspace_files(root)
+                }
                 api::Operation::CancelRequest { handle, mode } => {
                     self.roots.resolve(&handle)?;
+                    if let Some(stream) = self.http_streams.get(&handle.resource) {
+                        stream.control.cancel();
+                        return Ok(api::Value::Cancellation(
+                            api::CancellationEffect::WaitingStopped,
+                        ));
+                    }
                     if let Some(request) = self.plugin_services.pending.get(&handle.resource) {
                         return request
                             .call
@@ -171,29 +198,32 @@ impl State {
                 operation => self.resource_request(operation),
             };
             // Record all delegated allocations at the common boundary, including file and request handles.
-            if let (
-                Ok(
+            if let (Ok(value), Some(context)) = (&result, &self.plugin_services.context) {
+                let handles = match value {
                     api::Value::Resource(handle)
                     | api::Value::Accepted(handle)
                     | api::Value::Preference(api::PreferenceRead {
                         subscription: Some(handle),
                         ..
-                    }),
-                ),
-                Some(context),
-            ) = (&result, &self.plugin_services.context)
-            {
-                if matches!(
-                    self.roots.resolve(handle),
-                    Ok(resource_roots::RootKind::Process(_))
-                ) {
-                    self.host_resources
-                        .preparations
-                        .opened(&context.lifetimes, handle);
+                    }) => vec![handle],
+                    // A batch has two independent lifetimes. Both waits and retained recovery must
+                    // remain cancellable/releasable by the source that originally allocated them.
+                    api::Value::BatchAccepted { request, batch } => vec![request, batch],
+                    _ => Vec::new(),
+                };
+                for handle in handles {
+                    if matches!(
+                        self.roots.resolve(handle),
+                        Ok(resource_roots::RootKind::Process(_))
+                    ) {
+                        self.host_resources
+                            .preparations
+                            .opened(&context.lifetimes, handle);
+                    }
+                    self.plugin_services
+                        .resources
+                        .insert(handle.resource, (handle.clone(), context.clone()));
                 }
-                self.plugin_services
-                    .resources
-                    .insert(handle.resource, (handle.clone(), context.clone()));
             }
             result
         })();
@@ -438,6 +468,7 @@ impl Instance {
             output.language_completion.is_none()
                 || (self.store.data().language_completion_call
                     && !self.store.data().language_structure_call
+                    && !self.store.data().language_direct_call
                     && self
                         .store
                         .data()
@@ -450,6 +481,7 @@ impl Instance {
             output.language_structure.is_none()
                 || (self.store.data().language_structure_call
                     && !self.store.data().language_completion_call
+                    && !self.store.data().language_direct_call
                     && self
                         .store
                         .data()
@@ -457,6 +489,19 @@ impl Instance {
                         .capabilities
                         .contains_key("language.structure")),
             "Structure results require a negotiated pure language invocation"
+        );
+        anyhow::ensure!(
+            output.language_direct.is_none()
+                || (self.store.data().language_direct_call
+                    && !self.store.data().language_completion_call
+                    && !self.store.data().language_structure_call
+                    && self
+                        .store
+                        .data()
+                        .api
+                        .capabilities
+                        .contains_key("language.direct")),
+            "Direct results require a negotiated experimental pure invocation"
         );
         anyhow::ensure!(
             !self.store.data().migrating
@@ -588,8 +633,14 @@ impl Instance {
             let mut visual_viewport = false;
             let mut icons = false;
             let mut invalid_icon = None;
+            let mut invalid_tree = None;
             let mut links = view.document.link_events;
             let mut visit = |node: &ui::Node| {
+                if let ui::Kind::Tree { handle } = &node.kind {
+                    if invalid_tree.is_none() {
+                        invalid_tree = self.store.data().owned_tree(handle).err();
+                    }
+                }
                 links |= !node.links.is_empty();
                 if let Some(svg) = &node.button_icon {
                     icons = true;
@@ -623,6 +674,9 @@ impl Instance {
             }
             if let Some(dialog) = &view.document.dialog {
                 dialog.content.visit(&mut visit);
+            }
+            if let Some(error) = invalid_tree {
+                return Err(error.into());
             }
             if resizable
                 && !api

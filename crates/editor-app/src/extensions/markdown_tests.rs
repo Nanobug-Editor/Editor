@@ -266,6 +266,7 @@ fn delivered_markdown_preview_tracks_unsaved_native_edits_and_reclaims_split(
         app.update(cx, |app, cx| {
             app.apply_reconciliation(
                 Reconciliation {
+                    file_events: Vec::new(),
                     snapshot: None,
                     documents: vec![(
                         reload_path.canonicalize().unwrap(),

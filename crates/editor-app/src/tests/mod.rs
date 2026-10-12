@@ -5,6 +5,7 @@ mod host_messages;
 mod language_editing;
 mod language_fixture;
 mod outline;
+mod problems;
 mod run_file_tabs;
 mod shortcuts;
 mod shortcuts_controls;
@@ -14,6 +15,8 @@ mod terminal;
 mod xml_formatting;
 mod xml_language_tools;
 pub(crate) use language_fixture::declared_language_service;
+// Shared package transport remains test-only; model descendants can reuse its real native setup.
+pub(crate) use outline::wait_node as wait_outline_node;
 pub(crate) use shortcuts::with_editor as with_shortcut_editor;
 pub(crate) use shortcuts::with_editor_profile as with_shortcut_editor_profile;
 
