@@ -133,7 +133,7 @@ impl ProjectWindow {
             // Bulk close has no disk-overwrite preview. Recheck disk even if the watcher is late.
             let conflict = editor.read(cx).tabs.iter().find_map(|tab| {
                 let text = tab.text.as_ref()?;
-                if !text.session.is_dirty() {
+                if !text.session.is_dirty() && text.disk_state == DiskState::Synced {
                     return None;
                 }
                 let unchanged = text.disk_state == DiskState::Synced
