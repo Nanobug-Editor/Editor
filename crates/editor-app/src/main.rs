@@ -360,16 +360,33 @@ impl EditorApp {
                 .placeholder(t!("editor.select_file").to_string())
         });
         // Finite import must finish before runtime activation or local configuration/layout restoration.
-        let terminal_upgrade_error = terminal::upgrade::prepare(workspace.root())
+        // A supplied window session also owns its resource profile; data cannot fall back to another user's roots.
+        let resource_profile = prepared_session
+            .as_ref()
+            .and_then(SessionState::file_path)
+            .or_else(|| SessionState::for_workspace(workspace.root()).file_path())
+            .and_then(|path| path.parent().map(Path::to_owned));
+        let terminal_upgrade_error = resource_profile
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Profile directory unavailable"))
+            .and_then(|profile| terminal::upgrade::prepare(workspace.root(), profile))
             .err()
             .map(|error| format!("{error:#}"));
+        // Keep normal users' established LocalAppData history. A host-selected isolated profile
+        // owns its history alongside its other data instead of writing through the ambient user.
+        let history = match resource_profile.as_ref().filter(|profile| {
+            dirs::config_dir().is_none_or(|root| **profile != root.join("MeEditor"))
+        }) {
+            Some(profile) => LocalHistory::at(profile.join("history")).ok(),
+            None => LocalHistory::for_current_user().ok(),
+        };
         let mut session_state =
             prepared_session.unwrap_or_else(|| SessionState::load(workspace.root()));
         // Plugin configurations are host-local per workspace; project settings do not supply run data.
         // A malformed local store is reported rather than silently replaced.
         let mut run_controls = run::RunControls::load_plugin_configurations(
             &workspace.root().display().to_string(),
-            editor_core::default_root(),
+            resource_profile.as_ref().map(|profile| profile.join("run")),
         );
         if let Some(error) = &terminal_upgrade_error {
             // All journal destinations stay immutable during this failed startup, including valid
@@ -457,6 +474,7 @@ impl EditorApp {
                 parent.clone(),
                 extensions.clone(),
                 workspace.root().to_owned(),
+                resource_profile.as_deref(),
                 session_state.workspace_trusted,
                 window,
                 cx,
@@ -537,7 +555,7 @@ impl EditorApp {
             language_features: Default::default(),
             problems: Default::default(),
             file_store: NativeFileStore,
-            history: LocalHistory::for_current_user().ok(),
+            history,
             editor,
             editor_panel,
             completion_popup: Rc::new(editor::CompletionPopupState::default()),

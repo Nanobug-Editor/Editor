@@ -25,14 +25,24 @@ pub(super) struct Saved {
 }
 
 pub(super) fn directory(workspace: &Path) -> PathBuf {
+    at_run_root(
+        workspace,
+        &editor_core::default_root().unwrap_or_else(std::env::temp_dir),
+    )
+}
+
+/// A project retains the same host-selected profile for terminal settings, history and upgrades.
+pub(super) fn directory_in_profile(workspace: &Path, profile: &Path) -> PathBuf {
+    at_run_root(workspace, &profile.join("run"))
+}
+
+/// Both legacy default-profile callers and explicit window owners use the same persisted digest.
+fn at_run_root(workspace: &Path, runs: &Path) -> PathBuf {
     let key = format!(
         "{:x}",
         Sha256::digest(workspace.to_string_lossy().as_bytes())
     );
-    editor_core::default_root()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("terminal")
-        .join(key)
+    runs.join("terminal").join(key)
 }
 
 impl TerminalPanel {

@@ -355,6 +355,13 @@ fn project_home_terminal_reopen_keeps_programs_stopped(cx: &mut TestAppContext) 
         click(visual, "project-close-project");
         click(visual, "project-close-discard");
         assert!(visual.debug_bounds("project-open-folder").is_some());
+        // A selected profile must own terminal snapshots and upgrades, not the ambient MeEditor store.
+        let isolated_terminals = profile.path().join("run/terminal");
+        assert!(
+            std::fs::read_dir(&isolated_terminals)
+                .unwrap()
+                .any(|entry| { entry.unwrap().path().join("state.json").is_file() })
+        );
         drop(editor);
         click(visual, "project-recent-0");
         visual

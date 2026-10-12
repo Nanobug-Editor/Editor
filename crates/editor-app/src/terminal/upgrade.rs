@@ -7,14 +7,11 @@ use std::{collections::BTreeMap, path::Path};
 use storage::{Kind, Locations, Plan};
 
 /// Resolve this application's existing roots before the configuration loader or runtime worker runs.
-pub(crate) fn prepare(workspace: &Path) -> anyhow::Result<()> {
+pub(crate) fn prepare(workspace: &Path, profile: &Path) -> anyhow::Result<()> {
     let runtime = crate::extensions::runtime_root(workspace);
-    let native = super::persistence::directory(workspace);
-    let runs = editor_core::default_root()
-        .ok_or_else(|| anyhow::anyhow!("Profile directory unavailable"))?;
-    let session = crate::app::session::SessionState::for_workspace(workspace)
-        .file_path()
-        .ok_or_else(|| anyhow::anyhow!("Session directory unavailable"))?;
+    let native = super::persistence::directory_in_profile(workspace, profile);
+    let runs = profile.join("run");
+    let session = crate::app::session::SessionState::file_in_profile(workspace, profile);
     perform(&runtime, workspace, &native, &runs, &session)
 }
 

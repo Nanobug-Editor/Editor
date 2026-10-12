@@ -130,7 +130,7 @@ impl ProjectWindow {
             }
         };
         // Finish the established finite data import before writing any new trust/session decision.
-        if let Err(error) = terminal::upgrade::prepare(workspace.root()) {
+        if let Err(error) = terminal::upgrade::prepare(workspace.root(), &self.profile) {
             self.error = Some(error.to_string());
             cx.notify();
             return;

@@ -167,19 +167,23 @@ impl SessionState {
 
     /// Host-only migrations resolve the exact profile file without repeating its workspace digest.
     pub(crate) fn file_path(&self) -> Option<PathBuf> {
+        let profile = self
+            .profile_directory
+            .clone()
+            .or_else(|| {
+                std::env::var_os("ME_EDITOR_PROFILE_HOME")
+                    .filter(|root| !root.is_empty())
+                    .map(PathBuf::from)
+            })
+            .or_else(|| dirs::config_dir().map(|root| root.join("MeEditor")))?;
+        Some(Self::file_in_profile(Path::new(&self.workspace), &profile))
+    }
+
+    /// Resolve a workspace's existing storage identity in a host-selected profile without loading data.
+    pub(crate) fn file_in_profile(workspace: &Path, profile: &Path) -> PathBuf {
         let mut hasher = DefaultHasher::new();
-        self.workspace.hash(&mut hasher);
-        Some(
-            self.profile_directory
-                .clone()
-                .or_else(|| {
-                    std::env::var_os("ME_EDITOR_PROFILE_HOME")
-                        .filter(|root| !root.is_empty())
-                        .map(PathBuf::from)
-                })
-                .or_else(|| dirs::config_dir().map(|root| root.join("MeEditor")))?
-                .join(format!("{:016x}.json", hasher.finish())),
-        )
+        workspace.to_string_lossy().hash(&mut hasher);
+        profile.join(format!("{:016x}.json", hasher.finish()))
     }
 
     pub fn load(workspace: &Path) -> Self {
@@ -193,10 +197,9 @@ impl SessionState {
 
     /// Absence of explicit, matching local authority never implies consent for a new project.
     pub(crate) fn recorded_trust(workspace: &Path, profile: &Path) -> Option<bool> {
-        let mut identity = Self::for_workspace(workspace);
-        identity.profile_directory = Some(profile.to_owned());
         let json: serde_json::Value =
-            serde_json::from_slice(&fs::read(identity.file_path()?).ok()?).ok()?;
+            serde_json::from_slice(&fs::read(Self::file_in_profile(workspace, profile)).ok()?)
+                .ok()?;
         (json.get("workspace")?.as_str()? == workspace.to_string_lossy())
             .then(|| {
                 json.get("workspace_trusted")

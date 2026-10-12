@@ -117,11 +117,14 @@ impl TerminalPanel {
         parent: WeakEntity<EditorApp>,
         io_host: Entity<extensions::ExtensionPanel>,
         workspace: PathBuf,
+        profile: Option<&Path>,
         trusted: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let storage = persistence::directory(&workspace);
+        let storage = profile
+            .map(|profile| persistence::directory_in_profile(&workspace, profile))
+            .unwrap_or_else(|| persistence::directory(&workspace));
         let focus = cx.focus_handle();
         // A dock can retain the pre-render handle; entering it must still land on the current input canvas.
         let focus_subscription = cx.on_focus(&focus, window, |panel, window, cx| {
