@@ -1443,41 +1443,83 @@ impl ExtensionPanel {
 impl EditorApp {
     /// Keep the window alive while snapshots finish; GPUI's final quit grace is only 200 ms.
     pub(crate) fn shutdown_plugins(&mut self, cx: &mut Context<Self>) {
-        self.plugin_configuration_bridge.jobs.stop_all();
+        let task = match self.prepare_project_shutdown(cx) {
+            Ok(task) => task,
+            Err(error) => {
+                self.status = error;
+                cx.notify();
+                return;
+            }
+        };
+        cx.spawn(async move |app, cx| {
+            let result = task.await;
+            let _ = app.update(cx, |app, cx| match result {
+                Ok(()) => cx.quit(),
+                Err(error) => {
+                    app.status = error;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Save logical state before stopping resources; the caller alone decides home versus app exit.
+    /// Save/launch failures are returned while the original editor remains available for recovery.
+    pub(crate) fn prepare_project_shutdown(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui_kit::Task<Result<(), String>>, String> {
         if self.shutting_down {
-            return;
+            return Err(t!("projects.closing").to_string());
         }
-        self.shutting_down = true;
         self.capture_dock_layout(cx);
-        // Read the current tree before saving, including the last click immediately before exit.
         self.capture_explorer_state(cx);
-        self.persist_session();
-        self.status = "正在保存插件状态…".into();
+        self.capture_document_session();
+        self.session_state
+            .try_save()
+            .map_err(|error| error.to_string())?;
+        // Terminal persistence can fail. Refuse to discard the project before any worker is stopped.
+        let native_cleanup = self
+            .terminal
+            .update(cx, |panel, _| panel.shutdown())
+            .map_err(|error| error.to_string())?;
+        self.stop_run_sessions(cx);
+        self.plugin_configuration_bridge.jobs.stop_all();
+        self.shutting_down = true;
+        // Modal content can hold a strong editor reference. Retire project-owned windows and
+        // their pending drafts before dropping the project, so the next project has no old owner.
+        self.close_run_form(cx);
+        self.dialog = None;
+        self.plugin_settings = None;
+        self._dialog_closed_subscription = None;
+        self._extensions_closed_subscription = None;
+        for handle in [self.dialog_window.take(), self.extensions_window.take()]
+            .into_iter()
+            .flatten()
+        {
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            });
+        }
+        self.file_watch.stop();
+        self.cancel_pending_format();
+        self.status = t!("projects.closing").to_string();
         self.extensions.read(cx).worker.cancel_installation();
         // File workers and their private backups may outlive the platform's 200 ms quit grace.
         // Share the native close gate's cleanup and prevent new file commands while it runs.
         let file_cleanup = self.shutdown_file_transfers(cx);
-        let native_cleanup = self.terminal.update(cx, |panel, _| panel.shutdown());
-        let native_cleanup = cx.background_executor().spawn(async move {
-            if let Ok(receiver) = native_cleanup {
-                let _ = receiver.recv();
-            }
-        });
+        let native_cleanup = cx
+            .background_executor()
+            .spawn(async move { native_cleanup.recv().map_err(|error| error.to_string()) });
         cx.notify();
-        let (tx, rx) = futures::channel::oneshot::channel();
-        let _ = self
-            .extensions
-            .read(cx)
-            .worker
-            .tx
-            .send(Work::Shutdown(Some(tx)));
-        cx.spawn(async move |_, cx| {
+        let shutdown = self.extensions.read(cx).worker.request_shutdown();
+        Ok(cx.background_executor().spawn(async move {
             file_cleanup.await;
-            native_cleanup.await;
-            let _ = rx.await;
-            let _ = cx.update(|cx| cx.quit());
-        })
-        .detach();
+            native_cleanup.await?;
+            shutdown?.await.map_err(|error| error.to_string())?;
+            Ok(())
+        }))
     }
     /// Show every panel one provider declared, because a session's output lives in its own surface.
     ///

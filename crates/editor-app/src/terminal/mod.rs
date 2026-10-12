@@ -193,11 +193,24 @@ impl TerminalPanel {
     pub(crate) fn visible(&self) -> bool {
         self.visible
     }
+    /// Hidden terminal tabs still own programs and participate in the project close decision.
+    pub(crate) fn has_running_programs(&self) -> bool {
+        self.sessions
+            .iter()
+            .any(|session| session.launched && !session.exited)
+    }
+    /// Startup restores panel layout without creating or restarting a shell.
+    pub(crate) fn restore_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+        self.visible = visible;
+        self.focus_pending = false;
+        cx.notify();
+    }
     /// Commit logical history before joining native cleanup at the editor's close gate.
     pub(crate) fn shutdown(&mut self) -> anyhow::Result<std::sync::mpsc::Receiver<()>> {
         let saved = self.save();
         if let Err(error) = saved {
-            self.report_error(FailureKind::Save, error);
+            self.report_error(FailureKind::Save, &error);
+            anyhow::bail!("{error}");
         }
         self.supervisor.shutdown()
     }
@@ -225,7 +238,7 @@ impl TerminalPanel {
             self.report_error(FailureKind::Process, error);
         }
         if trusted && self.visible {
-            self.launch_active();
+            self.launch_active(false);
         }
         cx.notify();
     }
@@ -287,7 +300,8 @@ impl TerminalPanel {
         cx.notify();
     }
 
-    fn launch_active(&mut self) {
+    /// Measurements may start newly requested shells, but restored transcripts require user input.
+    fn launch_active(&mut self, from_user_input: bool) {
         let Some(index) = self.active_index() else {
             return;
         };
@@ -295,6 +309,7 @@ impl TerminalPanel {
             || self.sessions[index].task.is_some()
             || self.sessions[index].launched
             || self.sessions[index].exited
+            || (self.sessions[index].restored && !from_user_input)
         {
             return;
         }
@@ -326,6 +341,12 @@ impl TerminalPanel {
     }
 
     fn write(&mut self, bytes: Vec<u8>, cx: &mut App) {
+        if bytes.is_empty() {
+            return;
+        }
+        // Sending text or a terminal key is an explicit request to use this retained Shell.
+        // Restoring layout, selecting history, focus and resize alone never start a program.
+        self.launch_active(true);
         if let Some(index) = self.active_index() {
             let session = &mut self.sessions[index];
             if session.exited || !session.launched {

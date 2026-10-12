@@ -10,6 +10,8 @@ pub(crate) mod languages;
 mod layout;
 pub(crate) mod messages;
 pub(crate) mod plugins;
+/// Project selection owns the native window independently of an opened editor session.
+pub(crate) mod projects;
 pub(crate) mod session;
 mod settings;
 mod shell;

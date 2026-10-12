@@ -105,11 +105,12 @@ fn legacy_upgrade_restores_native_shell_then_resizes_without_replaying_tasks(
     // Opening the real native panel must select the imported Shell, not create another default tab.
     let toggle = visual.debug_bounds("terminal-toggle").unwrap();
     visual.simulate_click(toggle.center(), Default::default());
-    wait(visual, &app, |visual| {
-        visual.update(|_, cx| app.read(cx).terminal.read(cx).sessions[0].launched)
-    });
+    visual.run_until_parked();
+    visual.update(|window, cx| window.draw(cx).clear(cx));
     visual.update(|_, cx| {
         let panel = app.read(cx).terminal.read(cx);
+        // Imported history is restored without replaying a program; the input below opts in.
+        assert!(!panel.has_running_programs());
         assert_eq!(panel.sessions.len(), 2);
         assert_eq!(panel.sessions[0].name, "my-old-shell");
         assert!(panel.sessions[1].exited && panel.sessions[1].task.is_some());

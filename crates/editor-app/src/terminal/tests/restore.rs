@@ -1,4 +1,4 @@
-//! Closing a native window persists its logical cells; reopening starts a fresh owned Shell.
+//! Closing persists logical cells; reopening keeps transcripts idle until explicit terminal input.
 
 use super::*;
 
@@ -152,8 +152,7 @@ fn native_terminal_reopen_preserves_history_and_resize(cx: &mut TestAppContext) 
     }
     // The original old output must stay single even after ConPTY's coalesced resize redraw.
     let deadline = Instant::now() + Duration::from_millis(400);
-    // ConPTY first removes the inherited empty prompt, then the newly owned Shell redraws it.
-    // A timer alone can sample that intermediate frame; wait for the complete original transcript.
+    // Reopening and resize preserve the transcript without replaying the old native program.
     wait(visual, &app, |visual| {
         Instant::now() >= deadline && painted(&app, visual).contains(&before)
     });

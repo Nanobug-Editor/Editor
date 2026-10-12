@@ -107,6 +107,8 @@ actions!(
 );
 
 struct EditorApp {
+    /// Normal GUI windows coordinate close/return-home separately from the project editor.
+    project_window: Option<WeakEntity<app::projects::ProjectWindow>>,
     workspace: Workspace,
     /// Native events and fallback scans send immutable disk snapshots to the UI thread.
     file_watch: FileWatch,
@@ -316,6 +318,17 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::new_with_session(workspace, initial_file, None, window, cx)
+    }
+
+    /// Construct project resources only after the caller has established local workspace authority.
+    fn new_with_session(
+        workspace: Workspace,
+        initial_file: Option<PathBuf>,
+        prepared_session: Option<SessionState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         explorer::transfer::shortcuts::init(cx);
         let file_transfers = explorer::transfer::TransferState::default();
         file_transfers.install_shutdown(cx);
@@ -350,7 +363,8 @@ impl EditorApp {
         let terminal_upgrade_error = terminal::upgrade::prepare(workspace.root())
             .err()
             .map(|error| format!("{error:#}"));
-        let mut session_state = SessionState::load(workspace.root());
+        let mut session_state =
+            prepared_session.unwrap_or_else(|| SessionState::load(workspace.root()));
         // Plugin configurations are host-local per workspace; project settings do not supply run data.
         // A malformed local store is reported rather than silently replaced.
         let mut run_controls = run::RunControls::load_plugin_configurations(
@@ -452,7 +466,7 @@ impl EditorApp {
             if let Some(error) = terminal_upgrade_error.clone() {
                 panel.upgrade_failed(error);
             }
-            panel.set_visible(session_state.native_terminal_visible, cx)
+            panel.restore_visible(session_state.native_terminal_visible, cx)
         });
         dock_area.update(cx, |area, cx| {
             // Explorer and the editor share the center; plugin management has its own window.
@@ -514,6 +528,7 @@ impl EditorApp {
             }
         });
         let mut this = Self {
+            project_window: None,
             workspace,
             file_watch,
             workspace_snapshot: None,
@@ -677,7 +692,7 @@ impl EditorApp {
             while let Some(update) = watch_updates.next().await {
                 let _ = app.update_in(cx, |app, window, cx| {
                     // Disk scans captured during a batch may still contain its intermediate paths.
-                    if !app.file_transfers.defer_reconciliation(&update) {
+                    if !app.shutting_down && !app.file_transfers.defer_reconciliation(&update) {
                         app.apply_reconciliation(update, window, cx);
                     }
                 });
@@ -909,19 +924,12 @@ impl EditorApp {
     }
 }
 
-fn resolve_startup_target() -> anyhow::Result<(Workspace, Option<PathBuf>)> {
+/// An argument-free launch has no workspace; explicit development instances retain their own target.
+fn resolve_startup_target() -> Option<PathBuf> {
     if let Some(instance) = plugin_development::instance::context() {
-        return Ok((Workspace::open(&instance.workspace)?, None));
+        return Some(instance.workspace.clone());
     }
-    let argument = std::env::args_os().nth(1).map(PathBuf::from);
-    let target = argument.unwrap_or(std::env::current_dir()?);
-    if target.is_file() {
-        let file = target.canonicalize()?;
-        let root = file.parent().unwrap_or(Path::new(".")).to_path_buf();
-        Ok((Workspace::open(root)?, Some(file)))
-    } else {
-        Ok((Workspace::open(target)?, None))
-    }
+    std::env::args_os().nth(1).map(PathBuf::from)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -942,9 +950,26 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     let _timer_resolution = WindowsTimerResolution::enable_for_window_drag();
 
-    let (workspace, initial_file) = resolve_startup_target()?;
+    let target = resolve_startup_target();
+    let development_workspace = plugin_development::instance::context()
+        .map(|instance| Workspace::open(&instance.workspace))
+        .transpose()?;
     // Plain entries prevent bundled host grammars from running before plugin validation.
-    let startup_state = SessionState::load(workspace.root());
+    let startup_state = target.as_ref().and_then(|path| {
+        let root = if path.is_file() {
+            path.parent()?
+        } else {
+            path.as_path()
+        };
+        Workspace::open(root)
+            .ok()
+            .map(|workspace| SessionState::load(workspace.root()))
+    });
+    let profile = app::shortcuts::bootstrap::default_path()
+        .map_err(anyhow::Error::msg)?
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("User profile directory is unavailable"))?
+        .to_owned();
     gpui_kit::application()
         .with_assets(AppAssets)
         .run(move |cx| {
@@ -961,13 +986,15 @@ fn main() -> anyhow::Result<()> {
             let bounds = Bounds::centered(
                 None,
                 size(
-                    px(startup_state.window_width),
-                    px(startup_state.window_height),
+                    px(startup_state
+                        .as_ref()
+                        .map_or(1280., |state| state.window_width)),
+                    px(startup_state
+                        .as_ref()
+                        .map_or(820., |state| state.window_height)),
                 ),
                 cx,
             );
-            let workspace = workspace.clone();
-            let initial_file = initial_file.clone();
             let mut window_options = TitleBar::window_options();
             // Native materials are chosen by the active theme before first draw.
             window_options.window_background = theme::window_background(cx);
@@ -976,12 +1003,26 @@ fn main() -> anyhow::Result<()> {
             // Leave frame scheduling uncapped; active frames follow the display refresh rate.
             window_options.inactive_frame_interval = None;
             // Kit supplies the shared Root and its automatic overlay hosting.
-            gpui_kit::open_window(window_options, cx, move |window, cx| {
-                // Native task switching and accessibility use a separate title from the custom chrome.
-                window.set_window_title(app::APP_NAME);
-                cx.new(|cx| EditorApp::new(workspace, initial_file, window, cx))
-            })
-            .expect("failed to open Nanobug window");
+            if let Some(workspace) = development_workspace {
+                // Explicit development grants and its isolated profile keep the established startup contract.
+                gpui_kit::open_window(window_options, cx, move |window, cx| {
+                    window.set_window_title(app::APP_NAME);
+                    cx.new(|cx| EditorApp::new(workspace, None, window, cx))
+                })
+                .expect("failed to open Nanobug development window");
+            } else {
+                gpui_kit::open_window(window_options, cx, move |window, cx| {
+                    window.set_window_title(app::APP_NAME);
+                    cx.new(|cx| {
+                        let mut host = app::projects::ProjectWindow::new(profile, window, cx);
+                        if let Some(path) = target {
+                            host.open_path(path, window, cx);
+                        }
+                        host
+                    })
+                })
+                .expect("failed to open Nanobug window");
+            }
         });
     Ok(())
 }

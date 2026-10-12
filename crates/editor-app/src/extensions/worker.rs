@@ -624,6 +624,26 @@ impl Drop for ImageOfferReservation {
 }
 
 impl Worker {
+    /// Ask the existing transport to retire its runtime; completion means resource ownership ended.
+    /// The inert recorded adapter has no runtime resources, but retains the same shutdown message.
+    pub(super) fn request_shutdown(
+        &self,
+    ) -> Result<futures::channel::oneshot::Receiver<()>, String> {
+        let (acknowledge, completed) = futures::channel::oneshot::channel();
+        #[cfg(test)]
+        if self.recording {
+            self.tx
+                .send(Work::Shutdown(None))
+                .map_err(|error| error.to_string())?;
+            let _ = acknowledge.send(());
+            return Ok(completed);
+        }
+        self.tx
+            .send(Work::Shutdown(Some(acknowledge)))
+            .map_err(|error| error.to_string())?;
+        Ok(completed)
+    }
+
     /// Reserve before copying clipboard pixels or reading external files, never after enqueueing them.
     pub(super) fn reserve_image_offer(&self) -> Option<ImageOfferReservation> {
         use std::sync::atomic::Ordering;

@@ -89,6 +89,10 @@ impl FileWatch {
     pub(crate) fn reconcile(&self) {
         let _ = self.sender.send(Command::Reconcile);
     }
+    /// Seal the watcher before dropping the old project; queued results are rejected by its close state.
+    pub(crate) fn stop(&self) {
+        let _ = self.sender.send(Command::Stop);
+    }
 
     /// Watch parent directories of open files outside the workspace.
     pub(crate) fn set_documents(&self, paths: Vec<WatchedFile>) {

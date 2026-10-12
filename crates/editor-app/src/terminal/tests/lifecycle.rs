@@ -1,4 +1,4 @@
-//! Session shortcuts and automatic selection must launch the correct restored native Shell.
+//! Session shortcuts keep history idle; explicit input starts the selected retained Shell.
 
 use super::*;
 

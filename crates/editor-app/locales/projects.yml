@@ -1,0 +1,67 @@
+_version: 2
+projects.welcome:
+  en: "Start your work"
+  zh-CN: "开始你的工作"
+projects.open_folder:
+  en: "Open folder"
+  zh-CN: "打开文件夹"
+projects.projects:
+  en: "Projects"
+  zh-CN: "项目"
+projects.subtitle:
+  en: "Open a folder or continue a recent project."
+  zh-CN: "打开文件夹，或继续最近的项目。"
+projects.recent:
+  en: "Recent projects"
+  zh-CN: "最近项目"
+projects.remove_recent:
+  en: "Remove from recent projects"
+  zh-CN: "从最近项目中移除"
+projects.close_project:
+  en: "Close project"
+  zh-CN: "关闭项目"
+projects.trust_question:
+  en: "Do you trust this project?"
+  zh-CN: "是否信任此项目？"
+projects.trust_details:
+  en: "Trusted projects can start plugins and language tools. Restricted mode allows editing without starting them."
+  zh-CN: "信任后可启动插件和语言工具；受限模式仍可查看与编辑文件。"
+projects.trust:
+  en: "Trust and open"
+  zh-CN: "信任并打开"
+projects.restricted:
+  en: "Open in restricted mode"
+  zh-CN: "以受限模式打开"
+projects.close_question:
+  en: "Close this project?"
+  zh-CN: "关闭此项目？"
+projects.unsaved_details:
+  en: "This project contains unsaved changes."
+  zh-CN: "此项目有尚未保存的修改。"
+projects.running_details:
+  en: "Closing will stop this project's running tasks and terminal programs."
+  zh-CN: "确认关闭会停止此项目运行中的任务与终端程序。"
+projects.save_close:
+  en: "Save and close"
+  zh-CN: "保存并关闭"
+projects.discard_close:
+  en: "Discard changes and close"
+  zh-CN: "放弃修改并关闭"
+projects.stop_close:
+  en: "Stop and close"
+  zh-CN: "停止并关闭"
+projects.changed_before_close:
+  en: "The document changed. Review the close decision again."
+  zh-CN: "文档已发生变化，请重新确认关闭决定。"
+projects.changed_before_open:
+  en: "The selected folder changed. Select the project again."
+  zh-CN: "所选目录已发生变化，请重新选择项目。"
+projects.closing:
+  en: "Saving project state and releasing resources…"
+  zh-CN: "正在保存项目状态并释放资源…"
+projects.disk_conflict:
+  en: "The file changed on disk or is unavailable: %{path}. Cancel closing and resolve it before saving."
+  zh-CN: "文件在磁盘上已发生变化或不可读取：%{path}。请取消关闭，处理后再保存。"
+projects.failure:
+  en: "The operation could not complete: %{details}"
+  zh-CN: "操作未完成：%{details}"

@@ -66,6 +66,8 @@ cargo run --release -- C:\path\to\project
 
 Debug builds are unoptimized; window movement and editing may be slower. Use Release for everyday evaluation.
 
+Starting without a path opens the project home. Choose **Open folder** or a recent project; a folder needs no Git repository or project file. A new project asks for trust or restricted editing, while existing local choices are retained. **Close project** returns the same window to the home after saving or discarding changes and confirming any running programs. Cancelling or a save failure keeps the project open. Reopening restores saved tabs and layout without restarting programs.
+
 The six workspace crates cover the application, document core, platform integration, plugin schema, public protocol, and plugin runtime. Official plugin sources live in the independent [X-for-Nanobug repositories](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/registry); fixed test-only Package inputs live in `crates/plugin-runtime/tests/fixtures/packages/`; native packaging configuration and instructions live in `installer/`. See the [maintainer documentation index](docs/README.md) for details.
 
 The Cargo package remains `editor-app`. Existing `MeEditor` data directories, `ME_EDITOR_*` environment variables, and persisted command identifiers are retained to preserve settings, history, and installed plugins.

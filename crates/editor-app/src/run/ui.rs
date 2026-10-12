@@ -567,8 +567,8 @@ impl EditorApp {
         false
     }
 
-    /// Leave after stopping every run session through the provider that owns it.
-    pub(crate) fn confirm_leave(&mut self, cx: &mut Context<Self>) {
+    /// Stop owned sessions without choosing whether the project window returns home or exits.
+    pub(crate) fn stop_run_sessions(&mut self, cx: &mut Context<Self>) {
         self.plugin_configuration_bridge.jobs.stop_all();
         // A preparation is asked to stop as a sequence, not as a program: its step may not have a
         // session yet, and one asked to stop must not be followed by the program it was preparing.
@@ -613,6 +613,11 @@ impl EditorApp {
                 request_id,
             });
         }
+    }
+
+    /// Continue the legacy standalone close only after owned sessions have been asked to stop.
+    pub(crate) fn confirm_leave(&mut self, cx: &mut Context<Self>) {
+        self.stop_run_sessions(cx);
         self.leave_confirmed = true;
         self.leave_confirm = None;
         cx.notify();

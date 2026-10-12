@@ -27,7 +27,7 @@ impl TerminalPanel {
                         self.resize_process(id, size, cx);
                     }
                 }
-                self.launch_active();
+                self.launch_active(false);
             }
             CanvasEvent::Text { text } => self.write(text.into_bytes(), cx),
             CanvasEvent::Key {

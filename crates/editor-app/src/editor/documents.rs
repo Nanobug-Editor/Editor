@@ -262,7 +262,8 @@ impl EditorApp {
         );
     }
 
-    pub(crate) fn persist_session(&mut self) {
+    /// Capture document identities without storing text or starting any restored programs.
+    pub(crate) fn capture_document_session(&mut self) {
         self.session_state.open_tabs = self
             .tabs
             .iter()
@@ -279,6 +280,11 @@ impl EditorApp {
             })
             .map(|path| path.to_string_lossy().into_owned());
         self.session_state.explorer_visible = self.explorer_visible;
+    }
+
+    /// Keep existing immediate persistence callers, while close can surface the same write's errors.
+    pub(crate) fn persist_session(&mut self) {
+        self.capture_document_session();
         self.session_state.save();
     }
 

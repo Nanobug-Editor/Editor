@@ -78,7 +78,7 @@ impl Drop for WindowsTimerResolution {
 }
 
 /// Draws the same window glyph and native control region as GPUI Kit's TitleBar.
-fn title_bar_window_control(
+pub(super) fn title_bar_window_control(
     id: &'static str,
     icon: IconName,
     area: WindowControlArea,
@@ -369,6 +369,7 @@ impl Render for EditorApp {
         self.track_plugin_indicator_frame(plugin_indicator);
         v_flex()
             .id("editor-shell")
+            .debug_selector(|| "editor-shell".into())
             .key_context("EditorShell")
             .capture_key_down(cx.listener(Self::cancel_pending_language_feature))
             .relative()
@@ -390,9 +391,18 @@ impl Render for EditorApp {
                     app.open_shortcuts(window, cx);
                 }),
             )
-            .on_action(
-                cx.listener(|this, _: &extensions::QuitEditor, _, cx| this.shutdown_plugins(cx)),
-            )
+            .on_action(cx.listener(|this, _: &extensions::QuitEditor, window, cx| {
+                if let Some(owner) = this.project_window.clone() {
+                    // Release the child editor's update lease before the owner examines it.
+                    window.defer(cx, move |window, cx| {
+                        let _ = owner.update(cx, |host, cx| {
+                            host.request_close(app::projects::CloseIntent::Window, window, cx);
+                        });
+                    });
+                } else {
+                    this.shutdown_plugins(cx);
+                }
+            }))
             .on_action(
                 cx.listener(|this, _: &extensions::ToggleExtensions, window, cx| {
                     this.toggle_extensions(window, cx)
@@ -490,6 +500,29 @@ impl Render for EditorApp {
                     .child(self.render_settings_dialog(cx))
                     .child(self.render_shortcuts_trigger(cx))
                     .child(self.render_shortcuts_menu_trigger(cx))
+                    .when(self.project_window.is_some(), |bar| {
+                        let owner = self.project_window.clone().unwrap();
+                        bar.child(
+                            Button::new("project-close-project")
+                                .debug_selector(|| "project-close-project".into())
+                                .small()
+                                .ghost()
+                                .label(t!("projects.close_project").to_string())
+                                .accessibility_label(t!("projects.close_project").to_string())
+                                .on_click(move |_, window, cx| {
+                                    let owner = owner.clone();
+                                    window.defer(cx, move |window, cx| {
+                                        let _ = owner.update(cx, |host, cx| {
+                                            host.request_close(
+                                                app::projects::CloseIntent::Home,
+                                                window,
+                                                cx,
+                                            );
+                                        });
+                                    });
+                                }),
+                        )
+                    })
                     .child(self.render_window_controls(window, cx)),
             )
             .child(h_flex().flex_1().min_h_0().child(self.dock_area.clone()))

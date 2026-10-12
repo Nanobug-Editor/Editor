@@ -66,6 +66,8 @@ cargo run --release -- C:\path\to\project
 
 Debug 构建未经优化，窗口拖动与编辑响应可能较慢，日常体验建议使用 Release。
 
+不传路径启动时进入项目首页，通过**打开文件夹**或最近项目开始编辑；普通目录即可使用，无需 Git 仓库或专用项目文件。新项目会询问信任或受限编辑，并保留已有本机选择。**关闭项目**在处理未保存修改、确认停止运行程序并完成清理后回到同一窗口的首页；取消或保存失败会保留当前项目。重新打开恢复已保存标签和布局，不自动重启程序。
+
 源码按职责组织为编辑器应用、文档核心、平台适配、插件格式、公开协议与插件运行时六个 crate。官方插件源码位于[独立 X-for-Nanobug 仓库](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/registry)，固定 Package 测试输入位于 `crates/plugin-runtime/tests/fixtures/packages/`，原生打包配置与步骤位于 `installer/`。详细入口见[维护者文档目录](docs/README.md)。
 
 Cargo 包名保留为 `editor-app`。为保留设置、历史和已安装插件，继续使用既有 `MeEditor` 数据目录、`ME_EDITOR_*` 环境变量和已保存的命令标识。

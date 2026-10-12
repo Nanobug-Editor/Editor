@@ -25,6 +25,9 @@ pub struct SessionState {
     /// Startup failures must not replace damaged data or targets of an unfinished migration.
     #[serde(skip)]
     persistence_blocked: bool,
+    /// A window retains its selected profile; serialized data cannot redirect future writes.
+    #[serde(skip)]
+    profile_directory: Option<PathBuf>,
     /// This private workspace record namespaces choices by lowercase file type.
     #[serde(default)]
     pub file_view_providers: std::collections::BTreeMap<String, FileProviderChoice>,
@@ -132,6 +135,7 @@ impl SessionState {
     pub fn for_workspace(workspace: &Path) -> Self {
         Self {
             persistence_blocked: false,
+            profile_directory: None,
             file_view_providers: Default::default(),
             workspace: workspace.to_string_lossy().into_owned(),
             // Preserve the editor's existing trust default; users can restrict a workspace locally.
@@ -166,21 +170,51 @@ impl SessionState {
         let mut hasher = DefaultHasher::new();
         self.workspace.hash(&mut hasher);
         Some(
-            std::env::var_os("ME_EDITOR_PROFILE_HOME")
-                .filter(|root| !root.is_empty())
-                .map(PathBuf::from)
+            self.profile_directory
+                .clone()
+                .or_else(|| {
+                    std::env::var_os("ME_EDITOR_PROFILE_HOME")
+                        .filter(|root| !root.is_empty())
+                        .map(PathBuf::from)
+                })
                 .or_else(|| dirs::config_dir().map(|root| root.join("MeEditor")))?
                 .join(format!("{:016x}.json", hasher.finish())),
         )
     }
 
     pub fn load(workspace: &Path) -> Self {
+        Self::load_selected_profile(workspace, None)
+    }
+
+    /// Load the existing workspace format in an explicit profile, preserving damaged data.
+    pub(crate) fn load_in_profile(workspace: &Path, profile: &Path) -> Self {
+        Self::load_selected_profile(workspace, Some(profile.to_owned()))
+    }
+
+    /// Absence of explicit, matching local authority never implies consent for a new project.
+    pub(crate) fn recorded_trust(workspace: &Path, profile: &Path) -> Option<bool> {
+        let mut identity = Self::for_workspace(workspace);
+        identity.profile_directory = Some(profile.to_owned());
+        let json: serde_json::Value =
+            serde_json::from_slice(&fs::read(identity.file_path()?).ok()?).ok()?;
+        (json.get("workspace")?.as_str()? == workspace.to_string_lossy())
+            .then(|| {
+                json.get("workspace_trusted")
+                    .and_then(serde_json::Value::as_bool)
+            })
+            .flatten()
+    }
+
+    /// Restore storage ownership after deserialization rather than accepting it from persisted fields.
+    fn load_selected_profile(workspace: &Path, profile: Option<PathBuf>) -> Self {
         let mut state = Self::for_workspace(workspace);
+        state.profile_directory = profile.clone();
         if let Some(path) = state.file_path() {
             if let Ok(contents) = fs::read_to_string(&path) {
                 if let Ok(saved) = serde_json::from_str::<Self>(&contents) {
                     if saved.workspace == state.workspace {
                         state = saved;
+                        state.profile_directory = profile.clone();
                         state.window_width = state.window_width.clamp(800., 7680.);
                         state.window_height = state.window_height.clamp(500., 4320.);
                         state.explorer_width = state.explorer_width.clamp(220., 520.);
@@ -237,19 +271,27 @@ impl SessionState {
     }
 
     pub fn save(&self) {
+        let _ = self.try_save();
+    }
+
+    /// Persist the logical session or return an error without replacing damaged/migrating data.
+    pub(crate) fn try_save(&self) -> anyhow::Result<()> {
         if self.persistence_blocked {
-            return;
+            anyhow::bail!("Workspace session is protected after a failed load or migration");
         }
-        let Some(path) = self.file_path() else { return };
-        let Some(parent) = path.parent() else { return };
-        if fs::create_dir_all(parent).is_ok() {
-            if let Ok(json) = serde_json::to_vec_pretty(self) {
-                let temporary = path.with_extension("json.tmp");
-                if fs::write(&temporary, json).is_ok() {
-                    let _ = fs::rename(temporary, path);
-                }
-            }
-        }
+        use std::io::Write as _;
+        let path = self
+            .file_path()
+            .ok_or_else(|| anyhow::anyhow!("User profile is unavailable"))?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Invalid session path"))?;
+        fs::create_dir_all(parent)?;
+        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+        temporary.write_all(&serde_json::to_vec_pretty(self)?)?;
+        temporary.as_file().sync_all()?;
+        temporary.persist(path).map_err(|error| error.error)?;
+        Ok(())
     }
 
     /// Keep automatic layout saves away from a failed import until the next successful startup.
