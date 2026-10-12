@@ -258,6 +258,12 @@ fn second_local_import_shows_visible_consent(cx: &mut TestAppContext) {
         "package origin and permissions should render inside the dialog"
     );
     assert!(
+        dialog_cx
+            .debug_bounds("plugin-install-replacements")
+            .is_some(),
+        "replacement ownership must be visible before approval"
+    );
+    assert!(
         dialog_cx.debug_bounds("plugin-install-cancel").is_some(),
         "the dialog must show a cancel button"
     );
