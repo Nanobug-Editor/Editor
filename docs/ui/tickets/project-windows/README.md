@@ -2,7 +2,7 @@
 
 日期：2026-10-12
 
-状态：用户已要求按该拆分执行第一单。三单已发布并核对正文、标签及原生阻塞边；01 进行中，02、03 待前置项完成。序号 01–03 不是 GitHub issue 编号。
+状态：用户已要求执行第一单；01 实现、行为验收及双轴审查完成，证据见[实施验收](../../verification/project-home.md)。02、03 尚未实施。三单已发布并核对正文、标签及原生阻塞边，GitHub 状态以实际议题读回为准；序号 01–03 不是 GitHub issue 编号。
 
 发布映射：[publication.json](publication.json)。真实工单为 [#103](https://github.com/T-miracle/Nanobug/issues/103)、[#104](https://github.com/T-miracle/Nanobug/issues/104)、[#105](https://github.com/T-miracle/Nanobug/issues/105)。
 
