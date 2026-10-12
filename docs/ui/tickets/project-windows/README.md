@@ -2,7 +2,9 @@
 
 日期：2026-10-12
 
-状态：3 张工单草案已整理，粒度与阻塞边待用户批准，尚未发布或实施。序号 01–03 不是 GitHub issue 编号。
+状态：用户已要求按该拆分执行第一单。三单已发布并核对正文、标签及原生阻塞边；01 进行中，02、03 待前置项完成。序号 01–03 不是 GitHub issue 编号。
+
+发布映射：[publication.json](publication.json)。真实工单为 [#103](https://github.com/T-miracle/Nanobug/issues/103)、[#104](https://github.com/T-miracle/Nanobug/issues/104)、[#105](https://github.com/T-miracle/Nanobug/issues/105)。
 
 依据：[总规格 #102](https://github.com/T-miracle/Nanobug/issues/102)及[本地规格](../../specs/project-windows.md)。已读取线上完整正文，评论列表为空；已确认的两个测试边界继续适用，不再重复询问。
 
@@ -62,10 +64,10 @@ flowchart LR
 
 ## 发布计划
 
-- 用户批准粒度及 01 → 02 → 03 两条边后，按依赖顺序发布三张工单，标签统一为 `ready-for-agent`。
+- 已按用户执行第一单的要求采用当前粒度，发布三张工单，标签统一为 `ready-for-agent`。
 - 发布前以稳定标识和标题核对重复议题。后续工单正文填入真实阻塞 issue 引用；原生 GitHub issue dependencies 使用被依赖工单的数据库 ID，并读回核对两条边。
 - 父 #102 只作为正文引用，不设为阻塞项，不关闭、不改写；不为建立本计划而修改父议题元数据。
-- 真实 issue 编号与 ID 在发布成功且读回后写入 publication.json；草案阶段不预填或猜测编号。
+- 真实 issue 编号与 ID 已写入 publication.json；已读回核对原生依赖为 #104 被 #103 阻塞、#105 被 #104 阻塞。
 - 发布后的初始实施前沿只有 01；01 完成后才进入 02，02 完成后才进入 03。实际状态以 GitHub 读回为准，标签本身不解除阻塞。
 
 返回[原生 UI 文档目录](../../README.md)。

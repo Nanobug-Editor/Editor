@@ -1,6 +1,8 @@
 # 01 — 项目首页、信任与单项目打开关闭闭环
 
-状态：拆分草案，待用户批准后发布；目标标签 `ready-for-agent`。未开始实现。
+状态：进行中；用户已要求执行本单，标签 `ready-for-agent`。尚未完成验收。
+
+议题：[工单 #103](https://github.com/T-miracle/Nanobug/issues/103)。
 
 稳定标识：`ui-project-windows:ticket:01`
 

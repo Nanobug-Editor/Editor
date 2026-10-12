@@ -1,6 +1,8 @@
 # 02 — 并行项目窗口、资源隔离与全窗口安全退出
 
-状态：拆分草案，待用户批准后发布；目标标签 `ready-for-agent`。未开始实现。
+状态：ready-for-agent；已发布，待前置工单完成后实施。
+
+议题：[工单 #104](https://github.com/T-miracle/Nanobug/issues/104)。
 
 稳定标识：`ui-project-windows:ticket:02`
 
@@ -33,7 +35,7 @@
 
 ## Blocked by
 
-- 01 — 项目首页、信任与单项目打开关闭闭环。需要其统一打开/关闭入口、可重复打开的项目会话、无项目窗口状态及已验证的保存/清理流程；发布时替换为真实 issue 引用并建立原生阻塞关系。
+- [工单 #103：项目首页、信任与单项目打开关闭闭环](https://github.com/T-miracle/Nanobug/issues/103)。需要其统一打开/关闭入口、可重复打开的项目会话、无项目窗口状态及已验证的保存/清理流程；原生阻塞关系已读回核对。
 
 ## Implementation and verification
 

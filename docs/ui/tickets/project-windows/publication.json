@@ -1,0 +1,10 @@
+{
+  "repository": "T-miracle/Nanobug",
+  "parent": 102,
+  "verified_on": "2026-10-12",
+  "tickets": [
+    { "ticket": "01", "number": 103, "id": 5810813384, "url": "https://github.com/T-miracle/Nanobug/issues/103", "labels": ["ready-for-agent"], "state": "open", "body_verified": true, "dependencies_verified": true, "blocked_by": [] },
+    { "ticket": "02", "number": 104, "id": 5810813837, "url": "https://github.com/T-miracle/Nanobug/issues/104", "labels": ["ready-for-agent"], "state": "open", "body_verified": true, "dependencies_verified": true, "blocked_by": [103] },
+    { "ticket": "03", "number": 105, "id": 5810842089, "url": "https://github.com/T-miracle/Nanobug/issues/105", "labels": ["ready-for-agent"], "state": "open", "body_verified": true, "dependencies_verified": true, "blocked_by": [104] }
+  ]
+}
