@@ -28,6 +28,9 @@ enum CloseState {
     Failed,
 }
 
+/// Immutable close-consent identity: document path, session revision and native text fingerprint.
+type DocumentVersions = Vec<(PathBuf, u64, [u8; 32])>;
+
 /// A pending decision retains immutable identity metadata, not another mutable document.
 enum Decision {
     Trust {
@@ -36,7 +39,7 @@ enum Decision {
     },
     Leave {
         intent: CloseIntent,
-        documents: Vec<(PathBuf, u64, [u8; 32])>,
+        documents: DocumentVersions,
         dirty: bool,
         running: bool,
     },

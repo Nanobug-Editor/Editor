@@ -25,18 +25,30 @@ impl ProjectWindow {
         // Commit queued platform/IME input, then wait for its Change event before consulting sessions.
         editor.update(cx, |app, cx| {
             app.finish_linked_input(window, cx);
-            app.editor
-                .update(cx, |editor, cx| editor.unmark_text(window, cx));
+            if !app
+                .language_edits
+                .bridge
+                .as_ref()
+                .is_some_and(|bridge| bridge.read(cx).has_pending())
+            {
+                commit_composition(app, window, cx);
+            }
         });
         let owner = cx.entity().downgrade();
         window.defer(cx, move |window, cx| {
-            let _ = owner.update(cx, |this, cx| this.review_close(intent, window, cx));
+            let _ = owner.update(cx, |this, cx| this.review_close(intent, None, window, cx));
         });
         false
     }
 
     /// Snapshot native text fingerprints so delayed consent cannot discard newer edits.
-    fn review_close(&mut self, intent: CloseIntent, window: &mut Window, cx: &mut Context<Self>) {
+    fn review_close(
+        &mut self,
+        intent: CloseIntent,
+        settled: Option<DocumentVersions>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.close_state == CloseState::Cleaning || self.decision.is_some() {
             return;
         }
@@ -44,7 +56,30 @@ impl ProjectWindow {
             return;
         };
         let app = editor.read(cx);
+        if app
+            .language_edits
+            .bridge
+            .as_ref()
+            .is_some_and(|bridge| bridge.read(cx).has_pending())
+        {
+            // Each queued History adds another deferred turn. Keep the original editor mounted
+            // until its whole native FIFO is committed, rather than inspecting a transient clean state.
+            self.request_close(intent, window, cx);
+            return;
+        }
         let documents = document_versions(app, cx);
+        if settled.as_ref() != Some(&documents) {
+            // The final FIFO replay emits Change effects after clearing its pending flag. Wait for
+            // a stable revision/text pair across another effect turn before showing any consent.
+            // This prevents a prompt captured from a transient revision from rejecting its first choice.
+            let owner = cx.entity().downgrade();
+            window.defer(cx, move |window, cx| {
+                let _ = owner.update(cx, |this, cx| {
+                    this.review_close(intent, Some(documents), window, cx)
+                });
+            });
+            return;
+        }
         let dirty = app.tabs.iter().any(OpenTab::is_dirty);
         let running =
             app.run_controls.has_work_in_flight() || app.terminal.read(cx).has_running_programs();
@@ -81,10 +116,17 @@ impl ProjectWindow {
         let new_running = !*running
             && (app.run_controls.has_work_in_flight()
                 || app.terminal.read(cx).has_running_programs());
-        if document_versions(app, cx) != *documents || new_running {
+        if document_versions(app, cx) != *documents
+            || new_running
+            || app
+                .language_edits
+                .bridge
+                .as_ref()
+                .is_some_and(|bridge| bridge.read(cx).has_pending())
+        {
             self.decision = None;
             self.error = Some(t!("projects.changed_before_close").to_string());
-            self.review_close(intent, window, cx);
+            self.review_close(intent, None, window, cx);
             return;
         }
         if save {
@@ -162,8 +204,34 @@ impl ProjectWindow {
     }
 }
 
+/// Base preedit changes native text silently. Commit through the installed input handler so its
+/// Change event reaches DocumentSession; unmark alone only ends the native history transaction.
+fn commit_composition(app: &mut EditorApp, window: &mut Window, cx: &mut Context<EditorApp>) {
+    let composition = app.editor.update(cx, |state, cx| {
+        let range = state.marked_text_range(window, cx)?;
+        let text = state.text_for_range(range.clone(), &mut None, window, cx)?;
+        Some((range, text))
+    });
+    if let Some((range, text)) = composition {
+        // Preserve the platform's UTF-16 range and the semantic adapter's own peer-edit policy.
+        // Replacing the displayed preedit with itself commits its existing transaction, not a new buffer.
+        if let Some(bridge) = &app.language_edits.bridge {
+            bridge.update(cx, |bridge, cx| {
+                bridge.replace_text_in_range(Some(range), &text, window, cx)
+            });
+        } else {
+            app.editor.update(cx, |state, cx| {
+                state.replace_text_in_range(Some(range), &text, window, cx)
+            });
+        }
+    } else {
+        app.editor
+            .update(cx, |state, cx| state.unmark_text(window, cx));
+    }
+}
+
 /// Native text fingerprints also cover pending changes not yet reflected in the document revision.
-fn document_versions(app: &EditorApp, cx: &App) -> Vec<(PathBuf, u64, [u8; 32])> {
+fn document_versions(app: &EditorApp, cx: &App) -> DocumentVersions {
     app.tabs
         .iter()
         .filter_map(|tab| {

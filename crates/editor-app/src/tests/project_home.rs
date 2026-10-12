@@ -6,6 +6,10 @@ use gpui_kit::{AppContext as _, Entity, TestAppContext, component::Root, gpui, p
 
 #[path = "project_home/failures.rs"]
 mod failures;
+#[path = "project_home/ime.rs"]
+mod ime;
+#[path = "project_home/queue.rs"]
+mod queue;
 
 /// Use the production window and platform picker in an isolated profile for each behavioral scenario.
 fn with_home(
