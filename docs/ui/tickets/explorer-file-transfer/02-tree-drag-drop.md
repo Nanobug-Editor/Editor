@@ -1,6 +1,6 @@
 # 02：目录树拖放与目标导航
 
-稳定标识：`explorer-file-transfer-02`。状态：2026-10-12 已完成 Windows 系统跨窗口原生多项拖入、主题及联合操作复验；验收已满足，待本次记录推送并核对关闭。具体证据见[验收记录](../../verification/explorer-file-transfer.md)。
+稳定标识：`explorer-file-transfer-02`。状态：2026-10-12 已完成 Windows 系统跨窗口原生多项拖入、主题及联合操作复验；本次记录已推送，按 completed 关闭并读回核对。具体证据见[验收记录](../../verification/explorer-file-transfer.md)。
 
 ## Parent
 

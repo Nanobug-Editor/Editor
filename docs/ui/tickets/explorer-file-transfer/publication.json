@@ -8,7 +8,9 @@
     "id": 5742116671,
     "node_id": "I_kwDOUnHq-M8AAAABVkG_Pw",
     "url": "https://github.com/T-miracle/Nanobug/issues/76",
-    "state": "open",
+    "state": "closed",
+    "state_reason": "completed",
+    "closed_at": "2026-10-12T02:22:50Z",
     "publication_status": "published",
     "readback_verified": true
   },
@@ -39,7 +41,9 @@
       "number": 79,
       "id": 5742262700,
       "url": "https://github.com/T-miracle/Nanobug/issues/79",
-      "state": "open",
+      "state": "closed",
+      "state_reason": "completed",
+      "closed_at": "2026-10-12T02:22:45Z",
       "readback_verified": true
     },
     {
