@@ -1,6 +1,6 @@
 # 01 — 项目首页、信任与单项目打开关闭闭环
 
-状态：实现、行为验收及双轴审查完成；分支 `codex/project-home`。验收证据及主分支已有失败见[实施验收](../../verification/project-home.md)，GitHub 交付状态以议题读回为准。
+状态：已实现、验收、审查并推送至 `codex/project-home`；GitHub #103 已读回为 closed/completed。验收证据、远程核对及主分支已有失败见[实施验收](../../verification/project-home.md)。
 
 议题：[工单 #103](https://github.com/T-miracle/Nanobug/issues/103)。
 

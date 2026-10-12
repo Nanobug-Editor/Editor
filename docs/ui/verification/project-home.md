@@ -78,4 +78,6 @@ Cargo 使用既有 Windows Rust 工具链，`CARGO_TARGET_DIR=C:/Projects/RustPr
 
 ## 审查与交付
 
-前两轮 Standards 和 Spec 发现及修正边界完整保存于双轴审查记录。最终代码固定提交 `9b18bbc` 独立复审：Standards 0 项、Spec 0 项，之前发现均已解决。原生补验完成；本单行为验收满足，GitHub 推送/关闭读回待记录。父 #102 与后续 #104/#105 保持既有范围，不随本单关闭。
+前两轮 Standards 和 Spec 发现及修正边界完整保存于双轴审查记录。最终代码固定提交 `9b18bbc` 独立复审：Standards 0 项、Spec 0 项，之前发现均已解决。原生补验完成，本单行为验收满足。
+
+源码及验收记录推送到 `origin/codex/project-home`，关闭前核对远程与本地提交同为 `8ec57afd9d32f41b443e49287b592dbabf10fb49`。GitHub 连接器更新返回 403（Resource not accessible by integration），按既有跟踪器约定使用仓库已有 Git 认证及 REST API，只更新本单；凭据未写入文件或日志。#103 于 `2026-10-12T15:09:41Z` 关闭，读回为 **closed/completed**，11 项验收勾选及完整正文一致。#102、#104、#105 均读回为 open。后续仅提交这份关闭读回记录，不改变已经验证的代码。
