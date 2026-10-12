@@ -4,7 +4,7 @@
 
 整理日期：2026-10-07。
 
-状态：产品交互与测试接缝均已确认；已发布为 GitHub [#76](https://github.com/T-miracle/Nanobug/issues/76)。基础实现已合并主分支；2026-10-12 补充 Windows 复制/剪切、联合操作、中英文明暗主题及退出清理复验，并修复文本重做快捷键和取消文案。系统跨窗口原生多项拖入仍待人工结果，父方案保持打开。实际通过范围与交付状态见[验收记录](../verification/explorer-file-transfer.md)。
+状态：产品交互与测试接缝均已确认；已发布为 GitHub [#76](https://github.com/T-miracle/Nanobug/issues/76)。基础实现已合并主分支；2026-10-12 补充 Windows 复制/剪切、系统跨窗口多项原生拖入、联合操作、中英文明暗主题及退出清理复验，并修复文本重做快捷键和取消文案。#78、#80 已关闭；#79 与父方案验收已满足，待本次记录推送并核对关闭。实际通过范围与交付状态见[验收记录](../verification/explorer-file-transfer.md)。
 
 ## Problem Statement
 

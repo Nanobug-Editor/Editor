@@ -1,6 +1,6 @@
 # 01：外部粘贴与可靠文件转移
 
-稳定标识：`explorer-file-transfer-01`。状态：Windows 系统复制/剪切、原生主题与联合操作已于 2026-10-12 复验通过；本次修复待提交、推送及核对关闭。具体证据见[验收记录](../../verification/explorer-file-transfer.md)。
+稳定标识：`explorer-file-transfer-01`。状态：Windows 系统复制/剪切、原生主题与联合操作已于 2026-10-12 复验通过；本次修复已推送，按 completed 关闭并读回核对。具体证据见[验收记录](../../verification/explorer-file-transfer.md)。
 
 ## Parent
 

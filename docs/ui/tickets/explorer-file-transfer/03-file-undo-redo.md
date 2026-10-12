@@ -1,6 +1,6 @@
 # 03：文件操作撤销、重做与冲突恢复
 
-稳定标识：`explorer-file-transfer-03`。状态：Windows 原生主题、联合操作、二次确认及最终退出清理已于 2026-10-12 复验；文本重做与取消文案修复通过回归和独立审查，待推送及核对关闭。具体证据见[验收记录](../../verification/explorer-file-transfer.md)。
+稳定标识：`explorer-file-transfer-03`。状态：Windows 原生主题、联合操作、二次确认及最终退出清理已于 2026-10-12 复验；文本重做与取消文案修复通过回归和独立审查，已推送，按 completed 关闭并读回核对。具体证据见[验收记录](../../verification/explorer-file-transfer.md)。
 
 ## Parent
 
