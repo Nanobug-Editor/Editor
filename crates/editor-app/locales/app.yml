@@ -2074,6 +2074,9 @@ transfer.missing_parent:
 transfer.window_closed:
   en: "The operation window was closed"
   zh-CN: "操作所在窗口已关闭"
+transfer.cleanup_failed:
+  en: "Could not remove the private file operation backup %{path}: %{error}. Release the lock and retry closing."
+  zh-CN: "无法删除文件操作的私有备份 %{path}：%{error}。请解除占用后重试关闭。"
 transfer.link_target:
   en: "Refusing to follow or replace a link"
   zh-CN: "不能跟随或替换链接目标"

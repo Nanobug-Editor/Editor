@@ -1514,18 +1514,32 @@ impl EditorApp {
         let worker = self.extensions.read(cx).worker.clone();
         let shutdown = worker.request_shutdown();
         Ok(cx.background_executor().spawn(async move {
-            file_cleanup.await;
-            native_cleanup.await?;
-            match shutdown?.await {
-                Ok(result) => result?,
-                // Cold startup can fail between enqueue and receipt; there was no live runtime to retire.
-                Err(_)
-                    if worker
-                        .shutdown_complete
-                        .load(std::sync::atomic::Ordering::Acquire) => {}
-                Err(error) => return Err(error.to_string()),
+            let plugin_cleanup = async {
+                match shutdown?.await {
+                    Ok(result) => result,
+                    // Cold startup can fail between enqueue and receipt; there was no live runtime to retire.
+                    Err(_)
+                        if worker
+                            .shutdown_complete
+                            .load(std::sync::atomic::Ordering::Acquire) =>
+                    {
+                        Ok(())
+                    }
+                    Err(error) => Err(error.to_string()),
+                }
+            };
+            // Await all owners even if one fails; a retry must not race a still-running retirement.
+            let (files, native, plugins) =
+                futures::join!(file_cleanup, native_cleanup, plugin_cleanup);
+            let errors = [files, native, plugins]
+                .into_iter()
+                .filter_map(Result::err)
+                .collect::<Vec<_>>();
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors.join("\n"))
             }
-            Ok(())
         }))
     }
     /// Show every panel one provider declared, because a session's output lives in its own surface.

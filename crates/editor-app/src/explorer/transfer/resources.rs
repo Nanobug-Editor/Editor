@@ -11,7 +11,7 @@ use std::{
 #[derive(Default)]
 pub(super) struct Resources {
     // Every path originates from a successful private tempfile allocation, never from a user-selected path.
-    entries: Mutex<Vec<(PathBuf, Weak<AtomicBool>, Arc<AtomicBool>)>>,
+    entries: Arc<Mutex<Vec<(PathBuf, Weak<AtomicBool>, Arc<AtomicBool>)>>>,
 }
 /// Completion belongs to the worker future, including unwinding or cancellation before it returns an outcome.
 pub(super) struct Lifetime(Arc<AtomicBool>);
@@ -37,8 +37,9 @@ impl Resources {
             .unwrap_or_else(|error| error.into_inner())
             .is_empty()
     }
-    /// Stop workers and delete only registered private backups; GPUI awaits this task during normal shutdown.
-    pub fn cleanup(&self, executor: &BackgroundExecutor) -> Task<()> {
+    /// Stop workers and delete only registered private backups, returning failures with their owned paths.
+    /// Failed entries remain registered so a later explicit close can retry after the lock is released.
+    pub fn cleanup(&self, executor: &BackgroundExecutor) -> Task<Result<(), String>> {
         let entries = std::mem::take(
             &mut *self
                 .entries
@@ -51,15 +52,39 @@ impl Resources {
             }
         }
         let timer = executor.clone();
+        let registered = self.entries.clone();
         executor.spawn(async move {
-            while entries.iter().any(|(_, _, completed)| !completed.load(Ordering::Acquire)) {
+            while entries
+                .iter()
+                .any(|(_, _, completed)| !completed.load(Ordering::Acquire))
+            {
                 timer.timer(std::time::Duration::from_millis(10)).await;
             }
-            for (path, _, _) in entries {
-                if let Err(error) = std::fs::remove_dir_all(&path)
-                    && error.kind() != std::io::ErrorKind::NotFound {
-                    tracing::warn!(%error, path = %path.display(), "file operation session backup cleanup failed");
+            let mut failed = Vec::new();
+            let mut errors = Vec::new();
+            for entry in entries {
+                if let Err(error) = std::fs::remove_dir_all(&entry.0)
+                    && error.kind() != std::io::ErrorKind::NotFound
+                {
+                    errors.push(
+                        rust_i18n::t!(
+                            "transfer.cleanup_failed",
+                            path = entry.0.display(),
+                            error = error
+                        )
+                        .to_string(),
+                    );
+                    failed.push(entry);
                 }
+            }
+            registered
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .extend(failed);
+            if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors.join("\n"))
             }
         })
     }

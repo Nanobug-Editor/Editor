@@ -12,6 +12,10 @@ fn explorer_transfer_window_close_cleans_only_session_backups(cx: &mut TestAppCo
     std::fs::write(&source, "import").unwrap();
     std::fs::write(unrelated.path().join("keep.txt"), "unrelated").unwrap();
     let workspace = Workspace::open(project.path()).unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    // This close now persists project/terminal state, so all owned storage must use a private profile.
+    let mut session = SessionState::load_in_profile(workspace.root(), profile.path());
+    session.workspace_trusted = false;
     cx.update(|cx| {
         gpui_kit::init(cx);
         typography::init(cx);
@@ -21,7 +25,8 @@ fn explorer_transfer_window_close_cleans_only_session_backups(cx: &mut TestAppCo
     let slot = Rc::new(RefCell::new(None));
     let captured = slot.clone();
     let (_, ui) = cx.add_window_view(move |window, cx| {
-        let app = cx.new(|cx| EditorApp::new(workspace, None, window, cx));
+        let app =
+            cx.new(|cx| EditorApp::new_with_session(workspace, None, Some(session), window, cx));
         *captured.borrow_mut() = Some(app.clone());
         Root::new(app, window, cx)
     });
@@ -51,6 +56,37 @@ fn explorer_transfer_window_close_cleans_only_session_backups(cx: &mut TestAppCo
             .to_path_buf()
     });
     assert!(backup.exists());
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        // Lock the actual clipboard worker's directory without granting delete sharing.
+        let locked = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .custom_flags(0x02000000) // FILE_FLAG_BACKUP_SEMANTICS opens a directory handle.
+            .open(&backup)
+            .unwrap();
+        let cleanup =
+            ui.update(|_, cx| app.update(cx, |app, cx| app.prepare_project_shutdown(cx).unwrap()));
+        let result = Arc::new(std::sync::Mutex::new(None));
+        let captured = result.clone();
+        ui.executor()
+            .spawn(async move { *captured.lock().unwrap() = Some(cleanup.await) })
+            .detach();
+        ui.run_until_parked();
+        assert!(
+            result.lock().unwrap().take().unwrap().is_err(),
+            "project close must report a locked transfer backup"
+        );
+        assert!(backup.exists());
+        ui.update(|_, cx| {
+            assert!(
+                !app.read(cx).file_transfers.resources.is_empty(),
+                "failed cleanup must retain its path for retry"
+            );
+        });
+        drop(locked);
+    }
     // The normal native close gate keeps the window alive until cancellation and owned cleanup finish.
     ui.update(|window, cx| {
         app.update(cx, |app, cx| {

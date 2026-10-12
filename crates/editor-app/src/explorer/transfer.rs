@@ -32,7 +32,7 @@ pub(crate) struct TransferState {
     deferred_renames: Vec<(PathBuf, PathBuf)>,
     resources: Arc<resources::Resources>,
     closing: bool,
-    cleanup: Option<Shared<Task<()>>>,
+    cleanup: Option<Shared<Task<Result<(), String>>>>,
     // Normal shutdown awaits already-started backup deletion before the registry deletes remaining paths.
     retired: Vec<Task<()>>,
     // Late outcomes retain their Arc until the registry has cleaned its already-registered path.
@@ -75,8 +75,16 @@ impl TransferState {
     /// The application quit observer owns this registry independently of the window/entity lifetime.
     pub(crate) fn install_shutdown(&self, cx: &mut App) {
         let resources = self.resources.clone();
-        cx.on_app_quit(move |cx| resources.cleanup(cx.background_executor()))
-            .detach();
+        cx.on_app_quit(move |cx| {
+            let cleanup = resources.cleanup(cx.background_executor());
+            // Emergency application quit is best effort; normal project/window close reports errors first.
+            cx.background_executor().spawn(async move {
+                if let Err(error) = cleanup.await {
+                    tracing::warn!(%error, "file operation session backup cleanup failed");
+                }
+            })
+        })
+        .detach();
     }
     pub(crate) fn is_running(&self) -> bool {
         self.active.is_some()
@@ -92,9 +100,14 @@ impl TransferState {
 }
 
 impl EditorApp {
-    /// Every normal exit path awaits the same cleanup; taking the registry twice cannot shorten that wait.
-    pub(crate) fn shutdown_file_transfers(&mut self, cx: &mut Context<Self>) -> Shared<Task<()>> {
-        if let Some(cleanup) = &self.file_transfers.cleanup {
+    /// Every normal exit awaits the same receipt; failed receipts allow a fresh cleanup of retained paths.
+    pub(crate) fn shutdown_file_transfers(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Shared<Task<Result<(), String>>> {
+        if let Some(cleanup) = &self.file_transfers.cleanup
+            && !matches!(cleanup.clone().now_or_never(), Some(Err(_)))
+        {
             return cleanup.clone();
         }
         self.file_transfers.closing = true;
@@ -110,7 +123,7 @@ impl EditorApp {
             .background_executor()
             .spawn(async move {
                 futures::future::join_all(retired).await;
-                resources.cleanup(&executor).await;
+                resources.cleanup(&executor).await
             })
             .shared();
         self.file_transfers.cleanup = Some(cleanup.clone());
@@ -131,9 +144,12 @@ impl EditorApp {
             return true;
         }
         let cleanup = self.shutdown_file_transfers(cx);
-        cx.spawn_in(window, async move |_, cx| {
-            cleanup.await;
-            let _ = cx.update(|window, _| window.remove_window());
+        cx.spawn_in(window, async move |app, cx| {
+            let result = cleanup.await;
+            let _ = app.update_in(cx, |app, window, cx| match result {
+                Ok(()) => window.remove_window(),
+                Err(error) => app.file_transfer_error(error, cx),
+            });
         })
         .detach();
         cx.notify();
