@@ -20,6 +20,14 @@ pub(crate) enum CloseIntent {
     Window,
 }
 
+/// A failed cleanup retains the project and admits retry, while an in-flight cleanup blocks input.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CloseState {
+    Idle,
+    Cleaning,
+    Failed,
+}
+
 /// A pending decision retains immutable identity metadata, not another mutable document.
 enum Decision {
     Trust {
@@ -42,7 +50,7 @@ pub(crate) struct ProjectWindow {
     decision: Option<Decision>,
     error: Option<String>,
     choosing: bool,
-    closing: bool,
+    close_state: CloseState,
     focus: FocusHandle,
     modal_focus: FocusHandle,
     scroll: ScrollHandle,
@@ -60,7 +68,7 @@ impl ProjectWindow {
             decision: None,
             error,
             choosing: false,
-            closing: false,
+            close_state: CloseState::Idle,
             focus: cx.focus_handle(),
             modal_focus: cx.focus_handle(),
             scroll: ScrollHandle::new(),
@@ -73,7 +81,10 @@ impl ProjectWindow {
     /// GUI startup and folder selection share validation and explicit local authority.
     /// Invalid or cancelled requests preserve the current view without a fallback directory.
     pub(crate) fn open_path(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
-        if self.closing || self.editor.is_some() || self.decision.is_some() {
+        if self.close_state == CloseState::Cleaning
+            || self.editor.is_some()
+            || self.decision.is_some()
+        {
             return;
         }
         self.error = None;
@@ -161,7 +172,7 @@ impl ProjectWindow {
 
     /// A delayed platform selection can affect only this same unopened window.
     fn choose_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.choosing || self.closing || self.editor.is_some() {
+        if self.choosing || self.close_state == CloseState::Cleaning || self.editor.is_some() {
             return;
         }
         self.choosing = true;

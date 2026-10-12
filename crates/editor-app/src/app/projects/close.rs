@@ -12,7 +12,7 @@ impl ProjectWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.closing {
+        if self.close_state == CloseState::Cleaning {
             return false;
         }
         if self.decision.is_some() {
@@ -37,7 +37,7 @@ impl ProjectWindow {
 
     /// Snapshot native text fingerprints so delayed consent cannot discard newer edits.
     fn review_close(&mut self, intent: CloseIntent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.closing || self.decision.is_some() {
+        if self.close_state == CloseState::Cleaning || self.decision.is_some() {
             return;
         }
         let Some(editor) = &self.editor else {
@@ -122,23 +122,27 @@ impl ProjectWindow {
         let task = match editor.update(cx, |app, cx| app.prepare_project_shutdown(cx)) {
             Ok(task) => task,
             Err(error) => {
+                self.close_state = CloseState::Failed;
                 self.error = Some(error);
                 cx.notify();
                 return;
             }
         };
-        self.closing = true;
+        self.close_state = CloseState::Cleaning;
         self.focus.focus(window, cx);
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update_in(cx, |this, window, cx| {
-                this.closing = false;
                 if let Err(error) = result {
+                    this.close_state = CloseState::Failed;
                     this.error = Some(error);
                     cx.notify();
                     return;
                 }
+                this.close_state = CloseState::Idle;
+                // A successful retry retires the previous failure together with the old project.
+                this.error = None;
                 this.editor = None;
                 this.decision = None;
                 window.set_window_title(app::APP_NAME);

@@ -171,5 +171,6 @@ fn image_resize_burst_publishes_latest_geometry_without_replaying_old_positions(
     }
     let (tx, rx) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
-    futures::executor::block_on(rx).unwrap();
+    // Retirement now distinguishes channel delivery from successful checkpoint/native cleanup.
+    futures::executor::block_on(rx).unwrap().unwrap();
 }

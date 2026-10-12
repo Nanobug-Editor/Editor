@@ -375,18 +375,16 @@ impl Executions {
     }
 
     /// A confirmed workspace/window close waits for the same supervisor cleanup acknowledgement.
-    pub(super) fn shutdown(&mut self) {
-        if let Ok(acknowledge) = self.group.shutdown() {
-            if acknowledge
-                .recv_timeout(std::time::Duration::from_secs(10))
-                .is_ok()
-            {
-                // Only the native cleanup acknowledgement releases shutdown diagnostics.
-                for entry in self.entries.values_mut() {
-                    entry.state = "terminated";
-                }
-            }
+    /// Retain native ownership and diagnostics if cleanup fails, so explicit close may retry.
+    pub(super) fn shutdown(&mut self) -> anyhow::Result<()> {
+        self.group
+            .shutdown()?
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|error| anyhow::anyhow!("Native execution cleanup failed: {error}"))?;
+        for entry in self.entries.values_mut() {
+            entry.state = "terminated";
         }
+        Ok(())
     }
 
     /// Ended observations remain readable but do not count as live native process resources.

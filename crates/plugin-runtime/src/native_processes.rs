@@ -101,6 +101,8 @@ pub struct NativeProcessGroup {
     retirements: Arc<Mutex<BTreeMap<u64, Arc<AtomicU64>>>>,
     /// One separate close gate stays available even when data/output queues apply backpressure.
     shutdown: mpsc::SyncSender<mpsc::Sender<()>>,
+    /// A completed cleanup remains a valid receipt after the supervisor thread has exited.
+    shutdown_complete: Arc<AtomicBool>,
 }
 
 impl NativeProcessGroup {
@@ -116,6 +118,8 @@ impl NativeProcessGroup {
         let supervisor_authority = authority.clone();
         let retirements = Arc::new(Mutex::new(BTreeMap::new()));
         let supervisor_retirements = retirements.clone();
+        let shutdown_complete = Arc::new(AtomicBool::new(false));
+        let supervisor_complete = shutdown_complete.clone();
         std::thread::spawn(move || {
             supervise(
                 input,
@@ -123,6 +127,7 @@ impl NativeProcessGroup {
                 close_gate,
                 supervisor_authority,
                 supervisor_retirements,
+                supervisor_complete,
             )
         });
         Self {
@@ -131,6 +136,7 @@ impl NativeProcessGroup {
             authority,
             retirements,
             shutdown,
+            shutdown_complete,
         }
     }
 
@@ -237,6 +243,10 @@ impl NativeProcessGroup {
     pub fn shutdown(&self) -> anyhow::Result<mpsc::Receiver<()>> {
         self.set_trusted(false)?;
         let (tx, rx) = mpsc::channel();
+        if self.shutdown_complete.load(Ordering::Acquire) {
+            let _ = tx.send(());
+            return Ok(rx);
+        }
         self.shutdown
             .try_send(tx)
             .map_err(|_| anyhow::anyhow!("Native cleanup is already pending or closed"))?;
@@ -257,6 +267,7 @@ fn supervise(
     close_gate: mpsc::Receiver<mpsc::Sender<()>>,
     authority: Arc<Authority>,
     retirements: Arc<Mutex<BTreeMap<u64, Arc<AtomicU64>>>>,
+    shutdown_complete: Arc<AtomicBool>,
 ) {
     let diagnostics = NativeDiagnostics::default();
     let mut processes = Processes::default();
@@ -267,10 +278,13 @@ fn supervise(
     'supervisor: loop {
         if let Ok(acknowledge) = close_gate.try_recv() {
             if processes.clear_checked().is_ok() {
+                shutdown_complete.store(true, Ordering::Release);
                 let _ = acknowledge.send(());
+                return;
             }
-            // Failure drops the acknowledgement; callers retain activity instead of claiming exit.
-            return;
+            // Failure drops this receipt while retaining native ownership for a later retry.
+            // Launch authority remains revoked, so a failed close cannot create new programs.
+            continue;
         }
         // Trust revocation and individual retirement bypass every data/output queue. A newer
         // authority grant only preserves leases admitted under that newer generation.

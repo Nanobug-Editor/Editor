@@ -1470,9 +1470,7 @@ impl EditorApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> Result<gpui_kit::Task<Result<(), String>>, String> {
-        if self.shutting_down {
-            return Err(t!("projects.closing").to_string());
-        }
+        // `shutting_down` seals new project work; a failed close may still retry idempotent cleanup.
         self.capture_dock_layout(cx);
         self.capture_explorer_state(cx);
         self.capture_document_session();
@@ -1513,11 +1511,20 @@ impl EditorApp {
             .background_executor()
             .spawn(async move { native_cleanup.recv().map_err(|error| error.to_string()) });
         cx.notify();
-        let shutdown = self.extensions.read(cx).worker.request_shutdown();
+        let worker = self.extensions.read(cx).worker.clone();
+        let shutdown = worker.request_shutdown();
         Ok(cx.background_executor().spawn(async move {
             file_cleanup.await;
             native_cleanup.await?;
-            shutdown?.await.map_err(|error| error.to_string())?;
+            match shutdown?.await {
+                Ok(result) => result?,
+                // Cold startup can fail between enqueue and receipt; there was no live runtime to retire.
+                Err(_)
+                    if worker
+                        .shutdown_complete
+                        .load(std::sync::atomic::Ordering::Acquire) => {}
+                Err(error) => return Err(error.to_string()),
+            }
             Ok(())
         }))
     }

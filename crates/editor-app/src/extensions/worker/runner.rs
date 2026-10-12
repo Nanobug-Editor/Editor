@@ -16,6 +16,8 @@ impl Worker {
         let output = state.clone();
         let trust = Arc::new(std::sync::atomic::AtomicBool::new(trusted));
         let authority = trust.clone();
+        let shutdown_complete = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let actor_complete = shutdown_complete.clone();
         std::thread::spawn(move || {
             // Prepare the public SDK off the UI thread. A failure is delivered only to guests that request it.
             let resources = plugin_runtime::HostResources {
@@ -36,6 +38,8 @@ impl Worker {
                             plugin: None,
                             message: format!("{e:#}"),
                         });
+                        // Opening a manager is cold; failed initialization owns no running project tools.
+                        actor_complete.store(true, std::sync::atomic::Ordering::Release);
                         return;
                     }
                 };
@@ -106,14 +110,9 @@ impl Worker {
                     match work.as_ref() {
                         Some(Work::Shutdown(_)) => {
                             pending.control.cancel();
-                            {
-                                let mut published = output.lock().unwrap();
-                                for id in manager.live.keys() {
-                                    retire_publication(&mut published, id);
-                                }
-                            }
-                            manager.shutdown();
-                            // Acknowledge only after the helper has released its candidate and transaction lock.
+                            // Wait for the candidate and its transaction lock before checked cleanup.
+                            // An early best-effort shutdown could discard a failed checkpoint and falsely
+                            // acknowledge success when this same request is later dispatched.
                             deferred.push_front(work.take().unwrap());
                         }
                         Some(Work::SetTrust(false)) => {
@@ -483,11 +482,26 @@ impl Worker {
                             result.map_err(|error| anyhow::anyhow!("{error}"))
                         }
                         Some(Work::Shutdown(ack)) => {
-                            drop(manager);
                             if let Some(ack) = ack {
-                                let _ = ack.send(());
+                                let result = manager
+                                    .shutdown_checked()
+                                    .map_err(|error| format!("{error:#}"));
+                                if result.is_ok() {
+                                    drop(manager);
+                                    actor_complete
+                                        .store(true, std::sync::atomic::Ordering::Release);
+                                    let _ = ack.send(result);
+                                    return;
+                                }
+                                // A failed checkpoint retains its instances; failed native retirement
+                                // retains its supervisor. The same actor can accept a later retry.
+                                let _ = ack.send(result.clone());
+                                result.map_err(anyhow::Error::msg)
+                            } else {
+                                drop(manager);
+                                actor_complete.store(true, std::sync::atomic::Ordering::Release);
+                                return;
                             }
-                            return;
                         }
                         Some(Work::Inspect(path)) => Package::read(&path)
                             .map(|package| output.lock().unwrap().pending = Some(package)),
@@ -1125,6 +1139,7 @@ impl Worker {
             state,
             trusted: trust,
             image_offers: Default::default(),
+            shutdown_complete,
             #[cfg(test)]
             recorded: Mutex::new(mpsc::channel().1),
             #[cfg(test)]

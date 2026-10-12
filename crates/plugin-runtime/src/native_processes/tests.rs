@@ -79,6 +79,13 @@ fn literal_launch_uses_its_owned_absolute_path_for_stdio_and_pty() {
             .unwrap()
             .recv_timeout(Duration::from_secs(5))
             .unwrap();
+        // A window may retry after another owner's checkpoint failed. Already-retired native
+        // resources must acknowledge again instead of making that recoverable close permanent.
+        group
+            .shutdown()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap();
     }
     assert_eq!(
         std::env::var_os("PATH"),

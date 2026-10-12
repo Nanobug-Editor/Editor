@@ -360,6 +360,45 @@ impl Manager {
 
     /// Shutdown retires application resources as well as all workspace resources.
     pub fn shutdown(&mut self) {
+        // Drop cannot report an error, but must retire resources even when checkpointing fails.
+        if self.shutdown_checked().is_err() {
+            let _ = self.retire_for_shutdown();
+        }
+    }
+
+    /// Checkpoint private state and release all owned scopes, returning observable close failures.
+    /// Checkpoint errors retain live instances for retry; native cleanup errors retain their supervisor.
+    pub fn shutdown_checked(&mut self) -> anyhow::Result<()> {
+        let mut failures = Vec::new();
+        if let Err(error) = self.checkpoint() {
+            failures.push(format!("{error:#}"));
+        }
+        // Parked scopes also own private state. Save before removing them, so failed writes are retryable.
+        let parked = self
+            .parked
+            .iter()
+            .flat_map(|(key, scope)| scope.live.keys().map(move |id| (key.clone(), id.clone())))
+            .collect::<Vec<_>>();
+        for (key, id) in parked {
+            let (environment, snapshot) = {
+                let scope = self.parked.get_mut(&key).unwrap();
+                (
+                    scope.environment.clone(),
+                    scope.live.get_mut(&id).unwrap().snapshot(),
+                )
+            };
+            if let Err(error) =
+                snapshot.and_then(|snapshot| self.save_scope_snapshot(&id, &environment, &snapshot))
+            {
+                failures.push(format!("{id}: {error:#}"));
+            }
+        }
+        anyhow::ensure!(failures.is_empty(), "{}", failures.join("; "));
+        self.retire_for_shutdown()
+    }
+
+    /// Retirement is idempotent; a failed native join can be retried without replaying programs.
+    fn retire_for_shutdown(&mut self) -> anyhow::Result<()> {
         // Detached preparation observes this seal before activation and cannot publish after shutdown.
         self.host_alive
             .store(false, std::sync::atomic::Ordering::Release);
@@ -368,7 +407,7 @@ impl Manager {
         // Programs get a shared bounded cleanup window and then forceful tree termination. The UI
         // awaits the actor's shutdown acknowledgement; only afterwards may its window disappear.
         self.stop_owned_programs();
-        self.native_executions.shutdown();
+        let native_cleanup = self.native_executions.shutdown();
         // Revocation must invalidate workers retained by a host before its last Arc is released.
         // Declarative services have no Main WASM in `live`; dropping cached preparations
         // retires their native seals, published requests and retained batch receipts now.
@@ -377,7 +416,6 @@ impl Manager {
         self.clear_direct_providers();
         // Host execution sessions end with the window that owns them; no start is left queued.
         self.host_sessions.retire();
-        let _ = self.checkpoint();
         for instance in self.live.values_mut() {
             instance.stop();
         }
@@ -385,15 +423,13 @@ impl Manager {
         let scopes = self.parked.keys().cloned().collect::<Vec<_>>();
         for key in scopes {
             if let Some(mut scope) = self.parked.remove(&key) {
-                for (id, instance) in &mut scope.live {
-                    let _ = instance.snapshot().and_then(|snapshot| {
-                        self.save_scope_snapshot(id, &scope.environment, &snapshot)
-                    });
+                for instance in scope.live.values_mut() {
                     instance.stop();
                 }
             }
         }
         self.workspace_open = false;
         self.trusted = false;
+        native_cleanup
     }
 }

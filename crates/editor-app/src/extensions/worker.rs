@@ -14,6 +14,8 @@ mod resize;
 #[cfg(test)]
 mod resize_tests;
 mod runner;
+#[cfg(test)]
+mod shutdown_tests;
 pub(super) mod targets;
 #[cfg(test)]
 mod viewport_tests;
@@ -278,7 +280,7 @@ pub enum Work {
         session: u64,
         request: u64,
     },
-    Shutdown(Option<futures::channel::oneshot::Sender<()>>),
+    Shutdown(Option<futures::channel::oneshot::Sender<Result<(), String>>>),
 }
 impl Work {
     /// Preserve plugin ownership before dispatch consumes the work; manager-wide actions have no owner.
@@ -600,6 +602,8 @@ pub(super) struct Worker {
     pub trusted: Arc<std::sync::atomic::AtomicBool>,
     /// Two native batches bound preparation and the otherwise unbounded command channel to 64 MiB.
     image_offers: Arc<std::sync::atomic::AtomicUsize>,
+    /// Only successful retirement (or failed cold startup with no runtime) proves the actor ended.
+    pub(super) shutdown_complete: Arc<std::sync::atomic::AtomicBool>,
     #[cfg(test)]
     pub recorded: Mutex<mpsc::Receiver<Work>>,
     /// Recorded UI transport is inert; real background actors retain live marketplace transport.
@@ -628,19 +632,39 @@ impl Worker {
     /// The inert recorded adapter has no runtime resources, but retains the same shutdown message.
     pub(super) fn request_shutdown(
         &self,
-    ) -> Result<futures::channel::oneshot::Receiver<()>, String> {
+    ) -> Result<futures::channel::oneshot::Receiver<Result<(), String>>, String> {
         let (acknowledge, completed) = futures::channel::oneshot::channel();
+        if self
+            .shutdown_complete
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            let _ = acknowledge.send(Ok(()));
+            return Ok(completed);
+        }
         #[cfg(test)]
         if self.recording {
             self.tx
                 .send(Work::Shutdown(None))
                 .map_err(|error| error.to_string())?;
-            let _ = acknowledge.send(());
+            self.shutdown_complete
+                .store(true, std::sync::atomic::Ordering::Release);
+            let _ = acknowledge.send(Ok(()));
             return Ok(completed);
         }
-        self.tx
-            .send(Work::Shutdown(Some(acknowledge)))
-            .map_err(|error| error.to_string())?;
+        if let Err(error) = self.tx.send(Work::Shutdown(Some(acknowledge))) {
+            // Failed cold initialization can end between the completion check and channel send.
+            // Recover its receipt only when the actor positively recorded that no resources remain.
+            if self
+                .shutdown_complete
+                .load(std::sync::atomic::Ordering::Acquire)
+            {
+                if let Work::Shutdown(Some(acknowledge)) = error.0 {
+                    let _ = acknowledge.send(Ok(()));
+                }
+            } else {
+                return Err(error.to_string());
+            }
+        }
         Ok(completed)
     }
 
@@ -757,6 +781,7 @@ impl Worker {
             ))),
             trusted: Arc::new(std::sync::atomic::AtomicBool::new(trusted)),
             image_offers: Default::default(),
+            shutdown_complete: Default::default(),
             recorded: Mutex::new(rx),
             recording: true,
             run_queries: Default::default(),

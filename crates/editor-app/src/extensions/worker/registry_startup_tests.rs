@@ -24,7 +24,7 @@ fn plugin_manager_startup_recovers_from_transient_registry_reader() {
     let deadline = Instant::now() + Duration::from_secs(5);
     let succeeded = loop {
         match completed.try_recv() {
-            Ok(Some(())) => break true,
+            Ok(Some(result)) => break result.is_ok(),
             Err(_) => break false,
             Ok(None) if Instant::now() >= deadline => break false,
             Ok(None) => std::thread::sleep(Duration::from_millis(10)),

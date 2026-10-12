@@ -304,7 +304,7 @@ impl Render for ProjectWindow {
                 )
             })
             .child(div().flex_1().min_h_0().child(content))
-            .when(self.closing, |root| {
+            .when(self.close_state == CloseState::Cleaning, |root| {
                 root.child(
                     div()
                         .absolute()

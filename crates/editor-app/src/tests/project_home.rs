@@ -4,6 +4,9 @@ use crate::{app::projects::ProjectWindow, theme::apply_theme, theme::builtin_the
 use gpui_kit::VisualTestContext;
 use gpui_kit::{AppContext as _, Entity, TestAppContext, component::Root, gpui, px, size};
 
+#[path = "project_home/failures.rs"]
+mod failures;
+
 /// Use the production window and platform picker in an isolated profile for each behavioral scenario.
 fn with_home(
     cx: &mut TestAppContext,

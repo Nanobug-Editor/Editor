@@ -126,5 +126,6 @@ fn stale_source_viewport_is_discarded_without_plugin_error() {
     );
     let (tx, rx) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
-    futures::executor::block_on(rx).unwrap();
+    // A delivered receipt is not success unless the owned runtime also retired successfully.
+    futures::executor::block_on(rx).unwrap().unwrap();
 }

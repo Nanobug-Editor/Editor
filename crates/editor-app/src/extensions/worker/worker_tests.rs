@@ -141,7 +141,8 @@ fn cold_commands_are_discoverable_without_starting_the_guest() {
     // cannot poison the actor's cleanup path and turn the expected test failure into an abort.
     let (tx, rx) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
-    futures::executor::block_on(rx).unwrap();
+    // Checked retirement reports persistence/native cleanup failure separately from delivery.
+    futures::executor::block_on(rx).unwrap().unwrap();
     assert!(
         discoverable,
         "opening a command menu must not depend on a live guest"
@@ -195,7 +196,7 @@ fn cold_command_first_birth_preserves_its_original_command_epoch() {
     };
     let (tx, rx) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
-    futures::executor::block_on(rx).unwrap();
+    futures::executor::block_on(rx).unwrap().unwrap();
     assert!(born, "first demand must produce its real owner");
     assert!(
         original.is_some(),
@@ -258,7 +259,7 @@ fn operation_errors_retain_plugin_ownership_through_worker_publication() {
     );
     let (tx, rx) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
-    futures::executor::block_on(rx).unwrap();
+    futures::executor::block_on(rx).unwrap().unwrap();
 }
 
 /// Obsolete native revisions and incarnations remain rejected without faulting a healthy real guest.
@@ -358,7 +359,7 @@ fn obsolete_ui_callbacks_are_information_but_real_rejections_are_errors() {
     );
     let (tx, rx) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(tx))).unwrap();
-    futures::executor::block_on(rx).unwrap();
+    futures::executor::block_on(rx).unwrap().unwrap();
 }
 
 /// Both old-version writes and typed editor completions must progress before the download is released.
@@ -545,5 +546,5 @@ fn run_preparation(restrict: bool) {
     // Shutdown acknowledgement waits for owner cleanup, so this test never races temp directory deletion.
     let (ack, finished) = futures::channel::oneshot::channel();
     worker.tx.send(Work::Shutdown(Some(ack))).unwrap();
-    futures::executor::block_on(finished).unwrap();
+    futures::executor::block_on(finished).unwrap().unwrap();
 }
