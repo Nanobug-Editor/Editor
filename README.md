@@ -14,7 +14,7 @@ The XML plugin provides schema assistance, completion, formatting, paired tag ed
 
 The native plugin manager reads the [reviewed marketplace](https://github.com/T-miracle/Nanobug-Plugin-Marketplace). Browse historical releases and changelogs, choose a compatible version for first installation, and explicitly install higher compatible versions. A red dot on the plugin button indicates available upgrades. Every download must match the reviewed ZIP SHA-256; updates that request new permissions require consent. Catalog failures leave cached browsing available and disable market installation until a successful refresh. Download counts are advisory and retain their measurement time during outages.
 
-[Documentation](documentation/en/index.md) · [Getting started](documentation/en/guide/getting-started.md) · [Plugin SDK sources](crates/plugin-protocol/src/lib.rs) · [Maintainer documents](docs/README.md) · [Report an issue](https://github.com/T-miracle/Editor/issues)
+[Getting started](#developing-nanobug) · [Plugin SDK sources](crates/plugin-protocol/src/lib.rs) · [Maintainer documents](docs/README.md) · [Report an issue](https://github.com/T-miracle/Editor/issues)
 
 ## Installation
 
@@ -95,13 +95,13 @@ cargo build -p editor-app
 # Low-level independent Cargo builds still use the host's embedded SDK.
 .\target\debug\editor-app.exe --plugin-cargo ../Rust-for-Nanobug/Cargo.toml check --target wasm32-wasip2
 
-# Export the embedded SDK directly for inspection or an external toolchain.
+# Export SDK source and protocol resources (no Markdown) for an external toolchain.
 .\target\debug\editor-app.exe --export-plugin-sdk .\target\sdk-export
 ```
 
 For CLI development, send `reload` or `stop` on standard input. `--workspace` selects a test workspace (the plugin project by default); `--profile` selects isolated data. Repeat `--grant <permission>` for the permissions declared in the manifest. New permissions require stopping and authorizing another run; changing the plugin ID also requires restarting the configuration. Missing compilers/SDK targets are reported and never installed automatically. Native build steps declare their exact OS/architecture; foreign native artifacts are rejected. Windows is verified; macOS/Linux use portable paths and process interfaces but remain unverified.
 
-Install or update generated ZIPs in the plugin manager and approve their declared permissions. See the [packaging format](documentation/en/sdk/packaging.md), [run, debug, and build guide](documentation/en/guide/run-debug-build.md) and [Rust debugger README](https://github.com/T-miracle/Rust-for-Nanobug). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
+Install or update generated ZIPs in the plugin manager and approve their declared permissions. Interface usage is documented in [SDK source comments](crates/plugin-protocol/src/lib.rs); debugger setup is described in the [Rust plugin README](https://github.com/T-miracle/Rust-for-Nanobug). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
 
 ## Contributing
 

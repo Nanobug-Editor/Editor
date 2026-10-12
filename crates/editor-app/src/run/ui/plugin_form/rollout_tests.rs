@@ -299,7 +299,7 @@ fn plugin_configuration_rollout_templates_filter_tools_without_execution(cx: &mu
 }
 
 #[gpui::test]
-#[ignore = "build real rust/rust-debugger packages and verify the pinned CodeLLDB archive; terminal is built in"]
+#[ignore = "build the unified rust package and verify the pinned CodeLLDB archive; terminal is built in"]
 fn plugin_configuration_rollout_real_cargo_debug_pause_inspect_step_and_stop(
     cx: &mut TestAppContext,
 ) {

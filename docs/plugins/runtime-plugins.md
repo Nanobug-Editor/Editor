@@ -65,7 +65,7 @@ WASM 不继承宿主目录、环境、输入输出或网络访问。每次调用
 4. 候选激活成功后以日志、备份和原子替换提交包记录与私有数据，再发布新实例。
 5. 准备失败保留旧实例；切换失败恢复旧版本及数据并分配新实例身份，旧句柄和回调不会复活。
 
-备份及恢复失败路径、休眠工作区升级见 [迁移契约](../../documentation/en/sdk/migration.md)。快照是插件的逻辑数据，不能恢复 OS 进程内存或撤销用户文档、外部文件等副作用。内置终端恢复有界历史和新 Shell；经 interactive.execute 服务创建的执行会话只恢复历史，不重跑程序。旧终端数据在任何组件激活前备份并导入，重复启动不覆盖已完成迁移后的数据。
+备份及恢复失败路径、休眠工作区升级见 [迁移契约](../../crates/plugin-protocol/src/lib.rs)。快照是插件的逻辑数据，不能恢复 OS 进程内存或撤销用户文档、外部文件等副作用。内置终端恢复有界历史和新 Shell；经 interactive.execute 服务创建的执行会话只恢复历史，不重跑程序。旧终端数据在任何组件激活前备份并导入，重复启动不覆盖已完成迁移后的数据。
 
 WASM 指令、时间和内存有独立预算；队列、进程、文件、绘图和事件均有上限。超限定位到插件/作用域/操作；插件可独立重启，LSP 有限重试。停用与卸载结清请求、撤销订阅和租约并回收进程树。
 
@@ -97,7 +97,7 @@ cargo test -p editor-app sdk_export -- --test-threads=1
 
 真实 Package 测试输入已经按版本/摘要固定在 `crates/plugin-runtime/tests/fixtures/packages/`，准备或更换方法见其 README。实际 WASM 测试仍需显式执行所选 `--ignored` 场景；需要原生依赖时准备记录中的固定制品，不能以普通 workspace 测试的跳过结果计通过。目录候选的 `NANOBUG_DEVELOPMENT_CANDIDATE` 和 SDK ZIP 的 `NANOBUG_SDK_PACKAGE` 命令见[本次验收记录](verification/plugin-development-packaging.md)；不得用普通 workspace 测试的跳过结果替代真实验收。
 
-现行插件项目均提供共享描述并独立打包，每包包含其 README。XML 包含结构回调、grammar 与 SVG 辅助 Schema；HTML、JavaScript 包含已构建的原生服务及许可。Rust 包附带公开 LSP 钩子，仅提供语言资源的包无需空生命周期组件。Markdown 包同时包含两份 WASM grammar 和独立解析组件。终端为宿主内置原生模块，直接使用上游 alacritty_terminal；不构建或加载独立终端包，基础主题内置。
+现行插件项目均提供共享描述并独立打包，每包包含其 README。XML 包含结构回调、grammar 与 SVG 辅助 Schema；HTML、JavaScript 包含已构建的原生服务及许可。Rust 0.6.0 在一个 WASM 中提供 LSP 钩子、Cargo 配置/目标和调试服务；Windows x86_64 首次调试准备固定 CodeLLDB，其他平台仅打包语言与 Cargo。安装明确确认后，旧 `rust-debugger` 的启停状态和相关提供者选择通过通用有限替代事务保留，原私有数据及依赖收据保留。详见 [Rust 合并方案](specs/rust-plugin-consolidation.md)。仅提供语言资源的包无需空生命周期组件。Markdown 包同时包含两份 WASM grammar 和独立解析组件。终端为宿主内置原生模块，直接使用上游 alacritty_terminal；不构建或加载独立终端包，基础主题内置。
 
 Windows 本次实际 WASM、目录重载及 GPUI 验收见[插件开发验收](verification/plugin-development-packaging.md)。既有 ConPTY、进程树、语言服务等平台完整矩阵见[历史最终契约验收](verification/plugin-api-contract-verification.md)，不计为本次重跑。macOS/Linux 未在本次环境实测或交叉构建，不以 Windows 结果替代其他平台验证。
 

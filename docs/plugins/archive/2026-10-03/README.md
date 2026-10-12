@@ -6,7 +6,7 @@ Windows 原生验收已通过；macOS/Linux 未实测或交叉构建。七个正
 
 ## 方案、工单与使用文档
 
-新增方案：[Markdown 插件总方案](../../../../plugins/markdown/docs/spec.md)、[工单目录](../../../../plugins/markdown/docs/tickets/README.md)、[AI 执行入口](../../../../plugins/markdown/AGENTS.md)（产品需求已逐项确认，拆分与测试接缝待确认；尚未发布议题或实施）。按用户明确要求，本批文档放在插件目录内，覆盖原生编辑与预览、格式工具栏、三种视图、双向同步滚动及图片交互。
+新增方案：[Markdown 插件总方案](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/markdown/docs/spec.md)、[工单目录](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/markdown/docs/tickets/README.md)、[AI 执行入口](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/markdown/AGENTS.md)（当时产品需求已逐项确认，拆分与测试接缝待确认；尚未发布议题或实施）。这些链接固定到拆仓前的历史源码；现行维护入口见当前插件文档目录。
 
 新增批次：[插件管理与运行日志改造方案](specs/plugin-management-logs.md)（已确认并发布为 [#22](https://github.com/T-miracle/Editor/issues/22)），对应[3 张实施工单](tickets/plugin-management-logs/README.md)。#23 分栏与固定顶部已完成，见[分栏验证](verification/plugin-management-tabs-verification.md)；#24 完整日志与未读图标、#25 底栏 A 方案待实施。本批次独立于下表已完成的平台重构。
 
@@ -46,14 +46,14 @@ Windows 原生验收已通过；macOS/Linux 未实测或交叉构建。七个正
 
 ## 插件包说明
 
-- [终端](../../../../plugins/terminal/README.md)
-- [示例](../../../../plugins/example/README.md)
-- [SVG](../../../../plugins/svg/README.md)
-- [Rust](../../../../plugins/rust/README.md)
-- [TOML](../../../../plugins/toml/README.md)
-- [HTML](../../../../plugins/html/README.md)
-- [JavaScript](../../../../plugins/javascript/README.md)
-- [能力协议验收夹具](../../../../plugins/capability-example/README.md)：仅用于验收，不属于发行插件目录。
+- [终端（已迁入宿主，独立插件退役）](../../verification/builtin-terminal-04-2026-10-09.md)
+- [示例](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/example/README.md)
+- [SVG](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/svg/README.md)
+- [Rust](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/rust/README.md)
+- [TOML](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/toml/README.md)
+- [HTML](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/html/README.md)
+- [JavaScript](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/javascript/README.md)
+- [能力协议验收夹具](https://github.com/T-miracle/Nanobug/blob/1bfc4cf10b3a67edb43f4f01003f1c6e2592cec2/plugins/capability-example/README.md)：仅用于历史验收，不属于发行插件目录；固定 Package/SDK 输入保留在 `crates/plugin-runtime/tests/fixtures/`。
 
 ## 后续管理约定
 

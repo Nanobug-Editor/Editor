@@ -104,3 +104,11 @@ ConPTY 只知道本次真实进程的画面；它的绝对定位和 resize 重�
 ## Spec
 
 规格轴先后指出并修复旧容量、同 ID 当前包误导入、保留历史时鼠标坐标错误、样式空白丢失及背景污染。最终 `c5f8dd6` 无剩余确定代码缺陷或范围蔓延；文档复审要求补充真实 Windows IME，已按上面的第 6 步完成。规范轴发现的一处终端包 ignore 前提也已同步为当前 Rust/调试器包。验收后执行普通提交、推送和 #91 状态读回；父设计议题 #87 保持不变。
+
+## 后续：移除本地残留终端插件目录
+
+2026-10-09 用户确认可移除时要求直接清理。`git ls-files plugins/terminal` 已无跟踪文件；目录只剩空的 icons、licenses、src 目录，以及 target 下 8454 个旧构建缓存文件（4312587813 字节）。宿主在 `crates/editor-app/src/terminal/` 直接使用上游 Alacritty；Cargo、源码、工作流和原生安装说明均没有依赖旧插件目录或终端 ZIP。
+
+核对真实来源路径、非链接根目录、剩余文件范围及归档目标后，将残留目录移至 `C:/Users/Tmiracle/.codex/workspaces/Nanobug/remove-terminal-plugin-20261009/terminal/`，仓库中 `plugins/terminal/` 已不存在。根约定、主题说明、历史插件索引和运行设计引用已同步修正；历史验收命令与当时的审查结论保留其时间范围。
+
+本阶段仅清理忽略的本地缓存和文档。目录不存在，构建与发行引用检索没有旧终端包依赖；`cargo metadata --offline --no-deps --format-version 1` 确认 workspace 仍为 6 个成员。受影响文档的本地链接及 `git diff --check` 均通过，同时修正同一历史审查文件中的旧归档路径，并将已退役的执行测试入口更新为原生终端任务测试。不重复上文的 Rust 或原生交互验收，也未提交或推送。

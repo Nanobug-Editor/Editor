@@ -9,7 +9,7 @@
 - 用户确认按整批工单审查。固定起点为 `e0f69d3b51032a89812db47a28fea3ec7c0272fa`，DeepSeek 交付 HEAD 为 `cfe130763dff1549d61bee1ec1d42cc026133865`；原批次共涉及 83 个文件。当前候选修复另以未提交工作区 diff 核对。
 - 工作区为 `C:\Projects\RustProjects\Editor-run-debug-build`，本地分支已按用户要求命名为 `Editor-run-debug-build`。它仍跟踪原远端分支 `origin/codex/run-debug-build`；本轮未提交、推送、合并或修改 GitHub 工单。
 - 主工作区 `C:\Projects\RustProjects\Editor` 的既有修改保留。本轮也未改动 `Editor-docs-site`。
-- 产品依据是 [#48](https://github.com/T-miracle/Editor/issues/48) 及 #49–#60 正文，另核对本分支的 [需求整理](../../需求整理.md)、[开发计划](../../开发计划.md)、[插件平台规格](../../specs/plugin-api-platform.md)、[工单授权](../../agents/issue-tracker.md) 和用户本轮提供的仓库约定。
+- 产品依据是 [#48](https://github.com/T-miracle/Editor/issues/48) 及 #49–#60 正文，另核对本分支的 [需求整理](../../project/需求整理.md)、[开发计划](../../project/开发计划.md)、[插件平台规格](../specs/plugin-api-platform.md)、[工单授权](../../agents/issue-tracker.md) 和用户本轮提供的仓库约定。
 - 本分支仍使用部分历史文档路径，不能据主工作区的新路径不存在就推断规格或站点不存在。历史验收记录只作为待核对证据，不替代规格。
 - Standards 与 Spec 分别由并行审查代理只读审查；本节两轴保留初次报告各自的顺序。追加检查和候选修复复审另作说明。
 
@@ -97,7 +97,7 @@
 
 ### 7. [P1，追加] 正常退出、立即终止与超时升级没有区分——尚未实现
 
-[terminal/service.rs](../../../plugins/terminal/src/service.rs) 的 `stop_call` 直接调用 `Process::Terminate`；现有执行/宿主 stop 参数只有会话 ID，无法表达正常退出、立即强制和超时升级策略。
+当时终端插件的 `plugins/terminal/src/service.rs` 中，`stop_call` 直接调用 `Process::Terminate`；当时执行/宿主 stop 参数只有会话 ID，无法表达正常退出、立即强制和超时升级策略。独立终端插件现已退役，本条保留历史审查结论。
 
 [#50](https://github.com/T-miracle/Editor/issues/50) 和 [#56](https://github.com/T-miracle/Editor/issues/56) 明确要求这些行为及对应程序验收。旧记录把正常停止和立即终止一并列为通过，缺乏代码依据。修正曾经排空工作队列的测试误诊是正确的，但不能据此认定 #50 全部合格。
 

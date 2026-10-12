@@ -14,7 +14,7 @@ XML 插件提供 Schema 辅助、补全、格式化、配对标签编辑与文�
 
 原生插件管理器读取[审核后的插件市场](https://github.com/T-miracle/Nanobug-Plugin-Marketplace)。用户可浏览历史版本和日志，首次安装选择兼容版，已有插件由用户明确升级到更高兼容版；插件按钮红点提示可用升级。下载必须匹配审核 ZIP 的 SHA-256，更新新增权限需再次确认。目录失败时仍可浏览缓存，成功刷新前禁止市场安装；下载次数独立展示测量时间，故障保留旧值。
 
-[文档](documentation/zh-cn/index.md) · [快速开始](documentation/zh-cn/guide/getting-started.md) · [插件 SDK 源码](crates/plugin-protocol/src/lib.rs) · [维护者资料](docs/README.md) · [问题反馈](https://github.com/T-miracle/Editor/issues)
+[快速开始](#开发-nanobug) · [插件 SDK 源码](crates/plugin-protocol/src/lib.rs) · [维护者资料](docs/README.md) · [问题反馈](https://github.com/T-miracle/Editor/issues)
 
 ## 安装
 
@@ -95,13 +95,13 @@ cargo build -p editor-app
 # 底层独立 Cargo 构建继续使用宿主内嵌 SDK。
 .\target\debug\editor-app.exe --plugin-cargo ../Rust-for-Nanobug/Cargo.toml check --target wasm32-wasip2
 
-# 直接导出内嵌 SDK，供检查或其他工具链使用。
+# 导出 SDK 源码与协议资源（不包含 Markdown），供其他工具链使用。
 .\target\debug\editor-app.exe --export-plugin-sdk .\target\sdk-export
 ```
 
 CLI 开发运行通过标准输入发送 `reload` 或 `stop`。`--workspace` 指定测试工作区，默认使用插件项目；`--profile` 指定隔离数据目录。用多个 `--grant <权限名>` 显式授权清单中声明的权限。新增权限需停止后重新授权运行，更改插件 ID 也需重新启动配置。缺失的编译器／SDK 目标会报错，不会自动安装。原生构建明确声明系统和架构，拒绝混入其他平台的原生产物。Windows 已验证；macOS/Linux 使用兼容的路径与进程接口，尚未实测。
 
-在插件管理中安装或更新生成的 ZIP，并批准声明的权限。详见[打包格式](documentation/zh-cn/sdk/packaging.md)、[运行、调试与构建指南](documentation/zh-cn/guide/run-debug-build.md)和 [Rust 调试器说明](https://github.com/T-miracle/Rust-for-Nanobug)。维护者决策和验收见[插件文档入口](docs/plugins/README.md)。
+在插件管理中安装或更新生成的 ZIP，并批准声明的权限。接口使用方法见 [SDK 源码注释](crates/plugin-protocol/src/lib.rs)，调试器配置见 [Rust 插件说明](https://github.com/T-miracle/Rust-for-Nanobug)。维护者决策和验收见[插件文档入口](docs/plugins/README.md)。
 
 ## 参与贡献
 

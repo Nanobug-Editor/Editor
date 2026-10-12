@@ -1,6 +1,6 @@
 # 编辑器文档站点方案（历史）
 
-2026-10-09 用户要求移除 `website/`。站点源码、Node 依赖入口和 GitHub Pages 发布工作流已移除；读者说明迁为 `documentation/` 下的双语 Markdown。以下内容保留当时的设计决策，不再作为当前实施或构建要求。
+2026-10-09 用户要求移除站点、文档内嵌及独立读者文档目录。站点源码、Node 依赖入口和 GitHub Pages 发布工作流已移除；基本命令保留在根双语 README，接口使用方法维护在源码注释中。以下内容保留当时的设计决策与路径，不再作为当前实施或构建要求。
 
 状态：已确认。方案与规格已发布为 GitHub [#38](https://github.com/T-miracle/Editor/issues/38)，实施工单 [#39–#47](https://github.com/T-miracle/Editor/issues/39) 已建立原生阻塞边，待实施（尚未建站点目录）。工单拆分见[工单索引](../tickets/README.md)与[规格正文](docs-site.md)。
 

@@ -6,8 +6,13 @@ use harness::NativeMarkdown;
 #[gpui::test]
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn delivered_markdown_platform_specification_previews_and_scrolls_to_end(cx: &mut TestAppContext) {
-    let text = include_str!("../../../../../docs/plugins/specs/plugin-api-platform.md");
-    let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("platform.md", text)]);
+    // Read the actual specification at test runtime instead of embedding a documentation copy.
+    let text = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../docs/plugins/specs/plugin-api-platform.md"),
+    )
+    .expect("Markdown migration fixture");
+    let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("platform.md", &text)]);
     fixture.open("platform.md", ui);
     // The native document may normalize line endings; mappings always refer to its memory snapshot.
     let current = ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).text().to_string());

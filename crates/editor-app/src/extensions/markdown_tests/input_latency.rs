@@ -7,11 +7,25 @@ use harness::NativeMarkdown;
 #[gpui::test]
 #[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
 fn delivered_markdown_input_to_frame_latency(cx: &mut TestAppContext) {
-    let source = include_str!("../../../../../documentation/en/sdk/ui.md")
-        .lines()
-        .take(120)
-        .collect::<Vec<_>>()
-        .join("\n");
+    // Match the former prose-oriented benchmark: four sections, sixteen paragraphs and 120 lines.
+    // Keep inline syntax and CJK without adding extra code-block, list or quote rendering workloads.
+    const PARAGRAPH: &str = concat!(
+        "Typing in a native editor updates its single document snapshot and selection.\n",
+        "Inline `code` and **emphasis** belong to a bounded, read-only derived preview.\n",
+        "Observers validate revision and ownership before adopting asynchronous results.\n",
+        "Wrapping and layout preserve the visible caret while background work proceeds.\n",
+        "Switching modes keeps input, focus and history within the same document session.\n",
+        "中文输入与英文内容共用文档状态，组件刷新保留当前光标、输入法状态和已有预览。\n",
+        "\n",
+    );
+    let source = (0..4)
+        .map(|section| {
+            format!(
+                "# Input latency sample {section}\n\n{}",
+                PARAGRAPH.repeat(4)
+            )
+        })
+        .collect::<String>();
     let (mut fixture, ui) =
         NativeMarkdown::mount(cx, &[("notes.md", &source), ("plain.txt", &source)]);
     language_tests::publish_languages(&fixture.app, &fixture.manager, ui);

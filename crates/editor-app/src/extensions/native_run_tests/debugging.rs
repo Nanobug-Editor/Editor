@@ -38,7 +38,7 @@ fn frame(
 
 /// Native Debug enters one target, paints its real stack/locals and keeps a paused target on Cancel.
 #[gpui::test]
-#[ignore = "build rust-debugger through the current SDK and acquire the pinned CodeLLDB VSIX"]
+#[ignore = "build unified rust through the current SDK and acquire the pinned CodeLLDB VSIX"]
 fn native_rust_debug_controls_inspect_and_confirm_a_real_paused_target(cx: &mut TestAppContext) {
     let root = tempfile::tempdir().unwrap();
     let (source, binary) = packages::program(root.path());
@@ -186,7 +186,7 @@ fn native_rust_debug_controls_inspect_and_confirm_a_real_paused_target(cx: &mut 
 
 /// Actual Canvas focus, IME input and Enter reach the sole debugger-owned target and its real pause.
 #[gpui::test]
-#[ignore = "build configuration-example/rust-debugger with the public SDK and prepare CodeLLDB"]
+#[ignore = "build configuration-example/rust with the public SDK and prepare CodeLLDB"]
 fn native_debug_stdin_reaches_the_target_and_inspection_stays_inside_its_tab(
     cx: &mut TestAppContext,
 ) {
