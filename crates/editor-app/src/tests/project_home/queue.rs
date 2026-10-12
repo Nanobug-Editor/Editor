@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::app::projects::CloseIntent;
-use gpui_kit::Keystroke;
+use gpui_kit::{EntityInputHandler as _, Keystroke};
 
 // Reuse the same inspected Package and controlled stdio fixture as the editing integration tests.
 #[allow(dead_code)]
@@ -13,6 +13,18 @@ mod editing_fixture;
 #[gpui::test]
 #[ignore = "uses the frozen javascript Package and its approved private Node runtime"]
 fn project_home_close_drains_native_history_and_tail_input(cx: &mut TestAppContext) {
+    close_queued_input(cx, false);
+}
+
+/// Undo may return the session to clean while a queued platform preedit still needs committing.
+#[gpui::test]
+#[ignore = "uses the frozen javascript Package and its approved private Node runtime"]
+fn project_home_close_drains_native_history_and_ime_tail(cx: &mut TestAppContext) {
+    close_queued_input(cx, true);
+}
+
+/// Both native tails share the production package and window setup; only their command batch differs.
+fn close_queued_input(cx: &mut TestAppContext, composing: bool) {
     let project = tempfile::tempdir().unwrap();
     let path = project.path().join("queued.linked");
     let source = "<!-- 中文🙂 -->\n<item>内容🙂</item>\n";
@@ -91,18 +103,45 @@ fn project_home_close_drains_native_history_and_tail_input(cx: &mut TestAppConte
         // One native batch is deliberate: draining between commands would hide the close race.
         visual.update(|window, cx| {
             window.dispatch_keystroke(Keystroke::parse("ctrl-z").unwrap(), cx);
-            window.dispatch_keystroke(Keystroke::parse("ctrl-y").unwrap(), cx);
-            window.dispatch_keystroke(Keystroke::parse("Y").unwrap(), cx);
+            if composing {
+                let bridge = editor.read(cx).language_edits.bridge.clone().unwrap();
+                bridge.update(cx, |bridge, cx| {
+                    bridge.replace_and_mark_text_in_range(None, "中文🙂", Some(0..2), window, cx);
+                });
+            } else {
+                window.dispatch_keystroke(Keystroke::parse("ctrl-y").unwrap(), cx);
+                window.dispatch_keystroke(Keystroke::parse("Y").unwrap(), cx);
+            }
             host.update(cx, |host, cx| {
                 host.request_close(CloseIntent::Home, window, cx);
             });
         });
         visual.run_until_parked();
-        let entered = source.replacen("item", "iXYtem", 1);
+        let entered = source.replacen(
+            "item",
+            if composing {
+                "i中文🙂tem"
+            } else {
+                "iXYtem"
+            },
+            1,
+        );
         assert_eq!(
             visual.update(|_, cx| editor.read(cx).editor.read(cx).value().to_string()),
             entered
         );
+        if composing {
+            assert!(
+                visual.update(|window, cx| editor
+                    .read(cx)
+                    .editor
+                    .clone()
+                    .update(cx, |state, cx| {
+                        state.marked_text_range(window, cx).is_none()
+                    })),
+                "close consent must follow an actual preedit commit, not merely a late Change event"
+            );
+        }
         click(visual, "project-close-save");
         assert!(
             visual.debug_bounds("project-open-folder").is_some(),

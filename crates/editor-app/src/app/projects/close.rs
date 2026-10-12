@@ -22,18 +22,8 @@ impl ProjectWindow {
             cx.quit();
             return true;
         };
-        // Commit queued platform/IME input, then wait for its Change event before consulting sessions.
-        editor.update(cx, |app, cx| {
-            app.finish_linked_input(window, cx);
-            if !app
-                .language_edits
-                .bridge
-                .as_ref()
-                .is_some_and(|bridge| bridge.read(cx).has_pending())
-            {
-                commit_composition(app, window, cx);
-            }
-        });
+        // Begin FIFO replay; the shared evaluation commits IME only after its deferred tail has drained.
+        editor.update(cx, |app, cx| app.finish_linked_input(window, cx));
         let owner = cx.entity().downgrade();
         window.defer(cx, move |window, cx| {
             let _ = owner.update(cx, |this, cx| this.review_close(intent, None, window, cx));
@@ -52,7 +42,7 @@ impl ProjectWindow {
         if self.close_state == CloseState::Cleaning || self.decision.is_some() {
             return;
         }
-        let Some(editor) = &self.editor else {
+        let Some(editor) = self.editor.clone() else {
             return;
         };
         let app = editor.read(cx);
@@ -67,6 +57,16 @@ impl ProjectWindow {
             self.request_close(intent, window, cx);
             return;
         }
+        if editor.update(cx, |app, cx| commit_composition(app, window, cx)) {
+            // A queued Mark can follow a deferred Undo. Commit it here as well as ordinary preedit,
+            // then let its Change event reach DocumentSession before capturing close consent.
+            let owner = cx.entity().downgrade();
+            window.defer(cx, move |window, cx| {
+                let _ = owner.update(cx, |this, cx| this.review_close(intent, None, window, cx));
+            });
+            return;
+        }
+        let app = editor.read(cx);
         let documents = document_versions(app, cx);
         if settled.as_ref() != Some(&documents) {
             // The final FIFO replay emits Change effects after clearing its pending flag. Wait for
@@ -206,7 +206,11 @@ impl ProjectWindow {
 
 /// Base preedit changes native text silently. Commit through the installed input handler so its
 /// Change event reaches DocumentSession; unmark alone only ends the native history transaction.
-fn commit_composition(app: &mut EditorApp, window: &mut Window, cx: &mut Context<EditorApp>) {
+fn commit_composition(
+    app: &mut EditorApp,
+    window: &mut Window,
+    cx: &mut Context<EditorApp>,
+) -> bool {
     let composition = app.editor.update(cx, |state, cx| {
         let range = state.marked_text_range(window, cx)?;
         let text = state.text_for_range(range.clone(), &mut None, window, cx)?;
@@ -224,9 +228,11 @@ fn commit_composition(app: &mut EditorApp, window: &mut Window, cx: &mut Context
                 state.replace_text_in_range(Some(range), &text, window, cx)
             });
         }
+        true
     } else {
         app.editor
             .update(cx, |state, cx| state.unmark_text(window, cx));
+        false
     }
 }
 
