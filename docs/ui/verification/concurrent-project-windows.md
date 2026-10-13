@@ -1,8 +1,8 @@
 # 并行项目窗口实施记录
 
-日期：2026-10-13。状态：实现、自动验证、原生行为验收与双轴审查完成，待普通提交、推送与工单读回。
+日期：2026-10-13。状态：实现、自动验证、原生行为验收与双轴审查完成，已普通提交并推送，GitHub #104 已读回为 closed/completed。
 
-依据：[工单 #104](../tickets/project-windows/02-concurrent-project-windows.md)、[总规格 #102](../specs/project-windows.md)。前置 #103 已通过 GitHub 读回为 closed/completed；#104 open，评论为空。
+依据：[工单 #104](../tickets/project-windows/02-concurrent-project-windows.md)、[总规格 #102](../specs/project-windows.md)。实施前 #103 已通过 GitHub 读回为 closed/completed；当时 #104 open，评论为空。
 
 固定起点 `3360306feac43492830cde3381048384587ade2d`，复用已附加的隔离工作区 `C:/Users/Tmiracle/.codex/worktrees/project-home/Editor`，新分支 `codex/concurrent-project-windows`。原主工作区仍在 main `ee59a569`，起始状态干净。
 
@@ -79,3 +79,9 @@
 #105 的跨进程请求、真实安装器及文件资源管理器右键尚未执行。本次未覆盖的完整缩放/滚动及单项目输入矩阵沿用 #103，不声称重复完成全部人工场景。
 
 日志保留于本机隔离资料目录 `C:/Users/Tmiracle/.codex/visualizations/2026/10/12/01a12e28-69b5-7ea2-b14e-f155ef6bf763`，`CARGO_TARGET_DIR=C:/Projects/RustProjects/Editor/target`。本单没有安装或升级工具链。
+
+## 远程交付
+
+实现与验收提交为 [`90c97a541a2113d11018b28401603ffdcac345d7`](https://github.com/T-miracle/Nanobug/commit/90c97a541a2113d11018b28401603ffdcac345d7)，普通推送到 `origin/codex/concurrent-project-windows` 后，`git ls-remote` 核对同一 SHA。该提交的源码与复审索引树完全相同，后续仅补文档状态。
+
+GitHub 连接器发生传输错误，改用仓库已认证 REST API 完成交付；凭据只存在于进程内存与 curl 标准输入，未写入日志或文件。#104 的 12 项验收及交付证据正文读回一致，`closed_at=2026-10-13T04:57:43Z`，状态 `closed/completed`。#102 和 #105 保持 open，前置 #103 保持 closed/completed，三者正文和状态均确认未被本次操作修改。读回结果保存为本机资料目录的 `concurrent-project-delivery-readback.json`。

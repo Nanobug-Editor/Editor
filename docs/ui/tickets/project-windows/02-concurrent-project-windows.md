@@ -1,6 +1,6 @@
 # 02 — 并行项目窗口、资源隔离与全窗口安全退出
 
-状态：实现、行为验收与双轴审查完成，待提交、推送及 GitHub 关闭读回。用户于 2026-10-13 要求执行本单，#103 已核对为 closed/completed。起点 `3360306`，隔离工作区分支 `codex/concurrent-project-windows`。证据见[实施验收](../../verification/concurrent-project-windows.md)和[双轴审查](../../verification/concurrent-project-windows-review.md)；完整 UI 套件保留 7 项已在主分支复现的既有失败，未计为通过。
+状态：已实现、行为验收、双轴审查并推送，GitHub #104 已读回为 closed/completed。用户于 2026-10-13 要求执行本单，#103 已核对为 closed/completed。起点 `3360306`，隔离工作区分支 `codex/concurrent-project-windows`，实现提交 `90c97a5`。证据见[实施验收](../../verification/concurrent-project-windows.md)和[双轴审查](../../verification/concurrent-project-windows-review.md)；完整 UI 套件保留 7 项已在主分支复现的既有失败，未计为通过。
 
 议题：[工单 #104](https://github.com/T-miracle/Nanobug/issues/104)。
 
