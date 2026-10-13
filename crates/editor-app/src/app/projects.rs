@@ -1,6 +1,7 @@
-//! Native window ownership before and after a single project session is selected.
+//! Native project ownership and shared application routing before and after selection.
 
 mod close;
+mod controller;
 mod recent;
 mod view;
 
@@ -18,6 +19,13 @@ use recent::RecentProjects;
 pub(crate) enum CloseIntent {
     Home,
     Window,
+    /// All native roots gather consent before any project begins resource retirement.
+    Application,
+}
+actions!(projects, [OpenFolder, ShowHome, CloseWindow]);
+/// The shell and project home use the same application-wide consent coordinator.
+pub(crate) fn quit_application(cx: &mut App) {
+    controller::quit(cx);
 }
 
 /// A failed cleanup retains the project and admits retry, while an in-flight cleanup blocks input.
@@ -49,7 +57,7 @@ enum Decision {
 pub(crate) struct ProjectWindow {
     editor: Option<Entity<EditorApp>>,
     profile: PathBuf,
-    recent: RecentProjects,
+    recent: Rc<std::cell::RefCell<RecentProjects>>,
     decision: Option<Decision>,
     error: Option<String>,
     choosing: bool,
@@ -60,10 +68,24 @@ pub(crate) struct ProjectWindow {
 }
 
 impl ProjectWindow {
+    /// Preserve this project's documents while routing to a shared or newly created home.
+    pub(super) fn show_home(&mut self, cx: &mut Context<Self>) {
+        if controller::is_quitting(cx) {
+            return;
+        }
+        self.error = controller::home(self.profile.clone(), cx)
+            .err()
+            .map(|error| error.to_string());
+        cx.notify();
+    }
     /// Create a home in the selected user profile without initializing workspace tools.
     pub(crate) fn new(profile: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let recent = RecentProjects::load(&profile);
-        let error = recent.error.clone();
+        let recent = controller::recent(&profile, cx);
+        let error = recent.borrow().error.clone();
+        let handle = window.window_handle();
+        controller::register(cx.entity().downgrade(), handle, cx);
+        cx.on_release(move |_, cx| controller::unregister(handle, cx))
+            .detach();
         let this = Self {
             editor: None,
             profile,
@@ -85,7 +107,7 @@ impl ProjectWindow {
     /// Invalid or cancelled requests preserve the current view without a fallback directory.
     pub(crate) fn open_path(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         if self.close_state == CloseState::Cleaning
-            || self.editor.is_some()
+            || controller::is_quitting(cx)
             || self.decision.is_some()
         {
             return;
@@ -107,6 +129,35 @@ impl ProjectWindow {
                 return;
             }
         };
+        let identity =
+            match platform_windows::directory_identity::DirectoryIdentity::open(workspace.root()) {
+                Ok(identity) => identity,
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    cx.notify();
+                    return;
+                }
+            };
+        if let Some(existing) = controller::owner(&identity, cx) {
+            if existing.handle.window_id() == window.window_handle().window_id() {
+                window.activate_window();
+                if let (Some(editor), Some(file)) = (&self.editor, file) {
+                    editor.update(cx, |app, cx| app.open_file(file, window, cx));
+                }
+            } else {
+                controller::activate(existing, file, cx);
+            }
+            return;
+        }
+        if self.editor.is_some() {
+            let path = file.unwrap_or_else(|| workspace.root().to_owned());
+            self.error = controller::open(self.profile.clone(), Some(path), cx)
+                .err()
+                .map(|error| error.to_string());
+            cx.notify();
+            return;
+        }
+        controller::reserve(window.window_handle(), Some(identity), cx);
         if let Some(trusted) = SessionState::recorded_trust(workspace.root(), &self.profile) {
             self.activate_project(workspace, file, trusted, window, cx);
         } else {
@@ -128,54 +179,72 @@ impl ProjectWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // The folder can disappear while consent is open; do not persist authority or start tools
-        // against a stale Workspace that was validated before the user made a decision.
-        let workspace = match Workspace::open(workspace.root()) {
-            Ok(current) if current.root() == workspace.root() => current,
-            Ok(_) => {
+        // Every failed activation releases its reservation so the same home can accept another selection.
+        (|| {
+            if controller::is_quitting(cx) {
+                return;
+            }
+            // The folder can disappear while consent is open; do not persist authority or start tools
+            // against a stale Workspace that was validated before the user made a decision.
+            let workspace = match Workspace::open(workspace.root()) {
+                Ok(current) if current.root() == workspace.root() => current,
+                Ok(_) => {
+                    self.error = Some(t!("projects.changed_before_open").to_string());
+                    cx.notify();
+                    return;
+                }
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    cx.notify();
+                    return;
+                }
+            };
+            let identity =
+                platform_windows::directory_identity::DirectoryIdentity::open(workspace.root());
+            if identity.as_ref().ok() != controller::reserved(window.window_handle(), cx).as_ref() {
                 self.error = Some(t!("projects.changed_before_open").to_string());
                 cx.notify();
                 return;
             }
-            Err(error) => {
+            // Finish the established finite data import before writing any new trust/session decision.
+            if let Err(error) = terminal::upgrade::prepare(workspace.root(), &self.profile) {
                 self.error = Some(error.to_string());
                 cx.notify();
                 return;
             }
-        };
-        // Finish the established finite data import before writing any new trust/session decision.
-        if let Err(error) = terminal::upgrade::prepare(workspace.root(), &self.profile) {
-            self.error = Some(error.to_string());
+            let mut session = SessionState::load_in_profile(workspace.root(), &self.profile);
+            session.workspace_trusted = trusted;
+            if let Err(error) = session.try_save() {
+                self.error = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+            let root = workspace.root().to_owned();
+            window.resize(size(px(session.window_width), px(session.window_height)));
+            let editor = cx
+                .new(|cx| EditorApp::new_with_session(workspace, file, Some(session), window, cx));
+            let owner = cx.entity().downgrade();
+            editor.update(cx, |app, _| app.project_window = Some(owner));
+            self.editor = Some(editor);
+            self.decision = None;
+            // Construction installs the legacy standalone gate; the project window supersedes it.
+            self.install_close_gate(window, cx);
+            window.set_window_title(&format!("{} — {}", root.display(), app::APP_NAME));
+            if let Err(error) = self.recent.borrow_mut().opened(&root) {
+                self.error = Some(error.to_string());
+            }
             cx.notify();
-            return;
+            cx.refresh_windows();
+        })();
+        if self.editor.is_none() {
+            controller::reserve(window.window_handle(), None, cx);
         }
-        let mut session = SessionState::load_in_profile(workspace.root(), &self.profile);
-        session.workspace_trusted = trusted;
-        if let Err(error) = session.try_save() {
-            self.error = Some(error.to_string());
-            cx.notify();
-            return;
-        }
-        let root = workspace.root().to_owned();
-        window.resize(size(px(session.window_width), px(session.window_height)));
-        let editor =
-            cx.new(|cx| EditorApp::new_with_session(workspace, file, Some(session), window, cx));
-        let owner = cx.entity().downgrade();
-        editor.update(cx, |app, _| app.project_window = Some(owner));
-        self.editor = Some(editor);
-        self.decision = None;
-        // Construction installs the legacy standalone gate; the project window supersedes it.
-        self.install_close_gate(window, cx);
-        window.set_window_title(&format!("{} — {}", root.display(), app::APP_NAME));
-        if let Err(error) = self.recent.opened(&root) {
-            self.error = Some(error.to_string());
-        }
-        cx.notify();
     }
 
     /// A delayed platform selection can affect only this same unopened window.
-    fn choose_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.choosing || self.close_state == CloseState::Cleaning || self.editor.is_some() {
+    pub(super) fn choose_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.choosing || self.close_state == CloseState::Cleaning || controller::is_quitting(cx)
+        {
             return;
         }
         self.choosing = true;
@@ -219,6 +288,18 @@ impl ProjectWindow {
 
     /// Cancelling restores editing focus and leaves unsaved data and running programs untouched.
     fn cancel_decision(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(
+            self.decision,
+            Some(Decision::Leave {
+                intent: CloseIntent::Application,
+                ..
+            })
+        ) {
+            controller::cancel_quit(cx);
+        }
+        if matches!(self.decision, Some(Decision::Trust { .. })) {
+            controller::reserve(window.window_handle(), None, cx);
+        }
         self.decision = None;
         self.error = None;
         if let Some(editor) = &self.editor {

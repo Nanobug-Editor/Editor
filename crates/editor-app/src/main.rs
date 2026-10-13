@@ -219,6 +219,11 @@ struct EditorApp {
     language_service_states: HashMap<String, app::language_servers::ServiceLoadState>,
     /// Every grammar belongs to an installed, dynamically selected provider.
     dynamic_languages: app::languages::DynamicLanguages,
+    /// Each document action and parser task retains its own project provider incarnation.
+    providers: language::providers::Providers,
+    /// User language choices propagate without copying another project's selected providers.
+    provider_generation: u64,
+    _theme_observer: Subscription,
     dynamic_language_ids: std::collections::BTreeSet<String>,
     /// Reject diagnostic results captured before a provider or scope publication changed.
     plugin_loading_generation: u64,
@@ -361,6 +366,14 @@ impl EditorApp {
         });
         // Finite import must finish before runtime activation or local configuration/layout restoration.
         // A supplied window session also owns its resource profile; data cannot fall back to another user's roots.
+        let explicit_profile = prepared_session
+            .as_ref()
+            .and_then(SessionState::file_path)
+            .and_then(|path| path.parent().map(Path::to_owned));
+        let provider_root = explicit_profile
+            .as_deref()
+            .map(extensions::profile_runtime_root)
+            .unwrap_or_else(|| extensions::runtime_root(workspace.root()));
         let resource_profile = prepared_session
             .as_ref()
             .and_then(SessionState::file_path)
@@ -369,7 +382,9 @@ impl EditorApp {
         let terminal_upgrade_error = resource_profile
             .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Profile directory unavailable"))
-            .and_then(|profile| terminal::upgrade::prepare(workspace.root(), profile))
+            .and_then(|profile| {
+                terminal::upgrade::prepare_with_runtime(workspace.root(), profile, &provider_root)
+            })
             .err()
             .map(|error| format!("{error:#}"));
         // Keep normal users' established LocalAppData history. A host-selected isolated profile
@@ -457,12 +472,19 @@ impl EditorApp {
             window,
             cx,
         );
+        let providers = language::providers::Providers::new(&provider_root, workspace.root());
+        let theme_observer = cx.observe_global::<gpui_kit::component::Theme>(|app, cx| {
+            app.dark_theme = cx.theme().is_dark();
+            app.refresh_dialog(cx);
+            cx.notify();
+        });
         let extensions = cx.new(|cx| {
             extensions::ExtensionPanel::new(
                 parent.clone(),
                 workspace.root().to_owned(),
                 extension_visibility.clone(),
                 session_state.workspace_trusted,
+                providers.clone(),
                 cx,
             )
         });
@@ -615,6 +637,9 @@ impl EditorApp {
             language_service_states: HashMap::new(),
             plugin_loading_generation: 0,
             dynamic_languages: Default::default(),
+            providers,
+            provider_generation: 0,
+            _theme_observer: theme_observer,
             dynamic_language_ids: Default::default(),
             pending_contribution_sync: false,
             pending_editor_requests: Vec::new(),
@@ -640,7 +665,7 @@ impl EditorApp {
             workspace_changes: Default::default(),
             plugin_picker_pending: false,
             plugin_file_picker: None,
-            dark_theme: false,
+            dark_theme: cx.theme().is_dark(),
             session_state,
             run_controls,
             debug_panel: run::ui::panel::DebugPanelState::new(cx),
@@ -754,7 +779,7 @@ impl EditorApp {
     }
 
     fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.dark_theme = !self.dark_theme;
+        self.dark_theme = !cx.theme().is_dark();
         apply_theme(&theme::active_theme(self.dark_theme), cx);
         self.status = if self.dark_theme {
             "JetBrains 2023 Dark"

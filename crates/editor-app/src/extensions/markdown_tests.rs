@@ -487,8 +487,11 @@ fn markdown_language_package_restores_open_document_and_retires_highlighting(
     });
     // Rendered highlight spans must include prose formatting, not just a recognized language label.
     let source = "# title\n\n**bold** *italic* `code` ~~gone~~ [link](next.md)\n";
+    let parser_owner = cx.update(|_, cx| app.read(cx).providers.clone());
     let highlight = |language: &str| {
-        let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new(language);
+        let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new(
+            &parser_owner.parser_key(language),
+        );
         parser.update(None, &gpui_base::input::Rope::from(source), None);
         parser
             .styles(

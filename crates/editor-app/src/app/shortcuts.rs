@@ -36,6 +36,17 @@ pub(crate) fn init(cx: &mut App) {
         OpenShortcuts,
         Some("EditorShell"),
     )]);
+    // Project commands are available in both editor and unopened home roots.
+    cx.bind_keys([
+        KeyBinding::new(
+            "ctrl-shift-o",
+            app::projects::OpenFolder,
+            Some("EditorShell"),
+        ),
+        KeyBinding::new("ctrl-shift-n", app::projects::ShowHome, Some("EditorShell")),
+        // Terminal tabs already own Ctrl+Shift+W. Window closure uses native Alt+F4 or the command menu.
+        KeyBinding::new("ctrl-shift-q", extensions::QuitEditor, Some("EditorShell")),
+    ]);
     runtime::register(cx);
     cx.set_global(Initialized);
 }

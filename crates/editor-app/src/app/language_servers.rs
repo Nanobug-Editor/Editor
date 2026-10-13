@@ -45,8 +45,8 @@ impl EditorApp {
     }
 
     pub(crate) fn sync_dynamic_language_servers(&mut self, cx: &mut Context<Self>) {
-        let selected = crate::language::providers::language_servers();
-        let selected_formatters = crate::language::providers::formatters();
+        let selected = self.providers.language_servers();
+        let selected_formatters = self.providers.formatters();
         let wanted = self.demand_open_language_servers(&selected, cx);
         let available = self.extensions.read(cx).language_services();
         // Role maps share adapters for the same immutable plan; a native service owns one process lease.
@@ -276,7 +276,7 @@ impl EditorApp {
         let mut documents_changed = false;
         for tab in self.tabs.iter().filter_map(|file| file.text.as_ref()) {
             let path = tab.path();
-            let language = editor::language_for_path(path);
+            let language = self.language_for_path(path);
             let previous = tab.editor.read(cx).language_name().to_string();
             if !changed && previous == language {
                 continue;
@@ -305,7 +305,7 @@ impl EditorApp {
     }
     /// didClose is delivered on the transport executor, without blocking tab removal on the UI thread.
     pub(crate) fn close_language_document(&self, path: &Path, cx: &mut Context<Self>) {
-        let language = editor::language_for_path(path);
+        let language = self.language_for_path(path);
         self.close_language_services_document(&language, path, cx);
     }
 

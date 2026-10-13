@@ -12,15 +12,44 @@ impl ProjectWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if matches!(intent, CloseIntent::Application)
+            && matches!(self.decision, Some(Decision::Trust { .. }))
+        {
+            self.decision = None;
+            controller::reserve(window.window_handle(), None, cx);
+        }
         if self.close_state == CloseState::Cleaning {
             return false;
+        }
+        if matches!(intent, CloseIntent::Application)
+            && let Some(Decision::Leave { intent, .. }) = &mut self.decision
+        {
+            // The application round adopts an existing local prompt; its ordinary Cancel/Save/Discard now answers that round.
+            *intent = CloseIntent::Application;
+            self.modal_focus.focus(window, cx);
+            cx.notify();
+            return false;
+        }
+        if !matches!(intent, CloseIntent::Application) && controller::is_quitting(cx) {
+            controller::cancel_quit(cx);
         }
         if self.decision.is_some() {
             return false;
         }
         let Some(editor) = self.editor.clone() else {
-            cx.quit();
-            return true;
+            if matches!(intent, CloseIntent::Application) {
+                controller::approve(
+                    window.window_handle(),
+                    controller::Consent {
+                        documents: Vec::new(),
+                        running: false,
+                    },
+                    cx,
+                );
+                return false;
+            }
+            controller::close_window(window.window_handle(), window, cx);
+            return false;
         };
         // Begin FIFO replay; the shared evaluation commits IME only after its deferred tail has drained.
         editor.update(cx, |app, cx| app.finish_linked_input(window, cx));
@@ -93,7 +122,15 @@ impl ProjectWindow {
             self.modal_focus.focus(window, cx);
             cx.notify();
         } else {
-            self.start_cleanup(intent, window, cx);
+            if matches!(intent, CloseIntent::Application) {
+                controller::approve(
+                    window.window_handle(),
+                    controller::Consent { documents, running },
+                    cx,
+                );
+            } else {
+                self.start_cleanup(intent, window, cx);
+            }
         }
     }
 
@@ -153,7 +190,63 @@ impl ProjectWindow {
             }
         }
         self.decision = None;
-        self.start_cleanup(intent, window, cx);
+        if matches!(intent, CloseIntent::Application) {
+            let app = editor.read(cx);
+            controller::approve(
+                window.window_handle(),
+                controller::Consent {
+                    documents: document_versions(app, cx),
+                    running: app.run_controls.has_work_in_flight()
+                        || app.terminal.read(cx).has_running_programs(),
+                },
+                cx,
+            );
+        } else {
+            self.start_cleanup(intent, window, cx);
+        }
+    }
+
+    /// Previously approved documents can still receive input while another window is deciding.
+    pub(super) fn consent_is_current(
+        &self,
+        consent: &controller::Consent,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        match &self.editor {
+            None => consent.documents.is_empty(),
+            Some(editor) => {
+                let app = editor.read(cx);
+                let native = app.editor.clone();
+                let current = document_versions(app, cx) == consent.documents
+                    && (app.run_controls.has_work_in_flight()
+                        || app.terminal.read(cx).has_running_programs())
+                        == consent.running
+                    && app
+                        .language_edits
+                        .bridge
+                        .as_ref()
+                        .is_none_or(|bridge| !bridge.read(cx).has_pending());
+                current
+                    && native.update(cx, |state, cx| {
+                        state.marked_text_range(window, cx).is_none()
+                    })
+            }
+        }
+    }
+
+    /// Called only after the application has validated every collected decision.
+    pub(super) fn start_application_cleanup(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.editor.is_none() {
+            self.close_state = CloseState::Cleaning;
+            controller::cleaned(window.window_handle(), Ok(()), cx);
+        } else {
+            self.start_cleanup(CloseIntent::Application, window, cx);
+        }
     }
 
     /// Keep the editor alive until its workers acknowledge shutdown; replacing the view occurs last.
@@ -165,8 +258,13 @@ impl ProjectWindow {
             Ok(task) => task,
             Err(error) => {
                 self.close_state = CloseState::Failed;
-                self.error = Some(error);
+                self.error = Some(error.clone());
                 cx.notify();
+                if matches!(intent, CloseIntent::Application) {
+                    controller::cleaned(window.window_handle(), Err(error), cx);
+                } else {
+                    controller::local_cleanup_settled(window.window_handle(), cx);
+                }
                 return;
             }
         };
@@ -178,25 +276,44 @@ impl ProjectWindow {
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Err(error) = result {
                     this.close_state = CloseState::Failed;
-                    this.error = Some(error);
+                    this.error = Some(error.clone());
                     cx.notify();
+                    if matches!(intent, CloseIntent::Application) {
+                        controller::cleaned(window.window_handle(), Err(error), cx);
+                    } else {
+                        controller::local_cleanup_settled(window.window_handle(), cx);
+                    }
+                    return;
+                }
+                if matches!(intent, CloseIntent::Application) {
+                    if let Some(editor) = &this.editor {
+                        editor.read(cx).providers.retire();
+                    }
+                    controller::cleaned(window.window_handle(), Ok(()), cx);
                     return;
                 }
                 this.close_state = CloseState::Idle;
                 // A successful retry retires the previous failure together with the old project.
                 this.error = None;
+                if let Some(editor) = &this.editor {
+                    editor.read(cx).providers.retire();
+                }
                 this.editor = None;
                 this.decision = None;
+                controller::reserve(window.window_handle(), None, cx);
                 window.set_window_title(app::APP_NAME);
+                controller::local_cleanup_settled(window.window_handle(), cx);
                 match intent {
                     CloseIntent::Home => {
                         this.focus.focus(window, cx);
                         cx.notify();
                     }
                     CloseIntent::Window => {
-                        window.remove_window();
-                        cx.quit();
+                        controller::close_window(window.window_handle(), window, cx);
                     }
+                    CloseIntent::Application => unreachable!(
+                        "application cleanup keeps editors mounted until the coordinator completes"
+                    ),
                 }
             });
         })

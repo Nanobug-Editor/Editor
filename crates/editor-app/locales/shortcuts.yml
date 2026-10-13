@@ -34,8 +34,17 @@ shortcuts.operation.ToggleExtensions:
   en: "Manage plugins"
   zh-CN: "管理插件"
 shortcuts.operation.QuitEditor:
-  en: "Quit editor"
-  zh-CN: "退出编辑器"
+  en: "Quit application"
+  zh-CN: "退出应用"
+shortcuts.operation.OpenFolder:
+  en: "Open folder"
+  zh-CN: "打开文件夹"
+shortcuts.operation.ShowHome:
+  en: "Projects home"
+  zh-CN: "项目首页"
+shortcuts.operation.CloseWindow:
+  en: "Close window"
+  zh-CN: "关闭窗口"
 shortcuts.operation.OpenShortcuts:
   en: "Keyboard shortcuts"
   zh-CN: "快捷键"

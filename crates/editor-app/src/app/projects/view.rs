@@ -14,7 +14,7 @@ impl ProjectWindow {
             .overflow_y_scroll()
             .track_scroll(&self.scroll)
             .gap_1();
-        for (index, entry) in self.recent.entries.iter().enumerate() {
+        for (index, entry) in self.recent.borrow().entries.iter().enumerate() {
             let path = entry.path.clone();
             let name = path
                 .file_name()
@@ -58,10 +58,12 @@ impl ProjectWindow {
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.error = this
                                     .recent
+                                    .borrow_mut()
                                     .remove(&remove)
                                     .err()
                                     .map(|error| error.to_string());
                                 cx.notify();
+                                cx.refresh_windows();
                             })),
                     ),
             );
@@ -117,6 +119,13 @@ impl ProjectWindow {
                             .min_h_0()
                             .child(list.size_full())
                             .child(crate::ui::controls::vertical_scrollbar(&self.scroll, cx)),
+                    )
+                    .child(
+                        Button::new("home-quit-application")
+                            .small()
+                            .ghost()
+                            .label(t!("projects.quit_application").to_string())
+                            .on_click(|_, _, cx| controller::quit(cx)),
                     ),
             )
             .into_any_element()
@@ -238,14 +247,22 @@ impl Render for ProjectWindow {
         let consent = self.consent(cx);
         v_flex()
             .id("project-window")
+            .key_context("EditorShell")
             .size_full()
             .relative()
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus)
-            .on_action(cx.listener(|this, _: &extensions::QuitEditor, window, cx| {
+            .on_action(cx.listener(|_, _: &extensions::QuitEditor, _, cx| {
+                controller::quit(cx);
+            }))
+            .on_action(cx.listener(|this, _: &CloseWindow, window, cx| {
                 this.request_close(CloseIntent::Window, window, cx);
             }))
+            .on_action(
+                cx.listener(|this, _: &OpenFolder, window, cx| this.choose_folder(window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &ShowHome, _, cx| this.show_home(cx)))
             .when(self.editor.is_none(), |root| {
                 root.child(
                     h_flex()

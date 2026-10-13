@@ -7,6 +7,21 @@ use std::collections::VecDeque;
 impl Worker {
     /// Run the production actor; tests use the same transport and publications with isolated storage.
     pub(super) fn start_background(root: PathBuf, environment: Environment, trusted: bool) -> Self {
+        Self::start_background_in_pool(
+            Arc::new(super::super::runtime_owners::RuntimePool::standalone()),
+            root,
+            environment,
+            trusted,
+        )
+    }
+
+    /// Project actors share the application's Manager but never their mailbox, publications or native intent.
+    pub(super) fn start_background_in_pool(
+        pool: Arc<super::super::runtime_owners::RuntimePool>,
+        root: PathBuf,
+        environment: Environment,
+        trusted: bool,
+    ) -> Self {
         let (tx, rx) = mpsc::channel();
         let state = Arc::new(Mutex::new(Self::initial_state(
             &root,
@@ -28,21 +43,20 @@ impl Worker {
                 logs: output.lock().unwrap().logs.clone(),
                 ..Default::default()
             };
-            let mut manager =
-                match Manager::open_with_resources(root, environment, trusted, resources) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        let mut published = output.lock().unwrap();
-                        published.startup.clear();
-                        published.status = Some(OperationStatus {
-                            plugin: None,
-                            message: format!("{e:#}"),
-                        });
-                        // Opening a manager is cold; failed initialization owns no running project tools.
-                        actor_complete.store(true, std::sync::atomic::Ordering::Release);
-                        return;
-                    }
-                };
+            let shared = match pool.open(root, environment.clone(), trusted, resources) {
+                Ok(m) => m,
+                Err(e) => {
+                    let mut published = output.lock().unwrap();
+                    published.startup.clear();
+                    published.status = Some(OperationStatus {
+                        plugin: None,
+                        message: format!("{e:#}"),
+                    });
+                    // Opening a manager is cold; failed initialization owns no running project tools.
+                    actor_complete.store(true, std::sync::atomic::Ordering::Release);
+                    return;
+                }
+            };
             let mut last_save = Instant::now();
             let mut development = crate::plugin_development::instance::Loader::default();
             let mut development_install = None::<String>;
@@ -85,11 +99,19 @@ impl Worker {
                     .map(|result| {
                         let mut job = preparation.take().unwrap();
                         job.join_completed();
-                        (job.id.clone(), job.control.clone(), result)
+                        (
+                            job.id.clone(),
+                            job.control.clone(),
+                            result,
+                            job.mutation.take(),
+                        )
                     });
                 let mut work = if completed.is_some() {
                     None
-                } else if preparation.is_none() && !deferred.is_empty() {
+                } else if preparation.is_none()
+                    && !deferred.is_empty()
+                    && !pool.installation_active()
+                {
                     deferred.pop_front()
                 } else if let Some(work) = next_received.take() {
                     Some(work)
@@ -140,9 +162,56 @@ impl Worker {
                         _ => {}
                     }
                 }
+                // Waiting for this project's mailbox never holds the shared owner. Each dispatch/poll
+                // borrows only its routed projection; other projects' processes and transports stay live.
+                let mut manager = shared.lock().unwrap();
+                if pool.installation_active() && !manager.workspace_is_open(&environment.workspace)
+                {
+                    if let Some(work) = work.take() {
+                        deferred.push_back(work);
+                    }
+                    // No project resources exist yet; receive/timer waits above release the shared owner.
+                    continue;
+                }
+                {
+                    if let Err(error) = manager.select_workspace(
+                        environment.clone(),
+                        authority.load(std::sync::atomic::Ordering::Acquire),
+                    ) {
+                        output.lock().unwrap().status = Some(OperationStatus {
+                            plugin: None,
+                            message: format!("{error:#}"),
+                        });
+                        continue;
+                    }
+                }
+                // Only the candidate's owning actor may change persistent metadata during preparation.
+                // Queued changes retain FIFO order; ordinary document/service work still receives ticks.
+                if preparation.is_none()
+                    && completed.is_none()
+                    && pool.installation_active()
+                    && work.as_ref().is_some_and(|work| {
+                        matches!(
+                            work,
+                            Work::SetSetting { .. }
+                                | Work::ImportPreference { .. }
+                                | Work::SetServiceProvider { .. }
+                                | Work::Enable(_)
+                                | Work::Restart(_)
+                                | Work::Disable(_)
+                                | Work::SetProjectEnabled(_, _)
+                                | Work::Uninstall(_, _)
+                                | Work::Install(_)
+                                | Work::Shutdown(_)
+                        )
+                    })
+                {
+                    deferred.push_back(work.take().unwrap());
+                }
+                output.lock().unwrap().logs = manager.runtime_logs();
                 let mut lifecycle = completed
                     .as_ref()
-                    .map(|(id, _, _)| OperationProgress {
+                    .map(|(id, _, _, _)| OperationProgress {
                         id: id.clone(),
                         action: LifecycleAction::Install,
                         delete_data: None,
@@ -151,9 +220,9 @@ impl Worker {
                 // Capture ownership before consuming either an asynchronous install or the queued action.
                 let status_plugin = completed
                     .as_ref()
-                    .map(|(id, _, _)| id.clone())
+                    .map(|(id, _, _, _)| id.clone())
                     .or_else(|| work.as_ref().and_then(Work::plugin_id).map(str::to_owned));
-                let retiring = if let Some((id, _, Ok(_))) = &completed {
+                let retiring = if let Some((id, _, Ok(_), _)) = &completed {
                     vec![id.clone()]
                 } else {
                     match &work {
@@ -191,7 +260,7 @@ impl Worker {
                         retire_publication(&mut published, &id);
                     }
                 }
-                let result = if let Some((_, control, prepared)) = completed {
+                let result = if let Some((_, control, prepared, _mutation)) = completed {
                     prepared.and_then(|prepared| manager.commit_installation(prepared, &control))
                 } else {
                     match work.and_then(|work| work.admit(&manager, &output)) {
@@ -483,8 +552,8 @@ impl Worker {
                         }
                         Some(Work::Shutdown(ack)) => {
                             if let Some(ack) = ack {
-                                let result = manager
-                                    .shutdown_checked()
+                                let result = pool
+                                    .close_project(&mut manager)
                                     .map_err(|error| format!("{error:#}"));
                                 if result.is_ok() {
                                     drop(manager);
@@ -498,6 +567,7 @@ impl Worker {
                                 let _ = ack.send(result.clone());
                                 result.map_err(anyhow::Error::msg)
                             } else {
+                                pool.abandon_project(&mut manager);
                                 drop(manager);
                                 actor_complete.store(true, std::sync::atomic::Ordering::Release);
                                 return;
@@ -514,6 +584,9 @@ impl Worker {
                                 .unwrap_or_default();
                             // Public installation owns preparation and cutover; document opening never selects a package.
                             if package.manifest.component.is_some() {
+                                let mutation = pool
+                                    .reserve_installation()
+                                    .expect("installation lane admitted under shared owner");
                                 let started = manager
                                     .begin_installation(
                                         &package,
@@ -528,7 +601,8 @@ impl Worker {
                                         )
                                     });
                                 match started {
-                                    Ok(job) => {
+                                    Ok(mut job) => {
+                                        job.mutation = Some(mutation);
                                         preparation = Some(job);
                                         // Preparation is not completion: retain the existing native loading state.
                                         lifecycle = None;

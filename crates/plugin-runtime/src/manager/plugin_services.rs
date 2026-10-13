@@ -151,9 +151,15 @@ impl Manager {
         let host = scopes
             .into_iter()
             .flat_map(|scope| {
+                let alive = self
+                    .parked
+                    .get(&scope)
+                    .and_then(|project| project.resources.as_ref())
+                    .map(|resources| resources.alive.clone())
+                    .unwrap_or_else(|| self.host_alive.clone());
                 [
-                    super::native_execution::provider(&scope, self.host_alive.clone()),
-                    super::host_services::session_provider(&scope, self.host_alive.clone()),
+                    super::native_execution::provider(&scope, alive.clone()),
+                    super::host_services::session_provider(&scope, alive),
                 ]
             })
             .collect();
@@ -234,11 +240,13 @@ impl Manager {
     /// No service callback can recursively invoke another store; callbacks enqueue their next hop.
     pub(super) fn route_services(&mut self) {
         self.refresh_services();
-        for (call, result) in self.plugin_services.lock().unwrap().take_completed() {
-            match result {
-                Ok(value) => self.host_sessions.observe_status(&call, &value),
-                Err(error) => self.host_sessions.observe_error(&call, &error),
-            }
+        let completed = self.plugin_services.lock().unwrap().take_completed();
+        for (call, result) in completed {
+            let scope = call.reference.provider.caller.scope.clone();
+            self.in_project(&scope, |manager| match result {
+                Ok(value) => manager.host_sessions.observe_status(&call, &value),
+                Err(error) => manager.host_sessions.observe_error(&call, &error),
+            });
         }
         // Activation and native dependency preparation share the original completion/deadline.
         // A requeued activation call is already Running; never begin it again or lose ready leases.
@@ -322,9 +330,17 @@ impl Manager {
                 Ok(Some(value))
             });
             match &result {
-                Ok(Some(value)) => self.host_sessions.observe_status(&call, value),
+                Ok(Some(value)) => {
+                    self.in_project(&call.reference.provider.caller.scope, |manager| {
+                        manager.host_sessions.observe_status(&call, value)
+                    });
+                }
                 Ok(None) => continue,
-                Err(failure) => self.host_sessions.observe_error(&call, failure),
+                Err(failure) => {
+                    self.in_project(&call.reference.provider.caller.scope, |manager| {
+                        manager.host_sessions.observe_error(&call, failure)
+                    });
+                }
             }
             call.completion
                 .finish(result.map(|value| value.expect("deferred calls continue above")));
@@ -332,6 +348,16 @@ impl Manager {
     }
     fn dispatch_service(&mut self, call: &Call) -> Result<Option<serde_json::Value>, api::Failure> {
         let scope = &call.reference.provider.caller.scope;
+        if scope != "application" && scope != &self.host_scope() {
+            return self
+                .in_project(scope, |manager| manager.dispatch_service(call))
+                .unwrap_or_else(|| {
+                    Err(api::Failure::new(
+                        api::ErrorCode::InvalidHandle,
+                        "Original service project has closed",
+                    ))
+                });
+        }
         let native = super::native_execution::provider(scope, self.host_alive.clone());
         if call.reference.provider.caller.instance == native.caller.instance {
             let (workspace, trusted) = if scope == &self.host_scope() {

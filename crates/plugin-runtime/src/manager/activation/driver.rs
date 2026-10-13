@@ -104,9 +104,14 @@ impl Manager {
         let record = &self.activation.records[&(token.scope().into(), token.plugin().into())];
         // A stopped actor cannot provide another tick. Original host/scope seals therefore retire
         // request observation immediately, while same-owner configuration changes use explicit cancellation.
-        completion
-            .lifetimes
-            .extend([self.host_alive.clone(), record.alive.clone()]);
+        completion.lifetimes.extend([
+            if token.scope() == "application" {
+                self.application_alive.clone()
+            } else {
+                self.host_alive.clone()
+            },
+            record.alive.clone(),
+        ]);
         // An expired forwarded parent consumes no reservation and cannot publish an already warm receipt.
         if completion.status().is_terminal() {
             return Ok(DemandRequest { completion });
@@ -190,7 +195,11 @@ impl Manager {
             diagnostics: self.native_diagnostics.clone(),
             broker: self.plugin_services.clone(),
             alive: record.alive.clone(),
-            host_alive: self.host_alive.clone(),
+            host_alive: if token.scope() == "application" {
+                self.application_alive.clone()
+            } else {
+                self.host_alive.clone()
+            },
             waiters: waiters.clone(),
             activate_business: !record.materialized,
             existing_owner: record.owner.clone(),
@@ -243,6 +252,33 @@ impl Manager {
     /// Recheck original scope/configuration, commit private data, then publish one exact owner and selected roles.
     /// A later role job borrows the original admitted owner and cannot Activate business again.
     pub fn commit_demand(
+        &mut self,
+        prepared: PreparedDemand,
+    ) -> Result<ActivationReceipt, api::Failure> {
+        let target = prepared
+            .result
+            .as_ref()
+            .ok()
+            .map(|built| scopes::workspace_key(&built.workspace));
+        let previous = self
+            .workspace_open
+            .then(|| (self.environment.clone(), self.trusted));
+        if let Some(target) = target.filter(|scope| scope != &self.host_scope()) {
+            if let Some(project) = self.parked.get(&target) {
+                let environment = project.environment.clone();
+                let trusted = project.trusted;
+                let _ = self.select_workspace(environment, trusted);
+            }
+        }
+        let result = self.commit_project_demand(prepared);
+        if let Some((environment, trusted)) = previous {
+            let _ = self.select_workspace(environment, trusted);
+        }
+        result
+    }
+
+    /// Admission runs in the preparation's captured project, while each language waiter keeps its own scope.
+    fn commit_project_demand(
         &mut self,
         prepared: PreparedDemand,
     ) -> Result<ActivationReceipt, api::Failure> {
@@ -347,24 +383,37 @@ impl Manager {
             }
             match &result {
                 Ok(receipt) if matches!(waiter.reason, DemandReason::Language { .. }) => {
-                    if waiter.language_workspace.as_deref()
-                        != Some(scopes::workspace_key(&self.environment.workspace).as_str())
-                    {
+                    let target = waiter.language_workspace.clone().unwrap_or_default();
+                    let delivered = self.in_project(&target, |manager| {
+                        if let Some(role) = manager.demanded_role_result(&waiter.reason) {
+                            waiter.completion.finish(role.map(|_| receipt.clone()));
+                        } else if let Err(error) =
+                            manager.join_demand_waiter(&token, waiter.clone())
+                        {
+                            waiter.completion.finish(Err(error));
+                        }
+                    });
+                    if delivered.is_none() {
                         waiter.completion.finish(Err(api::Failure::new(
                             api::ErrorCode::InvalidHandle,
-                            "Original language workspace is no longer selected",
+                            "Original language workspace has closed",
                         )));
-                    } else if let Some(role) = self.demanded_role_result(&waiter.reason) {
-                        waiter.completion.finish(role.map(|_| receipt.clone()));
-                    } else if let Err(error) = self.join_demand_waiter(&token, waiter.clone()) {
-                        waiter.completion.finish(Err(error));
                     }
                 }
                 _ => waiter.completion.finish(result.clone()),
             }
         }
         if let Err(error) = &result {
-            if let Some(entry) = self.installed.get_mut(token.plugin()) {
+            if token.scope() != "application" && token.scope() != self.host_scope() {
+                // A failed or closed A preparation cannot poison B's current publication for the same package.
+                if let Some(resources) = self
+                    .parked
+                    .get_mut(token.scope())
+                    .and_then(|project| project.resources.as_mut())
+                {
+                    resources.record_error(token.plugin(), error.to_string());
+                }
+            } else if let Some(entry) = self.installed.get_mut(token.plugin()) {
                 entry.error = Some(error.to_string());
             }
         }

@@ -190,7 +190,7 @@ impl EditorApp {
                         .path
                         .as_ref()
                         .filter(|_| !target.directory)
-                        .map(|path| crate::editor::language_for_path(path))
+                        .map(|path| self.language_for_path(path))
                 }),
             extension: target
                 .path

@@ -1,6 +1,5 @@
 //! Native formatting and rename share versioned document transactions and independent provider selection.
-use super::language_for_path;
-use crate::language::{navigation, providers};
+use crate::language::navigation;
 use crate::*;
 use gpui_base::input::InputState;
 use lsp_types::{PrepareRenameResponse, TextEdit};
@@ -68,7 +67,7 @@ impl EditorApp {
         let language = self
             .active_path
             .as_deref()
-            .map(language_for_path)
+            .map(|path| self.language_for_path(path))
             .unwrap_or_default();
         let server = self
             .language_servers
@@ -111,7 +110,16 @@ impl EditorApp {
         let history = self.language_edits.history_forwarding.clone();
         let owner = cx.entity().downgrade();
         self.language_edits.bridge = Some(cx.new(|cx| {
-            super::linked_input::Bridge::new(editor, path, language, server, history, owner, cx)
+            super::linked_input::Bridge::new(
+                editor,
+                path,
+                language,
+                server,
+                history,
+                owner,
+                self.providers.clone(),
+                cx,
+            )
         }));
         cx.notify();
     }
@@ -138,11 +146,11 @@ impl EditorApp {
         let language = self
             .active_path
             .as_deref()
-            .map(language_for_path)
+            .map(|path| self.language_for_path(path))
             .unwrap_or_default();
         // Restricted workspaces retain ordinary native saving, while language tools remain forbidden.
         if self.session_state.workspace_trusted
-            && providers::editing_preferences(&language).format_on_save
+            && self.providers.editing_preferences(&language).format_on_save
         {
             self.request_format(true, window, cx);
         } else {
@@ -301,7 +309,7 @@ impl EditorApp {
             "{}",
             t!("editor.editing_stale")
         );
-        let language = language_for_path(self.tabs[index].path());
+        let language = self.language_for_path(self.tabs[index].path());
         anyhow::ensure!(
             self.language_servers
                 .get(&language)

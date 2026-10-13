@@ -1,5 +1,5 @@
 //! Hot grammar tasks publish only into the still-selected generation, then refresh open documents.
-use crate::language::providers::{self, GrammarProvider};
+use crate::language::providers::GrammarProvider;
 use crate::*;
 use gpui_kit::AnyElement;
 mod associations;
@@ -45,7 +45,7 @@ pub(crate) fn render_settings(view: &Entity<EditorApp>, cx: &App) -> AnyElement 
     );
     content = content.child(associations::render(view, cx));
     content = content.child(editing::render(view, cx));
-    let rows = providers::rows();
+    let rows = view.read(cx).providers.rows();
     if rows.is_empty() {
         content = content.child(t!("settings.providers_empty").to_string());
     }
@@ -152,7 +152,7 @@ pub(crate) fn render_settings(view: &Entity<EditorApp>, cx: &App) -> AnyElement 
         .dynamic_languages
         .error
         .clone()
-        .or_else(providers::error)
+        .or_else(|| view.read(cx).providers.error())
     {
         content = content.child(
             div()
@@ -176,34 +176,40 @@ fn select(
         if !app.session_state.workspace_trusted {
             return;
         }
-        app.dynamic_languages.error = providers::choose(scope, key, provider)
+        app.dynamic_languages.error = app
+            .providers
+            .choose(scope, key, provider)
             .err()
             .map(|e| format!("{e:#}"));
         if app.dynamic_languages.error.is_none() {
             app.sync_dynamic_languages(cx);
         }
         app.refresh_dialog(cx);
+        cx.refresh_windows();
         cx.notify();
     });
 }
 
 impl EditorApp {
     pub(crate) fn sync_dynamic_languages(&mut self, cx: &mut Context<Self>) {
+        self.provider_generation = self.providers.feature_generation();
         self.plugin_loading_generation = self.plugin_loading_generation.wrapping_add(1);
         self.sync_dynamic_language_servers(cx);
         self.dynamic_languages.generation += 1;
         let generation = self.dynamic_languages.generation;
-        let selected = providers::grammars();
+        let selected = self.providers.grammars();
         let old = std::mem::take(&mut self.dynamic_languages.entries);
-        for language in providers::languages() {
+        for language in self.providers.languages() {
             if !selected.iter().any(|p| p.declaration.language == language) {
                 // Recognition alone must never accidentally enable an upstream built-in grammar.
-                language_plugins::mask_language(&language);
+                language_plugins::mask_language(&self.providers.parser_key(&language));
             }
         }
         for (provider, _) in &old {
             if !selected.contains(provider) {
-                language_plugins::mask_language(&provider.declaration.language);
+                language_plugins::mask_language(
+                    &self.providers.parser_key(&provider.declaration.language),
+                );
             }
         }
         for provider in selected {
@@ -212,7 +218,7 @@ impl EditorApp {
                 continue;
             }
             let language = provider.declaration.language.clone();
-            language_plugins::mask_language(&language);
+            language_plugins::mask_language(&self.providers.parser_key(&language));
             self.dynamic_languages
                 .entries
                 .push((provider.clone(), Ok(false)));
@@ -232,7 +238,7 @@ impl EditorApp {
                     .await;
                 let _ = this.update(cx, |app, cx| {
                     if app.dynamic_languages.generation != generation
-                        || !providers::is_current(&provider)
+                        || !app.providers.is_current(&provider)
                     {
                         return;
                     }
@@ -255,7 +261,12 @@ impl EditorApp {
                     logs.append(&provider.owner, level, &source, message);
                     *state = match result {
                         Ok((grammar, query)) => {
-                            language_plugins::publish_dynamic(&language, grammar, query);
+                            language_plugins::publish_project_dynamic(
+                                &app.providers,
+                                &language,
+                                grammar,
+                                query,
+                            );
                             Ok(true)
                         }
                         Err(error) => Err(format!("{error:#}")),
@@ -278,10 +289,10 @@ impl EditorApp {
                 panel.invalidate_code_highlighting(cx);
             });
         }
-        let current = providers::languages();
+        let current = self.providers.languages();
         for tab in self.tabs.iter().filter_map(|file| file.text.as_ref()) {
-            let language = editor::language_for_path(tab.path());
-            if providers::handles_path(tab.path())
+            let language = self.language_for_path(tab.path());
+            if self.providers.handles_path(tab.path())
                 || current.contains(&language)
                 || self
                     .dynamic_language_ids

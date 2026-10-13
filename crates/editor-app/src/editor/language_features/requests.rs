@@ -2,7 +2,7 @@
 use super::*;
 use crate::language::{
     features::{LanguageFeatureEvent, LanguageFeatures},
-    navigation, providers,
+    navigation,
 };
 use gpui_kit::AnyElement;
 use plugin_runtime::{
@@ -108,7 +108,7 @@ impl EditorApp {
     ) -> bool {
         self.session_state.workspace_trusted
             && self.active_path.as_deref().is_some_and(|path| {
-                let language = editor::language_for_path(path);
+                let language = self.language_for_path(path);
                 self.language_feature_choice(&language, feature, cx)
                     .is_some()
             })
@@ -158,7 +158,7 @@ impl EditorApp {
         };
         if !self.session_state.workspace_trusted
             || self.language_features.sequence != sequence
-            || providers::feature_generation() != active.generation
+            || self.providers.feature_generation() != active.generation
             || self
                 .active_text_tab_index()
                 .and_then(|index| self.plugin_document_version(index).ok())
@@ -189,7 +189,10 @@ impl EditorApp {
         }
         match target {
             Target::Direct { key, provider } => {
-                providers::language_feature_provider(language, feature).as_ref() == Some(key)
+                self.providers
+                    .language_feature_provider(language, feature)
+                    .as_ref()
+                    == Some(key)
                     && self
                         .extensions
                         .read(cx)
@@ -199,7 +202,7 @@ impl EditorApp {
                         .is_some_and(|current| Arc::ptr_eq(current, provider))
             }
             Target::Lsp { server, lease } => {
-                !providers::has_language_feature(language, feature)
+                !self.providers.has_language_feature(language, feature)
                     && lease.is_active()
                     && self
                         .language_servers
@@ -214,7 +217,7 @@ impl EditorApp {
         self.session_state.workspace_trusted
             && self.language_features.sequence == intent.sequence
             && self.editor == intent.editor
-            && providers::feature_generation() == intent.generation
+            && self.providers.feature_generation() == intent.generation
             && self
                 .active_text_tab_index()
                 .and_then(|index| self.plugin_document_version(index).ok())
@@ -269,7 +272,7 @@ impl EditorApp {
         let Ok(document) = self.plugin_document_version(index) else {
             return;
         };
-        let language = editor::language_for_path(self.tabs[index].path());
+        let language = self.language_for_path(self.tabs[index].path());
         let Some(choice) = self.language_feature_choice(&language, feature, cx) else {
             self.status = t!("language_features.unavailable").to_string();
             cx.notify();
@@ -282,7 +285,7 @@ impl EditorApp {
             document,
             language,
             feature,
-            generation: providers::feature_generation(),
+            generation: self.providers.feature_generation(),
             target,
             choice,
         };
@@ -330,8 +333,10 @@ impl EditorApp {
         feature: direct::Feature,
         cx: &App,
     ) -> Option<Target> {
-        if providers::has_language_feature(language, feature) {
-            let key = providers::language_feature_provider(language, feature)?;
+        if self.providers.has_language_feature(language, feature) {
+            let key = self
+                .providers
+                .language_feature_provider(language, feature)?;
             let provider = self
                 .extensions
                 .read(cx)

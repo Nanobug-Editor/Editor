@@ -11,6 +11,12 @@ use std::{
     sync::{Arc, LazyLock, RwLock},
 };
 
+mod owner;
+#[cfg(test)]
+pub(crate) use owner::icon_rules;
+pub(crate) use owner::{CatalogView, asset, project_icon_rules, theme};
+use owner::{asset_prefix, project_catalog};
+
 /// A snapshot lets render and document paths read plugin metadata without disk I/O.
 #[derive(Default)]
 struct Catalog {
@@ -18,6 +24,7 @@ struct Catalog {
     icon_rules: Arc<Vec<(String, FileIconConfig, bool)>>,
 }
 
+#[derive(Clone)]
 struct Contribution {
     root: PathBuf,
     digest: String,
@@ -30,12 +37,14 @@ struct Contribution {
     assets: BTreeMap<String, Vec<u8>>,
 }
 
+#[cfg(test)]
 static CATALOG: LazyLock<RwLock<Arc<Catalog>>> =
     LazyLock::new(|| RwLock::new(Arc::new(Catalog::default())));
 
 /// Rebuild from enabled packages after a lifecycle change; failed assets stay unavailable.
 #[cfg(test)]
 pub fn refresh(root: &Path) -> anyhow::Result<()> {
+    crate::language::providers::configure(root, Path::new(""));
     let installed = Manager::read_registry(root)?
         .into_values()
         .collect::<Vec<_>>();
@@ -44,28 +53,40 @@ pub fn refresh(root: &Path) -> anyhow::Result<()> {
 }
 
 /// Restore contributions enabled only for the active workspace before tabs load.
-pub fn refresh_for_workspace(root: &Path, workspace: &Path) -> anyhow::Result<()> {
-    crate::language::providers::configure(root, workspace);
+pub fn refresh_for_project(
+    providers: &crate::language::providers::Providers,
+    root: &Path,
+    workspace: &Path,
+) -> anyhow::Result<()> {
     let key = workspace.display().to_string();
     let installed = Manager::read_registry(root)?
         .into_values()
         .map(|mut entry| {
+            entry.global_enabled = Some(entry.enabled);
             entry.enabled |= entry.project_enabled_in(&key);
             entry
         })
         .collect::<Vec<_>>();
-    refresh_entries(root, &installed);
+    refresh_project_entries(providers, root, &installed, true);
     Ok(())
 }
 
-/// The worker's live error state prevents failed components from contributing assets.
-pub fn refresh_entries(root: &Path, installed: &[Installed]) {
+/// Project errors mask executable/effective declarations; immutable user resources follow global installation authority.
+pub fn refresh_project_entries(
+    providers: &crate::language::providers::Providers,
+    root: &Path,
+    installed: &[Installed],
+    publish_user_resources: bool,
+) {
     let mut catalog = Catalog::default();
+    let mut user_catalog = publish_user_resources.then(Catalog::default);
     for installed in installed {
         let id = &installed.manifest.id;
-        if !installed.enabled
+        let project_enabled = installed.enabled && installed.error.is_none();
+        let user_enabled =
+            publish_user_resources && installed.global_enabled.unwrap_or(installed.enabled);
+        if (!project_enabled && !user_enabled)
             || installed.compatibility_error().is_some()
-            || installed.error.is_some()
             || !id.bytes().all(|byte| {
                 byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'.' || byte == b'-'
             })
@@ -83,7 +104,17 @@ pub fn refresh_entries(root: &Path, installed: &[Installed]) {
         let version = root.join("packages").join(&id).join(&installed.digest);
         match Contribution::read(&version, path, id, &installed.digest) {
             Ok(contribution) => {
-                catalog.plugins.insert(id.clone(), contribution);
+                if user_enabled {
+                    // A failed project provider cannot remove a validated user's theme from healthy peers.
+                    user_catalog
+                        .as_mut()
+                        .unwrap()
+                        .plugins
+                        .insert(id.clone(), contribution.clone());
+                }
+                if project_enabled {
+                    catalog.plugins.insert(id.clone(), contribution);
+                }
             }
             Err(error) => {
                 tracing::warn!(plugin = %id, %error, "declarative plugin assets unavailable")
@@ -103,7 +134,7 @@ pub fn refresh_entries(root: &Path, installed: &[Installed]) {
         }
     }
     catalog.icon_rules = Arc::new(rules);
-    crate::language::providers::refresh_with_language_features(
+    providers.refresh_with_language_features(
         root,
         catalog
             .plugins
@@ -159,7 +190,18 @@ pub fn refresh_entries(root: &Path, installed: &[Installed]) {
             })
             .collect(),
     );
-    *CATALOG.write().unwrap() = Arc::new(catalog);
+    owner::publish(providers, catalog, user_catalog);
+}
+
+/// Existing single-project package fixtures use the same project projection as their native editor.
+#[cfg(test)]
+pub fn refresh_for_workspace(root: &Path, workspace: &Path) -> anyhow::Result<()> {
+    crate::language::providers::configure(root, workspace);
+    refresh_for_project(&crate::language::providers::legacy(), root, workspace)
+}
+#[cfg(test)]
+pub fn refresh_entries(root: &Path, installed: &[Installed]) {
+    refresh_project_entries(&crate::language::providers::legacy(), root, installed, true);
 }
 
 impl Contribution {
@@ -349,7 +391,15 @@ fn language_for_path_in_catalog(
 /// something unusable — cannot stop another provider from offering its own targets. The candidates
 /// are gathered here and handed on; nothing in this module decides what a candidate means.
 pub fn discover_run_targets(workspace: &Path) -> Result<Vec<DiscoveredTarget>, String> {
-    let catalog = CATALOG.read().unwrap().clone();
+    let catalog = crate::language::providers::Providers::for_workspace(workspace)
+        .map(|providers| project_catalog(&providers))
+        .unwrap_or_default();
+    #[cfg(test)]
+    let catalog = if catalog.plugins.is_empty() {
+        CATALOG.read().unwrap().clone()
+    } else {
+        catalog
+    };
     let providers = catalog
         .plugins
         .iter()
@@ -476,238 +526,5 @@ pub fn plugin_root(id: &str) -> Option<PathBuf> {
         .map(|entry| entry.root.clone())
 }
 
-/// Installed theme packages override the built-in safety palette for their declared mode.
-pub fn theme(dark: bool) -> Option<ThemeDefinition> {
-    let mode = if dark {
-        ThemeMode::Dark
-    } else {
-        ThemeMode::Light
-    };
-    let catalog = CATALOG.read().unwrap().clone();
-    catalog
-        .plugins
-        .values()
-        .filter_map(|entry| entry.theme.as_ref())
-        .flat_map(|file| &file.themes)
-        .find(|theme| theme.mode == mode)
-        .cloned()
-}
-
-/// Theme icon rules precede language rules, preserving the existing file-tree priority.
-pub fn icon_rules() -> Arc<Vec<(String, FileIconConfig, bool)>> {
-    let catalog = CATALOG.read().unwrap().clone();
-    catalog.icon_rules.clone()
-}
-
-fn asset_prefix(id: &str, digest: &str) -> String {
-    format!("plugins/{id}/{digest}")
-}
-
-/// Resolve a renderer asset only from an enabled installed plugin version.
-pub fn asset(path: &str) -> Option<Vec<u8>> {
-    let catalog = CATALOG.read().unwrap().clone();
-    catalog.plugins.iter().find_map(|(id, entry)| {
-        path.strip_prefix(&format!("{}/", asset_prefix(id, &entry.digest)))
-            .and_then(|relative| entry.assets.get(relative).cloned())
-    })
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A differently named resource-only provider uses the same catalog and stable source identity.
-    #[test]
-    fn an_independent_declaration_offers_distinct_sources_without_language_rules() {
-        let example = Contribution::read(
-            &crate::test_packages::root("run-target-example"),
-            "plugin.toml",
-            "run-target-example",
-            &"b".repeat(64),
-        )
-        .unwrap();
-        assert_eq!(example.run_targets.len(), 1);
-        let project = tempfile::tempdir().unwrap();
-        for directory in ["one", "two"] {
-            std::fs::create_dir_all(project.path().join(directory)).unwrap();
-            std::fs::write(
-                project.path().join(directory).join("native-tool.toml"),
-                "[tool]\nname=\"Same label\"\nprogram=\"tool.exe\"\n",
-            )
-            .unwrap();
-        }
-        let mut catalog = Catalog::default();
-        catalog.plugins.insert("run-target-example".into(), example);
-        *CATALOG.write().unwrap() = Arc::new(catalog);
-        let targets = discover_run_targets(project.path()).unwrap();
-        assert_eq!(targets.len(), 2);
-        assert_ne!(
-            targets[0].id, targets[1].id,
-            "equal labels in different files are different targets"
-        );
-        assert!(
-            targets
-                .iter()
-                .all(|target| target.provider == "run-target-example"
-                    && target.target_type == "native-tool"
-                    && target.program == "tool.exe")
-        );
-        assert!(
-            discover_run_targets(tempfile::tempdir().unwrap().path())
-                .unwrap()
-                .is_empty()
-        );
-        *CATALOG.write().unwrap() = Arc::new(Catalog::default());
-    }
-
-    /// A declaration that disagrees with its contribution file is reported, not silently accepted.
-    #[test]
-    fn a_mismatched_discovery_identity_is_refused() {
-        assert!(declaration_matches_contribution("rust-binary", "rust-binary").is_ok());
-        let error = declaration_matches_contribution("declared", "other")
-            .expect_err("a declaration naming another provider is refused");
-        assert!(
-            error.contains("other") && error.contains("declared"),
-            "{error}"
-        );
-        // A contribution whose file is absent is reported with the file it named.
-        let directory = tempfile::tempdir().unwrap();
-        let (providers, failures) = read_run_targets(
-            directory.path(),
-            &[plugin_schema::RunTargetContribution {
-                id: "declared".into(),
-                file: PathBuf::from("missing.json"),
-            }],
-        );
-        assert!(providers.is_empty());
-        assert_eq!(failures.len(), 1);
-        assert_eq!(failures[0].provider, "declared");
-        // The reason comes from the platform and is not asserted word for word, but a plugin that
-        // names a file it does not ship has to be reported rather than quietly offering nothing.
-        assert!(!failures[0].error.trim().is_empty());
-    }
-    /// Startup resource loading must reject old protocols before opening their grammar/theme/icon assets.
-    #[test]
-    fn incompatible_resource_records_do_not_publish_contributions() {
-        let directory = tempfile::tempdir().unwrap();
-        let package =
-            crate::extensions::language_tests::packages::language_package("me.custom-language");
-        let mut manager = Manager::open(directory.path().into(), Default::default()).unwrap();
-        manager.install(&package, Default::default()).unwrap();
-        let mut entries = manager.published_entries();
-        refresh_entries(directory.path(), &entries);
-        assert!(
-            plugin_root("me.custom-language").is_some(),
-            "current author ID must remain exact"
-        );
-        entries[0].manifest.protocol = 1;
-        entries[0].manifest.api = None;
-        refresh_entries(directory.path(), &entries);
-        assert!(plugin_root("me.custom-language").is_none());
-        assert!(icon_rules().is_empty());
-        assert!(
-            entries[0].enabled,
-            "filtering must not clear the persisted preference"
-        );
-    }
-
-    /// JavaScript aliases resolve from the installed manifest and carry valid themed icons.
-    #[test]
-    fn javascript_package_resolves_extensions_and_icons() {
-        let javascript = Contribution::read(
-            &crate::test_packages::root("javascript"),
-            "plugin.toml",
-            "javascript",
-            &"a".repeat(64),
-        )
-        .unwrap();
-        assert_eq!(javascript.assets.len(), 2);
-        let mut catalog = Catalog::default();
-        catalog.plugins.insert("javascript".to_owned(), javascript);
-        for path in ["main.js", "module.mjs", "legacy.cjs", "View.jsx", "MAIN.JS"] {
-            let (_, language) = language_for_path_in_catalog(&catalog, Path::new(path)).unwrap();
-            assert_eq!(language.id, "javascript");
-            let icons = catalog.plugins["javascript"].icons.as_ref().unwrap();
-            let extension = Path::new(path).extension().unwrap().to_str().unwrap();
-            assert!(
-                icons.icons[0]
-                    .extensions
-                    .iter()
-                    .any(|candidate| candidate.eq_ignore_ascii_case(extension))
-            );
-        }
-        // TypeScript and JSON retain their own language identities.
-        for path in ["main.ts", "View.tsx", "package.json"] {
-            assert!(language_for_path_in_catalog(&catalog, Path::new(path)).is_none());
-        }
-        catalog.plugins.clear();
-        assert!(language_for_path_in_catalog(&catalog, Path::new("main.js")).is_none());
-    }
-
-    /// Fixed official Package resources retain the declaration, icon and grammar behavior after source removal.
-    #[test]
-    fn declarative_language_packages_expose_their_distinct_resources() {
-        let digest = "a".repeat(64);
-        let rust = Contribution::read(
-            &crate::test_packages::root("rust"),
-            "plugin.toml",
-            "rust",
-            &digest,
-        )
-        .unwrap();
-        assert_eq!(rust.manifest.language_definitions[0].id, "rust");
-        assert!(!rust.assets.is_empty());
-        let toml = Contribution::read(
-            &crate::test_packages::root("toml"),
-            "plugin.toml",
-            "toml",
-            &digest,
-        )
-        .unwrap();
-        assert_eq!(toml.manifest.language_definitions[0].id, "toml");
-        assert!(rust.theme.is_none() && toml.theme.is_none());
-
-        // Both HTML suffixes resolve to one language and ship valid theme-specific icons.
-        let html = Contribution::read(
-            &crate::test_packages::root("html"),
-            "plugin.toml",
-            "html",
-            &digest,
-        )
-        .unwrap();
-        assert_eq!(html.assets.len(), 2);
-        assert_eq!(
-            html.icons.as_ref().unwrap().icons[0].extensions,
-            ["html", "htm"]
-        );
-        let mut html_catalog = Catalog::default();
-        html_catalog.plugins.insert("html".to_owned(), html);
-        for path in ["index.html", "legacy.htm", "INDEX.HTML", "LEGACY.HTM"] {
-            let (owner, language) =
-                language_for_path_in_catalog(&html_catalog, Path::new(path)).unwrap();
-            assert_eq!(owner, "html");
-            assert_eq!(language.id, "html");
-        }
-        for path in ["view.xhtml", "component.vue", "image.svg", "index.html.txt"] {
-            assert!(language_for_path_in_catalog(&html_catalog, Path::new(path)).is_none());
-        }
-
-        // Known lockfiles use TOML, while a shared .lock suffix cannot select a grammar.
-        let mut catalog = Catalog::default();
-        catalog.plugins.insert("toml".to_owned(), toml);
-        for path in ["config.toml", "Cargo.lock", "uv.lock", "CARGO.LOCK"] {
-            assert_eq!(
-                language_for_path_in_catalog(&catalog, Path::new(path))
-                    .map(|(_, language)| language.id),
-                Some("toml".to_owned()),
-                "{path} should select the TOML plugin"
-            );
-        }
-        for path in ["composer.lock", "Gemfile.lock", "random.lock"] {
-            assert!(
-                language_for_path_in_catalog(&catalog, Path::new(path)).is_none(),
-                "{path} must not be classified by its .lock suffix"
-            );
-        }
-    }
-}
+mod tests;

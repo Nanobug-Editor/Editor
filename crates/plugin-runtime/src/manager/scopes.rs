@@ -5,6 +5,8 @@ pub(super) struct ParkedWorkspace {
     pub(super) environment: Environment,
     pub(super) trusted: bool,
     pub(super) live: BTreeMap<String, Instance>,
+    /// Concurrent routing retains transports and native roots; legacy sequential switching does not.
+    pub(super) resources: Option<super::concurrent::ProjectResources>,
 }
 
 /// Canonical roots make equivalent host paths select the same persisted scope.
@@ -135,6 +137,12 @@ impl Manager {
             + self
                 .parked
                 .values()
+                .filter_map(|scope| scope.resources.as_ref())
+                .map(|resources| resources.resource_count())
+                .sum::<usize>()
+            + self
+                .parked
+                .values()
                 .flat_map(|scope| scope.live.values())
                 .map(Instance::resource_count)
                 .sum::<usize>()
@@ -192,6 +200,7 @@ impl Manager {
                     environment: self.environment.clone(),
                     trusted: self.trusted,
                     live,
+                    resources: None,
                 },
             );
         }
@@ -230,7 +239,7 @@ impl Manager {
         Ok(())
     }
 
-    fn start_scope_plugins(&mut self) {
+    pub(super) fn start_scope_plugins(&mut self) {
         if !self.trusted || !self.workspace_open {
             return;
         }
@@ -329,6 +338,11 @@ impl Manager {
 
     /// Global disable/uninstall invalidates every outstanding workspace owner for the package.
     pub(super) fn retire_parked_plugin(&mut self, id: &str) {
+        for scope in self.parked.values_mut() {
+            if let Some(resources) = &mut scope.resources {
+                resources.retire_plugin(id);
+            }
+        }
         let removed = self
             .parked
             .values_mut()
@@ -394,7 +408,10 @@ impl Manager {
             }
         }
         anyhow::ensure!(failures.is_empty(), "{}", failures.join("; "));
-        self.retire_for_shutdown()
+        self.retire_for_shutdown()?;
+        // A completed application retirement releases its unique private-data owner as well as its processes.
+        self._runtime_lock.take();
+        Ok(())
     }
 
     /// Retirement is idempotent; a failed native join can be retried without replaying programs.
@@ -402,12 +419,17 @@ impl Manager {
         // Detached preparation observes this seal before activation and cannot publish after shutdown.
         self.host_alive
             .store(false, std::sync::atomic::Ordering::Release);
+        self.application_alive
+            .store(false, std::sync::atomic::Ordering::Release);
         self.retire_workspace_images();
         self.retire_workspace_image_inputs();
         // Programs get a shared bounded cleanup window and then forceful tree termination. The UI
         // awaits the actor's shutdown acknowledgement; only afterwards may its window disappear.
         self.stop_owned_programs();
-        let native_cleanup = self.native_executions.shutdown();
+        let mut native_failures = Vec::new();
+        if let Err(error) = self.native_executions.shutdown() {
+            native_failures.push(format!("{error:#}"));
+        }
         // Revocation must invalidate workers retained by a host before its last Arc is released.
         // Declarative services have no Main WASM in `live`; dropping cached preparations
         // retires their native seals, published requests and retained batch receipts now.
@@ -422,14 +444,33 @@ impl Manager {
         self.live.clear();
         let scopes = self.parked.keys().cloned().collect::<Vec<_>>();
         for key in scopes {
-            if let Some(mut scope) = self.parked.remove(&key) {
+            if let Some(scope) = self.parked.get_mut(&key) {
+                let mut failed = false;
+                if let Some(resources) = &mut scope.resources {
+                    resources
+                        .alive
+                        .store(false, std::sync::atomic::Ordering::Release);
+                    resources.host_sessions.retire();
+                    if let Err(error) = resources.native_executions.shutdown() {
+                        native_failures.push(format!("{error:#}"));
+                        failed = true;
+                    }
+                    resources.clear_after_retirement();
+                }
                 for instance in scope.live.values_mut() {
                     instance.stop();
+                }
+                scope.live.clear();
+                scope.trusted = false;
+                // Keep a failed supervisor registered so a subsequent Quit can retry its actual join.
+                if !failed {
+                    self.parked.remove(&key);
                 }
             }
         }
         self.workspace_open = false;
         self.trusted = false;
-        native_cleanup
+        anyhow::ensure!(native_failures.is_empty(), "{}", native_failures.join("; "));
+        Ok(())
     }
 }

@@ -159,21 +159,60 @@ pub(crate) fn readonly_parser(
 }
 
 /// Only the UI owner may publish a generation-checked successful load.
-pub(crate) fn publish_dynamic(language: &str, grammar: Arc<LoadedGrammar>, query: String) {
+pub(crate) fn publish_project_dynamic(
+    providers: &super::providers::Providers,
+    language: &str,
+    grammar: Arc<LoadedGrammar>,
+    query: String,
+) {
     let registry = LanguageRegistry::singleton();
     // A declared injection must never borrow an upstream native parser when its plugin is absent.
-    let selected = super::providers::grammars();
+    let selected = providers.grammars();
     for dependency in &grammar.injection_languages {
         if !selected
             .iter()
             .any(|provider| &provider.declaration.language == dependency)
         {
-            mask_language(dependency);
+            mask_language(&providers.parser_key(dependency));
         }
     }
+    let language = providers.parser_key(language);
+    let mut injections = grammar.injections.clone();
+    // Static injection targets were validated on load. Qualify their registry keys with the same owner.
+    let whitespace = r"(?:\s|;[^\n]*(?:\n|$))*";
+    let target = regex::Regex::new(&format!(r#"(\({whitespace}#set!{whitespace}(?:injection\.language|"injection\.language"){whitespace}")([^"]+)(")"#)).expect("static injection property pattern");
+    injections = target
+        .replace_all(&injections, |capture: &regex::Captures<'_>| {
+            // Qualify only the static property value; a text predicate containing the same language word is unchanged.
+            format!(
+                "{}{}{}",
+                &capture[1],
+                providers.parser_key(&capture[2]),
+                &capture[3]
+            )
+        })
+        .into_owned();
     let mut config = GrammarConfig::plain(language.to_owned());
     config.highlights = SharedString::from(query);
-    config.injections = SharedString::from(grammar.injections.clone());
+    config.injections = SharedString::from(injections);
+    config.injection_languages = grammar
+        .injection_languages
+        .iter()
+        .map(|dependency| providers.parser_key(dependency).into())
+        .collect();
+    registry.register(&language, &config);
+    registry.register_parser_factory(&language, parser_factory(grammar));
+}
+
+/// The original single-project grammar fixture uses the same qualified parser cache as native editors.
+#[cfg(test)]
+pub(crate) fn publish_dynamic(language: &str, grammar: Arc<LoadedGrammar>, query: String) {
+    // The pre-existing standalone parser fixtures have no native project owner. Their logical keys
+    // stay in this immutable parser cache; production documents only use qualified project keys.
+    let registry = LanguageRegistry::singleton();
+    let mut config = GrammarConfig::plain(language.to_owned());
+    config.highlights = query.into();
+    config.injections = grammar.injections.clone().into();
     config.injection_languages = grammar
         .injection_languages
         .iter()

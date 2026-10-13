@@ -24,7 +24,7 @@ pub(super) fn render(view: &Entity<EditorApp>, cx: &App) -> AnyElement {
                     });
                 }),
         );
-    for (extension, language) in providers::file_associations() {
+    for (extension, language) in view.read(cx).providers.file_associations() {
         let owner = view.clone();
         let key = extension.clone();
         content = content.child(
@@ -46,7 +46,7 @@ pub(super) fn render(view: &Entity<EditorApp>, cx: &App) -> AnyElement {
                 .child(Input::new(&input)),
         );
         let mut choices = h_flex().gap_2().flex_wrap();
-        for language in providers::languages() {
+        for language in view.read(cx).providers.languages() {
             let owner = view.clone();
             let input = input.clone();
             let selector = format!("file-association-language-{language}");
@@ -69,7 +69,9 @@ pub(super) fn render(view: &Entity<EditorApp>, cx: &App) -> AnyElement {
 /// Persisting a setting changes only recognition; language activation still observes trust.
 fn apply(view: &Entity<EditorApp>, extension: &str, language: Option<&str>, cx: &mut App) {
     view.update(cx, |app, cx| {
-        app.dynamic_languages.error = providers::associate_extension(extension, language)
+        app.dynamic_languages.error = app
+            .providers
+            .associate_extension(extension, language)
             .err()
             .map(|error| format!("{}: {error:#}", t!("settings.file_association_error")));
         if app.dynamic_languages.error.is_none() {
@@ -77,6 +79,7 @@ fn apply(view: &Entity<EditorApp>, extension: &str, language: Option<&str>, cx: 
             app.sync_dynamic_languages(cx);
         }
         app.refresh_dialog(cx);
+        cx.refresh_windows();
         cx.notify();
     });
 }

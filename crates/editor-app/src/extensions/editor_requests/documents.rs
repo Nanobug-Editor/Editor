@@ -1,6 +1,5 @@
 //! Read current metadata and text only from the owning native DocumentSession/EditorState pair.
 use super::*;
-use crate::editor::language_for_path;
 
 impl EditorApp {
     /// Publish metadata transitions without retaining text or replacing the legacy revision stream.
@@ -254,7 +253,7 @@ impl EditorApp {
                 .virtual_document
                 .as_ref()
                 .map(|virtual_tab| virtual_tab.language.clone())
-                .unwrap_or_else(|| language_for_path(file.path())),
+                .unwrap_or_else(|| self.language_for_path(file.path())),
             encoding,
             eol,
             byte_len,

@@ -14,6 +14,7 @@ pub use activation::{
     PreparedDemand,
 };
 mod bundles;
+mod concurrent;
 mod data_updates;
 mod debug_services;
 mod dependencies;
@@ -145,6 +146,8 @@ pub struct Manager {
     service_preparations: Vec<service_preparation::Pending>,
     /// Retired with this runtime so a queued start cannot outlive the window that requested it.
     host_alive: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Application declarations retain an owner independently of the last selected project.
+    application_alive: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 impl Manager {
     /// Share the process-local log owner with host UI and independent real-package verification.
@@ -258,6 +261,7 @@ impl Manager {
             debug_sessions: Default::default(),
             service_preparations: Vec::new(),
             host_alive,
+            application_alive: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
         };
         if manager.installed.values().any(|entry| {
             entry.manifest.component.is_some() && entry.compatibility_error().is_none()

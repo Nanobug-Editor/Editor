@@ -15,12 +15,22 @@ pub(crate) struct SyntaxDiagnostics {
 }
 
 impl SyntaxDiagnostics {
-    /// Parse a read-only snapshot on a worker, using only a registered plugin grammar.
+    /// Standalone parser fixtures retain their original logical cache key, outside native project routing.
+    #[cfg(test)]
     pub(crate) fn check(&mut self, language: &str, text: &Rope) -> Vec<Diagnostic> {
+        self.check_project(language, language, text)
+    }
+    /// Parse a read-only snapshot on a worker, using only a registered plugin grammar.
+    pub(crate) fn check_project(
+        &mut self,
+        language: &str,
+        parser_language: &str,
+        text: &Rope,
+    ) -> Vec<Diagnostic> {
         // Plugin registration deliberately leaves the native grammar empty. This
         // guard prevents diagnostic parsing from falling back to a host grammar.
         if !LanguageRegistry::singleton()
-            .language(language)
+            .language(parser_language)
             .is_some_and(|config| config.language.is_none() && !config.highlights.is_empty())
         {
             self.highlighter = None;
@@ -29,9 +39,12 @@ impl SyntaxDiagnostics {
         if self
             .highlighter
             .as_ref()
-            .is_none_or(|(id, _)| id != language)
+            .is_none_or(|(id, _)| id != parser_language)
         {
-            self.highlighter = Some((language.to_owned(), SyntaxHighlighter::new(language)));
+            self.highlighter = Some((
+                parser_language.to_owned(),
+                SyntaxHighlighter::new(parser_language),
+            ));
         }
         let highlighter = &mut self.highlighter.as_mut().unwrap().1;
         highlighter.update(None, text, None);

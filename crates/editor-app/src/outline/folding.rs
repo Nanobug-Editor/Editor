@@ -13,7 +13,11 @@ pub(crate) struct Controller {
 
 impl Controller {
     /// Install once per text session; structure, grammar folds and owned marker edits share this adapter.
-    pub(crate) fn attach(editor: &Entity<EditorState>, cx: &mut App) -> Self {
+    pub(crate) fn attach(
+        editor: &Entity<EditorState>,
+        providers: crate::language::providers::Providers,
+        cx: &mut App,
+    ) -> Self {
         let controller = Self {
             folds: Rc::new(RefCell::new(None)),
             markers: Rc::new(RefCell::new(Default::default())),
@@ -26,7 +30,8 @@ impl Controller {
                 Rc::new(move |language| {
                     Some(Box::new(Adapter {
                         language: language.to_owned().into(),
-                        syntax: Rc::new(RefCell::new(plugin_syntax(language))),
+                        syntax: Rc::new(RefCell::new(plugin_syntax_in(&providers, language))),
+                        providers: providers.clone(),
                         parser_cancelled: Rc::new(Cell::new(false)),
                         folds: folds.clone(),
                         markers: markers.clone(),
@@ -73,6 +78,8 @@ impl Controller {
 /// Delegate dynamic grammar/styles to the public SyntaxHighlighter; only candidate arbitration is host-owned.
 struct Adapter {
     language: SharedString,
+    /// Native parsers and delayed reparses resolve only this project's selected grammar.
+    providers: crate::language::providers::Providers,
     syntax: Rc<RefCell<SyntaxHighlighter>>,
     /// Cancellation leaves resumable parser state; read its cached styles but never parse another input with it.
     parser_cancelled: Rc<Cell<bool>>,
@@ -145,7 +152,9 @@ impl InputHighlighter for Adapter {
         let generation = self.generation.clone();
         let requested = generation.get();
         let text = text.clone();
-        let grammar_epoch = crate::language::code_highlighting::epoch();
+        let providers = self.providers.clone();
+        let current_providers = providers.clone();
+        let grammar_epoch = providers.feature_generation();
         self.pending = Some(cx.spawn_in(window, async move |editor, cx| {
             cx.background_executor()
                 .timer(Duration::from_millis(150))
@@ -154,7 +163,7 @@ impl InputHighlighter for Adapter {
             let parsed = cx
                 .background_executor()
                 .spawn(async move {
-                    let mut parsed = plugin_syntax(&language);
+                    let mut parsed = plugin_syntax_in(&providers, &language);
                     // A timed-out candidate owns the same resumable state and must never become the live parser.
                     parsed
                         .update(None, &source, Some(Duration::from_millis(100)))
@@ -166,7 +175,7 @@ impl InputHighlighter for Adapter {
             };
             // Editor incarnation, source, adapter generation and grammar selection all guard background completion.
             if generation.get() != requested
-                || grammar_epoch != crate::language::code_highlighting::epoch()
+                || grammar_epoch != current_providers.feature_generation()
             {
                 return;
             }
@@ -202,11 +211,24 @@ impl InputHighlighter for Adapter {
 }
 
 /// Structure alone never authorizes a built-in parser; only the selected dynamic grammar may produce styles.
-fn plugin_syntax(language: &str) -> SyntaxHighlighter {
-    let selected = crate::language::providers::grammars()
+fn plugin_syntax_in(
+    providers: &crate::language::providers::Providers,
+    language: &str,
+) -> SyntaxHighlighter {
+    let selected = providers
+        .grammars()
         .iter()
         .any(|provider| provider.declaration.language == language);
-    SyntaxHighlighter::new(if selected { language } else { "text" })
+    SyntaxHighlighter::new(&if selected {
+        providers.parser_key(language)
+    } else {
+        "text".into()
+    })
+}
+
+#[cfg(test)]
+fn plugin_syntax(language: &str) -> SyntaxHighlighter {
+    plugin_syntax_in(&crate::language::providers::legacy(), language)
 }
 
 /// Preserve Base's generic named-node fallback for editors whose independent structure provider is removed.

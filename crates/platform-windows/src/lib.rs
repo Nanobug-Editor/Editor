@@ -14,6 +14,8 @@ mod attachments;
 pub use attachments::{NewWorkspaceFileStore, create_document_attachment};
 /// Per-plugin protected credentials, separate from document storage and history.
 pub mod credentials;
+/// File-system identity for native project routing, separate from persistent display paths.
+pub mod directory_identity;
 pub mod file_picker;
 
 #[derive(Debug, Default, Clone, Copy)]

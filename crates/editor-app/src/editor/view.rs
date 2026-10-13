@@ -55,6 +55,7 @@ impl EditorApp {
                     let row_path = PathBuf::from(item.id.as_str());
                     let drop_target = app.explorer_drag.target() == Some(row_path.as_path());
                     let icon = file_icon(
+                        &app.providers,
                         Path::new(item.id.as_str()),
                         is_folder,
                         &theme::active_theme(app.dark_theme),
@@ -323,7 +324,12 @@ impl EditorApp {
             } else {
                 tab.title()
             };
-            let icon = file_icon(&path, false, &theme::active_theme(self.dark_theme));
+            let icon = file_icon(
+                &self.providers,
+                &path,
+                false,
+                &theme::active_theme(self.dark_theme),
+            );
             let activate_path = path.clone();
             let context_path = path.clone();
             let close_path = path.clone();

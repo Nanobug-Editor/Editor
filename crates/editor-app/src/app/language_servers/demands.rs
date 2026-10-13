@@ -41,7 +41,7 @@ impl EditorApp {
                 if tab.text.is_none() || tab.virtual_document.is_some() {
                     continue;
                 }
-                let language = editor::language_for_path(tab.path());
+                let language = self.language_for_path(tab.path());
                 let Some(key) = selected.get(&language).and_then(Option::as_ref) else {
                     continue;
                 };

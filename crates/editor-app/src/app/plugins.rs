@@ -299,7 +299,7 @@ impl EditorApp {
             }
         }
         let available = panel.language_services();
-        let selected = crate::language::providers::language_servers();
+        let selected = self.providers.language_servers();
         for (language, state) in &self.language_service_states {
             if *state != ServiceLoadState::Loading {
                 continue;

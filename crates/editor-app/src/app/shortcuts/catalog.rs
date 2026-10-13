@@ -193,6 +193,9 @@ fn shell_action(name: &str) -> bool {
             | "me_editor::ShowSignatureHelp"
             | "extensions::ToggleExtensions"
             | "extensions::QuitEditor"
+            | "projects::OpenFolder"
+            | "projects::ShowHome"
+            | "projects::CloseWindow"
             | "shortcuts::OpenShortcuts"
     )
 }
@@ -267,6 +270,9 @@ fn append_unbound(result: &mut Vec<Operation>, cx: &App) {
             Scope::Global,
         ),
         ("extensions::QuitEditor", "EditorShell", Scope::Global),
+        ("projects::OpenFolder", "EditorShell", Scope::Global),
+        ("projects::ShowHome", "EditorShell", Scope::Global),
+        ("projects::CloseWindow", "EditorShell", Scope::Global),
         ("shortcuts::OpenShortcuts", "EditorShell", Scope::Global),
         ("input::ActivateToken", "Input", Scope::Panel),
         ("input::DeleteToBeginningOfLine", "Input", Scope::Panel),

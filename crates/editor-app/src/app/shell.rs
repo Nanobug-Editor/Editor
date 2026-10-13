@@ -122,7 +122,7 @@ pub(super) fn title_bar_window_control(
                     WindowControlArea::Min => window.minimize_window(),
                     WindowControlArea::Max => window.zoom_window(),
                     WindowControlArea::Close => {
-                        window.dispatch_action(Box::new(extensions::QuitEditor), cx)
+                        window.dispatch_action(Box::new(app::projects::CloseWindow), cx)
                     }
                     WindowControlArea::Drag => {}
                 }
@@ -330,6 +330,9 @@ impl EditorApp {}
 
 impl Render for EditorApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.provider_generation != self.providers.feature_generation() && !self.shutting_down {
+            self.sync_dynamic_languages(cx);
+        }
         if std::mem::take(&mut self.pending_contribution_sync) {
             // The render frame provides the window needed to attach LSP providers to open tabs.
             self.sync_runtime_contributions(window, cx);
@@ -392,17 +395,48 @@ impl Render for EditorApp {
                 }),
             )
             .on_action(cx.listener(|this, _: &extensions::QuitEditor, window, cx| {
-                if let Some(owner) = this.project_window.clone() {
+                if this.project_window.is_some() {
                     // Release the child editor's update lease before the owner examines it.
-                    window.defer(cx, move |window, cx| {
-                        let _ = owner.update(cx, |host, cx| {
-                            host.request_close(app::projects::CloseIntent::Window, window, cx);
-                        });
+                    window.defer(cx, move |_, cx| {
+                        app::projects::quit_application(cx);
                     });
                 } else {
                     this.shutdown_plugins(cx);
                 }
             }))
+            .on_action(
+                cx.listener(|this, _: &app::projects::CloseWindow, window, cx| {
+                    if let Some(owner) = this.project_window.clone() {
+                        window.defer(cx, move |window, cx| {
+                            let _ = owner.update(cx, |host, cx| {
+                                host.request_close(app::projects::CloseIntent::Window, window, cx);
+                            });
+                        });
+                    } else {
+                        this.shutdown_plugins(cx);
+                    }
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &app::projects::OpenFolder, window, cx| {
+                    if let Some(owner) = this.project_window.clone() {
+                        window.defer(cx, move |window, cx| {
+                            let _ = owner.update(cx, |host, cx| host.choose_folder(window, cx));
+                        });
+                    }
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &app::projects::ShowHome, window, cx| {
+                    if let Some(owner) = this.project_window.clone() {
+                        window.defer(cx, move |_, cx| {
+                            let _ = owner.update(cx, |host, cx| {
+                                host.show_home(cx);
+                            });
+                        });
+                    }
+                }),
+            )
             .on_action(
                 cx.listener(|this, _: &extensions::ToggleExtensions, window, cx| {
                     this.toggle_extensions(window, cx)
@@ -503,6 +537,26 @@ impl Render for EditorApp {
                     .when(self.project_window.is_some(), |bar| {
                         let owner = self.project_window.clone().unwrap();
                         bar.child(
+                            Button::new("project-open-another")
+                                .debug_selector(|| "project-open-another".into())
+                                .small()
+                                .ghost()
+                                .label(t!("projects.open_folder").to_string())
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(Box::new(app::projects::OpenFolder), cx)
+                                }),
+                        )
+                        .child(
+                            Button::new("project-show-home")
+                                .debug_selector(|| "project-show-home".into())
+                                .small()
+                                .ghost()
+                                .label(t!("projects.home").to_string())
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(Box::new(app::projects::ShowHome), cx)
+                                }),
+                        )
+                        .child(
                             Button::new("project-close-project")
                                 .debug_selector(|| "project-close-project".into())
                                 .small()
@@ -520,6 +574,16 @@ impl Render for EditorApp {
                                             );
                                         });
                                     });
+                                }),
+                        )
+                        .child(
+                            Button::new("project-quit-application")
+                                .debug_selector(|| "project-quit-application".into())
+                                .small()
+                                .ghost()
+                                .label(t!("projects.quit_application").to_string())
+                                .on_click(|_, window, cx| {
+                                    window.dispatch_action(Box::new(extensions::QuitEditor), cx)
                                 }),
                         )
                     })

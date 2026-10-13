@@ -30,4 +30,12 @@ mod text_drag;
 mod view;
 pub(crate) mod viewport;
 
-pub(crate) use documents::{attach_language_server, detach_language_server, language_for_path};
+pub(crate) use documents::{attach_language_server, detach_language_server};
+
+/// Legacy single-project fixture calls resolve through the same project owner as production actions.
+#[cfg(test)]
+pub(crate) fn language_for_path(path: &std::path::Path) -> String {
+    crate::language::providers::legacy()
+        .language_for_path(path)
+        .unwrap_or_else(|| "text".into())
+}

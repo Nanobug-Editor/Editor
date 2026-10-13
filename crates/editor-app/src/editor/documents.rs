@@ -123,7 +123,7 @@ impl EditorApp {
             for (editor, path) in renamed_editors {
                 // A moved document's language providers must send the new file URI.
                 detach_language_server(&editor, cx);
-                if let Some(server) = self.language_servers.get(&language_for_path(&path)) {
+                if let Some(server) = self.language_servers.get(&self.language_for_path(&path)) {
                     attach_language_server(
                         &editor,
                         &path,
@@ -133,7 +133,7 @@ impl EditorApp {
                     );
                 }
                 editor.update(cx, |editor, cx| {
-                    editor.set_highlighter(language_for_path(&path), cx)
+                    editor.set_highlighter(self.language_for_path(&path), cx)
                 });
                 self.refresh_syntax_diagnostics(editor.entity_id(), cx);
             }
@@ -362,7 +362,7 @@ impl EditorApp {
         match DocumentSession::open(&self.file_store, path.clone()) {
             Ok(opened) => {
                 let document_path = opened.session.path().to_path_buf();
-                let language = language_for_path(&document_path);
+                let language = self.language_for_path(&document_path);
                 let text = self.create_native_text_tab(opened, window, cx);
                 self.tabs.push(OpenTab {
                     virtual_document: None,
@@ -728,7 +728,7 @@ impl EditorApp {
             .virtual_document
             .as_ref()
             .map(|virtual_tab| virtual_tab.language.clone())
-            .unwrap_or_else(|| language_for_path(&path));
+            .unwrap_or_else(|| self.language_for_path(&path));
         let file_name = tab.title();
         let editor = tab.text.as_ref().map(|text| text.editor.clone());
         let file_id = tab.file_id;
@@ -1181,15 +1181,17 @@ pub(crate) fn detach_language_server(editor: &Entity<EditorState>, cx: &mut Cont
 }
 
 /// Resolve recognition consistently for opening, renaming and hot highlighter replacement.
-pub(crate) fn language_for_path(path: &Path) -> String {
-    if let Some(language) = crate::language::providers::language_for_path(path) {
-        return language;
+impl EditorApp {
+    pub(crate) fn language_for_path(&self, path: &Path) -> String {
+        if let Some(language) = self.providers.language_for_path(path) {
+            return language;
+        }
+        if self.providers.handles_path(path) {
+            return "text".into();
+        }
+        // Recognition is exclusively provided by installed declarations; upstream defaults stay inert.
+        "text".to_owned()
     }
-    if crate::language::providers::handles_path(path) {
-        return "text".into();
-    }
-    // Recognition is exclusively provided by installed declarations; upstream defaults stay inert.
-    "text".to_owned()
 }
 
 /// Centers the painted caret using upstream viewport APIs; scrolling is clamped by the editor.

@@ -10,8 +10,8 @@ impl EditorApp {
             return None;
         }
         let index = self.active_text_tab_index()?;
-        let language = language::providers::language_for_path(self.tabs[index].path())?;
-        let choice = language::providers::structure_provider(&language)?;
+        let language = self.providers.language_for_path(self.tabs[index].path())?;
+        let choice = self.providers.structure_provider(&language)?;
         let original = self.outline.demand.as_ref().filter(|demand| demand.ready)?;
         if self.plugin_document_version(index).ok().as_ref() != Some(&original.source.document) {
             return None;

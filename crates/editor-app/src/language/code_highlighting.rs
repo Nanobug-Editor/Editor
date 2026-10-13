@@ -42,6 +42,7 @@ struct Work<'a> {
     cancelled: &'a AtomicBool,
     deadline: Instant,
     epoch: u64,
+    providers: &'a providers::Providers,
     captures: usize,
     capture_bytes: usize,
     injection_events: usize,
@@ -53,7 +54,7 @@ struct Work<'a> {
 
 impl Work<'_> {
     fn check(&self) -> Result<(), Failure> {
-        if stopped(self.cancelled, self.deadline) || epoch() != self.epoch {
+        if stopped(self.cancelled, self.deadline) || self.providers.code_epoch() != self.epoch {
             Err(Failure::Stopped)
         } else {
             Ok(())
@@ -79,6 +80,8 @@ impl Work<'_> {
 pub(crate) struct Selection {
     pub provider: GrammarProvider,
     pub epoch: u64,
+    /// Scope and incarnation reject another project's choices and late jobs after close/reopen.
+    pub providers: providers::Providers,
 }
 
 /// Captures are UTF-8 byte ranges into the unchanged input, not colors or mutable editor state.
@@ -106,7 +109,6 @@ struct Prepared {
 
 #[derive(Default)]
 struct PreparedCache {
-    epoch: u64,
     entries: VecDeque<Arc<Prepared>>,
 }
 static PREPARED: LazyLock<Mutex<PreparedCache>> =
@@ -114,28 +116,39 @@ static PREPARED: LazyLock<Mutex<PreparedCache>> =
 
 /// Resolve an enabled language ID, display name or selected extension from current declarations.
 /// Unknown or ambiguous aliases return `None`; no built-in parser may serve as a fallback.
+pub(crate) fn selected_in(providers: &providers::Providers, language: &str) -> Option<Selection> {
+    let (provider, epoch) = providers.code_provider(language)?;
+    Some(Selection {
+        provider,
+        epoch,
+        providers: providers.clone(),
+    })
+}
+
+#[cfg(test)]
 pub(crate) fn selected(language: &str) -> Option<Selection> {
-    let (provider, epoch) = providers::code_provider(language)?;
-    Some(Selection { provider, epoch })
+    selected_in(&providers::legacy(), language)
 }
 
 /// Compare package and generation, rejecting even a remove/reinstall or A/B/A selection sequence.
 pub(crate) fn is_current(selection: &Selection) -> bool {
-    providers::code_is_current(&selection.provider, selection.epoch)
+    selection
+        .providers
+        .code_is_current(&selection.provider, selection.epoch)
 }
 
 /// Native views can invalidate scenes when the last provider is withdrawn as well as installed.
+#[cfg(test)]
 pub(crate) fn epoch() -> u64 {
     providers::code_epoch()
 }
 
 /// Provider changes release prepared resources; older notifications cannot roll the cache back.
-pub(super) fn invalidate_prepared(epoch: u64) {
+pub(super) fn invalidate_prepared(scope: u64, epoch: u64) {
     let mut cache = PREPARED.lock().unwrap();
-    if epoch > cache.epoch {
-        cache.entries.clear();
-        cache.epoch = epoch;
-    }
+    cache.entries.retain(|entry| {
+        entry.selection.providers.scope() != scope || entry.selection.epoch >= epoch
+    });
 }
 
 /// Capture a small immutable code block on a background worker, or return plain text on failure.
@@ -162,6 +175,7 @@ pub(crate) fn highlight(
         cancelled,
         deadline,
         epoch: selection.epoch,
+        providers: &selection.providers,
         captures: 0,
         capture_bytes: 0,
         injection_events: 0,
@@ -248,10 +262,12 @@ fn layer(
         }
         for request in requests {
             work.check()?;
-            let Some(injected) = selected(&request.language).filter(|provider| {
-                provider.epoch == work.epoch
-                    && provider.provider.declaration.language == request.language
-            }) else {
+            let Some(injected) =
+                selected_in(work.providers, &request.language).filter(|provider| {
+                    provider.epoch == work.epoch
+                        && provider.provider.declaration.language == request.language
+                })
+            else {
                 continue;
             };
             match layer(&injected, &request.ranges, depth + 1, work) {
@@ -435,12 +451,8 @@ fn prepare(
     });
     let mut cache = PREPARED.lock().unwrap();
     // A delayed initialization cannot revive resources retired by a newer provider generation.
-    if selection.epoch < cache.epoch {
+    if !is_current(selection) {
         return None;
-    }
-    if selection.epoch > cache.epoch {
-        cache.entries.clear();
-        cache.epoch = selection.epoch;
     }
     if let Some(existing) = cache
         .entries

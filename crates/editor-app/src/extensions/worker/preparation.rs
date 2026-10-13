@@ -6,6 +6,8 @@ pub(super) struct BackgroundPreparation {
     pub control: plugin_runtime::InstallControl,
     ready: mpsc::Receiver<anyhow::Result<plugin_runtime::PreparedInstallation>>,
     thread: Option<std::thread::JoinHandle<()>>,
+    /// Application mutation ownership remains held until the actor completes final cutover.
+    pub(super) mutation: Option<crate::extensions::runtime_owners::InstallationLease>,
 }
 
 impl BackgroundPreparation {
@@ -28,6 +30,7 @@ impl BackgroundPreparation {
             control,
             ready,
             thread: Some(thread),
+            mutation: None,
         })
     }
 

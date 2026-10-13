@@ -66,6 +66,8 @@ pub(crate) struct PluginView {
     plugin: String,
     document: Document,
     environment: Environment,
+    /// Read-only code requests retain the project that supplied this scene.
+    providers: Option<crate::language::providers::Providers>,
     sink: EventSink,
     /// Nested canvas/control sinks share the gate; retained readonly trees cannot dispatch stale input.
     scene_current: Rc<Cell<bool>>,
@@ -255,6 +257,9 @@ impl PluginView {
         let scene_current = Rc::new(Cell::new(true));
         let gate = scene_current.clone();
         let mut this = Self {
+            providers: crate::language::providers::Providers::for_workspace(std::path::Path::new(
+                &environment.workspace,
+            )),
             native_editor: None,
             plugin,
             document,

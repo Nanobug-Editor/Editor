@@ -49,7 +49,7 @@ fn close_queued_input(cx: &mut TestAppContext, composing: bool) {
         let editor = visual.update(|_, cx| host.read(cx).editor.clone().unwrap());
         let root = visual.update(|_, cx| editor.read(cx).workspace.root().to_owned());
         let mut manager = plugin_runtime::Manager::open(
-            crate::extensions::runtime_root(&root),
+            crate::extensions::profile_runtime_root(profile.path()),
             plugin_runtime::plugin_protocol::Environment {
                 workspace: root.display().to_string(),
                 ..Default::default()

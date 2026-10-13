@@ -130,7 +130,14 @@ fn readonly_code_highlighting_epochs_reject_remove_reenable_and_choice_aba() {
     fixture.refresh(false);
     assert!(selected("dialect").is_none());
     assert!(!is_current(&first));
-    assert!(PREPARED.lock().unwrap().entries.is_empty());
+    assert!(
+        PREPARED
+            .lock()
+            .unwrap()
+            .entries
+            .iter()
+            .all(|entry| entry.selection.providers != first.providers)
+    );
     fixture.refresh(true);
     let restored = fixture.selection();
     assert_eq!(restored.provider, first.provider);
@@ -217,8 +224,11 @@ fn readonly_code_highlighting_failed_provider_is_plain_and_context_rebuild_advan
     let failed = fixture.selection();
     assert!(highlight(&failed, "x = 1", &AtomicBool::new(false), deadline()).is_empty());
     let other_workspace = tempfile::tempdir().unwrap();
+    // Opening another context must preserve A; only explicit retirement invalidates A's captured job.
     providers::configure(fixture.store.path(), other_workspace.path());
     assert!(epoch() > failed.epoch);
+    assert!(is_current(&failed));
+    failed.providers.retire();
     assert!(!is_current(&failed));
     fixture.refresh(true);
     assert!(fixture.selection().epoch > failed.epoch);

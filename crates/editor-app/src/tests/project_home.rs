@@ -11,6 +11,12 @@ mod ime;
 #[path = "project_home/queue.rs"]
 mod queue;
 
+// Reuse the same production home/open path for cross-window language behavior.
+#[path = "project_windows/catalog.rs"]
+mod concurrent_catalog;
+#[path = "project_windows/windows.rs"]
+mod concurrent_windows;
+
 /// Use the production window and platform picker in an isolated profile for each behavioral scenario.
 fn with_home(
     cx: &mut TestAppContext,

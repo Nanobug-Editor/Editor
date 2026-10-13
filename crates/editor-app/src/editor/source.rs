@@ -1,5 +1,4 @@
 //! Compose the existing native editor, popovers and input gestures without replacing its session.
-use super::language_for_path;
 use crate::*;
 use gpui_kit::component::WindowExt as _;
 
@@ -64,7 +63,7 @@ impl EditorApp {
         let language = self
             .active_path
             .as_deref()
-            .map(language_for_path)
+            .map(|path| self.language_for_path(path))
             .unwrap_or_default();
         let can_format = editable && self.language_edits.formatters.contains_key(&language);
         let can_rename = editable

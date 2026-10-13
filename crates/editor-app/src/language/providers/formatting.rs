@@ -127,29 +127,41 @@ impl Registry {
 }
 
 /// Consult current registry policy before using a cached formatter, including a freshly reloaded store.
+impl Providers {
+    pub(crate) fn formatter_error(&self, language: &str) -> Option<FormatterPreferenceError> {
+        self.read()
+            .formatter_preference_errors
+            .get(&format!("formatter:{language}"))
+            .cloned()
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn formatter_error(language: &str) -> Option<FormatterPreferenceError> {
-    REGISTRY
-        .read()
-        .unwrap()
-        .formatter_preference_errors
-        .get(&format!("formatter:{language}"))
-        .cloned()
+    legacy().formatter_error(language)
 }
 
 /// One selected formatter never replaces the independent primary analysis service.
+impl Providers {
+    pub(crate) fn formatters(&self) -> BTreeMap<String, Option<String>> {
+        let registry = self.read();
+        registry
+            .formatters
+            .keys()
+            .map(|language| {
+                (
+                    language.clone(),
+                    registry
+                        .selected
+                        .get(&format!("formatter:{language}"))
+                        .cloned(),
+                )
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn formatters() -> BTreeMap<String, Option<String>> {
-    let registry = REGISTRY.read().unwrap();
-    registry
-        .formatters
-        .keys()
-        .map(|language| {
-            (
-                language.clone(),
-                registry
-                    .selected
-                    .get(&format!("formatter:{language}"))
-                    .cloned(),
-            )
-        })
-        .collect()
+    legacy().formatters()
 }

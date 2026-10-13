@@ -4,6 +4,12 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
+// Cross-project ownership observes the same production actor and public native publications.
+#[path = "../../tests/project_windows/runtime.rs"]
+mod concurrent;
+#[path = "../../tests/project_windows/installation.rs"]
+mod concurrent_installation;
+
 /// A program the caller stopped is not the same fact as one nobody can describe.
 ///
 /// The vocabulary here is the execution contract's, and the terminal provider answers a stop with

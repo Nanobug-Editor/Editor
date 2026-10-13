@@ -8,11 +8,20 @@ use storage::{Kind, Locations, Plan};
 
 /// Resolve this application's existing roots before the configuration loader or runtime worker runs.
 pub(crate) fn prepare(workspace: &Path, profile: &Path) -> anyhow::Result<()> {
-    let runtime = crate::extensions::runtime_root(workspace);
+    let runtime = crate::extensions::profile_runtime_root(profile);
+    prepare_with_runtime(workspace, profile, &runtime)
+}
+
+/// Standalone/development hosts retain their explicit store while GUI profiles share their own store.
+pub(crate) fn prepare_with_runtime(
+    workspace: &Path,
+    profile: &Path,
+    runtime: &Path,
+) -> anyhow::Result<()> {
     let native = super::persistence::directory_in_profile(workspace, profile);
     let runs = profile.join("run");
     let session = crate::app::session::SessionState::file_in_profile(workspace, profile);
-    perform(&runtime, workspace, &native, &runs, &session)
+    perform(runtime, workspace, &native, &runs, &session)
 }
 
 /// Prepare one workspace's logical state; no native program or guest code is launched by an import.

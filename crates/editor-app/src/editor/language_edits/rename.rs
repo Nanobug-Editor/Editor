@@ -20,7 +20,7 @@ impl EditorApp {
         let Some(index) = self.active_text_tab_index() else {
             return;
         };
-        let language = language_for_path(self.tabs[index].path());
+        let language = self.language_for_path(self.tabs[index].path());
         let Some(server) = self
             .language_servers
             .get(&language)
@@ -131,7 +131,7 @@ impl EditorApp {
         let Some(index) = self.active_text_tab_index() else {
             return;
         };
-        let language = language_for_path(self.tabs[index].path());
+        let language = self.language_for_path(self.tabs[index].path());
         if self.plugin_document_version(index).ok().as_ref() != Some(&form.document)
             || !form.lease.is_active()
             || !self

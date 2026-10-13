@@ -19,14 +19,16 @@ impl EditorApp {
         feature: direct::Feature,
         cx: &App,
     ) -> Option<Choice> {
-        let (key, role) = if providers::has_language_feature(language, feature) {
+        let (key, role) = if self.providers.has_language_feature(language, feature) {
             (
-                providers::language_feature_provider(language, feature)?,
+                self.providers
+                    .language_feature_provider(language, feature)?,
                 LanguageRole::Direct(feature),
             )
         } else {
             (
-                providers::language_servers()
+                self.providers
+                    .language_servers()
                     .get(language)?
                     .as_ref()?
                     .clone(),

@@ -36,7 +36,15 @@ impl Fixture {
             )],
             Vec::new(),
         );
-        crate::language::plugins::register_plugin(&root).unwrap();
+        let providers = crate::language::providers::legacy();
+        let provider = providers
+            .grammars()
+            .into_iter()
+            .find(|provider| provider.declaration.language == "xml")
+            .unwrap();
+        let (grammar, query) = crate::language::plugins::prepare_dynamic(&provider).unwrap();
+        // The native adapter now resolves a qualified project parser, while its document language remains XML.
+        crate::language::plugins::publish_project_dynamic(&providers, "xml", grammar, query);
         fixture
     }
 }
@@ -45,7 +53,9 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         // Withdraw the role before its temporary preferences disappear, including on RED panic.
         crate::language::providers::refresh(self.store.path(), Vec::new(), Vec::new());
-        crate::language::plugins::mask_language("xml");
+        crate::language::plugins::mask_language(
+            &crate::language::providers::legacy().parser_key("xml"),
+        );
     }
 }
 
@@ -85,7 +95,10 @@ fn native_xml_cancelled_parser_preserves_paste_undo_redo(cx: &mut TestAppContext
             .collect::<String>()
     );
     let mut cancelled = plugin_syntax("xml");
-    assert_eq!(cancelled.language().as_ref(), "xml");
+    assert_eq!(
+        cancelled.language().as_ref(),
+        crate::language::providers::legacy().parser_key("xml")
+    );
     assert!(cancelled.update(None, &Rope::from(INITIAL_SOURCE), None));
     assert!(
         !cancelled.update(None, &Rope::from(pasted.clone()), Some(Duration::ZERO)),
@@ -105,10 +118,14 @@ fn native_xml_cancelled_parser_preserves_paste_undo_redo(cx: &mut TestAppContext
             editor.set_highlighter_factory(
                 Rc::new(|language| {
                     let mut syntax = plugin_syntax(language);
-                    assert_eq!(syntax.language().as_ref(), "xml");
+                    assert_eq!(
+                        syntax.language().as_ref(),
+                        crate::language::providers::legacy().parser_key("xml")
+                    );
                     // Complete the short opening document before any controlled cancellation.
                     assert!(syntax.update(None, &Rope::from(INITIAL_SOURCE), None));
                     Some(Box::new(Adapter {
+                        providers: crate::language::providers::legacy(),
                         language: language.to_owned().into(),
                         syntax: Rc::new(RefCell::new(syntax)),
                         parser_cancelled: Rc::new(Cell::new(false)),

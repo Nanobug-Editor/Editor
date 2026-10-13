@@ -408,7 +408,12 @@ fn removed_html_plugin_resets_aliases_and_preserves_unrelated_state(cx: &mut Tes
     cx.run_until_parked();
     cx.update(|window, cx| {
         app.update(cx, |app, cx| {
-            extensions::contributions::refresh(directory.path()).unwrap();
+            extensions::contributions::refresh_project_entries(
+                &app.providers,
+                &crate::extensions::runtime_root(app.workspace.root()),
+                &[],
+                false,
+            );
             for name in ["index.html", "legacy.HTM", "style.css"] {
                 app.open_file(directory.path().join(name), window, cx);
             }

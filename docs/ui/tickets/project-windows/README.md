@@ -1,8 +1,8 @@
 # 项目首页与多窗口实施工单
 
-日期：2026-10-12
+日期：2026-10-13
 
-状态：01 已实现、行为验收、审查并推送，GitHub #103 已读回为 closed/completed，证据见[实施验收](../../verification/project-home.md)。02、03 读回为 open，尚未实施；02 的前置项已满足。三单已发布并核对正文、标签及原生阻塞边；序号 01–03 不是 GitHub issue 编号。
+状态：01 已实现、行为验收、审查并推送，GitHub #103 已读回为 closed/completed，证据见[实施验收](../../verification/project-home.md)。02 已实现、验收与审查，待提交推送及关闭读回，见[实施验收](../../verification/concurrent-project-windows.md)与[双轴审查](../../verification/concurrent-project-windows-review.md)。03 仍为 open，尚未实施。三单已发布并核对正文、标签及原生阻塞边；序号 01–03 不是 GitHub issue 编号。
 
 发布映射：[publication.json](publication.json)。真实工单为 [#103](https://github.com/T-miracle/Nanobug/issues/103)、[#104](https://github.com/T-miracle/Nanobug/issues/104)、[#105](https://github.com/T-miracle/Nanobug/issues/105)。
 

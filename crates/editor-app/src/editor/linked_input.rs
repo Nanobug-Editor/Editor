@@ -25,6 +25,8 @@ pub(crate) struct Bridge {
     /// Asynchronous replay refreshes this proof from the existing OpenTab ownership before mutation.
     native_open: bool,
     language: String,
+    /// Linked input follows this document's project, including user preference changes in another window.
+    providers: providers::Providers,
     active: bool,
     generation: u64,
     group: Option<Group>,
@@ -77,12 +79,14 @@ impl Bridge {
         server: Arc<navigation::LanguageServer>,
         history_forwarding: Rc<Cell<bool>>,
         owner: WeakEntity<EditorApp>,
+        providers: providers::Providers,
         cx: &mut Context<Self>,
     ) -> Self {
         let document =
             server.open_document(navigation::file_uri(&path).expect("open native file URI"));
         let observer = cx.observe(&editor, |bridge, _, cx| bridge.refresh(cx));
         let mut bridge = Self {
+            providers,
             editor,
             server,
             document,
@@ -146,7 +150,10 @@ impl Bridge {
         self.active
             && self.server.is_active()
             && self.document.is_active()
-            && providers::editing_preferences(&self.language).linked_editing
+            && self
+                .providers
+                .editing_preferences(&self.language)
+                .linked_editing
     }
 
     /// A delayed answer must match the complete native snapshot and current caret before it can link.

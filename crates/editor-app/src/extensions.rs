@@ -97,6 +97,7 @@ mod surface;
 #[cfg(test)]
 mod ui_package_tests;
 pub(crate) use settings::SettingsView;
+pub(crate) mod runtime_owners;
 #[cfg(test)]
 mod tests;
 mod worker;
@@ -142,6 +143,14 @@ pub(crate) fn runtime_root(workspace: &Path) -> PathBuf {
             })
     }
 }
+/// GUI windows share the selected profile's plugin store; an explicit host runtime override still wins.
+pub(crate) fn profile_runtime_root(profile: &Path) -> PathBuf {
+    #[cfg(not(test))]
+    if let Some(root) = std::env::var_os("ME_EDITOR_PLUGIN_HOME").filter(|root| !root.is_empty()) {
+        return PathBuf::from(root);
+    }
+    profile.join("runtime-plugins")
+}
 /// Opens plugin management independently of plugin-owned panel visibility.
 pub fn init(cx: &mut App) {
     cx.bind_keys([KeyBinding::new(
@@ -162,6 +171,10 @@ pub struct ExtensionPanel {
     visible: Rc<Cell<bool>>,
     workspace: PathBuf,
     root: PathBuf,
+    /// This view publishes only the language roles belonging to its project.
+    providers: crate::language::providers::Providers,
+    /// Every panel retains its project's immutable contribution projection.
+    _catalog: contributions::CatalogView,
     worker: Arc<Worker>,
     pub(crate) entries: Vec<Installed>,
     pub(crate) startup: BTreeMap<String, String>,
@@ -403,20 +416,27 @@ impl ExtensionPanel {
         workspace: PathBuf,
         visible: Rc<Cell<bool>>,
         trusted: bool,
+        providers: crate::language::providers::Providers,
         cx: &mut Context<Self>,
     ) -> Self {
-        let root = runtime_root(&workspace);
+        let root = providers.store_root();
         let environment = environment(&workspace, cx);
+        let catalog = contributions::CatalogView::new(&providers, cx);
         // Installed declarations are available before restored editor tabs are opened.
-        crate::language::providers::configure(&root, &workspace);
         if trusted {
-            if let Err(error) = contributions::refresh_for_workspace(&root, &workspace) {
+            if let Err(error) = contributions::refresh_for_project(&providers, &root, &workspace) {
                 tracing::warn!(%error, "installed plugin contributions unavailable");
             }
         } else {
-            contributions::refresh_entries(&root, &[]);
+            contributions::refresh_project_entries(&providers, &root, &[], false);
         }
-        let worker = Arc::new(Worker::start(root.clone(), environment, trusted));
+        let pool = runtime_owners::for_application(cx);
+        let worker = Arc::new(Worker::start_in_pool(
+            pool,
+            root.clone(),
+            environment,
+            trusted,
+        ));
         // The first review/update check is asynchronous and does not require opening management.
         worker.refresh_market(
             root.join("marketplace/catalog.json"),
@@ -456,6 +476,8 @@ impl ExtensionPanel {
             visible,
             workspace,
             root,
+            providers,
+            _catalog: catalog,
             worker,
             entries,
             startup,
@@ -559,6 +581,12 @@ impl ExtensionPanel {
         Self {
             parent,
             visible: Rc::new(Cell::new(initially_visible)),
+            providers: crate::language::providers::Providers::for_workspace(&workspace)
+                .expect("project panel provider owner"),
+            _catalog: contributions::CatalogView::for_project(
+                &crate::language::providers::Providers::for_workspace(&workspace)
+                    .expect("project panel provider owner"),
+            ),
             workspace,
             root,
             worker: worker.clone(),
@@ -634,7 +662,7 @@ impl ExtensionPanel {
         if !trusted {
             self.worker.cancel_installation();
             // Startup declarations can exist before the worker publishes any installed entries.
-            contributions::refresh_entries(&self.root, &[]);
+            contributions::refresh_project_entries(&self.providers, &self.root, &[], false);
         }
         self.worker
             .trusted
@@ -830,7 +858,14 @@ impl ExtensionPanel {
             });
         }
         if contributions_changed {
-            contributions::refresh_entries(&self.root, &self.entries);
+            contributions::refresh_project_entries(
+                &self.providers,
+                &self.root,
+                &self.entries,
+                self.worker
+                    .trusted
+                    .load(std::sync::atomic::Ordering::Acquire),
+            );
             let parent = self.parent.clone();
             cx.defer(move |cx| {
                 let _ = parent.update(cx, |app, cx| {

@@ -39,7 +39,7 @@ impl EditorApp {
             return;
         };
         let path = self.tabs[index].path().to_path_buf();
-        let language = crate::language::providers::language_for_path(&path);
+        let language = self.providers.language_for_path(&path);
         let server = language
             .as_ref()
             .and_then(|language| self.language_servers.get(language))
@@ -77,6 +77,7 @@ impl EditorApp {
             cx.notify();
             return;
         };
+        let parser_language = self.providers.parser_key(&language);
         let parser = tab.diagnostics.parser.clone();
         // Capture the UI-owned lifetime before any debounce or executor hop can outlive the tab.
         let document = server.as_ref().and_then(|server| {
@@ -104,7 +105,12 @@ impl EditorApp {
             let syntax_text = text.clone();
             let diagnostics = cx
                 .background_executor()
-                .spawn(async move { parser.lock().unwrap().check(&language, &syntax_text) })
+                .spawn(async move {
+                    parser
+                        .lock()
+                        .unwrap()
+                        .check_project(&language, &parser_language, &syntax_text)
+                })
                 .await;
             let _ = this.update(cx, |app, cx| {
                 app.apply_syntax_diagnostics(
@@ -269,7 +275,7 @@ impl EditorApp {
         source: String,
         cx: &mut Context<Self>,
     ) {
-        let language = editor::language_for_path(path);
+        let language = self.language_for_path(path);
         let (Some(server), Some(uri)) = (
             self.language_servers.get(&language).cloned(),
             language_navigation::file_uri(path),

@@ -1,4 +1,4 @@
-//! A single worker owns plugin stores; the UI thread never compiles or executes WASM.
+//! Project actors route a shared plugin-store owner; the UI thread never compiles or executes WASM.
 use plugin_runtime::{Installed, Manager, Package, plugin_protocol::*};
 mod admission;
 #[cfg(test)]
@@ -791,6 +791,24 @@ impl Worker {
     #[cfg(not(test))]
     pub fn start(root: PathBuf, environment: Environment, trusted: bool) -> Self {
         Self::start_background(root, environment, trusted)
+    }
+
+    /// Native GUI creation injects its application data owner; the recorded adapter retains the same message seam.
+    pub(super) fn start_in_pool(
+        pool: Arc<super::runtime_owners::RuntimePool>,
+        root: PathBuf,
+        environment: Environment,
+        trusted: bool,
+    ) -> Self {
+        #[cfg(test)]
+        {
+            let _ = pool;
+            Self::start(root, environment, trusted)
+        }
+        #[cfg(not(test))]
+        {
+            Self::start_background_in_pool(pool, root, environment, trusted)
+        }
     }
 }
 impl LifecycleAction {

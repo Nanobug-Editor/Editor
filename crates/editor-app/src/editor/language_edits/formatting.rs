@@ -32,8 +32,8 @@ impl EditorApp {
         else {
             return;
         };
-        let language = language_for_path(self.tabs[index].path());
-        if let Some(error) = providers::formatter_error(&language) {
+        let language = self.language_for_path(self.tabs[index].path());
+        if let Some(error) = self.providers.formatter_error(&language) {
             let message = error.message();
             if save {
                 self.save_current(cx);
@@ -44,7 +44,9 @@ impl EditorApp {
             cx.notify();
             return;
         }
-        let key = providers::formatters()
+        let key = self
+            .providers
+            .formatters()
             .get(&language)
             .and_then(Option::as_ref)
             .cloned();
@@ -74,7 +76,7 @@ impl EditorApp {
             document,
             key,
             availability,
-            generation: providers::feature_generation(),
+            generation: self.providers.feature_generation(),
             window_epoch: self.language_features_sequence(),
         };
         self.language_edits.format_pending = Some(RequestCancellation::default());
@@ -122,8 +124,10 @@ impl EditorApp {
             && self.editor == reservation.editor
             && self.language_edits.request == reservation.request
             && self.language_features_sequence() == reservation.window_epoch
-            && providers::feature_generation() == reservation.generation
-            && providers::formatters()
+            && self.providers.feature_generation() == reservation.generation
+            && self
+                .providers
+                .formatters()
                 .get(&reservation.language)
                 .and_then(Option::as_ref)
                 == Some(&reservation.key)

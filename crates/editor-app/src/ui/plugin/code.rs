@@ -61,7 +61,11 @@ impl Drop for CodeHighlights {
 }
 
 /// Only visible code blocks request work; hidden tabs, disabled branches and modal-covered content stay plain.
-fn collect(node: &plugin_runtime::plugin_protocol::ui::Node, requests: &mut Vec<Request>) {
+fn collect(
+    providers: &crate::language::providers::Providers,
+    node: &plugin_runtime::plugin_protocol::ui::Node,
+    requests: &mut Vec<Request>,
+) {
     if node.disabled || requests.len() >= 64 {
         return;
     }
@@ -70,7 +74,7 @@ fn collect(node: &plugin_runtime::plugin_protocol::ui::Node, requests: &mut Vec<
             text,
             language: Some(name),
         } if !text.is_empty() => {
-            if let Some(selection) = language::selected(name) {
+            if let Some(selection) = language::selected_in(providers, name) {
                 requests.push(Request {
                     node: node.id.clone(),
                     text: text.clone(),
@@ -80,13 +84,13 @@ fn collect(node: &plugin_runtime::plugin_protocol::ui::Node, requests: &mut Vec<
         }
         Kind::Column { children } | Kind::Row { children } => {
             for child in children {
-                collect(child, requests);
+                collect(providers, child, requests);
             }
         }
-        Kind::Scroll { content } => collect(content, requests),
+        Kind::Scroll { content } => collect(providers, content, requests),
         Kind::Tabs { tabs, selected } => {
             if let Some(tab) = tabs.iter().find(|tab| &tab.id == selected) {
-                collect(&tab.content, requests);
+                collect(providers, &tab.content, requests);
             }
         }
         _ => {}
@@ -151,13 +155,13 @@ impl PluginView {
             .source
             .clone()
             .filter(|_| self.document.code_highlighting);
-        if source.is_some() {
+        if let Some(providers) = self.providers.as_ref().filter(|_| source.is_some()) {
             if let Some(dialog) = &self.document.dialog {
-                collect(&dialog.content, &mut requests);
+                collect(providers, &dialog.content, &mut requests);
             } else if self.document.menu.is_none() {
-                collect(&self.document.root, &mut requests);
+                collect(providers, &self.document.root, &mut requests);
                 if let Some(toolbar) = &self.document.editor_toolbar {
-                    collect(toolbar, &mut requests);
+                    collect(providers, toolbar, &mut requests);
                 }
             }
         }

@@ -82,7 +82,11 @@ fn dynamic_selection_survives_primary_load_and_primary_returns_after_removal(
         "rust"
     );
     assert_eq!(
-        registry.language("rust").unwrap().highlights.as_ref(),
+        registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("rust")))
+            .unwrap()
+            .highlights
+            .as_ref(),
         std::str::from_utf8(&alternate.files["highlights.scm"]).unwrap()
     );
     // Removing a dynamic owner revalidates the primary parser instead of leaving its stale loaded flag.
@@ -94,7 +98,11 @@ fn dynamic_selection_survives_primary_load_and_primary_returns_after_removal(
     .unwrap();
     let query_path = manifest.highlighters[0].highlights.to_string_lossy();
     assert_eq!(
-        registry.language("rust").unwrap().highlights.as_ref(),
+        registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("rust")))
+            .unwrap()
+            .highlights
+            .as_ref(),
         std::str::from_utf8(&primary.files[query_path.as_ref()]).unwrap()
     );
     // Retiring the old package while a dynamic override remains must not mask the surviving grammar.
@@ -103,7 +111,11 @@ fn dynamic_selection_survives_primary_load_and_primary_returns_after_removal(
     manager.uninstall("rust", false).unwrap();
     publish_languages(&app, &manager, cx);
     assert_eq!(
-        registry.language("rust").unwrap().highlights.as_ref(),
+        registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("rust")))
+            .unwrap()
+            .highlights
+            .as_ref(),
         std::str::from_utf8(&alternate.files["highlights.scm"]).unwrap()
     );
     manager.uninstall("rust-alternative", false).unwrap();
@@ -186,10 +198,12 @@ fn unknown_declarative_language_highlights_open_document_without_restart(cx: &mu
     );
     // A language label alone is insufficient: the plugin query and WASM parser must be usable.
     let config = gpui_kit::component::highlighter::LanguageRegistry::singleton()
-        .language("novel")
+        .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
         .unwrap();
     assert!(config.language.is_none() && !config.highlights.is_empty());
-    let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new("novel");
+    let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new(
+        &cx.update(|_, cx| app.read(cx).providers.parser_key("novel")),
+    );
     parser.update(None, &gpui_base::input::Rope::from("answer = 42\n"), None);
     assert!(!parser.tree().unwrap().root_node().has_error());
     // Installing competition must retain the currently working recognition and highlighter.
@@ -223,7 +237,7 @@ fn unknown_declarative_language_highlights_open_document_without_restart(cx: &mu
     );
     assert!(
         !gpui_kit::component::highlighter::LanguageRegistry::singleton()
-            .language("novel")
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
             .unwrap()
             .highlights
             .is_empty()
@@ -256,7 +270,7 @@ fn unknown_declarative_language_highlights_open_document_without_restart(cx: &mu
         form.debug_bounds("provider-selected-recognition:ext:novel-novel-primary/novel")
             .is_some()
     );
-    // Project selection overrides the user choice and survives leaving and reopening that workspace.
+    // Project selection overrides the user choice without changing a concurrently opened workspace.
     let scope = form.debug_bounds("provider-scope").unwrap();
     form.simulate_click(
         point(scope.right() - px(12.), scope.center().y),
@@ -274,7 +288,16 @@ fn unknown_declarative_language_highlights_open_document_without_restart(cx: &mu
     );
     let root = directory.path().join(".runtime-plugin-test");
     let another = tempfile::tempdir().unwrap();
-    contributions::refresh_for_workspace(&root, another.path()).unwrap();
+    let peer = crate::language::providers::Providers::new(&root, another.path());
+    contributions::refresh_for_project(&peer, &root, another.path()).unwrap();
+    assert_eq!(
+        peer.grammars()
+            .iter()
+            .find(|provider| provider.declaration.language == "novel")
+            .unwrap()
+            .owner,
+        "novel-alternative"
+    );
     form.update(|_, cx| {
         app.update(cx, |app, cx| {
             app.sync_dynamic_languages(cx);
@@ -283,10 +306,20 @@ fn unknown_declarative_language_highlights_open_document_without_restart(cx: &mu
     });
     form.run_until_parked();
     assert!(
-        form.debug_bounds("provider-selected-highlight:novel-novel-alternative/syntax")
+        form.debug_bounds("provider-selected-highlight:novel-novel-primary/syntax")
             .is_some()
     );
-    contributions::refresh_for_workspace(&root, directory.path()).unwrap();
+    let reopened = crate::language::providers::Providers::new(&root, directory.path());
+    contributions::refresh_for_project(&reopened, &root, directory.path()).unwrap();
+    assert_eq!(
+        reopened
+            .grammars()
+            .iter()
+            .find(|provider| provider.declaration.language == "novel")
+            .unwrap()
+            .owner,
+        "novel-primary"
+    );
     form.update(|_, cx| {
         app.update(cx, |app, cx| {
             app.sync_dynamic_languages(cx);
@@ -486,10 +519,16 @@ tree_sitter_abi = 15
         assert_eq!(app.plugin_count(PluginPopupKind::Error, cx), 1);
     });
     let registry = gpui_kit::component::highlighter::LanguageRegistry::singleton();
-    assert!(!registry.language("novel").unwrap().highlights.is_empty());
+    assert!(
+        !registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
+            .unwrap()
+            .highlights
+            .is_empty()
+    );
     assert!(
         registry
-            .language("another-language")
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("another-language")))
             .unwrap()
             .highlights
             .is_empty()
@@ -497,10 +536,22 @@ tree_sitter_abi = 15
     // Disable and re-enable withdraw and reload both declarations without closing their editors.
     manager.disable("novel-multi").unwrap();
     publish_languages(&app, &manager, cx);
-    assert!(registry.language("novel").unwrap().highlights.is_empty());
+    assert!(
+        registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
+            .unwrap()
+            .highlights
+            .is_empty()
+    );
     manager.enable("novel-multi").unwrap();
     publish_languages(&app, &manager, cx);
-    assert!(!registry.language("novel").unwrap().highlights.is_empty());
+    assert!(
+        !registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
+            .unwrap()
+            .highlights
+            .is_empty()
+    );
     // Start a valid replacement, retire it before queued background work can finish, then drain tasks.
     files.insert("bad.scm".into(), files["highlights.scm"].clone());
     let source = String::from_utf8(files["plugin.toml"].clone())
@@ -520,10 +571,16 @@ tree_sitter_abi = 15
     manager.uninstall("novel-multi", false).unwrap();
     queue_languages(&app, &manager, cx);
     cx.run_until_parked();
-    assert!(registry.language("novel").unwrap().highlights.is_empty());
     assert!(
         registry
-            .language("another-language")
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
+            .unwrap()
+            .highlights
+            .is_empty()
+    );
+    assert!(
+        registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("another-language")))
             .unwrap()
             .highlights
             .is_empty()

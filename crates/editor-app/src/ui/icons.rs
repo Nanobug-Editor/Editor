@@ -18,17 +18,28 @@ enum FileIconKind {
 /// The icon refuses to shrink: `flex_shrink` defaults to `1` in GPUI, so a
 /// narrow explorer pane would otherwise squeeze a fixed-size icon down to
 /// nothing instead of leaving it at its full size.
-pub fn file_icon(path: &Path, is_folder: bool, theme: &ThemeDefinition) -> Img {
-    img(icon_path(path, is_folder, theme))
+pub fn file_icon(
+    providers: &crate::language::providers::Providers,
+    path: &Path,
+    is_folder: bool,
+    theme: &ThemeDefinition,
+) -> Img {
+    img(project_icon_path(providers, path, is_folder, theme))
         .size_4()
         .flex_shrink_0()
 }
 
-fn icon_path(path: &Path, is_folder: bool, theme: &ThemeDefinition) -> String {
+fn project_icon_path(
+    providers: &crate::language::providers::Providers,
+    path: &Path,
+    is_folder: bool,
+    theme: &ThemeDefinition,
+) -> String {
     let dark = theme.mode == FileThemeMode::Dark;
 
     // The catalog orders theme overrides before language icons from installed packages.
-    for (root, config, _) in crate::extensions::contributions::icon_rules().iter() {
+    for (root, config, _) in crate::extensions::contributions::project_icon_rules(providers).iter()
+    {
         if let Some(icon) = config
             .icons
             .iter()
@@ -39,6 +50,16 @@ fn icon_path(path: &Path, is_folder: bool, theme: &ThemeDefinition) -> String {
     }
 
     system_icon_path(classify_system_icon(path, is_folder), dark).to_owned()
+}
+
+#[cfg(test)]
+fn icon_path(path: &Path, is_folder: bool, theme: &ThemeDefinition) -> String {
+    // Existing icon fixtures assert system fallbacks without constructing a project.
+    system_icon_path(
+        classify_system_icon(path, is_folder),
+        theme.mode == FileThemeMode::Dark,
+    )
+    .to_owned()
 }
 
 /// Matches a rule by folder, exact name or extension, with path suffixes for nested config files.

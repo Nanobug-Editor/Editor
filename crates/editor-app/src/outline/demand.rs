@@ -22,8 +22,8 @@ impl EditorApp {
             .active_text_tab_index()
             .filter(|_| self.session_state.workspace_trusted)
             .and_then(|index| {
-                let language = language::providers::language_for_path(self.tabs[index].path())?;
-                let key = language::providers::structure_provider(&language)?;
+                let language = self.providers.language_for_path(self.tabs[index].path())?;
+                let key = self.providers.structure_provider(&language)?;
                 let plugin = key
                     .split_once('/')
                     .map_or(key.as_str(), |(plugin, _)| plugin);

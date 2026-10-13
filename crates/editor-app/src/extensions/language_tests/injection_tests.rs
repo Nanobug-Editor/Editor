@@ -99,10 +99,13 @@ fn installed_injection_queries_cannot_borrow_undeclared_native_grammars(cx: &mut
                     .any(|record| record.message.contains(expected_error))
             );
         });
-        let config = registry.language("novel-injection").unwrap();
+        let config = registry
+            .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel-injection")))
+            .unwrap();
         assert!(config.highlights.is_empty() && config.injections.is_empty());
-        let mut parser =
-            gpui_kit::component::highlighter::SyntaxHighlighter::new("novel-injection");
+        let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new(
+            &cx.update(|_, cx| app.read(cx).providers.parser_key("novel-injection")),
+        );
         parser.update(None, &gpui_base::input::Rope::from(source), None);
         assert!(
             parser.tree().is_none(),

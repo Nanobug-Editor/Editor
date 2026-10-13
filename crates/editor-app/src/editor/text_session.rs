@@ -1,5 +1,5 @@
 //! Native text construction shares editor/session subscriptions between local and readonly resources.
-use super::{attach_language_server, language_for_path};
+use super::attach_language_server;
 use crate::*;
 
 impl EditorApp {
@@ -10,7 +10,7 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> TextTab {
-        let language = language_for_path(opened.session.path());
+        let language = self.language_for_path(opened.session.path());
         // Only the selected, permission-checked runtime service can attach to a document.
         let server = if opened.session.is_readonly() {
             None
@@ -44,7 +44,8 @@ impl EditorApp {
         }
         // Definition markers use their own layer beside plugin syntax highlighting.
         // One native adapter survives grammar/fold updates and ordinary document Undo.
-        let highlighter = crate::outline::folding::Controller::attach(&editor, cx);
+        let highlighter =
+            crate::outline::folding::Controller::attach(&editor, self.providers.clone(), cx);
         let definition_highlight = editor.update(cx, |editor, cx| {
             editor.create_decorations_collection(Vec::new(), cx)
         });
