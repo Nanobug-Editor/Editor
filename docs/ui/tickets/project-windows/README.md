@@ -2,7 +2,7 @@
 
 日期：2026-10-13
 
-状态：01/02 已实现、行为验收、审查并推送，GitHub #103/#104 已读回为 closed/completed，证据见[首页验收](../../verification/project-home.md)与[并行窗口验收](../../verification/concurrent-project-windows.md)。03 实现、自动验证、双轴审查及真实 Windows 联合验收完成，待普通提交、推送及 #105/#102 关闭读回，见[外部打开验收](../../verification/windows-project-entry.md)。三单已发布并核对正文、标签及原生阻塞边；序号 01–03 不是 GitHub issue 编号。
+状态：三单均已实现、行为验收、审查、普通提交并推送；GitHub #103/#104/#105 及总 #102 全部读回 closed/completed。证据见[首页验收](../../verification/project-home.md)、[并行窗口验收](../../verification/concurrent-project-windows.md)与[最终外部打开验收](../../verification/windows-project-entry.md)。最后实现提交为 `9a00f903`，分支 `codex/windows-project-entry` 包含前两单源码。序号 01–03 不是 GitHub issue 编号。
 
 发布映射：[publication.json](publication.json)。真实工单为 [#103](https://github.com/T-miracle/Nanobug/issues/103)、[#104](https://github.com/T-miracle/Nanobug/issues/104)、[#105](https://github.com/T-miracle/Nanobug/issues/105)。
 

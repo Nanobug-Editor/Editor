@@ -4,7 +4,7 @@
 
 稳定标识：`ui-project-windows`
 
-状态：产品行为与两个测试边界于 2026-10-12 确认。三张工单实现及原生行为验收已完成，P01–P24 核对完成，待第三单普通提交、推送及 #105/#102 关闭读回。证据见[工单目录](../tickets/project-windows/README.md)与[最终外部打开验收](../verification/windows-project-entry.md)。
+状态：产品行为与两个测试边界于 2026-10-12 确认。三张工单实现及原生行为验收完成，P01–P24 已核对；提交已普通推送至 `codex/windows-project-entry`，#103/#104/#105 及总 #102 全部读回 closed/completed。证据见[工单目录](../tickets/project-windows/README.md)与[最终外部打开验收](../verification/windows-project-entry.md)。
 
 发布目标：`T-miracle/Nanobug` GitHub Issues，标签 `ready-for-agent`。旧跟踪器名称 `T-miracle/Editor` 已核对解析到同一仓库。规格整理阶段仅发布总规格；用户随后批准拆单和实施，并于 2026-10-13 明确要求完成剩余工单、提交推送及关闭总方案。
 
@@ -264,6 +264,6 @@
 - 已确认：本次对话中的产品范围、窗口路由、关闭、信任、最近项目和安装器选项。
 - 已确认：本文 Testing Decisions 提出的一个应用级主接缝及 Windows 系统集成边界。
 - 已发布：[GitHub #102](https://github.com/T-miracle/Nanobug/issues/102)，标签 `ready-for-agent`；2026-10-12 已读回核对标题、完整正文和标签。发布前已按稳定标识及标题检查重复议题。
-- 实施与行为验收已完成：不将原型作为原生证明，使用三单真实应用、插件/程序与 Windows 系统证据；远程交付状态按读回结果更新。
+- 实施、行为验收与远程交付已完成：使用三单真实应用、插件/程序与 Windows 系统证据，不将原型作为原生证明。全部工单和总方案已核对 closed/completed，最后实现提交为 `9a00f903`。
 
 <!-- ui-project-windows:spec:2026-10-12 -->

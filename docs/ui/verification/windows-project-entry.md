@@ -1,6 +1,6 @@
 # Windows 外部项目打开实施记录
 
-日期：2026-10-13。状态：实现、自动验证、真实 Windows 行为验收及双轴源码审查完成，待普通提交、推送与 GitHub 关闭读回。
+日期：2026-10-13。状态：实现、自动验证、真实 Windows 行为验收及双轴审查完成，已普通提交并推送；#105 和总方案 #102 均已读回 closed/completed。
 
 依据：[工单 #105](../tickets/project-windows/03-windows-project-entry.md)与[总规格 #102](../specs/project-windows.md)。#103、#104 已交付；本单从 `c8da09db104f4ed29ad249b2dd7510b19017f879` 开始，分支 `codex/windows-project-entry`，复用隔离工作区。原 main 不作为测试安装目录。
 
@@ -132,4 +132,19 @@
 | P23 | 最终便携候选无参数首页/明确目录请求通过，实际生产 verb 不存在；运行不注册菜单 |
 | P24 | #103 中英文/主题/滚动/缩放与 #104 原生中文 IME/跨窗焦点；本单中英文实际经典对象/背景菜单、中文编辑和键盘退出通过 |
 
-前两单证据分别见[首页验收](project-home.md)与[并行窗口验收](concurrent-project-windows.md)。普通全量 UI 回归包含受本单公共入口影响的既有用例；未选择的 ignored 测试仍不计通过。P01–P24 的分段证据已完成核对，剩余交付动作是普通提交、推送和 issue 状态读回；不以本地勾选代替远程交付。
+前两单证据分别见[首页验收](project-home.md)与[并行窗口验收](concurrent-project-windows.md)。普通全量 UI 回归包含受本单公共入口影响的既有用例；未选择的 ignored 测试仍不计通过。P01–P24 的分段证据已完成核对，交付依据为普通推送结果、远程 SHA 和 issue 正文/状态读回，不以本地勾选代替远程交付。
+
+## 远程交付与总方案关闭
+
+实现与验收提交 [`9a00f903e5ff6bc8b7570a20aadd4b19e6fbbb2b`](https://github.com/T-miracle/Nanobug/commit/9a00f903e5ff6bc8b7570a20aadd4b19e6fbbb2b) 普通推送至 `origin/codex/windows-project-entry`，`git ls-remote` 核对同一 SHA。该分支包含 #103/#104 的源码历史；本次未合并 main 或发布 Release。后续仅补远程状态文档，不改变受测源码或安装器。
+
+GitHub 连接器读操作可用，更新返回 403 `Resource not accessible by integration`，因此使用仓库已有认证的 REST API；凭据仅在内存及 curl 标准输入配置中，不写入文件、日志或命令参数。先关闭 #105 并读回其完整正文、11 项勾选及 completed 状态，再按用户明确授权关闭 #102。最后再次从连接器独立读取四项状态，#105/#102 正文与预期完全一致，批准的用户故事未被改写：
+
+| 议题 | 读回状态 | 实际关闭时间（UTC） |
+| --- | --- | --- |
+| #103 | closed/completed | `2026-10-12T15:09:41Z` |
+| #104 | closed/completed | `2026-10-13T04:57:43Z` |
+| #105 | closed/completed | `2026-10-13T13:36:50Z` |
+| #102 | closed/completed | `2026-10-13T13:38:53Z` |
+
+读回摘要为验收目录的 `project-windows-final-delivery-readback.json`；两项完整 API 正文分别为 `entry-closed-105-readback.json`、`entry-closed-102-readback.json`。只有状态与正文核对一致后才更新本地完成状态。

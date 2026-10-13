@@ -1,6 +1,6 @@
 # 03 — Windows 外部打开、目录右键与安装交付
 
-状态：实现、自动验证、双轴审查及真实 Windows 行为验收完成，待普通提交、推送和远程关闭读回。#104 已读回为 closed/completed；用户于 2026-10-13 要求完成剩余实施工单并关闭总方案，覆盖旧模板“不修改/关闭父议题”的限制。起点 `c8da09d`，隔离工作区分支 `codex/windows-project-entry`；见[验收记录](../../verification/windows-project-entry.md)及[双轴审查](../../verification/windows-project-entry-review.md)。
+状态：实现、自动验证、双轴审查及真实 Windows 行为验收完成，提交 `9a00f903` 已普通推送至 `codex/windows-project-entry` 并核对 SHA；#105 已读回 closed/completed（`2026-10-13T13:36:50Z`），随后总 #102 已按用户授权关闭并读回。用户于 2026-10-13 要求完成剩余实施工单并关闭总方案，覆盖旧模板“不修改/关闭父议题”的限制。起点 `c8da09d`；见[验收记录](../../verification/windows-project-entry.md)及[双轴审查](../../verification/windows-project-entry-review.md)。
 
 议题：[工单 #105](https://github.com/T-miracle/Nanobug/issues/105)。
 
@@ -59,6 +59,6 @@
 
 先运行启动路由、进程协调和安装集成针对性测试。最终候选稳定后集中执行一次 `cargo fmt --check`、`cargo test --workspace --exclude editor-app`、`cargo check --workspace`、相关 `cargo test -p editor-app <测试过滤词>`，再用对应构建执行真实 Windows 系统验收及联合冒烟。
 
-构建和打包直接使用仓库当前规定的 Cargo、宿主工具及原生安装器工具，不恢复已移除脚本、不擅自安装缺失工具。证据记录候选版本、安装产物、实际命令、结果、覆盖引用和平台限制。全部验收通过才可宣称 #102 功能交付；不因本单收尾而自动关闭或改写父议题。
+构建和打包直接使用仓库当前规定的 Cargo、宿主工具及原生安装器工具，不恢复已移除脚本、不擅自安装缺失工具。证据记录候选版本、安装产物、实际命令、结果、覆盖引用和平台限制。行为验收完成后，按用户后续明确授权核对推送与全部工单，再关闭总 #102；不能仅因本单收尾就把父方案标为完成。
 
 <!-- ui-project-windows:ticket:03 -->

@@ -2,8 +2,8 @@
 
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
-- [项目首页、多窗口与 Windows 目录右键打开规格](specs/project-windows.md)：已发布 [GitHub #102](https://github.com/T-miracle/Nanobug/issues/102)；三单实现及行为验收完成，P01–P24 已核对，待第三单推送与总方案关闭读回。本次对话原型仅用于交互示意。
-- [项目首页与多窗口实施工单](tickets/project-windows/README.md)：已发布 #103–#105，原生依赖为 103 → 104 → 105；01/02 已推送及核对关闭，见[首页验收](verification/project-home.md)、[并行窗口验收](verification/concurrent-project-windows.md)及各自双轴审查。03 已完成真实安装器、资源管理器和原生双窗口联合验收，见[Windows 外部打开验收](verification/windows-project-entry.md)与[双轴审查](verification/windows-project-entry-review.md)；测试质量、去重和覆盖归属见工单索引。
+- [项目首页、多窗口与 Windows 目录右键打开规格](specs/project-windows.md)：三单已实现、验收、审查并推送，P01–P24 已核对；#103–#105 及总 [#102](https://github.com/T-miracle/Nanobug/issues/102) 全部读回 closed/completed。本次对话原型仅用于交互示意。
+- [项目首页与多窗口实施工单](tickets/project-windows/README.md)：原生依赖为 103 → 104 → 105，三单均已核对关闭；见[首页验收](verification/project-home.md)、[并行窗口验收](verification/concurrent-project-windows.md)、[Windows 外部打开验收](verification/windows-project-entry.md)及各自双轴审查。最后一单完成真实安装器、资源管理器和原生双窗口联合验收；测试质量、去重和覆盖归属见工单索引。
 
 - [宿主消息窗口规格](specs/host-messages.md)：[两张实施工单](tickets/host-messages/README.md)已实现、验收、审查并推送，GitHub #85、#86 已核对关闭；证据见 [实施验收](verification/host-messages.md)。
 - [宿主消息来源盘点](verification/host-messages-sources.md)：已接入来源、插件归属及排除依据。
