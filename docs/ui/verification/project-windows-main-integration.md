@@ -1,6 +1,6 @@
 # 项目窗口方案主分支集成验证
 
-日期：2026-10-13。用户明确要求将 `codex/windows-project-entry` 合并到 `main`、解决可能冲突、验证后推送 GitHub。快进合并、针对性验证及完整 UI 基线核对已完成，待普通推送和远程 SHA 读回。
+日期：2026-10-13。用户明确要求将 `codex/windows-project-entry` 合并到 `main`、解决可能冲突、验证后推送 GitHub。快进合并、针对性验证及完整 UI 基线核对已完成，已普通推送 main 并核对远程 SHA。
 
 ## 合并输入与现有改动
 
@@ -34,4 +34,6 @@
 
 日志与原 Cargo.lock 备份保留在 `C:/Users/Tmiracle/.codex/visualizations/2026/10/12/01a12e28-69b5-7ea2-b14e-f155ef6bf763/main-integration/`。未执行的 ignored 不计通过；真实 WASM/原生程序显式场景与安装/资源管理器联合验收复用[三单完整记录](windows-project-entry.md)，输入未改变，不机械重复整个系统安装流程。
 
-最终源代码完整性、文档链接及补丁检查完成后，再普通推送 main 并核对远程 SHA。主工作区并发改动继续保留。
+源代码完整性及补丁检查完成后，文档提交 [`239358a75ba215ccf1c49291cd09136509158174`](https://github.com/T-miracle/Nanobug/commit/239358a75ba215ccf1c49291cd09136509158174) 先在隔离副本建立，再快进到本机 main，普通推送 `origin/main`；`git ls-remote` 读回同一 SHA，且 `codex/windows-project-entry` 是 main 的祖先。后续仅补本段关闭记录，不改变受测源码。
+
+更新主工作区时，对当时 17 个并发修改/新文件记录更新前后 SHA-256，全部相同；没有混入本次提交。主工作区仍可保留另一任务的未提交修改，不把其工作区状态称为干净或已验证。证据为 `parallel-work-before-main-docs.json`、`parallel-work-after-main-docs.json`；最终推送再次核对 SHA 后交付。

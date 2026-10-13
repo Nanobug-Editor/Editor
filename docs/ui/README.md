@@ -3,7 +3,7 @@
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
 - [项目首页、多窗口与 Windows 目录右键打开规格](specs/project-windows.md)：三单已实现、验收、审查并推送，P01–P24 已核对；#103–#105 及总 [#102](https://github.com/T-miracle/Nanobug/issues/102) 全部读回 closed/completed。本次对话原型仅用于交互示意。
-- [项目窗口方案主分支集成验证](verification/project-windows-main-integration.md)：用户随后要求合并 main；记录快进、原有行尾差异、并发工作隔离与编译检查缓存的实际诊断，验证完成，待 main 推送读回。
+- [项目窗口方案主分支集成验证](verification/project-windows-main-integration.md)：已合并并推送 main，SHA 已读回核对；记录快进、原有行尾差异、并发工作保留、编译缓存实际诊断，以及 7 项既有 UI 基线失败。
 - [项目首页与多窗口实施工单](tickets/project-windows/README.md)：原生依赖为 103 → 104 → 105，三单均已核对关闭；见[首页验收](verification/project-home.md)、[并行窗口验收](verification/concurrent-project-windows.md)、[Windows 外部打开验收](verification/windows-project-entry.md)及各自双轴审查。最后一单完成真实安装器、资源管理器和原生双窗口联合验收；测试质量、去重和覆盖归属见工单索引。
 
 - [宿主消息窗口规格](specs/host-messages.md)：[两张实施工单](tickets/host-messages/README.md)已实现、验收、审查并推送，GitHub #85、#86 已核对关闭；证据见 [实施验收](verification/host-messages.md)。
