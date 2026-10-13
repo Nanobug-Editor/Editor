@@ -3,6 +3,7 @@
 本目录索引实际维护的插件资料。跨插件平台方案放在本目录的 specs、tickets 与 verification；插件自身的历史专题资料保留在对应包内，不复制正文或继承其他任务的完成状态。
 
 - [独立插件市场规格与工单](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
+- [插件管理器共用布局](specs/plugin-manager-shared-layout.md)、[2026-10-13 验收记录](verification/plugin-manager-shared-layout-2026-10-13.md)：已安装与市场共用窗口框架，搜索框内置左侧筛选，详情按数据分区；浏览版本与实际安装实例的操作目标分别明确。实现与测试记录不继承市场服务工单的交付状态。
 - [已验收的 Rust 合并方案](specs/rust-plugin-consolidation.md)与[历史验收](verification/rust-plugin-consolidation-2026-10-09.md)：市场工单 03 的外部准入依据；迁移与本次修复的结果另记，不将其他任务成果计为新实现。
 - [市场工单 03 宿主集成记录](verification/plugin-marketplace-03-2026-10-11.md)：七个新命名仓库、稳定 Release、完整 ZIP 摘要、七包原生安装与代表功能已验证；PR #6 已按本批授权合并，正式 Pages、统计及客户端线上安装验收通过。
 - [市场工单 04 删除前盘点](verification/plugin-marketplace-04-inventory-2026-10-11.md)：实际消费者与替代输入对应关系；源码迁出和无随附 Windows 交付已验收，证据见 [04 最终记录](verification/plugin-marketplace-04-2026-10-11.md)。

@@ -161,13 +161,14 @@ fn inspect_history_and_upgrade(
 ) {
     assert_eq!(server.downloads.load(Ordering::Acquire), 0);
     if existing.is_some() {
-        click(form, "plugin-market-history");
+        click(form, "plugin-detail-tabs-3");
     }
     assert_eq!(
         form.update(|_, cx| panel.read(cx).manager_selected.clone()),
         Some("toml".into())
     );
-    assert!(form.debug_bounds("market-version-0.2.3").is_some());
+    click(form, "plugin-detail-tabs-3");
+    click(form, "market-version-0.2.3");
     let state = worker.state.lock().unwrap();
     let release = state.market.catalog.as_ref().unwrap().plugins[0].versions[0].clone();
     assert!(!release.changelog.is_empty());
@@ -176,7 +177,7 @@ fn inspect_history_and_upgrade(
     assert!(stats.total("toml").is_some());
     drop(state);
     // Enter and clear Chinese through the real text input; no filter values are substituted.
-    let search = form.debug_bounds("market-search").unwrap();
+    let search = form.debug_bounds("plugin-manager-search").unwrap();
     form.simulate_click(search.center(), Default::default());
     form.simulate_input("中文");
     draw(form);
@@ -317,11 +318,12 @@ fn outage_and_withdrawal(
         })
     });
     draw(form);
-    click(form, "plugin-market-history");
+    click(form, "plugin-detail-tabs-3");
     assert!(
         form.debug_bounds("market-version-0.2.3").is_some(),
         "withdrawal remains visible in installed history"
     );
+    click(form, "market-version-0.2.3");
     scroll_details(form, -350.);
     click(form, "market-install");
     assert_eq!(revoked.downloads.load(Ordering::Acquire), 0);
@@ -350,7 +352,7 @@ fn click(form: &mut VisualTestContext, selector: &'static str) {
 
 /// Use the actual wheel input to reach version actions and the rendered changelog in the details viewport.
 fn scroll_details(form: &mut VisualTestContext, delta: f32) {
-    let viewport = form.debug_bounds("online-market-details").unwrap();
+    let viewport = form.debug_bounds("plugin-manager-detail-content").unwrap();
     form.simulate_event(gpui_kit::ScrollWheelEvent {
         position: viewport.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(delta))),

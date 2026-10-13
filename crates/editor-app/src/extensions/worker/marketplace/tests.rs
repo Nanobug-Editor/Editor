@@ -4,6 +4,7 @@ use crate::extensions::market_test_server::Server;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 mod delivery;
+mod layout;
 mod official;
 mod updates;
 mod wasm_updates;
@@ -316,6 +317,16 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
             .as_array_mut()
             .unwrap()
             .push(incompatible);
+        // A second inert listing makes filter changes observable without another package download.
+        let mut other = catalog["plugins"][0].clone();
+        other["id"] = "test.other".into();
+        other["category"] = "utilities".into();
+        other["tags"] = serde_json::json!(["other"]);
+        for release in other["versions"].as_array_mut().unwrap() {
+            release["manifest"]["id"] = "test.other".into();
+            release["manifest"]["name"] = "Other".into();
+        }
+        catalog["plugins"].as_array_mut().unwrap().push(other);
         let server = Server::from_bytes(
             &serde_json::to_vec(&catalog).unwrap(),
             include_bytes!("../../../../../plugin-runtime/tests/fixtures/marketplace/notes.zip")
@@ -371,6 +382,98 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         form.run_until_parked();
         form.update(|window, cx| window.draw(cx).clear(cx));
         assert_eq!(server.downloads.load(Ordering::Acquire), 0);
+        // Browsing uses the same native manager frame as installed plugins, before any download.
+        assert!(form.debug_bounds("plugin-manager-sidebar").is_some());
+        assert!(form.debug_bounds("plugin-manager-tabs-0").is_some());
+        assert!(form.debug_bounds("plugin-manager-tabs-1").is_some());
+        assert!(form.debug_bounds("plugin-manager-header").is_some());
+        assert!(form.debug_bounds("plugin-row-test.other").is_some());
+        let search_frame = form.debug_bounds("plugin-manager-search").unwrap();
+        let trigger = form.debug_bounds("market-filter-trigger").unwrap();
+        assert!(search_frame.contains(&trigger.center()));
+        form.simulate_click(trigger.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        let filters = form.debug_bounds("market-filter-panel").unwrap();
+        assert_eq!(
+            filters.left(),
+            search_frame.left(),
+            "filter panel aligns with the search frame"
+        );
+        assert!(
+            filters.top() >= search_frame.bottom(),
+            "filter panel opens below search"
+        );
+        let category = form.debug_bounds("market-category-tools").unwrap();
+        form.simulate_click(category.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(form.debug_bounds("plugin-row-test.other").is_none());
+        assert!(form.debug_bounds("market-filter-active").is_some());
+        let clear = form.debug_bounds("market-clear-filters").unwrap();
+        form.simulate_click(clear.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(form.debug_bounds("plugin-row-test.other").is_some());
+        assert!(form.debug_bounds("market-filter-active").is_none());
+        let windows = form.cx.update(|cx| cx.windows().len());
+        form.simulate_keystrokes("escape");
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(form.debug_bounds("market-filter-panel").is_none());
+        assert_eq!(
+            form.cx.update(|cx| cx.windows().len()),
+            windows,
+            "Escape closes only the filter panel"
+        );
+        // Base synthesizes a keyboard click on key-up; dispatching a lone key-down is not an activation.
+        let keystroke = gpui_kit::Keystroke::parse("enter").unwrap();
+        form.simulate_event(gpui_kit::KeyDownEvent {
+            keystroke: keystroke.clone(),
+            is_held: false,
+            prefer_character_input: false,
+        });
+        form.simulate_event(gpui_kit::KeyUpEvent { keystroke });
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(
+            form.debug_bounds("market-filter-panel").is_some(),
+            "keyboard activation restores the popover"
+        );
+        form.simulate_click(search_frame.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(form.debug_bounds("market-filter-panel").is_none());
+        // Traverse the actual search/tab/list focus order and select the second row with a complete key press.
+        for _ in 0..3 {
+            form.simulate_keystrokes("tab");
+            let keystroke = gpui_kit::Keystroke::parse("enter").unwrap();
+            form.simulate_event(gpui_kit::KeyDownEvent {
+                keystroke: keystroke.clone(),
+                is_held: false,
+                prefer_character_input: false,
+            });
+            form.simulate_event(gpui_kit::KeyUpEvent { keystroke });
+            form.run_until_parked();
+            form.update(|window, cx| window.draw(cx).clear(cx));
+            if form.update(|_, cx| panel.read(cx).manager_selected.as_deref() == Some("test.other"))
+            {
+                break;
+            }
+        }
+        assert!(
+            form.update(|_, cx| panel.read(cx).manager_selected.as_deref() == Some("test.other")),
+            "market rows remain keyboard selectable"
+        );
+        let notes = form.debug_bounds("plugin-row-test.notes").unwrap();
+        form.simulate_click(notes.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
+        // Reviewed history is a detail page; selecting it keeps the fixed management actions available.
+        let versions = form.debug_bounds("plugin-detail-tabs-3").unwrap();
+        form.simulate_click(versions.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
         let newer = form
             .debug_bounds("market-version-2.0.0")
             .expect("historical version selector");
@@ -393,6 +496,10 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
             0,
             "browsing cannot resolve external images"
         );
+        let information = form.debug_bounds("plugin-detail-tabs-4").unwrap();
+        form.simulate_click(information.center(), Default::default());
+        form.run_until_parked();
+        form.update(|window, cx| window.draw(cx).clear(cx));
         let source = form.debug_bounds("market-source").unwrap();
         form.simulate_click(source.center(), Default::default());
         assert_eq!(
@@ -405,7 +512,7 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
             form.opened_url().as_deref(),
             Some("https://github.com/author/notes/issues")
         );
-        let search = form.debug_bounds("market-search").unwrap();
+        let search = form.debug_bounds("plugin-manager-search").unwrap();
         form.simulate_click(search.center(), Default::default());
         form.simulate_input("未匹配 插件");
         form.run_until_parked();
@@ -415,7 +522,7 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         form.simulate_input("Notes");
         form.run_until_parked();
         form.update(|window, cx| window.draw(cx).clear(cx));
-        let viewport = form.debug_bounds("online-market-details").unwrap();
+        let viewport = form.debug_bounds("plugin-manager-detail-content").unwrap();
         form.simulate_event(gpui_kit::ScrollWheelEvent {
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))),

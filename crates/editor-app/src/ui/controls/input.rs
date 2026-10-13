@@ -4,8 +4,8 @@ use gpui_base::StyledExt as _;
 use gpui_base::input::{Input as BaseInput, InputState};
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
-    App, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, App, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 
 #[derive(IntoElement)]
@@ -17,6 +17,8 @@ pub(crate) struct Input {
     focus_bordered: bool,
     /// The native input publishes its semantic name independently of the placeholder text.
     accessibility_label: Option<SharedString>,
+    /// Optional leading control shares this input's border; editing and IME remain owned by Base.
+    prefix: Option<AnyElement>,
 }
 
 impl Input {
@@ -28,6 +30,7 @@ impl Input {
             bordered: true,
             focus_bordered: true,
             accessibility_label: None,
+            prefix: None,
         }
     }
 
@@ -38,6 +41,12 @@ impl Input {
     /// Expose an explicit native accessibility label without changing shared editing behavior.
     pub(crate) fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
         self.accessibility_label = Some(label.into());
+        self
+    }
+
+    /// Insert a local control before the editable area without adding another input state or frame.
+    pub(crate) fn prefix(mut self, prefix: impl IntoElement) -> Self {
+        self.prefix = Some(prefix.into_any_element());
         self
     }
 
@@ -83,9 +92,14 @@ impl RenderOnce for Input {
             .when(self.focus_bordered && self.appearance, |this| {
                 this.in_focus(|style| style.border_color(palette.ring))
             })
+            .when_some(self.prefix, |this, prefix| {
+                this.child(div().flex_shrink_0().child(prefix))
+            })
             .child(
                 gpui_base::input::InputBase::new(("local-input", self.state.entity_id()))
-                    .size_full()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .h_full()
                     .when_some(self.accessibility_label, |frame, label| {
                         frame.accessibility_label(label)
                     })

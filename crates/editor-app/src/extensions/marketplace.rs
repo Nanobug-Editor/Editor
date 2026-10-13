@@ -1,12 +1,19 @@
 //! Native marketplace uses inert catalog snapshots; consent never constructs a fake Package.
 use super::*;
-use crate::ui::controls::vertical_viewport_scrollbar;
 use gpui_base::DialogClose;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::dialog::{DialogAction, DialogFooter};
-use gpui_kit::component::scroll::ScrollableElement;
 use plugin_runtime::marketplace::{CATALOG_URL, CompatibilityIssue, Release, Sort};
 mod details;
+mod filters;
+
+/// Catalog freshness gates downloads; installed lifecycle authority remains independent.
+pub(super) struct Snapshot {
+    pub state: plugin_runtime::marketplace::CatalogState,
+    pub statistics: Option<Arc<plugin_runtime::marketplace::Statistics>>,
+    pub statistics_error: Option<String>,
+    pub ready: bool,
+}
 
 const MARKET_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
 
@@ -24,6 +31,23 @@ pub(super) struct ViewState {
 }
 
 impl ViewState {
+    /// Borrow active discovery filters without exposing mutation outside their UI owner.
+    pub(super) fn category(&self) -> &str {
+        &self.category
+    }
+    /// Return the retained tag constraint for the same bounded catalog search.
+    pub(super) fn tag(&self) -> &str {
+        &self.tag
+    }
+    /// Read the selected ordering without allowing another view to mutate discovery state.
+    pub(super) fn sort(&self) -> Sort {
+        self.sort
+    }
+    /// Explicit history navigation permits withdrawn entries for exactly the selected identity.
+    pub(super) fn history_ids(&self) -> std::collections::BTreeSet<String> {
+        self.history_id.iter().cloned().collect()
+    }
+
     /// Installed-detail navigation opens all reviewed history without retaining earlier search filters.
     pub(super) fn show_history(&mut self, id: String) {
         self.category.clear();
@@ -86,282 +110,21 @@ impl ExtensionPanel {
         );
     }
 
-    /// Search, filters and details use local controls and the existing native scroll viewport.
-    pub(super) fn online_market(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        if !self.market_view.started {
+    /// One immutable publication supplies both installed metadata and market discovery.
+    pub(super) fn market_snapshot(&mut self) -> Snapshot {
+        if self.manager_market && !self.market_view.started {
             self.market_view.started = true;
             if self.worker.state.lock().unwrap().market.generation() == 0 {
                 self.refresh_online_market();
             }
         }
-        let (state, statistics, statistics_error, ready) = {
-            let published = self.worker.state.lock().unwrap();
-            (
-                published.market.clone(),
-                published.market_statistics.clone(),
-                published.market_statistics_error.clone(),
-                published.ready,
-            )
-        };
-        let history_ids = self.market_view.history_id.iter().cloned().collect();
-        let query = self
-            .manager_search
-            .as_ref()
-            .map(|input| input.read(cx).value().to_string())
-            .unwrap_or_default();
-        let rows = state
-            .catalog
-            .as_ref()
-            .map(|catalog| {
-                catalog.search_with(
-                    &query,
-                    &self.market_view.category,
-                    &self.market_view.tag,
-                    self.market_view.sort,
-                    statistics.as_deref(),
-                    &history_ids,
-                )
-            })
-            .unwrap_or_default();
-        let selection = self
-            .manager_selected
-            .as_ref()
-            .filter(|id| rows.iter().any(|r| &r.id == *id))
-            .cloned()
-            .or_else(|| rows.first().map(|r| r.id.clone()));
-        self.manager_selected = selection.clone();
-        let selected = rows
-            .iter()
-            .find(|r| Some(&r.id) == selection.as_ref())
-            .copied();
-        let mut list = v_flex().gap_1();
-        for row in rows {
-            let id = row.id.clone();
-            list = list.child(
-                Button::new(SharedString::from(format!("market-row-{id}")))
-                    .label(row.versions[0].manifest.name.clone())
-                    .w_full()
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        // Selecting another row returns to ordinary discovery rather than retaining a withdrawal exception.
-                        if this.manager_selected.as_ref() != Some(&id) {
-                            this.market_view.leave_history();
-                        }
-                        this.manager_selected = Some(id.clone());
-                        this.market_view.selected_version = None;
-                        this.manager_detail_scroll.set_offset(Default::default());
-                        cx.notify();
-                    })),
-            );
+        let published = self.worker.state.lock().unwrap();
+        Snapshot {
+            state: published.market.clone(),
+            statistics: published.market_statistics.clone(),
+            statistics_error: published.market_statistics_error.clone(),
+            ready: published.ready,
         }
-        let categories = state
-            .catalog
-            .as_ref()
-            .map(|c| {
-                c.plugins
-                    .iter()
-                    .map(|p| p.category.clone())
-                    .collect::<std::collections::BTreeSet<_>>()
-            })
-            .unwrap_or_default();
-        let tags = state
-            .catalog
-            .as_ref()
-            .map(|c| {
-                c.plugins
-                    .iter()
-                    .flat_map(|p| p.tags.iter().cloned())
-                    .collect::<std::collections::BTreeSet<_>>()
-            })
-            .unwrap_or_default();
-        let category_label = if self.market_view.category.is_empty() {
-            t!("plugins.market_all_categories").to_string()
-        } else {
-            self.market_view.category.clone()
-        };
-        let tag_label = if self.market_view.tag.is_empty() {
-            t!("plugins.market_all_tags").to_string()
-        } else {
-            self.market_view.tag.clone()
-        };
-        let mut sidebar = v_flex()
-            .w(px(258.))
-            .h_full()
-            .gap_2()
-            .p_3()
-            .bg(cx.theme().sidebar)
-            .child(
-                Button::new("market-installed")
-                    .label(t!("plugins.installed").to_string())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.manager_market = false;
-                        this.market_view.leave_history();
-                        this.manager_selected = None;
-                        cx.notify();
-                    })),
-            )
-            .child(
-                div()
-                    .debug_selector(|| "market-search".into())
-                    .child(Input::new(self.manager_search.as_ref().unwrap())),
-            )
-            .child(
-                Button::new("market-category")
-                    .label(category_label)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.market_view.leave_history();
-                        this.market_view.category =
-                            next_filter(&this.market_view.category, &categories);
-                        this.manager_selected = None;
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("market-tag")
-                    .label(tag_label)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.market_view.leave_history();
-                        this.market_view.tag = next_filter(&this.market_view.tag, &tags);
-                        this.manager_selected = None;
-                        cx.notify();
-                    })),
-            );
-        let sorts = [Sort::Relevance, Sort::Downloads, Sort::Updated, Sort::Name];
-        sidebar = sidebar
-            .child(crate::ui::controls::tab_strip(
-                "market-sort",
-                sorts
-                    .iter()
-                    .position(|s| *s == self.market_view.sort)
-                    .unwrap_or_default(),
-                [
-                    (t!("plugins.market_sort_relevance").into(), false),
-                    (t!("plugins.market_sort_downloads").into(), false),
-                    (t!("plugins.market_sort_updated").into(), false),
-                    (t!("plugins.market_sort_name").into(), false),
-                ],
-                [None; 4],
-                &self.manager_tabs_focus,
-                {
-                    let owner = cx.entity().downgrade();
-                    move |index, _, cx| {
-                        let _ = owner.update(cx, |this, cx| {
-                            this.market_view.leave_history();
-                            this.market_view.sort = sorts[index];
-                            cx.notify();
-                        });
-                    }
-                },
-                cx,
-            ))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .overflow_y_scrollbar()
-                    .child(list),
-            )
-            .child(
-                Button::new("market-refresh")
-                    .label(t!("plugins.market_refresh").to_string())
-                    .disabled(state.refreshing)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.refresh_online_market();
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("market-local")
-                    .label(t!("plugins.install_local").to_string())
-                    .disabled(self.progress.is_some())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.manager_market = false;
-                        this.choose_package(cx);
-                    })),
-            );
-        let mut body = v_flex().gap_3().p_5();
-        if let Some(at) = state
-            .fetched_at
-            .and_then(|seconds| chrono::DateTime::from_timestamp(i64::try_from(seconds).ok()?, 0))
-        {
-            body = body.child(
-                t!(
-                    "plugins.market_fetched_at",
-                    time = at.format("%Y-%m-%d %H:%M:%S UTC").to_string()
-                )
-                .to_string(),
-            );
-        }
-        if !state.fresh() {
-            body = body.child(div().text_color(cx.theme().muted_foreground).child(
-                if state.refreshing {
-                    t!("plugins.market_refreshing").to_string()
-                } else {
-                    t!(
-                        "plugins.market_offline",
-                        error = state.error.as_deref().unwrap_or("")
-                    )
-                    .to_string()
-                },
-            ));
-        }
-        if let Some(statistics) = &statistics {
-            if let Some(at) = &statistics.measured_at {
-                body =
-                    body.child(t!("plugins.market_statistics_at", time = at.clone()).to_string());
-            }
-        }
-        if let Some(error) = &statistics_error {
-            body = body
-                .child(t!("plugins.market_statistics_stale", error = error.clone()).to_string());
-        }
-        if let Some(status) = &self.status {
-            body = body.child(
-                div()
-                    .text_color(cx.theme().danger)
-                    .child(status.message.clone()),
-            );
-        }
-        if let Some(listing) = selected {
-            body = body.child(self.market_listing_details(
-                listing,
-                &state,
-                statistics.as_deref(),
-                ready,
-                cx,
-            ));
-        } else {
-            body = body.child(t!("plugins.empty_market").to_string());
-        }
-        h_flex()
-            .size_full()
-            .child(sidebar)
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .h_full()
-                    .child(
-                        div()
-                            .id("online-market-details")
-                            .debug_selector(|| "online-market-details".into())
-                            .size_full()
-                            .overflow_y_scroll()
-                            .track_scroll(&self.manager_detail_scroll)
-                            .child(body),
-                    )
-                    .child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .child(vertical_viewport_scrollbar(&self.manager_detail_scroll, cx)),
-                    ),
-            )
-            .into_any_element()
     }
 
     /// First installs confirm all permissions; upgrades confirm new grants and other owners to replace.
@@ -498,15 +261,6 @@ impl ExtensionPanel {
                 })
         });
     }
-}
-
-/// Cycling includes the unfiltered choice and remains operable with the local button keyboard behavior.
-fn next_filter(current: &str, values: &std::collections::BTreeSet<String>) -> String {
-    values
-        .iter()
-        .find(|value| value.as_str() > current)
-        .cloned()
-        .unwrap_or_default()
 }
 
 /// Explain why a historical release cannot be installed without hiding its review history.

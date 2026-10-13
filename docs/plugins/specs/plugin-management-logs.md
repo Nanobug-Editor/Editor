@@ -5,6 +5,8 @@
 GitHub 方案：[#22](https://github.com/T-miracle/Editor/issues/22)，标签：`ready-for-agent`。
 工单见[实施工单](../tickets/plugin-management-logs/README.md)，本批次独立于已完成的 20 张平台工单。
 
+2026-10-13 补充：[插件管理器共用布局](plugin-manager-shared-layout.md)替代下文因市场未开放而禁用四个信息 Tab 的条件。Tab 顺序、固定头部与正文滚动、日志提醒及已读规则继续有效；本方案与早期验收保留为历史记录。
+
 ## Problem Statement
 
 插件说明、服务状态与诊断混在详情里，用户阅读说明时会被运行信息打断；顶部操作与滚动区层次不清晰。底栏加载入口需要同时表达未查看异常，现有弹窗的信息排版不易快速阅读，用户无法一致地追踪查看状态。

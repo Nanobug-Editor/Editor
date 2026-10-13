@@ -356,7 +356,7 @@ fn native_update(
     });
     form.run_until_parked();
     form.update(|window, cx| window.draw(cx).clear(cx));
-    let history = form.debug_bounds("plugin-market-history").unwrap();
+    let history = form.debug_bounds("plugin-detail-tabs-3").unwrap();
     form.simulate_click(history.center(), Default::default());
     form.run_until_parked();
     form.update(|window, cx| window.draw(cx).clear(cx));
@@ -364,7 +364,12 @@ fn native_update(
         form.update(|_, cx| panel.read(cx).manager_selected.clone()),
         Some(id.clone())
     );
-    let viewport = form.debug_bounds("online-market-details").unwrap();
+    // Selecting the reviewed candidate retains this identity even when another listing sorts first.
+    let version = form.debug_bounds("market-version-2.0.0").unwrap();
+    form.simulate_click(version.center(), Default::default());
+    form.run_until_parked();
+    form.update(|window, cx| window.draw(cx).clear(cx));
+    let viewport = form.debug_bounds("plugin-manager-detail-content").unwrap();
     form.simulate_event(gpui_kit::ScrollWheelEvent {
         position: viewport.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-350.))),

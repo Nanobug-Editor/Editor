@@ -412,7 +412,6 @@ fn check_detail_navigation(form: &mut VisualTestContext, owner: &Entity<Extensio
         "plugin-detail-tabs-1",
         "plugin-detail-tabs-2",
         "plugin-detail-tabs-3",
-        "plugin-detail-tabs-4",
     ] {
         click(form, selector);
         assert_eq!(
@@ -422,7 +421,7 @@ fn check_detail_navigation(form: &mut VisualTestContext, owner: &Entity<Extensio
     }
     click(form, "plugin-detail-tabs-0");
     for (key, expected) in [
-        ("right", management::DetailTab::RuntimeLog),
+        ("right", management::DetailTab::Information),
         ("left", management::DetailTab::Overview),
         ("end", management::DetailTab::RuntimeLog),
         ("home", management::DetailTab::Overview),

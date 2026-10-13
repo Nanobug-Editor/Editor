@@ -15,6 +15,7 @@ mod input;
 pub(crate) mod interaction;
 pub(crate) mod menu;
 mod notification;
+mod popover;
 mod scrollbar;
 mod segmented_tabs;
 mod shortcut_panel;
@@ -40,6 +41,7 @@ pub(crate) use editor_canvas::empty_editor_canvas;
 pub(crate) use icon::Icon;
 pub(crate) use input::Input;
 pub(crate) use notification::Notification;
+pub(crate) use popover::popover;
 pub(crate) use scrollbar::{
     install_scrollbar_theme, vertical_scrollbar, vertical_viewport_scrollbar,
 };

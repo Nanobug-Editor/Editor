@@ -27,8 +27,8 @@ plugins.market_feedback:
   en: "Feedback / issues"
   zh-CN: "反馈与问题"
 plugins.market_all_categories:
-  en: "All categories (next)"
-  zh-CN: "全部分类（切换）"
+  en: "All categories"
+  zh-CN: "全部分类"
 plugins.market_identity:
   en: "ID: %{id} · Source: %{repository}"
   zh-CN: "标识：%{id} · 来源：%{repository}"
@@ -36,8 +36,32 @@ plugins.market_compatibility:
   en: "Editor: %{host} · Platforms: %{platforms}"
   zh-CN: "编辑器：%{host} · 平台：%{platforms}"
 plugins.market_all_tags:
-  en: "All tags (next)"
-  zh-CN: "全部标签（切换）"
+  en: "All tags"
+  zh-CN: "全部标签"
+plugins.market_filters:
+  en: "Filter marketplace"
+  zh-CN: "筛选插件市场"
+plugins.market_categories:
+  en: "Category"
+  zh-CN: "分类"
+plugins.market_tags:
+  en: "Tag"
+  zh-CN: "标签"
+plugins.market_sort:
+  en: "Sort by"
+  zh-CN: "排序"
+plugins.market_clear_filters:
+  en: "Clear filters"
+  zh-CN: "清除筛选"
+plugins.market_browsing_version:
+  en: "Browsing %{version}"
+  zh-CN: "浏览版本 %{version}"
+plugins.market_installed_version:
+  en: "Installed %{version}"
+  zh-CN: "已安装 %{version}"
+plugins.installed_incompatible:
+  en: "Incompatible; please update. %{reason} Settings and enablement are preserved."
+  zh-CN: "不兼容，请更新。%{reason} 原有设置和启用范围已保留。"
 plugins.market_sort_relevance:
   en: "Match"
   zh-CN: "相关"
