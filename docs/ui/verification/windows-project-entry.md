@@ -136,7 +136,7 @@
 
 ## 远程交付与总方案关闭
 
-实现与验收提交 [`9a00f903e5ff6bc8b7570a20aadd4b19e6fbbb2b`](https://github.com/T-miracle/Nanobug/commit/9a00f903e5ff6bc8b7570a20aadd4b19e6fbbb2b) 普通推送至 `origin/codex/windows-project-entry`，`git ls-remote` 核对同一 SHA。该分支包含 #103/#104 的源码历史；本次未合并 main 或发布 Release。后续仅补远程状态文档，不改变受测源码或安装器。
+实现与验收提交 [`9a00f903e5ff6bc8b7570a20aadd4b19e6fbbb2b`](https://github.com/T-miracle/Nanobug/commit/9a00f903e5ff6bc8b7570a20aadd4b19e6fbbb2b) 普通推送至 `origin/codex/windows-project-entry`，`git ls-remote` 核对同一 SHA。该分支包含 #103/#104 的源码历史；工单交付阶段未合并 main 或发布 Release。用户随后授权 main 合并及推送，见[主分支集成验证](project-windows-main-integration.md)。后续状态文档不改变受测源码或安装器。
 
 GitHub 连接器读操作可用，更新返回 403 `Resource not accessible by integration`，因此使用仓库已有认证的 REST API；凭据仅在内存及 curl 标准输入配置中，不写入文件、日志或命令参数。先关闭 #105 并读回其完整正文、11 项勾选及 completed 状态，再按用户明确授权关闭 #102。最后再次从连接器独立读取四项状态，#105/#102 正文与预期完全一致，批准的用户故事未被改写：
 
