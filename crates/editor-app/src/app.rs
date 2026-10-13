@@ -16,6 +16,8 @@ pub(crate) mod session;
 mod settings;
 mod shell;
 pub(crate) mod shortcuts;
+/// Ordinary GUI admission and external requests share one profile-scoped application owner.
+pub(crate) mod startup;
 
 pub(crate) use settings::SettingsSection;
 

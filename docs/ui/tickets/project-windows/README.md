@@ -2,7 +2,7 @@
 
 日期：2026-10-13
 
-状态：01 已实现、行为验收、审查并推送，GitHub #103 已读回为 closed/completed，证据见[实施验收](../../verification/project-home.md)。02 已实现、验收、审查并推送，GitHub #104 已读回为 closed/completed，见[实施验收](../../verification/concurrent-project-windows.md)与[双轴审查](../../verification/concurrent-project-windows-review.md)。03 仍为 open，前置项已满足。三单已发布并核对正文、标签及原生阻塞边；序号 01–03 不是 GitHub issue 编号。
+状态：01/02 已实现、行为验收、审查并推送，GitHub #103/#104 已读回为 closed/completed，证据见[首页验收](../../verification/project-home.md)与[并行窗口验收](../../verification/concurrent-project-windows.md)。03 实现、自动验证、双轴审查及真实 Windows 联合验收完成，待普通提交、推送及 #105/#102 关闭读回，见[外部打开验收](../../verification/windows-project-entry.md)。三单已发布并核对正文、标签及原生阻塞边；序号 01–03 不是 GitHub issue 编号。
 
 发布映射：[publication.json](publication.json)。真实工单为 [#103](https://github.com/T-miracle/Nanobug/issues/103)、[#104](https://github.com/T-miracle/Nanobug/issues/104)、[#105](https://github.com/T-miracle/Nanobug/issues/105)。
 
@@ -28,7 +28,7 @@ flowchart LR
 - 03 依赖 02 是因为真实第二次启动必须能安全激活或新开项目；仅菜单注册可以提前研究，但不是独立可交付功能。不额外添加 03 → 01 的传递性边。
 - 本次没有必须独立交付的广域机械重构。必要预重构安排在各单新增行为之前：01 整理启动和收尾，02 在单作用域下完成所有权迁移后再开放第二项目，03 整理 GUI/CLI/profile 分流后再接系统入口。
 - 每单均要求最终候选可编译且针对性测试通过，不留一个必须靠后续单修复才能转绿的中间交付。不因实施顺序允许就自动委派代理。
-- #102 是设计依据而非执行阻塞；不修改或关闭父议题。本次发布授权只覆盖批准后的三张实施工单及原生阻塞关系，不自动开始实现或提交代码。
+- #102 是设计依据而非执行阻塞。拆单发布阶段只授权三张工单及原生阻塞关系；用户于 2026-10-13 进一步要求执行剩余所有工单并关闭总方案，之后按“实现、验证与审查 → 普通提交 → 推送及 SHA 核对 → 工单关闭读回 → 父方案关闭读回”完成交付。
 
 ## 验收覆盖归属
 
@@ -66,7 +66,7 @@ flowchart LR
 
 - 已按用户执行第一单的要求采用当前粒度，发布三张工单，标签统一为 `ready-for-agent`。
 - 发布前以稳定标识和标题核对重复议题。后续工单正文填入真实阻塞 issue 引用；原生 GitHub issue dependencies 使用被依赖工单的数据库 ID，并读回核对两条边。
-- 父 #102 只作为正文引用，不设为阻塞项，不关闭、不改写；不为建立本计划而修改父议题元数据。
+- 拆单时父 #102 只作为正文引用，不设为阻塞项，不为建立计划修改其元数据。后续关闭总方案遵循上述用户新授权，保留已批准的故事、范围与测试边界。
 - 真实 issue 编号与 ID 已写入 publication.json；已读回核对原生依赖为 #104 被 #103 阻塞、#105 被 #104 阻塞。
 - 发布后的初始实施前沿只有 01；01 完成后才进入 02，02 完成后才进入 03。实际状态以 GitHub 读回为准，标签本身不解除阻塞。
 

@@ -18,7 +18,7 @@ XML 插件提供 Schema 辅助、补全、格式化、配对标签编辑与文�
 
 ## 安装
 
-项目仍在开发中。Windows 用户运行 `Nanobug-Setup-<版本>-x64.exe`，按当前用户安装。安装器创建开始菜单入口，提供可选桌面快捷方式，并注册卸载程序。程序、图标和宿主许可证安装到 `%LOCALAPPDATA%\Programs\Nanobug`，使用时无需 Rust/Cargo。
+项目仍在开发中。Windows 用户运行 `Nanobug-Setup-<版本>-x64.exe`，按当前用户安装。安装器创建开始菜单入口，提供可选桌面快捷方式，并注册卸载程序。另一个首次默认勾选的选项在文件夹对象及文件夹空白处添加**使用 Nanobug 打开**，升级保留该选择；Windows 11 中入口可能位于**显示更多选项**。程序、图标和宿主许可证安装到 `%LOCALAPPDATA%\Programs\Nanobug`，使用时无需 Rust/Cargo。
 
 更新或卸载前先正常退出 Nanobug。既有 `MeEditor` 目录中的设置、历史与已安装插件数据会保留。Windows 安装界面提供英文和简体中文。
 
@@ -67,6 +67,8 @@ cargo run --release -- C:\path\to\project
 Debug 构建未经优化，窗口拖动与编辑响应可能较慢，日常体验建议使用 Release。
 
 不传路径启动时进入项目首页，通过**打开文件夹**或最近项目开始编辑；普通目录即可使用，无需 Git 仓库或专用项目文件。新项目会询问信任或受限编辑，并保留已有本机选择。**关闭项目**在处理未保存修改、确认停止运行程序并完成清理后回到同一窗口的首页；取消或保存失败会保留当前项目。重新打开恢复已保存标签和布局，不自动重启程序。
+
+打开另一个项目时，当前项目继续在自己的窗口运行；重复打开同一实际目录会激活原窗口，资源管理器和普通再次启动也遵守此规则。无参数再次启动会复用或新建首页。**退出应用**统一收集全部窗口的决定，任一取消都会保留所有窗口。便携版支持相同目录或文件参数，启动不会注册菜单。`Nanobug.exe --profile "<独立 profile 目录>" -- "<项目或文件>"` 可选择隔离 GUI profile；插件工具命令与显式开发实例保持独立启动行为。
 
 源码按职责组织为编辑器应用、文档核心、平台适配、插件格式、公开协议与插件运行时六个 crate。官方插件源码位于[独立 X-for-Nanobug 仓库](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/registry)，固定 Package 测试输入位于 `crates/plugin-runtime/tests/fixtures/packages/`，原生打包配置与步骤位于 `installer/`。详细入口见[维护者文档目录](docs/README.md)。
 

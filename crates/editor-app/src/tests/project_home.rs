@@ -16,6 +16,9 @@ mod queue;
 mod concurrent_catalog;
 #[path = "project_windows/windows.rs"]
 mod concurrent_windows;
+// External requests exercise the same GPUI lifecycle and actual document targets.
+#[path = "project_windows/external.rs"]
+mod external_windows;
 
 /// Use the production window and platform picker in an isolated profile for each behavioral scenario.
 fn with_home(

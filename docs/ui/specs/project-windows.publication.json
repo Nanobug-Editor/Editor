@@ -10,9 +10,9 @@
     "title_verified": true,
     "body_verified": true,
     "label_verified": true,
-    "verified_on": "2026-10-12"
+    "verified_on": "2026-10-13"
   },
   "test_boundaries_confirmed_on": "2026-10-12",
-  "implementation_status": "not_started",
-  "tickets": []
+  "implementation_status": "verified_pending_remote_delivery",
+  "tickets": [103, 104, 105]
 }

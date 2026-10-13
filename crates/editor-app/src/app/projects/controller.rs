@@ -374,8 +374,13 @@ pub(super) fn activate(entry: Entry, file: Option<PathBuf>, cx: &mut App) {
     let _ = entry.handle.update(cx, |_, window, cx| {
         window.activate_window();
         let _ = entry.host.update(cx, |host, cx| {
-            if let (Some(editor), Some(file)) = (&host.editor, file) {
-                editor.update(cx, |app, cx| app.open_file(file, window, cx));
+            if let Some(file) = file {
+                if let Some(editor) = &host.editor {
+                    editor.update(cx, |app, cx| app.open_file(file, window, cx));
+                } else if let Some(Decision::Trust { initial_file, .. }) = &mut host.decision {
+                    // A repeated file request selects its file without bypassing the original trust decision.
+                    *initial_file = Some(file);
+                }
             }
         });
     });

@@ -28,6 +28,52 @@ pub(crate) fn quit_application(cx: &mut App) {
     controller::quit(cx);
 }
 
+/// External GUI requests enter the existing native project lifecycle in this profile.
+/// The caller reports dispatch errors instead of silently falling back to the process directory.
+pub(crate) fn open_request(
+    profile: PathBuf,
+    path: Option<PathBuf>,
+    cx: &mut App,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !controller::is_quitting(cx),
+        "{}",
+        t!("projects.external_quitting")
+    );
+    let Some(path) = path else {
+        return controller::home(profile, cx);
+    };
+    let file = path.is_file().then(|| path.clone());
+    let root = if file.is_some() {
+        path.parent()
+            .ok_or_else(|| anyhow::anyhow!("Missing file parent"))?
+    } else {
+        path.as_path()
+    };
+    let workspace = Workspace::open(root)?;
+    let identity = platform_windows::directory_identity::DirectoryIdentity::open(workspace.root())?;
+    if let Some(existing) = controller::owner(&identity, cx) {
+        let host = existing
+            .host
+            .upgrade()
+            .ok_or_else(|| anyhow::anyhow!("Project window closed"))?;
+        anyhow::ensure!(
+            host.read(cx).close_state != CloseState::Cleaning
+                && !matches!(host.read(cx).decision, Some(Decision::Leave { .. })),
+            "{}",
+            t!("projects.external_busy")
+        );
+        controller::activate(existing, file, cx);
+        Ok(())
+    } else {
+        controller::open(
+            profile,
+            Some(file.unwrap_or_else(|| workspace.root().to_owned())),
+            cx,
+        )
+    }
+}
+
 /// A failed cleanup retains the project and admits retry, while an in-flight cleanup blocks input.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CloseState {

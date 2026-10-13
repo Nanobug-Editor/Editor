@@ -38,6 +38,8 @@ tracing = "0.1"
 url = "2.5"
 plugin-runtime = { path = "../plugin-runtime" }
 futures = "0.3"
+# Reuse the locked OS randomness provider for private GUI transport session tokens.
+getrandom = "=0.3.4"
 sha2 = "0.10"
 # Full-color plugin vectors are rasterized on the existing background worker.
 resvg = "=0.45.1"

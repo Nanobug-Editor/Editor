@@ -967,14 +967,6 @@ impl EditorApp {
     }
 }
 
-/// An argument-free launch has no workspace; explicit development instances retain their own target.
-fn resolve_startup_target() -> Option<PathBuf> {
-    if let Some(instance) = plugin_development::instance::context() {
-        return Some(instance.workspace.clone());
-    }
-    std::env::args_os().nth(1).map(PathBuf::from)
-}
-
 fn main() -> anyhow::Result<()> {
     if plugin_development::run_cli()? {
         return Ok(());
@@ -990,10 +982,39 @@ fn main() -> anyhow::Result<()> {
     // Use Simplified Chinese by default while keeping locale changes centralized.
     rust_i18n::set_locale("zh-CN");
 
+    let launch = match app::startup::resolve() {
+        Ok(launch) => launch,
+        Err(error) => {
+            app::startup::show_error(error.to_string());
+            return Err(error);
+        }
+    };
+    if launch.explicit_profile {
+        // Only ordinary GUI parsing can reach here: prior CLI probes were synchronous and no threads exist yet.
+        // Existing profile readers therefore observe one selection before GPUI or the request worker starts.
+        unsafe {
+            std::env::set_var("ME_EDITOR_PROFILE_HOME", &launch.profile);
+        }
+    }
+    let incoming = if plugin_development::instance::context().is_none() {
+        match app::startup::enter(&launch.profile, launch.target.clone()) {
+            Ok(app::startup::Admission::Primary(server)) => Some(server),
+            Ok(app::startup::Admission::Delivered) => return Ok(()),
+            Err(error) => {
+                app::startup::show_error(error.to_string());
+                return Err(error);
+            }
+        }
+    } else {
+        // A controller's explicit isolated development instance remains independently owned and never joins normal GUI admission.
+        None
+    };
+
     #[cfg(target_os = "windows")]
     let _timer_resolution = WindowsTimerResolution::enable_for_window_drag();
 
-    let target = resolve_startup_target();
+    let target = launch.target;
+    let profile = launch.profile;
     let development_workspace = plugin_development::instance::context()
         .map(|instance| Workspace::open(&instance.workspace))
         .transpose()?;
@@ -1006,13 +1027,8 @@ fn main() -> anyhow::Result<()> {
         };
         Workspace::open(root)
             .ok()
-            .map(|workspace| SessionState::load(workspace.root()))
+            .map(|workspace| SessionState::load_in_profile(workspace.root(), &profile))
     });
-    let profile = app::shortcuts::bootstrap::default_path()
-        .map_err(anyhow::Error::msg)?
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("User profile directory is unavailable"))?
-        .to_owned();
     gpui_kit::application()
         .with_assets(AppAssets)
         .run(move |cx| {
@@ -1024,6 +1040,9 @@ fn main() -> anyhow::Result<()> {
             // Load overrides before a native window accepts keys; damaged data remains intact.
             if let Err(error) = app::shortcuts::bootstrap::ensure(cx) {
                 eprintln!("Could not load shortcut configuration: {error}");
+            }
+            if let Some(server) = incoming {
+                app::startup::attach(server, profile.clone(), cx);
             }
 
             let bounds = Bounds::centered(

@@ -71,3 +71,66 @@ projects.disk_conflict:
 projects.failure:
   en: "The operation could not complete: %{details}"
   zh-CN: "操作未完成：%{details}"
+projects.external_quitting:
+  en: "Nanobug is exiting. Wait for it to finish or cancel exiting, then try opening the project again."
+  zh-CN: "Nanobug 正在退出。请等待退出完成或取消退出，再重新打开项目。"
+projects.external_busy:
+  en: "This project has a pending close decision. Complete or cancel it, then try opening again."
+  zh-CN: "此项目正在确认或执行关闭。请完成或取消关闭，再重新打开。"
+projects.external_failure:
+  en: "The project request could not be completed. Review the details and try again."
+  zh-CN: "项目打开请求未能完成。请查看原因后重试。"
+projects.external_dismiss:
+  en: "Close"
+  zh-CN: "关闭"
+projects.launch_duplicate_profile:
+  en: "Select only one GUI profile."
+  zh-CN: "一次启动只能选择一个应用 profile。"
+projects.launch_missing_profile:
+  en: "Supply a directory after --profile."
+  zh-CN: "请在 --profile 后提供目录。"
+projects.launch_empty_profile:
+  en: "The GUI profile directory cannot be empty."
+  zh-CN: "应用 profile 目录不能为空。"
+projects.launch_unknown_option:
+  en: "Unknown GUI option: %{option}."
+  zh-CN: "无法识别的启动选项：%{option}。"
+projects.launch_multiple_targets:
+  en: "Supply only one project or file target."
+  zh-CN: "一次启动只能提供一个项目或文件路径。"
+projects.launch_missing_default_profile:
+  en: "The user profile directory is unavailable."
+  zh-CN: "无法取得用户 profile 目录。"
+projects.external_invalid_path:
+  en: "The incoming path is invalid or too long."
+  zh-CN: "收到的路径无效或过长。"
+projects.external_absolute_path:
+  en: "The incoming project or file path must be absolute."
+  zh-CN: "收到的项目或文件路径必须是绝对路径。"
+projects.external_delivery_failed:
+  en: "The running application did not confirm delivery. Retry after it responds or exits. %{details}"
+  zh-CN: "正在运行的应用未确认接收请求。请等待其响应或退出后重试。%{details}"
+projects.external_frame_quota:
+  en: "The open request or endpoint information exceeds the size limit."
+  zh-CN: "打开请求或应用端点信息超出大小限制。"
+projects.external_randomness:
+  en: "The system could not prepare a private request session: %{details}."
+  zh-CN: "系统无法准备私有请求会话：%{details}。"
+projects.external_worker:
+  en: "The application could not start receiving project requests."
+  zh-CN: "应用无法启动项目请求接收服务。"
+projects.external_invalid_session:
+  en: "The request does not belong to the current application session."
+  zh-CN: "请求不属于当前应用会话。"
+projects.external_queue_busy:
+  en: "The application cannot accept more requests right now. Please retry shortly."
+  zh-CN: "应用暂时无法接收更多请求，请稍后重试。"
+projects.external_dispatch_exited:
+  en: "The application exited before handling the open request. Please retry."
+  zh-CN: "应用在处理打开请求前已退出，请重试。"
+projects.external_dispatch_expired:
+  en: "The open request was not handled in time. Please retry."
+  zh-CN: "打开请求未能及时处理，请重试。"
+projects.external_endpoint_unsupported:
+  en: "The running application's request endpoint is unsupported. Restart it and try again."
+  zh-CN: "不支持正在运行的应用端点，请重启应用后重试。"

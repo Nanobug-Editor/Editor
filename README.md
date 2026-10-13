@@ -18,7 +18,7 @@ The native plugin manager reads the [reviewed marketplace](https://github.com/T-
 
 ## Installation
 
-Nanobug is under active development. On Windows, run `Nanobug-Setup-<version>-x64.exe` to install for your user account. The installer creates a Start menu entry, offers an optional desktop shortcut, and registers an uninstaller. It installs the program, icon and host licenses under `%LOCALAPPDATA%\Programs\Nanobug`; Rust and Cargo are not required to use them.
+Nanobug is under active development. On Windows, run `Nanobug-Setup-<version>-x64.exe` to install for your user account. The installer creates a Start menu entry, offers an optional desktop shortcut, and registers an uninstaller. A separate option, checked on first installation, adds **Open with Nanobug** to folder and folder background menus; upgrades retain your choice. On Windows 11, these entries may appear under **Show more options**. It installs the program, icon and host licenses under `%LOCALAPPDATA%\Programs\Nanobug`; Rust and Cargo are not required to use them.
 
 Exit Nanobug before installing an update or uninstalling. Settings, history, and installed plugin data in the existing `MeEditor` directories are preserved. Windows installers include English and Simplified Chinese.
 
@@ -67,6 +67,8 @@ cargo run --release -- C:\path\to\project
 Debug builds are unoptimized; window movement and editing may be slower. Use Release for everyday evaluation.
 
 Starting without a path opens the project home. Choose **Open folder** or a recent project; a folder needs no Git repository or project file. A new project asks for trust or restricted editing, while existing local choices are retained. **Close project** returns the same window to the home after saving or discarding changes and confirming any running programs. Cancelling or a save failure keeps the project open. Reopening restores saved tabs and layout without restarting programs.
+
+Opening another project keeps the current project running in its own window. Reopening the same directory activates its existing window, including requests from File Explorer or another ordinary launch. An argument-free second launch reuses or opens a home. **Quit application** gathers every window's decisions; any cancellation keeps all windows available. Portable runs accept the same directory/file arguments without registering Explorer menus. Use `Nanobug.exe --profile "<separate profile directory>" -- "<project or file>"` for an isolated GUI profile; plugin tooling and explicit development instances retain their independent startup behavior.
 
 The six workspace crates cover the application, document core, platform integration, plugin schema, public protocol, and plugin runtime. Official plugin sources live in the independent [X-for-Nanobug repositories](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/registry); fixed test-only Package inputs live in `crates/plugin-runtime/tests/fixtures/packages/`; native packaging configuration and instructions live in `installer/`. See the [maintainer documentation index](docs/README.md) for details.
 
