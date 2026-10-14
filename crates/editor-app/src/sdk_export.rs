@@ -173,6 +173,10 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../plugin-protocol/src/ui/controls.rs"),
     ),
     (
+        "src/ui/styles.rs",
+        include_bytes!("../../plugin-protocol/src/ui/styles.rs"),
+    ),
+    (
         "Cargo.toml",
         include_bytes!("../../plugin-protocol/Cargo.toml"),
     ),
