@@ -27,7 +27,7 @@
 | `crates/plugin-schema` | 稳定声明式插件格式与校验 |
 | `crates/plugin-protocol` | 公开版本化能力、消息、UI、WIT 与访客 SDK 契约 |
 | `crates/plugin-runtime` | 包验证、WASM 隔离、资源与权限、实例生命周期和事务 |
-| 独立 `*-for-Nanobug` 仓库 | 官方插件源码、资源、独立构建与 Release；来源见市场 registry |
+| `Nanobug-Editor` 组织的独立插件仓库 | 官方插件源码、资源、独立构建与 Release；来源见市场 registry |
 | `crates/plugin-runtime/tests/fixtures/` | 固定 Package/SDK 测试输入及版本/摘要账本，不进入宿主发行或 SDK |
 | `installer/` | 原生安装器配置与直接调用工具的打包说明 |
 | `docs/` | 分类文档入口；项目基线、插件系统、UI 调研和协作约定（AI 与维护者工作面，不发布为站点） |
@@ -50,7 +50,7 @@
 
 ## 插件平台边界
 
-- 插件市场的现行范围、工单与发布状态以 [Nanobug-Plugin-Marketplace](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/docs) 为准。该任务已确认官方拆仓、无随附发行和示例源码删除；保留公开能力、用户既有安装/数据及固定测试覆盖，不能以历史随附规则恢复自动推荐。
+- 插件市场的现行范围、工单与发布状态以 [Nanobug-Plugin-Marketplace](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/docs) 为准。该任务已确认官方拆仓、无随附发行和示例源码删除；保留公开能力、用户既有安装/数据及固定测试覆盖，不能以历史随附规则恢复自动推荐。
 
 - **所有宿主 API 必须是面向全部插件公开、可复用的通用能力，不由单个插件独占。** 插件负责业务策略，宿主提供通用机制；接口不足时先抽象可复用的能力并扩展公开契约，不为某个插件或类似功能重复设计专属 API。所有插件在相同能力协商与权限条件下使用这些接口。
 - **在已有公开能力范围内，新增、替换、禁用和移除插件不得要求修改宿主代码。** 宿主不得按插件 ID、语言名称或服务器名称执行专属业务分支；新增基础能力才扩展宿主 API。

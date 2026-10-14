@@ -64,7 +64,7 @@ HTML、JavaScript 的 `native/server.cjs` 是已构建的分发资源；共享�
 ```powershell
 # 锁定依赖在忽略的构建目录安装，不调用仓库或存档脚本。
 $packageName = 'html' # 另一个项目为 javascript。
-$project = (Resolve-Path '../HTML-for-Nanobug').Path # JavaScript 使用 ../JavaScript-for-Nanobug。
+$project = (Resolve-Path '../HTML').Path # JavaScript 使用 ../JavaScript。
 $buildDir = Join-Path $PWD "target/language-services/$packageName"
 New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
 Copy-Item -LiteralPath "$project/service/package.json", "$project/service/package-lock.json", "$project/service/server.cjs" -Destination $buildDir

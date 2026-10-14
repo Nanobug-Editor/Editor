@@ -2,7 +2,7 @@
 
 本目录索引实际维护的插件资料。跨插件平台方案放在本目录的 specs、tickets 与 verification；插件自身的历史专题资料保留在对应包内，不复制正文或继承其他任务的完成状态。
 
-- [独立插件市场规格与工单](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
+- [独立插件市场规格与工单](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
 - [插件管理器共用布局](specs/plugin-manager-shared-layout.md)、[2026-10-13 验收记录](verification/plugin-manager-shared-layout-2026-10-13.md)：已安装与市场共用窗口框架，搜索框内置左侧筛选，详情按数据分区；浏览版本与实际安装实例的操作目标分别明确。实现与测试记录不继承市场服务工单的交付状态。
 - [已验收的 Rust 合并方案](specs/rust-plugin-consolidation.md)与[历史验收](verification/rust-plugin-consolidation-2026-10-09.md)：市场工单 03 的外部准入依据；迁移与本次修复的结果另记，不将其他任务成果计为新实现。
 - [市场工单 03 宿主集成记录](verification/plugin-marketplace-03-2026-10-11.md)：七个新命名仓库、稳定 Release、完整 ZIP 摘要、七包原生安装与代表功能已验证；PR #6 已按本批授权合并，正式 Pages、统计及客户端线上安装验收通过。
@@ -17,7 +17,7 @@
 - [插件开发工作区整合主工作区改动](verification/plugin-development-main-integration.md)：2026-10-08 用户授权整合全部未提交改动，包含两侧备份、冲突处理与重新验证；未提交或推送。
 - [缺失项目描述修复与主工作区 Release 交付](verification/plugin-development-main-delivery.md)：截图错误的回归测试、主工作区整合与 Release 启动证据。
 
-- [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/T-miracle/Nanobug/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-12，七单全部验收交付、普通提交和推送，#93–#99均已读回closed/completed。最后07源码交付 `8ee28952014a6533253fc83e17c3410d88a76e48` 已推送核对，最终两轴未解决项均0；源码SDK与主分支整合的历史输入见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。稳定核心＋实验扩展，AI暂不实现，父设计议题#92保持开放且未修改。
+- [基础社区生态：通用插件 API 完善方案](specs/plugin-api-community-foundation.md) / [#92](https://github.com/Nanobug-Editor/Editor/issues/92)、[七张实施工单 #93–#99 与测试安排](tickets/plugin-api-community-foundation/README.md)、[实施与验收入口](verification/plugin-api-community-foundation/README.md)：2026-10-12，七单全部验收交付、普通提交和推送，#93–#99均已读回closed/completed。最后07源码交付 `8ee28952014a6533253fc83e17c3410d88a76e48` 已推送核对，最终两轴未解决项均0；源码SDK与主分支整合的历史输入见[恢复记录](verification/plugin-api-community-foundation/2026-10-11-resume.md)。稳定核心＋实验扩展，AI暂不实现，父设计议题#92保持开放且未修改。
 - [01 / 02 普通合并连接验证](verification/plugin-api-community-foundation/01-02-integration.md)：真实 SDK 菜单、精确左文档版本、焦点退役回归及新增原生连接已验证，双轴未解决项均为 0；为 03 / 05 提供已修正整合点。
 - [03 工作区计划与会话恢复验收](verification/plugin-api-community-foundation/03-workspace-transactions.md)、[Windows 原生记录](verification/plugin-api-community-foundation/03-workspace-transactions-native.md)：真实脚手架与分页转换消费者、混合脏文本与磁盘计划、取消及整组 Undo、精确 Native Save、Dark/字号布局和正常停止通过；既有 Settings UIA 崩溃及最终交付状态按记录核对。
 - [04 多来源诊断与共享语言结果验收](verification/plugin-api-community-foundation/04-diagnostics-and-language.md)：独立检查器、直接结果与标准 LSP 的原生呈现、事务和资源退役已验收交付，#96 已读回关闭；49 文件源码 SDK、六包、17 项连接回归、规定门禁及两语言生产键盘流程通过，本机默认快捷键限制保留在记录中。
@@ -25,7 +25,7 @@
 - [07 按需激活、热配置与兼容升级验收](verification/plugin-api-community-foundation/07-activation-and-compatibility.md)、[Windows 原生记录](verification/plugin-api-community-foundation/native-07.md)、[双轴审查](verification/plugin-api-community-foundation/07-activation-and-compatibility-review.md)：实际新旧SDK、按需启动、配置热应用、退役清理与T35包组合通过；Runtime19、额外Query1、App12、最终三门禁与Windows新增原生交互已实际通过，两轴均零未解决项；源码交付已推送核对，#99已关闭。
 - [05 通用树与编辑器装饰验收](verification/plugin-api-community-foundation/05-trees-and-decorations.md)、[Windows 原生记录](verification/plugin-api-community-foundation/05-trees-and-decorations-native.md)：四个独立正式包、菜单参数、编辑/Undo、屏外标记撤销、树开发重载与失败恢复通过；独立双轴归零、交付分支 `6940380` 已推送核对，#97 已读回关闭。集成点的资源和 SDK 联合验证另记。
 - [通用插件接口完整性审计](specs/plugin-api-ecosystem-audit/README.md)：2026-10-08 的 58 项历史调查；语言接口已随后整合，当前实施范围见基础社区生态方案，不等于所有检查项获准实施。
-- [XML 插件与通用语言编辑能力方案](specs/xml-language-tools.md) / [#72](https://github.com/T-miracle/Editor/issues/72)，[三个实施工单 #73–#75](tickets/xml-language-tools/README.md)：全部验收、推送并核对关闭；包含可替换格式化、XML/HTML 标签编辑及宿主大纲与停靠，父设计议题保持不变。
+- [XML 插件与通用语言编辑能力方案](specs/xml-language-tools.md) / [#72](https://github.com/Nanobug-Editor/Editor/issues/72)，[三个实施工单 #73–#75](tickets/xml-language-tools/README.md)：全部验收、推送并核对关闭；包含可替换格式化、XML/HTML 标签编辑及宿主大纲与停靠，父设计议题保持不变。
 - [XML 语言工单 01 验收记录](verification/xml-language-tools/01-xml-language.md)：记录实际包、原生输入与服务结果，当前状态以记录为准。
 - [格式化与标签编辑工单 02 验收记录](verification/xml-language-tools/02-format-and-tags.md)：独立提供者、XML/HTML 配对编辑及原生输入顺序。
 - [宿主大纲工单 03 验收记录](verification/xml-language-tools/03-outline-and-docking.md)：结构与图标契约、原生树、折叠及四向停靠恢复。
@@ -48,32 +48,32 @@
 - [工单 05：最终契约与集成验收](verification/plugin-ui-decoupling/05-integration-and-contract.md)。
 - [本地 main 合并与原有改动整合](verification/plugin-ui-decoupling/06-local-main-merge.md)：合并提交 `db53d2d`，保留合并前未提交内容与备份，按用户要求暂不推送；当前工作区的验证结果与环境限制见该记录。
 
-- [Markdown 使用说明](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/README.md)、[总方案](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/spec.md)、[执行工单](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/tickets/README.md)、[逐单验收](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/README.md)、[AI 执行入口](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/AGENTS.md)。
+- [Markdown 使用说明](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/README.md)、[总方案](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/spec.md)、[执行工单](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/tickets/README.md)、[逐单验收](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/README.md)、[AI 执行入口](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/AGENTS.md)。
 - [插件平台规格](specs/plugin-api-platform.md)、[平台实施工单](tickets/README.md)、[运行与构建](runtime-plugins.md)、[公开协议与 SDK](../../crates/plugin-protocol/README.md)。
 - [插件管理与日志方案](specs/plugin-management-logs.md)、[对应工单](tickets/plugin-management-logs/README.md)、[管理页验收](verification/plugin-management-tabs-verification.md)。
-- [运行、调试与构建父议题](https://github.com/T-miracle/Editor/issues/48)、[接手终验与工单处置](verification/run-debug-build-completion-2026-10-06.md)、[B1 UI 修复与复验](verification/run-debug-build-ui-fix-2026-10-06.md)、[历史验收](verification/run-debug-build.md)、[整批初审记录（2026-10-05）](verification/run-debug-build-review-2026-10-05.md)。当前进度以终验及复验记录为准。
+- [运行、调试与构建父议题](https://github.com/Nanobug-Editor/Editor/issues/48)、[接手终验与工单处置](verification/run-debug-build-completion-2026-10-06.md)、[B1 UI 修复与复验](verification/run-debug-build-ui-fix-2026-10-06.md)、[历史验收](verification/run-debug-build.md)、[整批初审记录（2026-10-05）](verification/run-debug-build-review-2026-10-05.md)。当前进度以终验及复验记录为准。
 - [本批调试器、受控传输与单目标握手决定](specs/run-debug-build-debugger.md)。
 - [构建与运行配置 B2：IDEA 参考设计提案](specs/run-config-idea-design.md)（用户已选 A / 方案 1）；[B3：双栏简洁版](specs/run-config-simple-design.md)（已落地原生弹窗，支持插件默认目标）；[B3 实现与验收](verification/run-config-simple-2026-10-06.md)。设计图与真实验证的范围在对应记录中区分。
-- [运行配置重构：插件模板、原生表单与配置树](specs/run-config-plugin-tree.md)／[规格 #67](https://github.com/T-miracle/Editor/issues/67)（2026-10-07 产品基线及测试入口已确认）。新规格替代 B3 的表单、目录组织、提交和存储约定，不将旧验收计作新功能通过。
+- [运行配置重构：插件模板、原生表单与配置树](specs/run-config-plugin-tree.md)／[规格 #67](https://github.com/Nanobug-Editor/Editor/issues/67)（2026-10-07 产品基线及测试入口已确认）。新规格替代 B3 的表单、目录组织、提交和存储约定，不将旧验收计作新功能通过。
 - [运行配置重构实施工单](tickets/run-config-plugin-tree/README.md)：4 个端到端切片 #68–#71 的实现与验收均完成，普通提交及 GitHub 交付记录见各工单。30 个验收场景的实际包、Windows 与真实调试证据见 [验收记录](verification/run-config-plugin-tree.md)。2026-10-07 用户另行授权合并主分支并推送，独立候选的冲突处理和验证见 [主分支集成记录](verification/run-config-main-merge-2026-10-07.md)。
 
 Windows 原生验收已通过；macOS/Linux 未实测或交叉构建。七个正式插件包已在本地构建和验收，未发布 GitHub Release。完整结果以[最终契约验收](verification/plugin-api-contract-verification.md)为准。
 
 ## 方案、工单与使用文档
 
-新增方案：[插件 UI 解耦与文件显示布局总方案](specs/plugin-ui-decoupling.md)，父议题 [#61](https://github.com/T-miracle/Editor/issues/61) 保持 open；[5 张粗粒度工单 #62–#66](tickets/plugin-ui-decoupling/README.md) 已完成并关闭，[发布记录](tickets/plugin-ui-decoupling/publication.json)保存映射。保留仅列文件的 Tab 栏，插件安排中心布局并可省略原生编辑面板；左侧窗口按钮组与右侧插件工具按钮组分离，图标、功能和显示偏好由插件提供，同工作区同类文件一起切换。[工单 01 的 Image 插件升级](tickets/plugin-ui-decoupling/01-file-views.md)已实施：由现有 SVG 扩展，SVG 保留编辑，其他支持图片只读预览，默认原尺寸、超区等比缩小。分支交付证据与本地 main 合并验证分别记录，不把原工作区的未提交内容计作分支成果。
+新增方案：[插件 UI 解耦与文件显示布局总方案](specs/plugin-ui-decoupling.md)，父议题 [#61](https://github.com/Nanobug-Editor/Editor/issues/61) 保持 open；[5 张粗粒度工单 #62–#66](tickets/plugin-ui-decoupling/README.md) 已完成并关闭，[发布记录](tickets/plugin-ui-decoupling/publication.json)保存映射。保留仅列文件的 Tab 栏，插件安排中心布局并可省略原生编辑面板；左侧窗口按钮组与右侧插件工具按钮组分离，图标、功能和显示偏好由插件提供，同工作区同类文件一起切换。[工单 01 的 Image 插件升级](tickets/plugin-ui-decoupling/01-file-views.md)已实施：由现有 SVG 扩展，SVG 保留编辑，其他支持图片只读预览，默认原尺寸、超区等比缩小。分支交付证据与本地 main 合并验证分别记录，不把原工作区的未提交内容计作分支成果。
 
-新增方案：[运行、调试与构建总方案](specs/run-debug-build.md)，已发布为 [#48](https://github.com/T-miracle/Editor/issues/48)，对应 [12 张工单 #49–#60](tickets/run-debug-build/README.md)（产品范围、B1 紧凑表单、拆分与测试接缝均已确认，待实施；16 条原生阻塞边已核对）。覆盖顶栏统一配置／会话入口、独立配置并行、顺序启动前步骤、Rust 完整启动调试及公开执行／调试接口。
+新增方案：[运行、调试与构建总方案](specs/run-debug-build.md)，已发布为 [#48](https://github.com/Nanobug-Editor/Editor/issues/48)，对应 [12 张工单 #49–#60](tickets/run-debug-build/README.md)（产品范围、B1 紧凑表单、拆分与测试接缝均已确认，待实施；16 条原生阻塞边已核对）。覆盖顶栏统一配置／会话入口、独立配置并行、顺序启动前步骤、Rust 完整启动调试及公开执行／调试接口。
 
-Markdown 插件：[总方案](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/spec.md)、[工单目录](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/tickets/README.md)、[AI 执行入口](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/AGENTS.md)。完整宿主能力与 Markdown 0.11.1 已合回主项目 `main`；SVG 0.3.0 同样采用底栏三个视图按钮。主目录构建、原生回归及发行文件见[主项目集成验收](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/12-main-project-integration.md)。原 0.11.0 工单及完整验收保留历史证据，早期[仅迁入源码的记录](verification/markdown-source-repackage.md)不代表后续宿主集成状态。
+Markdown 插件：[总方案](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/spec.md)、[工单目录](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/tickets/README.md)、[AI 执行入口](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/AGENTS.md)。完整宿主能力与 Markdown 0.11.1 已合回主项目 `main`；SVG 0.3.0 同样采用底栏三个视图按钮。主目录构建、原生回归及发行文件见[主项目集成验收](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/12-main-project-integration.md)。原 0.11.0 工单及完整验收保留历史证据，早期[仅迁入源码的记录](verification/markdown-source-repackage.md)不代表后续宿主集成状态。
 
-后续缺陷：[源码区只有一行的布局修复](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/13-source-editor-height.md)，直接验证工具栏下方的实际输入高度、空文档、SVG、主题与窗口重排。
+后续缺陷：[源码区只有一行的布局修复](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/13-source-editor-height.md)，直接验证工具栏下方的实际输入高度、空文档、SVG、主题与窗口重排。
 
-后续更新：[Markdown 0.12.0 图标工具栏与首次滚动修复](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/14-icon-toolbar-and-first-scroll.md)，采用统一 SVG 与 29 px 单行工具栏，底栏面板图标移至同步开关右侧，验证同版本启动刷新保留手动滚动位置。
+后续更新：[Markdown 0.12.0 图标工具栏与首次滚动修复](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/14-icon-toolbar-and-first-scroll.md)，采用统一 SVG 与 29 px 单行工具栏，底栏面板图标移至同步开关右侧，验证同版本启动刷新保留手动滚动位置。
 
-当前后续范围：[Markdown 0.13.0 GitHub 配色、六级标题、工具栏显隐与小幅滚动](https://github.com/T-miracle/Markdown-for-Nanobug/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/15-github-headings-toolbar-scroll.md)。底栏图标改为仅控制顶部工具栏，旧记录中面板开关语义保留为历史说明。
+当前后续范围：[Markdown 0.13.0 GitHub 配色、六级标题、工具栏显隐与小幅滚动](https://github.com/Nanobug-Editor/Markdown/blob/31516790679c2ab591105d11e6fd15e974b72505/docs/verification/15-github-headings-toolbar-scroll.md)。底栏图标改为仅控制顶部工具栏，旧记录中面板开关语义保留为历史说明。
 
-已完成批次：[插件管理与运行日志改造方案](specs/plugin-management-logs.md)（[#22](https://github.com/T-miracle/Editor/issues/22) 已于 2026-10-05 核对完成并关闭），对应[3 张实施工单](tickets/plugin-management-logs/README.md)，#23–#25 均已完成并关闭。验收见[分栏验证](verification/plugin-management-tabs-verification.md)、[运行日志验证](verification/plugin-runtime-logs-verification.md)和[底栏摘要验证](verification/plugin-status-popover-verification.md)；后续本地日期与日志降序修正也已通过[补充验收](verification/plugin-log-time-order-verification.md)。本批次独立于下表已完成的平台重构。
+已完成批次：[插件管理与运行日志改造方案](specs/plugin-management-logs.md)（[#22](https://github.com/Nanobug-Editor/Editor/issues/22) 已于 2026-10-05 核对完成并关闭），对应[3 张实施工单](tickets/plugin-management-logs/README.md)，#23–#25 均已完成并关闭。验收见[分栏验证](verification/plugin-management-tabs-verification.md)、[运行日志验证](verification/plugin-runtime-logs-verification.md)和[底栏摘要验证](verification/plugin-status-popover-verification.md)；后续本地日期与日志降序修正也已通过[补充验收](verification/plugin-log-time-order-verification.md)。本批次独立于下表已完成的平台重构。
 
 启动修正：[Windows 插件管理器访问拒绝验收](verification/plugin-manager-access-verification.md)（2026-10-04 已完成）。确认仓库继承的 Low 完整性标签导致 `os error 5`，本机已恢复正常目录标签并移除临时启动包装；直接 `cargo run` 与 `cargo run --release` 均通过原生验收，安装状态保持完整。
 
@@ -116,15 +116,15 @@ Markdown 插件：[总方案](https://github.com/T-miracle/Markdown-for-Nanobug/
 ## 插件包说明
 
 - [内置终端、运行与调试](specs/builtin-terminal-run-debug.md)：终端不再独立发行插件包；语言规则和调试器仍通过通用插件接口接入。
-- [Image for Nanobug](https://github.com/T-miracle/Image-for-Nanobug)（安装 ID 为 `svg`）
-- [Rust for Nanobug](https://github.com/T-miracle/Rust-for-Nanobug)
-- [TOML for Nanobug](https://github.com/T-miracle/TOML-for-Nanobug)
-- [HTML for Nanobug](https://github.com/T-miracle/HTML-for-Nanobug)
-- [JavaScript for Nanobug](https://github.com/T-miracle/JavaScript-for-Nanobug)
-- [XML for Nanobug](https://github.com/T-miracle/XML-for-Nanobug)
-- [Markdown for Nanobug](https://github.com/T-miracle/Markdown-for-Nanobug)
-- [Markdown 输入与增量预览验收](https://github.com/T-miracle/Markdown-for-Nanobug/blob/main/docs/verification/17-incremental-input-viewport.md)（0.15.0：用户实测输入仍卡顿，性能验收重新打开）
-- [Markdown 源码输入与过期视口通知](https://github.com/T-miracle/Markdown-for-Nanobug/blob/main/docs/verification/18-source-input-and-stale-viewport.md)（宿主跟进修复与实测限制）
+- [Image for Nanobug](https://github.com/Nanobug-Editor/Image)（安装 ID 为 `svg`）
+- [Rust for Nanobug](https://github.com/Nanobug-Editor/Rust)
+- [TOML for Nanobug](https://github.com/Nanobug-Editor/TOML)
+- [HTML for Nanobug](https://github.com/Nanobug-Editor/HTML)
+- [JavaScript for Nanobug](https://github.com/Nanobug-Editor/JavaScript)
+- [XML for Nanobug](https://github.com/Nanobug-Editor/XML)
+- [Markdown for Nanobug](https://github.com/Nanobug-Editor/Markdown)
+- [Markdown 输入与增量预览验收](https://github.com/Nanobug-Editor/Markdown/blob/main/docs/verification/17-incremental-input-viewport.md)（0.15.0：用户实测输入仍卡顿，性能验收重新打开）
+- [Markdown 源码输入与过期视口通知](https://github.com/Nanobug-Editor/Markdown/blob/main/docs/verification/18-source-input-and-stale-viewport.md)（宿主跟进修复与实测限制）
 - [冻结 Package/SDK 验收夹具](../../crates/plugin-runtime/tests/fixtures/packages/README.md)：保留示例覆盖，不属于应用、安装器、SDK 或市场发行目录。
 - [插件市场 04 删除盘点](verification/plugin-marketplace-04-inventory-2026-10-11.md)：源码迁移与受影响消费者的对应关系。
 - [插件市场 04 最终实施与验收](verification/plugin-marketplace-04-2026-10-11.md)：无随附产物、686 项应用和 188 项实际 WASM 回归、失败历史及 M01–M26 汇总；GitHub 交付状态以所链接 PR 和工单读回为准。

@@ -5,11 +5,10 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io::Read, sync::Arc, time::Duration};
 
-/// The official reviewed registry; arbitrary user-provided market endpoints are not supported.
-pub const CATALOG_URL: &str = "https://t-miracle.github.io/Nanobug-Plugin-Marketplace/catalog.json";
+/// The organization's official reviewed registry; arbitrary user-provided market endpoints are not supported.
+pub const CATALOG_URL: &str = "https://nanobug-editor.github.io/Plugin-Marketplace/catalog.json";
 /// Advisory counts are fetched separately so statistics failures cannot grant or revoke installs.
-pub const STATISTICS_URL: &str =
-    "https://t-miracle.github.io/Nanobug-Plugin-Marketplace/stats.json";
+pub const STATISTICS_URL: &str = "https://nanobug-editor.github.io/Plugin-Marketplace/stats.json";
 const MAX_CATALOG: usize = 16 * 1024 * 1024;
 mod statistics;
 pub use statistics::{PluginStatistics, Statistics, VersionStatistics};

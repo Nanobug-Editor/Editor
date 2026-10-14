@@ -1,8 +1,8 @@
 # 议题跟踪器：GitHub
 
-用户于 2026-10-02 确认采用 `T-miracle/Editor` 的 GitHub Issues，并批准插件平台 API 的 20 张工单拆分。
+用户于 2026-10-02 确认采用 `Nanobug-Editor/Editor` 的 GitHub Issues，并批准插件平台 API 的 20 张工单拆分。
 
-仓库：https://github.com/T-miracle/Editor
+仓库：https://github.com/Nanobug-Editor/Editor
 
 ## 发布与读取
 
@@ -31,7 +31,7 @@
 
 ## 当前插件平台方案
 
-- [设计基线 #1](https://github.com/T-miracle/Editor/issues/1)
+- [设计基线 #1](https://github.com/Nanobug-Editor/Editor/issues/1)
 - 实施工单 #2–#21，工单序号 01–20 与 GitHub issue 编号不同。
 - [本地目录与依赖图](../plugins/tickets/README.md)
 - 发布记录与真实 ID 映射保存在本地工单目录的 publication.json。

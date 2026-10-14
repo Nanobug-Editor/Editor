@@ -8,15 +8,19 @@
 
 Nanobug is a native desktop code editor built with Rust and GPUI, with Windows as its primary platform.
 
+The editor, reviewed marketplace and official plugins are maintained in the [Nanobug organization](https://github.com/Nanobug-Editor). The editor repository is named `Editor`; plugin repositories use their language or feature names.
+
 The built-in terminal uses upstream Alacritty and shares one bottom panel with build, run and debug sessions; no terminal plugin installation is required. Independent plugins provide language support, Markdown and image previews, build rules and debuggers. Official and third-party plugins use the same public interfaces. Fresh installations contain no plugins or automatic recommendations: plain-text editing, the native terminal and the default theme are available immediately.
 
 The XML plugin provides schema assistance, completion, formatting, paired tag editing, and a document outline. HTML and JavaScript provide independent native language services. New workspaces start with the outline hidden; open it from the bottom window controls.
 
-The native plugin manager reads the [reviewed marketplace](https://github.com/T-miracle/Nanobug-Plugin-Marketplace). Browse historical releases and changelogs, choose a compatible version for first installation, and explicitly install higher compatible versions. A red dot on the plugin button indicates available upgrades. Every download must match the reviewed ZIP SHA-256; updates that request new permissions require consent. Catalog failures leave cached browsing available and disable market installation until a successful refresh. Download counts are advisory and retain their measurement time during outages.
+The native plugin manager reads the [reviewed marketplace](https://github.com/Nanobug-Editor/Plugin-Marketplace). Browse historical releases and changelogs, choose a compatible version for first installation, and explicitly install higher compatible versions. A red dot on the plugin button indicates available upgrades. Every download must match the reviewed ZIP SHA-256; updates that request new permissions require consent. Catalog failures leave cached browsing available and disable market installation until a successful refresh. Download counts are advisory and retain their measurement time during outages.
 
-[Getting started](#developing-nanobug) · [Plugin SDK sources](crates/plugin-protocol/src/lib.rs) · [Maintainer documents](docs/README.md) · [Report an issue](https://github.com/T-miracle/Editor/issues)
+[Getting started](#developing-nanobug) · [Plugin SDK sources](crates/plugin-protocol/src/lib.rs) · [Maintainer documents](docs/README.md) · [Report an issue](https://github.com/Nanobug-Editor/Editor/issues)
 
 ## Installation
+
+Build the current source to use the organization's marketplace endpoint. Binaries built before the organization migration still use the retired personal Pages address; installed plugins, settings and private data remain on your machine.
 
 Nanobug is under active development. On Windows, run `Nanobug-Setup-<version>-x64.exe` to install for your user account. The installer creates a Start menu entry, offers an optional desktop shortcut, and registers an uninstaller. A separate option, checked on first installation, adds **Open with Nanobug** to folder and folder background menus; upgrades retain your choice. On Windows 11, these entries may appear under **Show more options**. It installs the program, icon and host licenses under `%LOCALAPPDATA%\Programs\Nanobug`; Rust and Cargo are not required to use them.
 
@@ -70,7 +74,7 @@ Starting without a path opens the project home. Choose **Open folder** or a rece
 
 Opening another project keeps the current project running in its own window. Reopening the same directory activates its existing window, including requests from File Explorer or another ordinary launch. An argument-free second launch reuses or opens a home. **Quit application** gathers every window's decisions; any cancellation keeps all windows available. Portable runs accept the same directory/file arguments without registering Explorer menus. Use `Nanobug.exe --profile "<separate profile directory>" -- "<project or file>"` for an isolated GUI profile; plugin tooling and explicit development instances retain their independent startup behavior.
 
-The six workspace crates cover the application, document core, platform integration, plugin schema, public protocol, and plugin runtime. Official plugin sources live in the independent [X-for-Nanobug repositories](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/registry); fixed test-only Package inputs live in `crates/plugin-runtime/tests/fixtures/packages/`; native packaging configuration and instructions live in `installer/`. See the [maintainer documentation index](docs/README.md) for details.
+The six workspace crates cover the application, document core, platform integration, plugin schema, public protocol, and plugin runtime. Official plugin sources live in the independent [plugin repositories in the Nanobug organization](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/registry); fixed test-only Package inputs live in `crates/plugin-runtime/tests/fixtures/packages/`; native packaging configuration and instructions live in `installer/`. See the [maintainer documentation index](docs/README.md) for details.
 
 The Cargo package remains `editor-app`. Existing `MeEditor` data directories, `ME_EDITOR_*` environment variables, and persisted command identifiers are retained to preserve settings, history, and installed plugins.
 
@@ -85,19 +89,19 @@ In **Edit configurations → Add → Nanobug**, choose **Plugin Packaging** or *
 cargo build -p editor-app
 
 # Build and ZIP a plugin, using its project root as output.
-.\target\debug\editor-app.exe --plugin-package ../Rust-for-Nanobug
+.\target\debug\editor-app.exe --plugin-package ../Rust
 
 # Batch packaging; relative --output is resolved from the current directory.
-.\target\debug\editor-app.exe --plugin-package ../TOML-for-Nanobug ../HTML-for-Nanobug --output target/plugin-build
+.\target\debug\editor-app.exe --plugin-package ../TOML ../HTML --output target/plugin-build
 
 # Prepare a directory candidate without ZIP or launching a development window.
-.\target\debug\editor-app.exe --plugin-build ../Rust-for-Nanobug
+.\target\debug\editor-app.exe --plugin-build ../Rust
 
 # Prepare the development instance; add explicit --grant arguments for the manifest's declared permissions.
-.\target\debug\editor-app.exe --plugin-dev ../Rust-for-Nanobug --watch --grant workspace.read --grant process.exec --grant ui.panels --grant process.service.analysis --grant process.service.adapter --grant dependencies.prepare
+.\target\debug\editor-app.exe --plugin-dev ../Rust --watch --grant workspace.read --grant process.exec --grant ui.panels --grant process.service.analysis --grant process.service.adapter --grant dependencies.prepare
 
 # Low-level independent Cargo builds still use the host's embedded SDK.
-.\target\debug\editor-app.exe --plugin-cargo ../Rust-for-Nanobug/Cargo.toml check --target wasm32-wasip2
+.\target\debug\editor-app.exe --plugin-cargo ../Rust/Cargo.toml check --target wasm32-wasip2
 
 # Export SDK source and protocol resources (no Markdown) for an external toolchain.
 .\target\debug\editor-app.exe --export-plugin-sdk .\target\sdk-export
@@ -105,11 +109,11 @@ cargo build -p editor-app
 
 For CLI development, send `reload` or `stop` on standard input. `--workspace` selects a test workspace (the plugin project by default); `--profile` selects isolated data. Repeat `--grant <permission>` for the permissions declared in the manifest. New permissions require stopping and authorizing another run; changing the plugin ID also requires restarting the configuration. Missing compilers/SDK targets are reported and never installed automatically. Native build steps declare their exact OS/architecture; foreign native artifacts are rejected. Windows is verified; macOS/Linux use portable paths and process interfaces but remain unverified.
 
-Install or update generated ZIPs in the plugin manager and approve their declared permissions. Interface usage is documented in [SDK source comments](crates/plugin-protocol/src/lib.rs); debugger setup is described in the [Rust plugin README](https://github.com/T-miracle/Rust-for-Nanobug). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
+Install or update generated ZIPs in the plugin manager and approve their declared permissions. Interface usage is documented in [SDK source comments](crates/plugin-protocol/src/lib.rs); debugger setup is described in the [Rust plugin README](https://github.com/Nanobug-Editor/Rust). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
 
 ## Contributing
 
-Use [GitHub Issues](https://github.com/T-miracle/Editor/issues) to report bugs or propose changes. Before editing, find the relevant specification and acceptance requirements in the [maintainer documentation index](docs/README.md).
+Use [GitHub Issues](https://github.com/Nanobug-Editor/Editor/issues) to report bugs or propose changes. Before editing, find the relevant specification and acceptance requirements in the [maintainer documentation index](docs/README.md).
 
 Basic checks for Rust changes:
 
