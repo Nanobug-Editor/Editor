@@ -1,6 +1,6 @@
 # 议题跟踪器：GitHub
 
-用户于 2026-10-02 确认采用 `Nanobug-Editor/Editor` 的 GitHub Issues，并批准插件平台 API 的 20 张工单拆分。
+用户于 2026-10-02 确认采用 `T-miracle/Editor` 的 GitHub Issues，并批准插件平台 API 的 20 张工单拆分。2026-10-14，该项目仓库迁入 `Nanobug-Editor/Editor`；议题及既有授权随原仓库保留。
 
 仓库：https://github.com/Nanobug-Editor/Editor
 
