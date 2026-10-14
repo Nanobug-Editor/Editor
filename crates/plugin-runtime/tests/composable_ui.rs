@@ -8,6 +8,84 @@ use std::io::{Cursor, Write};
 #[path = "composable_ui/icons.rs"]
 mod ui_icons;
 
+/// A real SDK guest must negotiate reusable presentation before its own view can be published.
+#[test]
+#[ignore = "opt-in real WASM/native integration; build the independent sdk-styles fixture through --plugin-package"]
+fn native_content_styles_require_negotiation_before_publication() {
+    for negotiated in [false, true] {
+        let mut files = Package::read(&test_packages::archive("sdk-styles-fixture"))
+            .unwrap()
+            .files;
+        if !negotiated {
+            let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
+            manifest["api"]["required"]
+                .as_object_mut()
+                .unwrap()
+                .remove("ui.styles");
+            files.insert(
+                "manifest.json".into(),
+                serde_json::to_vec(&manifest).unwrap(),
+            );
+        }
+        // Repack only the declaration; the guest publishes its real current-SDK view without assets.
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, bytes) in files {
+            archive
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(&bytes).unwrap();
+        }
+        let package = Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let mut manager =
+            Manager::open(directory.path().join("plugins"), Environment::default()).unwrap();
+        let result = manager.install(&package, package.manifest.permissions.clone());
+        if negotiated {
+            result.unwrap();
+            // Installation prepares metadata; showing the declared view is the public business demand.
+            let availability = manager.availability("sdk-styles-fixture").unwrap();
+            let demand = manager
+                .begin_demand(
+                    &availability,
+                    plugin_runtime::DemandReason::View("welcome".into()),
+                    60_000,
+                )
+                .unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            loop {
+                manager.poll();
+                if let plugin_runtime::plugin_protocol::api::RequestUpdate::Completed { result } =
+                    demand.status()
+                {
+                    result.unwrap();
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "native style view demand must finish"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            let document = &manager.live["sdk-styles-fixture"].views["welcome"];
+            assert_eq!(
+                document.root.id, "prose",
+                "the guest must publish its native style view"
+            );
+            assert_eq!(document.content_styles["prose"].font.size_px, Some(16.));
+        } else {
+            assert_eq!(
+                result
+                    .unwrap_err()
+                    .downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
+                    .unwrap()
+                    .code,
+                plugin_runtime::plugin_protocol::api::ErrorCode::CapabilityUnavailable
+            );
+            assert!(manager.live.is_empty());
+        }
+    }
+}
+
 /// Owned content defaults and adjustable native panes are independently negotiated before publication.
 #[test]
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]

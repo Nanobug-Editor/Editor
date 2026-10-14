@@ -38,13 +38,88 @@ pub(crate) fn rich_text_view(
     html: String,
     font_size: Pixels,
     colors: RichTextColors,
+    presentation: Option<&plugin_runtime::plugin_protocol::ui::ContentStyle>,
+    rem_size: Pixels,
     cx: &App,
 ) -> TextView {
     TextView::html(id, html)
-        .style(document_style(font_size, colors, cx))
+        .style(content_document_style(
+            font_size,
+            colors,
+            presentation,
+            rem_size,
+            cx,
+        ))
         .selectable(true)
         .on_link_click(|_, _, _, _| {})
         .image_source(|_| ImageSource::Custom(Arc::new(|_, _| None)))
+}
+
+/// Project bounded guest typography onto Base's public style seam, preserving selection and links.
+fn content_document_style(
+    font_size: Pixels,
+    colors: RichTextColors,
+    preset: Option<&plugin_runtime::plugin_protocol::ui::ContentStyle>,
+    rem_size: Pixels,
+    cx: &App,
+) -> TextViewStyle {
+    let border = colors.border;
+    let muted = colors.muted_foreground;
+    let foreground = colors.foreground;
+    let code_background = colors.code_background;
+    let mut style = document_style(font_size, colors, cx);
+    let Some(preset) = preset else {
+        return style;
+    };
+    if let Some(gap) = preset.paragraph_gap {
+        style = style.with_paragraph_gap(rems(gap * f32::from(font_size) / f32::from(rem_size)));
+    }
+    if !preset.headings.is_empty() {
+        let headings = preset.headings.clone();
+        style = style.with_heading(move |level| {
+            let heading = &headings[usize::from(level.clamp(1, 6) - 1)];
+            let size = font_size * heading.scale;
+            StyleRefinement::default()
+                .text_size(size)
+                .font_weight(gpui_kit::FontWeight(f32::from(heading.weight)))
+                .line_height(gpui_kit::relative(heading.line_height))
+                .pb(size * heading.padding_bottom)
+                .border_b(gpui_kit::px(heading.border_bottom))
+                .border_color(border)
+                .text_color(if heading.muted { muted } else { foreground })
+        });
+    }
+    if let Some(code) = &preset.code {
+        style = style.with_code_block(
+            StyleRefinement::default()
+                .bg(code_background)
+                .p(gpui_kit::px(code.padding))
+                .rounded(gpui_kit::px(code.radius))
+                .border(gpui_kit::px(code.border))
+                .border_color(border)
+                .text_size(font_size * code.scale)
+                .line_height(gpui_kit::relative(code.line_height)),
+        );
+    }
+    if let Some(edges) = preset.table_cell_padding {
+        let mut table = StyleRefinement::default().rounded(gpui_kit::px(0.));
+        table.overflow.x = Some(gpui_kit::Overflow::Scroll);
+        style = style
+            .with_table_cell(
+                StyleRefinement::default()
+                    .pt(gpui_kit::px(edges.top))
+                    .pr(gpui_kit::px(edges.right))
+                    .pb(gpui_kit::px(edges.bottom))
+                    .pl(gpui_kit::px(edges.left)),
+            )
+            .with_table(table)
+            .with_table_head(
+                StyleRefinement::default()
+                    .bg(gpui_kit::transparent_black())
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD),
+            );
+    }
+    style
 }
 
 /// Keep all native rich-text color roles, including inline code, on the same resolved palette.

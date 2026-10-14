@@ -50,6 +50,17 @@ impl PluginView {
                             matches!(node.kind, Kind::Row { .. }) && node.layout.wrap,
                             |v| v.flex_wrap(),
                         )
+                        .when_some(node.layout.align, |view, align| {
+                            // The public alignment is horizontal even when the container is a column.
+                            match (matches!(node.kind, Kind::Row { .. }), align) {
+                                (true, ui::Alignment::Start) => view.justify_start(),
+                                (true, ui::Alignment::Center) => view.justify_center(),
+                                (true, ui::Alignment::End) => view.justify_end(),
+                                (false, ui::Alignment::Start) => view.items_start(),
+                                (false, ui::Alignment::Center) => view.items_center(),
+                                (false, ui::Alignment::End) => view.items_end(),
+                            }
+                        })
                         .children(children)
                         .into_any_element()
                 }

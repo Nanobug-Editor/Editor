@@ -89,6 +89,7 @@ impl PluginView {
                 self.virtual_blocks
                     .height(node, width)
                     .unwrap_or_else(|| estimate(node, width))
+                    + px(node.layout.margin.top + node.layout.margin.bottom)
             })
             .collect::<Vec<_>>();
         // Refining spacers must keep the same visible block. A changed native offset means a real
@@ -144,6 +145,12 @@ impl PluginView {
             if skip {
                 // The public mapped identity still supplies geometry, but no rich text/control is laid out.
                 let mut placeholder = Node::text(node.id.clone(), "").height(f32::from(height));
+                // Preserve margins while storing only the measured content extent in the spacer.
+                placeholder.layout.height = Some(
+                    (f32::from(height) - node.layout.margin.top - node.layout.margin.bottom)
+                        .max(0.),
+                );
+                placeholder.layout.margin = node.layout.margin;
                 placeholder.source_range = node.source_range;
                 placeholder.role = node.role.clone();
                 *node = placeholder;
@@ -160,6 +167,12 @@ impl PluginView {
 /// Estimates are only spacers, never source positions or saved dimensions. Actual layout replaces them.
 fn estimate(node: &Node, width: Pixels) -> Pixels {
     if let Some(height) = node.layout.height {
+        if let Kind::Image { .. } = &node.kind
+            && node.viewport.is_none()
+        {
+            // Loaded images have no alt caption; responsive pixels replace this spacer estimate.
+            return px(height + node.layout.padding * 2.);
+        }
         return px(height);
     }
     let inner = (f32::from(width) - node.layout.padding * 2.).max(80.);

@@ -25,7 +25,7 @@ impl PluginView {
         &mut self,
         node: &Node,
         disabled: bool,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = self.colors(node.theme_role(), cx);
@@ -44,7 +44,8 @@ impl PluginView {
             }
             Kind::Text { text } => text_leaf(native_id, text).into_any_element(),
             Kind::Image { source, alt } => {
-                // Direct retained pixels bypass GPUI's ambient file/URL loader. Height follows the image ratio.
+                // Direct retained pixels bypass ambient file/URL loading. Declared dimensions choose
+                // the pixel area's ratio; a missing dimension follows the intrinsic bitmap ratio.
                 let photo = self.photos.get(&node.id).filter(|photo| {
                     self.document
                         .source
@@ -66,28 +67,52 @@ impl PluginView {
                     }
                     let image_id = format!("plugin-image-{}", node.id);
                     let pixels_id = format!("plugin-image-pixels-{}", node.id);
+                    let intrinsic_ratio = bitmap.width as f32 / bitmap.height as f32;
+                    let width = node.layout.width.unwrap_or_else(|| {
+                        node.layout
+                            .height
+                            .map_or(bitmap.width as f32, |height| height * intrinsic_ratio)
+                    });
+                    let ratio = match (node.layout.width, node.layout.height) {
+                        (Some(width), Some(height)) if width > 0. && height > 0. => width / height,
+                        _ => intrinsic_ratio,
+                    };
+                    let zero_extent = width == 0. || node.layout.height == Some(0.);
+                    let fit = if node.layout.width.is_some() && node.layout.height.is_some() {
+                        gpui_kit::ObjectFit::Fill
+                    } else {
+                        gpui_kit::ObjectFit::Contain
+                    };
                     div()
+                        .id(SharedString::from(image_id.clone()))
                         .debug_selector(move || image_id.clone())
+                        // Alternative text names the image for accessibility, not a visible caption.
+                        .role(gpui_kit::Role::Image)
+                        .aria_label(alt.clone())
                         .flex()
                         .flex_col()
                         .w_full()
+                        // Bound the complete element as well as pixels. Otherwise a height-only
+                        // image can inherit a wider flex parent's intrinsic aspect-ratio height.
+                        .max_w(px(width))
                         .min_w_0()
                         .child(
                             div()
                                 .debug_selector(move || pixels_id.clone())
                                 .flex_shrink_0()
                                 .w_full()
-                                .max_w(px(bitmap.width as f32))
-                                .aspect_ratio(bitmap.width as f32 / bitmap.height as f32)
+                                .max_w(px(width))
+                                .when(!zero_extent, |view| view.aspect_ratio(ratio))
+                                // Zero is a valid public dimension; never construct a zero/NaN ratio.
+                                .when(zero_extent, |view| {
+                                    view.h(px(node.layout.height.unwrap_or(0.)))
+                                })
                                 .child(
                                     gpui_kit::img(bitmap.image.clone())
                                         .size_full()
-                                        .object_fit(gpui_kit::ObjectFit::Contain),
+                                        .object_fit(fit),
                                 ),
                         )
-                        .when(!alt.is_empty(), |view| {
-                            view.child(div().text_size(px(12.)).child(alt.clone()))
-                        })
                         .into_any_element()
                 } else {
                     let key = super::bitmap::status_key(
@@ -102,6 +127,8 @@ impl PluginView {
                         .border_color(colors.border)
                         .rounded(px(4.))
                         .p_2()
+                        // A pending/failed resource reserves its declared image area without borrowing pixels.
+                        .when_some(node.layout.height, |view, height| view.h(px(height)))
                         .child(if alt.is_empty() {
                             label.to_string()
                         } else {
@@ -118,8 +145,7 @@ impl PluginView {
                     SharedString::from(format!("{native_id}-scene-{revision}")),
                     html.clone(),
                     px(self
-                        .environment
-                        .font_style(&self.plugin, node.theme_role(), false)
+                        .content_font(node.theme_role(), false)
                         .size_px
                         .unwrap_or(14.)),
                     crate::ui::controls::RichTextColors {
@@ -130,6 +156,8 @@ impl PluginView {
                         border: colors.border,
                         link: colors.accent,
                     },
+                    self.document.content_styles.get(node.theme_role()),
+                    window.rem_size(),
                     cx,
                 )
                 // Base resolves real link hit targets and selection gestures. No URI is opened here;
@@ -154,20 +182,28 @@ impl PluginView {
             }
             Kind::CodeBlock { text, .. } => {
                 // Each literal line keeps its whitespace; the host never parses guest code as markup.
-                let font = self
-                    .environment
-                    .font_style(&self.plugin, node.theme_role(), true);
+                let font = self.content_font(node.theme_role(), true);
+                let preset = self
+                    .document
+                    .content_styles
+                    .get(node.theme_role())
+                    .and_then(|style| style.code.as_ref());
+                let font_size =
+                    font.size_px.unwrap_or(14.) * preset.map_or(1., |style| style.scale);
                 div()
                     .id(native_id.clone())
                     .w_full()
                     .overflow_x_scroll()
                     .bg(colors.code_background)
-                    .border_1()
+                    .border(px(preset.map_or(1., |style| style.border)))
                     .border_color(colors.border)
-                    .rounded(px(4.))
-                    .p_3()
+                    .rounded(px(preset.map_or(4., |style| style.radius)))
+                    .p(px(preset.map_or(12., |style| style.padding)))
                     .font_family(font.family.unwrap_or_else(|| "Consolas".into()))
-                    .text_size(px(font.size_px.unwrap_or(14.)))
+                    .text_size(px(font_size))
+                    .when_some(preset, |view, style| {
+                        view.line_height(relative(style.line_height))
+                    })
                     .child(div().flex().flex_col().children({
                         let mut start = 0;
                         text.split_inclusive('\n')

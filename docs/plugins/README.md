@@ -123,6 +123,9 @@ Markdown 插件：[总方案](https://github.com/Nanobug-Editor/Markdown/blob/31
 - [JavaScript for Nanobug](https://github.com/Nanobug-Editor/JavaScript)
 - [XML for Nanobug](https://github.com/Nanobug-Editor/XML)
 - [Markdown for Nanobug](https://github.com/Nanobug-Editor/Markdown)
+- [Markdown 内嵌 HTML 原生预览](verification/markdown-embedded-html.md)（0.18.0 本地候选：原生 HTML 子集、受控图片与链接、真实包验证；未发布市场）。
+- [Markdown HTML 图片尺寸修复](verification/markdown-image-dimensions.md)（0.18.1 本地候选与匹配宿主：width/height、单边比例、窄栏缩小和说明布局；83 项单元及 3 项原生场景通过）。
+- [Markdown GitHub README 呈现](verification/markdown-github-readme-presentation.md)（0.18.2 本地候选：align、alt 无障碍语义、公开原生样式；验证范围和状态见记录）。
 - [Markdown 输入与增量预览验收](https://github.com/Nanobug-Editor/Markdown/blob/main/docs/verification/17-incremental-input-viewport.md)（0.15.0：用户实测输入仍卡顿，性能验收重新打开）
 - [Markdown 源码输入与过期视口通知](https://github.com/Nanobug-Editor/Markdown/blob/main/docs/verification/18-source-input-and-stale-viewport.md)（宿主跟进修复与实测限制）
 - [冻结 Package/SDK 验收夹具](../../crates/plugin-runtime/tests/fixtures/packages/README.md)：保留示例覆盖，不属于应用、安装器、SDK 或市场发行目录。
