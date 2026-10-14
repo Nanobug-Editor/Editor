@@ -238,6 +238,15 @@ impl PluginView {
         // boundary avoids repeated intrinsic sizing through nested wrapping toolbar groups.
         let icon_extent = (node.button_icon.is_some() && matches!(node.kind, Kind::Button { .. }))
             .then_some(24. + node.layout.padding * 2.);
+        // Source images derive their responsive height from the actual pixel area. Fixing the
+        // wrapper height would leave unused space when a narrower container shrinks the bitmap.
+        let pixel_image = matches!(node.kind, Kind::Image { .. }) && node.viewport.is_none();
+        let wrapper_height = if pixel_image {
+            None
+        } else {
+            node.layout.height.or(icon_extent)
+        };
+        let presentation = self.document.content_styles.get(node.theme_role());
         self.font(
             div()
                 .id(SharedString::from(format!("plugin-ui-{}-wrapper", node.id)))
@@ -247,13 +256,49 @@ impl PluginView {
                 .flex_col()
                 .flex_shrink_0()
                 // Wrapped groups need a bounded outer box as well as a wrapping inner flex row.
-                .when(node.layout.wrap, |wrapper| wrapper.max_w_full())
+                .when(node.layout.wrap || pixel_image, |wrapper| {
+                    wrapper.max_w_full()
+                })
                 .min_w_0()
                 .min_h_0()
                 .when(node.layout.grow, |v| v.flex_1())
                 .when_some(node.layout.width.or(icon_extent), |v, w| v.w(px(w)))
-                .when_some(node.layout.height.or(icon_extent), |v, h| v.h(px(h)))
+                .when_some(wrapper_height, |v, h| v.h(px(h)))
                 .p(px(node.layout.padding))
+                .mt(px(node.layout.margin.top))
+                .mr(px(node.layout.margin.right))
+                .mb(px(node.layout.margin.bottom))
+                .ml(px(node.layout.margin.left))
+                .when_some(
+                    presentation.and_then(|style| style.padding),
+                    |view, edges| {
+                        view.pt(px(edges.top))
+                            .pr(px(edges.right))
+                            .pb(px(edges.bottom))
+                            .pl(px(edges.left))
+                    },
+                )
+                .when_some(
+                    presentation.and_then(|style| style.border),
+                    |view, edges| {
+                        view.border_t(px(edges.top))
+                            .border_r(px(edges.right))
+                            .border_b(px(edges.bottom))
+                            .border_l(px(edges.left))
+                            .border_color(colors.border)
+                    },
+                )
+                .when_some(
+                    presentation.and_then(|style| style.radius),
+                    |view, radius| view.rounded(px(radius)),
+                )
+                .when_some(node.layout.align, |view, align| {
+                    view.text_align(match align {
+                        ui::Alignment::Start => gpui_kit::TextAlign::Left,
+                        ui::Alignment::Center => gpui_kit::TextAlign::Center,
+                        ui::Alignment::End => gpui_kit::TextAlign::Right,
+                    })
+                })
                 .bg(colors.background)
                 .text_color(colors.foreground)
                 .when(disabled, |v| v.opacity(0.5))

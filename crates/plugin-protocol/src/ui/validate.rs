@@ -6,6 +6,20 @@ pub(super) fn document(document: &Document) -> Result<(), String> {
     if document.version != VERSION {
         return Err("Unsupported UI protocol version".into());
     }
+    if document.content_styles.len() > 32 {
+        return Err("Too many native content style roles".into());
+    }
+    for (role, style) in &document.content_styles {
+        if role.is_empty()
+            || role.len() > 128
+            || !role
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        {
+            return Err("Invalid native content style role".into());
+        }
+        style.validate()?;
+    }
     if document.content_colors.len() > 64
         || document.content_colors.iter().any(|(role, color)| {
             role.is_empty()
@@ -180,6 +194,7 @@ impl Validator {
         }
     }
     fn node(&mut self, node: &Node, depth: usize) -> Result<(), String> {
+        node.layout.margin.validate(10000.)?;
         if let Some(viewport) = &node.viewport {
             viewport.validate(&node.kind)?;
         }

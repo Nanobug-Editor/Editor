@@ -89,14 +89,50 @@ impl PluginView {
     }
 
     pub(super) fn font<T: Styled>(&self, element: T, role: &str) -> T {
-        let font = self.environment.font_style(&self.plugin, role, false);
-        element
+        let font = self.content_font(role, false);
+        let element = element
             .font_family(font.family.unwrap_or_else(|| "Segoe UI".into()))
             .text_size(px(font.size_px.unwrap_or(14.)))
             .font_weight(if font.bold.unwrap_or(false) {
                 FontWeight::BOLD
             } else {
                 FontWeight::NORMAL
-            })
+            });
+        if let Some(height) = self
+            .document
+            .content_styles
+            .get(role)
+            .and_then(|style| style.line_height)
+        {
+            element.line_height(gpui_kit::relative(height))
+        } else {
+            element
+        }
+    }
+
+    /// Guest presentation supplies content defaults; explicit user role typography wins per field.
+    pub(super) fn content_font(
+        &self,
+        role: &str,
+        monospace: bool,
+    ) -> plugin_runtime::plugin_protocol::FontStyle {
+        let base = self.environment.font_style(&self.plugin, role, monospace);
+        let mut font = self
+            .document
+            .content_styles
+            .get(role)
+            .map(|style| style.font.clone())
+            .unwrap_or_default();
+        // A prose family cannot replace the user's monospace family in literal code.
+        if monospace {
+            font.family = None;
+        }
+        let font = font.over(base);
+        self.environment
+            .theme_text_styles
+            .get(&format!("{}.{role}", self.plugin))
+            .cloned()
+            .unwrap_or_default()
+            .over(font)
     }
 }

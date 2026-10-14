@@ -535,6 +535,18 @@ impl Instance {
                 .validate()
                 .map_err(|message| Failure::new(ErrorCode::InvalidRequest, message))?;
             self.check_tool_authority(&view.panel, &view.document)?;
+            if view
+                .document
+                .required_capabilities()
+                .contains_key("ui.styles")
+                && !self.store.data().api.capabilities.contains_key("ui.styles")
+            {
+                return Err(Failure::new(
+                    ErrorCode::CapabilityUnavailable,
+                    "Native content presentation requires ui.styles",
+                )
+                .into());
+            }
             if !view.document.content_colors.is_empty()
                 && !self
                     .store
