@@ -310,9 +310,17 @@ impl EditorApp {
     fn render_tabs(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tab_styles = component_styles(cx, ThemeComponent::EditorTab);
         let close_styles = component_styles(cx, ThemeComponent::EditorTabClose);
-        let tabs = self.tabs.iter().enumerate().map(|(index, tab)| {
+        let visible_tabs = self.tabs.iter().enumerate().filter(|(_, tab)| {
+            tab.virtual_document
+                .as_ref()
+                .is_none_or(|source| !source.hidden)
+        });
+        let visible_count = visible_tabs.clone().count();
+        let total_count = visible_count + self.comparison_views.len();
+        let tabs = visible_tabs.map(|(index, tab)| {
             let path = tab.path().to_path_buf();
-            let is_active = self.active_path.as_ref() == Some(&path);
+            let is_active =
+                self.active_comparison.is_none() && self.active_path.as_ref() == Some(&path);
             let is_external = !path.starts_with(self.workspace.root());
             let is_dirty = tab.is_dirty();
             let disk_state = tab
@@ -502,7 +510,7 @@ impl EditorApp {
         } else {
             (window.bounds().size.width - px(EXPLORER_INITIAL_WIDTH) - px(24.)).max(px(0.))
         };
-        let content_width = px(190.) * self.tabs.len();
+        let content_width = px(190.) * total_count;
         let max_scroll = if measured_viewport > px(0.) {
             self.tabs_scroll.max_offset().x
         } else {
@@ -573,7 +581,39 @@ impl EditorApp {
                             .flex_none()
                             .w_auto()
                             .min_w_full()
-                            .children(tabs),
+                            .children(tabs)
+                            .children(self.comparison_views.iter().enumerate().map(
+                                |(index, view)| {
+                                    let activate = cx.entity().downgrade();
+                                    let close = activate.clone();
+                                    let activate_id = view.id.clone();
+                                    let close_id = view.id.clone();
+                                    crate::ui::controls::comparison_tab(
+                                        view.id.clone(),
+                                        view.title.clone(),
+                                        self.active_comparison.as_ref() == Some(&view.id),
+                                        view.preview,
+                                        visible_count + index,
+                                        total_count,
+                                        move |pin, window, cx| {
+                                            let _ = activate.update(cx, |app, cx| {
+                                                app.activate_comparison_view(
+                                                    &activate_id,
+                                                    pin,
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                        },
+                                        move |window, cx| {
+                                            let _ = close.update(cx, |app, cx| {
+                                                app.close_comparison_view(&close_id, window, cx)
+                                            });
+                                        },
+                                        cx,
+                                    )
+                                },
+                            )),
                     ),
             )
             .when(max_scroll > px(0.) && self.tabs_hovered, |this| {

@@ -17,6 +17,33 @@ impl Manager {
             .into());
         }
         self.refresh_services();
+        if let api::Notification::PanelVisibility { panel: target, .. } = &event {
+            let entry = self.installed.get(id).ok_or_else(|| {
+                api::Failure::new(api::ErrorCode::NotFound, "Unknown visibility owner")
+            })?;
+            validate_panel_visibility(
+                entry,
+                panel.as_deref(),
+                target,
+                self.trusted,
+                self.workspace_open,
+            )?;
+            // Observation cannot demand a cold instance or restart one that retired after sampling.
+            let instance = self.live.get(id).ok_or_else(|| {
+                api::Failure::new(api::ErrorCode::InvalidState, "Visibility owner is not live")
+            })?;
+            if !instance
+                .negotiated()
+                .capabilities
+                .contains_key("ui.visibility")
+            {
+                return Err(api::Failure::new(
+                    api::ErrorCode::CapabilityUnavailable,
+                    "ui.visibility was not negotiated",
+                )
+                .into());
+            }
+        }
         // Never deliver document text to a guest without the same editor permission as native reads.
         let inner = &event;
         if let api::Notification::SourceViewport(position) = inner {
@@ -283,3 +310,40 @@ impl Manager {
         Ok(())
     }
 }
+
+/// Host observations retain the same ownership, consent and scope boundary as their native surface.
+fn validate_panel_visibility(
+    entry: &Installed,
+    routed_panel: Option<&str>,
+    target: &str,
+    trusted: bool,
+    workspace_open: bool,
+) -> Result<(), api::Failure> {
+    if routed_panel != Some(target) {
+        return Err(api::Failure::new(
+            api::ErrorCode::InvalidRequest,
+            "Visibility requires its exact routed panel",
+        ));
+    }
+    if !entry.enabled
+        || entry.error.is_some()
+        || !entry.grants.contains("ui.panels")
+        || !entry.manifest.panels.iter().any(|panel| panel.id == target)
+        || (entry.manifest.scope == api::InstanceScope::Workspace && (!trusted || !workspace_open))
+    {
+        return Err(api::Failure::new(
+            api::ErrorCode::PermissionDenied,
+            "Visibility requires an enabled declared surface and current ui.panels consent",
+        ));
+    }
+    if !entry.supports_capability("ui.visibility") {
+        return Err(api::Failure::new(
+            api::ErrorCode::CapabilityUnavailable,
+            "ui.visibility was not negotiated",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod visibility_tests;

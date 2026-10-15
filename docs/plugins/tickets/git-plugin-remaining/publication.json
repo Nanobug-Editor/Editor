@@ -1,0 +1,32 @@
+{
+  "repository": "Nanobug-Editor/Editor",
+  "repository_id": 1383197432,
+  "planning_date": "2026-10-15",
+  "mode": "user-scenarios",
+  "approved": true,
+  "publication_method": "GitHub REST API using existing repository Git credential; connector create_issue returned 403 and created no issue",
+  "issues": [
+    {
+      "ticket": "01",
+      "stable_id": "nanobug-git-remaining-2026-10-15/01",
+      "number": 119,
+      "database_id": 5865985342,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/119",
+      "state_at_publication": "open",
+      "labels": ["ready-for-agent"]
+    },
+    {
+      "ticket": "02",
+      "stable_id": "nanobug-git-remaining-2026-10-15/02",
+      "number": 120,
+      "database_id": 5865985809,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/120",
+      "state_at_publication": "open",
+      "labels": ["ready-for-agent"]
+    }
+  ],
+  "native_dependencies": [
+    { "blocked_issue": 120, "blocking_issue": 119, "blocking_database_id": 5865985342, "readback_verified": true }
+  ],
+  "parent_issue_modified": false
+}

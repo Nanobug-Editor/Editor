@@ -279,6 +279,15 @@ fn color(style: marks::Style, cx: &App) -> gpui_kit::Hsla {
 impl EditorApp {
     /// Gutter elements use public native range geometry after prepaint, retaining horizontal-scroll position.
     pub(crate) fn render_editor_markers(&self, cx: &Context<Self>) -> impl IntoElement {
+        self.render_editor_markers_projected(None, cx)
+    }
+
+    /// Places source-owned gutter controls at aligned source rows without changing their metadata.
+    pub(super) fn render_editor_markers_projected(
+        &self,
+        projection: Option<super::popovers::SourceProjection>,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
         let owner = cx.entity().downgrade();
         gpui_kit::canvas(
             move |_, window, cx| {
@@ -287,8 +296,12 @@ impl EditorApp {
                         let index = app.active_text_tab_index()?;
                         let markers = app.tabs[index].text.as_ref()?.highlighter.markers();
                         let editor = app.editor.read(cx);
-                        let viewport = editor.input_bounds();
-                        let visible_rows = editor.visible_row_range()?;
+                        let viewport = if let Some(projection) = &projection {
+                            projection.viewport(cx)?
+                        } else {
+                            editor.input_bounds()
+                        };
+                        let visible_rows = editor.visible_row_range();
                         let items = markers
                             .borrow()
                             .presentation(cx.theme().is_dark(), &rust_i18n::locale());
@@ -303,11 +316,18 @@ impl EditorApp {
                                     // region nor an accessibility node.
                                     let source_row =
                                         editor.text().offset_to_position(range.start).line as usize;
-                                    if !visible_rows.contains(&source_row) {
+                                    if projection.is_none()
+                                        && !visible_rows.as_ref()?.contains(&source_row)
+                                    {
                                         return None;
                                     }
                                     let row =
                                         editor.range_to_bounds(&(range.start..range.start))?;
+                                    let row = if let Some(projection) = &projection {
+                                        projection.bounds(row, cx)?
+                                    } else {
+                                        row
+                                    };
                                     (row.bottom() > viewport.top() && row.top() < viewport.bottom())
                                         .then_some((row, label, artwork, style, key))
                                 })

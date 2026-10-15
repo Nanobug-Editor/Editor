@@ -2,14 +2,35 @@
 use super::*;
 use crate::ui::controls::menu::{MenuStyle, PopupMenu};
 impl ExtensionPanel {
+    /// Revoke pointer projections before dropping either native surface. Old rendered frames may
+    /// retain their pane entities until the router has delivered the original editor's MouseUp.
+    pub(super) fn retire_native_inputs(&mut self, cx: &mut App) {
+        self.retire_native_ui(cx);
+        self.retire_native_toolbar(cx);
+    }
+
+    /// Withdraw the body while preserving any independently mounted source toolbar.
+    pub(super) fn retire_native_ui(&mut self, cx: &mut App) {
+        self.main_code_source = None;
+        if let Some(view) = self.native_ui.take() {
+            view.update(cx, |view, cx| view.retire_code_panes(cx));
+        }
+    }
+
+    /// Withdraw a source toolbar without retiring a same-source body during publication gaps.
+    pub(super) fn retire_native_toolbar(&mut self, cx: &mut App) {
+        if let Some(view) = self.native_toolbar.take() {
+            view.update(cx, |view, cx| view.retire_code_panes(cx));
+        }
+    }
+
     /// Release native focus/IME targets with the hidden surface, while the guest keeps its own view state.
-    pub(super) fn hide(&mut self) {
+    pub(super) fn hide(&mut self, cx: &mut App) {
         self.source_viewport.withdraw();
         self.viewport_sync_enabled = false;
         self.visible.set(false);
         self.view_demand.borrow_mut().cancel();
-        self.native_ui = None;
-        self.native_toolbar = None;
+        self.retire_native_inputs(cx);
         self.command_popup = None;
     }
     pub(super) fn command_popup(

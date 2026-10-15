@@ -282,6 +282,7 @@ impl State {
                     operation: process::Operation::RequestExit { .. }
                         | process::Operation::Terminate { .. }
                         | process::Operation::Write { .. }
+                        | process::Operation::CloseStdin { .. }
                 }
             )
         {
@@ -430,6 +431,7 @@ impl State {
             api::Operation::Process {
                 operation:
                     process::Operation::Write { handle, .. }
+                    | process::Operation::CloseStdin { handle }
                     | process::Operation::Resize { handle, .. }
                     | process::Operation::RequestExit { handle, .. }
                     | process::Operation::Terminate { handle },

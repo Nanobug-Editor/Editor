@@ -55,6 +55,8 @@ pub(super) fn document(document: &Document) -> Result<(), String> {
         editor_source: document.source.clone(),
         allow_editor: document.editor_layout,
         editors: 0,
+        readonly_editors: 0,
+        sync_groups: Default::default(),
     };
     validator.node(&document.root, 0)?;
     if document.tools.len() > 32 {
@@ -147,8 +149,31 @@ struct Validator {
     editor_source: Option<crate::api::DocumentVersion>,
     allow_editor: bool,
     editors: usize,
+    /// Even empty snapshots allocate native selection/layout state, independently of byte quotas.
+    readonly_editors: usize,
+    sync_groups: std::collections::BTreeMap<String, usize>,
 }
 impl Validator {
+    /// Groups remain local to this document and cannot create unbounded pairwise mapping work.
+    fn sync_group(&mut self, group: &Option<String>) -> Result<(), String> {
+        let Some(group) = group else {
+            return Ok(());
+        };
+        if group.is_empty()
+            || group.len() > 64
+            || !group
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        {
+            return Err("Invalid native code scroll group ID".into());
+        }
+        let members = self.sync_groups.entry(group.clone()).or_default();
+        *members += 1;
+        if *members > 3 || self.sync_groups.len() > 4 {
+            return Err("Native code scroll groups exceed 4 groups or 3 members".into());
+        }
+        Ok(())
+    }
     fn budget(&mut self, count: usize) -> Result<(), String> {
         self.count += count;
         if self.count > 2048 {
@@ -262,7 +287,7 @@ impl Validator {
                     return Err("Tree requires a bounded nonzero owned resource handle".into());
                 }
             }
-            Kind::NativeEditor { document } => {
+            Kind::NativeEditor { document } | Kind::EditorWithActions { document, .. } => {
                 self.editors += 1;
                 if !self.allow_editor
                     || self.editors > 1
@@ -271,6 +296,47 @@ impl Validator {
                     return Err(
                         "Native editor must uniquely reference this layout's exact source".into(),
                     );
+                }
+                if let Kind::EditorWithActions {
+                    left,
+                    right,
+                    sync_group,
+                    ..
+                } = &node.kind
+                {
+                    self.sync_group(sync_group)?;
+                    if left.len() + right.len() > 128 {
+                        return Err("Editor action quota exceeded".into());
+                    }
+                    for action in left.iter().chain(right) {
+                        if action.offset > 1024 * 1024 {
+                            return Err("Editor action offset exceeds source quota".into());
+                        }
+                        self.node(&action.content, depth + 1)?;
+                    }
+                }
+            }
+            Kind::ReadonlyCode {
+                text,
+                changes,
+                sync_group,
+            } => {
+                self.readonly_editors += 1;
+                if self.readonly_editors > 8 {
+                    return Err("Readonly code pane quota exceeded".into());
+                }
+                self.sync_group(sync_group)?;
+                self.bytes += text.len();
+                if text.len() > 256 * 1024 || self.bytes > 1024 * 1024 || changes.len() > 512 {
+                    return Err("Readonly code quota exceeded".into());
+                }
+                if changes.iter().any(|range| {
+                    range.start > range.end
+                        || range.end > text.len()
+                        || !text.is_char_boundary(range.start)
+                        || !text.is_char_boundary(range.end)
+                }) {
+                    return Err("Readonly code ranges require bounded UTF-8 boundaries".into());
                 }
             }
             Kind::SideTabs(tabs) => {

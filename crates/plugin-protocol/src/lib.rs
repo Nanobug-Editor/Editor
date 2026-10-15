@@ -190,6 +190,8 @@ pub struct Panel {
     pub auxiliary: bool,
     pub id: String,
     pub title: String,
+    /// `window` (ui.windows 1.0) is a separate native work window, shown through
+    /// SetPanelVisibility. Closing hides only this contribution and retains plugin/document state.
     pub position: String,
     /// Editor-local previews match these case-insensitive extensions without dots.
     /// Other panel positions leave this list empty and retain their independent dock behavior.

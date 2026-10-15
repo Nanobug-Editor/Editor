@@ -1,4 +1,49 @@
 _version: 2
+editor.preview_label:
+  en: "Preview"
+  zh-CN: "预览"
+editor.detached_source:
+  en: This document is open in a separate work window.
+  zh-CN: 此文档正在独立工作窗口中编辑。
+editor.window_save_conflict:
+  en: The disk file changed or was deleted. Review it, then use the explicit overwrite button to save.
+  zh-CN: 磁盘文件已被修改或删除。核对后请点击覆盖按钮保存。
+editor.window_confirm_overwrite:
+  en: Overwrite disk file
+  zh-CN: 覆盖磁盘文件
+editor.window_save_changed:
+  en: The document changed after confirmation. Save again to review the current result.
+  zh-CN: 文档已在确认后变化，请重新保存并核对当前结果。
+editor.diff_limit:
+  en: The comparison exceeds its complete-text limit. The file remains open for editing.
+  zh-CN: 差异比较超过完整文本限制，文件仍可继续编辑。
+editor.diff_previous:
+  en: Previous change
+  zh-CN: 上一处差异
+editor.diff_next:
+  en: Next change
+  zh-CN: 下一处差异
+editor.diff_unified:
+  en: Unified (read only)
+  zh-CN: 统一视图（只读）
+editor.diff_split:
+  en: Side by side
+  zh-CN: 双栏视图
+editor.diff_sync:
+  en: Synchronized scrolling
+  zh-CN: 同步滚动
+editor.code_sync_unavailable:
+  en: Synchronized scrolling is unavailable; panes scroll independently.
+  zh-CN: 同步滚动暂不可用，当前各栏独立滚动。
+editor.diff_alignment_paused_overlays:
+  en: Search or code actions are open. Panes scroll independently until they close.
+  zh-CN: 搜索或代码操作已打开，暂时使用独立滚动；关闭后恢复对齐。
+editor.diff_alignment_paused_sync:
+  en: Synchronized scrolling is off. Panes scroll independently.
+  zh-CN: 已关闭同步滚动，暂时使用独立滚动。
+editor.diff_alignment_unavailable:
+  en: This comparison cannot align blank rows. Panes scroll independently.
+  zh-CN: 当前文件无法补白对齐，使用独立滚动。
 editor.readonly_label:
   en: "Read-only"
   zh-CN: "只读"

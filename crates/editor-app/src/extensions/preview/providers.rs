@@ -12,7 +12,7 @@ struct Candidate {
 
 impl EditorApp {
     /// Auxiliary functions receive only compatible authorized files; only selection grants layout ownership.
-    pub(super) fn file_panel_is_active(
+    pub(in crate::extensions) fn file_panel_is_active(
         &self,
         panel: &Entity<ExtensionPanel>,
         selected: &Option<Entity<ExtensionPanel>>,

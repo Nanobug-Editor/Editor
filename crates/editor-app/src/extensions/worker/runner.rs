@@ -682,7 +682,22 @@ impl Worker {
                                         | api::Notification::FilePreview { .. }
                                         | api::Notification::SourceViewport(_)
                                 );
+                                let visibility_callback =
+                                    matches!(&event, api::Notification::PanelVisibility { .. });
                                 match manager.event(&id, panel, event) {
+                                    Err(error)
+                                        if visibility_callback
+                                            && manager.instance_id(&id).is_none()
+                                            && error
+                                                .downcast_ref::<api::Failure>()
+                                                .is_some_and(|failure| {
+                                                    failure.code == api::ErrorCode::InvalidState
+                                                }) =>
+                                    {
+                                        // Retirement can finish between the native sample and actor dispatch.
+                                        // A visibility observation never creates another callback owner.
+                                        Ok(())
+                                    }
                                     Err(error)
                                         if native_callback
                                             && error

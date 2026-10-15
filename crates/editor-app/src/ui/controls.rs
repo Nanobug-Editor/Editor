@@ -1,5 +1,8 @@
 //! Editor-owned visual controls built over gpui-base behavior.
 
+pub(crate) mod aligned_editor;
+pub(crate) mod aligned_pointer;
+pub(crate) mod aligned_rows;
 mod button;
 mod checkbox;
 mod definition_popup;
@@ -8,6 +11,7 @@ pub(crate) mod dialog;
 mod disclosure;
 pub(crate) mod dock;
 mod editor;
+mod editor_actions;
 mod editor_canvas;
 pub(crate) mod file_operation;
 mod icon;
@@ -29,6 +33,13 @@ mod text;
 mod textarea;
 mod tooltip;
 mod tree;
+pub(crate) mod window;
+
+/// Install local window presentation after upstream registration and before creating native roots.
+/// The final decorator projects aligned-editor input before any root/overlay capture listener.
+pub(crate) fn init(cx: &mut gpui_kit::App) {
+    aligned_pointer::init(cx);
+}
 
 pub(crate) use button::{Button, ButtonCustomVariant};
 pub(crate) use checkbox::Checkbox;
@@ -36,7 +47,13 @@ pub(crate) use definition_popup::definition_popup;
 pub(crate) use diagnostic_popup::diagnostic_popup;
 pub(crate) use dialog::DialogContent;
 pub(crate) use disclosure::disclosure;
-pub(crate) use editor::{readonly_editor, synchronize_editor_appearance};
+pub(crate) use editor::{
+    readonly_editor, readonly_editor_body, synchronize_editor_appearance, window_editor,
+    window_editor_body,
+};
+pub(crate) use editor_actions::{
+    EditorActionElements, EditorActionProjection, with_projected_editor_actions,
+};
 pub(crate) use editor_canvas::empty_editor_canvas;
 pub(crate) use icon::Icon;
 pub(crate) use input::Input;
@@ -54,7 +71,7 @@ pub(crate) use spinner::Spinner;
 pub(crate) use split::split_container;
 pub(crate) use status_bar::StatusBar;
 pub(crate) use status_icon::StatusIcon;
-pub(crate) use tabs::tab_strip;
+pub(crate) use tabs::{comparison_tab, tab_strip};
 pub(crate) use text::{RichTextColors, markdown_view, rich_text_view, untrusted_markdown_view};
 pub(crate) use textarea::Textarea;
 pub(crate) use tooltip::Tooltip;

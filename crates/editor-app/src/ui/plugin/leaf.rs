@@ -25,13 +25,14 @@ impl PluginView {
         &mut self,
         node: &Node,
         disabled: bool,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let colors = self.colors(node.theme_role(), cx);
         let id = node.id.clone();
         let native_id = SharedString::from(format!("plugin-ui-{}", node.id));
         match &node.kind {
+            Kind::ReadonlyCode { .. } => self.render_readonly_code(&node.id, window, cx),
             Kind::Tree { .. } => self
                 .trees
                 .get(&node.id)
@@ -195,6 +196,11 @@ impl PluginView {
                             move || control.clone()
                         })
                         .accessibility_label(label.clone())
+                        .when(self.editor_action_nodes.contains(&node.id), |button| {
+                            // Three native rail actions fit without padding expanding the row;
+                            // disabled siblings keep the same geometry and accessible controls.
+                            button.small().compact().w(px(24.)).min_w_0().px_0()
+                        })
                         .when(node.button_icon.is_none(), |button| {
                             button.label(label.clone())
                         })

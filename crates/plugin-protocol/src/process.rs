@@ -1,4 +1,11 @@
 //! Native execution declarations and typed process events; the API does not expose parser internals.
+//!
+//! `process` 1.8 adds `CloseStdin` for owned pipe processes. Queue all `Write` bytes first, then
+//! close once to deliver EOF without terminating the child. Accepted writes drain in order before
+//! the writer is dropped; later writes are rejected. Continue reading output until `Exited`, and
+//! release the handle through normal resource cleanup. PTY processes reject this operation because
+//! their interactive terminal input is not a separately owned pipe. The negotiated process capability,
+//! execution permission and live instance ownership are checked before changing the writer state.
 use serde::{Deserialize, Serialize};
 
 /// Installation approves this exact program and argument vector. Calls supply only its map key.
@@ -161,6 +168,12 @@ pub enum Operation {
     Write {
         handle: crate::api::ResourceHandle,
         bytes: Vec<u8>,
+    },
+    /// process 1.8: close only the owned stdio input after all accepted writes have drained.
+    /// Idempotent while the process remains live. Subsequent writes fail; stdout/stderr and the
+    /// exit notification remain observable. PTYs reject this operation without sending control bytes.
+    CloseStdin {
+        handle: crate::api::ResourceHandle,
     },
     Resize {
         handle: crate::api::ResourceHandle,

@@ -168,6 +168,10 @@ struct EditorApp {
     _extensions_observer: Subscription,
     /// Installed manifests dynamically contribute native dock panel entities.
     plugin_panels: HashMap<String, Entity<extensions::ExtensionPanel>>,
+    /// Separate native surfaces borrow project-owned documents; they never own another editor state.
+    plugin_windows: HashMap<String, gpui_kit::WindowHandle<Root>>,
+    /// Each document has one native work-window mount; its existing owner survives later contenders.
+    plugin_window_mounts: HashMap<String, String>,
     /// The manager owns a modal window independently from settings and plugin dock surfaces.
     extensions_window: Option<WindowHandle<Root>>,
     _extensions_closed_subscription: Option<Subscription>,
@@ -254,6 +258,9 @@ struct EditorApp {
     language_server_demands: app::language_servers::DemandState,
     /// A comparison borrows existing native document entities and owns only its decoration layers.
     document_comparison: Option<editor::comparison::DocumentComparison>,
+    /// File-bound comparison views retain identities and display choices, never editable text.
+    comparison_views: Vec<editor::comparison::ComparisonView>,
+    active_comparison: Option<String>,
     /// Comparison commands capture their own target through the existing local popup control.
     document_command_menu: Option<extensions::command_menus::DocumentCommandMenu>,
     plugin_popup: Option<(PluginPopupKind, Point<Pixels>)>,
@@ -605,6 +612,8 @@ impl EditorApp {
             extensions,
             _extensions_observer: extensions_observer,
             plugin_panels: HashMap::new(),
+            plugin_windows: HashMap::new(),
+            plugin_window_mounts: HashMap::new(),
             extensions_window: None,
             _extensions_closed_subscription: None,
             pending_plugin_file: None,
@@ -654,6 +663,8 @@ impl EditorApp {
             plugin_command_intents: Default::default(),
             language_server_demands: Default::default(),
             document_comparison: None,
+            comparison_views: Vec::new(),
+            active_comparison: None,
             document_command_menu: None,
             plugin_popup: None,
             file_view_menu: None,
@@ -1041,6 +1052,8 @@ fn main() -> anyhow::Result<()> {
             if let Err(error) = app::shortcuts::bootstrap::ensure(cx) {
                 eprintln!("Could not load shortcut configuration: {error}");
             }
+            // Keep pointer projection outside the complete native Root and its other decorators.
+            ui::controls::init(cx);
             if let Some(server) = incoming {
                 app::startup::attach(server, profile.clone(), cx);
             }

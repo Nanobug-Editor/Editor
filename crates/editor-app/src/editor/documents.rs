@@ -685,6 +685,10 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Normal file navigation leaves the retained comparison view available in its own tab.
+        if self.active_comparison.take().is_some() {
+            self.close_document_comparison(cx);
+        }
         if self
             .tabs
             .get(index)
@@ -929,6 +933,12 @@ impl EditorApp {
             cx.notify();
             return;
         };
+        self.save_text_tab(index, cx);
+    }
+
+    /// Save this existing session without activating another main-window tab. Work-window commands
+    /// resolve the actual focused document before entering the same disk-conflict and history path.
+    pub(crate) fn save_text_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         if self.tabs[index].virtual_document.is_some() {
             self.report_host_message(
                 MessageLevel::Warning,
@@ -1011,7 +1021,7 @@ impl EditorApp {
             .text
             .as_mut()
             .expect("save target remains open");
-        let value = self.editor.read(cx).value().to_string();
+        let value = tab.editor.read(cx).value().to_string();
         if let Some(history) = &self.history {
             let _ = history.snapshot_file(&save_path);
         }

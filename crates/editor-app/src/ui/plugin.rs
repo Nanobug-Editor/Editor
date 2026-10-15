@@ -5,6 +5,7 @@ mod canvas;
 // Native host features use the same keyed canvas directly, without a guest Document or dispatch.
 pub(crate) use canvas::CanvasView;
 mod code;
+mod code_sync;
 mod containers;
 pub(crate) mod controls;
 mod file_image;
@@ -14,6 +15,7 @@ mod leaf;
 #[cfg(test)]
 mod link_tests;
 mod links;
+mod readonly_code;
 mod render;
 mod svg;
 #[cfg(test)]
@@ -49,6 +51,8 @@ type EventSink = Rc<dyn Fn(UiEvent, &mut App)>;
 pub(crate) type NativeEditorRenderer = Rc<
     dyn Fn(
         &plugin_runtime::plugin_protocol::api::DocumentVersion,
+        Option<crate::ui::controls::EditorActionElements>,
+        Option<(crate::ui::controls::aligned_editor::AlignmentGroup, usize)>,
         &mut Window,
         &mut App,
     ) -> Option<gpui_kit::AnyElement>,
@@ -63,6 +67,11 @@ struct NativeInput {
 
 pub(crate) struct PluginView {
     pub(crate) native_editor: Option<NativeEditorRenderer>,
+    /// Editor edge controls are checked again at input time, after native edits and queued paints.
+    pub(crate) action_source_current:
+        Option<Rc<dyn Fn(&plugin_runtime::plugin_protocol::api::DocumentVersion, &App) -> bool>>,
+    /// Rail appearance includes disabled siblings; activation authority remains a separate gate.
+    editor_action_nodes: BTreeSet<String>,
     plugin: String,
     document: Document,
     environment: Environment,
@@ -73,6 +82,9 @@ pub(crate) struct PluginView {
     scene_current: Rc<Cell<bool>>,
     inputs: BTreeMap<String, NativeInput>,
     textareas: BTreeMap<String, textareas::NativeTextarea>,
+    readonly_code: BTreeMap<String, readonly_code::Snapshot>,
+    /// Native pane synchronization owns derived byte maps and cancellable scroll locations only.
+    code_sync: code_sync::CodeSync,
     scrolls: BTreeMap<String, ScrollHandle>,
     /// Read-only source block ownership and one revision-bound reveal; native scroll remains in Base.
     scene_layout: layout::SceneLayout,
@@ -111,6 +123,12 @@ pub(crate) struct PluginView {
 }
 
 impl PluginView {
+    /// Withdraw projected gestures before an owning native window or pane is removed. The router
+    /// flushes the original control's release while its old frame is still mounted.
+    pub(crate) fn retire_code_panes(&mut self, cx: &mut Context<Self>) {
+        self.code_sync.cancel(cx);
+    }
+
     /// Suspend guest input and pending locations while retaining paint and the native text entity.
     pub(crate) fn set_scene_current(&mut self, current: bool, cx: &mut Context<Self>) {
         if self.scene_current.get() && !current {
@@ -124,6 +142,13 @@ impl PluginView {
             self.scene_layout.cancel_reveal();
             self.viewport.reset_scene();
             self.link_press = None;
+            if self.document.code_alignment {
+                if self.scene_current.get() {
+                    self.code_sync.cancel_gestures();
+                }
+            } else {
+                self.code_sync.cancel(cx);
+            }
         }
         if self.scene_current.replace(current) != current {
             cx.notify();
@@ -261,6 +286,8 @@ impl PluginView {
                 &environment.workspace,
             )),
             native_editor: None,
+            action_source_current: None,
+            editor_action_nodes: BTreeSet::new(),
             plugin,
             document,
             environment,
@@ -272,6 +299,8 @@ impl PluginView {
             scene_current,
             inputs: BTreeMap::new(),
             textareas: BTreeMap::new(),
+            readonly_code: BTreeMap::new(),
+            code_sync: Default::default(),
             scrolls: BTreeMap::new(),
             scene_layout: Default::default(),
             viewport: Default::default(),
@@ -336,6 +365,9 @@ impl PluginView {
         }
         if self.document != document {
             self.invalidate_code_highlighting(cx);
+            if self.document.code_alignment != document.code_alignment {
+                self.code_sync.cancel(cx);
+            }
         }
         let old_dialog = self.document.dialog.as_ref().map(|d| d.id.clone());
         // New resource authority must publish its intrinsic geometry again, even at the same size.
@@ -434,6 +466,16 @@ impl PluginView {
         if let Some(dialog) = &self.document.dialog {
             dialog.content.visit(&mut |node| nodes.push(node.clone()));
         }
+        self.editor_action_nodes.clear();
+        for node in &nodes {
+            if let Kind::EditorWithActions { left, right, .. } = &node.kind {
+                for action in left.iter().chain(right) {
+                    action.content.visit(&mut |child| {
+                        self.editor_action_nodes.insert(child.id.clone());
+                    });
+                }
+            }
+        }
         let input_ids: BTreeSet<_> = nodes
             .iter()
             .filter(|n| matches!(n.kind, Kind::Input(_)))
@@ -441,6 +483,7 @@ impl PluginView {
             .collect();
         self.inputs.retain(|id, _| input_ids.contains(id));
         self.sync_textareas(&nodes, window, cx);
+        self.sync_readonly_code(&nodes, window, cx);
         let scroll_ids: BTreeSet<_> = nodes
             .iter()
             .filter(|n| matches!(n.kind, Kind::Scroll { .. }))
@@ -629,6 +672,14 @@ impl PluginView {
             node: id.into(),
             action,
         };
+        if let Some(source) = self.document.editor_action_source(id)
+            && self
+                .action_source_current
+                .as_ref()
+                .is_none_or(|current| !current(source, cx))
+        {
+            return false;
+        }
         if self.document.validate_event(&event).is_err()
             || (matches!(event.action, Action::Dismiss)
                 && self.dismissed_dialog.as_deref() == Some(id))

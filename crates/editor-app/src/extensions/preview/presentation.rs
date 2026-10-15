@@ -63,7 +63,20 @@ impl EditorApp {
             .renderable_document()
             .is_some_and(|scene| scene.active_native_editor().is_some());
         let enabled = self.editor_preview_sync_enabled(&preview, cx);
+        let code_source = self.active_text_tab_index().and_then(|index| {
+            let current = self.plugin_document_version(index).ok()?;
+            let panel = preview.read(cx);
+            let scene = panel.renderable_document()?;
+            let source = scene.active_native_editor()?;
+            (has_editor
+                && source.id == current.id
+                && source.path == current.path
+                && source.revision <= current.revision
+                && !self.plugin_window_mounts.contains_key(&current.id))
+            .then(|| (current, self.editor.clone()))
+        });
         preview.update(cx, |panel, cx| {
+            panel.main_code_source = code_source;
             panel.viewport_sync_enabled = enabled;
             if !has_editor {
                 panel.source_viewport.withdraw();

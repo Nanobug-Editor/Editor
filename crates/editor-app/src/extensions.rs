@@ -96,6 +96,12 @@ mod shortcut_query_tests;
 mod surface;
 #[cfg(test)]
 mod ui_package_tests;
+mod visibility;
+#[cfg(test)]
+mod visibility_tests;
+mod windows;
+#[cfg(test)]
+mod windows_tests;
 pub(crate) use settings::SettingsView;
 pub(crate) mod runtime_owners;
 #[cfg(test)]
@@ -169,6 +175,8 @@ pub struct ExtensionPanel {
     log_generation: u64,
     parent: WeakEntity<EditorApp>,
     visible: Rc<Cell<bool>>,
+    /// Actual native surface sampling is independent from the user's persisted visibility choice.
+    panel_visibility: visibility::PanelVisibility,
     workspace: PathBuf,
     root: PathBuf,
     /// This view publishes only the language roles belonging to its project.
@@ -187,6 +195,13 @@ pub struct ExtensionPanel {
     surface_id: Option<String>,
     /// Editor-local surfaces are selected by the active document instead of the outer dock tree.
     editor_preview: bool,
+    /// A work window has its own native chrome and never occupies a dock region.
+    work_window: bool,
+    /// Prepared while the owning app is available; rendering a second window must not reborrow it.
+    work_window_source: Option<windows::SourceMount>,
+    /// Main-layout owners prepare this borrow before child rendering, avoiding a parent entity
+    /// reborrow from native view preparation or editor-request dispatch.
+    main_code_source: Option<(protocol::api::DocumentVersion, Entity<EditorState>)>,
     /// Auxiliary file functions receive compatible contexts but never own the center layout.
     editor_auxiliary: bool,
     /// The editor's revision token avoids copying unchanged documents on every shell repaint.
@@ -476,6 +491,7 @@ impl ExtensionPanel {
             visible,
             workspace,
             root,
+            panel_visibility: Default::default(),
             providers,
             _catalog: catalog,
             worker,
@@ -487,6 +503,9 @@ impl ExtensionPanel {
             active: None,
             surface_id: None,
             editor_preview: false,
+            work_window: false,
+            work_window_source: None,
+            main_code_source: None,
             editor_auxiliary: false,
             viewport_sync_enabled: false,
             source_viewport: Default::default(),
@@ -581,6 +600,7 @@ impl ExtensionPanel {
         Self {
             parent,
             visible: Rc::new(Cell::new(initially_visible)),
+            panel_visibility: Default::default(),
             providers: crate::language::providers::Providers::for_workspace(&workspace)
                 .expect("project panel provider owner"),
             _catalog: contributions::CatalogView::for_project(
@@ -598,6 +618,9 @@ impl ExtensionPanel {
             active: Some(id),
             surface_id: Some(panel.id),
             editor_preview: panel.position == "editor",
+            work_window: panel.position == "window",
+            work_window_source: None,
+            main_code_source: None,
             editor_auxiliary: panel.auxiliary,
             viewport_sync_enabled: false,
             source_viewport: Default::default(),
@@ -678,7 +701,10 @@ impl ExtensionPanel {
         let mut changed = false;
         let mut contributions_changed = false;
         let editor_requests = {
-            let mut state = self.worker.state.lock().unwrap();
+            // Native surface retirement mutates the panel while the snapshot is held. Own the
+            // shared-state handle independently instead of borrowing it through this panel.
+            let shared_state = self.worker.state.clone();
+            let mut state = shared_state.lock().unwrap();
             if self.market_view.revision != state.market_revision {
                 self.market_view.revision = state.market_revision;
                 changed = true;
@@ -774,8 +800,7 @@ impl ExtensionPanel {
                     // A replacement can reuse source/UI revisions; instance retirement still revokes its locate.
                     self.source_viewport.withdraw();
                     self.viewport_sync_enabled = false;
-                    self.native_ui = None;
-                    self.native_toolbar = None;
+                    self.retire_native_inputs(cx);
                     self._focus_events.clear();
                     self.command_popup = None;
                     self.commands_open = false;
@@ -839,6 +864,7 @@ impl ExtensionPanel {
             }
         };
         self.poll_view_demand(cx);
+        self.publish_panel_visibility();
         if !editor_requests.is_empty() {
             let parent = self.parent.clone();
             cx.defer(move |cx| {
@@ -880,6 +906,7 @@ impl ExtensionPanel {
             // instance epochs. Polling itself never changes bindings or redraws an unchanged UI.
             // Defer until this ExtensionPanel borrow ends before reading the shared publication.
             let parent = self.parent.clone();
+            let visibility_window = self.panel_visibility.owner_window;
             cx.defer(move |cx| {
                 let _ = parent.update(cx, |app, cx| {
                     app.sync_shortcut_plugins(cx);
@@ -893,6 +920,13 @@ impl ExtensionPanel {
                         cx.notify();
                     }
                 });
+                if let Some(handle) = visibility_window {
+                    let _ = handle.update(cx, |_, window, cx| {
+                        let _ = parent.update(cx, |app, cx| {
+                            app.sync_plugin_panel_visibility(window, cx);
+                        });
+                    });
+                }
             });
         }
         if changed {
@@ -1220,7 +1254,7 @@ impl DockPanel for ExtensionPanel {
                                     .as_ref()
                                     .zip(this.surface_id.as_ref())
                                     .map(|(id, surface)| format!("{id}/{surface}"));
-                                this.hide();
+                                this.hide(cx);
                                 let _ = this.parent.update(cx, |app, cx| {
                                     // Hiding from the title bar is a saved visibility choice too.
                                     if let Some(key) = panel_key {
@@ -1523,6 +1557,12 @@ impl EditorApp {
         // Modal content can hold a strong editor reference. Retire project-owned windows and
         // their pending drafts before dropping the project, so the next project has no old owner.
         self.close_run_form(cx);
+        for panel in self.plugin_panels.values() {
+            panel.update(cx, |panel, cx| panel.retire_native_inputs(cx));
+        }
+        for (_, handle) in self.plugin_windows.drain() {
+            windows::remove_work_window_after_release(handle, cx);
+        }
         self.dialog = None;
         self.plugin_settings = None;
         self._dialog_closed_subscription = None;
@@ -1634,6 +1674,12 @@ impl EditorApp {
             .cloned()
             .collect();
         for key in obsolete {
+            if let Some(panel) = self.plugin_panels.get(&key) {
+                panel.update(cx, |panel, cx| panel.retire_native_inputs(cx));
+            }
+            if let Some(handle) = self.plugin_windows.remove(&key) {
+                windows::remove_work_window_after_release(handle, cx);
+            }
             if let Some(panel) = self.plugin_panels.remove(&key) {
                 self.dock_area
                     .update(cx, |area, cx| area.remove_panel(panel, window, cx));
@@ -1662,7 +1708,7 @@ impl EditorApp {
             };
             if let Some(panel) = self.plugin_panels.get(&key) {
                 // Editor-local contributions are rendered inside the current document's panel.
-                if descriptor.position == "editor" {
+                if matches!(descriptor.position.as_str(), "editor" | "window") {
                     panel.update(cx, |panel, _| panel.editor_auxiliary = descriptor.auxiliary);
                     continue;
                 }
@@ -1704,7 +1750,7 @@ impl EditorApp {
                     cx,
                 )
             });
-            if initially_visible && !panel.read(cx).editor_preview {
+            if initially_visible && !panel.read(cx).editor_preview && !panel.read(cx).work_window {
                 self.dock_area.update(cx, |area, cx| {
                     crate::local_dock::add_panel_view(
                         area,
@@ -1719,6 +1765,7 @@ impl EditorApp {
             self.plugin_panels.insert(key, panel);
         }
         // Startup factories now have every available plugin view to bind to the saved layout.
+        self.sync_plugin_windows(cx);
         self.sync_editor_previews(cx);
         self.restore_dock_layout(window, cx);
         // Upstream retains empty dock regions. Remove their layout boxes at the app boundary,
@@ -1749,6 +1796,7 @@ impl EditorApp {
                 });
             }
         }
+        self.sync_plugin_panel_visibility(window, cx);
     }
     /// Places the supplied plugin artwork beside settings in the window title bar.
     pub(crate) fn render_extensions_button(&self, cx: &mut Context<Self>) -> impl IntoElement {

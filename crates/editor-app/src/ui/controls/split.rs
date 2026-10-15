@@ -6,11 +6,12 @@ use gpui_kit::{
 };
 use std::rc::Rc;
 
-/// Render a bounded portable Row/Column as native resizable panels with one shared local divider.
+/// Render portable children with their declared initial axis extent. Base retains resize state;
+/// explicit extents stop growing with flexible peers but remain adjustable by the native divider.
 pub(crate) fn split_container(
     id: SharedString,
     vertical: bool,
-    children: Vec<AnyElement>,
+    children: Vec<(Option<f32>, AnyElement)>,
     _: &App,
 ) -> AnyElement {
     let group = if vertical {
@@ -29,10 +30,13 @@ pub(crate) fn split_container(
                 .into_any_element(),
         )
     }));
-    for child in children {
+    for (initial_size, child) in children {
         group = group.child(
             gpui_base::resizable_panel()
                 .size_range(px(100.)..gpui_kit::Pixels::MAX)
+                .when_some(initial_size, |panel, extent| {
+                    panel.size(px(extent)).flex_none()
+                })
                 .child(child),
         );
     }

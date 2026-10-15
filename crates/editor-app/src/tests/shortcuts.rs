@@ -42,6 +42,7 @@ pub(crate) fn with_editor_profile(
         crate::app::shortcuts::init(cx);
         cx.bind_keys(bindings);
         crate::app::shortcuts::bootstrap::configure(cx, profile.to_path_buf()).unwrap();
+        crate::ui::controls::init(cx);
     });
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("shortcuts.txt");

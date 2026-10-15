@@ -232,7 +232,7 @@ fn native_cold_menu_and_view_wait_keep_exact_owner_without_eager_birth(cx: &mut 
         visual.update(|window, cx| {
             panel.update(cx, |panel, cx| {
                 panel.show(window, cx);
-                panel.hide();
+                panel.hide(cx);
                 cx.notify();
             })
         });
@@ -267,7 +267,7 @@ fn native_cold_menu_and_view_wait_keep_exact_owner_without_eager_birth(cx: &mut 
         composable_tests::pump(&mut manager, &app, visual);
         visual.update(|window, cx| {
             panel.update(cx, |panel, cx| {
-                panel.hide();
+                panel.hide(cx);
                 panel.show(window, cx);
                 cx.notify();
             })

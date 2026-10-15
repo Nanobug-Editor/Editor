@@ -254,6 +254,15 @@ impl EditorApp {
 
     /// Draw a theme-colored insertion caret without changing the editor's source selection.
     pub(super) fn render_text_drag_caret(&self, cx: &Context<Self>) -> impl IntoElement {
+        self.render_text_drag_caret_projected(None, cx)
+    }
+
+    /// Uses the same native drag hit but projects its painted caret into the physical aligned pane.
+    pub(super) fn render_text_drag_caret_projected(
+        &self,
+        projection: Option<super::popovers::SourceProjection>,
+        cx: &Context<Self>,
+    ) -> impl IntoElement {
         let app = cx.entity().downgrade();
         canvas(
             |_, _, _| (),
@@ -277,6 +286,16 @@ impl EditorApp {
                     return;
                 }
                 let caret = Bounds::new(hit.bounds.origin, size(px(2.), hit.bounds.size.height));
+                let (caret, viewport) = if let Some(projection) = &projection {
+                    let (Some(caret), Some(viewport)) =
+                        (projection.bounds(caret, cx), projection.viewport(cx))
+                    else {
+                        return;
+                    };
+                    (caret, viewport)
+                } else {
+                    (caret, viewport)
+                };
                 window.with_content_mask(
                     Some(gpui_kit::ContentMask { bounds: viewport }),
                     |window| {

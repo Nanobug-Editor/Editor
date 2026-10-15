@@ -321,8 +321,7 @@ impl EditorApp {
                             panel.preview_pending = false;
                             panel.preview_superseded = 0;
                             panel.preview_document = context.clone();
-                            panel.native_ui = None;
-                            panel.native_toolbar = None;
+                            panel.retire_native_inputs(cx);
                             panel.send(protocol::api::Notification::Preview {
                                 document: None,
                                 text: String::new(),
@@ -335,8 +334,7 @@ impl EditorApp {
                             panel.preview_version = Some(version.clone());
                             panel.preview_document = context.clone();
                             panel.preview_error = Some(t!("preview.document_limit").to_string());
-                            panel.native_ui = None;
-                            panel.native_toolbar = None;
+                            panel.retire_native_inputs(cx);
                             panel.send(protocol::api::Notification::Preview {
                                 document: None,
                                 text: String::new(),
@@ -352,14 +350,14 @@ impl EditorApp {
                             .as_ref()
                             .is_some_and(|view| !view.read(cx).same_source_document(version))
                         {
-                            panel.native_ui = None;
+                            panel.retire_native_ui(cx);
                         }
                         if panel
                             .native_toolbar
                             .as_ref()
                             .is_some_and(|view| !view.read(cx).same_source_document(version))
                         {
-                            panel.native_toolbar = None;
+                            panel.retire_native_toolbar(cx);
                         }
                         panel.send(protocol::api::Notification::Preview {
                             document: Some(version.clone()),
@@ -380,8 +378,7 @@ impl EditorApp {
                     panel.preview_pending = false;
                     panel.preview_superseded = 0;
                     panel.preview_error = None;
-                    panel.native_ui = None;
-                    panel.native_toolbar = None;
+                    panel.retire_native_inputs(cx);
                 }
             });
         }
@@ -484,8 +481,7 @@ impl EditorApp {
                         .filter(|_| self.active_text_tab_index().is_none())
                         .map(|path| (path, file.as_ref().map_or(0, |file| file.version.revision)));
                     if !same_file {
-                        panel.native_ui = None;
-                        panel.native_toolbar = None;
+                        panel.retire_native_inputs(cx);
                         panel.source_viewport.withdraw();
                     }
                     panel.send(protocol::api::Notification::FilePreview { file });
@@ -495,8 +491,7 @@ impl EditorApp {
                     panel.preview_version = None;
                     panel.preview_document = None;
                     panel.preview_error = None;
-                    panel.native_ui = None;
-                    panel.native_toolbar = None;
+                    panel.retire_native_inputs(cx);
                     panel.source_viewport.withdraw();
                     cx.notify();
                 }
@@ -552,7 +547,7 @@ impl EditorApp {
 
 impl ExtensionPanel {
     /// A publication gap retains same-source readonly paint; obsolete event authority is withdrawn.
-    pub(super) fn retire_unowned_native_view(&mut self, cx: &App) {
+    pub(super) fn retire_unowned_native_view(&mut self, cx: &mut App) {
         let retained = self.editor_preview
             && self.preview_version.as_ref().is_some_and(|version| {
                 self.native_ui
@@ -560,7 +555,7 @@ impl ExtensionPanel {
                     .is_some_and(|view| view.read(cx).same_source_document(version))
             });
         if !retained {
-            self.native_ui = None;
+            self.retire_native_ui(cx);
         }
     }
 }

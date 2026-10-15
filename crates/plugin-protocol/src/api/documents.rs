@@ -52,6 +52,26 @@
 //! For an update, refresh the owned virtual version and acquire a fresh source version before
 //! comparing again. Handle `StaleRevision`, `InvalidHandle`, `PermissionDenied` and
 //! `LimitExceeded` explicitly instead of substituting another document or truncating text.
+//!
+//! # Persistent comparisons (`editor.virtual` / `editor.diff` 1.1)
+//!
+//! `OpenVirtualSource` has the same ownership and size limits as a virtual document but keeps
+//! the readonly snapshot out of the ordinary file tab strip. `OpenDocumentComparison` opens
+//! a file-bound comparison under an instance-local key. Reusing a key replaces that descriptor;
+//! different keys coexist, with at most 32 live descriptors. Its initial source versions must be
+//! exact. Subsequent native edits recompute the comparison from the original document sessions,
+//! retaining their selection, IME and Undo. The split presentation supports synchronized scrolling,
+//! inline marks and difference navigation; its unified presentation is a derived readonly view.
+//! Split comparisons also align added/deleted rows using bounded, display-only blank space over
+//! the original native sessions. Native search/code-action overlays temporarily pause alignment;
+//! unsupported geometry or size limits explicitly fall back to independent panes. Plugin code
+//! groups opt into the same mechanism through `ui.code_editor` 1.1 and `Document.code_alignment`.
+//! These semantics do not alter the legacy `CompareDocuments` operation described above.
+//!
+//! A preview may replace another unpinned preview; a pinned comparison remains until closed.
+//! Closing a source or retiring its owner revokes every referencing descriptor. Superseded hidden
+//! snapshots are reclaimed when no descriptor references them. Neither closing a comparison nor
+//! retiring its plugin discards a user's local document, edits or native Undo history.
 use super::{DocumentVersion, ErrorCode, Failure, ResourceHandle, TextRange};
 use serde::{Deserialize, Serialize};
 

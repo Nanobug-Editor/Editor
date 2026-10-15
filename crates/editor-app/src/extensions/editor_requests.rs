@@ -254,6 +254,11 @@ impl EditorApp {
                 title,
                 language,
                 text,
+            }
+            | Op::OpenVirtualSource {
+                title,
+                language,
+                text,
             } => self.open_plugin_virtual(title, language.as_deref(), text, &request, window, cx),
             Op::LocateDocument { document, position } => {
                 self.locate_plugin_resource(document, *position, &request, window, cx)
@@ -261,6 +266,13 @@ impl EditorApp {
             Op::CompareDocuments { left, right } => {
                 self.compare_plugin_documents(left, right, &request, window, cx)
             }
+            Op::OpenDocumentComparison {
+                key,
+                title,
+                left,
+                right,
+                preview,
+            } => self.open_comparison_view(key, title, left, right, *preview, &request, window, cx),
             Op::ReadDocument { document, range } => self.read_plugin_document(document, *range, cx),
             Op::ListDocuments => {
                 let documents = (0..self.tabs.len())

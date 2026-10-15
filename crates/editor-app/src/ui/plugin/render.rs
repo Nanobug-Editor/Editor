@@ -15,6 +15,7 @@ impl PluginView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         self.sync_widgets(window, cx);
+        self.sync_code_groups(window, cx);
         self.sync_code_highlighting(cx);
         let viewport_frame = self.begin_viewport_frame();
         self.virtual_blocks.begin();
@@ -184,7 +185,8 @@ impl PluginView {
                     ),
             );
         }
-        view.into_any_element()
+        // This final probe samples only after every native code pane has completed prepaint.
+        view.child(self.code_sync_probe(cx)).into_any_element()
     }
 
     pub(super) fn node(
@@ -199,6 +201,7 @@ impl PluginView {
         let content = if matches!(
             node.kind,
             Kind::NativeEditor { .. }
+                | Kind::EditorWithActions { .. }
                 | Kind::Row { .. }
                 | Kind::Column { .. }
                 | Kind::Scroll { .. }

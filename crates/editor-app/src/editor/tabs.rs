@@ -66,6 +66,8 @@ impl OpenTab {
 
 /// Provider metadata contains authority and display hints, never a second mutable document value.
 pub(crate) struct VirtualTab {
+    /// Hidden readonly sources participate in document APIs without adding standalone chrome.
+    pub(crate) hidden: bool,
     pub(crate) resource: std::sync::Arc<plugin_runtime::VirtualDocumentResource>,
     pub(crate) title: String,
     pub(crate) language: String,

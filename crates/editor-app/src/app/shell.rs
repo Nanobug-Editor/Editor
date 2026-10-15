@@ -1,5 +1,6 @@
 //! Owns window chrome, dock panels, settings UI, and shell rendering.
 
+pub(super) use crate::ui::controls::window::title_bar_window_control;
 use crate::*;
 
 /// Share one document scope between default keys and unbound shortcut metadata.
@@ -75,60 +76,6 @@ impl Drop for WindowsTimerResolution {
             }
         }
     }
-}
-
-/// Draws the same window glyph and native control region as GPUI Kit's TitleBar.
-pub(super) fn title_bar_window_control(
-    id: &'static str,
-    icon: IconName,
-    area: WindowControlArea,
-    close: bool,
-    cx: &App,
-) -> impl IntoElement {
-    let hover_foreground = if close {
-        cx.theme().danger_foreground
-    } else {
-        cx.theme().secondary_foreground
-    };
-    let hover_background = if close {
-        cx.theme().danger
-    } else {
-        cx.theme().secondary_hover
-    };
-    let active_background = if close {
-        cx.theme().danger_active
-    } else {
-        cx.theme().secondary_active
-    };
-    div()
-        .id(id)
-        .flex()
-        .w(px(34.))
-        .h_full()
-        .flex_shrink_0()
-        .justify_center()
-        .content_center()
-        .items_center()
-        .text_color(cx.theme().foreground)
-        .hover(|style| style.bg(hover_background).text_color(hover_foreground))
-        .active(|style| style.bg(active_background).text_color(hover_foreground))
-        .when(cfg!(target_os = "windows"), |this| {
-            this.window_control_area(area)
-        })
-        .when(!cfg!(target_os = "windows"), |this| {
-            this.on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                match area {
-                    WindowControlArea::Min => window.minimize_window(),
-                    WindowControlArea::Max => window.zoom_window(),
-                    WindowControlArea::Close => {
-                        window.dispatch_action(Box::new(app::projects::CloseWindow), cx)
-                    }
-                    WindowControlArea::Drag => {}
-                }
-            })
-        })
-        .child(Icon::new(icon).small())
 }
 
 #[derive(Clone, Copy)]
@@ -717,46 +664,6 @@ impl Render for EditorApp {
 
 impl EditorApp {
     fn render_window_controls(&self, window: &Window, cx: &Context<Self>) -> impl IntoElement {
-        let supported = window.window_controls();
-        h_flex()
-            .id("window-controls")
-            .h_full()
-            .items_center()
-            .flex_shrink_0()
-            .when(!cfg!(target_os = "macos") && supported.minimize, |this| {
-                this.child(title_bar_window_control(
-                    "minimize",
-                    IconName::WindowMinimize,
-                    WindowControlArea::Min,
-                    false,
-                    cx,
-                ))
-            })
-            .when(!cfg!(target_os = "macos") && supported.maximize, |this| {
-                this.child(title_bar_window_control(
-                    if window.is_maximized() {
-                        "restore"
-                    } else {
-                        "maximize"
-                    },
-                    if window.is_maximized() {
-                        IconName::WindowRestore
-                    } else {
-                        IconName::WindowMaximize
-                    },
-                    WindowControlArea::Max,
-                    false,
-                    cx,
-                ))
-            })
-            .when(!cfg!(target_os = "macos"), |this| {
-                this.child(title_bar_window_control(
-                    "close",
-                    IconName::WindowClose,
-                    WindowControlArea::Close,
-                    true,
-                    cx,
-                ))
-            })
+        crate::ui::controls::window::native_window_controls(window, cx)
     }
 }
