@@ -4,7 +4,7 @@
 
 **模式：** 场景拆分。
 
-**状态：** in-progress — 实现及自动门禁通过，准备提交审查与交付；尚未关闭。
+**状态：** in-progress — 用户于 2026-10-16 要求继续。两项正式审查 P2 已修复；44 项补白、65 项通用 UI、原生文档 IME、旧同步/可见性、同包窗口 5/5 及阶段门禁通过。准备普通修复提交及正式复审，尚未推送关闭；见[实施验证](../../verification/git-plugin-2026-10-15.md)。
 
 **GitHub：** [#119](https://github.com/Nanobug-Editor/Editor/issues/119)。
 

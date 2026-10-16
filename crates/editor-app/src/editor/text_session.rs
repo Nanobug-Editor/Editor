@@ -2,6 +2,9 @@
 use super::attach_language_server;
 use crate::*;
 
+#[cfg(test)]
+mod tests;
+
 impl EditorApp {
     /// Every text tab uses one native EditorState and the same revision/IME/Undo event subscription.
     pub(crate) fn create_native_text_tab(
@@ -67,6 +70,8 @@ impl EditorApp {
                         return;
                     };
                     tab.capability_revision = tab.capability_revision.saturating_add(1);
+                    tab.capability_content =
+                        super::native_text::NativeTextIdentity::new(changed_editor.read(cx).text());
                     if tab.suppress_change {
                         return;
                     }
@@ -85,6 +90,22 @@ impl EditorApp {
         let panel = self.editor_panel.downgrade();
         let observer = cx.observe(&editor, move |this, changed_editor, cx| {
             // Existing native observers report selection/viewport changes, including keyboard and IME.
+            // Base preedit changes bytes but emits only Notify. Advance the plugin capability before
+            // publishing metadata; normal Change still exclusively owns dirty/Undo bookkeeping.
+            // The immutable shared-root check stays O(1) for every nontext notification and for
+            // oversize documents, and detects equal-length candidate replacements as well.
+            if let Some(tab) = this
+                .tabs
+                .iter_mut()
+                .find(|tab| tab.owns_editor(&changed_editor))
+                .and_then(|tab| tab.text.as_mut())
+            {
+                let text = changed_editor.read(cx).text();
+                if !tab.capability_content.matches(text) {
+                    tab.capability_content = super::native_text::NativeTextIdentity::new(text);
+                    tab.capability_revision = tab.capability_revision.saturating_add(1);
+                }
+            }
             this.sync_plugin_documents(cx);
             if this.editor.entity_id() == changed_editor.entity_id() {
                 let _ = panel.update(cx, |_, cx| cx.notify());
@@ -92,6 +113,7 @@ impl EditorApp {
         });
         TextTab {
             capability_revision: 0,
+            capability_content: super::native_text::NativeTextIdentity::new(editor.read(cx).text()),
             session: opened.session,
             editor,
             disk_digest,

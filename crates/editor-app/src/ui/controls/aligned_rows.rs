@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, ops::Range};
 pub(crate) const MAX_SOURCE_BYTES: usize = 1024 * 1024;
 /// Includes the empty EOF logical row after a trailing LF, even in an otherwise empty source.
 pub(crate) const MAX_SOURCE_ROWS: usize = 2001;
-/// Both pivot comparisons share this work budget; common prefix/suffix rows do not consume it.
+/// Pivot and peer insertion comparisons share this budget; common edges do not consume it.
 pub(crate) const MAX_LCS_CELLS: usize = 4_000_000;
 
 /// Planning/layout failures request an explicit independent-layout fallback from the UI owner.
@@ -113,18 +113,37 @@ impl AlignedRows {
             .map(|other| PairRows::new(&rows[0], other, budget))
             .collect::<Result<Vec<_>, _>>()?;
         let mut slots = vec![Vec::new(); sources.len()];
-        // Keys are (next pivot row, insertion ordinal), then (pivot row, usize::MAX). Equal
-        // insertion ordinals in different peers share a slot; the longest bucket defines its size.
+        // Pivot anchors bound each insertion bucket. In a three-pane group the peers can share
+        // new lines absent from the pivot, so align that bucket before returning to its anchor.
         for pivot in 0..=rows[0].len() {
-            let inserted = pairs
-                .iter()
-                .map(|pair| pair.before[pivot].len())
-                .max()
-                .unwrap_or(0);
-            for ordinal in 0..inserted {
-                slots[0].push(None);
-                for (pane, pair) in pairs.iter().enumerate() {
-                    slots[pane + 1].push(pair.before[pivot].get(ordinal).copied());
+            let left = &pairs[0].before[pivot];
+            if let Some(right) = pairs
+                .get(1)
+                .map(|pair| &pair.before[pivot])
+                .filter(|right| !left.is_empty() || !right.is_empty())
+            {
+                let left_symbols = left.iter().map(|row| rows[1][*row]).collect::<Vec<_>>();
+                let right_symbols = right.iter().map(|row| rows[2][*row]).collect::<Vec<_>>();
+                // Reuse the same bounded matcher and scene ledger; a failed peer comparison
+                // requests the existing independent-layout fallback without a partial plan.
+                let inserted = PairRows::new(&left_symbols, &right_symbols, budget)?;
+                for row in 0..=left.len() {
+                    for other in &inserted.before[row] {
+                        slots[0].push(None);
+                        slots[1].push(None);
+                        slots[2].push(Some(right[*other]));
+                    }
+                    if row < left.len() {
+                        slots[0].push(None);
+                        slots[1].push(Some(left[row]));
+                        slots[2].push(inserted.at[row].map(|other| right[other]));
+                    }
+                }
+            } else {
+                // A lone peer needs no second diff, and empty three-pane buckets need no slots.
+                for row in left {
+                    slots[0].push(None);
+                    slots[1].push(Some(*row));
                 }
             }
             if pivot < rows[0].len() {

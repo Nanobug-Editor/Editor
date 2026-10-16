@@ -12,6 +12,8 @@ use gpui_kit::{
 };
 use std::cell::RefCell;
 
+mod composition;
+mod insertions;
 mod workbench;
 
 /// Fixture snapshots are expectations only. All visible source edits and Undo use this one entity.

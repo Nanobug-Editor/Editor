@@ -37,7 +37,7 @@ impl PluginView {
                 let subscription = cx.subscribe_in(
                     &state,
                     window,
-                    move |this, state, event: &InputEvent, _, cx| {
+                    move |this, state, event: &InputEvent, window, cx| {
                         if !matches!(event, InputEvent::Change) {
                             return;
                         }
@@ -49,7 +49,7 @@ impl PluginView {
                             return;
                         }
                         entry.last_value = value.clone();
-                        this.emit(&id, Action::Change(value), cx);
+                        this.emit_in(&id, Action::Change(value), window, cx);
                     },
                 );
                 self.textareas.insert(

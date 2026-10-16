@@ -91,8 +91,14 @@ impl PluginView {
                 .accessibility_label(self.link_label(link))
                 .tooltip(link.uri.clone())
                 .child(content)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.emit_version(&id, revision, Action::Link { uri: uri.clone() }, cx);
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.emit_version_in(
+                        &id,
+                        revision,
+                        Action::Link { uri: uri.clone() },
+                        window,
+                        cx,
+                    );
                 }))
                 .into_any_element();
         }
@@ -121,11 +127,17 @@ impl PluginView {
             .track_focus(focus)
             .label(self.link_label(link))
             .tooltip(link.uri.clone())
-            .on_click(cx.listener(move |this, event, _, cx| {
+            .on_click(cx.listener(move |this, event, window, cx| {
                 // An invisible target can receive Tab, but a pointer press cannot open it.
                 // Focus-specific Base IDs also prevent that press surviving its newly revealed cue.
                 if focused || matches!(event, ClickEvent::Keyboard(_)) {
-                    this.emit_version(&id, revision, Action::Link { uri: uri.clone() }, cx);
+                    this.emit_version_in(
+                        &id,
+                        revision,
+                        Action::Link { uri: uri.clone() },
+                        window,
+                        cx,
+                    );
                 }
             }));
             body = body.child(

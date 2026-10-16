@@ -74,7 +74,7 @@ fn unmatched_runs_pair_in_order_before_padding_the_extra_native_rows() {
 }
 
 #[test]
-fn three_panes_share_each_insertion_bucket_by_ordinal_and_maximum_length() {
+fn three_panes_align_inserted_rows_and_preserve_pivot_anchors() {
     let plan = AlignedRows::new(&[
         "a\nb\nc",
         "head\na\nx\nb\nc\ntail1\ntail2",
@@ -119,6 +119,94 @@ fn three_panes_share_each_insertion_bucket_by_ordinal_and_maximum_length() {
             ],
         ]
     );
+}
+
+/// Two non-pivot sources can share a new row at different insertion ordinals. Their real shared
+/// text must align while the surrounding one-sided additions reserve only blank display space.
+#[test]
+fn common_peer_insertions_share_display_rows_without_pivot_anchors() {
+    let sources = ["a\nz\n", "a\nX\n共同\nz\n", "a\n共同\nY\nz\n"];
+    let plan = AlignedRows::new(&sources).unwrap();
+    let measured = plan
+        .layout(&[uniform(3, 20.), uniform(5, 20.), uniform(5, 20.)])
+        .unwrap();
+    // The visible order is a, X, 共同, Y, z, EOF. These known source coordinates therefore
+    // identify the same actual text row without depending on a particular matching algorithm.
+    assert_eq!(measured.panes[1].source_to_display(40.), Some(40.));
+    assert_eq!(measured.panes[2].source_to_display(20.), Some(40.));
+    assert_eq!(measured.panes[0].source_to_display(20.), Some(80.));
+    assert_eq!(measured.panes[1].source_to_display(60.), Some(80.));
+    assert_eq!(measured.panes[2].source_to_display(60.), Some(80.));
+    for (pane, slots) in plan.slots.iter().enumerate() {
+        assert_eq!(
+            slots.iter().copied().flatten().collect::<Vec<_>>(),
+            (0..plan.source_rows[pane].len()).collect::<Vec<_>>(),
+            "alignment cannot insert text rows, duplicate them or change source order",
+        );
+    }
+}
+
+/// Peer-only anchors use the caller's remaining cells. Two-pane insertion buckets need no LCS
+/// work because only one peer owns rows there; matching common bucket edges is also free.
+#[test]
+fn peer_insertions_charge_the_shared_budget_only_for_three_panes() {
+    let sources = ["a\nz\n", "a\nX\n共同\nz\n", "a\n共同\nY\nz\n"];
+    let mut budget = 4;
+    assert!(AlignedRows::new_with_budget(&sources, &mut budget).is_ok());
+    assert_eq!(budget, 0);
+    let mut budget = 3;
+    assert_eq!(
+        AlignedRows::new_with_budget(&sources, &mut budget),
+        Err(AlignError::ComparisonBudget),
+    );
+    assert_eq!(budget, 3);
+    let mut budget = 0;
+    assert!(AlignedRows::new_with_budget(&sources[..2], &mut budget).is_ok());
+    assert!(
+        AlignedRows::new_with_budget(&[sources[0], sources[1], sources[1]], &mut budget).is_ok()
+    );
+    assert_eq!(budget, 0);
+    // Differences against the pivot spend six cells first; the peer bucket then needs four.
+    let sources = [
+        "a\nold\nz\n",
+        "a\nchanged\nX\n共同\nz\n",
+        "a\nchanged\n共同\nY\nz\n",
+    ];
+    let mut budget = 9;
+    assert_eq!(
+        AlignedRows::new_with_budget(&sources, &mut budget),
+        Err(AlignError::ComparisonBudget),
+    );
+    assert_eq!(budget, 3);
+    let mut budget = 10;
+    assert!(AlignedRows::new_with_budget(&sources, &mut budget).is_ok());
+    assert_eq!(budget, 0);
+}
+
+/// A common peer-only line can wrap differently in the two original editors. Its shared slot
+/// takes the larger native height so that the following pivot and EOF rows remain aligned.
+#[test]
+fn common_peer_insertions_keep_later_anchors_aligned_after_soft_wraps() {
+    let plan = AlignedRows::new(&["a\nz\n", "a\nX\n共同\nz\n", "a\n共同\nY\nz\n"]).unwrap();
+    let measured = plan
+        .layout(&[
+            uniform(3, 20.),
+            vec![
+                0_f32..20.,
+                20_f32..40.,
+                40_f32..80.,
+                80_f32..100.,
+                100_f32..120.,
+            ],
+            uniform(5, 20.),
+        ])
+        .unwrap();
+    assert_eq!(measured.panes[1].source_to_display(40.), Some(40.));
+    assert_eq!(measured.panes[2].source_to_display(20.), Some(40.));
+    for (pane, z, eof) in [(0, 20., 40.), (1, 80., 100.), (2, 60., 80.)] {
+        assert_eq!(measured.panes[pane].source_to_display(z), Some(100.));
+        assert_eq!(measured.panes[pane].source_to_display(eof), Some(120.));
+    }
 }
 
 fn wrapped_layout() -> AlignedLayout {

@@ -16,6 +16,17 @@ use plugin_runtime::{TreeResource, TreeSnapshot, plugin_protocol::tree as api};
 use rust_i18n::t;
 use std::sync::Arc;
 
+/// Loading remains an intent until the owning PluginView has checked the original native Window.
+/// In particular, a rejected source action must not first allocate a pending runtime page request.
+enum Dispatch {
+    Event(api::Event),
+    Load {
+        parent: Option<String>,
+        continuation: bool,
+    },
+}
+type TreeSink = Rc<dyn Fn(Dispatch, u64, &mut App)>;
+
 /// One keyed UI node borrows one instance-owned tree; no domain providers or text copies live here.
 pub(super) struct TreeView {
     pub(super) resource: Arc<TreeResource>,
@@ -26,7 +37,7 @@ pub(super) struct TreeView {
     node: String,
     environment: Environment,
     gate: Rc<Cell<bool>>,
-    sink: EventSink,
+    sink: TreeSink,
     sentinels: BTreeMap<String, (Option<String>, bool)>,
     popup: Option<Entity<PopupMenu>>,
     popup_epoch: Option<(u64, u64)>,
@@ -35,13 +46,13 @@ pub(super) struct TreeView {
 }
 impl TreeView {
     /// Native callbacks always keep the original scene revision and immutable resource incarnation.
-    pub(super) fn new(
+    fn new(
         resource: Arc<TreeResource>,
         node: String,
         revision: u64,
         environment: Environment,
         gate: Rc<Cell<bool>>,
-        sink: EventSink,
+        sink: TreeSink,
         cx: &mut Context<Self>,
     ) -> Self {
         let tree = cx.new(|cx| TreeState::new(cx));
@@ -111,25 +122,23 @@ impl TreeView {
         self.environment = environment;
         self.reconcile(cx);
     }
-    /// Every load enters the existing panel event transport, preserving its outer scene gate too.
+    /// Page allocation is deferred with the intent, after source and scene authority validation.
     fn load(&mut self, parent: Option<String>, continuation: bool, cx: &mut Context<Self>) {
         if !self.gate.get() || !self.resource.is_live() {
             return;
         }
-        if let Ok(Some(request)) = self.resource.request(parent, continuation) {
-            self.emit(api::Event::Request(request), cx);
-        }
+        (self.sink)(
+            Dispatch::Load {
+                parent,
+                continuation,
+            },
+            self.revision,
+            cx,
+        );
     }
     fn emit(&self, event: api::Event, cx: &mut Context<Self>) {
         if self.gate.get() && self.resource.is_live() {
-            (self.sink)(
-                UiEvent {
-                    revision: self.revision,
-                    node: self.node.clone(),
-                    action: Action::Tree(event),
-                },
-                cx,
-            );
+            (self.sink)(Dispatch::Event(event), self.revision, cx);
         }
     }
     /// Base resets selection when replacing items. Restore by stable provider ID without changing scroll.
@@ -454,6 +463,42 @@ impl Render for TreeView {
 }
 
 impl PluginView {
+    /// Base tree observation and paging have no Window parameter. Resume in the original surface
+    /// after the tree's current borrow ends, then apply the same gate as every other native action.
+    fn dispatch_tree(
+        &mut self,
+        id: &str,
+        revision: u64,
+        resource: &TreeResource,
+        dispatch: Dispatch,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.scene_current.get()
+            || revision != self.document.revision
+            || !resource.is_live()
+            || !self.document.active_node(id).is_some_and(
+                |node| matches!(&node.kind, Kind::Tree { handle } if handle == resource.handle()),
+            )
+            || !self.event_source_current_in(id, window, cx)
+        {
+            return;
+        }
+        let event = match dispatch {
+            Dispatch::Event(event) => event,
+            Dispatch::Load {
+                parent,
+                continuation,
+            } => {
+                let Ok(Some(request)) = resource.request(parent, continuation) else {
+                    return;
+                };
+                api::Event::Request(request)
+            }
+        };
+        self.emit_version_in(id, revision, Action::Tree(event), window, cx);
+    }
+
     /// Published maps are joined by the entire opaque owner, never by a business plugin ID.
     pub(crate) fn update_trees(&mut self, resources: &[Arc<TreeResource>], cx: &mut Context<Self>) {
         let mut requested = Vec::new();
@@ -492,7 +537,22 @@ impl PluginView {
                 let resource = resource.clone();
                 let environment = self.environment.clone();
                 let gate = self.scene_current.clone();
-                let sink = self.sink.clone();
+                let owner = cx.entity().downgrade();
+                let target_window = self.window;
+                let target_node = id.clone();
+                let target_resource = resource.clone();
+                let sink: TreeSink = Rc::new(move |dispatch, revision, cx| {
+                    let owner = owner.clone();
+                    let node = target_node.clone();
+                    let resource = target_resource.clone();
+                    cx.defer(move |cx| {
+                        let _ = target_window.update(cx, |_, window, cx| {
+                            let _ = owner.update(cx, |this, cx| {
+                                this.dispatch_tree(&node, revision, &resource, dispatch, window, cx)
+                            });
+                        });
+                    });
+                });
                 let revision = self.document.revision;
                 self.trees.insert(
                     id.clone(),

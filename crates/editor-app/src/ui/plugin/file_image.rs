@@ -69,6 +69,7 @@ impl PluginView {
             .or_default()
             .clone();
         let owner = cx.entity().downgrade();
+        let target_window = self.window;
         let target_node = node.clone();
         let input = viewport.is_some();
         let image = gpui_kit::canvas(
@@ -89,27 +90,30 @@ impl PluginView {
                     let measured_authority = measured_authority.clone();
                     // Prepaint may not update its rendering entity; publish after the frame through the scene gate.
                     cx.defer(move |cx| {
-                        let accepted = owner.update(cx, |view, cx| {
-                            if (view.document.file.clone(), view.document.source.clone())
-                                != measured_authority
-                            {
-                                return false;
-                            }
-                            view.emit_version(
-                                &node,
-                                revision,
-                                Action::ViewportInput(ui::ViewportInput {
-                                    content,
-                                    event: ui::CanvasEvent::Resize {
-                                        width: area.width,
-                                        height: area.height,
-                                        grid: None,
-                                    },
-                                }),
-                                cx,
-                            )
+                        let accepted = target_window.update(cx, |_, window, cx| {
+                            owner.update(cx, |view, cx| {
+                                if (view.document.file.clone(), view.document.source.clone())
+                                    != measured_authority
+                                {
+                                    return false;
+                                }
+                                view.emit_version_in(
+                                    &node,
+                                    revision,
+                                    Action::ViewportInput(ui::ViewportInput {
+                                        content,
+                                        event: ui::CanvasEvent::Resize {
+                                            width: area.width,
+                                            height: area.height,
+                                            grid: None,
+                                        },
+                                    }),
+                                    window,
+                                    cx,
+                                )
+                            })
                         });
-                        if matches!(accepted, Ok(true)) {
+                        if matches!(accepted, Ok(Ok(true))) {
                             measurement.set(Some((area, content)));
                         }
                     });
@@ -135,13 +139,17 @@ impl PluginView {
         )
         .size_full();
         let emit = Rc::new(
-            move |view: &mut PluginView, event: ui::CanvasEvent, cx: &mut Context<PluginView>| {
+            move |view: &mut PluginView,
+                  event: ui::CanvasEvent,
+                  window: &mut Window,
+                  cx: &mut Context<PluginView>| {
                 input
                     && (view.document.file.clone(), view.document.source.clone()) == authority
-                    && view.emit_version(
+                    && view.emit_version_in(
                         &node,
                         revision,
                         Action::ViewportInput(ui::ViewportInput { content, event }),
+                        window,
                         cx,
                     )
             },
@@ -156,7 +164,7 @@ impl PluginView {
             .overflow_hidden()
             .child(image)
             .on_scroll_wheel(cx.listener(
-                move |view, event: &gpui_kit::ScrollWheelEvent, _, cx| {
+                move |view, event: &gpui_kit::ScrollWheelEvent, window, cx| {
                     let bounds = wheel_bounds.get();
                     let local = event.position - bounds.origin;
                     let delta = event.delta.pixel_delta(px(view
@@ -175,6 +183,7 @@ impl PluginView {
                             delta_y: delta.y / px(1.),
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     ) {
                         cx.stop_propagation();
@@ -191,7 +200,7 @@ impl PluginView {
             let down_bounds = measured.clone();
             element = element.on_mouse_down(
                 button,
-                cx.listener(move |view, event: &gpui_kit::MouseDownEvent, _, cx| {
+                cx.listener(move |view, event: &gpui_kit::MouseDownEvent, window, cx| {
                     let p = event.position - down_bounds.get().origin;
                     if down(
                         view,
@@ -203,6 +212,7 @@ impl PluginView {
                             clicks: event.click_count as u8,
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     ) {
                         cx.stop_propagation();
@@ -213,7 +223,7 @@ impl PluginView {
             let up_bounds = measured.clone();
             element = element.on_mouse_up(
                 button,
-                cx.listener(move |view, event: &gpui_kit::MouseUpEvent, _, cx| {
+                cx.listener(move |view, event: &gpui_kit::MouseUpEvent, window, cx| {
                     let p = event.position - up_bounds.get().origin;
                     if up(
                         view,
@@ -225,6 +235,7 @@ impl PluginView {
                             clicks: event.click_count as u8,
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     ) {
                         cx.stop_propagation();
@@ -233,8 +244,8 @@ impl PluginView {
             );
         }
         element
-            .on_mouse_move(
-                cx.listener(move |view, event: &gpui_kit::MouseMoveEvent, _, cx| {
+            .on_mouse_move(cx.listener(
+                move |view, event: &gpui_kit::MouseMoveEvent, window, cx| {
                     let p = event.position - measured.get().origin;
                     let button = match event.pressed_button {
                         Some(gpui_kit::MouseButton::Middle) => 1,
@@ -251,10 +262,11 @@ impl PluginView {
                             clicks: 0,
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     );
-                }),
-            )
+                },
+            ))
             .into_any_element()
     }
 }

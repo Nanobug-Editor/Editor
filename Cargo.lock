@@ -1860,6 +1860,7 @@ dependencies = [
  "raw-window-handle",
  "regex",
  "resvg 0.45.1",
+ "ropey",
  "rust-i18n",
  "semver",
  "serde",

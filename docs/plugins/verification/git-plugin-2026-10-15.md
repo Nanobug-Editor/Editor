@@ -1,6 +1,44 @@
 # Git 插件实施验证（2026-10-15）
 
-状态：用户已批准保留已有进度，并将剩余工作按场景拆分后继续；已发布 #119/#120，当前执行 #119，尚未完整交付。暂停时现场见[历史快照](git-plugin-paused-2026-10-15.md)，后续结果按下面的候选身份分别记录。依据为[已确认规格](../specs/git-plugin.md)。补白已按用户最新要求重新纳入范围；本记录不把未实现的能力标记通过。
+状态：2026-10-16 用户要求继续，已从保留现场恢复。#119 的两项 P2 已修复，定向回归、实际窗口 5/5 和仓库阶段门禁全部通过，正在准备正式复审；#120 保留已有实现和通过证据，等待 #119 完成交付。暂停历史见[现场记录](git-plugin-paused-2026-10-15.md)。依据为[已确认规格](../specs/git-plugin.md)；本记录不把未完成的验收标记通过。
+
+## 2026-10-16 恢复：审查缺陷修复
+
+当前实现候选 tree 为 `9df3a9a611c18a0c88f9fc9542d228b9743fe0c7`，由同一临时 index 导出后验证。实际包仍为下文同摘要 0.1.1 ZIP；本轮未改访客、协议或包资产。Cargo 仅显式使用上游已经锁定的 `ropey =2.0.0-beta.1`，没有升级依赖。
+
+- IME：`NativeTextIdentity` 只保存不可变 COW 根，通过上游公开 O(1) instance 比较检测原生文本变化，不设按大小/长度放行的权限捷径。TextTab 的 notify-only 文本变化推进插件能力版本，不改变 dirty/Undo；普通 Change 保持原职责。完整来源 token 改变时才采样动作身份，同版本重发不能重新授权。所有边缘控件的真实事件检查当前 Window 的 marked range、原生身份和现有精确来源权威；Tree 先验权再申请分页，测量回执仍表示实际发送。
+- 三栏：同一个 pivot 间隙内，两侧新增行使用现有 PairRows 匹配并归入共享比较预算。没有复制 LCS、增加新预算或修改源文本；两栏不增加比较。新的真实三栏回归检查共同新增行、后续锚点、EOF、原文和选择，并在窗口重测后复验。
+- 宿主 DocumentInfo 回归先在 0.13 秒复现预编辑未推进版本，修复后 0.16 秒通过。新按钮回归在输入发生的同一次 update 内直接检查事件出口，覆盖等长候选重发、仅 unmark 后旧来源拒绝和新版本恢复真实点击。首次后续断言因在旧锚点前插入 UTF-8 使旧偏移落在字符内部而没有可绘制矩形；夹具改在仍可见的 row03 输入，保留 row02 原生禁用按钮、宽度和真实事件断言，没有删除权限检查。
+
+| 隔离候选验证 | 实际结果 | 日志（宿主 target/） |
+| --- | --- | --- |
+| 当前有效场景 → IME → 同版本重发 → unmark → 新版本点击 | 1/1，0.77 秒；显式执行 ignored | `git-ticket119-preedit-authority.log` |
+| `align --include-ignored --test-threads=1` | 44/44，9.31 秒；包含新增两项原生回归 | `git-ticket119-alignment-review-final.log` |
+| 原生 DocumentInfo 的预编辑/等长替换/取消/提交/Undo/非文本通知 | 1/1，0.16 秒 | `git-ticket119-native-capability-final.log` |
+| `native_code_sync --test-threads=1` | 4/4，0.29 秒 | `git-ticket119-legacy-review-final.log` |
+| `panel_visibility --test-threads=1` | 3/3，0.27 秒 | `git-ticket119-visibility-review-final.log` |
+| `ui::plugin:: --include-ignored --test-threads=1` | 65/65，49.62 秒；通用控件、Canvas、输入和集合交互 | `git-ticket119-plugin-ui-review-final.log` |
+| 实际包 5 项原生窗口 | 同摘要 0.1.1 包 5/5，373.79 秒；显式执行 ignored | `git-ticket119-review-windows.log` |
+| fmt / 非 UI workspace / workspace check | 全通过；非 UI 为 77 组、276 通过、272 ignored，未执行的 ignored 不计通过；check 12.80 秒 | `git-ticket119-review-fmt.log`、`git-ticket119-review-workspace.log`、`git-ticket119-review-check.log` |
+
+使用本轮构建输出的 `target/debug/deps/editor_app-34d8e9e5735919f6.exe`，不是此前 runner；先执行 `cargo test -p editor-app --bin editor-app --no-run --target-dir .. -j1`。红灯、第一次补充断言失败和后续绿灯分别保留；此节只列当前实际结果，正式复审和推送关闭尚未完成。
+
+## 正式审查与再次暂停（2026-10-15 历史）
+
+审查范围为固定点 `1379f58df76622bdf4d6a7c4167469f124d17a0b` 至本地 HEAD `81d6221a7f6daff290b95bff992ecc039b119c5d`，提交列表和 diff 均非空。
+
+### Standards
+
+0 项硬性违规，0 项判断类问题。静态检查确认通用公开能力、原文档与权限边界、上游公开接口组合、注释及中英文资源；此轴不代替原生行为验证。
+
+### Spec
+
+2 项 P2，均为实现缺陷（分类 c），无范围扩张（分类 b）：
+
+- IME 预编辑仅 notify、不推进能力 revision，旧来源动作可能继续发出。新增 `native_code_alignment_current_actions_reject_preedit_and_unmarked_old_content` 已失败，0.24 秒；`target/git-ticket119-preedit-authority-red.log`。
+- 同一 pivot 间隙内两侧共同新增行未进一步匹配，三栏显示行错位。新增 `common_peer_insertions_share_display_rows_without_pivot_anchors` 已失败；`target/git-ticket119-peer-insertion-red.log`。
+
+合计 2 项，最高 P2；Standards 最高严重级别无，Spec 最高 P2。生产修复尚未开始。测试候选 tree 为 `8466f18870f667dbfd6af99dcf91cc4692218ca1`，相对 HEAD 仅增加三处测试文件、125 行。以下 39/39 与 5/5 等结果属于提交候选的既有测试集合，不能据此宣称追加回归后的完整候选已通过。
 
 ## 工单 01 当前候选门禁
 
@@ -18,7 +56,7 @@
 | `cargo check --workspace --target-dir .. -j1` | 通过，3.26 秒 | `target/git-ticket119-final-check.log` |
 | `cargo test --workspace --exclude editor-app --target-dir .. -j1` | 276 通过、272 ignored；复用同一非 UI 内容的隔离结果，此后只修改 UI 及文档 | `target/git-ticket119-isolated-workspace.log` |
 
-定向 Cargo 命令也可从宿主根添加 `--manifest-path target/git-ticket119-source/Cargo.toml` 并改用 `--target-dir target`。该二进制完成一次构建后，重复过滤词直接运行 `target/debug/deps/editor_app-d4e1859b30e4cb6a.exe`；上表给出等价 Cargo 入口，日志不伪装为每项都重新编译。自动行为与阶段门禁全部通过，当前准备普通提交及固定点至 HEAD 的 Standards/Spec 审查；审查、推送和 issue 关闭尚未完成。
+定向 Cargo 命令也可从宿主根添加 `--manifest-path target/git-ticket119-source/Cargo.toml` 并改用 `--target-dir target`。该二进制完成一次构建后，重复过滤词直接运行 `target/debug/deps/editor_app-d4e1859b30e4cb6a.exe`；上表给出等价 Cargo 入口，日志不伪装为每项都重新编译。此阶段的自动行为与门禁通过，已形成普通本地提交；随后正式审查发现上述两个 P2，修复、复审、推送和 issue 关闭尚未完成。
 
 ## 恢复实施与新工单（历史过程）
 

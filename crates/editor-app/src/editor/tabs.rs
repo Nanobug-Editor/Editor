@@ -84,6 +84,8 @@ impl Drop for VirtualTab {
 pub(crate) struct TextTab {
     /// Unlike the dirty revision, this also advances on disk reloads and other programmatic changes.
     pub(crate) capability_revision: u64,
+    /// Notify-only IME changes revoke capabilities without marking the document dirty or adding Undo.
+    pub(super) capability_content: super::native_text::NativeTextIdentity,
     pub(crate) session: DocumentSession,
     pub(crate) editor: Entity<EditorState>,
     /// Hash of the last disk text, avoiding a second full copy of every open document.

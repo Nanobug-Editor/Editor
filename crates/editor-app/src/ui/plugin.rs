@@ -80,6 +80,8 @@ pub(crate) struct PluginView {
     sink: EventSink,
     /// Nested canvas/control sinks share the gate; retained readonly trees cannot dispatch stale input.
     scene_current: Rc<Cell<bool>>,
+    /// Callbacks without a Window defer to this original native surface before checking IME.
+    window: gpui_kit::AnyWindowHandle,
     inputs: BTreeMap<String, NativeInput>,
     textareas: BTreeMap<String, textareas::NativeTextarea>,
     readonly_code: BTreeMap<String, readonly_code::Snapshot>,
@@ -297,6 +299,7 @@ impl PluginView {
                 }
             }),
             scene_current,
+            window: window.window_handle(),
             inputs: BTreeMap::new(),
             textareas: BTreeMap::new(),
             readonly_code: BTreeMap::new(),
@@ -518,6 +521,7 @@ impl PluginView {
                 if !self.canvases.contains_key(&node.id) {
                     let owner = cx.entity().downgrade();
                     let id = node.id.clone();
+                    let target_window = self.window;
                     let view = cx.new(|cx| {
                         let canvas = cx.entity().downgrade();
                         canvas::CanvasView::new(
@@ -531,25 +535,27 @@ impl PluginView {
                                     plugin_runtime::plugin_protocol::ui::CanvasEvent::Resize { .. }
                                 );
                                 cx.defer(move |cx| {
-                                    let accepted = owner.update(cx, |this, cx| {
-                                        // Canvas and image viewports use the same input envelope, without host zoom state.
-                                        let action = this
-                                            .document
-                                            .active_node(&id)
-                                            .and_then(|node| node.viewport.as_ref())
-                                            .and_then(|viewport| viewport.content)
-                                            .map_or_else(
-                                                || Action::Canvas(event.clone()),
-                                                |content| {
-                                                    Action::ViewportInput(ui::ViewportInput {
-                                                        content,
-                                                        event: event.clone(),
-                                                    })
-                                                },
-                                            );
-                                        this.emit_version(&id, revision, action, cx)
+                                    let accepted = target_window.update(cx, |_, window, cx| {
+                                        owner.update(cx, |this, cx| {
+                                            // Canvas and image viewports use the same input envelope, without host zoom state.
+                                            let action = this
+                                                .document
+                                                .active_node(&id)
+                                                .and_then(|node| node.viewport.as_ref())
+                                                .and_then(|viewport| viewport.content)
+                                                .map_or_else(
+                                                    || Action::Canvas(event.clone()),
+                                                    |content| {
+                                                        Action::ViewportInput(ui::ViewportInput {
+                                                            content,
+                                                            event: event.clone(),
+                                                        })
+                                                    },
+                                                );
+                                            this.emit_version_in(&id, revision, action, window, cx)
+                                        })
                                     });
-                                    if measurement && !matches!(accepted, Ok(true)) {
+                                    if measurement && !matches!(accepted, Ok(Ok(true))) {
                                         let _ = canvas.update(cx, |view, cx| {
                                             view.invalidate_measurement();
                                             cx.notify();
@@ -608,7 +614,7 @@ impl PluginView {
                 let subscription = cx.subscribe_in(
                     &state,
                     window,
-                    move |this, state, event: &InputEvent, _, cx| {
+                    move |this, state, event: &InputEvent, window, cx| {
                         let value = state.read(cx).value().to_string();
                         let action = match event {
                             InputEvent::Change => {
@@ -624,7 +630,7 @@ impl PluginView {
                             InputEvent::PressEnter { .. } => Action::Submit(value),
                             _ => return,
                         };
-                        this.emit(&id, action, cx);
+                        this.emit_in(&id, action, window, cx);
                     },
                 );
                 self.inputs.insert(
@@ -654,13 +660,59 @@ impl PluginView {
         }
     }
 
-    /// Old elements cannot activate removed/disabled controls or controls behind a modal.
+    /// Non-source notifications can use an App-only entry. Source actions always require a Window.
     fn emit(&mut self, id: &str, action: Action, cx: &mut Context<Self>) {
         self.emit_version(id, self.document.revision, action, cx);
     }
 
-    /// Deferred canvas measurements retain the revision at emission instead of borrowing a newer tree.
+    /// App-only callbacks fail closed for source actions: their IME state cannot be checked here.
     fn emit_version(
+        &mut self,
+        id: &str,
+        revision: u64,
+        action: Action,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.document.editor_action_source(id).is_some() {
+            return false;
+        }
+        self.forward_version(id, revision, action, cx)
+    }
+
+    /// Native input retains its real Window so marked text is checked before owner authority.
+    fn emit_in(&mut self, id: &str, action: Action, window: &mut Window, cx: &mut Context<Self>) {
+        self.emit_version_in(id, self.document.revision, action, window, cx);
+    }
+
+    /// Validate the local immutable native identity before reading the authoritative source owner.
+    /// This path is for actual input/deferred dispatch only, never for constructing a native frame.
+    fn event_source_current_in(&self, id: &str, window: &mut Window, cx: &mut App) -> bool {
+        self.document.editor_action_source(id).is_none_or(|source| {
+            self.code_action_native_current(source, window, cx)
+                && self
+                    .action_source_current
+                    .as_ref()
+                    .is_some_and(|current| current(source, cx))
+        })
+    }
+
+    /// Deferred events retain their captured UI revision and return true only after actual forwarding.
+    fn emit_version_in(
+        &mut self,
+        id: &str,
+        revision: u64,
+        action: Action,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.event_source_current_in(id, window, cx) {
+            return false;
+        }
+        self.forward_version(id, revision, action, cx)
+    }
+
+    /// Every native adapter shares scene, event-shape and dismissal validation immediately at send.
+    fn forward_version(
         &mut self,
         id: &str,
         revision: u64,
@@ -672,15 +724,8 @@ impl PluginView {
             node: id.into(),
             action,
         };
-        if let Some(source) = self.document.editor_action_source(id)
-            && self
-                .action_source_current
-                .as_ref()
-                .is_none_or(|current| !current(source, cx))
-        {
-            return false;
-        }
-        if self.document.validate_event(&event).is_err()
+        if !self.scene_current.get()
+            || self.document.validate_event(&event).is_err()
             || (matches!(event.action, Action::Dismiss)
                 && self.dismissed_dialog.as_deref() == Some(id))
         {

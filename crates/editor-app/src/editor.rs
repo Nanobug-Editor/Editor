@@ -16,6 +16,7 @@ mod hover_hit_test;
 pub(crate) mod language_edits;
 pub(crate) mod language_features;
 pub(crate) mod linked_input;
+pub(crate) mod native_text;
 mod pointer_hover;
 mod resources;
 mod source;

@@ -1,8 +1,39 @@
 # Git 插件暂停与恢复记录（2026-10-15）
 
-状态：用户明确要求暂停，已停止实施和测试。源码、候选包与日志保留在本地；未提交、推送或发布。恢复时先读本记录、[规格](../specs/git-plugin.md)及[实施验证记录](git-plugin-2026-10-15.md)，再核对现场。实施验证记录中的部分旧结果尚未合并本轮结果，最新事实以下表为准。
+记录状态：保留 2026-10-15 22:54（Asia/Shanghai）用户再次暂停时的完整现场。用户于 2026-10-16 明确要求继续，现已恢复 #119；最新修复、验证和交付状态见[实施验证记录](git-plugin-2026-10-15.md)。下面的进度、未修复项与未推送状态属于暂停时点，不代替恢复后的结果。
 
-后续：用户已批准保留本现场并将剩余工作按场景拆分，已发布[两张工单](../tickets/git-plugin-remaining/README.md)（#119/#120）并恢复实施。本文件保留为暂停时的历史快照；恢复后的结果单独记录，不将这里的失败或已通过证据覆盖为新候选结果。
+此前用户已批准保留现场，将剩余工作按场景拆分并发布[两张工单](../tickets/git-plugin-remaining/README.md)（#119/#120）。下面“本次再次暂停现场”记录最新事实；其后保留首次暂停时的历史快照，不能把不同阶段的结果合并为新候选通过。
+
+## 本次再次暂停现场
+
+| 工单 | 保留的估算进度 | 当前状态 |
+| --- | --- | --- |
+| [01 / #119](https://github.com/Nanobug-Editor/Editor/issues/119) | `██████████████████░░` 约 90% | 暂停；既有自动门禁通过，正式审查发现两项 P2，新增回归已复现失败，生产修复尚未开始 |
+| [02 / #120](https://github.com/Nanobug-Editor/Editor/issues/120) | `███████░░░░░░░░░░░░░` 约 35% | 暂停；保留既有业务实现、55 项访客和 17 项实际包证据，等待 #119，尚未进入剩余全流程及生产外观验收 |
+
+百分比包含重拆前的实现和证据，是工作量估算，不是验收条目完成比例。暂停时已读回两个 GitHub issue 均为 open；没有关闭或修改远程议题。用户最新暂停要求优先于此前连续实施授权。
+
+- 分支：`codex/git-plugin-workbench`；HEAD：`81d6221a7f6daff290b95bff992ecc039b119c5d`。固定审查点：`1379f58df76622bdf4d6a7c4167469f124d17a0b`。该普通提交只包含 Git 所需实现闭包，排除了其他任务的工作区改动；未推送。
+- 正式 Standards 审查：0 项硬性违规、0 项判断类问题。正式 Spec 审查：2 项 P2，均属实现缺陷；没有因既有自动测试通过而标记审查完成。
+- P2 / IME：当前有效来源进入预编辑时，上游仅 notify、不发普通 Change，插件能力 revision 不前进，旧忽略/确认动作仍可能发出。新增 `native_code_alignment_current_actions_reject_preedit_and_unmarked_old_content` 已在 0.24 秒复现；日志 `target/git-ticket119-preedit-authority-red.log`。测试还保留等长候选替换、unmark 与正确版本重新授权的后续断言，当前在首个失败处停止，后续断言尚未执行。
+- P2 / 三栏新增行：pivot 为 `a\nz\n`、结果为 `a\nX\n共同\nz\n`、右栏为 `a\n共同\nY\nz\n` 时，同一 pivot 间隙内两侧共同新增行按序号槽位排列，显示位置不一致。新增 `common_peer_insertions_share_display_rows_without_pivot_anchors` 已复现 `20px != 40px`；日志 `target/git-ticket119-peer-insertion-red.log`。
+- 两项只新增测试，未开始生产修复。未提交文件为 `crates/editor-app/src/ui/controls/aligned_rows/tests.rs`、`crates/editor-app/src/ui/plugin/code_sync/alignment_tests.rs`、新增 `crates/editor-app/src/ui/plugin/code_sync/alignment_tests/composition.rs`，合计新增 125 行。真实 index 干净；不要将其他任务的未提交文件混入本任务。
+- 临时 index：`target/git-ticket119.index`；当前测试候选 tree：`8466f18870f667dbfd6af99dcf91cc4692218ca1`；导出目录：`target/git-ticket119-source/`。红灯构建日志：`target/git-ticket119-review-regressions-build.log`。本轮 runner 为 `target/debug/deps/editor_app-d4e1859b30e4cb6a.exe`；恢复时以新构建输出为准，不猜文件名。
+- 原生测试进程已退出，暂停核对时该 runner 无残留进程。所有子代理停止；UI 代理仅完成方案准备，没有落盘生产修改。已保存的 12 个混合 UI 文件修复前快照位于 `target/git119-before-ime-review/`，用于恢复后隔离本任务增量。
+- 候选包仍为 `target/git-plugin-final/git-0.1.1.zip`，SHA-256 `7336d5d39fecc18f2faa8972916fa739978f7e96da96116bb6b34fe5d0363e48`；插件源码仍在 `C:/Projects/RustProjects/Git-for-Nanobug`，没有 `.git` 或远程。本轮未改插件或重打包。
+
+### 恢复入口
+
+1. 先核对本地 HEAD、真实 index、其他任务改动、临时 index 及上面的两份红灯日志。既有提交与回归都保留，不重做已经通过的窗口和对齐修复；也不能把当前两个失败项算作通过。
+2. IME 修复方案尚未实施：新增本地不可变原生文本 identity；使用已锁定 Ropey 2.0.0-beta.1 的公开 `ropey::extra::esoterica::ropes_are_instances` 作 O(1) COW 身份比较，不采用按长度判断或第二份可变文本。`TextTab` 观察 notify-only 文本变化时只推进能力 revision，普通通知不能推进，dirty/Undo 仍由原生 Change 与 DocumentSession 管理。通过公开 `EntityInputHandler::marked_text_range` 检查组合状态，需要真实 Window；绘制仅检查已绑定原生来源，不读正在更新的父 EditorApp，事件再执行现有精确来源/权限检查。
+3. 将 Button、Canvas、Collection、输入、选择、链接和 Tree 等真实事件统一接入带 Window 的来源门禁；Tree 分页须先校验再创建请求。保留同步返回值“确实转发”的含义，不改成仅排队。新增 composition 测试的直接事件调用届时也要改成带 Window 的入口，避免仅靠无窗口入口拒绝而假通过。还需补充原生宿主 capability revision 的预编辑、等长替换、取消、提交、非文本通知回归。
+4. 三栏新增行修复在共享 diff 预算内，对同一 pivot 间隙中的两侧新增片段再用现有 `PairRows::new` 对齐；两栏不增加额外比较，不复制 LCS 或另发预算。追加真实三栏几何/文本/选择回归，根模块负责声明新的测试子模块，避免与 composition 文件交叉编辑。
+5. 保留混合文件的其他主题修改，以修复前快照和三方增量合入隔离候选，不能整文件暂存这些混合 UI 文件。Cargo 统一在隔离导出目录运行，并使用共享 `target`；不要在测试 EXE 运行时重新链接。
+6. 修复后先定向绿灯，再执行受影响补白、旧同步、可见性、窗口及仓库阶段门禁。普通修复提交后重新做固定点至 HEAD 的双轴审查；全部通过才推送、核对远程提交并关闭 #119。之后才能实施 #120 的剩余业务风险、生产截图矩阵、最终包身份与交付验收。
+
+#119 已有自动门禁：补白 39/39（显式包含 ignored）、旧同步 4/4、可见性 3/3、比较 2/2、同包窗口 5/5、fmt/workspace check 通过；非 UI 隔离门禁 276 通过、272 ignored。详见实施验证记录。新增两个红灯使审查仍未通过，不能把上述旧集合写成当前全测试已通过。#120 还需验证历史分页刷新、busy 状态、首/多父提交、认证失败与取消、脏原生文档阻挡、外部结束/新冲突和原生外观等场景。
+
+## 首次暂停历史快照
 
 ## 已确认范围
 

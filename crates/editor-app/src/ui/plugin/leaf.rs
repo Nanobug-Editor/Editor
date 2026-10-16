@@ -135,16 +135,17 @@ impl PluginView {
                 )
                 // Base resolves real link hit targets and selection gestures. No URI is opened here;
                 // a negotiated event reaches the guest and then the versioned native effect boundary.
-                .on_link_click(move |uri, event, _, cx| {
+                .on_link_click(move |uri, event, window, cx| {
                     if link_events {
                         let _ = owner.update(cx, |this, cx| {
                             if this.accept_link_click(&id, revision, event) {
-                                this.emit_version(
+                                this.emit_version_in(
                                     &id,
                                     revision,
                                     Action::Link {
                                         uri: uri.to_string(),
                                     },
+                                    window,
                                     cx,
                                 );
                             }
@@ -223,9 +224,9 @@ impl PluginView {
                                 .hover(colors.hover)
                                 .active(colors.active),
                         )
-                        .on_click(
-                            cx.listener(move |this, _, _, cx| this.emit(&id, Action::Click, cx)),
-                        ),
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.emit_in(&id, Action::Click, window, cx)
+                        })),
                     node.theme_role(),
                 )
                 .into_any_element(),
@@ -297,12 +298,13 @@ impl PluginView {
                         .flex()
                         .items_center()
                         .gap_2()
-                        .on_change(move |state, _, _, cx| {
+                        .on_change(move |state, _, window, cx| {
                             let _ = owner.update(cx, |this, cx| {
-                                this.emit_version(
+                                this.emit_version_in(
                                     &id,
                                     revision,
                                     Action::Toggle(state == CheckboxState::Checked),
+                                    window,
                                     cx,
                                 )
                             });
@@ -339,9 +341,14 @@ impl PluginView {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .on_change(move |_, _, _, cx| {
+                            .on_change(move |_, _, window, cx| {
                                 let _ = owner.update(cx, |this, cx| {
-                                    this.emit(&node_id, Action::Select(option_id.clone()), cx)
+                                    this.emit_in(
+                                        &node_id,
+                                        Action::Select(option_id.clone()),
+                                        window,
+                                        cx,
+                                    )
                                 });
                             })
                             .child(marker)

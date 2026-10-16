@@ -30,13 +30,13 @@ pub(crate) struct CollectionView {
     focus: FocusHandle,
     revision: Rc<Cell<u64>>,
     sidebar_width: Rc<Cell<Option<f32>>>,
-    sink: Rc<dyn Fn(UiEvent, &mut App)>,
+    sink: Rc<dyn Fn(UiEvent, &mut Window, &mut App)>,
 }
 impl CollectionView {
     pub fn new(
         plugin: String,
         focus: FocusHandle,
-        sink: impl Fn(UiEvent, &mut App) + 'static,
+        sink: impl Fn(UiEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             plugin,
@@ -163,13 +163,14 @@ impl CollectionView {
                         tabs.clone(),
                         style.clone(),
                         focus,
-                        move |action, _, cx| {
+                        move |action, window, cx| {
                             sink(
                                 UiEvent {
                                     revision: revision.get(),
                                     node: node.clone(),
                                     action,
                                 },
+                                window,
                                 cx,
                             )
                         },
@@ -214,13 +215,14 @@ impl CollectionView {
                         menu.items.clone(),
                         style,
                         position,
-                        move |action, _, cx| {
+                        move |action, window, cx| {
                             sink(
                                 UiEvent {
                                     revision: revision.get(),
                                     node: node.clone(),
                                     action,
                                 },
+                                window,
                                 cx,
                             )
                         },
@@ -280,7 +282,7 @@ mod tests {
         let capture = slot.clone();
         let (_, cx) = cx.add_window_view(move |window, cx| {
             let view =
-                cx.new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _| {}));
+                cx.new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _, _| {}));
             *capture.borrow_mut() = Some(view.clone());
             Root::new(view, window, cx)
         });
@@ -366,7 +368,7 @@ mod tests {
         let capture = slot.clone();
         let (_, cx) = cx.add_window_view(move |window, cx| {
             let view =
-                cx.new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _| {}));
+                cx.new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _, _| {}));
             *capture.borrow_mut() = Some(view.clone());
             Root::new(view, window, cx)
         });
@@ -422,7 +424,7 @@ mod tests {
             gpui_kit::init(cx);
             crate::ui::typography::init(cx);
             crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
-            let mut view = CollectionView::new("plugin".into(), cx.focus_handle(), |_, _| {});
+            let mut view = CollectionView::new("plugin".into(), cx.focus_handle(), |_, _, _| {});
             // Defaults are stable across host themes; explicit plugin roles take precedence.
             let tabs = view.tabs_style(cx);
             assert_eq!(tabs.background, rgb(0xf7f8fa).into());

@@ -34,7 +34,7 @@ impl PluginView {
             } => {
                 // Keep stale rails in the same geometry while withdrawing their activation.
                 // Native typing must not widen/reflow the result pane until the guest catches up.
-                let current = self.code_source_paint_current(document);
+                let current = self.code_action_native_current(document, window, cx);
                 let actions = crate::ui::controls::EditorActionElements {
                     left: left
                         .iter()
@@ -157,8 +157,8 @@ impl PluginView {
                                 colors.background
                             })
                             .hover(|s| s.bg(colors.hover))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.emit(&node_id, Action::Select(tab_id.clone()), cx)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.emit_in(&node_id, Action::Select(tab_id.clone()), window, cx)
                             }))
                             .child(tab.label.clone()),
                     );

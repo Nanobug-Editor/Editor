@@ -3,7 +3,8 @@ use super::*;
 use crate::editor::viewport::{self as native_viewport, Anchor, Locator, Step};
 use gpui_base::input::{EditorState, RopeExt as _};
 use gpui_kit::{
-    AnyElement, EntityId, InteractiveElement, ParentElement, Pixels, Point, Styled, div,
+    AnyElement, EntityId, EntityInputHandler as _, InteractiveElement, ParentElement, Pixels,
+    Point, Styled, div,
 };
 use plugin_runtime::plugin_protocol::api::DocumentVersion;
 use std::ops::Range;
@@ -155,6 +156,8 @@ impl Group {
 /// The only native editor reference is an existing host session supplied by its owning surface.
 pub(super) struct CodeSync {
     source: Option<(DocumentVersion, Entity<EditorState>)>,
+    /// One immutable COW identity is admitted per complete source token, never per native paint.
+    source_text: Option<crate::editor::native_text::NativeTextIdentity>,
     groups: BTreeMap<String, Group>,
     generation: u64,
     /// Shared across live aligned groups, including rebuilds caused by native editing and IME.
@@ -166,6 +169,7 @@ impl Default for CodeSync {
     fn default() -> Self {
         Self {
             source: None,
+            source_text: None,
             groups: BTreeMap::new(),
             generation: 0,
             alignment_budget: Rc::new(Cell::new(MAX_CELLS)),
@@ -227,13 +231,25 @@ fn active_nodes<'a>(node: &'a ui::Node, out: &mut Vec<&'a ui::Node>) {
 }
 
 impl PluginView {
-    /// Paint uses the source version prepared by its owner, which may still be updating while
-    /// opening a window. Event dispatch separately rechecks the owner's authoritative version.
-    pub(super) fn code_source_paint_current(&self, document: &DocumentVersion) -> bool {
-        self.code_sync
-            .source
-            .as_ref()
-            .is_some_and(|(source, _)| source == document)
+    /// Paint and input inspect only the bound native session. The owner may still be updating
+    /// while painting, so its authoritative callback is reserved for actual event dispatch.
+    /// Marked text revokes actions even when Base has only notified, without an ordinary Change.
+    pub(super) fn code_action_native_current(
+        &self,
+        document: &DocumentVersion,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        let Some((source, editor)) = self.code_sync.source.as_ref() else {
+            return false;
+        };
+        let Some(identity) = self.code_sync.source_text.as_ref() else {
+            return false;
+        };
+        source == document
+            && editor.update(cx, |editor, cx| {
+                identity.matches(editor.text()) && editor.marked_text_range(window, cx).is_none()
+            })
     }
 
     /// Bind the already owned native session. Clearing/changing this binding revokes old locations;
@@ -251,6 +267,18 @@ impl PluginView {
         if identity(&self.code_sync.source) != identity(&source) {
             self.code_sync.cancel(cx);
             cx.notify();
+        }
+        let token = |source: &Option<(DocumentVersion, Entity<EditorState>)>| {
+            source
+                .as_ref()
+                .map(|(version, editor)| (version.clone(), editor.entity_id()))
+        };
+        if token(&self.code_sync.source) != token(&source) {
+            // Repeated publications at the same version cannot grant authority to notify-only
+            // preedit text. Only a newly prepared complete token can admit a new native identity.
+            self.code_sync.source_text = source.as_ref().map(|(_, editor)| {
+                crate::editor::native_text::NativeTextIdentity::new(editor.read(cx).text())
+            });
         }
         self.code_sync.source = source;
     }
