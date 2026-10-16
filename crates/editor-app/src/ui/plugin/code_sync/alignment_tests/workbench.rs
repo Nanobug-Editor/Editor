@@ -185,19 +185,18 @@ fn diagnostics(mounted: &Mounted, ui: &mut VisualTestContext) -> String {
 
 /// Use the Base control's own hit bounds, then require a legal public event at the current scene
 /// revision. The fixture deliberately performs no guest mutation, isolating routing from Git.
-fn click_control(mounted: &Mounted, ui: &mut VisualTestContext, id: &str) {
+fn click_control(mounted: &Mounted, ui: &mut VisualTestContext, id: &str, selector: &'static str) {
     let geometry = diagnostics(mounted, ui);
     eprintln!("[native-alignment-workbench] {id}: {geometry}");
-    let expected_path = format!("plugin-ui-{id}");
+    let hit = ui
+        .debug_bounds(selector)
+        .unwrap_or_else(|| panic!("missing actual button {id}: {geometry}"));
     let bounds = ui.update(|window, _| {
         let snapshots = gpui_base::test_support::snapshots(window);
         let button = snapshots
             .iter()
             .find(|snapshot| {
-                snapshot.role() == Some(gpui_kit::Role::Button)
-                    && snapshot.path().iter().any(|part| {
-                        matches!(part, gpui_kit::ElementId::Name(name) if name.as_str() == expected_path)
-                    })
+                snapshot.role() == Some(gpui_kit::Role::Button) && snapshot.bounds() == hit
             })
             .unwrap_or_else(|| panic!("missing actual button {id}: {geometry}"));
         let bounds = button.bounds();
@@ -243,7 +242,12 @@ fn native_code_alignment_resizable_workbench_footer_routes_click(cx: &mut TestAp
         true,
         size(px(1280.), px(800.)),
     );
-    click_control(&mounted, ui, "merge-from-base");
+    click_control(
+        &mounted,
+        ui,
+        "merge-from-base",
+        "plugin-button-merge-from-base",
+    );
 }
 
 #[gpui::test]
@@ -259,8 +263,18 @@ fn native_code_alignment_resizable_workbench_rails_route_clicks(cx: &mut TestApp
     );
     // Do not reveal the edge first: opening the production scene must leave its first conflict
     // actionable without an artificial scroll that would conceal a flexible-layout regression.
-    click_control(&mounted, ui, "merge-block-0-left");
-    click_control(&mounted, ui, "merge-block-0-right");
+    click_control(
+        &mounted,
+        ui,
+        "merge-block-0-left",
+        "plugin-button-merge-block-0-left",
+    );
+    click_control(
+        &mounted,
+        ui,
+        "merge-block-0-right",
+        "plugin-button-merge-block-0-right",
+    );
 }
 
 /// The main window reads the borrowed session for metadata without mounting another native input.

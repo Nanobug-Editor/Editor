@@ -13,6 +13,7 @@ use gpui_kit::{
 use std::cell::RefCell;
 
 mod composition;
+mod gestures;
 mod insertions;
 mod workbench;
 
@@ -217,15 +218,17 @@ fn settle(ui: &mut VisualTestContext) {
 /// aria-disabled; it disables controls by withdrawing their native focus/click registration.
 /// Check that supported focus seam, then observe real activation and source-focus preservation.
 fn rail(ui: &mut VisualTestContext, disabled: bool) -> Bounds<Pixels> {
+    // Stable hit selectors and actual accessibility rectangles remain public even when native
+    // gesture incarnations change. Do not couple acceptance to that private element-id suffix.
+    let hit = ui
+        .debug_bounds("plugin-button-rail-action")
+        .expect("the actual native rail button must remain painted");
     ui.update(|window, _| {
         let snapshots = gpui_base::test_support::snapshots(window);
         let button = snapshots
             .iter()
             .find(|snapshot| {
-                snapshot.role() == Some(gpui_kit::Role::Button)
-                    && snapshot.path().iter().any(|part| {
-                        matches!(part, gpui_kit::ElementId::Name(name) if name.as_str() == "plugin-ui-rail-action")
-                    })
+                snapshot.role() == Some(gpui_kit::Role::Button) && snapshot.bounds() == hit
             })
             .expect("the actual native rail button must remain painted");
         assert!(button.visible());

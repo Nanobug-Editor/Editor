@@ -31,6 +31,7 @@ impl PluginView {
         let colors = self.colors(node.theme_role(), cx);
         let id = node.id.clone();
         let native_id = SharedString::from(format!("plugin-ui-{}", node.id));
+        let gesture = self.action_gesture(&node.id);
         match &node.kind {
             Kind::ReadonlyCode { .. } => self.render_readonly_code(&node.id, window, cx),
             Kind::Tree { .. } => self
@@ -138,7 +139,9 @@ impl PluginView {
                 .on_link_click(move |uri, event, window, cx| {
                     if link_events {
                         let _ = owner.update(cx, |this, cx| {
-                            if this.accept_link_click(&id, revision, event) {
+                            if this.action_gesture_current(&id, gesture)
+                                && this.accept_link_click(&id, revision, event)
+                            {
                                 this.emit_version_in(
                                     &id,
                                     revision,
@@ -190,7 +193,13 @@ impl PluginView {
             }
             Kind::Button { label } => self
                 .font(
-                    Button::new(native_id.clone())
+                    Button::new(action_gestures::native_id(native_id.clone(), gesture))
+                        .when_some(
+                            self.action_gestures
+                                .focus
+                                .get(&action_gestures::FocusTarget::Button(node.id.clone())),
+                            |button, focus| button.track_focus(focus),
+                        )
                         .debug_selector({
                             // Keep native form actions addressable after splitting the leaf renderer.
                             let control = format!("plugin-button-{}", node.id);
@@ -225,7 +234,9 @@ impl PluginView {
                                 .active(colors.active),
                         )
                         .on_click(cx.listener(move |this, _, window, cx| {
-                            this.emit_in(&id, Action::Click, window, cx)
+                            if this.action_gesture_current(&id, gesture) {
+                                this.emit_in(&id, Action::Click, window, cx);
+                            }
                         })),
                     node.theme_role(),
                 )
@@ -251,9 +262,10 @@ impl PluginView {
             Kind::Checkbox { label, checked } => {
                 let owner = cx.entity().downgrade();
                 let revision = self.document.revision;
-                // Base retains a press by element ID. A fresh scene must not consume a prior press,
-                // while an explicit focus handle lets ordinary task edits keep keyboard activation.
-                let gesture_id = SharedString::from(format!("{native_id}-scene-{revision}"));
+                // Scene-bound ordinary controls keep their existing IDs; source actions also
+                // revoke presses on native source changes and withdrawal without losing focus.
+                let gesture_id =
+                    action_gestures::native_id(format!("{native_id}-scene-{revision}"), gesture);
                 // Marker-only controls keep their prose outside the checkbox. The ordinary
                 // localized hint supplies an accessible name without duplicating visible text.
                 let accessible_label = if label.is_empty() {
@@ -300,13 +312,15 @@ impl PluginView {
                         .gap_2()
                         .on_change(move |state, _, window, cx| {
                             let _ = owner.update(cx, |this, cx| {
-                                this.emit_version_in(
-                                    &id,
-                                    revision,
-                                    Action::Toggle(state == CheckboxState::Checked),
-                                    window,
-                                    cx,
-                                )
+                                if this.action_gesture_current(&id, gesture) {
+                                    this.emit_version_in(
+                                        &id,
+                                        revision,
+                                        Action::Toggle(state == CheckboxState::Checked),
+                                        window,
+                                        cx,
+                                    );
+                                }
                             });
                         })
                         .child(marker)
@@ -333,26 +347,40 @@ impl PluginView {
                             colors.background
                         });
                     group = group.child(
-                        Radio::new(SharedString::from(format!("{}-option-{index}", node.id)))
-                            .checked(checked)
-                            .disabled(disabled || option.disabled)
-                            .accessibility_label(option.label.clone())
-                            .set_position(index + 1, options.len())
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .on_change(move |_, _, window, cx| {
-                                let _ = owner.update(cx, |this, cx| {
+                        Radio::new(action_gestures::native_id(
+                            format!("{}-option-{index}", node.id),
+                            gesture,
+                        ))
+                        .when_some(
+                            self.action_gestures
+                                .focus
+                                .get(&action_gestures::FocusTarget::Choice(
+                                    node.id.clone(),
+                                    option.id.clone(),
+                                )),
+                            |radio, focus| radio.track_focus(focus),
+                        )
+                        .checked(checked)
+                        .disabled(disabled || option.disabled)
+                        .accessibility_label(option.label.clone())
+                        .set_position(index + 1, options.len())
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .on_change(move |_, _, window, cx| {
+                            let _ = owner.update(cx, |this, cx| {
+                                if this.action_gesture_current(&node_id, gesture) {
                                     this.emit_in(
                                         &node_id,
                                         Action::Select(option_id.clone()),
                                         window,
                                         cx,
-                                    )
-                                });
-                            })
-                            .child(marker)
-                            .child(option.label.clone()),
+                                    );
+                                }
+                            });
+                        })
+                        .child(marker)
+                        .child(option.label.clone()),
                     );
                 }
                 group.into_any_element()

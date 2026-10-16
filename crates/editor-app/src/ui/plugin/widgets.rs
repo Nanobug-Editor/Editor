@@ -32,8 +32,10 @@ impl PluginView {
                 sidebar: Some(tabs),
                 menu: None,
             };
+            let gesture = self.action_gesture(&id);
             self.collections[&id].update(cx, |view, cx| {
-                view.update(model, self.environment.clone(), self.origin, window, cx)
+                view.update(model, self.environment.clone(), self.origin, window, cx);
+                view.set_action_gesture(gesture, cx);
             });
         }
         // The ordinary dialog has precedence over a popup; neither borrows another panel's native state.
@@ -74,11 +76,23 @@ impl PluginView {
             .map(|canvas| canvas.read(cx).focus_handle())
             .unwrap_or_else(|| self.dialog_focus.clone());
         cx.new(|_| {
-            controls::CollectionView::new(self.plugin.clone(), focus, move |event, window, cx| {
-                let _ = owner.update(cx, |this, cx| {
-                    this.emit_version_in(&event.node, event.revision, event.action, window, cx);
-                });
-            })
+            controls::CollectionView::new(
+                self.plugin.clone(),
+                focus,
+                move |event, gesture, window, cx| {
+                    let _ = owner.update(cx, |this, cx| {
+                        if this.action_gesture_current(&event.node, gesture) {
+                            this.emit_version_in(
+                                &event.node,
+                                event.revision,
+                                event.action,
+                                window,
+                                cx,
+                            );
+                        }
+                    });
+                },
+            )
         })
     }
 }

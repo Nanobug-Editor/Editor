@@ -1,4 +1,5 @@
 //! Native plugin view lifecycle. GPUI entities stay here; guests receive typed events only.
+mod action_gestures;
 mod atlas;
 pub(crate) mod bitmap;
 mod canvas;
@@ -114,6 +115,8 @@ pub(crate) struct PluginView {
     view_focus: FocusHandle,
     /// Control focus survives a source refresh; gesture identity is separately bound to its scene.
     checkbox_focus: BTreeMap<String, FocusHandle>,
+    /// Source controls revoke Base presses independently of retained input, scroll and focus state.
+    action_gestures: action_gestures::ActionGestures,
     previous_focus: Option<FocusHandle>,
     dismissed_dialog: Option<String>,
     /// Editor-local toolbar projections fit their wrapped content instead of consuming the full pane.
@@ -128,12 +131,14 @@ impl PluginView {
     /// Withdraw projected gestures before an owning native window or pane is removed. The router
     /// flushes the original control's release while its old frame is still mounted.
     pub(crate) fn retire_code_panes(&mut self, cx: &mut Context<Self>) {
+        self.invalidate_action_gestures(cx);
         self.code_sync.cancel(cx);
     }
 
     /// Suspend guest input and pending locations while retaining paint and the native text entity.
     pub(crate) fn set_scene_current(&mut self, current: bool, cx: &mut Context<Self>) {
         if self.scene_current.get() && !current {
+            self.invalidate_action_gestures(cx);
             for tree in self.trees.values() {
                 tree.read(cx).resource.suspend();
             }
@@ -320,6 +325,7 @@ impl PluginView {
             dialog_focus: cx.focus_handle(),
             view_focus: cx.focus_handle().tab_stop(false),
             checkbox_focus: BTreeMap::new(),
+            action_gestures: Default::default(),
             previous_focus: None,
             dismissed_dialog: None,
             content_sized: false,
@@ -367,6 +373,7 @@ impl PluginView {
             return;
         }
         if self.document != document {
+            self.invalidate_action_gestures(cx);
             self.invalidate_code_highlighting(cx);
             if self.document.code_alignment != document.code_alignment {
                 self.code_sync.cancel(cx);
@@ -516,6 +523,7 @@ impl PluginView {
                 .entry(id)
                 .or_insert_with(|| cx.focus_handle());
         }
+        self.sync_action_focus(&nodes, cx);
         for node in nodes {
             if let Kind::Canvas(drawing) = &node.kind {
                 if !self.canvases.contains_key(&node.id) {
@@ -524,9 +532,9 @@ impl PluginView {
                     let target_window = self.window;
                     let view = cx.new(|cx| {
                         let canvas = cx.entity().downgrade();
-                        canvas::CanvasView::new(
+                        canvas::CanvasView::new_versioned(
                             drawing.clone(),
-                            move |event, revision, cx| {
+                            move |event, revision, gesture, cx| {
                                 let owner = owner.clone();
                                 let id = id.clone();
                                 let canvas = canvas.clone();
@@ -537,6 +545,9 @@ impl PluginView {
                                 cx.defer(move |cx| {
                                     let accepted = target_window.update(cx, |_, window, cx| {
                                         owner.update(cx, |this, cx| {
+                                            if !this.action_gesture_current(&id, gesture) {
+                                                return false;
+                                            }
                                             // Canvas and image viewports use the same input envelope, without host zoom state.
                                             let action = this
                                                 .document
@@ -575,7 +586,9 @@ impl PluginView {
                     node.theme_role(),
                     drawing.grid,
                 ));
+                let gesture = self.action_gesture(&node.id);
                 self.canvases[&node.id].update(cx, |view, cx| {
+                    view.set_action_gesture(gesture);
                     view.drawing = drawing.clone();
                     if view.viewport.as_ref().and_then(|v| v.content)
                         != node.viewport.as_ref().and_then(|v| v.content)

@@ -259,6 +259,17 @@ impl PluginView {
         source: Option<(DocumentVersion, Entity<EditorState>)>,
         cx: &mut Context<Self>,
     ) {
+        let token = |source: &Option<(DocumentVersion, Entity<EditorState>)>| {
+            source
+                .as_ref()
+                .map(|(version, editor)| (version.clone(), editor.entity_id()))
+        };
+        let token_changed = token(&self.code_sync.source) != token(&source);
+        if token_changed {
+            // Retiring a projected pane may flush its original release. Revoke source actions
+            // before that cleanup can dispatch through the frame that is being withdrawn.
+            self.invalidate_action_gestures(cx);
+        }
         let identity = |source: &Option<(DocumentVersion, Entity<EditorState>)>| {
             source.as_ref().map(|(version, editor)| {
                 (version.id.clone(), version.path.clone(), editor.entity_id())
@@ -268,17 +279,14 @@ impl PluginView {
             self.code_sync.cancel(cx);
             cx.notify();
         }
-        let token = |source: &Option<(DocumentVersion, Entity<EditorState>)>| {
-            source
-                .as_ref()
-                .map(|(version, editor)| (version.clone(), editor.entity_id()))
-        };
-        if token(&self.code_sync.source) != token(&source) {
+        if token_changed {
             // Repeated publications at the same version cannot grant authority to notify-only
             // preedit text. Only a newly prepared complete token can admit a new native identity.
             self.code_sync.source_text = source.as_ref().map(|(_, editor)| {
                 crate::editor::native_text::NativeTextIdentity::new(editor.read(cx).text())
             });
+            // A revision-only source refresh still needs to mount fresh Base gesture identities.
+            cx.notify();
         }
         self.code_sync.source = source;
     }

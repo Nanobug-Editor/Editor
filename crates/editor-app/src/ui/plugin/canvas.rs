@@ -20,6 +20,8 @@ pub(crate) struct CanvasView {
     pub(crate) font: protocol::FontStyle,
     pub(super) enabled: bool,
     pub(super) revision: u64,
+    /// Only editor-source descendants bind a short-lived pointer/dispatch credential.
+    action_gesture: Option<action_gestures::ActionGesture>,
     pub(crate) foreground: u32,
     pub(super) images: Option<std::sync::Arc<Vec<Option<super::images::VectorImage>>>>,
     focus: FocusHandle,
@@ -33,7 +35,7 @@ pub(crate) struct CanvasView {
     pub(crate) scrollbar_idle: Option<std::time::Duration>,
     scrollbar_visible: bool,
     scrollbar_hold: Option<gpui_kit::Task<()>>,
-    sink: Rc<dyn Fn(CanvasEvent, u64, &mut App)>,
+    sink: Rc<dyn Fn(CanvasEvent, u64, Option<action_gestures::ActionGesture>, &mut App)>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -66,6 +68,22 @@ impl CanvasView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::new_versioned(
+            drawing,
+            move |event, revision, _, cx| sink(event, revision, cx),
+            window,
+            cx,
+        )
+    }
+
+    /// Plugin views retain the source credential at emission, including deferred geometry events.
+    /// Standalone native canvases use `new` and retain their ordinary cross-render drag behavior.
+    pub(super) fn new_versioned(
+        drawing: Canvas,
+        sink: impl Fn(CanvasEvent, u64, Option<action_gestures::ActionGesture>, &mut App) + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let focus = cx.focus_handle();
         let subscriptions = vec![
             cx.on_focus(&focus, window, |this, _, cx| {
@@ -83,6 +101,7 @@ impl CanvasView {
             font: Default::default(),
             enabled: true,
             revision: 0,
+            action_gesture: None,
             foreground: 0,
             images: None,
             focus,
@@ -101,8 +120,20 @@ impl CanvasView {
     }
     fn emit(&self, event: CanvasEvent, cx: &mut Context<Self>) {
         if self.enabled {
-            (self.sink)(event, self.revision, cx);
+            (self.sink)(event, self.revision, self.action_gesture, cx);
         }
+    }
+    /// Revoke only source-owned gesture state; ordinary guest repaints keep their captured drag.
+    pub(super) fn set_action_gesture(
+        &mut self,
+        gesture: Option<action_gestures::ActionGesture>,
+    ) -> bool {
+        if self.action_gesture == gesture {
+            return false;
+        }
+        self.deactivate();
+        self.action_gesture = gesture;
+        true
     }
     /// A removed or disabled input target must not retain an unfinished native composition.
     pub(super) fn cancel_composition(&mut self) {
@@ -323,11 +354,16 @@ impl CanvasView {
 
     /// Capture only a drag begun here, retaining ownership outside the canvas until release.
     fn capture_pointer(&self, window: &mut Window, cx: &Context<Self>) {
+        let gesture = self.action_gesture;
         let moved = cx.entity().downgrade();
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
             if phase.capture() {
                 let _ = moved.update(cx, |this, cx| {
-                    if this.enabled && this.drag.is_some() && this.drag == event.pressed_button {
+                    if this.action_gesture == gesture
+                        && this.enabled
+                        && this.drag.is_some()
+                        && this.drag == event.pressed_button
+                    {
                         this.pointer(
                             PointerPhase::Move,
                             event.position,
@@ -345,7 +381,10 @@ impl CanvasView {
         window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
             if phase.capture() {
                 let _ = released.update(cx, |this, cx| {
-                    if this.enabled && this.drag == Some(event.button) {
+                    if this.action_gesture == gesture
+                        && this.enabled
+                        && this.drag == Some(event.button)
+                    {
                         this.drag = None;
                         this.pointer(
                             PointerPhase::Up,
@@ -409,6 +448,7 @@ fn rect_bounds(rect: protocol::Rect, origin: Point<Pixels>) -> Bounds<Pixels> {
 
 impl Render for CanvasView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let gesture = self.action_gesture;
         let measure = cx.entity().downgrade();
         let paint = measure.clone();
         let mut element = div()
@@ -417,8 +457,9 @@ impl Render for CanvasView {
             .relative()
             .overflow_hidden()
             .track_focus(&self.focus)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if !this.enabled
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                if this.action_gesture != gesture
+                    || !this.enabled
                     || !this.drawing.focusable
                     || !this.focus.is_focused(window)
                     || !this.composition.is_empty()
@@ -452,7 +493,7 @@ impl Render for CanvasView {
             element = element.on_mouse_down(
                 button,
                 cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                    if !this.enabled {
+                    if this.action_gesture != gesture || !this.enabled {
                         return;
                     }
                     this.drag = Some(button);
@@ -472,7 +513,10 @@ impl Render for CanvasView {
             );
         }
         element = element
-            .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
+            .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
+                if this.action_gesture != gesture {
+                    return;
+                }
                 // Line wheels on a grid use measured rows, not the smaller font point size.
                 let line_height = match &this.measured {
                     Some(CanvasEvent::Resize {
@@ -497,7 +541,11 @@ impl Render for CanvasView {
             .child(
                 canvas(
                     move |bounds, window, cx| {
-                        let _ = measure.update(cx, |this, cx| this.measure(bounds, window, cx));
+                        let _ = measure.update(cx, |this, cx| {
+                            if this.action_gesture == gesture {
+                                this.measure(bounds, window, cx);
+                            }
+                        });
                     },
                     move |bounds, _, window, cx| {
                         let _ = paint.update(cx, |this, cx| this.paint(bounds, window, cx));

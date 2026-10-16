@@ -135,6 +135,7 @@ impl PluginView {
                     .into_any_element()
             }
             Kind::Tabs { tabs, selected } => {
+                let gesture = self.action_gesture(&node.id);
                 let mut strip = Tabs::new(native_id.clone())
                     .flex()
                     .gap_1()
@@ -144,23 +145,28 @@ impl PluginView {
                     let node_id = node.id.clone();
                     let tab_id = tab.id.clone();
                     strip = strip.child(
-                        Tab::new(SharedString::from(format!("{}-tab-{index}", node.id)))
-                            .selected(&tab.id == selected)
-                            .disabled(disabled)
-                            .accessibility_label(tab.label.clone())
-                            .set_position(index + 1, tabs.len())
-                            .px_3()
-                            .py_2()
-                            .bg(if &tab.id == selected {
-                                colors.active
-                            } else {
-                                colors.background
-                            })
-                            .hover(|s| s.bg(colors.hover))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.emit_in(&node_id, Action::Select(tab_id.clone()), window, cx)
-                            }))
-                            .child(tab.label.clone()),
+                        Tab::new(action_gestures::native_id(
+                            format!("{}-tab-{index}", node.id),
+                            gesture,
+                        ))
+                        .selected(&tab.id == selected)
+                        .disabled(disabled)
+                        .accessibility_label(tab.label.clone())
+                        .set_position(index + 1, tabs.len())
+                        .px_3()
+                        .py_2()
+                        .bg(if &tab.id == selected {
+                            colors.active
+                        } else {
+                            colors.background
+                        })
+                        .hover(|s| s.bg(colors.hover))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            if this.action_gesture_current(&node_id, gesture) {
+                                this.emit_in(&node_id, Action::Select(tab_id.clone()), window, cx);
+                            }
+                        }))
+                        .child(tab.label.clone()),
                     );
                 }
                 let mut body = div().flex().flex_col().gap_2().child(strip);

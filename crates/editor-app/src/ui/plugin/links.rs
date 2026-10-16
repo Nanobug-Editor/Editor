@@ -76,22 +76,27 @@ impl PluginView {
         }
         let disabled = disabled || self.document.active_node(&node.id).is_none();
         let revision = self.document.revision;
+        let gesture = self.action_gesture(&node.id);
         if !matches!(node.kind, Kind::RichText { .. }) {
             let link = &node.links[0];
             let focus = &self.link_focus[&focus_key(&node.id, 0, &link.uri)].handle;
             let id = node.id.clone();
             let uri = link.uri.clone();
-            return Button::new(format!("plugin-image-link-{}-scene-{revision}", node.id))
-                .ghost()
-                .p_0()
-                .h_auto()
-                .w_full()
-                .disabled(disabled)
-                .track_focus(focus)
-                .accessibility_label(self.link_label(link))
-                .tooltip(link.uri.clone())
-                .child(content)
-                .on_click(cx.listener(move |this, _, window, cx| {
+            return Button::new(action_gestures::native_id(
+                format!("plugin-image-link-{}-scene-{revision}", node.id),
+                gesture,
+            ))
+            .ghost()
+            .p_0()
+            .h_auto()
+            .w_full()
+            .disabled(disabled)
+            .track_focus(focus)
+            .accessibility_label(self.link_label(link))
+            .tooltip(link.uri.clone())
+            .child(content)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                if this.action_gesture_current(&id, gesture) {
                     this.emit_version_in(
                         &id,
                         revision,
@@ -99,8 +104,9 @@ impl PluginView {
                         window,
                         cx,
                     );
-                }))
-                .into_any_element();
+                }
+            }))
+            .into_any_element();
         }
         let mut body = div().relative().w_full().child(content);
         for (index, link) in node.links.iter().enumerate() {
@@ -114,9 +120,12 @@ impl PluginView {
             let id = node.id.clone();
             let uri = link.uri.clone();
             let debug_id = format!("plugin-link-focus-{}-{index}", node.id);
-            let button = Button::new(format!(
-                "plugin-link-{}-{index}-scene-{revision}-focus-{focused}",
-                node.id
+            let button = Button::new(action_gestures::native_id(
+                format!(
+                    "plugin-link-{}-{index}-scene-{revision}-focus-{focused}",
+                    node.id
+                ),
+                gesture,
             ))
             .ghost()
             .small()
@@ -130,7 +139,9 @@ impl PluginView {
             .on_click(cx.listener(move |this, event, window, cx| {
                 // An invisible target can receive Tab, but a pointer press cannot open it.
                 // Focus-specific Base IDs also prevent that press surviving its newly revealed cue.
-                if focused || matches!(event, ClickEvent::Keyboard(_)) {
+                if (focused || matches!(event, ClickEvent::Keyboard(_)))
+                    && this.action_gesture_current(&id, gesture)
+                {
                     this.emit_version_in(
                         &id,
                         revision,

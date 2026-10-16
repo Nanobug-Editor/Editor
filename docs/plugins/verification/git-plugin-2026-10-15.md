@@ -1,6 +1,34 @@
 # Git 插件实施验证（2026-10-15）
 
-状态：2026-10-16 用户要求继续，已从保留现场恢复。#119 的两项 P2 已修复，定向回归、实际窗口 5/5 和仓库阶段门禁全部通过，正在准备正式复审；#120 保留已有实现和通过证据，等待 #119 完成交付。暂停历史见[现场记录](git-plugin-paused-2026-10-15.md)。依据为[已确认规格](../specs/git-plugin.md)；本记录不把未完成的验收标记通过。
+状态：2026-10-16 用户要求继续，已从保留现场恢复。#119 前两项 P2 修复并通过阶段门禁后，第二轮正式复审又发现旧按压可接续到新场景的 P2；新增四项真实鼠标回归已完成红绿验证，完整门禁正在复验，尚未推送关闭。#120 保留已有实现和通过证据，等待 #119 完成交付。暂停历史见[现场记录](git-plugin-paused-2026-10-15.md)。依据为[已确认规格](../specs/git-plugin.md)；本记录不把未完成的验收标记通过。
+
+## 2026-10-16 第二轮正式复审与手势修复
+
+审查范围为固定点 `1379f58df76622bdf4d6a7c4167469f124d17a0b` 至 HEAD `85c9bccbabd2cfc440f06760b571aba0a714e84e`；`git diff <固定点>...HEAD` 和对应提交列表非空。两个轴分别由子代理完成。
+
+### Standards
+
+0 项硬性违规、0 项判断类问题。未发现新增公开能力绕过、上游复制或文档状态分叉；此静态结论不能代替真实输入回归。
+
+### Spec
+
+1 项 P2，实现缺陷（分类 c）：来源动作按钮的稳定 Base 元素身份保留了上一帧的按压，而回调读取新的 UI revision；旧按压可能激活新的场景，违反 #119 AC4。初步三栏测试因布局重建附带撤销按压而掩盖完整边界，补充同来源只换 UI 场景、旧版无补白代码组、来源 Canvas 和来源 SideTabs 四个真实鼠标回归，全部失败（`target/git-ticket119-action-widgets-red.log`，1.62 秒）。另外，同一次 update 内撤回再恢复也必须结束旧按压，不能依赖隐藏帧存在。
+
+两轴合计分别为 Standards 0 项（无最高级别）、Spec 1 项（最高 P2）。修复只为来源动作建立绑定 UI revision、完整来源 token 及撤回世代的本地手势身份，再经过既有 IME、原生文本身份、精确来源和拥有者检查。输入、滚动和焦点保留；普通 Canvas 的跨帧拖动不变，没有更改协议、插件或包资产，也没有复制上游控件。
+
+四个回归修复后 4/4 通过，2.57 秒，`target/git-ticket119-action-widgets-green.log`；第一次隔离编译缺少 `FluentBuilder` 导入，已补齐后重建。稳定的公开 debug selector 用于定位真实控件，不将测试绑到需要变化的私有 Base 元素 ID。实现与测试 tree 为 `a314887c742e328b862bfae45963c52b2a0cb5a9`（不含本段文档刷新），仅导出本任务增量；没有借入其他任务的未提交源码。
+
+| 手势修复候选验证 | 实际结果 | 日志（宿主 target/） |
+| --- | --- | --- |
+| 四项来源动作真实鼠标回归 | 4/4，2.57 秒；显式执行 ignored | `git-ticket119-action-widgets-green.log` |
+| `align --include-ignored --test-threads=1` | 48/48，13.40 秒 | `git-ticket119-gesture-alignment.log` |
+| `ui::plugin:: --include-ignored --test-threads=1` | 69/69，57.41 秒；含普通 Canvas 跨帧拖动 | `git-ticket119-gesture-ui.log` |
+| 旧语义同步 / 可见性 / 原生 DocumentInfo IME | 4/4、3/3、1/1 | `git-ticket119-gesture-legacy.log`、`git-ticket119-gesture-visibility.log`、`git-ticket119-gesture-document.log` |
+| `cargo fmt --check` | 通过 | `git-ticket119-gesture-fmt.log` |
+| 非 UI workspace / workspace check | 77 组、276 通过、272 ignored；check 通过，6.85 秒。未执行 ignored 不计通过 | `git-ticket119-gesture-workspace.log`、`git-ticket119-gesture-check.log` |
+| 同摘要 0.1.1 实际包五窗口 | 正在执行；未计通过 | `git-ticket119-gesture-windows.log` |
+
+本轮仅修改宿主私有手势适配与真实回归，未改变插件候选摘要。正式复审、窗口复验和推送关闭尚未完成。
 
 ## 2026-10-16 恢复：审查缺陷修复
 
