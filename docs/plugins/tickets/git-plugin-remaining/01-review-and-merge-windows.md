@@ -4,7 +4,7 @@
 
 **模式：** 场景拆分。
 
-**状态：** in-progress — 用户于 2026-10-16 要求继续。前两项 P2 修复并通过门禁后，第二轮正式复审发现旧按压跨场景接续的 P2；来源按钮、旧版比较、Canvas 和 SideTabs 四项真实鼠标回归已完成红绿验证，正在复验完整门禁。尚未推送关闭；见[实施验证](../../verification/git-plugin-2026-10-15.md)。
+**状态：** in-progress — 用户于 2026-10-16 要求继续。来源按钮、旧版比较、Canvas、SideTabs、Tree 和图片六项真实输入回归已完成红绿验证，第三轮复审遗漏的 Tree 路径已补齐；正在完成共享门禁、最终窗口与正式复审。尚未推送关闭；见[实施验证](../../verification/git-plugin-2026-10-15.md)。
 
 **GitHub：** [#119](https://github.com/Nanobug-Editor/Editor/issues/119)。
 

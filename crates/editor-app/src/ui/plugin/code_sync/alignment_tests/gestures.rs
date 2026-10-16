@@ -272,3 +272,259 @@ fn native_code_alignment_source_collection_cannot_select_with_a_replaced_press(
     assert_eq!(mounted.events.borrow()[0].node, "rail-tabs");
     assert_eq!(mounted.events.borrow()[0].revision, 2);
 }
+
+/// A package-owned resource supplies actual Base tree rows; no test-only host tree constructor
+/// or direct toggle call can hide a press that survives in the native disclosure element.
+#[gpui::test]
+#[ignore = "frozen Package/WASM tree fixture and native source-action press; run explicitly"]
+fn native_code_alignment_source_tree_cannot_expand_with_a_replaced_press(cx: &mut TestAppContext) {
+    let storage = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let package = crate::test_packages::package("database-tree-0.1.1");
+    let mut manager = plugin_runtime::Manager::open(
+        storage.path().into(),
+        Environment {
+            workspace: workspace.path().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+    crate::extensions::demand_plugin_fixture(
+        &mut manager,
+        "database-tree",
+        plugin_runtime::DemandReason::View("presentation".into()),
+    )
+    .unwrap();
+    let resource = manager.live["database-tree"]
+        .tree_resources()
+        .pop()
+        .unwrap();
+    // Prime provider metadata through its declared scene, as the production native projection
+    // does. The action fixture below records events so it must not substitute for that provider.
+    let scene = manager.live["database-tree"].views["presentation"].clone();
+    let mut tree_node = None;
+    scene.root.visit(&mut |node| {
+        if matches!(&node.kind, Kind::Tree { handle } if handle == resource.handle()) {
+            tree_node = Some(node.id.clone());
+        }
+    });
+    let request = resource.request(None, false).unwrap().unwrap();
+    manager
+        .event(
+            "database-tree",
+            Some("presentation".into()),
+            plugin_runtime::plugin_protocol::api::Notification::Ui(UiEvent {
+                revision: scene.revision,
+                node: tree_node.unwrap(),
+                action: Action::Tree(plugin_runtime::plugin_protocol::tree::Event::Request(
+                    request,
+                )),
+            }),
+        )
+        .unwrap();
+    manager.poll();
+    assert!(resource.snapshot().nodes.contains_key("main"));
+    let handle = resource.handle().clone();
+    let (mounted, ui) = mount_with_document(
+        cx,
+        |version| {
+            action_document(
+                version,
+                ui::Node::new("rail-tree", Kind::Tree { handle })
+                    .width(76.)
+                    .height(100.),
+            )
+        },
+        content(1),
+        false,
+        false,
+        size(px(1060.), px(260.)),
+    );
+    ui.update(|_, cx| {
+        mounted.view.update(cx, |view, cx| {
+            view.update_trees(&[resource.clone()], cx);
+        });
+    });
+    settle(ui);
+    let row = ui.debug_bounds("plugin-tree-row-main").unwrap();
+    // The native 16px disclosure slot starts after the row's 8px indentation.
+    let hit = row.origin + point(px(12.), row.size.height / 2.);
+    assert!(!resource.snapshot().expanded.contains("main"));
+    mounted.events.borrow_mut().clear();
+    ui.simulate_mouse_down(hit, MouseButton::Left, Default::default());
+    ui.update(|window, cx| {
+        mounted.view.update(cx, |view, cx| {
+            view.update_document(
+                mounted.document.clone().revision(2),
+                Environment::default(),
+                window,
+                cx,
+            );
+            view.update_trees(&[resource.clone()], cx);
+        });
+    });
+    settle(ui);
+    ui.simulate_mouse_up(hit, MouseButton::Left, Default::default());
+    settle(ui);
+    assert!(
+        !resource.snapshot().expanded.contains("main") && mounted.events.borrow().is_empty(),
+        "a new source-tree scene cannot adopt an old disclosure press or allocate its page"
+    );
+    ui.simulate_click(hit, Default::default());
+    settle(ui);
+    assert!(resource.snapshot().expanded.contains("main"));
+    assert!(
+        mounted
+            .events
+            .borrow()
+            .iter()
+            .any(|event| event.revision == 2 && matches!(&event.action, Action::Tree(_)))
+    );
+    mounted.events.borrow_mut().clear();
+    ui.simulate_mouse_down(hit, MouseButton::Left, Default::default());
+    ui.update(|_, cx| {
+        mounted.view.update(cx, |view, cx| {
+            view.set_scene_current(false, cx);
+            view.set_scene_current(true, cx);
+            view.update_trees(&[resource.clone()], cx);
+        });
+    });
+    settle(ui);
+    ui.simulate_mouse_up(hit, MouseButton::Left, Default::default());
+    settle(ui);
+    assert!(
+        resource.snapshot().expanded.contains("main"),
+        "withdrawal also revokes a pending collapse without relying on a hidden frame"
+    );
+    ui.simulate_click(hit, Default::default());
+    settle(ui);
+    assert!(!resource.snapshot().expanded.contains("main"));
+}
+
+/// Immutable authorized pixels use the same public viewport path as image consumers. Source
+/// actions additionally require their own Down before Up, across scene replacement and withdrawal.
+#[gpui::test]
+#[ignore = "native source-image pointer ownership; run explicitly with --ignored --test-threads=1"]
+fn native_code_alignment_source_image_cannot_release_into_a_replaced_scene(
+    cx: &mut TestAppContext,
+) {
+    use std::sync::Arc;
+    let (mounted, ui) = mount_with_document(
+        cx,
+        |version| {
+            let mut image = ui::Node::new(
+                "rail-image",
+                Kind::Image {
+                    source: "rail.png".into(),
+                    alt: String::new(),
+                },
+            )
+            .width(64.)
+            .height(32.);
+            image.viewport = Some(ui::VisualViewport::default());
+            action_document(version, image)
+        },
+        content(1),
+        false,
+        false,
+        size(px(1060.), px(260.)),
+    );
+    ui.update(|_, cx| {
+        mounted.view.update(cx, |view, cx| {
+            view.photos.insert(
+                "rail-image".into(),
+                Arc::new(crate::ui::plugin::images::Photo {
+                    resource: Arc::new(plugin_runtime::ImageResource {
+                        source: mounted.version.clone().into(),
+                        uri: "rail.png".into(),
+                        state: plugin_runtime::ImageState::Ready(Arc::new(Vec::new())),
+                    }),
+                    decoded: Ok(Some(crate::ui::plugin::bitmap::Bitmap {
+                        width: 64,
+                        height: 32,
+                        image: Arc::new(gpui_kit::RenderImage::new([image::Frame::new(
+                            image::RgbaImage::from_pixel(64, 32, image::Rgba([255, 0, 0, 255])),
+                        )])),
+                    })),
+                }),
+            );
+            cx.notify();
+        });
+    });
+    settle(ui);
+    let hit = ui.debug_bounds("plugin-file-image").unwrap().center();
+    for withdraw in [false, true] {
+        mounted.events.borrow_mut().clear();
+        ui.simulate_mouse_down(hit, MouseButton::Left, Default::default());
+        settle(ui);
+        assert!(
+            mounted
+                .events
+                .borrow()
+                .iter()
+                .any(|event| matches!(&event.action,
+            Action::ViewportInput(input) if matches!(input.event,
+                ui::CanvasEvent::Pointer { phase: ui::PointerPhase::Down, .. })))
+        );
+        mounted.events.borrow_mut().clear();
+        ui.update(|window, cx| {
+            mounted.view.update(cx, |view, cx| {
+                if withdraw {
+                    view.set_scene_current(false, cx);
+                    view.set_scene_current(true, cx);
+                } else {
+                    view.update_document(
+                        mounted.document.clone().revision(2),
+                        Environment::default(),
+                        window,
+                        cx,
+                    );
+                }
+            });
+        });
+        settle(ui);
+        ui.simulate_event(gpui_kit::MouseMoveEvent {
+            position: hit + point(px(2.), px(0.)),
+            pressed_button: Some(MouseButton::Left),
+            ..Default::default()
+        });
+        settle(ui);
+        assert!(
+            !mounted
+                .events
+                .borrow()
+                .iter()
+                .any(|event| matches!(&event.action,
+                Action::ViewportInput(input) if matches!(input.event,
+                    ui::CanvasEvent::Pointer { phase: ui::PointerPhase::Move, .. }))),
+            "a source image cannot adopt an old held drag after replacement or withdrawal"
+        );
+        ui.simulate_mouse_up(hit, MouseButton::Left, Default::default());
+        settle(ui);
+        assert!(
+            !mounted
+                .events
+                .borrow()
+                .iter()
+                .any(|event| matches!(&event.action,
+                Action::ViewportInput(input) if matches!(input.event,
+                    ui::CanvasEvent::Pointer { phase: ui::PointerPhase::Up, .. }))),
+            "a source image cannot forward Up from a replaced or withdrawn Down"
+        );
+        mounted.events.borrow_mut().clear();
+        ui.simulate_click(hit, Default::default());
+        settle(ui);
+        assert!(
+            mounted
+                .events
+                .borrow()
+                .iter()
+                .any(|event| event.revision == 2
+                    && matches!(&event.action, Action::ViewportInput(input) if matches!(input.event,
+                ui::CanvasEvent::Pointer { phase: ui::PointerPhase::Up, .. })))
+        );
+    }
+}

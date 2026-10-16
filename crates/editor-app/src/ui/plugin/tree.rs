@@ -1,5 +1,6 @@
 //! Generic native tree projection. Base retains selection, direction keys and virtual scrolling;
 //! the shared runtime resource retains bounded provider pages and rejects obsolete callbacks.
+use super::action_gestures::ActionGesture;
 use super::*;
 use crate::ui::controls::{
     Icon, TreeRowAppearance,
@@ -9,8 +10,8 @@ use crate::ui::controls::{
 use gpui_base::{Tree, TreeEvent, TreeItem, TreeState};
 use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
-    InteractiveElement as _, MouseButton, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, StyleRefinement, Styled as _, div,
+    InteractiveElement as _, MouseButton, ParentElement as _, StatefulInteractiveElement as _,
+    StyleRefinement, Styled as _, div,
 };
 use plugin_runtime::{TreeResource, TreeSnapshot, plugin_protocol::tree as api};
 use rust_i18n::t;
@@ -25,7 +26,7 @@ enum Dispatch {
         continuation: bool,
     },
 }
-type TreeSink = Rc<dyn Fn(Dispatch, u64, &mut App)>;
+type TreeSink = Rc<dyn Fn(Dispatch, u64, Option<ActionGesture>, &mut App)>;
 
 /// One keyed UI node borrows one instance-owned tree; no domain providers or text copies live here.
 pub(super) struct TreeView {
@@ -34,6 +35,9 @@ pub(super) struct TreeView {
     snapshot: TreeSnapshot,
     selected: Option<String>,
     revision: u64,
+    /// Source-owned rows bind native presses and deferred requests to one admitted scene.
+    action_gesture: Option<ActionGesture>,
+    window: gpui_kit::AnyWindowHandle,
     node: String,
     environment: Environment,
     gate: Rc<Cell<bool>>,
@@ -50,9 +54,11 @@ impl TreeView {
         resource: Arc<TreeResource>,
         node: String,
         revision: u64,
+        action_gesture: Option<ActionGesture>,
         environment: Environment,
         gate: Rc<Cell<bool>>,
         sink: TreeSink,
+        window: gpui_kit::AnyWindowHandle,
         cx: &mut Context<Self>,
     ) -> Self {
         let tree = cx.new(|cx| TreeState::new(cx));
@@ -99,6 +105,8 @@ impl TreeView {
             snapshot: TreeSnapshot::default(),
             selected: None,
             revision,
+            action_gesture,
+            window,
             node,
             environment,
             gate,
@@ -112,12 +120,60 @@ impl TreeView {
         this.reconcile(cx);
         this
     }
+
+    /// Revoke source presses and menus immediately, retaining Base's selection, focus and scroll.
+    /// A false/true withdrawal without a frame still changes the callbacks' captured credential.
+    pub(super) fn set_action_gesture(
+        &mut self,
+        gesture: Option<ActionGesture>,
+        revision: u64,
+        cx: &mut Context<Self>,
+    ) {
+        if self.action_gesture == gesture {
+            return;
+        }
+        self.action_gesture = gesture;
+        self.revision = revision;
+        self.popup_epoch = None;
+        if let Some(menu) = self.popup.take() {
+            let target = self.window;
+            // Dismiss through the native menu lifecycle after its current owner borrow ends.
+            // The old callback checks its credential before it can affect a newly opened menu.
+            cx.defer(move |cx| {
+                let _ = target.update(cx, |_, window, cx| {
+                    menu.update(cx, |menu, cx| menu.dismiss(window, cx));
+                });
+            });
+        }
+        cx.notify();
+    }
+
+    /// A retained native row or key handler cannot change resource state for another source scene.
+    fn frame_current(&self, gesture: Option<ActionGesture>) -> bool {
+        self.action_gesture == gesture && self.gate.get() && self.resource.is_live()
+    }
+
+    /// Base processes its navigation actions before raw key events. Capture only stale frames,
+    /// leaving all current selection/expansion and focus behavior in the upstream primitive.
+    fn source_action_guard<A: gpui_kit::Action>(
+        gesture: Option<ActionGesture>,
+        cx: &Context<Self>,
+    ) -> impl Fn(&A, &mut Window, &mut App) + 'static {
+        cx.listener(move |this, _: &A, _, cx| {
+            if !this.frame_current(gesture) {
+                cx.stop_propagation();
+            }
+        })
+    }
+
     pub(super) fn update(
         &mut self,
         revision: u64,
+        gesture: Option<ActionGesture>,
         environment: Environment,
         cx: &mut Context<Self>,
     ) {
+        self.set_action_gesture(gesture, revision, cx);
         self.revision = revision;
         self.environment = environment;
         self.reconcile(cx);
@@ -133,12 +189,18 @@ impl TreeView {
                 continuation,
             },
             self.revision,
+            self.action_gesture,
             cx,
         );
     }
     fn emit(&self, event: api::Event, cx: &mut Context<Self>) {
         if self.gate.get() && self.resource.is_live() {
-            (self.sink)(Dispatch::Event(event), self.revision, cx);
+            (self.sink)(
+                Dispatch::Event(event),
+                self.revision,
+                self.action_gesture,
+                cx,
+            );
         }
     }
     /// Base resets selection when replacing items. Restore by stable provider ID without changing scroll.
@@ -311,6 +373,7 @@ impl TreeView {
         let id = id.to_string();
         let epoch = self.snapshot.epoch;
         let revision = self.revision;
+        let gesture = self.action_gesture;
         let menu = cx.new(|cx| {
             PopupMenu::new(
                 items,
@@ -318,14 +381,19 @@ impl TreeView {
                 position,
                 move |action, _, cx| {
                     let _ = owner.update(cx, |this, cx| {
+                        if !this.frame_current(gesture)
+                            || this.popup_epoch != Some((epoch, revision))
+                            || this.revision != revision
+                            || this.snapshot.epoch != epoch
+                        {
+                            return;
+                        }
                         if let Action::Select(item) = action {
-                            if this.snapshot.epoch == epoch && this.revision == revision {
-                                if let Some(index) = item
-                                    .strip_prefix("tree-menu-")
-                                    .and_then(|index| index.parse::<u32>().ok())
-                                {
-                                    this.invoke(&id, api::NodeAction::Menu { index }, cx);
-                                }
+                            if let Some(index) = item
+                                .strip_prefix("tree-menu-")
+                                .and_then(|index| index.parse::<u32>().ok())
+                            {
+                                this.invoke(&id, api::NodeAction::Menu { index }, cx);
                             }
                         }
                         this.popup = None;
@@ -360,15 +428,41 @@ impl Render for TreeView {
         }
         let owner = cx.entity().downgrade();
         let snapshot = self.snapshot.clone();
-        let row_tree = self.tree.clone();
         let rows_owner = owner.clone();
+        let gesture = self.action_gesture;
         div()
-            .id(SharedString::from(format!("plugin-tree-{}", self.node)))
+            .id(action_gestures::native_id(
+                format!("plugin-tree-{}", self.node),
+                gesture,
+            ))
             .size_full()
             .min_h_0()
             .relative()
+            .capture_action(Self::source_action_guard::<gpui_base::actions::Confirm>(
+                gesture, cx,
+            ))
+            .capture_action(Self::source_action_guard::<gpui_base::actions::SelectLeft>(
+                gesture, cx,
+            ))
+            .capture_action(
+                Self::source_action_guard::<gpui_base::actions::SelectRight>(gesture, cx),
+            )
+            .capture_action(Self::source_action_guard::<gpui_base::actions::SelectUp>(
+                gesture, cx,
+            ))
+            .capture_action(Self::source_action_guard::<gpui_base::actions::SelectDown>(
+                gesture, cx,
+            ))
+            .capture_key_down(cx.listener(move |this, _, _, cx| {
+                if !this.frame_current(gesture) {
+                    cx.stop_propagation();
+                }
+            }))
             .on_key_down(
-                cx.listener(|this, event: &gpui_kit::KeyDownEvent, window, cx| {
+                cx.listener(move |this, event: &gpui_kit::KeyDownEvent, window, cx| {
+                    if !this.frame_current(gesture) {
+                        return;
+                    }
                     if event.keystroke.key == "enter" {
                         if let Some(id) = this
                             .tree
@@ -400,19 +494,22 @@ impl Render for TreeView {
                         let toggle_owner = rows_owner.clone();
                         let toggle_id = id.clone();
                         let toggle = Rc::new(move |window: &mut Window, cx: &mut App| {
-                            let _ = toggle_owner
-                                .update(cx, |this, cx| this.toggle(&toggle_id, window, cx));
+                            let _ = toggle_owner.update(cx, |this, cx| {
+                                if this.frame_current(gesture) {
+                                    this.toggle(&toggle_id, window, cx);
+                                }
+                            });
                         });
                         let click_owner = rows_owner.clone();
                         let click_id = id.clone();
-                        let clicked_tree = row_tree.clone();
                         let menu_owner = rows_owner.clone();
                         let menu_id = id.clone();
                         let description = data
                             .map(|node| node.description.clone())
                             .unwrap_or_default();
                         let row = tree_row(
-                            format!("plugin-tree-row-{id}"),
+                            action_gestures::native_id(format!("plugin-tree-row-{id}"), gesture)
+                                .to_string(),
                             entry.item().label.to_string(),
                             entry.depth(),
                             icon,
@@ -429,21 +526,27 @@ impl Render for TreeView {
                         .debug_selector(move || format!("plugin-tree-row-{id}").into())
                         .on_mouse_down(MouseButton::Left, move |event, window, cx| {
                             cx.stop_propagation();
-                            clicked_tree.update(cx, |tree, cx| {
-                                tree.set_selected_index(Some(index), cx);
-                                tree.focus(window, cx);
+                            let _ = click_owner.update(cx, |this, cx| {
+                                if !this.frame_current(gesture) {
+                                    return;
+                                }
+                                this.tree.update(cx, |tree, cx| {
+                                    tree.set_selected_index(Some(index), cx);
+                                    tree.focus(window, cx);
+                                });
+                                if event.click_count == 2 {
+                                    this.activate(&click_id, window, cx);
+                                }
                             });
-                            if event.click_count == 2 {
-                                let _ = click_owner
-                                    .update(cx, |this, cx| this.activate(&click_id, window, cx));
-                            }
                         })
                         .on_mouse_down(
                             MouseButton::Right,
                             move |event, window, cx| {
                                 cx.stop_propagation();
                                 let _ = menu_owner.update(cx, |this, cx| {
-                                    this.open_menu(&menu_id, event.position, window, cx)
+                                    if this.frame_current(gesture) {
+                                        this.open_menu(&menu_id, event.position, window, cx);
+                                    }
                                 });
                             },
                         );
@@ -463,18 +566,31 @@ impl Render for TreeView {
 }
 
 impl PluginView {
+    /// Source binding and withdrawal change before resource publication or another native frame.
+    /// Keep the same TreeState while revoking every retained callback with its captured credential.
+    pub(super) fn sync_tree_action_gestures(&mut self, cx: &mut Context<Self>) {
+        for (id, tree) in &self.trees {
+            let gesture = self.action_gesture(id);
+            tree.update(cx, |view, cx| {
+                view.set_action_gesture(gesture, self.document.revision, cx);
+            });
+        }
+    }
+
     /// Base tree observation and paging have no Window parameter. Resume in the original surface
     /// after the tree's current borrow ends, then apply the same gate as every other native action.
     fn dispatch_tree(
         &mut self,
         id: &str,
         revision: u64,
+        gesture: Option<ActionGesture>,
         resource: &TreeResource,
         dispatch: Dispatch,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if !self.scene_current.get()
+            || !self.action_gesture_current(id, gesture)
             || revision != self.document.revision
             || !resource.is_live()
             || !self.document.active_node(id).is_some_and(
@@ -529,9 +645,15 @@ impl PluginView {
             else {
                 continue;
             };
+            let gesture = self.action_gesture(&id);
             if let Some(view) = self.trees.get(&id) {
                 view.update(cx, |view, cx| {
-                    view.update(self.document.revision, self.environment.clone(), cx)
+                    view.update(
+                        self.document.revision,
+                        gesture,
+                        self.environment.clone(),
+                        cx,
+                    )
                 });
             } else {
                 let resource = resource.clone();
@@ -541,14 +663,16 @@ impl PluginView {
                 let target_window = self.window;
                 let target_node = id.clone();
                 let target_resource = resource.clone();
-                let sink: TreeSink = Rc::new(move |dispatch, revision, cx| {
+                let sink: TreeSink = Rc::new(move |dispatch, revision, gesture, cx| {
                     let owner = owner.clone();
                     let node = target_node.clone();
                     let resource = target_resource.clone();
                     cx.defer(move |cx| {
                         let _ = target_window.update(cx, |_, window, cx| {
                             let _ = owner.update(cx, |this, cx| {
-                                this.dispatch_tree(&node, revision, &resource, dispatch, window, cx)
+                                this.dispatch_tree(
+                                    &node, revision, gesture, &resource, dispatch, window, cx,
+                                )
                             });
                         });
                     });
@@ -556,7 +680,19 @@ impl PluginView {
                 let revision = self.document.revision;
                 self.trees.insert(
                     id.clone(),
-                    cx.new(|cx| TreeView::new(resource, id, revision, environment, gate, sink, cx)),
+                    cx.new(|cx| {
+                        TreeView::new(
+                            resource,
+                            id,
+                            revision,
+                            gesture,
+                            environment,
+                            gate,
+                            sink,
+                            target_window,
+                            cx,
+                        )
+                    }),
                 );
             }
         }

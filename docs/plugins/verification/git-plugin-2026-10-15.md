@@ -1,6 +1,35 @@
 # Git 插件实施验证（2026-10-15）
 
-状态：2026-10-16 用户要求继续，已从保留现场恢复。#119 前两项 P2 修复并通过阶段门禁后，第二轮正式复审又发现旧按压可接续到新场景的 P2；新增四项真实鼠标回归已完成红绿验证，完整门禁正在复验，尚未推送关闭。#120 保留已有实现和通过证据，等待 #119 完成交付。暂停历史见[现场记录](git-plugin-paused-2026-10-15.md)。依据为[已确认规格](../specs/git-plugin.md)；本记录不把未完成的验收标记通过。
+状态：2026-10-16 用户要求继续，已从保留现场恢复。#119 的旧按压缺陷现已覆盖来源按钮、旧版比较、Canvas、SideTabs、Tree 和图片；六项真实输入及共享门禁通过，最终窗口与正式复审正在完成，尚未推送关闭。#120 保留已有实现和通过证据，等待 #119 完成交付。暂停历史见[现场记录](git-plugin-paused-2026-10-15.md)。依据为[已确认规格](../specs/git-plugin.md)；本记录不把未完成的验收标记通过。
+
+## 2026-10-16 第三轮复审与 Tree／图片补齐
+
+范围仍为 `1379f58df76622bdf4d6a7c4167469f124d17a0b...a5b3794d1dce931ce8c519457e26106d0c4deb7d`，三个普通提交的差异非空。两轴分别复审，读取已提交源码，不借用工作区其他主题变更。
+
+### Standards
+
+0 项硬性规范违规、0 项判断类问题。来源手势与焦点资源集中管理；Base 公开行为、原文档和既有权限保留，没有插件专属分支或 SDK 扩展。
+
+### Spec
+
+1 项 P2，实现缺陷（分类 c）：#119 AC4 的旧按压问题仍遗漏合法的 EditorAction Tree 子控件。其稳定 disclosure 身份能够将旧按压接到新 revision，资源 epoch 本身不能撤销 Base 按压。按钮、Canvas 和 SideTabs 已修路径未发现新问题；分类 a/b 均为 0。两轴分别为 Standards 0 项（最高无）、Spec 1 项（最高 P2）。
+
+新增原生 Tree 回归通过冻结 `database-tree-0.1.1` 包与公开 Manager 准备资源及根页面，真实按下 disclosure，替换同来源 UI 场景，重绘后释放。修复前在 42.76 秒复现新场景展开及申请数据页（`target/git-ticket119-tree-red.log`）。第一次夹具没有准备根页面、找不到 main 行（`target/git-ticket119-tree-image-red.log`），属于夹具失败，不作为 Tree 行为红灯；同一日志中图片 Up 越场景已独立复现。
+
+实现／测试 tree `93f30dd44d7a988d7708ebe7e83818ff95a5875a` 只增加以下修复：Tree 真实行和根元素的来源手势身份、键盘／菜单捕获及延迟请求凭据；状态继续使用同一个 TreeState，滚动和焦点保留。图片的持按 Move／Up 必须匹配真实 Down，框外释放延迟清理按独立序号撤销，不能清掉同场景的新按压。来源变化及无隐藏帧的撤回立即撤销；普通树和图片保持原公开行为。
+
+六项真实输入回归 6/6 通过，47.92 秒（显式执行 ignored，`target/git-ticket119-tree-image-green.log`）；包含 Tree 展开／折叠、撤回再恢复，图片旧拖动／释放拒绝及新点击可用。后续宽过滤器使用 `--skip native_code_alignment_source_tree_cannot_expand_with_a_replaced_press`，复用同一 runner 刚通过的这一项，避免重复执行固定 WASM 夹具；不是跳过未验证项。
+
+| Tree／图片修复候选验证 | 实际结果 | 日志（宿主 target/） |
+| --- | --- | --- |
+| 六项来源真实输入回归 | 6/6，47.92 秒；显式执行 ignored | `git-ticket119-tree-image-green.log` |
+| 补白集合 | 49/49，14.72 秒，另复用上行同候选 Tree 1/1；50 项全部覆盖 | `git-ticket119-tree-alignment.log` |
+| 通用插件 UI 集合 | 70/70，59.96 秒，另复用同候选 Tree 1/1；71 项全部覆盖 | `git-ticket119-tree-ui.log` |
+| 格式检查 | `cargo fmt --check` 通过 | `git-ticket119-tree-image-fmt.log` |
+| 非 UI workspace / workspace check | 全通过；check 7.44 秒，非 UI 的未执行 ignored 不计通过 | `git-ticket119-tree-workspace.log`、`git-ticket119-tree-check.log` |
+| 旧同步／可见性／DocumentInfo IME、实际包五窗口 | 正在完成顺序复验；未计为本候选通过 | `git-ticket119-tree-legacy.log`、`git-ticket119-tree-visibility.log`、`git-ticket119-tree-document.log`、`git-ticket119-tree-windows.log` |
+
+正式复审及推送关闭尚未完成。
 
 ## 2026-10-16 第二轮正式复审与手势修复
 
@@ -26,7 +55,7 @@
 | 旧语义同步 / 可见性 / 原生 DocumentInfo IME | 4/4、3/3、1/1 | `git-ticket119-gesture-legacy.log`、`git-ticket119-gesture-visibility.log`、`git-ticket119-gesture-document.log` |
 | `cargo fmt --check` | 通过 | `git-ticket119-gesture-fmt.log` |
 | 非 UI workspace / workspace check | 77 组、276 通过、272 ignored；check 通过，6.85 秒。未执行 ignored 不计通过 | `git-ticket119-gesture-workspace.log`、`git-ticket119-gesture-check.log` |
-| 同摘要 0.1.1 实际包五窗口 | 正在执行；未计通过 | `git-ticket119-gesture-windows.log` |
+| 同摘要 0.1.1 实际包五窗口 | 5/5，391.06 秒；显式执行 ignored | `git-ticket119-gesture-windows.log` |
 
 本轮仅修改宿主私有手势适配与真实回归，未改变插件候选摘要。正式复审、窗口复验和推送关闭尚未完成。
 

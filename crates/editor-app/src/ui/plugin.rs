@@ -469,6 +469,7 @@ impl PluginView {
         self.scene_layout.reset(&self.document);
         self.viewport.reset_scene();
         self.sync_link_focus(window, cx);
+        self.sync_tree_action_gestures(cx);
         let mut nodes = vec![];
         self.document
             .root
