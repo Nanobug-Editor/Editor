@@ -4,7 +4,7 @@
 
 **模式：** 场景拆分。
 
-**状态：** validated — 最终同包五窗口 5/5、补白 50 项、通用 UI 71 项、共享侧边标签 4 项及规定门禁通过，Standards／Spec 未解决项分别为 0／0。等待推送核对并关闭；见[实施验证](../../verification/git-plugin-2026-10-15.md)。
+**状态：** completed — 验收及两轴审查通过；已推送并核对远端 09510cc58a8b434b815dfa5f9a7a3207f1221a55，GitHub 于 2026-10-16 02:43:22 UTC 读回 closed／completed。完整证据见[实施验证](../../verification/git-plugin-2026-10-15.md)。
 
 **GitHub：** [#119](https://github.com/Nanobug-Editor/Editor/issues/119)。
 
