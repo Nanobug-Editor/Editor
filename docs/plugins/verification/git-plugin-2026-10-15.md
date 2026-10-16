@@ -1,6 +1,20 @@
 # Git 插件实施验证（2026-10-15）
 
-状态：2026-10-16 用户要求继续，已从保留现场恢复。#119 的旧按压缺陷现已覆盖来源按钮、旧版比较、Canvas、SideTabs、Tree 和图片；六项真实输入及共享门禁通过，最终窗口与正式复审正在完成，尚未推送关闭。#120 保留已有实现和通过证据，等待 #119 完成交付。暂停历史见[现场记录](git-plugin-paused-2026-10-15.md)。依据为[已确认规格](../specs/git-plugin.md)；本记录不把未完成的验收标记通过。
+状态：2026-10-16，#119 最终五窗口 5/5、补白 50 项、通用 UI 71 项、共享侧边标签 4 项和阶段门禁全部通过，正式两轴审查未解决项均为 0，准备推送并核对关闭。#120 保留已有实现和通过证据，等待 #119 关闭后继续。暂停历史见[现场记录](git-plugin-paused-2026-10-15.md)。依据为[已确认规格](../specs/git-plugin.md)；本记录不把未完成的验收标记通过。
+
+## 工单 01 最终验收与审查（2026-10-16）
+
+源码审查为 `git diff 1379f58df76622bdf4d6a7c4167469f124d17a0b...8205c1e557198ea38c2640b09e50672cd1f2a316`，四个普通提交、119 文件的差异非空；验证代码 tree 为 `93f30dd44d7a988d7708ebe7e83818ff95a5875a`。最终同一 0.1.1 包五窗口 5/5，390.65 秒，`target/git-ticket119-tree-windows.log`，显式执行 ignored。包 SHA-256 仍为 `7336d5d39fecc18f2faa8972916fa739978f7e96da96116bb6b34fe5d0363e48`，没有拿先前 runner 的窗口结果替代本次验收。
+
+### Standards
+
+0 项硬性违规、0 项判断类问题。Base 公开行为、原文档唯一状态、来源校验及资源清理保留；手势凭据集中管理，未发现新增职责分叉或重复抽象。
+
+### Spec
+
+分类 a/b/c 均为 0，最高严重级别无。此前 Tree 遗漏已关闭：撤销立即同步到 Tree，延迟分页在申请资源前检查原始手势凭据，行、键盘和菜单沿用同一门禁；图片 Up 匹配原 Down，框外延迟清理不能撤销新按压。两轴仅静态复审，真实行为证据另见本节与下表。
+
+最终分别为 Standards 0 项（最高无）、Spec 0 项（最高无）。补白 50 项与通用 UI 71 项的覆盖合成方法见下表；侧边标签的选择、重排、左右停靠缩放、边框及刷新保留重命名另行 4/4 通过，0.05 秒（`target/git-ticket119-shared-side-tabs.log`）。所有本单已知失败已修复；生产外观矩阵和完整 Git 工作流由 #120 承接，不以本单完成替代整项功能交付。
 
 ## 2026-10-16 第三轮复审与 Tree／图片补齐
 
@@ -26,10 +40,11 @@
 | 补白集合 | 49/49，14.72 秒，另复用上行同候选 Tree 1/1；50 项全部覆盖 | `git-ticket119-tree-alignment.log` |
 | 通用插件 UI 集合 | 70/70，59.96 秒，另复用同候选 Tree 1/1；71 项全部覆盖 | `git-ticket119-tree-ui.log` |
 | 格式检查 | `cargo fmt --check` 通过 | `git-ticket119-tree-image-fmt.log` |
-| 非 UI workspace / workspace check | 全通过；check 7.44 秒，非 UI 的未执行 ignored 不计通过 | `git-ticket119-tree-workspace.log`、`git-ticket119-tree-check.log` |
-| 旧同步／可见性／DocumentInfo IME、实际包五窗口 | 正在完成顺序复验；未计为本候选通过 | `git-ticket119-tree-legacy.log`、`git-ticket119-tree-visibility.log`、`git-ticket119-tree-document.log`、`git-ticket119-tree-windows.log` |
+| 非 UI workspace / workspace check | 77 组、276 通过、272 ignored；check 7.44 秒，未执行 ignored 不计通过 | `git-ticket119-tree-workspace.log`、`git-ticket119-tree-check.log` |
+| 旧同步／可见性／DocumentInfo IME | 4/4（0.29 秒）、3/3（0.26 秒）、1/1（0.16 秒） | `git-ticket119-tree-legacy.log`、`git-ticket119-tree-visibility.log`、`git-ticket119-tree-document.log` |
+| 实际包五窗口 | 5/5，390.65 秒；显式执行 ignored | `git-ticket119-tree-windows.log` |
 
-正式复审及推送关闭尚未完成。
+正式复审已完成，结果见最上方最终验收节；准备推送并核对关闭。
 
 ## 2026-10-16 第二轮正式复审与手势修复
 
