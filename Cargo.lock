@@ -1874,6 +1874,7 @@ dependencies = [
  "unicode-segmentation",
  "url",
  "wasmtime",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

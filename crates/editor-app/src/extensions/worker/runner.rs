@@ -260,6 +260,11 @@ impl Worker {
                         retire_publication(&mut published, &id);
                     }
                 }
+                #[cfg(all(test, windows))]
+                let scene_cause =
+                    super::native_acceptance::scene_probe::describe_work(work.as_ref());
+                #[cfg(all(test, windows))]
+                let scene_before_work = super::native_acceptance::scene_probe::sample(&manager);
                 let result = if let Some((_, control, prepared, _mutation)) = completed {
                     prepared.and_then(|prepared| manager.commit_installation(prepared, &control))
                 } else {
@@ -666,6 +671,30 @@ impl Worker {
                             });
                             result
                         }
+                        Some(Work::FormChange {
+                            plugin,
+                            epoch,
+                            panel,
+                            event,
+                            reply,
+                        }) => {
+                            let current = output
+                                .lock()
+                                .unwrap()
+                                .instance_epochs
+                                .get(&plugin)
+                                .copied()
+                                .unwrap_or(0);
+                            super::form_delivery::deliver(
+                                &mut manager,
+                                &plugin,
+                                epoch,
+                                current,
+                                panel,
+                                event,
+                                reply,
+                            )
+                        }
                         Some(Work::Event(id, epoch, panel, event)) => {
                             let current = output
                                 .lock()
@@ -684,7 +713,19 @@ impl Worker {
                                 );
                                 let visibility_callback =
                                     matches!(&event, api::Notification::PanelVisibility { .. });
-                                match manager.event(&id, panel, event) {
+                                #[cfg(all(test, windows))]
+                                let key_probe = super::native_acceptance::probe_key_admission(
+                                    &manager,
+                                    &id,
+                                    panel.as_deref(),
+                                    &event,
+                                );
+                                let handled = manager.event(&id, panel, event);
+                                #[cfg(all(test, windows))]
+                                super::native_acceptance::probe_key_result(
+                                    &manager, &id, key_probe, &handled,
+                                );
+                                match handled {
                                     Err(error)
                                         if visibility_callback
                                             && manager.instance_id(&id).is_none()
@@ -779,6 +820,15 @@ impl Worker {
                         None => Ok(()),
                     }
                 };
+                #[cfg(all(test, windows))]
+                super::native_acceptance::scene_probe::transition(
+                    "work",
+                    &scene_cause,
+                    scene_before_work,
+                    super::native_acceptance::scene_probe::sample(&manager),
+                );
+                #[cfg(all(test, windows))]
+                let scene_before_streams = super::native_acceptance::scene_probe::sample(&manager);
                 match output.lock().unwrap().document_events.take_batch(64) {
                     Ok(changes) => {
                         for change in changes {
@@ -809,7 +859,23 @@ impl Worker {
                     &output,
                     authority.load(std::sync::atomic::Ordering::Acquire),
                 );
+                #[cfg(all(test, windows))]
+                super::native_acceptance::scene_probe::transition(
+                    "streams_and_demands",
+                    &scene_cause,
+                    scene_before_streams,
+                    super::native_acceptance::scene_probe::sample(&manager),
+                );
+                #[cfg(all(test, windows))]
+                let scene_before_poll = super::native_acceptance::scene_probe::sample(&manager);
                 manager.poll();
+                #[cfg(all(test, windows))]
+                super::native_acceptance::scene_probe::transition(
+                    "manager.poll",
+                    &scene_cause,
+                    scene_before_poll,
+                    super::native_acceptance::scene_probe::sample(&manager),
+                );
                 demands.poll(
                     &mut manager,
                     &output,

@@ -49,6 +49,12 @@ fn click(
 fn git_merge_edges_keep_nonconflicting_changes_and_require_manual_block_review(
     cx: &mut TestAppContext,
 ) {
+    // Preserve the native test body inside the same private Git configuration as its Manager.
+    if !run_isolated_test(
+        "extensions::windows_tests::merge::git_merge_edges_keep_nonconflicting_changes_and_require_manual_block_review",
+    ) {
+        return;
+    }
     crate::tests::with_shortcut_editor(cx, false, Vec::new(), |visual, app, path| {
         let root = path.parent().unwrap();
         let file = root.join("merge.txt");

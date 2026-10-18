@@ -340,6 +340,12 @@ impl RebaseFixture {
 #[test]
 #[ignore = "build Git-for-Nanobug with its native rebase dependency; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_interactive_rebase_continues_after_native_conflict_edit_save_and_stage() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "rebase_resume::git_package_interactive_rebase_continues_after_native_conflict_edit_save_and_stage",
+    ) {
+        return;
+    }
     let mut fixture = RebaseFixture::conflict();
     fixture.resolve();
     let lists = fixture.editor.lists;
@@ -387,6 +393,12 @@ fn git_package_interactive_rebase_continues_after_native_conflict_edit_save_and_
 #[test]
 #[ignore = "build Git-for-Nanobug with its native rebase dependency; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_interactive_rebase_rejects_injected_exec_and_retains_result_plan_and_git_state() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "rebase_resume::git_package_interactive_rebase_rejects_injected_exec_and_retains_result_plan_and_git_state",
+    ) {
+        return;
+    }
     let mut fixture = RebaseFixture::conflict();
     fixture.resolve();
     let root = fixture.repository.path();
@@ -457,4 +469,55 @@ fn git_package_interactive_rebase_rejects_injected_exec_and_retains_result_plan_
     assert_eq!(std::fs::read(&fixture.plan_file).unwrap(), plan);
     assert!(!root.join("unapproved-exec.txt").exists());
     fixture.manager.disable("git").unwrap();
+}
+
+/// Reopening the plugin actor keeps the persisted approved plan and the external native session;
+/// it must rediscover Git's real conflict before presenting another versioned source action.
+#[test]
+#[ignore = "build Git-for-Nanobug with its native rebase dependency; set NANOBUG_GIT_CANDIDATE"]
+fn git_package_reopens_an_active_interactive_rebase_and_keeps_the_native_result_until_continue() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "rebase_resume::git_package_reopens_an_active_interactive_rebase_and_keeps_the_native_result_until_continue",
+    ) {
+        return;
+    }
+    let mut fixture = RebaseFixture::conflict();
+    fixture.resolve();
+    let result = fixture.editor.info.clone();
+    let plan = std::fs::read(&fixture.plan_file).unwrap();
+    let root = fixture.repository.path();
+    fixture.manager = super::workbench::reopen(fixture.manager, fixture._profile.path(), root);
+    assert_eq!(std::fs::read(&fixture.plan_file).unwrap(), plan);
+    assert_eq!(fixture.editor.info, result);
+    assert!(root.join(".git/rebase-merge").is_dir());
+    // The resolved index is sufficient for recovery. No second text model is constructed when
+    // the reopened actor discovers a paused plan whose previously edited file is already staged.
+    fixture
+        .editor
+        .click(&mut fixture.manager, "conflicts", "continue");
+    assert!(!root.join(".git/rebase-merge").exists());
+    assert_eq!(fixture.editor.info, result);
+    assert_eq!(fixture.editor.edits, 1);
+    assert_eq!(fixture.editor.saves, 1);
+    assert_eq!(git(root, &["show", "HEAD:merge.txt"]), "B 中😀\n");
+    assert_eq!(
+        git(
+            root,
+            &[
+                "log",
+                "--reverse",
+                "--format=%s",
+                &format!("{}..HEAD", fixture.base)
+            ]
+        ),
+        "B\nC\n"
+    );
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(&fixture.plan_file).unwrap())
+            .unwrap(),
+        json!(null)
+    );
+    fixture.manager.disable("git").unwrap();
+    assert_eq!(fixture.manager.resource_count(), 0);
 }

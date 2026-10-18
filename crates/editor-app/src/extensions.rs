@@ -8,6 +8,8 @@ mod activation_combination_tests;
 mod activation_tests;
 #[cfg(test)]
 mod capability_tests;
+#[cfg(test)]
+mod cold_observation_tests;
 pub(crate) mod command_intents;
 pub(crate) mod command_menus;
 mod commands;
@@ -30,6 +32,8 @@ use crate::ui::plugin::images;
 mod dock_tests;
 #[cfg(test)]
 mod file_view_tests;
+#[cfg(test)]
+mod git_fixture_environment;
 #[cfg(test)]
 mod hot_update_tests;
 mod installation;
@@ -99,6 +103,8 @@ mod ui_package_tests;
 mod visibility;
 #[cfg(test)]
 mod visibility_tests;
+#[cfg(test)]
+mod window_focus_tests;
 mod windows;
 #[cfg(test)]
 mod windows_tests;
@@ -787,6 +793,8 @@ impl ExtensionPanel {
                 if self.instance_epoch != epoch {
                     // The replacement guest starts at its default size; force one native measure.
                     self.instance_epoch = epoch;
+                    // A theme receipt belongs to this incarnation, even when the palette is unchanged.
+                    self.last_theme = None;
                     self.last_size = (0., 0., 0., 0.);
                     self.preview_document = None;
                     self.preview_version = None;
@@ -967,6 +975,11 @@ impl ExtensionPanel {
                 .copied()
                 .unwrap_or(0)
         };
+        // Ambient observations have no cold callback owner and must not demand or fault a guest.
+        // Nonzero epochs stay pinned above so the actor can reject a retired surface unchanged.
+        if epoch == 0 && matches!(&event, PluginEvent::Theme(_) | PluginEvent::Focus(_)) {
+            return;
+        }
         let _ = self
             .worker
             .tx
@@ -1003,8 +1016,12 @@ impl ExtensionPanel {
             context: None,
         });
     }
+    /// Focus a dock surface in its invoking main window. Independent surfaces receive their
+    /// initial focus from their own native root, never by replacing the parent's focused editor.
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
-        self.focus.focus(window, cx);
+        if !self.work_window {
+            self.focus.focus(window, cx);
+        }
     }
     /// Reveal a plugin surface and notify its owner even when the old focus handle is retained.
     /// Plugins decide whether opening an empty view requires new state or process resources.

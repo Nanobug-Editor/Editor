@@ -1,0 +1,9 @@
+{
+  "process_id": 20884,
+  "thread_id": 29560,
+  "gpui_windows": [],
+  "native_nonchild_windows": [],
+  "rejected_windows": 0,
+  "enumeration_error": null,
+  "phase": "after_harness_drop_before_quit"
+}

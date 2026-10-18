@@ -1,13 +1,19 @@
 //! Real package publication verifies an independent work window shares the existing native document.
+use super::git_fixture_environment::run_isolated_test;
 use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use plugin_runtime::Manager;
 use serde_json::json;
 mod comparisons;
 mod merge;
+mod shutdown;
 
 /// Every Git write is confined to the test's temporary workspace.
 fn git(root: &Path, args: &[&str]) -> bool {
+    super::git_fixture_environment::reject_repository_overrides()
+        .expect("fixture environment must not redirect repository-local Git state");
+    super::git_fixture_environment::require_private_configuration()
+        .expect("window fixture requires its isolated test child");
     std::process::Command::new("git")
         .current_dir(root)
         .args(args)
@@ -138,6 +144,12 @@ fn flush(manager: &mut Manager, app: &Entity<EditorApp>, visual: &mut VisualTest
 fn plugin_work_window_edits_the_original_session_and_hiding_keeps_the_draft(
     cx: &mut TestAppContext,
 ) {
+    // Preserve the native test body inside the same private Git configuration as its Manager.
+    if !run_isolated_test(
+        "extensions::windows_tests::plugin_work_window_edits_the_original_session_and_hiding_keeps_the_draft",
+    ) {
+        return;
+    }
     crate::tests::with_shortcut_editor(cx, false, Vec::new(), |visual, app, path| {
         let root = path.parent().unwrap();
         let conflict = root.join("conflict.txt");

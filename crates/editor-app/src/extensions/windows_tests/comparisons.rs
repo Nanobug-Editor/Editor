@@ -30,6 +30,12 @@ fn click_count(visual: &mut VisualTestContext, selector: &str, count: usize) {
 #[gpui::test]
 #[ignore = "build Git-for-Nanobug candidate with editor.diff 1.1; set NANOBUG_GIT_CANDIDATE"]
 fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut TestAppContext) {
+    // Preserve the native test body inside the same private Git configuration as its Manager.
+    if !run_isolated_test(
+        "extensions::windows_tests::comparisons::git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs",
+    ) {
+        return;
+    }
     crate::tests::with_shortcut_editor(cx, true, Vec::new(), |visual, app, path| {
         let root = path.parent().unwrap();
         assert!(git(root, &["init", "-b", "main"]));
@@ -261,6 +267,12 @@ fn with_comparison(
 fn git_comparison_refresh_reuses_hidden_source_and_source_close_retires_view(
     cx: &mut TestAppContext,
 ) {
+    // Preserve the native test body inside the same private Git configuration as its Manager.
+    if !run_isolated_test(
+        "extensions::windows_tests::comparisons::git_comparison_refresh_reuses_hidden_source_and_source_close_retires_view",
+    ) {
+        return;
+    }
     with_comparison(cx, "base\n", "changed\n", |manager, visual, app, file| {
         let mut previous_source = None;
         for iteration in 0..40 {
@@ -338,6 +350,12 @@ fn git_comparison_refresh_reuses_hidden_source_and_source_close_retires_view(
 fn git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections(
     cx: &mut TestAppContext,
 ) {
+    // Preserve the native test body inside the same private Git configuration as its Manager.
+    if !run_isolated_test(
+        "extensions::windows_tests::comparisons::git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections",
+    ) {
+        return;
+    }
     let tail = (0..100)
         .map(|line| format!("shared row {line:03} 中文\n"))
         .collect::<String>();

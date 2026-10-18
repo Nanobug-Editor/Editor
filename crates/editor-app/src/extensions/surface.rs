@@ -39,9 +39,13 @@ impl ExtensionPanel {
             .map(|status| status.message.as_str())
     }
 
-    /// Both a preview body and a source-only toolbar must deliver live theme and locale changes.
+    /// Both a preview body and a source-only toolbar deliver theme and locale to their live owner.
+    /// Cold sampling still supplies native context, but cannot acknowledge delivery before birth.
     pub(super) fn native_environment(&mut self, cx: &mut Context<Self>) -> protocol::Environment {
         let environment = environment(&self.workspace, cx);
+        if self.instance_epoch == 0 {
+            return environment;
+        }
         if self.last_theme.as_ref() != Some(&environment) {
             self.last_theme = Some(environment.clone());
             for entry in &self.entries {
@@ -82,6 +86,9 @@ impl ExtensionPanel {
                 .expect("an approved document has a surface");
             let visible = self.visible.clone();
             let epoch = self.instance_epoch;
+            let form_changes =
+                self.worker
+                    .form_change_sink(plugin.clone(), panel.clone(), epoch, visible.clone());
             self.native_ui = Some(cx.new(|cx| {
                 crate::ui::plugin::PluginView::new(
                     plugin.clone(),
@@ -100,6 +107,7 @@ impl ExtensionPanel {
                     window,
                     cx,
                 )
+                .with_form_changes(form_changes)
             }));
         }
         let key = format!(

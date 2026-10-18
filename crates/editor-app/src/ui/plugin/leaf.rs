@@ -224,7 +224,8 @@ impl PluginView {
                         .when_some(node.tooltip.clone(), |button, tooltip| {
                             button.accessibility_label(tooltip.clone()).tooltip(tooltip)
                         })
-                        .disabled(disabled)
+                        // A waiting latest draft blocks activations, not editing authority.
+                        .disabled(disabled || self.form_activation_blocked())
                         .border_color(colors.border)
                         .custom(
                             ButtonCustomVariant::new(cx)

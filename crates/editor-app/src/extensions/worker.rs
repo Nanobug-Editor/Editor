@@ -6,7 +6,10 @@ mod bundled_tests;
 mod command_epochs;
 pub(super) mod configurations;
 pub(crate) mod demands;
+mod form_delivery;
 mod marketplace;
+#[cfg(all(test, windows))]
+mod native_acceptance;
 mod preparation;
 #[cfg(all(test, windows))]
 mod registry_startup_tests;
@@ -208,6 +211,14 @@ pub enum Work {
     Uninstall(String, bool),
     /// Native callbacks retain the incarnation that created them, even if a replacement reuses node IDs.
     Event(String, u64, Option<String>, api::Notification),
+    /// Only ordinary form Change requests a delivery receipt; business events are never retried.
+    FormChange {
+        plugin: String,
+        epoch: u64,
+        panel: String,
+        event: ui::UiEvent,
+        reply: futures::channel::oneshot::Sender<crate::ui::plugin::FormReceipt>,
+    },
     /// Bytes offered by a native user gesture remain host-owned; only opaque metadata crosses WASM.
     ImageInput {
         plugin: String,
@@ -290,6 +301,7 @@ impl Work {
             | Self::ImportPreference { plugin, .. }
             | Self::Invoke { plugin, .. }
             | Self::Demand { plugin, .. }
+            | Self::FormChange { plugin, .. }
             | Self::ImageInput { plugin, .. } => Some(plugin),
             Self::Install(package) => Some(&package.manifest.id),
             // A status query observes a program another owner already has, so it claims no plugin.

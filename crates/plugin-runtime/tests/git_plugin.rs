@@ -9,17 +9,27 @@ use std::{
     process::Command,
     time::{Duration, Instant},
 };
+#[path = "git_plugin/environment.rs"]
+mod environment;
 #[path = "git_plugin/index_edges.rs"]
 mod index_edges;
 #[path = "git_plugin/rebase_resume.rs"]
 mod rebase_resume;
 #[path = "git_plugin/repository.rs"]
 mod repository;
+#[path = "git_plugin/workbench.rs"]
+mod workbench;
+use environment::{require_isolated_git_environment, run_isolated_test};
 
 /// Git identity is configured only in this isolated temporary repository, never in the user's profile.
 fn git(root: &Path, args: &[&str]) -> String {
+    require_isolated_git_environment();
     let result = Command::new("git")
         .current_dir(root)
+        // An agent's temporary index must never redirect a disposable repository's Git writes.
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
         .args(args)
         .output()
         .unwrap();
@@ -114,6 +124,12 @@ fn ui_action(manager: &mut Manager, node: &str, action: ui::Action) {
 #[test]
 #[ignore = "build Git-for-Nanobug with its declared native rebase dependency; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_interactive_rebase_reorders_rewords_and_fixups_the_previewed_commits() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "git_package_interactive_rebase_reorders_rewords_and_fixups_the_previewed_commits",
+    ) {
+        return;
+    }
     let package = Package::read(Path::new(
         &std::env::var_os("NANOBUG_GIT_CANDIDATE").expect("candidate required"),
     ))
@@ -227,6 +243,12 @@ fn git_package_interactive_rebase_reorders_rewords_and_fixups_the_previewed_comm
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE to its ZIP"]
 fn git_package_resolves_a_binary_add_add_conflict_with_an_explicit_complete_version() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "git_package_resolves_a_binary_add_add_conflict_with_an_explicit_complete_version",
+    ) {
+        return;
+    }
     let package = Package::read(Path::new(
         &std::env::var_os("NANOBUG_GIT_CANDIDATE").expect("candidate required"),
     ))
@@ -321,6 +343,10 @@ fn activate(package: &Package, root: &Path) -> (tempfile::TempDir, Manager) {
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE to its ZIP"]
 fn git_package_unstages_an_unborn_file_without_deleting_worktree_content() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test("git_package_unstages_an_unborn_file_without_deleting_worktree_content") {
+        return;
+    }
     let package = Package::read(Path::new(
         &std::env::var_os("NANOBUG_GIT_CANDIDATE").expect("candidate required"),
     ))
@@ -352,6 +378,12 @@ fn git_package_unstages_an_unborn_file_without_deleting_worktree_content() {
 #[test]
 #[ignore = "build independent Git-for-Nanobug through --plugin-package; set NANOBUG_GIT_CANDIDATE to its ZIP"]
 fn git_package_stages_one_path_and_commits_only_the_index_with_multiline_stdin() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "git_package_stages_one_path_and_commits_only_the_index_with_multiline_stdin",
+    ) {
+        return;
+    }
     let candidate = std::env::var_os("NANOBUG_GIT_CANDIDATE").expect("candidate ZIP required");
     let package = Package::read(Path::new(&candidate)).unwrap();
     let repository = tempfile::tempdir().unwrap();

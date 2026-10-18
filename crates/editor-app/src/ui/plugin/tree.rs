@@ -17,6 +17,9 @@ use plugin_runtime::{TreeResource, TreeSnapshot, plugin_protocol::tree as api};
 use rust_i18n::t;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod refresh_tests;
+
 /// Loading remains an intent until the owning PluginView has checked the original native Window.
 /// In particular, a rejected source action must not first allocate a pending runtime page request.
 enum Dispatch {
@@ -225,6 +228,24 @@ impl TreeView {
             self.load(None, false, cx);
         }
         let snapshot = self.resource.snapshot();
+        // A source handover can reject a deferred page intent without changing resource metadata.
+        // Retry only current unloaded expanded pages before the unchanged-projection fast path;
+        // load still captures the current source/scene authority and never replays native gestures.
+        for id in &snapshot.expanded {
+            if snapshot
+                .nodes
+                .get(id)
+                .is_some_and(|node| node.branch && !node.disabled)
+                && snapshot
+                    .branches
+                    .get(&Some(id.clone()))
+                    .is_some_and(|branch| {
+                        !branch.loaded && !branch.loading && branch.error.is_none()
+                    })
+            {
+                self.load(Some(id.clone()), false, cx);
+            }
+        }
         if snapshot.revision == self.snapshot.revision {
             return;
         }
@@ -238,18 +259,6 @@ impl TreeView {
                 tree.set_selected_index(tree.index_of(&selected.into()), cx);
             }
         });
-        // Refresh may preserve a previously expanded stable ID before its new children exist.
-        for id in self.snapshot.expanded.clone() {
-            if self.snapshot.nodes.get(&id).is_some_and(|node| node.branch)
-                && self
-                    .snapshot
-                    .branches
-                    .get(&Some(id.clone()))
-                    .is_some_and(|branch| branch.error.is_none())
-            {
-                self.load(Some(id), false, cx);
-            }
-        }
         cx.notify();
     }
     /// A host-reserved row keeps an unloaded branch expandable through Base's public folder contract.

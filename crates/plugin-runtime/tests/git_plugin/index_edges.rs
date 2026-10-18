@@ -99,6 +99,12 @@ fn idle_with_documents(manager: &mut Manager, documents: &[api::DocumentInfo]) -
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_unstage_with_dirty_buffer_changes_only_the_index_including_unborn_head() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "index_edges::git_package_unstage_with_dirty_buffer_changes_only_the_index_including_unborn_head",
+    ) {
+        return;
+    }
     for unborn in [false, true] {
         let repository = fixture(unborn);
         let root = repository.path();
@@ -131,6 +137,12 @@ fn git_package_unstage_with_dirty_buffer_changes_only_the_index_including_unborn
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_unstage_hunk_ignores_dirty_native_buffer_but_staging_still_requires_saving() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "index_edges::git_package_unstage_hunk_ignores_dirty_native_buffer_but_staging_still_requires_saving",
+    ) {
+        return;
+    }
     let repository = fixture(false);
     let root = repository.path();
     let baseline = (0..40)
@@ -207,6 +219,12 @@ fn git_package_unstage_hunk_ignores_dirty_native_buffer_but_staging_still_requir
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_stages_intent_to_add_literal_paths_and_rejects_an_external_index_change() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "index_edges::git_package_stages_intent_to_add_literal_paths_and_rejects_an_external_index_change",
+    ) {
+        return;
+    }
     let repository = fixture(false);
     let root = repository.path();
     for (path, text) in [("[ab].txt", "intent 中😀\n"), ("a.txt", "sibling\n")] {

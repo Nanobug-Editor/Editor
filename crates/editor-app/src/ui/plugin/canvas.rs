@@ -36,7 +36,63 @@ pub(crate) struct CanvasView {
     scrollbar_visible: bool,
     scrollbar_hold: Option<gpui_kit::Task<()>>,
     sink: Rc<dyn Fn(CanvasEvent, u64, Option<action_gestures::ActionGesture>, &mut App)>,
+    /// Native acceptance observes the original callback before its ordinary input gates.
+    #[cfg(test)]
+    key_observer: Option<Rc<dyn Fn(serde_json::Value)>>,
     _subscriptions: Vec<Subscription>,
+}
+
+#[cfg(test)]
+impl PluginView {
+    /// Observe the keyed native canvas's input state without changing focus or authority.
+    /// The ID selects one canvas; window supplies actual focus ownership and cx reads its entity.
+    pub(crate) fn native_canvas_input_snapshot(
+        &self,
+        id: &str,
+        window: &Window,
+        cx: &App,
+    ) -> Option<serde_json::Value> {
+        let canvas = self.canvases.get(id)?.read(cx);
+        Some(serde_json::json!({
+            "scene_revision": self.document.revision,
+            "scene_current": self.scene_current.get(),
+            "node_active": self.document.active_node(id).is_some(),
+            "canvas_revision": canvas.revision,
+            "enabled": canvas.enabled,
+            "focusable": canvas.drawing.focusable,
+            "focused": canvas.focus.is_focused(window),
+            "canvas_focus": format!("{:?}", canvas.focus),
+            "composition_empty": canvas.composition.is_empty(),
+            "gesture_current": self.action_gesture_current(id, canvas.action_gesture),
+            "source_gesture": canvas.action_gesture.is_some(),
+            "bounds": format!("{:?}", canvas.bounds),
+            "scroll_offset": canvas.drawing.scroll.as_ref().map(|scroll| scroll.offset),
+        }))
+    }
+
+    /// Observe an unchanged, already-admitted UI event immediately before the original sink.
+    /// The callback cannot replace its envelope, authorize a rejected event or replay input.
+    pub(crate) fn observe_native_input(
+        &mut self,
+        id: &str,
+        observe: Rc<dyn Fn(serde_json::Value)>,
+        cx: &mut App,
+    ) -> bool {
+        let Some(canvas) = self.canvases.get(id) else {
+            return false;
+        };
+        canvas.update(cx, |canvas, _| canvas.key_observer = Some(observe.clone()));
+        let sink = self.sink.clone();
+        let id = id.to_owned();
+        self.sink = Rc::new(move |event, cx| {
+            if event.node == id && matches!(&event.action, Action::Canvas(CanvasEvent::Key { .. }))
+            {
+                observe(serde_json::json!({"stage": "sink_forwarded", "event": event}));
+            }
+            sink(event, cx);
+        });
+        true
+    }
 }
 
 impl CanvasView {
@@ -115,6 +171,8 @@ impl CanvasView {
             scrollbar_visible: false,
             scrollbar_hold: None,
             sink: Rc::new(sink),
+            #[cfg(test)]
+            key_observer: None,
             _subscriptions: subscriptions,
         }
     }
@@ -449,6 +507,8 @@ fn rect_bounds(rect: protocol::Rect, origin: Point<Pixels>) -> Bounds<Pixels> {
 impl Render for CanvasView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let gesture = self.action_gesture;
+        #[cfg(test)]
+        let callback_revision = self.revision;
         let measure = cx.entity().downgrade();
         let paint = measure.clone();
         let mut element = div()
@@ -458,6 +518,17 @@ impl Render for CanvasView {
             .overflow_hidden()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                #[cfg(test)]
+                if let Some(observe) = &this.key_observer {
+                    observe(serde_json::json!({
+                        "stage": "canvas_received", "key": event.keystroke.key,
+                        "canvas_revision": this.revision, "callback_revision": callback_revision,
+                        "enabled": this.enabled, "focusable": this.drawing.focusable,
+                        "focused": this.focus.is_focused(window),
+                        "composition_empty": this.composition.is_empty(),
+                        "gesture_current": this.action_gesture == gesture,
+                    }));
+                }
                 if this.action_gesture != gesture
                     || !this.enabled
                     || !this.drawing.focusable

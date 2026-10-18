@@ -1,0 +1,2016 @@
+{
+  "case": "dark-zh-CN-100",
+  "workflow": "complete-workbench",
+  "theme": "dark",
+  "locale": "zh-CN",
+  "requested_scale_percent": 100,
+  "dpi_method": "WM_DPICHANGED sent only to this process's own ordinary HWND; OS display settings unchanged",
+  "os_ime_candidates_verified": false,
+  "shutdown_complete": true,
+  "screenshots": {
+    "branches-local.png": {
+      "renderer": "Windows D3D11 render target readback",
+      "scale_factor": 1.0,
+      "viewport_logical": [
+        1273.0,
+        896.0
+      ],
+      "client_physical": [
+        1273,
+        896
+      ],
+      "image_physical": [
+        1273,
+        896
+      ],
+      "screenshot": "branches-local.png",
+      "os_ime_candidates_verified": false
+    },
+    "branches-remote.png": {
+      "renderer": "Windows D3D11 render target readback",
+      "scale_factor": 1.0,
+      "viewport_logical": [
+        1273.0,
+        896.0
+      ],
+      "client_physical": [
+        1273,
+        896
+      ],
+      "image_physical": [
+        1273,
+        896
+      ],
+      "screenshot": "branches-remote.png",
+      "os_ime_candidates_verified": false
+    },
+    "workbench-ime.png": {
+      "renderer": "Windows D3D11 render target readback",
+      "scale_factor": 1.0,
+      "viewport_logical": [
+        1273.0,
+        896.0
+      ],
+      "client_physical": [
+        1273,
+        896
+      ],
+      "image_physical": [
+        1273,
+        896
+      ],
+      "screenshot": "workbench-ime.png",
+      "os_ime_candidates_verified": false
+    },
+    "workbench.png": {
+      "renderer": "Windows D3D11 render target readback",
+      "scale_factor": 1.0,
+      "viewport_logical": [
+        1273.0,
+        896.0
+      ],
+      "client_physical": [
+        1273,
+        896
+      ],
+      "image_physical": [
+        1273,
+        896
+      ],
+      "screenshot": "workbench.png",
+      "os_ime_candidates_verified": false
+    },
+    "history.png": {
+      "renderer": "Windows D3D11 render target readback",
+      "scale_factor": 1.0,
+      "viewport_logical": [
+        1273.0,
+        796.0
+      ],
+      "client_physical": [
+        1273,
+        796
+      ],
+      "image_physical": [
+        1273,
+        796
+      ],
+      "screenshot": "history.png",
+      "os_ime_candidates_verified": false
+    },
+    "conflicts.png": {
+      "renderer": "Windows D3D11 render target readback",
+      "scale_factor": 1.0,
+      "viewport_logical": [
+        1273.0,
+        796.0
+      ],
+      "client_physical": [
+        1273,
+        796
+      ],
+      "image_physical": [
+        1273,
+        796
+      ],
+      "screenshot": "conflicts.png",
+      "os_ime_candidates_verified": false
+    }
+  },
+  "observations": {
+    "native_button_refresh_wait": {
+      "id": "refresh",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 286px, y: 637px }, size: Size { 48px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_refresh_before_click": {
+      "id": "refresh",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 286px, y: 637px }, size: Size { 48px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 174,
+          "worker_revision": 174,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_refresh_after_click": {
+      "id": "refresh",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": false,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 174,
+          "worker_revision": 175,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 174,
+          "worker_revision": 175,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 174,
+          "worker_revision": 175,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 174,
+          "worker_revision": 175,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_local_branch_group": {
+      "label": "本地",
+      "main": "Bounds { origin: Point { x: 289px, y: 744px }, size: Size { 184px × 24px } }",
+      "incoming": "Bounds { origin: Point { x: 289px, y: 720px }, size: Size { 184px × 24px } }"
+    },
+    "native_remote_branch_group": {
+      "label": "远程",
+      "remote": "fixture",
+      "main": "Bounds { origin: Point { x: 289px, y: 768px }, size: Size { 184px × 24px } }"
+    },
+    "native_branch_filter_without_checkout": {
+      "selected_ref": "refs/heads/incoming",
+      "checkout": "main",
+      "head": "b56124d86b6da6e60d78bf1ec1c777e4e98fe3b3",
+      "incoming_history_present": true,
+      "main_history_absent": true
+    },
+    "native_button_all_wait": {
+      "id": "all",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 334px, y: 637px }, size: Size { 76px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_all_before_click": {
+      "id": "all",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 334px, y: 637px }, size: Size { 76px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 51,
+          "worker_revision": 51,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_all_after_click": {
+      "id": "all",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 51,
+          "worker_revision": 52,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 51,
+          "worker_revision": 52,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 51,
+          "worker_revision": 52,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 51,
+          "worker_revision": 52,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_all_refs_restored": true,
+    "comparison_ime_before_preedit": {
+      "phase": "before_preedit",
+      "original_entity": "EntityId(20v1)",
+      "focused": true,
+      "original_bytes": 1237,
+      "actual_bytes": 1237,
+      "equals_original": true,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 0,
+        "end": 0
+      },
+      "selection_reversed": false
+    },
+    "comparison_ime_preedit": {
+      "phase": "preedit",
+      "original_entity": "EntityId(20v1)",
+      "focused": true,
+      "original_bytes": 1237,
+      "actual_bytes": 1244,
+      "equals_original": false,
+      "marked_utf16": {
+        "start": 0,
+        "end": 3
+      },
+      "selection_utf16": {
+        "start": 0,
+        "end": 3
+      },
+      "selection_reversed": false
+    },
+    "comparison_ime": {
+      "original_entity": "EntityId(20v1)",
+      "caret": "Bounds { origin: Point { x: 830.6094px, y: 121px }, size: Size { 0px × 21px } }",
+      "utf16_preedit": [
+        0,
+        3
+      ],
+      "os_candidates_verified": false
+    },
+    "comparison_ime_cancelled": {
+      "phase": "cancelled",
+      "original_entity": "EntityId(20v1)",
+      "focused": true,
+      "original_bytes": 1237,
+      "actual_bytes": 1237,
+      "equals_original": true,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 0,
+        "end": 0
+      },
+      "selection_reversed": false
+    },
+    "comparison_ime_committed": {
+      "phase": "committed",
+      "original_entity": "EntityId(20v1)",
+      "focused": true,
+      "original_bytes": 1237,
+      "actual_bytes": 1243,
+      "equals_original": false,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 2,
+        "end": 2
+      },
+      "selection_reversed": false
+    },
+    "comparison_ime_after_undo": {
+      "phase": "after_undo",
+      "original_entity": "EntityId(20v1)",
+      "focused": true,
+      "original_bytes": 1237,
+      "actual_bytes": 1237,
+      "equals_original": true,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 0,
+        "end": 0
+      },
+      "selection_reversed": false
+    },
+    "comparison_composition_cancel_commit_undo": true,
+    "independent_scroll_and_fixed_form": {
+      "form_before": "Bounds { origin: Point { x: 16px, y: 743px }, size: Size { 248px × 60px } }",
+      "form_after": "Bounds { origin: Point { x: 16px, y: 743px }, size: Size { 248px × 60px } }",
+      "source_scroll": "180px"
+    },
+    "staging_refresh_native_projection": {
+      "epoch": 6,
+      "revision": 22,
+      "expanded": [
+        "dn19370d78e198d3f6",
+        "dn4f198595c7fa52c7"
+      ],
+      "loaded_expanded_pages": true
+    },
+    "saved_and_refreshed_before_staging": true,
+    "native_button_hunk-0_wait": {
+      "id": "hunk-0",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 711px }, size: Size { 102px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_hunk-0_before_click": {
+      "id": "hunk-0",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 711px }, size: Size { 102px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 100,
+          "worker_revision": 100,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_hunk-0_after_click": {
+      "id": "hunk-0",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 100,
+          "worker_revision": 101,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 100,
+          "worker_revision": 101,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 100,
+          "worker_revision": 101,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 100,
+          "worker_revision": 101,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "partial_index_groups": true,
+    "native_button_stage_wait": {
+      "id": "stage",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 683px }, size: Size { 48px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_stage_before_click": {
+      "id": "stage",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 683px }, size: Size { 48px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 118,
+          "worker_revision": 118,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_stage_after_click": {
+      "id": "stage",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 118,
+          "worker_revision": 119,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 118,
+          "worker_revision": 119,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 118,
+          "worker_revision": 119,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 118,
+          "worker_revision": 119,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_commit_wait": {
+      "id": "commit",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 827px }, size: Size { 264px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_commit_before_click": {
+      "id": "commit",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 827px }, size: Size { 264px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 135,
+          "worker_revision": 135,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_commit_after_click": {
+      "id": "commit",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 135,
+          "worker_revision": 136,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 135,
+          "worker_revision": 136,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 135,
+          "worker_revision": 136,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 135,
+          "worker_revision": 136,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_index_commit": {
+      "index_only": true,
+      "message": "Native UI commit 中文",
+      "previous_head": "b56124d86b6da6e60d78bf1ec1c777e4e98fe3b3",
+      "untracked_files_retained": 28
+    },
+    "history_body_geometry": {
+      "body": "Bounds { origin: Point { x: 286px, y: 693px }, size: Size { 190px × 113px } }",
+      "minimum_complete_commit_rows": 3,
+      "dock_content": "Bounds { origin: Point { x: 280px, y: 631px }, size: Size { 993px × 232px } }",
+      "canvas_region": "Bounds { origin: Point { x: 476px, y: 693px }, size: Size { 797px × 113px } }",
+      "history_pointer": "Point { x: 874.5px, y: 731px }"
+    },
+    "history_pointer_latest_revision": 151,
+    "history_pointer_selection_wait": {
+      "revision_advanced": true,
+      "selected_title": true,
+      "expected_oid": "ce981c45ba4dc1d6402d677eccbadbc1ece2104b",
+      "actual_oid": "ce981c45ba4dc1d6402d677eccbadbc1ece2104b",
+      "exact_oid": true,
+      "window_active": true,
+      "captured_focus_retained": true,
+      "captured_focus": "FocusHandle(FocusId(74v1))",
+      "current_focus": "Some(FocusHandle(FocusId(74v1)))"
+    },
+    "history_pointer_focus_wait": {
+      "window_active": true,
+      "captured_focus_retained": true,
+      "captured_focus": "FocusHandle(FocusId(74v1))",
+      "current_focus": "Some(FocusHandle(FocusId(74v1)))"
+    },
+    "native_history_pointer_selection": {
+      "commit": "ce981c45ba4dc1d6402d677eccbadbc1ece2104b",
+      "current_scene_selected": true,
+      "native_focus_retained": true,
+      "separate_from_wheel": true
+    },
+    "history_key_end_before": {
+      "node_current": true,
+      "window_active": true,
+      "original_focus_retained": true,
+      "current_focus": "Some(FocusHandle(FocusId(74v1)))",
+      "worker_revision": 168,
+      "host_revision": 168,
+      "offset": 160.0,
+      "native_canvas": {
+        "scene_revision": 168,
+        "scene_current": true,
+        "node_active": true,
+        "canvas_revision": 168,
+        "enabled": true,
+        "focusable": true,
+        "focused": true,
+        "canvas_focus": "FocusHandle(FocusId(74v1))",
+        "composition_empty": true,
+        "gesture_current": true,
+        "source_gesture": false,
+        "bounds": "Bounds { origin: Point { x: 476px, y: 721px }, size: Size { 791px × 85px } }",
+        "scroll_offset": 160.0
+      },
+      "trace": []
+    },
+    "history_key_end_after_dispatch": {
+      "current_focus": "Some(FocusHandle(FocusId(74v1)))",
+      "original_focus_retained": true,
+      "offset": 160.0,
+      "native_canvas": {
+        "scene_revision": 168,
+        "scene_current": true,
+        "node_active": true,
+        "canvas_revision": 168,
+        "enabled": true,
+        "focusable": true,
+        "focused": true,
+        "canvas_focus": "FocusHandle(FocusId(74v1))",
+        "composition_empty": true,
+        "gesture_current": true,
+        "source_gesture": false,
+        "bounds": "Bounds { origin: Point { x: 476px, y: 721px }, size: Size { 791px × 85px } }",
+        "scroll_offset": 160.0
+      },
+      "trace": [
+        {
+          "stage": "canvas_received",
+          "key": "end",
+          "canvas_revision": 168,
+          "callback_revision": 168,
+          "enabled": true,
+          "focusable": true,
+          "focused": true,
+          "composition_empty": true,
+          "gesture_current": true,
+          "worker_revision": 168,
+          "worker_processes": 0,
+          "at_millis": 1792298536776
+        }
+      ]
+    },
+    "history_key_enter_before": {
+      "node_current": true,
+      "window_active": true,
+      "original_focus_retained": true,
+      "current_focus": "Some(FocusHandle(FocusId(74v1)))",
+      "worker_revision": 169,
+      "host_revision": 169,
+      "offset": 1035.0,
+      "native_canvas": {
+        "scene_revision": 169,
+        "scene_current": true,
+        "node_active": true,
+        "canvas_revision": 169,
+        "enabled": true,
+        "focusable": true,
+        "focused": true,
+        "canvas_focus": "FocusHandle(FocusId(74v1))",
+        "composition_empty": true,
+        "gesture_current": true,
+        "source_gesture": false,
+        "bounds": "Bounds { origin: Point { x: 476px, y: 721px }, size: Size { 791px × 85px } }",
+        "scroll_offset": 1035.0
+      },
+      "trace": [
+        {
+          "stage": "canvas_received",
+          "key": "end",
+          "canvas_revision": 168,
+          "callback_revision": 168,
+          "enabled": true,
+          "focusable": true,
+          "focused": true,
+          "composition_empty": true,
+          "gesture_current": true,
+          "worker_revision": 168,
+          "worker_processes": 0,
+          "at_millis": 1792298536776
+        },
+        {
+          "stage": "sink_forwarded",
+          "event": {
+            "revision": 168,
+            "node": "log",
+            "action": {
+              "type": "canvas",
+              "value": {
+                "type": "key",
+                "key": "end",
+                "ctrl": false,
+                "alt": false,
+                "shift": false
+              }
+            }
+          },
+          "worker_revision": 168,
+          "worker_processes": 0,
+          "at_millis": 1792298536802
+        }
+      ]
+    },
+    "history_key_enter_after_dispatch": {
+      "current_focus": "Some(FocusHandle(FocusId(74v1)))",
+      "original_focus_retained": true,
+      "offset": 1035.0,
+      "native_canvas": {
+        "scene_revision": 169,
+        "scene_current": true,
+        "node_active": true,
+        "canvas_revision": 169,
+        "enabled": true,
+        "focusable": true,
+        "focused": true,
+        "canvas_focus": "FocusHandle(FocusId(74v1))",
+        "composition_empty": true,
+        "gesture_current": true,
+        "source_gesture": false,
+        "bounds": "Bounds { origin: Point { x: 476px, y: 721px }, size: Size { 791px × 85px } }",
+        "scroll_offset": 1035.0
+      },
+      "trace": [
+        {
+          "stage": "canvas_received",
+          "key": "end",
+          "canvas_revision": 168,
+          "callback_revision": 168,
+          "enabled": true,
+          "focusable": true,
+          "focused": true,
+          "composition_empty": true,
+          "gesture_current": true,
+          "worker_revision": 168,
+          "worker_processes": 0,
+          "at_millis": 1792298536776
+        },
+        {
+          "stage": "sink_forwarded",
+          "event": {
+            "revision": 168,
+            "node": "log",
+            "action": {
+              "type": "canvas",
+              "value": {
+                "type": "key",
+                "key": "end",
+                "ctrl": false,
+                "alt": false,
+                "shift": false
+              }
+            }
+          },
+          "worker_revision": 168,
+          "worker_processes": 0,
+          "at_millis": 1792298536802
+        },
+        {
+          "stage": "canvas_received",
+          "key": "enter",
+          "canvas_revision": 169,
+          "callback_revision": 169,
+          "enabled": true,
+          "focusable": true,
+          "focused": true,
+          "composition_empty": true,
+          "gesture_current": true,
+          "worker_revision": 169,
+          "worker_processes": 0,
+          "at_millis": 1792298537355
+        }
+      ]
+    },
+    "history_key_trace": [
+      {
+        "stage": "canvas_received",
+        "key": "end",
+        "canvas_revision": 168,
+        "callback_revision": 168,
+        "enabled": true,
+        "focusable": true,
+        "focused": true,
+        "composition_empty": true,
+        "gesture_current": true,
+        "worker_revision": 168,
+        "worker_processes": 0,
+        "at_millis": 1792298536776
+      },
+      {
+        "stage": "sink_forwarded",
+        "event": {
+          "revision": 168,
+          "node": "log",
+          "action": {
+            "type": "canvas",
+            "value": {
+              "type": "key",
+              "key": "end",
+              "ctrl": false,
+              "alt": false,
+              "shift": false
+            }
+          }
+        },
+        "worker_revision": 168,
+        "worker_processes": 0,
+        "at_millis": 1792298536802
+      },
+      {
+        "stage": "canvas_received",
+        "key": "enter",
+        "canvas_revision": 169,
+        "callback_revision": 169,
+        "enabled": true,
+        "focusable": true,
+        "focused": true,
+        "composition_empty": true,
+        "gesture_current": true,
+        "worker_revision": 169,
+        "worker_processes": 0,
+        "at_millis": 1792298537355
+      },
+      {
+        "stage": "sink_forwarded",
+        "event": {
+          "revision": 169,
+          "node": "log",
+          "action": {
+            "type": "canvas",
+            "value": {
+              "type": "key",
+              "key": "enter",
+              "ctrl": false,
+              "alt": false,
+              "shift": false
+            }
+          }
+        },
+        "worker_revision": 169,
+        "worker_processes": 0,
+        "at_millis": 1792298537381
+      }
+    ],
+    "readonly_pointer_immediate": {
+      "window_active": true,
+      "focused": false,
+      "current_focus": "Some(FocusHandle(FocusId(100v1)))",
+      "value_preserved": true,
+      "source_bounds": "Bounds { origin: Point { x: 746px, y: 128px }, size: Size { 519px × 611px } }"
+    },
+    "readonly_pointer_after_frame": {
+      "window_active": true,
+      "focused": true,
+      "current_focus": "Some(FocusHandle(FocusId(102v1)))",
+      "value_preserved": true
+    },
+    "readonly_native_input_result": {
+      "window_active": true,
+      "focused": true,
+      "current_focus": "Some(FocusHandle(FocusId(102v1)))",
+      "value_preserved": true,
+      "role": "Some(Document)"
+    },
+    "readonly_history": {
+      "commit": "1616b287e9f07c03ad005872f9b8d2b084fb9736",
+      "source_labels": [
+        "空树 · 只读",
+        "1616b287e9f07c03ad005872f9b8d2b084fb9736"
+      ],
+      "wheel_before": 0.0,
+      "wheel_after": 1035.0,
+      "end_revealed_oldest": true,
+      "native_readonly_input_rejected": true
+    },
+    "conflict_tree_navigation": {
+      "relative_path": "conflicts/merge.txt",
+      "native_selected": true
+    },
+    "native_button_merge-from-base_wait": {
+      "id": "merge-from-base",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 230px, y: 711px }, size: Size { 216px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 0
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 0
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_merge-from-base_before_click": {
+      "id": "merge-from-base",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 230px, y: 711px }, size: Size { 216px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 0
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 0
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 231,
+          "worker_revision": 231,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_merge-from-base_after_click": {
+      "id": "merge-from-base",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 231,
+          "worker_revision": 232,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 0
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 0
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 231,
+          "worker_revision": 232,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 231,
+          "worker_revision": 232,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 231,
+          "worker_revision": 232,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_proposal_merge-from-base_result": {
+      "matches_expected": true,
+      "actual_bytes": 76,
+      "expected_bytes": 76,
+      "markers_present": false,
+      "source_current": true
+    },
+    "native_button_merge-nonconflicting_wait": {
+      "id": "merge-nonconflicting",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 711px }, size: Size { 118px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 2
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 2
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_merge-nonconflicting_before_click": {
+      "id": "merge-nonconflicting",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 8px, y: 711px }, size: Size { 118px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 2
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 2
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 238,
+          "worker_revision": 238,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_merge-nonconflicting_after_click": {
+      "id": "merge-nonconflicting",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 238,
+          "worker_revision": 239,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 2
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 2
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 238,
+          "worker_revision": 239,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 238,
+          "worker_revision": 239,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 238,
+          "worker_revision": 239,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_proposal_merge-nonconflicting_result": {
+      "matches_expected": true,
+      "actual_bytes": 80,
+      "expected_bytes": 80,
+      "markers_present": false,
+      "source_current": false
+    },
+    "native_button_merge-block-0-left_wait": {
+      "id": "merge-block-0-left",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 573px, y: 172px }, size: Size { 24px × 24px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 4
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 4
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_merge-block-0-left_before_click": {
+      "id": "merge-block-0-left",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 573px, y: 172px }, size: Size { 24px × 24px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 4
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 4
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 244,
+          "worker_revision": 244,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_merge-block-0-left_after_click": {
+      "id": "merge-block-0-left",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 244,
+          "worker_revision": 245,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 4
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 4
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 244,
+          "worker_revision": 245,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 244,
+          "worker_revision": 245,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 244,
+          "worker_revision": 245,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_proposal_merge-block-0-left_result": {
+      "matches_expected": true,
+      "actual_bytes": 78,
+      "expected_bytes": 78,
+      "markers_present": false,
+      "source_current": false
+    },
+    "conflict_ime_before_preedit": {
+      "phase": "before_preedit",
+      "original_entity": "EntityId(112v21)",
+      "focused": true,
+      "original_bytes": 78,
+      "actual_bytes": 78,
+      "equals_original": true,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 78,
+        "end": 78
+      },
+      "selection_reversed": false
+    },
+    "conflict_ime_preedit": {
+      "phase": "preedit",
+      "original_entity": "EntityId(112v21)",
+      "focused": true,
+      "original_bytes": 78,
+      "actual_bytes": 85,
+      "equals_original": false,
+      "marked_utf16": {
+        "start": 0,
+        "end": 3
+      },
+      "selection_utf16": {
+        "start": 0,
+        "end": 3
+      },
+      "selection_reversed": false
+    },
+    "conflict_ime": {
+      "original_entity": "EntityId(112v21)",
+      "caret": "Bounds { origin: Point { x: 736.83203px, y: 137.575px }, size: Size { 2px × 17.85px } }",
+      "utf16_preedit": [
+        0,
+        3
+      ],
+      "os_candidates_verified": false
+    },
+    "conflict_ime_cancelled": {
+      "phase": "cancelled",
+      "original_entity": "EntityId(112v21)",
+      "focused": true,
+      "original_bytes": 78,
+      "actual_bytes": 78,
+      "equals_original": true,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 0,
+        "end": 0
+      },
+      "selection_reversed": false
+    },
+    "conflict_ime_committed": {
+      "phase": "committed",
+      "original_entity": "EntityId(112v21)",
+      "focused": true,
+      "original_bytes": 78,
+      "actual_bytes": 84,
+      "equals_original": false,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 2,
+        "end": 2
+      },
+      "selection_reversed": false
+    },
+    "conflict_ime_after_undo": {
+      "phase": "after_undo",
+      "original_entity": "EntityId(112v21)",
+      "focused": true,
+      "original_bytes": 78,
+      "actual_bytes": 78,
+      "equals_original": true,
+      "marked_utf16": null,
+      "selection_utf16": {
+        "start": 0,
+        "end": 0
+      },
+      "selection_reversed": false
+    },
+    "conflict_composition_cancel_commit_undo": true,
+    "conflict_sources": {
+      "titles": [
+        "来源 2 · 只读 · refs/heads/main · ce981c45ba4dc1d6402d677eccbadbc1ece2104b",
+        "合并结果 · 可编辑",
+        "来源 3 · 只读 · merge · 18056dd25e502de0e474d3a7aafd04012dc093c9"
+      ],
+      "same_original_entity": "EntityId(112v21)",
+      "history_window_retained": true
+    },
+    "conflict_refresh_native_projection": {
+      "epoch": 13,
+      "revision": 18,
+      "expanded": [
+        "dna61a3d7c764ab5c7"
+      ],
+      "loaded_expanded_pages": true
+    },
+    "native_button_resolved_wait": {
+      "id": "resolved",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 698px, y: 711px }, size: Size { 118px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_resolved_before_click": {
+      "id": "resolved",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 698px, y: 711px }, size: Size { 118px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 267,
+          "worker_revision": 267,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_resolved_after_click": {
+      "id": "resolved",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 267,
+          "worker_revision": 268,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 267,
+          "worker_revision": 268,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 267,
+          "worker_revision": 268,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 267,
+          "worker_revision": 268,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_continue_wait": {
+      "id": "continue",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 816px, y: 711px }, size: Size { 48px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_continue_before_click": {
+      "id": "continue",
+      "native_painted": true,
+      "native_visible": true,
+      "native_disabled_metadata": null,
+      "native_focus_metadata": false,
+      "native_geometry_available": true,
+      "native_bounds": "Bounds { origin: Point { x: 816px, y: 711px }, size: Size { 48px × 28px } }",
+      "guest_host_current": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 298,
+          "worker_revision": 298,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_button_continue_after_click": {
+      "id": "continue",
+      "native_painted": true,
+      "native_focus_metadata": true,
+      "window_active": true,
+      "scenes": [
+        {
+          "panel": "git/conflicts",
+          "host_revision": 298,
+          "worker_revision": 299,
+          "declared_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          },
+          "current_native_source": {
+            "id": "EntityId(112v21)",
+            "path": "conflicts/merge.txt",
+            "revision": 12
+          }
+        },
+        {
+          "panel": "git/staging",
+          "host_revision": 298,
+          "worker_revision": 299,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/history",
+          "host_revision": 298,
+          "worker_revision": 299,
+          "declared_native_source": null,
+          "current_native_source": null
+        },
+        {
+          "panel": "git/commit-details",
+          "host_revision": 298,
+          "worker_revision": 299,
+          "declared_native_source": null,
+          "current_native_source": null
+        }
+      ]
+    },
+    "native_conflict_continue": {
+      "completed": true,
+      "parents": [
+        "ce981c45ba4dc1d6402d677eccbadbc1ece2104b",
+        "18056dd25e502de0e474d3a7aafd04012dc093c9"
+      ],
+      "result_matches_review": true
+    },
+    "lifecycle_scenario": {
+      "ok": true,
+      "error": null
+    },
+    "lifecycle_native_window_capture": {
+      "ok": true,
+      "error": null
+    },
+    "lifecycle_project_shutdown": {
+      "ok": true,
+      "error": null
+    },
+    "lifecycle_native_input_retirement": {
+      "ok": true,
+      "error": null
+    },
+    "lifecycle_main_window_removal": {
+      "ok": true,
+      "error": null
+    },
+    "lifecycle_no_native_window_owners": {
+      "ok": true,
+      "error": null
+    },
+    "lifecycle_native_window_retirement": {
+      "ok": true,
+      "original_count": 3,
+      "captured_count": 3,
+      "remaining": 0,
+      "remaining_windows": "[]",
+      "capture_error": null,
+      "error": null
+    },
+    "unexpected_error_logs": []
+  },
+  "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71"
+}

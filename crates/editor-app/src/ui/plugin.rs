@@ -10,6 +10,10 @@ mod code_sync;
 mod containers;
 pub(crate) mod controls;
 mod file_image;
+mod form_delivery;
+pub(crate) use form_delivery::{FormChangeSink, FormReceipt};
+#[cfg(test)]
+mod form_delivery_tests;
 pub(crate) mod images;
 mod layout;
 mod leaf;
@@ -84,6 +88,8 @@ pub(crate) struct PluginView {
     /// Callbacks without a Window defer to this original native surface before checking IME.
     window: gpui_kit::AnyWindowHandle,
     inputs: BTreeMap<String, NativeInput>,
+    /// Only undelivered ordinary form drafts wait for their exact native/guest incarnation.
+    forms: form_delivery::Forms,
     textareas: BTreeMap<String, textareas::NativeTextarea>,
     readonly_code: BTreeMap<String, readonly_code::Snapshot>,
     /// Native pane synchronization owns derived byte maps and cancellable scroll locations only.
@@ -159,6 +165,9 @@ impl PluginView {
         }
         if self.scene_current.replace(current) != current {
             cx.notify();
+        }
+        if current {
+            self.schedule_form_delivery(cx);
         }
     }
     /// Image decoding belongs to the worker; native children only borrow the matching immutable raster.
@@ -306,6 +315,7 @@ impl PluginView {
             scene_current,
             window: window.window_handle(),
             inputs: BTreeMap::new(),
+            forms: Default::default(),
             textareas: BTreeMap::new(),
             readonly_code: BTreeMap::new(),
             code_sync: Default::default(),
@@ -382,6 +392,8 @@ impl PluginView {
         let old_dialog = self.document.dialog.as_ref().map(|d| d.id.clone());
         // New resource authority must publish its intrinsic geometry again, even at the same size.
         if self.document.file != document.file || self.document.source != document.source {
+            // A retained node name cannot carry a draft into another source owner.
+            self.cancel_form_delivery();
             self.visual_measurements.clear();
         }
         if self.document.source.as_ref().map(|source| &source.id)
@@ -639,7 +651,16 @@ impl PluginView {
                                     return;
                                 }
                                 entry.last_value = value.clone();
-                                Action::Change(value)
+                                let revision = entry.value_revision;
+                                this.form_changed(
+                                    &id,
+                                    state.entity_id(),
+                                    revision,
+                                    value,
+                                    window,
+                                    cx,
+                                );
+                                return;
                             }
                             InputEvent::PressEnter { .. } => Action::Submit(value),
                             _ => return,
@@ -661,6 +682,7 @@ impl PluginView {
             let entry = self.inputs.get_mut(&node.id).unwrap();
             let replace = entry.value_revision != input.value_revision;
             if replace {
+                self.forms.cancel(&node.id);
                 entry.last_value = input.value.clone();
                 entry.value_revision = input.value_revision;
             }
@@ -672,6 +694,7 @@ impl PluginView {
                 }
             });
         }
+        self.reconcile_form_delivery(cx);
     }
 
     /// Non-source notifications can use an App-only entry. Source actions always require a Window.
@@ -740,6 +763,10 @@ impl PluginView {
         };
         if !self.scene_current.get()
             || self.document.validate_event(&event).is_err()
+            // Never queue or retarget a business gesture ahead of a newer unsent field value.
+            // Dismiss and ordinary observations remain available while that draft catches up.
+            || (matches!(event.action, Action::Click | Action::Submit(_))
+                && self.form_activation_blocked())
             || (matches!(event.action, Action::Dismiss)
                 && self.dismissed_dialog.as_deref() == Some(id))
         {

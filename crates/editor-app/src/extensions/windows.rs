@@ -19,7 +19,9 @@ struct WorkWindow {
 }
 impl Render for WorkWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let panel_focus = self.panel.read(cx).focus.clone();
         div()
+            .track_focus(&panel_focus)
             .key_context("EditorShell")
             .on_action(cx.listener(|this, _: &SaveDocument, window, cx| {
                 let Some(source) = this.panel.read(cx).window_source_id() else {
@@ -132,6 +134,11 @@ impl EditorApp {
     /// Visibility is an explicit plugin/host action. Native close hides the surface without
     /// cancelling external operations or destroying a user's document/Undo history.
     pub(super) fn sync_plugin_windows(&mut self, cx: &mut Context<Self>) {
+        // Shutdown retains saved panel visibility after draining native owners. Retirement
+        // frames still render the shell, but must never recreate those independent windows.
+        if self.shutting_down {
+            return;
+        }
         let panels: Vec<_> = self
             .plugin_panels
             .iter()
@@ -164,9 +171,15 @@ impl EditorApp {
             options.window_min_size = Some(size(px(900.), px(520.)));
             match cx.open_window(options, move |window, cx| {
                 window.set_window_title(&title);
-                let close_panel = panel.clone();
+                // The same handle is mounted by WorkWindow's root. Initial focus belongs only
+                // to this native window; later scene publications preserve its focused child.
+                let panel_focus = panel.read(cx).focus.clone();
+                panel_focus.focus(window, cx);
+                // The root owns the live panel. Win32 may retain its close callback until
+                // asynchronous HWND destruction, so that callback cannot prolong panel ownership.
+                let close_panel = panel.downgrade();
                 window.on_window_should_close(cx, move |window, cx| {
-                    close_panel.update(cx, |panel, cx| panel.retire_native_inputs(cx));
+                    let _ = close_panel.update(cx, |panel, cx| panel.retire_native_inputs(cx));
                     if let Some(router) =
                         crate::ui::controls::aligned_pointer::for_window(window, cx)
                         && !router.flush(window, cx)

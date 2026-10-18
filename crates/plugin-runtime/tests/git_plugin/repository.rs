@@ -143,6 +143,12 @@ fn preview(manager: &Manager) -> String {
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_stash_create_previews_and_moves_untracked_files_then_apply_keeps_the_entry() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_stash_create_previews_and_moves_untracked_files_then_apply_keeps_the_entry",
+    ) {
+        return;
+    }
     let (repository, package) = fixture();
     let root = repository.path();
     std::fs::write(root.join("tracked.txt"), "tracked 中😀\n").unwrap();
@@ -198,6 +204,12 @@ fn git_package_stash_create_previews_and_moves_untracked_files_then_apply_keeps_
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_stash_pop_conflict_retains_the_original_stash_and_real_unmerged_state() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_stash_pop_conflict_retains_the_original_stash_and_real_unmerged_state",
+    ) {
+        return;
+    }
     let (repository, package) = fixture();
     let root = repository.path();
     std::fs::write(root.join("tracked.txt"), "stashed side\n").unwrap();
@@ -226,6 +238,12 @@ fn git_package_stash_pop_conflict_retains_the_original_stash_and_real_unmerged_s
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_stash_pop_uses_the_previewed_oid_and_keeps_entries_after_a_selector_shift() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_stash_pop_uses_the_previewed_oid_and_keeps_entries_after_a_selector_shift",
+    ) {
+        return;
+    }
     let (repository, package) = fixture();
     let root = repository.path();
     std::fs::write(root.join("tracked.txt"), "approved original\n").unwrap();
@@ -258,6 +276,12 @@ fn git_package_stash_pop_uses_the_previewed_oid_and_keeps_entries_after_a_select
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_stash_drop_refuses_a_selector_that_changed_after_confirmation_preview() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_stash_drop_refuses_a_selector_that_changed_after_confirmation_preview",
+    ) {
+        return;
+    }
     let (repository, package) = fixture();
     let root = repository.path();
     std::fs::write(root.join("tracked.txt"), "original stash\n").unwrap();
@@ -282,6 +306,12 @@ fn git_package_stash_drop_refuses_a_selector_that_changed_after_confirmation_pre
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_pull_fast_forwards_a_non_origin_upstream_and_local_refresh_does_not_fetch() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_pull_fast_forwards_a_non_origin_upstream_and_local_refresh_does_not_fetch",
+    ) {
+        return;
+    }
     let (_repository, local, writer, package) = tracking_fixture();
     write_commit(&writer, "remote.txt", "remote update\n", "remote update");
     git(&writer, &["push"]);
@@ -321,6 +351,12 @@ fn git_package_pull_fast_forwards_a_non_origin_upstream_and_local_refresh_does_n
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_force_lease_refuses_remote_advance_after_preview() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_force_lease_refuses_remote_advance_after_preview",
+    ) {
+        return;
+    }
     let (repository, local, writer, package) = tracking_fixture();
     let remote = repository.path().join("remote.git");
     let expected_remote = git(&remote, &["rev-parse", "refs/heads/main"])
@@ -406,6 +442,12 @@ fn git_package_force_lease_refuses_remote_advance_after_preview() {
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_pull_asks_on_divergence_and_recovers_the_remembered_choice_on_reactivation() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_pull_asks_on_divergence_and_recovers_the_remembered_choice_on_reactivation",
+    ) {
+        return;
+    }
     let (_repository, local, writer, package) = tracking_fixture();
     write_commit(&local, "local.txt", "local update\n", "local update");
     write_commit(&writer, "remote.txt", "remote update\n", "remote update");
@@ -433,7 +475,10 @@ fn git_package_pull_asks_on_divergence_and_recovers_the_remembered_choice_on_rea
     );
     assert!(git(&local, &["status", "--porcelain"]).is_empty());
     reactivate(&mut manager);
+    // Repository details remain reachable without consuming the history's permanent row space.
+    click(&mut manager, "history", "repo-info");
     assert!(text(&manager, "repo-policy").contains("Remembered: merge"));
+    click(&mut manager, "history", "repo-close");
     assert!(text(&manager, "repo-fetch-time").contains("UTC"));
     write_commit(
         &writer,
@@ -465,6 +510,12 @@ fn git_package_pull_asks_on_divergence_and_recovers_the_remembered_choice_on_rea
 #[test]
 #[ignore = "build independent Git-for-Nanobug candidate; set NANOBUG_GIT_CANDIDATE"]
 fn git_package_discovers_linked_worktrees_and_rejects_projects_below_the_repository_root() {
+    // Keep factory and Manager/native Git children in one private configuration process.
+    if !run_isolated_test(
+        "repository::git_package_discovers_linked_worktrees_and_rejects_projects_below_the_repository_root",
+    ) {
+        return;
+    }
     let (repository, package) = fixture();
     let root = repository.path();
     let linked_parent = tempfile::tempdir().unwrap();
@@ -480,7 +531,9 @@ fn git_package_discovers_linked_worktrees_and_rejects_projects_below_the_reposit
         ],
     );
     let (_profile, mut manager) = activate(&package, &linked);
+    click(&mut manager, "history", "repo-info");
     assert!(text(&manager, "repo-identity").contains("linked worktree"));
+    click(&mut manager, "history", "repo-close");
     manager.disable("git").unwrap();
     let nested = root.join("nested");
     std::fs::create_dir(&nested).unwrap();

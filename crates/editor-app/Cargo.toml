@@ -66,3 +66,7 @@ gpui-kit = { workspace = true, features = ["test-support"] }
 toml.workspace = true
 # Build independent declarative package fixtures through the public ZIP inspection boundary.
 zip = { version = "4", default-features = false, features = ["deflate"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+# Observe and resize only the acceptance process's own native HWND; reuse the locked SDK bindings.
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
