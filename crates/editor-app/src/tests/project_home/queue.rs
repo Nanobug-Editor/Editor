@@ -113,7 +113,7 @@ fn close_queued_input(cx: &mut TestAppContext, composing: bool) {
                 window.dispatch_keystroke(Keystroke::parse("Y").unwrap(), cx);
             }
             host.update(cx, |host, cx| {
-                host.request_close(CloseIntent::Home, window, cx);
+                host.request_close(CloseIntent::Window, window, cx);
             });
         });
         visual.run_until_parked();
@@ -143,10 +143,11 @@ fn close_queued_input(cx: &mut TestAppContext, composing: bool) {
             );
         }
         click(visual, "project-close-save");
-        assert!(
-            visual.debug_bounds("project-open-folder").is_some(),
+        assert_eq!(
+            window_count(visual),
+            0,
             "the first save choice must close after the whole FIFO; error={:?}",
-            visual.update(|_, cx| host.read(cx).error.clone())
+            visual.cx.update(|cx| host.read(cx).error.clone())
         );
         assert_eq!(std::fs::read_to_string(path).unwrap(), entered);
         // The recorded UI adapter does not own this actual service manager; retire its native lease explicitly.

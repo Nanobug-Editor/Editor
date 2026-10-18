@@ -404,6 +404,19 @@ pub enum Input {
 /// Native UI notifications contain no legacy canvas or character-grid fields.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Notification {
+    /// ui.visibility 1.0: the first sampled state, then changes, for one declared owned panel.
+    /// Requires negotiation and the ordinary ui.panels grant; older guests receive no such event.
+    /// `Input::Event.panel` equals `panel`. Visible means the platform presents the containing
+    /// window and the panel is its displayed native surface: a hidden panel, inactive dock tab,
+    /// collapsed dock, inactive file provider or closed work window is false. Platform visibility
+    /// is sampled; this is not a promise that every pixel is unobscured by another control.
+    /// A new live instance receives a fresh initial state. This observation never activates a
+    /// cold/disabled instance or grants background execution. Guests may aggregate their panels
+    /// and suspend refresh timers while all are false; process completion must remain observable.
+    PanelVisibility {
+        panel: String,
+        visible: bool,
+    },
     /// A coalesced tick for a live instance-owned timer; sequence advances only for delivered ticks.
     Timer {
         handle: ResourceHandle,
@@ -639,6 +652,15 @@ pub enum EditorOperation {
         language: Option<String>,
         text: String,
     },
+    /// editor.virtual 1.1: create an owned readonly source without opening a standalone tab.
+    /// Lifetime, quotas and returned DocumentOpened metadata match OpenVirtualDocument. OpenDocument
+    /// can later reveal it explicitly; comparisons do not create extra snapshot tabs.
+    OpenVirtualSource {
+        title: String,
+        #[serde(default)]
+        language: Option<String>,
+        text: String,
+    },
     /// Refresh owned readonly content at its exact revision without a user edit or undo entry.
     RefreshVirtualDocument {
         document: DocumentVersion,
@@ -653,6 +675,19 @@ pub enum EditorOperation {
     CompareDocuments {
         left: DocumentVersion,
         right: DocumentVersion,
+    },
+    /// editor.diff 1.1: open/update a file-bound native comparison tab under this instance's key.
+    /// Both initial versions are exact. Subsequent edits retain the right session and recompute
+    /// decorations; tab switches retain the comparison. At most 32 views may remain open.
+    /// `preview` permits replacing another unpinned preview from this owner; double-click pins it.
+    /// Returns DocumentsCompared. Sources must be distinct readable sessions; virtuals stay owned.
+    OpenDocumentComparison {
+        key: String,
+        title: String,
+        left: DocumentVersion,
+        right: DocumentVersion,
+        #[serde(default)]
+        preview: bool,
     },
     /// Enumerate up to 128 currently open readable text sessions; requires editor.documents 1.1.
     ListDocuments,

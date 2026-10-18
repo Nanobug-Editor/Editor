@@ -2,8 +2,20 @@
 
 本目录索引实际维护的插件资料。跨插件平台方案放在本目录的 specs、tickets 与 verification；插件自身的历史专题资料保留在对应包内，不复制正文或继承其他任务的完成状态。
 
+- [Git 暂存提交面板归属调整](verification/git-sidebar-panel-2026-10-18.md)：已改为资源管理器、大纲同类的共享侧栏；17 项回归、旧布局一次迁移／用户位置恢复、深中100%／浅英150%原生拖动与隐藏重开通过，宿主便携包已生成。Git 仍为独立0.1.8；根工作区已有检查问题与实际范围见记录。
+
+- [Git 工作窗口标题栏点击回归](verification/git-window-caption-2026-10-18.md)：已修复通用标题栏 Drag 覆盖原生按钮；真实拖动与三按钮、已加载提交详情的深色 100%／浅色 150% 两组合、关闭后单次主窗刷新及窗口退役通过。新宿主便携包已生成，Git 仍为独立 0.1.8，规定检查、旧格式偏差及验收范围见记录。
+
+- [Git 周期检查打断审查回归](verification/git-auto-refresh-2026-10-18.md)：无变化检查清空树页和禁用控件已分别复现；独立 0.1.8 本地包完成真实包、两段原生闲置与错误恢复回归，规定工作区检查及 53 文件账本有据。现有根格式偏差、未重跑的矩阵及既存原生请求超时清理限制见记录。
+
+- [Git 加载与工作窗口超时回归](verification/git-loading-window-timeout-2026-10-18.md)：2026-10-18 新反馈独立记录；已修复过期树分页残留 loading，Package/Manager、两种无插桩原生恢复、正常仓库完整流程及工作区检查通过，本地修复版已生成。容器目录与实际仓库入口、原工作区两处格式偏差及尚未独立复现的整窗卡死边界见记录。
+
+- [Vue 多版本插件与 TypeScript 协作方案](specs/vue-multi-backend.md)、[11 张工单草案](tickets/vue-typescript/README.md)、[工具层协作初步验证](verification/vue-typescript-p0-2026-10-15.md)：已要求开始实施，Vue 2.6/2.7/3 真实工具探针的 24 项断言通过；正式切片待拆分确认，完整 P0、独立插件、宿主集成和原生验收尚未完成。
+- [Git 插件范围与原型方案](specs/git-plugin.md)、[实施验证记录](verification/git-plugin-2026-10-15.md)、[历史暂停现场](verification/git-plugin-paused-2026-10-16.md)、[场景工单与最终进度](tickets/git-plugin-remaining/README.md)：#119、#120 均已验收、普通推送并读回 closed／completed，100%。独立 0.1.7／52 项源码，访客 101/101、实际业务 43＋修正夹具 1、五窗口 5/5、正式原生完整流程／八组合、54 图核验及规定宿主检查有据，最终双轴无未解决项。原全量旧夹具失败按真实身份保留。Git 由宿主外独立项目和显式 ZIP 交付，不随宿主内置或自动恢复；系统 IME 候选弹窗仍未验证。
 - [独立插件市场规格与工单](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
 - [插件管理器共用布局](specs/plugin-manager-shared-layout.md)、[2026-10-13 验收记录](verification/plugin-manager-shared-layout-2026-10-13.md)：已安装与市场共用窗口框架，搜索框内置左侧筛选，详情按数据分区；浏览版本与实际安装实例的操作目标分别明确。实现与测试记录不继承市场服务工单的交付状态。
+- [更新入口与详情呈现优化](verification/plugin-manager-presentation-2026-10-14.md)：已安装显示审核新版本，不可执行操作隐藏；资料分组、版本列表及进行中反馈集中验证，沿用已有授权和事务入口。
+- [冷启动插件预览误报与首次激活回归](verification/plugin-preview-cold-callbacks-2026-10-14.md)：排查启用状态下的 FilePreview/Preview disabled 误报，保留同文档编辑期间的首次激活意图；真实 ZIP、原生输入与错误边界结果独立记录。
 - [已验收的 Rust 合并方案](specs/rust-plugin-consolidation.md)与[历史验收](verification/rust-plugin-consolidation-2026-10-09.md)：市场工单 03 的外部准入依据；迁移与本次修复的结果另记，不将其他任务成果计为新实现。
 - [市场工单 03 宿主集成记录](verification/plugin-marketplace-03-2026-10-11.md)：七个新命名仓库、稳定 Release、完整 ZIP 摘要、七包原生安装与代表功能已验证；PR #6 已按本批授权合并，正式 Pages、统计及客户端线上安装验收通过。
 - [市场工单 04 删除前盘点](verification/plugin-marketplace-04-inventory-2026-10-11.md)：实际消费者与替代输入对应关系；源码迁出和无随附 Windows 交付已验收，证据见 [04 最终记录](verification/plugin-marketplace-04-2026-10-11.md)。
@@ -53,6 +65,7 @@
 - [插件管理与日志方案](specs/plugin-management-logs.md)、[对应工单](tickets/plugin-management-logs/README.md)、[管理页验收](verification/plugin-management-tabs-verification.md)。
 - [运行、调试与构建父议题](https://github.com/Nanobug-Editor/Editor/issues/48)、[接手终验与工单处置](verification/run-debug-build-completion-2026-10-06.md)、[B1 UI 修复与复验](verification/run-debug-build-ui-fix-2026-10-06.md)、[历史验收](verification/run-debug-build.md)、[整批初审记录（2026-10-05）](verification/run-debug-build-review-2026-10-05.md)。当前进度以终验及复验记录为准。
 - [本批调试器、受控传输与单目标握手决定](specs/run-debug-build-debugger.md)。
+- [运行顶栏图标与选择语义](specs/run-debug-build.md#3-顶栏与选择语义)：2026-10-14 按用户提供的四个 SVG 统一线条粗细；运行、调试默认绿色，无活动执行、准备或调试目标时隐藏停止按钮。
 - [构建与运行配置 B2：IDEA 参考设计提案](specs/run-config-idea-design.md)（用户已选 A / 方案 1）；[B3：双栏简洁版](specs/run-config-simple-design.md)（已落地原生弹窗，支持插件默认目标）；[B3 实现与验收](verification/run-config-simple-2026-10-06.md)。设计图与真实验证的范围在对应记录中区分。
 - [运行配置重构：插件模板、原生表单与配置树](specs/run-config-plugin-tree.md)／[规格 #67](https://github.com/Nanobug-Editor/Editor/issues/67)（2026-10-07 产品基线及测试入口已确认）。新规格替代 B3 的表单、目录组织、提交和存储约定，不将旧验收计作新功能通过。
 - [运行配置重构实施工单](tickets/run-config-plugin-tree/README.md)：4 个端到端切片 #68–#71 的实现与验收均完成，普通提交及 GitHub 交付记录见各工单。30 个验收场景的实际包、Windows 与真实调试证据见 [验收记录](verification/run-config-plugin-tree.md)。2026-10-07 用户另行授权合并主分支并推送，独立候选的冲突处理和验证见 [主分支集成记录](verification/run-config-main-merge-2026-10-07.md)。

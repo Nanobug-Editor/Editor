@@ -67,7 +67,8 @@ impl EditorApp {
             | Op::SaveDocument { document }
             | Op::ReadDocumentSelection { document }
             | Op::ReplaceDocumentRange { document, .. } => check(document),
-            Op::CompareDocuments { left, right } => {
+            Op::CompareDocuments { left, right }
+            | Op::OpenDocumentComparison { left, right, .. } => {
                 check(left)?;
                 check(right)
             }
@@ -144,6 +145,9 @@ impl EditorApp {
                 "Document open did not execute",
             ));
         }
+        if let Some(virtual_tab) = &mut self.tabs[index].virtual_document {
+            virtual_tab.hidden = false;
+        }
         self.activate_tab(index, window, cx);
         self.plugin_document_info(index, cx)
             .map(Value::DocumentOpened)
@@ -177,6 +181,7 @@ impl EditorApp {
             cx,
         );
         self.tabs.push(OpenTab {
+            preview: false,
             path,
             file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             file_revision: 0,
@@ -185,13 +190,16 @@ impl EditorApp {
             text: Some(native),
             file_error: None,
             virtual_document: Some(VirtualTab {
+                hidden: matches!(request.operation(), Op::OpenVirtualSource { .. }),
                 resource: resource.clone(),
                 title: title.into(),
                 language: language.unwrap_or("text").into(),
             }),
         });
         let index = self.tabs.len() - 1;
-        self.activate_tab(index, window, cx);
+        if !matches!(request.operation(), Op::OpenVirtualSource { .. }) {
+            self.activate_tab(index, window, cx);
+        }
         let info = self.plugin_document_info(index, cx)?;
         resource.bind(info.document.clone());
         Ok(Value::DocumentOpened(info))

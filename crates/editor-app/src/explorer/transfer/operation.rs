@@ -187,12 +187,12 @@ impl Worker {
                 if !target.is_dir() {
                     return Err(format!(
                         "{}: {}",
-                        target.display(),
+                        editor_core::display_path(&target),
                         t!("transfer.invalid_directory")
                     ));
                 }
                 let meta = fs::symlink_metadata(source)
-                    .map_err(|error| format!("{}: {error}", source.display()))?;
+                    .map_err(|error| format!("{}: {error}", editor_core::display_path(&source)))?;
                 if snapshot::is_link(&meta) {
                     self.skipped.push(source.clone());
                     return Ok(());
@@ -205,7 +205,7 @@ impl Worker {
                 if destination == source || destination.starts_with(&source) {
                     return Err(format!(
                         "{}: {}",
-                        source.display(),
+                        editor_core::display_path(&source),
                         t!("explorer.self_paste")
                     ));
                 }
@@ -354,7 +354,7 @@ impl Worker {
         async move {
             self.check_cancel()?;
             let meta = fs::symlink_metadata(&source)
-                .map_err(|error| format!("{}: {error}", source.display()))?;
+                .map_err(|error| format!("{}: {error}", editor_core::display_path(&source)))?;
             if snapshot::is_link(&meta) {
                 self.skipped.push(source);
                 return Ok(false);
@@ -388,7 +388,7 @@ impl Worker {
             if !meta.is_file() {
                 return Err(format!(
                     "{}: {}",
-                    source.display(),
+                    editor_core::display_path(&source),
                     t!("transfer.unsupported")
                 ));
             }
@@ -428,7 +428,7 @@ impl Worker {
             });
         }
         let mut entries = fs::read_dir(source)
-            .map_err(|error| format!("{}: {error}", source.display()))?
+            .map_err(|error| format!("{}: {error}", editor_core::display_path(&source)))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?;
         entries.sort_by_key(|entry| entry.file_name());
@@ -459,7 +459,8 @@ impl Worker {
         }
         if self.kind == Kind::Move && all_moved {
             // Only empty source directories are removed; merge-skipped children remain at their original path.
-            fs::remove_dir(source).map_err(|error| format!("{}: {error}", source.display()))?;
+            fs::remove_dir(source)
+                .map_err(|error| format!("{}: {error}", editor_core::display_path(&source)))?;
             self.receipt.changes.push(Change {
                 path: source.to_path_buf(),
                 before: Snapshot::Directory { asset: None },
@@ -497,7 +498,12 @@ fn free_name(path: &Path) -> Result<PathBuf, String> {
         match fs::symlink_metadata(&candidate) {
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
-            Err(error) => return Err(format!("{}: {error}", candidate.display())),
+            Err(error) => {
+                return Err(format!(
+                    "{}: {error}",
+                    editor_core::display_path(&candidate)
+                ));
+            }
         }
     }
     unreachable!()

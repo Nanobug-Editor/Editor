@@ -29,7 +29,7 @@ fn identity(path: &Path) -> Result<Option<Identity>, String> {
         })),
         Ok(_) => Err(t!("transfer.link_target").to_string()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(format!("{}: {error}", path.display())),
+        Err(error) => Err(format!("{}: {error}", editor_core::display_path(&path))),
     }
 }
 
@@ -142,7 +142,7 @@ impl Plan {
             if identity(&entry.path)? != entry.expected {
                 return Err(format!(
                     "{}: {}",
-                    entry.path.display(),
+                    editor_core::display_path(&entry.path),
                     t!("transfer.changed")
                 ));
             }
@@ -163,26 +163,33 @@ impl Plan {
                 Ok::<_, String>(())
             })();
             if let Err(error) = result {
-                let mut failures = vec![format!("{}: {error}", entry.path.display())];
+                let mut failures = vec![format!(
+                    "{}: {error}",
+                    editor_core::display_path(&entry.path)
+                )];
                 for entry in self.entries.iter_mut().take(index + 1).rev() {
                     if entry.installed {
                         match fs::rename(&entry.path, entry.stage.path().join("new")) {
                             Ok(()) => entry.installed = false,
-                            Err(error) => {
-                                failures.push(format!("{}: {error}", entry.path.display()))
-                            }
+                            Err(error) => failures.push(format!(
+                                "{}: {error}",
+                                editor_core::display_path(&entry.path)
+                            )),
                         }
                     }
                     if entry.parked {
                         match fs::rename(entry.stage.path().join("old"), &entry.path) {
                             Ok(()) => entry.parked = false,
                             Err(error) => {
-                                failures.push(format!("{}: {error}", entry.path.display()));
+                                failures.push(format!(
+                                    "{}: {error}",
+                                    editor_core::display_path(&entry.path)
+                                ));
                                 // A failed rollback retains the parked original instead of deleting the only remaining copy.
                                 entry.stage.disable_cleanup(true);
                                 failures.push(format!(
                                     "{}: {}",
-                                    entry.stage.path().display(),
+                                    editor_core::display_path(&entry.stage.path()),
                                     t!("transfer.rollback_backup")
                                 ));
                             }
@@ -205,7 +212,7 @@ impl Plan {
             }
             let path = entry.stage.path().to_path_buf();
             if let Err(error) = entry.stage.close() {
-                failures.push(format!("{}: {error}", path.display()));
+                failures.push(format!("{}: {error}", editor_core::display_path(&path)));
             }
         }
         if failures.is_empty() {

@@ -140,7 +140,8 @@ impl LanguageFeatures {
                     unreachable!("complete validates every reference resource")
                 };
                 let target = format!(
-                    "{path}:{}:{}",
+                    "{}:{}:{}",
+                    editor_core::display_path(std::path::Path::new(path)),
                     u64::from(location.position.line) + 1,
                     u64::from(location.position.character) + 1
                 );

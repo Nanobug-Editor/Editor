@@ -83,21 +83,12 @@ impl ExtensionPanel {
         let Some(catalog) = &state.market.catalog else {
             return false;
         };
-        let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
         self.entries.iter().any(|entry| {
             catalog
                 .plugins
                 .iter()
                 .find(|listing| listing.id == entry.manifest.id)
-                .is_some_and(|listing| {
-                    listing
-                        .upgrade(
-                            &entry.manifest.version,
-                            env!("CARGO_PKG_VERSION"),
-                            &platform,
-                        )
-                        .is_some()
-                })
+                .is_some_and(|listing| self.market_upgrade(listing).is_some())
         })
     }
 

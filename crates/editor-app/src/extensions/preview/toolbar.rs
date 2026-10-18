@@ -15,7 +15,7 @@ impl EditorApp {
             .current_document()
             .is_none_or(|scene| scene.active_native_editor().is_none())
         {
-            panel.update(cx, |panel, _| panel.native_toolbar = None);
+            panel.update(cx, |panel, cx| panel.retire_native_toolbar(cx));
             return None;
         }
         let toolbar = panel.update(cx, |panel, cx| panel.source_toolbar(window, cx))?;
@@ -40,11 +40,11 @@ impl ExtensionPanel {
         cx: &mut Context<Self>,
     ) -> Option<Entity<crate::ui::plugin::PluginView>> {
         let Some(mut document) = self.current_document().map(|document| (*document).clone()) else {
-            self.native_toolbar = None;
+            self.retire_native_toolbar(cx);
             return None;
         };
         let Some(mut toolbar) = document.editor_toolbar.take() else {
-            self.native_toolbar = None;
+            self.retire_native_toolbar(cx);
             return None;
         };
         // A modal in the complete publication also owns input over its source-local projection.
@@ -65,6 +65,9 @@ impl ExtensionPanel {
             let panel = self.surface_id.clone()?;
             let visible = self.visible.clone();
             let epoch = self.instance_epoch;
+            let form_changes =
+                self.worker
+                    .form_change_sink(plugin.clone(), panel.clone(), epoch, visible.clone());
             let parent = self.parent.clone();
             let owner = cx.entity().downgrade();
             self.native_toolbar = Some(cx.new(|cx| {
@@ -149,6 +152,7 @@ impl ExtensionPanel {
                     window,
                     cx,
                 )
+                .with_form_changes(form_changes)
                 .content_sized()
             }));
         }

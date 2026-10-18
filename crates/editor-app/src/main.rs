@@ -65,6 +65,7 @@ use std::{
 use app::WindowsTimerResolution;
 use app::dialog as app_dialog;
 use app::plugins::{PluginPopupKind, PluginPopupSnapshot};
+use app::projects::switcher::ProjectMenuHost as _;
 use app::session as session_state;
 use app::{EditorDockPanel, EditorDockPanelKind, bind_editor_shell_keys};
 use assets::AppAssets;
@@ -168,6 +169,10 @@ struct EditorApp {
     _extensions_observer: Subscription,
     /// Installed manifests dynamically contribute native dock panel entities.
     plugin_panels: HashMap<String, Entity<extensions::ExtensionPanel>>,
+    /// Separate native surfaces borrow project-owned documents; they never own another editor state.
+    plugin_windows: HashMap<String, gpui_kit::WindowHandle<Root>>,
+    /// Each document has one native work-window mount; its existing owner survives later contenders.
+    plugin_window_mounts: HashMap<String, String>,
     /// The manager owns a modal window independently from settings and plugin dock surfaces.
     extensions_window: Option<WindowHandle<Root>>,
     _extensions_closed_subscription: Option<Subscription>,
@@ -183,10 +188,10 @@ struct EditorApp {
     dialog: Option<Entity<app_dialog::AppDialog>>,
     /// The shortcut lookup stays inside this window and captures its original focus target.
     shortcut_panel: Option<Entity<app::shortcuts::ShortcutPanel>>,
-    /// Snapshot the panel before Base focuses the pointer-activated toolbar entry.
-    shortcut_pointer_origin: Option<app::shortcuts::ShortcutOrigin>,
-    /// The application menu keeps a shortcut entry independently of user key bindings.
-    shortcut_menu: app::shortcuts::menu::MenuState,
+    /// The application menu retains project actions and shortcut lookup independently of user bindings.
+    application_menu: app::shortcuts::menu::MenuState,
+    /// The project dropdown owns only navigation metadata; document sessions stay in their windows.
+    project_menu: app::projects::switcher::ProjectMenuState,
     /// Native settings window handle used to activate an already open window.
     dialog_window: Option<WindowHandle<Root>>,
     /// Removes the settings view when its native window closes.
@@ -254,6 +259,9 @@ struct EditorApp {
     language_server_demands: app::language_servers::DemandState,
     /// A comparison borrows existing native document entities and owns only its decoration layers.
     document_comparison: Option<editor::comparison::DocumentComparison>,
+    /// File-bound comparison views retain identities and display choices, never editable text.
+    comparison_views: Vec<editor::comparison::ComparisonView>,
+    active_comparison: Option<String>,
     /// Comparison commands capture their own target through the existing local popup control.
     document_command_menu: Option<extensions::command_menus::DocumentCommandMenu>,
     plugin_popup: Option<(PluginPopupKind, Point<Pixels>)>,
@@ -397,6 +405,9 @@ impl EditorApp {
         };
         let mut session_state =
             prepared_session.unwrap_or_else(|| SessionState::load(workspace.root()));
+        // Capture before layout/document persistence during setup; only first-open uses a fallback file.
+        let restore_empty_documents =
+            session_state.document_session_loaded && session_state.open_tabs.is_empty();
         // Plugin configurations are host-local per workspace; project settings do not supply run data.
         // A malformed local store is reported rather than silently replaced.
         let mut run_controls = run::RunControls::load_plugin_configurations(
@@ -441,6 +452,11 @@ impl EditorApp {
             cx.notify();
         });
         let parent = cx.entity().downgrade();
+        let problems = editor::diagnostics::problems::ProblemsState::new(
+            parent.clone(),
+            session_state.problems_visible,
+            cx,
+        );
         let outline = outline::OutlineState::new(cx);
         let outline_panel = cx.new(|cx| outline::OutlinePanel::new(parent.clone(), cx));
         let explorer_visibility = Rc::new(Cell::new(session_state.explorer_visible));
@@ -575,7 +591,7 @@ impl EditorApp {
             language_servers: HashMap::new(),
             language_edits: Default::default(),
             language_features: Default::default(),
-            problems: Default::default(),
+            problems,
             file_store: NativeFileStore,
             history,
             editor,
@@ -605,6 +621,8 @@ impl EditorApp {
             extensions,
             _extensions_observer: extensions_observer,
             plugin_panels: HashMap::new(),
+            plugin_windows: HashMap::new(),
+            plugin_window_mounts: HashMap::new(),
             extensions_window: None,
             _extensions_closed_subscription: None,
             pending_plugin_file: None,
@@ -616,8 +634,8 @@ impl EditorApp {
             titlebar_should_move: false,
             dialog: None,
             shortcut_panel: None,
-            shortcut_pointer_origin: None,
-            shortcut_menu: Default::default(),
+            application_menu: Default::default(),
+            project_menu: Default::default(),
             dialog_window: None,
             _dialog_closed_subscription: None,
             settings_section: app::SettingsSection::AppearanceAndBehavior,
@@ -654,6 +672,8 @@ impl EditorApp {
             plugin_command_intents: Default::default(),
             language_server_demands: Default::default(),
             document_comparison: None,
+            comparison_views: Vec::new(),
+            active_comparison: None,
             document_command_menu: None,
             plugin_popup: None,
             file_view_menu: None,
@@ -686,6 +706,7 @@ impl EditorApp {
         };
         this.restore_dock_layout(window, cx);
         this.ensure_terminal_dock(window, cx);
+        this.ensure_problems_dock(window, cx);
         this.refresh_files(cx);
 
         let saved_tabs = this.session_state.open_tabs.clone();
@@ -712,7 +733,7 @@ impl EditorApp {
             // Explicit file requests can reveal their path after saved tabs finish restoring.
             this.restoring_documents = false;
             this.open_file(path, window, cx);
-        } else if !restored_any {
+        } else if !restored_any && !restore_empty_documents {
             if let Some(path) = this.default_file() {
                 this.open_file(path, window, cx);
             }
@@ -1041,26 +1062,36 @@ fn main() -> anyhow::Result<()> {
             if let Err(error) = app::shortcuts::bootstrap::ensure(cx) {
                 eprintln!("Could not load shortcut configuration: {error}");
             }
+            // Keep pointer projection outside the complete native Root and its other decorators.
+            ui::controls::init(cx);
             if let Some(server) = incoming {
                 app::startup::attach(server, profile.clone(), cx);
             }
 
             let bounds = Bounds::centered(
                 None,
-                size(
-                    px(startup_state
-                        .as_ref()
-                        .map_or(1280., |state| state.window_width)),
-                    px(startup_state
-                        .as_ref()
-                        .map_or(820., |state| state.window_height)),
-                ),
+                if target.is_none() && development_workspace.is_none() {
+                    size(
+                        px(app::projects::DEFAULT_WINDOW_WIDTH),
+                        px(app::projects::DEFAULT_WINDOW_HEIGHT),
+                    )
+                } else {
+                    size(
+                        px(startup_state
+                            .as_ref()
+                            .map_or(1280., |state| state.window_width)),
+                        px(startup_state
+                            .as_ref()
+                            .map_or(820., |state| state.window_height)),
+                    )
+                },
                 cx,
             );
             let mut window_options = TitleBar::window_options();
             // Native materials are chosen by the active theme before first draw.
             window_options.window_background = theme::window_background(cx);
             window_options.window_bounds = Some(WindowBounds::Windowed(bounds));
+            window_options.window_min_size = Some(size(px(720.), px(480.)));
             // GPUI's default throttles animations in inactive windows to 30 FPS.
             // Leave frame scheduling uncapped; active frames follow the display refresh rate.
             window_options.inactive_frame_interval = None;

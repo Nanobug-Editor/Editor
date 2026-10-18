@@ -174,7 +174,7 @@ impl EditorApp {
             return;
         };
         panel.update(cx, |panel, cx| {
-            panel.hide();
+            panel.hide(cx);
             cx.notify();
         });
         self.session_state

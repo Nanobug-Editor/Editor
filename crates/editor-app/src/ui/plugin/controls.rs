@@ -1,4 +1,5 @@
 //! Adapt portable canvas controls to reusable native widgets; no plugin identity is special-cased.
+use super::action_gestures::ActionGesture;
 use crate::ui::controls::{
     menu::{MenuStyle, PopupMenu},
     side_tabs::{SideTabBar, SideTabsStyle},
@@ -29,14 +30,16 @@ pub(crate) struct CollectionView {
     menu: Option<Entity<PopupMenu>>,
     focus: FocusHandle,
     revision: Rc<Cell<u64>>,
+    /// Source-owned collections bind their native gesture and final dispatch to the same scene.
+    action_gesture: Rc<Cell<Option<ActionGesture>>>,
     sidebar_width: Rc<Cell<Option<f32>>>,
-    sink: Rc<dyn Fn(UiEvent, &mut App)>,
+    sink: Rc<dyn Fn(UiEvent, Option<ActionGesture>, &mut Window, &mut App)>,
 }
 impl CollectionView {
-    pub fn new(
+    pub(super) fn new(
         plugin: String,
         focus: FocusHandle,
-        sink: impl Fn(UiEvent, &mut App) + 'static,
+        sink: impl Fn(UiEvent, Option<ActionGesture>, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
             plugin,
@@ -47,7 +50,23 @@ impl CollectionView {
             sidebar: None,
             menu: None,
             revision: Rc::new(Cell::new(0)),
+            action_gesture: Rc::new(Cell::new(None)),
             sidebar_width: Rc::new(Cell::new(None)),
+        }
+    }
+    /// Cancel source presses immediately without recreating the native rename input or scroll.
+    pub(super) fn set_action_gesture(
+        &mut self,
+        gesture: Option<ActionGesture>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.action_gesture.replace(gesture) != gesture {
+            if let Some(sidebar) = &self.sidebar {
+                sidebar.update(cx, |bar, cx| {
+                    bar.set_gesture_incarnation(gesture.map(|gesture| gesture.incarnation()), cx);
+                });
+            }
+            cx.notify();
         }
     }
     fn color(&self, key: &str, fallback: Hsla) -> Hsla {
@@ -154,6 +173,7 @@ impl CollectionView {
             if self.sidebar.is_none() {
                 let sink = self.sink.clone();
                 let revision = self.revision.clone();
+                let gesture = self.action_gesture.clone();
                 let node = tabs.id.clone();
                 let focus = self.focus.clone();
                 let preview_width = self.sidebar_width.clone();
@@ -163,13 +183,15 @@ impl CollectionView {
                         tabs.clone(),
                         style.clone(),
                         focus,
-                        move |action, _, cx| {
+                        move |action, window, cx| {
                             sink(
                                 UiEvent {
                                     revision: revision.get(),
                                     node: node.clone(),
                                     action,
                                 },
+                                gesture.get(),
+                                window,
                                 cx,
                             )
                         },
@@ -185,8 +207,10 @@ impl CollectionView {
             if let Some(width) = self.sidebar_width.get() {
                 displayed_tabs.width = width;
             }
+            let gesture = self.action_gesture.get();
             self.sidebar.as_ref().unwrap().update(cx, |view, cx| {
-                view.update(displayed_tabs, style, window, cx)
+                view.update(displayed_tabs, style, window, cx);
+                view.set_gesture_incarnation(gesture.map(|gesture| gesture.incarnation()), cx);
             });
         }
         if menu_changed {
@@ -208,19 +232,22 @@ impl CollectionView {
             } else {
                 let sink = self.sink.clone();
                 let revision = self.revision.clone();
+                let gesture = self.action_gesture.clone();
                 let node = menu.id.clone();
                 self.menu = Some(cx.new(|cx| {
                     PopupMenu::new(
                         menu.items.clone(),
                         style,
                         position,
-                        move |action, _, cx| {
+                        move |action, window, cx| {
                             sink(
                                 UiEvent {
                                     revision: revision.get(),
                                     node: node.clone(),
                                     action,
                                 },
+                                gesture.get(),
+                                window,
                                 cx,
                             )
                         },
@@ -279,8 +306,8 @@ mod tests {
         let slot = Rc::new(RefCell::new(None));
         let capture = slot.clone();
         let (_, cx) = cx.add_window_view(move |window, cx| {
-            let view =
-                cx.new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _| {}));
+            let view = cx
+                .new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _, _, _| {}));
             *capture.borrow_mut() = Some(view.clone());
             Root::new(view, window, cx)
         });
@@ -365,8 +392,8 @@ mod tests {
         let slot = Rc::new(RefCell::new(None));
         let capture = slot.clone();
         let (_, cx) = cx.add_window_view(move |window, cx| {
-            let view =
-                cx.new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _| {}));
+            let view = cx
+                .new(|cx| CollectionView::new("plugin".into(), cx.focus_handle(), |_, _, _, _| {}));
             *capture.borrow_mut() = Some(view.clone());
             Root::new(view, window, cx)
         });
@@ -422,7 +449,7 @@ mod tests {
             gpui_kit::init(cx);
             crate::ui::typography::init(cx);
             crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
-            let mut view = CollectionView::new("plugin".into(), cx.focus_handle(), |_, _| {});
+            let mut view = CollectionView::new("plugin".into(), cx.focus_handle(), |_, _, _, _| {});
             // Defaults are stable across host themes; explicit plugin roles take precedence.
             let tabs = view.tabs_style(cx);
             assert_eq!(tabs.background, rgb(0xf7f8fa).into());

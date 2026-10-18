@@ -1,14 +1,64 @@
 //! Compose the existing native editor, popovers and input gestures without replacing its session.
+use crate::ui::controls::aligned_editor::{AlignmentGroup, AlignmentNativeFactory};
 use crate::*;
 use gpui_kit::component::WindowExt as _;
+use gpui_kit::component::native_menu::NativeMenu;
+
+/// One menu definition serves ordinary and projected input; only its physical anchor changes.
+type SourceMenuBuilder = Rc<dyn Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu>;
+/// The native OS presentation boundary is replaceable by local interaction tests, not plugin APIs.
+type SourceMenuPresenter = Rc<dyn Fn(NativeMenu, Point<Pixels>, &mut Window, &mut App)>;
+
+#[cfg(test)]
+mod tests;
 
 impl EditorApp {
+    /// Native search and code-action panels require an opaque independent input presentation.
+    /// Group owners use this signal for an explicit whole-group pause, never a one-pane fallback.
+    pub(crate) fn alignment_native_overlays_open(&self, cx: &App) -> bool {
+        let state = self.editor.read(cx);
+        state.search_session().open || state.code_action_menu_state().open
+    }
+
     /// Borrow the current native text entity for either a fallback body or an authorized layout node.
     pub(crate) fn render_native_editor(
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
+        self.render_native_editor_body(None, window, cx)
+    }
+
+    /// Retains this source's commands, semantic input and overlays around a measured aligned pane.
+    /// Only the atomic native input is composed by the group; SourceFrame is mounted exactly once.
+    pub(crate) fn render_native_editor_aligned(
+        &self,
+        group: &AlignmentGroup,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
+        group.refresh_native_overlays(cx);
+        self.render_native_editor_body(Some((group, index)), window, cx)
+    }
+
+    /// Shares the ordinary source frame while allowing a geometry-owning inner input composition.
+    fn render_native_editor_body(
+        &self,
+        alignment: Option<(&AlignmentGroup, usize)>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
+        if self
+            .plugin_window_mounts
+            .contains_key(&format!("{:?}", self.editor.entity_id()))
+        {
+            return div()
+                .size_full()
+                .p_4()
+                .child(t!("editor.detached_source").to_string())
+                .into_any_element();
+        }
         crate::ui::controls::synchronize_editor_appearance(&self.editor, cx);
         if let Some(index) = self.active_text_tab_index() {
             self.tabs[index]
@@ -71,6 +121,115 @@ impl EditorApp {
                 .language_servers
                 .get(&language)
                 .is_some_and(|server| server.provides_editing());
+        let custom_popovers = {
+            let state = self.editor.read(cx);
+            !state.search_session().open
+                && !state.code_action_menu_state().open
+                && (state.completion_menu_state().open
+                    || state.hover_popover().is_some()
+                    || state.diagnostic_popover().is_some())
+        };
+        let menu_builder: SourceMenuBuilder = Rc::new(move |menu, _, cx| {
+            // Route the menu action through the same fresh LSP request as F12.
+            let menu = menu
+                .menu_with_disabled(
+                    t!("editor.go_to_definition").to_string(),
+                    !(enabled && has_definition),
+                    Box::new(NavigateToDefinition),
+                )
+                .menu_with_disabled(
+                    t!("editor.code_actions").to_string(),
+                    !(editable && has_code_actions),
+                    Box::new(gpui_base::input::ToggleCodeActions),
+                )
+                .separator()
+                .menu_with_disabled(
+                    t!("editor.format_document").to_string(),
+                    !can_format,
+                    Box::new(FormatDocument),
+                )
+                .menu_with_disabled(
+                    t!("editor.rename_symbol").to_string(),
+                    !can_rename,
+                    Box::new(RenameSymbol),
+                )
+                .separator()
+                // Cut and Copy validate the live selection when their actions run.
+                .menu_with_disabled(
+                    t!("editor.cut").to_string(),
+                    !editable,
+                    Box::new(gpui_base::input::Cut),
+                )
+                .menu_with_disabled(
+                    t!("editor.copy").to_string(),
+                    !enabled,
+                    Box::new(gpui_base::input::Copy),
+                )
+                .menu_with_disabled(
+                    t!("editor.paste").to_string(),
+                    !(editable && cx.read_from_clipboard().is_some()),
+                    Box::new(gpui_base::input::Paste),
+                )
+                .separator()
+                .menu(
+                    t!("editor.select_all").to_string(),
+                    Box::new(gpui_base::input::SelectAll),
+                );
+            if let Some(target) = plugin_target.clone() {
+                extensions::command_menus::append_editor(menu, plugin_rows.clone(), target)
+            } else {
+                menu
+            }
+        });
+        let native_menu = menu_builder.clone();
+        let aligned_native = alignment.is_some();
+        // The group repeats only atomic native controls; SourceFrame and language overlays remain singular.
+        let native: AlignmentNativeFactory = Rc::new(move |editor, _, cx| {
+            // Match the ordinary SourceFrame switch: styled InputOverlays would replace the host's
+            // completion action handler with one belonging to its hidden native completion menu.
+            if custom_popovers {
+                return gpui_base::input::Editor::new(editor).into_any_element();
+            }
+            let menu = native_menu.clone();
+            Editor::new(editor)
+                // The aligned pane owns the single accessible source node. Its atomic authority
+                // is full-height and must not publish a duplicate invisible input to screen readers.
+                .when(aligned_native, |editor| {
+                    editor.role(gpui_base::RoleOverride::Presentational)
+                })
+                // Preserve live edit restrictions when the styled component renders.
+                .readonly(!editable)
+                .disabled(!enabled)
+                .context_menu(move |base, window, cx| menu(base, window, cx))
+                .bordered(false)
+                .p_0()
+                .size_full()
+                .min_h_0()
+                .bg(style.background.unwrap_or(cx.theme().background))
+                .text_color(style.foreground.unwrap_or(cx.theme().foreground))
+                .font_family(cx.theme().mono_font_family.clone())
+                .text_size(
+                    style
+                        .font_size_px
+                        .map(px)
+                        .unwrap_or(cx.theme().mono_font_size),
+                )
+                .into_any_element()
+        });
+        let alignment = alignment.filter(|(group, index)| {
+            group.set_presentation(
+                *index,
+                &self.editor,
+                Some(self.aligned_linked_input_factory(cx)),
+                Some(native.clone()),
+                cx,
+            )
+        });
+        let mut aligned_body = alignment.and_then(|(group, index)| group.pane(index));
+        let projection = alignment
+            .map(|(group, index)| super::popovers::SourceProjection::new(group.clone(), index));
+        let aligned = alignment.is_some();
+        let clicked_source = self.editor.clone();
         // Preserve the native editor and all its popovers while a plugin adds a sibling preview.
         div()
             .debug_selector(|| "editor-source-pane".into())
@@ -114,14 +273,28 @@ impl EditorApp {
             .on_mouse_up(MouseButton::Middle, move |event, window, cx| {
                 let position = event.position;
                 let app = app.clone();
+                let clicked_source = clicked_source.clone();
                 cx.stop_propagation();
                 window.defer(cx, move |window, cx| {
+                    if !app
+                        .read_with(cx, |app, _| app.editor == clicked_source)
+                        .unwrap_or(false)
+                    {
+                        return;
+                    }
                     // Reuse the editor's own hit testing to place the caret under the click.
+                    // The root router has restored the physical pointer before this deferred
+                    // gesture; redispatching the already projected native point would translate twice.
+                    let dispatch_position = if aligned {
+                        window.mouse_position()
+                    } else {
+                        position
+                    };
                     let modifiers = Modifiers::default();
                     window.dispatch_event(
                         PlatformInput::MouseDown(MouseDownEvent {
                             button: MouseButton::Left,
-                            position,
+                            position: dispatch_position,
                             modifiers,
                             click_count: 1,
                             first_mouse: false,
@@ -131,14 +304,20 @@ impl EditorApp {
                     window.dispatch_event(
                         PlatformInput::MouseUp(MouseUpEvent {
                             button: MouseButton::Left,
-                            position,
+                            position: dispatch_position,
                             modifiers,
                             click_count: 1,
                         }),
                         cx,
                     );
-                    let _ = app.update(cx, |app, cx| {
-                        app.request_definition(Some(position), window, cx);
+                    // Aligned mouse forwarding is deferred too. Queue the semantic query after
+                    // both forwarded events, so its caret and empty-result anchor match the click.
+                    window.defer(cx, move |window, cx| {
+                        let _ = app.update(cx, |app, cx| {
+                            if app.editor == clicked_source {
+                                app.request_definition(Some(dispatch_position), window, cx);
+                            }
+                        });
                     });
                 });
             })
@@ -149,91 +328,66 @@ impl EditorApp {
                     &self.definition_popup_focus,
                     style,
                     hover_enabled,
+                    &mut aligned_body,
+                    projection.as_ref(),
                     window,
                     cx,
                 )
                 .unwrap_or_else(|| {
-                    Editor::new(&self.editor)
-                        // Preserve live edit restrictions when the styled component renders.
-                        .readonly(!editable)
-                        .disabled(!enabled)
-                        .context_menu(move |menu, _, cx| {
-                            // Route the menu action through the same fresh LSP request as F12.
-                            let menu = menu
-                                .menu_with_disabled(
-                                    t!("editor.go_to_definition").to_string(),
-                                    !(enabled && has_definition),
-                                    Box::new(NavigateToDefinition),
-                                )
-                                .menu_with_disabled(
-                                    t!("editor.code_actions").to_string(),
-                                    !(editable && has_code_actions),
-                                    Box::new(gpui_base::input::ToggleCodeActions),
-                                )
-                                .separator()
-                                .menu_with_disabled(
-                                    t!("editor.format_document").to_string(),
-                                    !can_format,
-                                    Box::new(FormatDocument),
-                                )
-                                .menu_with_disabled(
-                                    t!("editor.rename_symbol").to_string(),
-                                    !can_rename,
-                                    Box::new(RenameSymbol),
-                                )
-                                .separator()
-                                // Cut and Copy validate the live selection when their actions run.
-                                .menu_with_disabled(
-                                    t!("editor.cut").to_string(),
-                                    !editable,
-                                    Box::new(gpui_base::input::Cut),
-                                )
-                                .menu_with_disabled(
-                                    t!("editor.copy").to_string(),
-                                    !enabled,
-                                    Box::new(gpui_base::input::Copy),
-                                )
-                                .menu_with_disabled(
-                                    t!("editor.paste").to_string(),
-                                    !(editable && cx.read_from_clipboard().is_some()),
-                                    Box::new(gpui_base::input::Paste),
-                                )
-                                .separator()
-                                .menu(
-                                    t!("editor.select_all").to_string(),
-                                    Box::new(gpui_base::input::SelectAll),
-                                );
-                            if let Some(target) = plugin_target.clone() {
-                                extensions::command_menus::append_editor(
-                                    menu,
-                                    plugin_rows.clone(),
-                                    target,
-                                )
-                            } else {
-                                menu
-                            }
-                        })
-                        .bordered(false)
-                        .p_0()
-                        .size_full()
-                        .min_h_0()
-                        .bg(style.background.unwrap_or(cx.theme().background))
-                        .text_color(style.foreground.unwrap_or(cx.theme().foreground))
-                        .font_family(cx.theme().mono_font_family.clone())
-                        .text_size(
-                            style
-                                .font_size_px
-                                .map(px)
-                                .unwrap_or(cx.theme().mono_font_size),
-                        )
-                        .into_any_element()
+                    aligned_body
+                        .take()
+                        .unwrap_or_else(|| native(&self.editor, window, cx))
                 }),
             )
+            // Install after the atomic authority: its native handler otherwise opens a menu at
+            // the synthetic source coordinate. Base still owns right-click selection semantics.
+            // Ordinary SourceFrames replace the weak projected handler too, including while a
+            // completion popup temporarily uses BaseEditor and would otherwise retain an old hook.
+            .child(projected_context_menu(
+                self.editor.clone(),
+                menu_builder,
+                alignment.map_or_else(
+                    || Rc::new(|bounds, _: &App| Some(bounds)) as _,
+                    |(group, index)| group.bounds_projector(index),
+                ),
+                Rc::new(|menu, anchor, window, cx| menu.show(anchor, window, cx)),
+            ))
             // Paint the drop caret after the text, using the current editor layout.
-            .child(self.render_text_drag_caret(cx))
-            .child(self.render_editor_markers(cx))
-            .children(self.render_linked_input())
+            .child(self.render_text_drag_caret_projected(projection.clone(), cx))
+            .child(self.render_editor_markers_projected(projection, cx))
+            // The aligned pane installs the same linked delegate inside its geometry bridge.
+            .children((!aligned).then(|| self.render_linked_input()).flatten())
             .children(self.render_rename_prompt(cx))
             .into_any_element()
     }
+}
+
+/// Reuse Base's deferred context-menu callback, projecting only its saved mouse anchor.
+fn projected_context_menu(
+    editor: Entity<EditorState>,
+    builder: SourceMenuBuilder,
+    projection: Rc<dyn Fn(Bounds<Pixels>, &App) -> Option<Bounds<Pixels>>>,
+    present: SourceMenuPresenter,
+) -> gpui_kit::AnyElement {
+    gpui_kit::canvas(
+        |_, _, _| (),
+        move |_, _, _, cx| {
+            editor.update(cx, |editor, _| {
+                editor.on_context_menu(Rc::new(move |_, _, position, window, cx| {
+                    let native = Bounds::new(position, size(px(0.), px(0.)));
+                    if let Some(anchor) = projection(native, cx) {
+                        present(
+                            builder(NativeMenu::new(), window, cx),
+                            anchor.origin,
+                            window,
+                            cx,
+                        );
+                    }
+                }));
+            });
+        },
+    )
+    .absolute()
+    .size_full()
+    .into_any_element()
 }

@@ -20,7 +20,7 @@ impl std::fmt::Display for DescriptionReadError {
         write!(
             formatter,
             "Cannot read plugin project description: {}",
-            self.path.display()
+            platform_windows::display_path(&self.path)
         )
     }
 }
@@ -103,9 +103,12 @@ impl Project {
     /// Returns DescriptionReadError for description I/O and rejects missing/unknown versions;
     /// no implicit archive policy is inferred from arbitrary project sources.
     pub fn read(path: &Path) -> anyhow::Result<Self> {
-        let path = path
-            .canonicalize()
-            .with_context(|| format!("Plugin project does not exist: {}", path.display()))?;
+        let path = path.canonicalize().with_context(|| {
+            format!(
+                "Plugin project does not exist: {}",
+                platform_windows::display_path(&path)
+            )
+        })?;
         let (root, descriptor) = if path.is_dir() {
             (path.clone(), path.join(DESCRIPTION))
         } else {
@@ -134,7 +137,7 @@ impl Project {
             serde_json::from_slice(&bytes).with_context(|| {
                 format!(
                     "Invalid plugin project description: {}",
-                    descriptor.display()
+                    platform_windows::display_path(&descriptor)
                 )
             })?;
         anyhow::ensure!(

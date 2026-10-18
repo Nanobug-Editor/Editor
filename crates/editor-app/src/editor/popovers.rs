@@ -12,6 +12,38 @@ mod completion_tests;
 #[path = "completion_refresh.rs"]
 mod completion_refresh;
 
+/// Read-only geometry shared by source-owned overlays; text and native session stay in EditorState.
+#[derive(Clone)]
+pub(super) struct SourceProjection {
+    group: crate::ui::controls::aligned_editor::AlignmentGroup,
+    index: usize,
+}
+
+impl SourceProjection {
+    /// Retains the same measured group, never a copied geometry snapshot or editor instance.
+    pub(super) fn new(
+        group: crate::ui::controls::aligned_editor::AlignmentGroup,
+        index: usize,
+    ) -> Self {
+        Self { group, index }
+    }
+
+    /// Projects a native window rectangle; unavailable/stale layout suppresses that overlay.
+    pub(super) fn bounds(&self, native: Bounds<Pixels>, cx: &App) -> Option<Bounds<Pixels>> {
+        self.group.project_bounds(self.index, native, cx)
+    }
+
+    /// The physical input clip, independent from the complete native authority height.
+    pub(super) fn viewport(&self, cx: &App) -> Option<Bounds<Pixels>> {
+        self.group.viewport(self.index, cx)
+    }
+
+    /// Uses current byte-range geometry for a source anchor, including a collapsed caret.
+    fn range(&self, range: std::ops::Range<usize>, cx: &App) -> Option<Bounds<Pixels>> {
+        self.group.project_range(self.index, range, cx)
+    }
+}
+
 /// Retain the selection, viewport and pending request across completion repaints.
 #[derive(Default)]
 pub(crate) struct CompletionPopupState {
@@ -127,6 +159,8 @@ pub(super) fn render(
     hover_focus: &DefinitionPopupFocus,
     style: theme::ResolvedStyle,
     hover_enabled: bool,
+    body: &mut Option<AnyElement>,
+    projection: Option<&SourceProjection>,
     window: &mut Window,
     cx: &mut Context<EditorApp>,
 ) -> Option<AnyElement> {
@@ -158,7 +192,7 @@ pub(super) fn render(
     }
     let completion_view = completion
         .open
-        .then(|| render_completion(editor, popup, &completion, window, cx))
+        .then(|| render_completion(editor, popup, &completion, projection, window, cx))
         .flatten();
     let diagnostic_view = diagnostic
         .as_ref()
@@ -169,6 +203,11 @@ pub(super) fn render(
             let start = diagnostic.range.start;
             let length = state.text().slice(start..).chars().next()?.len_utf8();
             let bounds = state.range_to_bounds(&(start..start + length))?;
+            let bounds = if let Some(projection) = projection {
+                projection.bounds(bounds, cx)?
+            } else {
+                bounds
+            };
             let host = cx.entity().downgrade();
             Some(
                 ui::controls::diagnostic_popup(
@@ -187,7 +226,7 @@ pub(super) fn render(
         .as_ref()
         // A deferred details card must stay out of modal masks and their hitboxes.
         .filter(|_| hover_enabled && diagnostic.is_none())
-        .and_then(|hover| render_hover(editor, hover, hover_focus, window, cx));
+        .and_then(|hover| render_hover(editor, hover, hover_focus, projection, window, cx));
     let hover_visible = (hover_view.is_some() || diagnostic_view.is_some()) && !completion.open;
     if completion.open {
         install_completion_actions(editor, popup, cx);
@@ -245,7 +284,10 @@ pub(super) fn render(
                     });
                 })
             })
-            .child(gpui_base::input::Editor::new(editor))
+            .child(
+                body.take()
+                    .unwrap_or_else(|| gpui_base::input::Editor::new(editor).into_any_element()),
+            )
             .children(completion_view)
             .children(hover_view)
             // Completion remains the active editing surface until it closes.
@@ -323,19 +365,29 @@ fn render_completion(
     editor: &Entity<EditorState>,
     popup: &Rc<CompletionPopupState>,
     menu: &gpui_base::input::CompletionMenuState,
+    projection: Option<&SourceProjection>,
     window: &mut Window,
     cx: &mut Context<EditorApp>,
 ) -> Option<AnyElement> {
     let state = editor.read(cx);
     let (cursor, line_height) = state.cursor_layout()?;
-    let origin = state.scroll_offset() + cursor.origin - state.input_bounds().origin
-        + point(-px(4.), line_height + px(4.));
+    let viewport = if let Some(projection) = projection {
+        projection.viewport(cx)?
+    } else {
+        state.input_bounds()
+    };
+    let caret = if let Some(projection) = projection {
+        projection.range(state.cursor()..state.cursor(), cx)?.origin
+    } else {
+        state.scroll_offset() + cursor.origin
+    };
+    let origin = caret - viewport.origin + point(-px(4.), line_height + px(4.));
     let width = state.lsp().completion_menu.max_width;
     let origin_x = origin
         .x
         .max(px(0.))
-        .min((window.bounds().size.width - state.input_bounds().origin.x - px(120.)).max(px(0.)));
-    let absolute_x = state.input_bounds().origin.x + origin_x;
+        .min((window.bounds().size.width - viewport.origin.x - px(120.)).max(px(0.)));
+    let absolute_x = viewport.origin.x + origin_x;
     let max_width = width
         .min(window.bounds().size.width - absolute_x)
         .max(px(120.));
@@ -497,11 +549,17 @@ fn render_hover(
     editor: &Entity<EditorState>,
     hover: &gpui_base::input::HoverPopoverState,
     hover_focus: &DefinitionPopupFocus,
+    projection: Option<&SourceProjection>,
     _window: &mut Window,
     cx: &mut Context<EditorApp>,
 ) -> Option<AnyElement> {
     let state = editor.read(cx);
     let bounds = state.range_to_bounds(&hover.symbol_range)?;
+    let bounds = if let Some(projection) = projection {
+        projection.bounds(bounds, cx)?
+    } else {
+        bounds
+    };
     let markdown = hover_markdown(&hover.hover.contents);
     let host_for_key = cx.entity().downgrade();
     Some(

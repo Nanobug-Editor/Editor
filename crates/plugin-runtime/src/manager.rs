@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 mod activation;
+mod application;
 mod artwork;
 pub use activation::{
     ActivationReceipt, Availability, DemandPreparation, DemandReason, DemandRequest, LanguageRole,
@@ -214,6 +215,7 @@ impl Manager {
         mut host_resources: crate::HostResources,
     ) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&root)?;
+        let workspace_open = !environment.workspace.is_empty();
         let canonical_root = root.canonicalize()?;
         // Stable profile identity keeps secrets out of data copies while isolating development hosts.
         if host_resources.secret_namespace.is_empty() {
@@ -224,11 +226,16 @@ impl Manager {
             );
         }
         let installed = Self::read_registry(&root)?;
-        host_resources
-            .terminals
-            .select_scope(scopes::workspace_key(&environment.workspace));
-        let host_alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let activation = activation::State::new(&environment.workspace);
+        host_resources.terminals.select_scope(if workspace_open {
+            scopes::workspace_key(&environment.workspace)
+        } else {
+            "application".into()
+        });
+        let host_alive = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(workspace_open));
+        let mut activation = activation::State::new(&environment.workspace);
+        if !workspace_open {
+            activation.select_scope("application");
+        }
         let mut manager = Self {
             _runtime_lock: None,
             diagnostic_history: BTreeMap::new(),
@@ -247,7 +254,7 @@ impl Manager {
             live: BTreeMap::new(),
             parked: BTreeMap::new(),
             trusted,
-            workspace_open: true,
+            workspace_open,
             activation,
             language_services: BTreeMap::new(),
             structure_providers: BTreeMap::new(),
@@ -257,7 +264,7 @@ impl Manager {
             image_input_budget: Default::default(),
             retired_image_sources: BTreeMap::new(),
             host_sessions: HostSessions::new(host_alive.clone()),
-            native_executions: native_execution::Executions::new(trusted),
+            native_executions: native_execution::Executions::new(trusted && workspace_open),
             debug_sessions: Default::default(),
             service_preparations: Vec::new(),
             host_alive,
@@ -273,6 +280,7 @@ impl Manager {
             .iter()
             .filter(|(_, p)| {
                 trusted
+                    && workspace_open
                     && (p.enabled
                         || (p.manifest.scope == api::InstanceScope::Workspace
                             && p.project_enabled_in(&manager.environment.workspace)))
@@ -338,8 +346,13 @@ impl Manager {
     ) -> anyhow::Result<()> {
         control.check()?;
         crate::capabilities::require_current(&package.manifest)?;
+        if self.is_application_management()
+            && package.manifest.scope == api::InstanceScope::Workspace
+        {
+            return self.install_dormant_workspace(package, grants, control);
+        }
         anyhow::ensure!(
-            self.trusted && self.workspace_open,
+            self.trusted && (self.workspace_open || self.is_application_management()),
             "Workspace is restricted or closed"
         );
         anyhow::ensure!(
@@ -450,6 +463,11 @@ impl Manager {
             anyhow::bail!(error);
         }
         self.revalidate_installed_metadata(entry)?;
+        if self.is_application_management() {
+            self.installed.get_mut(id).unwrap().enabled = true;
+            self.save_registry()?;
+            return Ok(());
+        }
         anyhow::ensure!(
             self.trusted && self.workspace_open,
             "Workspace is restricted or closed"
@@ -473,6 +491,20 @@ impl Manager {
             .get(id)
             .ok_or_else(|| anyhow::anyhow!("Unknown plugin"))?
             .clone();
+        if entry.manifest.scope == api::InstanceScope::Workspace
+            && entry.manifest.component.is_some()
+            && self.dormant_preparation_pending(id, &entry.digest)
+        {
+            let (_, mut package) = self.read_installed_assets(&entry)?;
+            package.digest = entry.digest.clone();
+            let control = crate::InstallControl::default();
+            let mut prepared =
+                self.prepare_installation(&package, entry.grants.clone(), &control)?;
+            prepared.enable_requested = true;
+            self.commit_installation(prepared, &control)?;
+            self.finish_dormant_preparation(id, &entry.digest)?;
+            return Ok(());
+        }
         let Some(_component_path) = &entry.manifest.component else {
             let contribution_path = entry
                 .manifest
@@ -634,6 +666,21 @@ impl Manager {
             anyhow::ensure!(
                 resolved.starts_with(self.root.canonicalize()?.join("dependency-receipts")),
                 "Invalid dependency receipt deletion path"
+            );
+            std::fs::remove_dir_all(resolved)?;
+        }
+        // Installation readiness is metadata, not retained user data. Reinstalling the same
+        // digest must prepare its real scopes again, especially after a data-removing uninstall.
+        let pending = self.root.join("pending-workspace-installations").join(id);
+        if pending.exists() {
+            let resolved = pending.canonicalize()?;
+            anyhow::ensure!(
+                resolved.starts_with(
+                    self.root
+                        .canonicalize()?
+                        .join("pending-workspace-installations")
+                ),
+                "Invalid pending installation deletion path"
             );
             std::fs::remove_dir_all(resolved)?;
         }

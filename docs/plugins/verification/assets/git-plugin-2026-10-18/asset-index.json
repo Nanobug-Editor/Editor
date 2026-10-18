@@ -1,0 +1,379 @@
+{
+  "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+  "workflow": "complete-workbench",
+  "completed_cases": [
+    "dark-zh-CN-100",
+    "dark-zh-CN-150",
+    "dark-en-100",
+    "dark-en-150",
+    "light-zh-CN-100",
+    "light-zh-CN-150",
+    "light-en-100",
+    "light-en-150"
+  ],
+  "os_ime_candidates_verified": false,
+  "screenshots": 48,
+  "visual_inspection_images_including_smoke": 54,
+  "assets": [
+    {
+      "path": "dark-zh-CN-100/workbench.png",
+      "bytes": 269557,
+      "sha256": "7adff6d49dc7c04577a49a95db65cb1fce5783eb440738099894c95d16ec0ef1"
+    },
+    {
+      "path": "dark-zh-CN-100/workbench-ime.png",
+      "bytes": 264217,
+      "sha256": "caab571768e06f302b359ce6d977624a91b7ea17084271eff59a1a5440127230"
+    },
+    {
+      "path": "dark-zh-CN-100/history.png",
+      "bytes": 118395,
+      "sha256": "d06c23a5b03758ec86c5d1cb4231d20462c4ff9a79ec06c1a6938c506ec6daff"
+    },
+    {
+      "path": "dark-zh-CN-100/conflicts.png",
+      "bytes": 113263,
+      "sha256": "60d8ea2af8c4a4e2ded35b13ffff29591da8ea1db881706241aed080aefb0a64"
+    },
+    {
+      "path": "dark-zh-CN-100/branches-local.png",
+      "bytes": 154825,
+      "sha256": "b8df3e6fc5e5a74c5f196e1a6441ff8758848d980770b3ea3812e3ea48f1c820"
+    },
+    {
+      "path": "dark-zh-CN-100/branches-remote.png",
+      "bytes": 154906,
+      "sha256": "eb8a70901749866ca9e7584f1f02b456e7a884fdb0cfcadfb5653e80e253fb98"
+    },
+    {
+      "path": "dark-zh-CN-100/evidence.json",
+      "bytes": 59232,
+      "sha256": "99bfcd977b45165f1eb9fbc602f93dcbdefc5bb80ee0cea000fafd21db50f681"
+    },
+    {
+      "path": "dark-zh-CN-100/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 201,
+      "sha256": "8b5303029e66b88d3100db3944048383887daa26a35ae1d07b9e1bfa3032deae"
+    },
+    {
+      "path": "dark-zh-CN-100/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 201,
+      "sha256": "7a04839a0be93c47db6ad9c698ce0f3225d201eabc28ef247d5c25658a747ca0"
+    },
+    {
+      "path": "dark-zh-CN-150/workbench.png",
+      "bytes": 437606,
+      "sha256": "b3c7fce4fec048ea3beb65fdb217291b9be7d069dd7bb6861b994d57d2e29e49"
+    },
+    {
+      "path": "dark-zh-CN-150/workbench-ime.png",
+      "bytes": 432955,
+      "sha256": "5be71466125a04e6c45d2aa8aa66c6fe5c8c7783604dbf0736f5c45ab6a6fd32"
+    },
+    {
+      "path": "dark-zh-CN-150/history.png",
+      "bytes": 203137,
+      "sha256": "0ca68d2a7e3c58ef40a83bf85e2304975cd591653dd4ae7c96e1e0e3dcdacf69"
+    },
+    {
+      "path": "dark-zh-CN-150/conflicts.png",
+      "bytes": 199642,
+      "sha256": "85222991c6b705424bb58777cda58700973fb6af56a2bba45f05fd4f7e2337d4"
+    },
+    {
+      "path": "dark-zh-CN-150/branches-local.png",
+      "bytes": 258522,
+      "sha256": "360837225e58a5e532f02f4bd188baf51d5fbb524f1df8a2e0aa1b223d2bb6a4"
+    },
+    {
+      "path": "dark-zh-CN-150/branches-remote.png",
+      "bytes": 258723,
+      "sha256": "b4081f87e30c2ae75a4b3d72788c25a66337b3dbf5ac32bbda0a5af6919a265c"
+    },
+    {
+      "path": "dark-zh-CN-150/evidence.json",
+      "bytes": 59552,
+      "sha256": "9ae0d95ca8cd309acf260a5215adf09045c9a6c11a129ba496f3b53e2d5e80b3"
+    },
+    {
+      "path": "dark-zh-CN-150/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 201,
+      "sha256": "c0ddff8a8b4e3593eb8f9941fd070a1c1944db5b325b52011734936d8b712d7b"
+    },
+    {
+      "path": "dark-zh-CN-150/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 201,
+      "sha256": "be90a2c0316f479a0a3c5676f6230272982b15b8ca4cbf076ac450ec57dd63e2"
+    },
+    {
+      "path": "dark-en-100/workbench.png",
+      "bytes": 265800,
+      "sha256": "06ba2c59e5b5bcc226b0d0f5b4136dc829175eb3e8b67e963a625b81d2827675"
+    },
+    {
+      "path": "dark-en-100/workbench-ime.png",
+      "bytes": 260455,
+      "sha256": "3e08cc3766cc82af90dbdcf1c321f36b34bf0f97dbc0ecba0074763f4458ce6d"
+    },
+    {
+      "path": "dark-en-100/history.png",
+      "bytes": 119753,
+      "sha256": "8171dd8eae023ebc53f643816110ef8a8e5a86aade951bf3ed40c1be5eee420b"
+    },
+    {
+      "path": "dark-en-100/conflicts.png",
+      "bytes": 113055,
+      "sha256": "437cfdc9c6e34c9bee107a6d13e8e636f55868828d43de13d160d4375c2f8b09"
+    },
+    {
+      "path": "dark-en-100/branches-local.png",
+      "bytes": 150436,
+      "sha256": "29f2ed391cc4dc3ccd01077f14b2ed82bab44e951bb52c2ecd1aefcc882af5a4"
+    },
+    {
+      "path": "dark-en-100/branches-remote.png",
+      "bytes": 150392,
+      "sha256": "a7e33328c83bd0e7ac77cbc74fa7494742115c9fa4703708fb25376b797ef2ac"
+    },
+    {
+      "path": "dark-en-100/evidence.json",
+      "bytes": 59230,
+      "sha256": "8ca6669691570004b6f7f0dbf91b2f09bbd779cb0887fc56c7737295bd90e9e8"
+    },
+    {
+      "path": "dark-en-100/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 200,
+      "sha256": "559b17b7d8076823516b97488d2031bfc18e27991af0daa7d1bedc75b74d9f34"
+    },
+    {
+      "path": "dark-en-100/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 200,
+      "sha256": "7d32bab75f557633299e4da326665192da7941ed329d59ed2af4d4ca38ee43a8"
+    },
+    {
+      "path": "dark-en-150/workbench.png",
+      "bytes": 449012,
+      "sha256": "daefa88f0921174b84c7d7ed3093094b019e8fc4eb8a99d0ecb47e2b42614453"
+    },
+    {
+      "path": "dark-en-150/workbench-ime.png",
+      "bytes": 444374,
+      "sha256": "8e29a9e231b959ba4fecf60bb57b785faa3a71bedbd8acb517a8f61639bd2f02"
+    },
+    {
+      "path": "dark-en-150/history.png",
+      "bytes": 204848,
+      "sha256": "ae2ef45285ade6182c19cfa263a474d08366fe50f696ed4f59dd3c3818972d94"
+    },
+    {
+      "path": "dark-en-150/conflicts.png",
+      "bytes": 210908,
+      "sha256": "0c58112d90d02c99cc3fde1c00efd870f97073dba2cb0ae32f95f8702306cf95"
+    },
+    {
+      "path": "dark-en-150/branches-local.png",
+      "bytes": 262306,
+      "sha256": "c255847da39630fc62cbc8ef9aab95f241eefff1dd47ee90ade6e7d4576b83c8"
+    },
+    {
+      "path": "dark-en-150/branches-remote.png",
+      "bytes": 262510,
+      "sha256": "ecddfa685643f66dd3779a897e67eed08b183f88c00491bf8bb7e177aa075f8f"
+    },
+    {
+      "path": "dark-en-150/evidence.json",
+      "bytes": 59724,
+      "sha256": "668fa4283fe28c673ead3b7d7a37795665d8a75b3394cfa6656c0d21db433c82"
+    },
+    {
+      "path": "dark-en-150/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 201,
+      "sha256": "c5817641ddd57d23f1158ac78dee46438473a09cd4382e0cbd56919e62b62d6f"
+    },
+    {
+      "path": "dark-en-150/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 201,
+      "sha256": "17f56b9fb1c2c42feb1ba19ec8b342279890e0d0eb2095bd0a049ab17259a6e8"
+    },
+    {
+      "path": "light-zh-CN-100/workbench.png",
+      "bytes": 269158,
+      "sha256": "5c8c0412c038c1270e987624345041955461f200e33b9631eeabfec773ece325"
+    },
+    {
+      "path": "light-zh-CN-100/workbench-ime.png",
+      "bytes": 264296,
+      "sha256": "52914532e0f3bf00461bae9e64b909e3af96d30c8d838dca97fd042b9905242d"
+    },
+    {
+      "path": "light-zh-CN-100/history.png",
+      "bytes": 117915,
+      "sha256": "3350a0f8292cbc6fa29ceca9470d8129df9c95534d00d55949ec975d13bdc2d9"
+    },
+    {
+      "path": "light-zh-CN-100/conflicts.png",
+      "bytes": 113020,
+      "sha256": "97f7616d9229605361272386e4ce187c3c9e03a57d22ce9ced905a38c926c9e5"
+    },
+    {
+      "path": "light-zh-CN-100/branches-local.png",
+      "bytes": 154713,
+      "sha256": "026607b3c2839c8667f94462d686be19110612c2a4090ab3f91fb3cd11e4ee5f"
+    },
+    {
+      "path": "light-zh-CN-100/branches-remote.png",
+      "bytes": 154613,
+      "sha256": "822a9506e35974d45f8ff54a53cefc3449a6492fcf4766abc46468bb42455c67"
+    },
+    {
+      "path": "light-zh-CN-100/evidence.json",
+      "bytes": 59234,
+      "sha256": "79a2a0f458ff6f763fec3fddac521da0888a0de0a90b3cb824a6baacc59eaff6"
+    },
+    {
+      "path": "light-zh-CN-100/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 200,
+      "sha256": "0a408043496566f866921dd71eedf37a631724489357ab9d5ff4a8004b0204a5"
+    },
+    {
+      "path": "light-zh-CN-100/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 200,
+      "sha256": "39573f6f2a5298effc322de3dbb42c3d471c0d4ea563e72a55941ba9e6809789"
+    },
+    {
+      "path": "light-zh-CN-150/workbench.png",
+      "bytes": 442594,
+      "sha256": "f7c5da00b35650ed14273550e8614e733c99990c63a7f98bebafff84c6960a2a"
+    },
+    {
+      "path": "light-zh-CN-150/workbench-ime.png",
+      "bytes": 438253,
+      "sha256": "e01511c0a54b47adb8c7f91448a09894e98d796b7b32ecd13fab36731a121fc3"
+    },
+    {
+      "path": "light-zh-CN-150/history.png",
+      "bytes": 206445,
+      "sha256": "d053f0cc9f9450086e4fff29b4d44f534553c4a3d790ab1ea83cc5a8d5f01d4e"
+    },
+    {
+      "path": "light-zh-CN-150/conflicts.png",
+      "bytes": 202799,
+      "sha256": "9e166d3c867849ce5d88cf37815e393f348270fc6e7a058fc47fa8121970be25"
+    },
+    {
+      "path": "light-zh-CN-150/branches-local.png",
+      "bytes": 260901,
+      "sha256": "040eee9df0fcb48c36b484a01ebbf905cd7d426fb3fe1b69c35b3ac6096599ff"
+    },
+    {
+      "path": "light-zh-CN-150/branches-remote.png",
+      "bytes": 260765,
+      "sha256": "10bb02aee95b5bfd6772863d759c11f86402bd8a92a143e36531cc7b63ef39eb"
+    },
+    {
+      "path": "light-zh-CN-150/evidence.json",
+      "bytes": 59591,
+      "sha256": "e70b63a6a40c09fa06763bbd9555eaff11f122cd274e200fe8ec94717f3afa19"
+    },
+    {
+      "path": "light-zh-CN-150/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 201,
+      "sha256": "5287169c878c2714e23006eebe9723cea44326662be47dfcd76e97bf9822fe03"
+    },
+    {
+      "path": "light-zh-CN-150/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 201,
+      "sha256": "b14376abb1b515c5a415cead157bc1cd28a6076c35831de8896f99463c12b85c"
+    },
+    {
+      "path": "light-en-100/workbench.png",
+      "bytes": 265349,
+      "sha256": "40adaf9aedaa7205f65433966db20014ed59164566a86b3d27bda4842830a424"
+    },
+    {
+      "path": "light-en-100/workbench-ime.png",
+      "bytes": 260483,
+      "sha256": "ae28290a314b287de806da99c25f840a1ead37f6b9694fd1e9761d4699f7c10b"
+    },
+    {
+      "path": "light-en-100/history.png",
+      "bytes": 118831,
+      "sha256": "21936805c5bb1e8d4fbdceed8fed37c445a8ca023b89f12ab445f3046e172ce2"
+    },
+    {
+      "path": "light-en-100/conflicts.png",
+      "bytes": 113081,
+      "sha256": "e7baa0c39a3aaba40430b37a77829262cfeb4d1d974999212cd63df3c715a308"
+    },
+    {
+      "path": "light-en-100/branches-local.png",
+      "bytes": 150376,
+      "sha256": "0b41cf9a2772f9be93e10a6dbb6f37e55e9bb36895fd5c808cf862cf2f15e9d2"
+    },
+    {
+      "path": "light-en-100/branches-remote.png",
+      "bytes": 150312,
+      "sha256": "341eb413aea4e0252a83480edecd01d462fffa72bd533a9fd28c49bdb802580a"
+    },
+    {
+      "path": "light-en-100/evidence.json",
+      "bytes": 59194,
+      "sha256": "978d80af375c26c436d3090b97f3b6a987760ee73460ec836c5a3207e5c20aa1"
+    },
+    {
+      "path": "light-en-100/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 201,
+      "sha256": "9ad3c9959ecda74be97d7e247c3fb86229015a1c80c5ab50cdbdbf04462151ae"
+    },
+    {
+      "path": "light-en-100/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 201,
+      "sha256": "349bbaa0db42519e88cd1fc2edb90b7e3af05edd04e0b6e50c7feeb9d2dc8493"
+    },
+    {
+      "path": "light-en-150/workbench.png",
+      "bytes": 454926,
+      "sha256": "c02fe01c2fb1fc3adb2cb3f38678eced1536c83194f22518853155824f878621"
+    },
+    {
+      "path": "light-en-150/workbench-ime.png",
+      "bytes": 450590,
+      "sha256": "362745cebea596c006bed1fed061793f8e380682c898f725f67079c8da4a0bd1"
+    },
+    {
+      "path": "light-en-150/history.png",
+      "bytes": 207660,
+      "sha256": "fc403344e186863c5a17bbc23778337175785bfe652fcdec2035cbdeb57e9fb1"
+    },
+    {
+      "path": "light-en-150/conflicts.png",
+      "bytes": 213003,
+      "sha256": "ed060bf9fbb629940c46884a52db3d80d7b3f1b67c7cc5565ec487ab8d3995cc"
+    },
+    {
+      "path": "light-en-150/branches-local.png",
+      "bytes": 265290,
+      "sha256": "815bfce06e0b891fa8ca835e52a593296e314bebf0bb8b6526252d33fff24b8d"
+    },
+    {
+      "path": "light-en-150/branches-remote.png",
+      "bytes": 265393,
+      "sha256": "8d100b9f07ad7c582837dcbff23a29ce89ea0ed0ed17ea034b2e81b8c4812f44"
+    },
+    {
+      "path": "light-en-150/evidence.json",
+      "bytes": 59726,
+      "sha256": "dc0f53d57c19b62ee52c49aa22b515adddc68b2be7e016a952775a2ef1b891c6"
+    },
+    {
+      "path": "light-en-150/shutdown-windows-after_original_retirement_wait.json",
+      "bytes": 201,
+      "sha256": "2ebfe1cb9216e18909bc8ef5593408097a2f14092bc89fd1309e7a8d24e9ab06"
+    },
+    {
+      "path": "light-en-150/shutdown-windows-after_harness_drop_before_quit.json",
+      "bytes": 201,
+      "sha256": "0012a848b5ef0655e6ce0d93d1cc25da7f547ab725e0244a9c4cebab8c2cc442"
+    }
+  ]
+}

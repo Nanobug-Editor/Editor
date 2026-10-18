@@ -148,7 +148,7 @@ impl Transaction {
                 Ok(()) => Err(error),
                 Err(recovery) => Err(anyhow::anyhow!(
                     "Commit failed: {error:#}; recovery incomplete, data retained at {}: {recovery:#}",
-                    self.directory.display()
+                    platform_windows::display_path(&self.directory)
                 )),
             };
         }
@@ -202,7 +202,7 @@ pub(crate) fn recover(root: &Path) -> anyhow::Result<Option<std::fs::File>> {
             restore(root, &directory, &journal).with_context(|| {
                 format!(
                     "Recovery incomplete at {}; data preserved",
-                    directory.display()
+                    platform_windows::display_path(&directory)
                 )
             })?;
         } else {

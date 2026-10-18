@@ -65,7 +65,11 @@ impl SettingsView {
                         t!("settings.plugin_project").to_string(),
                     ])
                     .selected_index(usize::from(scope == Scope::Project))
-                    .disabled(disabled || application)
+                    .disabled(
+                        disabled
+                            || application
+                            || self.owner.read(cx).workspace.as_os_str().is_empty(),
+                    )
                     .on_change(move |index, _, cx| {
                         scope_view.update(cx, |this, cx| {
                             this.service_scopes.insert(

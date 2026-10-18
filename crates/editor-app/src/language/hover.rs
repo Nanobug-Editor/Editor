@@ -257,7 +257,7 @@ fn definition_preview(
     }
     Some(format!(
         "**定义实现** · `{}:{}`\n\n````rust\n{}\n````",
-        path.display(),
+        editor_core::display_path(&path),
         line + 1,
         excerpt
     ))

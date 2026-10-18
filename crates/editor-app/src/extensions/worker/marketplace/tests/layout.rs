@@ -6,6 +6,8 @@ use crate::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use std::cell::RefCell;
 use std::io::{Cursor, Write};
+#[path = "../../../../tests/plugin_manager_presentation.rs"]
+mod presentation;
 
 /// Derive a valid newer declarative package without relabeling the frozen archive or using guest SDK code.
 fn fixture_package(old: &Package, version: &str, name: &str) -> (Package, Vec<u8>) {
@@ -98,6 +100,25 @@ fn marketplace_browsing_version_preserves_local_lifecycle_and_fixed_layout(
             .as_array_mut()
             .unwrap()
             .insert(0, release);
+        catalog["plugins"][0]["maintainers"] = serde_json::json!([
+            "maintainer-one",
+            "maintainer-two",
+            "maintainer-three",
+            "maintainer-four",
+            "maintainer-five",
+            "maintainer-six"
+        ]);
+        // An inert reviewed history is long enough to exercise the real list viewport, never extra downloads.
+        for patch in 1..=12 {
+            let mut older = catalog["plugins"][0]["versions"][1].clone();
+            let version = format!("0.9.{patch}");
+            older["version"] = version.clone().into();
+            older["manifest"]["version"] = version.into();
+            catalog["plugins"][0]["versions"]
+                .as_array_mut()
+                .unwrap()
+                .push(older);
+        }
         let server = Server::from_bytes(&serde_json::to_vec(&catalog).unwrap(), bytes);
         let home = tempfile::tempdir().unwrap();
         let root = home.path().join(".runtime-plugin-test");
@@ -144,6 +165,12 @@ fn marketplace_browsing_version_preserves_local_lifecycle_and_fixed_layout(
             .unwrap();
         let form = VisualTestContext::from_window(dialog, editor).into_mut();
         draw(form);
+        // Installed discovery exposes the reviewed upgrade without changing its local details or downloading it.
+        assert!(
+            form.debug_bounds("market-install").is_some(),
+            "installed details must offer the reviewed 1.1.0 upgrade"
+        );
+        assert!(form.debug_bounds("plugin-row-test.notes-update").is_some());
         let local_sidebar = form.debug_bounds("plugin-manager-sidebar").unwrap();
         let local_detail = form.debug_bounds("plugin-manager-detail").unwrap();
         // Searching the old local name must not discard the chosen ID when the reviewed version is renamed.
@@ -165,6 +192,7 @@ fn marketplace_browsing_version_preserves_local_lifecycle_and_fixed_layout(
             form.debug_bounds("plugin-row-test.notes").is_some(),
             "renamed history keeps its exact identity"
         );
+        presentation::check_details(form);
         check_local_actions(form, &panel, &worker, &server, &root);
         worker.tx.send(Work::Shutdown(None)).unwrap();
     }
@@ -200,6 +228,10 @@ fn check_local_actions(
     });
     form.update(|_, cx| panel.update(cx, |panel, cx| panel.poll(cx)));
     draw(form);
+    assert!(
+        form.debug_bounds("plugin-restart-action").is_none(),
+        "disabled instances have no restart action"
+    );
     click(form, "plugin-project-scope-region");
     wait(worker, |state| {
         state.progress.is_none()

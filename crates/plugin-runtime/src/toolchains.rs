@@ -152,7 +152,10 @@ fn resolve_in_path(program: &str, path: &std::ffi::OsStr) -> anyhow::Result<Path
             return Ok(path);
         }
     }
-    anyhow::bail!("Native tool not found: {program}")
+    anyhow::bail!(
+        "Native tool not found: {}",
+        platform_windows::display_path(Path::new(program))
+    )
 }
 
 /// Explicit absolute paths have one candidate; bare names never consult project-relative PATH entries.

@@ -2,11 +2,13 @@
 
 mod commands;
 mod documents;
+mod paths;
 mod run;
 mod workspace;
 
 pub use commands::{CommandDescriptor, CommandId, CommandRegistry, KeyBindingDescriptor};
 pub use documents::{DocumentError, DocumentSession, DocumentStore, OpenedDocument};
+pub use paths::{DisplayPath, display_path};
 pub use run::{
     BreakpointError, ConfigurationFolder, ConfigurationPlacement, ConfigurationTree,
     ConfigurationValidation, DebugCapabilities, DebugControlReason, DebugControls, DebugSession,

@@ -1,0 +1,1550 @@
+{
+  "schema": "nanobug.git120.actual-package-manager-coverage.v1",
+  "generated_at": "2026-10-18T05:15:00.397Z",
+  "scope": "Actual independent Git 0.1.7 Package/Manager headless integration only",
+  "candidate": {
+    "path": "C:/Projects/RustProjects/Editor/target/git-plugin-final-120-scene-quiet/git-0.1.7.zip",
+    "size_bytes": 801674,
+    "sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71"
+  },
+  "original_invocation": {
+    "runner": "C:/Projects/RustProjects/Editor/target/git120-scene-activity-runner-2026-10-18/git_plugin-bedae8640c39723e.exe",
+    "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+    "arguments": [
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "runtime_exit_code": 101,
+    "shell_exit_code": 1,
+    "signal": null,
+    "ended_naturally": true,
+    "raw_summary": "test result: FAILED. 43 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2756.97s",
+    "passed": 43,
+    "failed": 1,
+    "ignored": 0,
+    "filtered_out": 2,
+    "filtered_environment_tests_not_counted_as_passed": [
+      "environment::git_fixture_ignores_external_hooks_monitors_and_templates",
+      "environment::git_fixture_rejects_repository_redirection_before_git_init"
+    ],
+    "libtest_elapsed_seconds": 2756.97,
+    "launcher_wall_seconds": 2757.0152194,
+    "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log",
+    "log_sha256": "b5ead6b973f650b8305347bbf3e3bd64e8f7fab8f844c6c6b17d1230b90895cb"
+  },
+  "original_failure": {
+    "test": "workbench::scene_activity::git_package_history_activity_defers_automatic_refresh_until_quiet",
+    "private_child_exit_code": 101,
+    "private_child_libtest_elapsed_seconds": 67.56,
+    "successful_activity_observation": "visible history remained current for 7014ms and 128 independent keys",
+    "error": "visible automatic refresh did not paint the external commit within 15 seconds",
+    "source_location_in_v1": "crates/plugin-runtime/tests/git_plugin/workbench/scene_activity.rs:133",
+    "classification": "Confirmed test fixture viewport omission; original failure remains recorded"
+  },
+  "fixture_correction": {
+    "test": "workbench::scene_activity::git_package_history_activity_defers_automatic_refresh_until_quiet",
+    "current_source_sha256": "1f1c6c7d76a9fd8600270baf5ae5af76d702afe57051e52dbf39d329356b1268",
+    "workbench_module_sha256": "1974b52e8d04b8744d77387ae9671a02039f3a73b14fa3edb82e2ff0710a841a",
+    "documented_change": "Implementer record: add comments and public Canvas Resize(width=900,height=240,grid=None) before existing painted third assertion; retain 7s activity/128 independent keys behavior and 15s Paint deadline",
+    "independent_observation": "Current QA14/root/clean source has that public Resize before the existing Paint assertion; no host API or production Rust change in QA13 to QA14",
+    "v1_complete_source_snapshot_available": false,
+    "v1_to_v2_byte_reconstruction_claimed": false,
+    "reuse_basis": "Frozen v1 EXE and real run, implementer change record, fixed QA13/QA14 differences, unchanged source-file hashes for the other 43 cases, and one exact isolated test per private process",
+    "v2_runner": "C:/Projects/RustProjects/Editor/target/git120-scene-activity-viewport-runner-2026-10-18/git_plugin-bedae8640c39723e.exe",
+    "v2_runner_sha256": "848e2a5816b94afbb475e6b50f2ba1a63e993a230a92a9b3a86e1579b7e09f31",
+    "v2_single_case_passed": 1,
+    "v2_elapsed_seconds": 58.84,
+    "v2_exit_code": 0,
+    "v2_receipt": "C:/Projects/RustProjects/Editor/target/git120-scene-activity-viewport-receipt-2026-10-18.json",
+    "v2_log": "C:/Projects/RustProjects/Editor/target/git120-scene-activity-viewport-final-green-2026-10-18.log",
+    "v2_log_sha256": "a98f273a9c176d7f2455fae9e8843e02648d5cc86fc42353d3f4187e489d6a9c"
+  },
+  "fixed_source_verification": {
+    "qa13": "9ddb5443d3c8bd229ae19901c593cdc875e4a1f6",
+    "qa14": "23bf796c7ffc1f02209127116e9284af309c697c",
+    "changed_rust_paths": [
+      "crates/plugin-runtime/tests/git_plugin/workbench.rs",
+      "crates/plugin-runtime/tests/git_plugin/workbench/scene_activity.rs"
+    ],
+    "workbench_delta": "only two-line module declaration",
+    "production_rust_changed_paths": [],
+    "unchanged_candidate_cases": 43,
+    "affected_candidate_cases": 1,
+    "current_fixture_and_workbench_match_qa14_root_and_clean": true,
+    "limitation": "QA13 lacks scene_activity.rs; v1 was QA13 plus uncommitted v1 test. This proves fixed-QA other-case source equality, not a reconstructed cryptographic manifest of the complete v1 compiler input."
+  },
+  "combined_coverage": {
+    "distinct_candidate_cases": 44,
+    "original_unchanged_passed_cases": 43,
+    "corrected_fixture_passed_cases": 1,
+    "all_accepted_child_receipts_exactly_one_passed": true,
+    "single_invocation_44_green": false,
+    "statement": "43 unchanged cases passed in the original full invocation, plus the one affected fixture passed separately under v2. The original invocation is 43 passed / 1 failed."
+  },
+  "timing_notes": {
+    "authoritative_total": "original libtest summary",
+    "per_case": "Cases 3 through 44 use actual Windows held process StartTime/ExitTime. First two use explicitly approximate harness boundaries; they are not Rust-reported exact test durations.",
+    "raw_process_observer": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-case-times-2026-10-18.json",
+    "auxiliary_launcher_parser": "Its passed=0/failed=0 streaming counters did not handle single-thread nocapture stdout/stderr interleaving and are not used as test results. Raw libtest summary and exact-child receipts are authoritative."
+  },
+  "process_cleanup": {
+    "checked_at": "2026-10-18T05:14:59.9847714Z",
+    "frozen_v1_and_v2_runner_processes_remaining": 0,
+    "original_runtime_ended_naturally": true,
+    "process_timing_observer_exit_code": 0,
+    "inherited_git_index_file_present_at_launch": false,
+    "inherited_git_index_file_present_at_cleanup": false,
+    "scope": "Exact two frozen runner executable paths; no unrelated process termination"
+  },
+  "cases": [
+    {
+      "name": "git_package_interactive_rebase_reorders_rewords_and_fixups_the_previewed_commits",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin.rs",
+        "qa13_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "qa14_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds_approx": 52.8,
+          "precision_seconds": 1,
+          "source": "Harness boundary proxy: launch 04:28:04.173Z, observed second-child start 04:28:57Z (seconds precision), third-child exact start; includes handoff overhead",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 52.8,
+        "timing_source": "Harness boundary proxy: launch 04:28:04.173Z, observed second-child start 04:28:57Z (seconds precision), third-child exact start; includes handoff overhead",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "git_package_resolves_a_binary_add_add_conflict_with_an_explicit_complete_version",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin.rs",
+        "qa13_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "qa14_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds_approx": 49,
+          "precision_seconds": 1,
+          "source": "Harness boundary proxy: launch 04:28:04.173Z, observed second-child start 04:28:57Z (seconds precision), third-child exact start; includes handoff overhead",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 49,
+        "timing_source": "Harness boundary proxy: launch 04:28:04.173Z, observed second-child start 04:28:57Z (seconds precision), third-child exact start; includes handoff overhead",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "git_package_stages_one_path_and_commits_only_the_index_with_multiline_stdin",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin.rs",
+        "qa13_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "qa14_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 56.468,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 57976,
+          "started_at": "2026-10-18T04:29:46.0252097Z",
+          "exited_at": "2026-10-18T04:30:42.4931082Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 56.468,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "git_package_unstages_an_unborn_file_without_deleting_worktree_content",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin.rs",
+        "qa13_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "qa14_sha256": "9cc565b415b2002dc8ae731d15b093360883174be0c63ab9507f73f5e686bc3c",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 48.402,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 35308,
+          "started_at": "2026-10-18T04:30:42.5078707Z",
+          "exited_at": "2026-10-18T04:31:30.9099258Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 48.402,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "index_edges::git_package_stages_intent_to_add_literal_paths_and_rejects_an_external_index_change",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/index_edges.rs",
+        "qa13_sha256": "3d353bb8cc73695af2c2082f5560f659826c407c987f249bbf5bfd2d20f3e408",
+        "qa14_sha256": "3d353bb8cc73695af2c2082f5560f659826c407c987f249bbf5bfd2d20f3e408",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 50.03,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 30420,
+          "started_at": "2026-10-18T04:31:30.9198357Z",
+          "exited_at": "2026-10-18T04:32:20.9495783Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 50.03,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "index_edges::git_package_unstage_hunk_ignores_dirty_native_buffer_but_staging_still_requires_saving",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/index_edges.rs",
+        "qa13_sha256": "3d353bb8cc73695af2c2082f5560f659826c407c987f249bbf5bfd2d20f3e408",
+        "qa14_sha256": "3d353bb8cc73695af2c2082f5560f659826c407c987f249bbf5bfd2d20f3e408",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 48.387,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 33220,
+          "started_at": "2026-10-18T04:32:20.9648835Z",
+          "exited_at": "2026-10-18T04:33:09.3516533Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 48.387,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "index_edges::git_package_unstage_with_dirty_buffer_changes_only_the_index_including_unborn_head",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/index_edges.rs",
+        "qa13_sha256": "3d353bb8cc73695af2c2082f5560f659826c407c987f249bbf5bfd2d20f3e408",
+        "qa14_sha256": "3d353bb8cc73695af2c2082f5560f659826c407c987f249bbf5bfd2d20f3e408",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 92.979,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 31232,
+          "started_at": "2026-10-18T04:33:09.3612256Z",
+          "exited_at": "2026-10-18T04:34:42.3398892Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 92.979,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "rebase_resume::git_package_interactive_rebase_continues_after_native_conflict_edit_save_and_stage",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/rebase_resume.rs",
+        "qa13_sha256": "49b16f6b4595a5da13079b5e8975230b4116ef7d547abc93e8e0fb69980756c3",
+        "qa14_sha256": "49b16f6b4595a5da13079b5e8975230b4116ef7d547abc93e8e0fb69980756c3",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 51.061,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 30168,
+          "started_at": "2026-10-18T04:34:42.3530866Z",
+          "exited_at": "2026-10-18T04:35:33.4138933Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 51.061,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "rebase_resume::git_package_interactive_rebase_rejects_injected_exec_and_retains_result_plan_and_git_state",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/rebase_resume.rs",
+        "qa13_sha256": "49b16f6b4595a5da13079b5e8975230b4116ef7d547abc93e8e0fb69980756c3",
+        "qa14_sha256": "49b16f6b4595a5da13079b5e8975230b4116ef7d547abc93e8e0fb69980756c3",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 52.679,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 10760,
+          "started_at": "2026-10-18T04:35:33.4214032Z",
+          "exited_at": "2026-10-18T04:36:26.1005988Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 52.679,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "rebase_resume::git_package_reopens_an_active_interactive_rebase_and_keeps_the_native_result_until_continue",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/rebase_resume.rs",
+        "qa13_sha256": "49b16f6b4595a5da13079b5e8975230b4116ef7d547abc93e8e0fb69980756c3",
+        "qa14_sha256": "49b16f6b4595a5da13079b5e8975230b4116ef7d547abc93e8e0fb69980756c3",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 76.178,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 432,
+          "started_at": "2026-10-18T04:36:26.1102376Z",
+          "exited_at": "2026-10-18T04:37:42.2885236Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 76.178,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_discovers_linked_worktrees_and_rejects_projects_below_the_repository_root",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 104.019,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 3860,
+          "started_at": "2026-10-18T04:37:42.3022283Z",
+          "exited_at": "2026-10-18T04:39:26.3209873Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 104.019,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_force_lease_refuses_remote_advance_after_preview",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 53.423,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 22276,
+          "started_at": "2026-10-18T04:39:26.3317555Z",
+          "exited_at": "2026-10-18T04:40:19.7546023Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 53.423,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_pull_asks_on_divergence_and_recovers_the_remembered_choice_on_reactivation",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 81.573,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 7196,
+          "started_at": "2026-10-18T04:40:19.7668155Z",
+          "exited_at": "2026-10-18T04:41:41.3400494Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 81.573,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_pull_fast_forwards_a_non_origin_upstream_and_local_refresh_does_not_fetch",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 57.175,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 43020,
+          "started_at": "2026-10-18T04:41:41.3521231Z",
+          "exited_at": "2026-10-18T04:42:38.5275512Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 57.175,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_stash_create_previews_and_moves_untracked_files_then_apply_keeps_the_entry",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 51.639,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 33128,
+          "started_at": "2026-10-18T04:42:38.5411610Z",
+          "exited_at": "2026-10-18T04:43:30.1802681Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 51.639,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_stash_drop_refuses_a_selector_that_changed_after_confirmation_preview",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 54.258,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 33208,
+          "started_at": "2026-10-18T04:43:30.1969882Z",
+          "exited_at": "2026-10-18T04:44:24.4551746Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 54.258,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_stash_pop_conflict_retains_the_original_stash_and_real_unmerged_state",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 50.329,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 16472,
+          "started_at": "2026-10-18T04:44:24.4703629Z",
+          "exited_at": "2026-10-18T04:45:14.7992924Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 50.329,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "repository::git_package_stash_pop_uses_the_previewed_oid_and_keeps_entries_after_a_selector_shift",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/repository.rs",
+        "qa13_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "qa14_sha256": "2e8f618091e26324f2a88dbc7054cc91a7b47671196d7ad606716cde7eaa8efe",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 53.291,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 29384,
+          "started_at": "2026-10-18T04:45:14.8096189Z",
+          "exited_at": "2026-10-18T04:46:08.1005373Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 53.291,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::completions::git_package_creates_a_branch_switches_explicitly_and_confirms_only_the_selected_discard",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/completions.rs",
+        "qa13_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "qa14_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 53.607,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 33892,
+          "started_at": "2026-10-18T04:46:08.1155055Z",
+          "exited_at": "2026-10-18T04:47:01.7225524Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 53.607,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::completions::git_package_interactive_squash_commits_the_reviewed_message_and_combined_tree",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/completions.rs",
+        "qa13_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "qa14_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 55.726,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 44140,
+          "started_at": "2026-10-18T04:47:01.7342818Z",
+          "exited_at": "2026-10-18T04:47:57.4602500Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 55.726,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::completions::git_package_reopened_cherry_pick_skips_only_its_conflicted_first_commit",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/completions.rs",
+        "qa13_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "qa14_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 79.834,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 22912,
+          "started_at": "2026-10-18T04:47:57.4737367Z",
+          "exited_at": "2026-10-18T04:49:17.3079662Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 79.834,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::completions::git_package_reopened_interactive_rebase_can_skip_or_abort_its_actual_conflict",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/completions.rs",
+        "qa13_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "qa14_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 163.514,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 52712,
+          "started_at": "2026-10-18T04:49:17.3225557Z",
+          "exited_at": "2026-10-18T04:52:00.8369643Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 163.514,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::completions::git_package_successful_stash_pop_and_drop_remove_only_the_confirmed_entries",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/completions.rs",
+        "qa13_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "qa14_sha256": "a3473a36b5fa65b1424b34e947049a89f71c81cf5492d6f21feca800e4ff1379",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 54.104,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 2504,
+          "started_at": "2026-10-18T04:52:00.8482519Z",
+          "exited_at": "2026-10-18T04:52:54.9525637Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 54.104,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::history::git_package_loaded_history_keeps_its_older_detail_across_timer_focus_save_and_new_commits",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/history.rs",
+        "qa13_sha256": "24e24a86bb88131d7b4b4afbe1029f0fc911e6bebee5eab627119ed44870ff09",
+        "qa14_sha256": "24e24a86bb88131d7b4b4afbe1029f0fc911e6bebee5eab627119ed44870ff09",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 60.618,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 23044,
+          "started_at": "2026-10-18T04:52:54.9605947Z",
+          "exited_at": "2026-10-18T04:53:55.5783282Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 60.618,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::history::git_package_root_ordinary_and_octopus_history_keep_readonly_sources_and_distinct_parents",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/history.rs",
+        "qa13_sha256": "24e24a86bb88131d7b4b4afbe1029f0fc911e6bebee5eab627119ed44870ff09",
+        "qa14_sha256": "24e24a86bb88131d7b4b4afbe1029f0fc911e6bebee5eab627119ed44870ff09",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 58.207,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 17228,
+          "started_at": "2026-10-18T04:53:55.5878669Z",
+          "exited_at": "2026-10-18T04:54:53.7949914Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 58.207,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::linked::git_package_stages_and_commits_a_linked_detached_worktree_without_moving_the_primary_branch",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/linked.rs",
+        "qa13_sha256": "f5fb27665d79bfe467f18dd4b844d773eba7c61bded0ec91fd2a687016a0a32a",
+        "qa14_sha256": "f5fb27665d79bfe467f18dd4b844d773eba7c61bded0ec91fd2a687016a0a32a",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 54.696,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 20460,
+          "started_at": "2026-10-18T04:54:53.8097271Z",
+          "exited_at": "2026-10-18T04:55:48.5054042Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 54.696,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::native_guards::git_package_cancelled_buffer_receipt_cannot_approve_a_new_write_intent",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/native_guards.rs",
+        "qa13_sha256": "977b399f6b5f92879b7de4e5046f7bad1bfee50669c53f083c51ab93ee6893bc",
+        "qa14_sha256": "977b399f6b5f92879b7de4e5046f7bad1bfee50669c53f083c51ab93ee6893bc",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 49.475,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 48912,
+          "started_at": "2026-10-18T04:55:48.5212986Z",
+          "exited_at": "2026-10-18T04:56:37.9958911Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 49.475,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::native_guards::git_package_saving_after_dirty_guard_requires_second_impact_review_and_confirmation",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/native_guards.rs",
+        "qa13_sha256": "977b399f6b5f92879b7de4e5046f7bad1bfee50669c53f083c51ab93ee6893bc",
+        "qa14_sha256": "977b399f6b5f92879b7de4e5046f7bad1bfee50669c53f083c51ab93ee6893bc",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 47.318,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 43464,
+          "started_at": "2026-10-18T04:56:38.0103621Z",
+          "exited_at": "2026-10-18T04:57:25.3280991Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 47.318,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::network::git_package_cancelling_stalled_fetch_and_pull_closes_the_socket_and_releases_owned_processes",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/network.rs",
+        "qa13_sha256": "c38125ad8bc369ca9315a0e0a1767973974f633d3df78d850c6d634a25176e57",
+        "qa14_sha256": "c38125ad8bc369ca9315a0e0a1767973974f633d3df78d850c6d634a25176e57",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 48.896,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 36856,
+          "started_at": "2026-10-18T04:57:25.3388656Z",
+          "exited_at": "2026-10-18T04:58:14.2349690Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 48.896,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::network::git_package_http_authentication_failure_never_integrates_or_reports_a_successful_fetch",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/network.rs",
+        "qa13_sha256": "c38125ad8bc369ca9315a0e0a1767973974f633d3df78d850c6d634a25176e57",
+        "qa14_sha256": "c38125ad8bc369ca9315a0e0a1767973974f633d3df78d850c6d634a25176e57",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 47.558,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 17944,
+          "started_at": "2026-10-18T04:58:14.2507414Z",
+          "exited_at": "2026-10-18T04:59:01.8090613Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 47.558,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::network::success::git_package_remote_success_and_published_rewrites_require_separate_exact_lease_confirmations",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/network/success.rs",
+        "qa13_sha256": "bac252643a19beb014f23c845fe5f215b2dee4bfd57a145f3dd480eda32c2d80",
+        "qa14_sha256": "bac252643a19beb014f23c845fe5f215b2dee4bfd57a145f3dd480eda32c2d80",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 57.065,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 25416,
+          "started_at": "2026-10-18T04:59:01.8214951Z",
+          "exited_at": "2026-10-18T04:59:58.8863620Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 57.065,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::operations::git_package_cherry_pick_keeps_the_exact_reviewed_batch_order_after_confirmation",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/operations.rs",
+        "qa13_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "qa14_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 47.108,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 52396,
+          "started_at": "2026-10-18T04:59:58.8981093Z",
+          "exited_at": "2026-10-18T05:00:46.0057854Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 47.108,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::operations::git_package_merge_modes_confirm_their_distinct_head_index_and_worktree_effects",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/operations.rs",
+        "qa13_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "qa14_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 140.203,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 14696,
+          "started_at": "2026-10-18T05:00:46.0215063Z",
+          "exited_at": "2026-10-18T05:03:06.2245105Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 140.203,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::operations::git_package_ordinary_rebase_replays_only_the_reviewed_branch_after_confirmation",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/operations.rs",
+        "qa13_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "qa14_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 47.091,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 23472,
+          "started_at": "2026-10-18T05:03:06.2411285Z",
+          "exited_at": "2026-10-18T05:03:53.3316904Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 47.091,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::operations::git_package_reset_modes_confirm_their_distinct_head_index_and_worktree_effects",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/operations.rs",
+        "qa13_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "qa14_sha256": "e449849e11b2e1f69d8f9bd7a78401bd8823d4a6559b969eeb639170aaa01e73",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 139.057,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 28376,
+          "started_at": "2026-10-18T05:03:53.3463446Z",
+          "exited_at": "2026-10-18T05:06:12.4038145Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 139.057,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::package_lifecycle::git_package_is_optional_and_uninstall_does_not_restore_it_on_reopen",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/package_lifecycle.rs",
+        "qa13_sha256": "8e6622c1621c74442531e662678655c0af5bf8352ba516bab180a31b9d8f2348",
+        "qa14_sha256": "8e6622c1621c74442531e662678655c0af5bf8352ba516bab180a31b9d8f2348",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 44.255,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 9068,
+          "started_at": "2026-10-18T05:06:12.4158560Z",
+          "exited_at": "2026-10-18T05:06:56.6706535Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 44.255,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::recovery::git_package_opaque_conflicts_restart_abort_and_reappear_without_reusing_old_approval",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/recovery.rs",
+        "qa13_sha256": "ed727804303f1ebcd2106fb73220f9b3588599ae2caa60004da102ce8369d5fd",
+        "qa14_sha256": "ed727804303f1ebcd2106fb73220f9b3588599ae2caa60004da102ce8369d5fd",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 73.292,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 19980,
+          "started_at": "2026-10-18T05:06:56.6785463Z",
+          "exited_at": "2026-10-18T05:08:09.9705805Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 73.292,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::scene_activity::git_package_history_activity_defers_automatic_refresh_until_quiet",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/scene_activity.rs",
+        "qa13_sha256": null,
+        "qa14_sha256": "1f1c6c7d76a9fd8600270baf5ae5af76d702afe57051e52dbf39d329356b1268",
+        "unchanged_in_fixed_qa": false
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "failed",
+        "exactly_one_passed_child_receipt": false,
+        "timing": {
+          "elapsed_seconds": 67.58,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 42820,
+          "started_at": "2026-10-18T05:08:09.9857273Z",
+          "exited_at": "2026-10-18T05:09:17.5661577Z",
+          "process_exit_code": 101
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "848e2a5816b94afbb475e6b50f2ba1a63e993a230a92a9b3a86e1579b7e09f31",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "v2 public Resize 900x240",
+        "elapsed_seconds": 58.84,
+        "timing_source": "v2 single-case libtest summary",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-scene-activity-viewport-final-green-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::scene_receipts::git_package_visibility_ack_preserves_an_admitted_history_key_and_exact_oid",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/scene_receipts.rs",
+        "qa13_sha256": "2acbb9730d9db0b066651f0c4cbd2e53bb5edbd663232de53b6d89ab997abba2",
+        "qa14_sha256": "2acbb9730d9db0b066651f0c4cbd2e53bb5edbd663232de53b6d89ab997abba2",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 44.962,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 30896,
+          "started_at": "2026-10-18T05:09:17.5776167Z",
+          "exited_at": "2026-10-18T05:10:02.5399608Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 44.962,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::tree_collisions::git_package_history_tree_distinguishes_a_deleted_file_from_its_replacement_directory",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/tree_collisions.rs",
+        "qa13_sha256": "9747d8f59cd0aecf511f8d40b1eb69cb5e26f3934ca55379757ec616b0252eeb",
+        "qa14_sha256": "9747d8f59cd0aecf511f8d40b1eb69cb5e26f3934ca55379757ec616b0252eeb",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 44.906,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 31760,
+          "started_at": "2026-10-18T05:10:02.5564411Z",
+          "exited_at": "2026-10-18T05:10:47.4623163Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 44.906,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::tree_collisions::git_package_staging_tree_distinguishes_a_deleted_file_from_its_replacement_directory",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/tree_collisions.rs",
+        "qa13_sha256": "9747d8f59cd0aecf511f8d40b1eb69cb5e26f3934ca55379757ec616b0252eeb",
+        "qa14_sha256": "9747d8f59cd0aecf511f8d40b1eb69cb5e26f3934ca55379757ec616b0252eeb",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 44.855,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 14124,
+          "started_at": "2026-10-18T05:10:47.4784101Z",
+          "exited_at": "2026-10-18T05:11:32.3333790Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 44.855,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::tree_pages::conflicts::git_package_conflict_tree_has_one_leaf_for_a_live_path_with_an_open_draft",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/tree_pages/conflicts.rs",
+        "qa13_sha256": "6552e01be3c15641614194b289b164dea5b2429d1b3e1442588ea49329d634f8",
+        "qa14_sha256": "6552e01be3c15641614194b289b164dea5b2429d1b3e1442588ea49329d634f8",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 47.715,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 15960,
+          "started_at": "2026-10-18T05:11:32.3470506Z",
+          "exited_at": "2026-10-18T05:12:20.0623741Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 47.715,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::tree_pages::git_package_directory_selection_keeps_an_already_allocated_child_page_current",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/tree_pages.rs",
+        "qa13_sha256": "565ceaf7c3722e8db67d9f6088f1ec498525e382e067a5e5505581746e738c25",
+        "qa14_sha256": "565ceaf7c3722e8db67d9f6088f1ec498525e382e067a5e5505581746e738c25",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 50.581,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 18292,
+          "started_at": "2026-10-18T05:12:20.0720680Z",
+          "exited_at": "2026-10-18T05:13:10.6533609Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 50.581,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    },
+    {
+      "name": "workbench::tree_pages::git_package_parallel_tree_pages_do_not_invalidate_each_others_scene_revision",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "fixed_qa_source": {
+        "path": "crates/plugin-runtime/tests/git_plugin/workbench/tree_pages.rs",
+        "qa13_sha256": "565ceaf7c3722e8db67d9f6088f1ec498525e382e067a5e5505581746e738c25",
+        "qa14_sha256": "565ceaf7c3722e8db67d9f6088f1ec498525e382e067a5e5505581746e738c25",
+        "unchanged_in_fixed_qa": true
+      },
+      "original_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "timing": {
+          "elapsed_seconds": 50.508,
+          "source": "Windows held private-child process StartTime/ExitTime",
+          "process_id": 7564,
+          "started_at": "2026-10-18T05:13:10.6663594Z",
+          "exited_at": "2026-10-18T05:14:01.1741049Z",
+          "process_exit_code": 0
+        },
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      },
+      "accepted_execution": {
+        "runner_sha256": "6db674e062c8fea67d46cc420be4612f5541b8a8fb295ac019e0d20542cfb4be",
+        "result": "passed",
+        "exactly_one_passed_child_receipt": true,
+        "fixture": "unchanged case",
+        "elapsed_seconds": 50.508,
+        "timing_source": "Windows held private-child process StartTime/ExitTime",
+        "log": "C:/Projects/RustProjects/Editor/target/git120-final-017-package-full-2026-10-18.log"
+      }
+    }
+  ]
+}

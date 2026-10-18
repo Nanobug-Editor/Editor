@@ -4,7 +4,12 @@
 //! remain in `gpui-base`; this module disables regrouping and owns the panel title
 //! strip, including its configurable height. Each panel occupies its own split slot.
 
-use std::{cell::Cell, rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    rc::Rc,
+    sync::Arc,
+};
 
 use crate::theme::component_styles;
 use gpui_base::dock::{
@@ -26,6 +31,9 @@ use gpui_kit::{
     div, px, size,
 };
 use plugin_schema::ThemeComponent;
+
+/// Transient native paint geometry only; Base retains the sole persistent layout and size preferences.
+type PaintedFrames = Rc<RefCell<HashMap<NodeId, Bounds<Pixels>>>>;
 
 /// A local Dock appearance with independent panels and a shared title height.
 #[derive(Clone, Copy)]
@@ -51,6 +59,7 @@ impl LocalDock {
                 title_height: self.title_height,
                 resizing: Rc::new(Cell::new(None)),
                 area: cx.entity().downgrade(),
+                frames: Rc::default(),
             });
             DockArea::new(id, version, window, cx).with_renderer(renderer)
         })
@@ -62,6 +71,7 @@ struct LocalDockRenderer {
     /// The UI tracks the active handle; Base owns all size constraints and layout state.
     resizing: Rc<Cell<Option<DockPlacement>>>,
     area: WeakEntity<DockArea>,
+    frames: PaintedFrames,
 }
 
 impl DockAreaRenderer for LocalDockRenderer {
@@ -89,6 +99,7 @@ impl DockAreaRenderer for LocalDockRenderer {
             area: self.area.clone(),
             node: Cell::new(None),
             bounds: Rc::new(Cell::new(Bounds::default())),
+            frames: self.frames.clone(),
         })
     }
 }
@@ -99,6 +110,16 @@ struct LocalTabGroupRenderer {
     area: WeakEntity<DockArea>,
     node: Cell<Option<NodeId>>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
+    frames: PaintedFrames,
+}
+
+impl Drop for LocalTabGroupRenderer {
+    fn drop(&mut self) {
+        // Removed native groups must not leave stale hit/size geometry behind.
+        if let Some(node) = self.node.get() {
+            self.frames.borrow_mut().remove(&node);
+        }
+    }
 }
 
 impl LocalTabGroupRenderer {
@@ -111,6 +132,7 @@ impl LocalTabGroupRenderer {
         let area = self.area.clone();
         let hit_bounds = self.bounds.clone();
         let release_bounds = hit_bounds.clone();
+        let frames = self.frames.clone();
         Some(
             div()
                 .id("local-dock-split-target")
@@ -142,12 +164,22 @@ impl LocalTabGroupRenderer {
                             window.mouse_position(),
                             cx,
                         );
+                        // Reordering uses the source's painted size as its initial preference.
+                        // Base still constrains peers; a fresh split may halve its neighbour.
+                        let size = placement::reorder_size(
+                            area,
+                            drag.source(),
+                            node,
+                            placement.axis(),
+                            &frames.borrow(),
+                            cx,
+                        );
                         area.move_panel(
                             drag.panel(),
                             InsertTarget::Split {
                                 node,
                                 placement,
-                                size: None,
+                                size,
                             },
                             window,
                             cx,
@@ -177,6 +209,16 @@ impl LocalTabGroupRenderer {
 }
 
 impl TabGroupRenderer for LocalTabGroupRenderer {
+    /// Measure the actual outer slot, including its title, through Base's public paint hook.
+    fn frame(&self, group: &TabGroupContext, _: &mut Window, _: &mut App) -> Stateful<Div> {
+        let node = group.node();
+        self.node.set(Some(node));
+        let frames = self.frames.clone();
+        div().id("tab-group").on_prepaint(move |bounds, _, _| {
+            frames.borrow_mut().insert(node, bounds);
+        })
+    }
+
     /// Keep native drag events, rejecting only the central tab-merge zone.
     fn content_frame(&self, group: &TabGroupContext, _: &mut Window, _: &mut App) -> Stateful<Div> {
         let node = group.node();
@@ -340,6 +382,13 @@ pub(crate) fn add_panel_view(
     if area.panel(id).is_some() {
         return;
     }
+    // A declared left panel joins the existing sidebar instead of reserving another
+    // outer column. Register first, then let Base split the retained sidebar band.
+    if placement == DockPlacement::Left && placement::left_sidebar_target(area, cx).is_some() {
+        area.add_panel_view(panel, DockPlacement::Center, None, window, cx);
+        move_to_left_sidebar(area, id, window, cx);
+        return;
+    }
     let neighbor = area.layout(placement).and_then(|tree| {
         tree.panels()
             .last()
@@ -363,6 +412,37 @@ pub(crate) fn add_panel_view(
             cx,
         );
     }
+}
+
+/// Move a registered panel into the existing left band without replacing its view or layout tree.
+/// Returns false when no left band exists; callers retain the ordinary peripheral fallback.
+pub(crate) fn move_to_left_sidebar(
+    area: &mut DockArea,
+    panel: gpui_base::dock::PanelId,
+    window: &mut Window,
+    cx: &mut Context<DockArea>,
+) -> bool {
+    if area.panel(panel).is_none() {
+        return false;
+    }
+    let Some((node, height)) = placement::left_sidebar_target(area, cx) else {
+        return false;
+    };
+    // A new peer shares the whole sidebar, rather than halving a possibly hidden
+    // last leaf. Give it the existing band's aggregate height as an initial weight;
+    // before measurement use the viewport. Base constrains and scales all peers.
+    let height = height.unwrap_or_else(|| window.viewport_size().height);
+    area.move_panel(
+        panel,
+        InsertTarget::Split {
+            node,
+            placement: Placement::Bottom,
+            size: Some(height),
+        },
+        window,
+        cx,
+    );
+    true
 }
 
 mod placement;

@@ -128,8 +128,8 @@ fn external_startup_preserves_documents_across_concurrent_and_failed_requests(
         assert_eq!(deliver(visual, profile.path(), None), Ok(true));
         assert_eq!(
             visual.update(|_, cx| cx.windows().len()),
-            2,
-            "repeat no-argument launch reuses one home"
+            1,
+            "repeat no-argument launch foregrounds the existing editor"
         );
         let requests: Vec<_> = (0..8)
             .map(|_| {
@@ -156,7 +156,7 @@ fn external_startup_preserves_documents_across_concurrent_and_failed_requests(
         assert!(requests.into_iter().all(|request| request.join().unwrap()));
         assert_eq!(
             visual.update(|_, cx| cx.windows().len()),
-            3,
+            2,
             "concurrent requests reserve just one real B directory"
         );
         assert_eq!(
@@ -212,7 +212,7 @@ fn external_startup_preserves_documents_across_concurrent_and_failed_requests(
         visual.run_until_parked();
         assert!(deliver(visual, profile.path(), Some(b.clone())).is_err());
         click(visual, "project-decision-cancel");
-        assert_eq!(visual.update(|_, cx| cx.windows().len()), 3);
+        assert_eq!(visual.update(|_, cx| cx.windows().len()), 2);
         assert_eq!(
             visual.update(|_, cx| {
                 host.read(cx)
@@ -234,7 +234,7 @@ fn external_startup_preserves_documents_across_concurrent_and_failed_requests(
             panic!("another profile must remain independently owned")
         };
         drop(independent);
-        assert_eq!(visual.update(|_, cx| cx.windows().len()), 3);
+        assert_eq!(visual.update(|_, cx| cx.windows().len()), 2);
     });
 }
 

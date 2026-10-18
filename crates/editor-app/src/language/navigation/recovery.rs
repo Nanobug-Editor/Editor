@@ -210,7 +210,7 @@ impl LanguageServer {
         Some(format!(
             "{} [{}] {state}（{}/{}）：{message}",
             self.service.owner.as_str(),
-            self.root.display(),
+            editor_core::display_path(&self.root),
             recovery.failures,
             MAX_FAILURES
         ))

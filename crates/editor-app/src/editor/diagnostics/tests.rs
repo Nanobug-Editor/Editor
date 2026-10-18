@@ -5,6 +5,8 @@ use gpui_base::input::{DiagnosticSeverity, Position};
 use gpui_kit::{TestAppContext, component::Root, gpui, size};
 use std::{cell::RefCell, rc::Rc};
 
+mod problems;
+
 /// Use a plain document so asynchronous language-server startup cannot affect UI assertions.
 fn test_editor<'a>(
     cx: &'a mut TestAppContext,

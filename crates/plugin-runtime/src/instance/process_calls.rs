@@ -196,6 +196,27 @@ impl State {
                 self.processes.write(id, &bytes).map_err(process_failure)?;
                 Ok(Value::Unit)
             }
+            Operation::CloseStdin { handle } => {
+                let id = self.process_id(&handle)?;
+                if !self
+                    .api
+                    .capabilities
+                    .get("process")
+                    .is_some_and(|version| *version >= semver::Version::new(1, 8, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "process 1.8 is required for input half-close",
+                    ));
+                }
+                if !self.processes.close_stdin(id).map_err(process_failure)? {
+                    return Err(Failure::new(
+                        ErrorCode::UnsupportedOperation,
+                        "A PTY has no independent stdin pipe",
+                    ));
+                }
+                Ok(Value::Unit)
+            }
             Operation::Resize {
                 handle,
                 columns,

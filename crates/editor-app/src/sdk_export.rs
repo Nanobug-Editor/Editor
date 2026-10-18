@@ -353,8 +353,12 @@ fn publish(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
     file.write_all(bytes)?;
     if let Err(error) = file.persist(path) {
         if !std::fs::read(path).is_ok_and(|existing| existing == bytes) {
-            return Err(error.error)
-                .with_context(|| format!("Could not publish SDK file {}", path.display()));
+            return Err(error.error).with_context(|| {
+                format!(
+                    "Could not publish SDK file {}",
+                    editor_core::display_path(&path)
+                )
+            });
         }
     }
     Ok(())

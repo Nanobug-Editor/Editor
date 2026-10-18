@@ -1,0 +1,4 @@
+# Receipt and image digests identify the captured bytes on every checkout.
+* -text
+# Generated Windows receipts keep CRLF while retaining the usual whitespace checks.
+*.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

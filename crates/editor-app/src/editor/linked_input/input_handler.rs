@@ -171,6 +171,35 @@ impl EntityInputHandler for Bridge {
 }
 
 impl EditorApp {
+    /// Chooses the current semantic input delegate at authority paint time, including pending
+    /// linked edits. Alignment wraps this handler's geometry and never bypasses its edit queue.
+    pub(crate) fn aligned_linked_input_factory(
+        &self,
+        cx: &Context<Self>,
+    ) -> crate::ui::controls::aligned_editor::AlignmentInputFactory {
+        let owner = cx.entity().downgrade();
+        let editor = self.editor.clone();
+        Rc::new(move |bounds, _, cx| {
+            let bridge = owner
+                .read_with(cx, |app, cx| {
+                    if app.editor != editor {
+                        return None;
+                    }
+                    app.language_edits.bridge.clone().filter(|bridge| {
+                        let bridge = bridge.read(cx);
+                        bridge.editor == editor && (bridge.active || bridge.has_pending())
+                    })
+                })
+                .ok()
+                .flatten();
+            if let Some(bridge) = bridge {
+                Box::new(ElementInputHandler::new(bounds, bridge))
+            } else {
+                Box::new(ElementInputHandler::new(bounds, editor.clone()))
+            }
+        })
+    }
+
     /// Flush entered characters before Undo/Redo and caret movements; semantic cancellation never loses input.
     pub(crate) fn finish_linked_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(bridge) = self.language_edits.bridge.clone() {

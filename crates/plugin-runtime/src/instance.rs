@@ -70,6 +70,8 @@ struct State {
     declared_editor_panels: BTreeSet<String>,
     /// Auxiliary tools never gain authority to publish the whole file layout.
     declared_layout_panels: BTreeSet<String>,
+    /// Work windows bind explicitly opened documents rather than a selected preview file.
+    declared_window_panels: BTreeSet<String>,
     subscriptions: std::collections::BTreeMap<u64, crate::document_events::Subscription>,
     /// Rich events require a separate opt-in handle so older SDKs never see unknown variants.
     document_streams: std::collections::BTreeMap<u64, crate::document_stream::Subscription>,
@@ -394,7 +396,15 @@ impl Instance {
             declared_layout_panels: manifest
                 .panels
                 .iter()
-                .filter(|panel| panel.position == "editor" && !panel.auxiliary)
+                .filter(|panel| {
+                    matches!(panel.position.as_str(), "editor" | "window") && !panel.auxiliary
+                })
+                .map(|panel| panel.id.clone())
+                .collect(),
+            declared_window_panels: manifest
+                .panels
+                .iter()
+                .filter(|panel| panel.position == "window")
                 .map(|panel| panel.id.clone())
                 .collect(),
             wasi: wasi.build(),

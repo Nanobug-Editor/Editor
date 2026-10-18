@@ -135,7 +135,8 @@ impl EditorApp {
         if self.shortcut_panel.is_some() {
             return;
         }
-        self.shortcut_menu.clear();
+        self.application_menu.clear();
+        self.project_menu.clear();
         runtime::cancel(window.window_handle(), cx);
         let load_error = bootstrap::ensure(cx).err();
         runtime::sync_window_plugins(self, window.window_handle(), cx);
@@ -197,35 +198,6 @@ impl EditorApp {
             return_focus.focus(window, cx);
         }
         cx.notify();
-    }
-
-    /// Keep a discoverable pointer entry when the opening binding is removed or changed.
-    pub(crate) fn render_shortcuts_trigger(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .capture_any_mouse_down(cx.listener(|app, event: &MouseDownEvent, window, cx| {
-                if event.button == MouseButton::Left {
-                    app.shortcut_pointer_origin = Some(ShortcutOrigin::capture(app, window, cx));
-                }
-            }))
-            .child(
-                Button::new("shortcuts-trigger")
-                    .debug_selector(|| "shortcuts-trigger".into())
-                    // Long translated labels would consume the narrow title bar's drag region.
-                    // Keep the full name in native semantics and the pointer tooltip instead.
-                    .label("⌨")
-                    .accessibility_label(t!("shortcuts.title").to_string())
-                    .tooltip(t!("shortcuts.title").to_string())
-                    .small()
-                    .compact()
-                    .ghost()
-                    .on_click(cx.listener(|app, _, window, cx| {
-                        let origin = app
-                            .shortcut_pointer_origin
-                            .take()
-                            .unwrap_or_else(|| ShortcutOrigin::capture(app, window, cx));
-                        app.open_shortcuts_from(origin, window, cx);
-                    })),
-            )
     }
 }
 

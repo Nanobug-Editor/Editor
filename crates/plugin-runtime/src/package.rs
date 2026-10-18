@@ -606,9 +606,20 @@ impl Package {
                 "Invalid or duplicate panel ID"
             );
             anyhow::ensure!(
-                ["left", "right", "bottom", "editor"].contains(&panel.position.as_str()),
+                ["left", "right", "bottom", "editor", "window"].contains(&panel.position.as_str()),
                 "Unsupported dock position"
             );
+            if panel.position == "window" {
+                anyhow::ensure!(
+                    manifest.scope == plugin_protocol::api::InstanceScope::Workspace
+                        && manifest
+                            .api
+                            .as_ref()
+                            .is_some_and(|api| api.required.contains_key("ui.windows"))
+                        && manifest.permissions.contains("ui.panels"),
+                    "Native work windows require workspace scope, ui.windows and ui.panels"
+                );
+            }
             anyhow::ensure!(
                 !panel.auxiliary || panel.position == "editor",
                 "Auxiliary file tools require an editor-local contribution"

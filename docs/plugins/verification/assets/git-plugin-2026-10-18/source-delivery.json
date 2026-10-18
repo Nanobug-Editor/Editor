@@ -1,0 +1,14 @@
+{
+  "commit": "a8cd5140862d2d58e8b41d67998ba6433ee11143",
+  "tree": "c1e384a52f68de2cfcbf38f890fc01d50349b369",
+  "parent": "2b9e1548a91925493ac89f397ff1cd8c0c0380e0",
+  "reviewed_qa": "7f7b5673812a5e8db58c7d85eb7c216bf8fc6892",
+  "reviewed_tree_equal": true,
+  "branch": "codex/git-plugin-workbench",
+  "ordinary_commit": true,
+  "normal_index_expected_before": "525825cfcdee3726080fe1d128ad26829ee58146",
+  "created_at": "2026-10-18T05:22:40.5116489Z",
+  "pushed_origin": true,
+  "remote_oid_verified": "a8cd5140862d2d58e8b41d67998ba6433ee11143",
+  "remote_verified_at": "2026-10-18T05:23:02.9987351Z"
+}

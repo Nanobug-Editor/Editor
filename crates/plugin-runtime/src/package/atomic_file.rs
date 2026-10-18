@@ -50,7 +50,7 @@ pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
                 return Err(error.error).with_context(|| {
                     format!(
                         "Cannot atomically replace plugin data file {}",
-                        destination.display()
+                        platform_windows::display_path(&destination)
                     )
                 });
             }

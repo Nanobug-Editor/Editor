@@ -37,8 +37,17 @@ fn native_content_styles_require_negotiation_before_publication() {
         }
         let package = Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap();
         let directory = tempfile::tempdir().unwrap();
-        let mut manager =
-            Manager::open(directory.path().join("plugins"), Environment::default()).unwrap();
+        // Workspace-scoped view validation needs a real project; empty management only admits metadata.
+        let environment = Environment {
+            workspace: directory
+                .path()
+                .canonicalize()
+                .unwrap()
+                .display()
+                .to_string(),
+            ..Environment::default()
+        };
+        let mut manager = Manager::open(directory.path().join("plugins"), environment).unwrap();
         let result = manager.install(&package, package.manifest.permissions.clone());
         if negotiated {
             result.unwrap();
@@ -135,14 +144,26 @@ fn package(edit: impl FnOnce(&mut Value)) -> Package {
 
 /// Package mutations remain at the installed ZIP boundary rather than bypassing negotiation.
 fn package_with_ui(edit: impl FnOnce(&mut Value), edit_ui: impl FnOnce(&mut Value)) -> Package {
-    let root = test_packages::archive("capability-example");
+    package_with_ui_from("capability-example", edit, edit_ui)
+}
+
+/// Choose an explicit SDK-generation snapshot while retaining the same public install boundary.
+fn package_with_ui_from(
+    id: &str,
+    edit: impl FnOnce(&mut Value),
+    edit_ui: impl FnOnce(&mut Value),
+) -> Package {
+    let root = test_packages::archive(id);
     let mut files = Package::read(&root).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     // Each test explicitly chooses its drawing capability contract.
-    manifest["api"]["optional"]
-        .as_object_mut()
-        .unwrap()
-        .remove("ui.canvas");
+    if let Some(optional) = manifest
+        .get_mut("api")
+        .and_then(|api| api.get_mut("optional"))
+        .and_then(Value::as_object_mut)
+    {
+        optional.remove("ui.canvas");
+    }
     edit(&mut manifest);
     files.insert(
         "manifest.json".into(),

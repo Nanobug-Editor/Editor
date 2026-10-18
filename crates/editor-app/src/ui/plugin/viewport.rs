@@ -333,14 +333,17 @@ impl PluginView {
         if !self.viewport.scheduled {
             self.viewport.scheduled = true;
             let owner = cx.entity().downgrade();
+            let target_window = self.window;
             cx.defer(move |cx| {
-                let _ = owner.update(cx, |view, cx| view.flush_viewport(cx));
+                let _ = target_window.update(cx, |_, window, cx| {
+                    let _ = owner.update(cx, |view, cx| view.flush_viewport(window, cx));
+                });
             });
         }
     }
 
     /// Notification authorization is checked again after defer; withdrawn scenes cannot emit receipts.
-    fn flush_viewport(&mut self, cx: &mut Context<Self>) {
+    fn flush_viewport(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.viewport.scheduled = false;
         let Some(queued) = self.viewport.queued.take() else {
             // A withdrawn or inactive scene still ends the unacknowledged manual position.
@@ -353,10 +356,11 @@ impl PluginView {
             self.viewport.manual_pending = false;
             return;
         }
-        if self.emit_version(
+        if self.emit_version_in(
             &queued.scroll,
             queued.revision,
             Action::Viewport(queued.snapshot.position.clone()),
+            window,
             cx,
         ) {
             self.viewport.program = None;

@@ -302,13 +302,14 @@ impl EditorApp {
                             .is_none_or(|tab| native_version(tab) != target.current)
                         {
                             conflicts.push(workspace::Conflict {
-                                target: target
-                                    .current
-                                    .path
-                                    .strip_prefix(app.workspace.root())
-                                    .unwrap_or(&target.current.path)
-                                    .display()
-                                    .to_string(),
+                                target: editor_core::display_path(
+                                    target
+                                        .current
+                                        .path
+                                        .strip_prefix(app.workspace.root())
+                                        .unwrap_or(&target.current.path),
+                                )
+                                .to_string(),
                                 reason: t!("workspace_plan.document_conflict").to_string(),
                             });
                         }

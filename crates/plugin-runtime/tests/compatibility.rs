@@ -55,7 +55,14 @@ fn package_host_floor_and_optional_fallback_do_not_require_empty_wasm() {
         assert!(package.component().is_none());
         assert!(package.manifest.activation.is_default());
         let root = tempfile::tempdir().unwrap();
-        let mut manager = Manager::open(root.path().into(), Environment::default()).unwrap();
+        let mut manager = Manager::open(
+            root.path().into(),
+            Environment {
+                workspace: root.path().display().to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         manager.install(&package, Default::default()).unwrap();
         assert!(manager.live.is_empty());
         assert!(

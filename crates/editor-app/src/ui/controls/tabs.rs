@@ -11,6 +11,85 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 
+/// Document tabs keep local appearance while Base owns pointer activation and tab accessibility.
+pub(crate) fn file_tab(
+    id: String,
+    title: String,
+    selected: bool,
+    index: usize,
+    count: usize,
+) -> Tab {
+    Tab::new(ElementId::Name(id.into()))
+        .selected(selected)
+        .accessibility_label(title)
+        .set_position(index + 1, count)
+        .justify_start()
+}
+
+/// A derived document view shares local file-tab appearance and Base activation semantics.
+/// Closing it affects only that presentation; callbacks retain the source session's identity.
+pub(crate) fn comparison_tab(
+    id: String,
+    title: String,
+    selected: bool,
+    preview: bool,
+    index: usize,
+    count: usize,
+    activate: impl Fn(bool, &mut Window, &mut App) + 'static,
+    close: impl Fn(&mut Window, &mut App) + 'static,
+    cx: &App,
+) -> gpui_kit::AnyElement {
+    let styles = crate::component_styles(cx, crate::ThemeComponent::EditorTab);
+    let accent = styles.selected.border.unwrap_or(cx.theme().primary);
+    file_tab(id.clone(), title.clone(), selected, index, count)
+        .debug_selector(move || format!("comparison-tab-{index}").into())
+        .h_full()
+        .w(px(190.))
+        .flex_shrink_0()
+        .px_2()
+        .gap_2()
+        .border_r_1()
+        .border_color(cx.theme().border)
+        .when(selected, |tab| tab.border_b_1().border_color(accent))
+        .bg(if selected {
+            styles.selected.background.unwrap_or(cx.theme().background)
+        } else {
+            styles.base.background.unwrap_or(cx.theme().tab_bar)
+        })
+        .text_color(if selected {
+            accent
+        } else {
+            styles.base.foreground.unwrap_or(cx.theme().foreground)
+        })
+        .hover(|style| style.bg(styles.hover.background.unwrap_or(cx.theme().list_hover)))
+        .child(div().flex_1().min_w(px(0.)).truncate().child(title))
+        .when(preview, |tab| tab.child(preview_tab_badge(cx)))
+        .child(
+            super::Button::new(format!("close-{id}"))
+                .compact()
+                .icon(super::Icon::new(gpui_kit::component::IconName::Close))
+                .accessibility_label(rust_i18n::t!("editor.close_diff").to_string())
+                .on_click(move |_, window, cx| {
+                    cx.stop_propagation();
+                    close(window, cx);
+                }),
+        )
+        .on_click(move |event, window, cx| activate(event.click_count() == 2, window, cx))
+        .into_any_element()
+}
+
+/// A localized muted label distinguishes replaceable previews from external-file italic titles.
+/// Both themes use the local palette; the surrounding Base tab remains the interaction target.
+pub(crate) fn preview_tab_badge(cx: &App) -> impl IntoElement {
+    div()
+        .id("editor-preview-badge")
+        .debug_selector(|| "editor-preview-badge".into())
+        .flex_shrink_0()
+        .text_size(px(10.))
+        .text_color(cx.theme().muted_foreground)
+        .child(rust_i18n::t!("editor.preview_label").to_string())
+}
+
 /// Render a controlled strip of localized labels and disabled flags.
 /// The owner supplies selection and focus; changes report an enabled index only.
 /// Returns the local underline appearance over Base's tab/list semantics.

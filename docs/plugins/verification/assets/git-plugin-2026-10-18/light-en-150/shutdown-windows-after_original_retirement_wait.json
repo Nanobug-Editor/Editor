@@ -1,0 +1,9 @@
+{
+  "process_id": 28352,
+  "thread_id": 18016,
+  "gpui_windows": [],
+  "native_nonchild_windows": [],
+  "rejected_windows": 0,
+  "enumeration_error": null,
+  "phase": "after_original_retirement_wait"
+}

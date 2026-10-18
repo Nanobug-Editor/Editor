@@ -535,17 +535,21 @@ impl Instance {
                 .validate()
                 .map_err(|message| Failure::new(ErrorCode::InvalidRequest, message))?;
             self.check_tool_authority(&view.panel, &view.document)?;
-            if view
-                .document
-                .required_capabilities()
-                .contains_key("ui.styles")
-                && !self.store.data().api.capabilities.contains_key("ui.styles")
-            {
-                return Err(Failure::new(
-                    ErrorCode::CapabilityUnavailable,
-                    "Native content presentation requires ui.styles",
-                )
-                .into());
+            for (name, minimum) in view.document.required_capabilities() {
+                if !self
+                    .store
+                    .data()
+                    .api
+                    .capabilities
+                    .get(name)
+                    .is_some_and(|actual| actual >= &minimum)
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        format!("{name} {minimum} was not negotiated"),
+                    )
+                    .into());
+                }
             }
             if !view.document.content_colors.is_empty()
                 && !self
@@ -581,11 +585,42 @@ impl Instance {
                 )
                 .into());
             }
-            if view.document.source.as_ref()
-                != self
-                    .preview_sources
-                    .get(&view.panel)
-                    .and_then(Option::as_ref)
+            let work_window = self
+                .store
+                .data()
+                .declared_window_panels
+                .contains(&view.panel);
+            if work_window && let Some(source) = &view.document.source {
+                if !self.store.data().permissions.contains("editor.read") {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Document windows require editor.read",
+                    )
+                    .into());
+                }
+                if source.path.starts_with("nanobug-virtual://")
+                    && !self
+                        .store
+                        .data()
+                        .virtual_documents
+                        .values()
+                        .any(|resource| {
+                            resource.is_live() && resource.document().as_ref() == Some(source)
+                        })
+                {
+                    return Err(Failure::new(
+                        ErrorCode::InvalidHandle,
+                        "Virtual window source is not owned",
+                    )
+                    .into());
+                }
+            }
+            if !work_window
+                && view.document.source.as_ref()
+                    != self
+                        .preview_sources
+                        .get(&view.panel)
+                        .and_then(Option::as_ref)
             {
                 return Err(Failure::new(
                     ErrorCode::StaleRevision,

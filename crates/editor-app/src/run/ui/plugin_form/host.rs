@@ -96,7 +96,7 @@ impl EditorApp {
             if let Ok(Ok(Some(paths))) = receiver.await {
                 let value = paths
                     .iter()
-                    .map(|path| path.display().to_string())
+                    .map(|path| editor_core::display_path(path).to_string())
                     .collect::<Vec<_>>()
                     .join("\n");
                 let _ = app.update(cx, |app, cx| {

@@ -415,7 +415,8 @@ impl std::fmt::Display for RunConfigError {
             Self::DirectoryTooLong => write!(formatter, "Working directory is too long"),
             Self::InvalidSharedPath { path } => write!(
                 formatter,
-                "Shared path must be project-relative or use ${{workspace}}: {path}"
+                "Shared path must be project-relative or use ${{workspace}}: {}",
+                crate::display_path(std::path::Path::new(path))
             ),
             Self::InvalidBreakpoint(error) => write!(formatter, "Invalid breakpoint: {error}"),
             Self::TooManyEnvEntries => {
@@ -431,7 +432,11 @@ impl std::fmt::Display for RunConfigError {
                 write!(formatter, "Too many tool directories for one configuration")
             }
             Self::InvalidToolPath { path } => {
-                write!(formatter, "Invalid tool directory: {path}")
+                write!(
+                    formatter,
+                    "Invalid tool directory: {}",
+                    crate::display_path(std::path::Path::new(path))
+                )
             }
             Self::TooManySteps => write!(formatter, "Too many build or pre-launch steps"),
             Self::EmptyStepName => write!(formatter, "A build or pre-launch step needs a name"),

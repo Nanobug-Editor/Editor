@@ -80,31 +80,17 @@ fn project_windows_open_new_project_and_reuse_the_same_directory(cx: &mut TestAp
                 })
                 .unwrap();
         });
-        // Home requests share one native home and the application-owned recent list.
-        visual.dispatch_action(crate::app::projects::ShowHome);
-        visual.run_until_parked();
-        assert_eq!(visual.update(|_, cx| cx.windows().len()), 3);
-        second.dispatch_action(crate::app::projects::ShowHome);
+        // Project management now opens the local dropdown and never creates another root.
+        click(visual, "project-show-home");
+        assert_eq!(window_count(visual), 2);
+        assert!(visual.debug_bounds("project-search").is_some());
+        click(&mut second, "project-show-home");
+        assert_eq!(window_count(&second), 2);
+        assert!(second.debug_bounds("project-search").is_some());
+        second.simulate_keystrokes("escape");
         second.run_until_parked();
-        assert_eq!(second.update(|_, cx| cx.windows().len()), 3);
-        let home_handle = second.update(|_, cx| {
-            cx.windows()
-                .into_iter()
-                .find(|entry| {
-                    entry.window_id() != second_window.window_id()
-                        && entry.window_id() != visual.window_handle().window_id()
-                })
-                .unwrap()
-        });
-        let mut home = VisualTestContext::from_window(home_handle, &visual.cx);
-        home.run_until_parked();
-        assert!(
-            home.debug_bounds("project-recent-0").is_some()
-                && home.debug_bounds("project-recent-1").is_some()
-        );
-        home.dispatch_action(crate::app::projects::CloseWindow);
-        home.run_until_parked();
-        assert_eq!(second.update(|_, cx| cx.windows().len()), 2);
+        visual.simulate_keystrokes("escape");
+        visual.run_until_parked();
         visual.dispatch_action(crate::app::projects::CloseWindow);
         visual.run_until_parked();
         click(visual, "project-close-discard");
@@ -206,10 +192,9 @@ fn project_windows_quit_cancel_retains_every_editor_and_revalidates_new_input(
         edit(visual, &first, "A pending");
         edit(&mut second, &next, "B pending");
         // Application quit takes over an already visible local close prompt, including its cancellation route.
-        click(visual, "project-close-project");
+        request_close_project(visual);
         assert!(visual.debug_bounds("project-close-discard").is_some());
-        second.dispatch_action(crate::extensions::QuitEditor);
-        second.run_until_parked();
+        click(&mut second, "project-quit-application");
         visual.run_until_parked();
         click(visual, "project-decision-cancel");
         assert!(
@@ -217,8 +202,7 @@ fn project_windows_quit_cancel_retains_every_editor_and_revalidates_new_input(
             "cancelling the adopted prompt must cancel the whole application round"
         );
         assert_eq!(visual.update(|_, cx| cx.windows().len()), 2);
-        visual.dispatch_action(crate::extensions::QuitEditor);
-        visual.run_until_parked();
+        click(visual, "project-quit-application");
         click(visual, "project-close-discard");
         assert_eq!(
             visual.cx.update(|cx| cx.windows().len()),
@@ -235,8 +219,7 @@ fn project_windows_quit_cancel_retains_every_editor_and_revalidates_new_input(
             second.update(|_, cx| next.read(cx).editor.read(cx).value().to_string()),
             "B pending"
         );
-        visual.dispatch_action(crate::extensions::QuitEditor);
-        visual.run_until_parked();
+        click(visual, "project-quit-application");
         click(visual, "project-close-discard");
         // Input in a previously approved window invalidates that consent before all cleanup begins.
         edit(visual, &first, "A newer input");
@@ -262,8 +245,7 @@ fn project_windows_quit_cancel_retains_every_editor_and_revalidates_new_input(
                 .share_mode(1)
                 .open(&path)
                 .unwrap();
-            visual.dispatch_action(crate::extensions::QuitEditor);
-            visual.run_until_parked();
+            click(visual, "project-quit-application");
             click(visual, "project-close-discard");
             click(&mut second, "project-close-discard");
             assert_eq!(
@@ -275,8 +257,7 @@ fn project_windows_quit_cancel_retains_every_editor_and_revalidates_new_input(
             drop(lock);
         }
         // A final successful retry saves A explicitly and discards B only after both decisions have been accepted.
-        visual.dispatch_action(crate::extensions::QuitEditor);
-        visual.run_until_parked();
+        click(visual, "project-quit-application");
         click(visual, "project-close-save");
         click(&mut second, "project-close-discard");
         assert!(visual.cx.update(|cx| cx.windows().is_empty()));

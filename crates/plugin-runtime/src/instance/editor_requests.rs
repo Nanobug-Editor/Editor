@@ -33,6 +33,49 @@ impl State {
                 "Deadline must be between 1 and 300000 ms",
             ));
         }
+        for (needed, capability) in [
+            (
+                matches!(&operation, EditorOperation::OpenVirtualSource { .. }),
+                "editor.virtual",
+            ),
+            (
+                matches!(&operation, EditorOperation::OpenDocumentComparison { .. }),
+                "editor.diff",
+            ),
+        ] {
+            if needed
+                && self
+                    .api
+                    .capabilities
+                    .get(capability)
+                    .is_none_or(|version| *version < semver::Version::new(1, 1, 0))
+            {
+                return Err(Failure::new(
+                    ErrorCode::CapabilityUnavailable,
+                    format!("Operation requires {capability} 1.1"),
+                ));
+            }
+        }
+        if let EditorOperation::OpenDocumentComparison { key, title, .. } = &operation {
+            if key.is_empty()
+                || key.len() > 128
+                || key.chars().any(char::is_control)
+                || title.is_empty()
+                || title.len() > 256
+                || title.chars().any(char::is_control)
+            {
+                return Err(Failure::new(
+                    ErrorCode::InvalidRequest,
+                    "Invalid comparison key or title",
+                ));
+            }
+            if self.plugin_services.context.is_some() {
+                return Err(Failure::new(
+                    ErrorCode::PermissionDenied,
+                    "Comparison views require direct ownership",
+                ));
+            }
+        }
         if matches!(&operation, EditorOperation::ApplyEdits { .. })
             && self
                 .api
@@ -78,8 +121,10 @@ impl State {
             EditorOperation::Workspace { .. } => ("workspace.files", ""),
             EditorOperation::Decorations { .. } => ("editor.decorations", "editor.read"),
             EditorOperation::OpenVirtualDocument { .. }
+            | EditorOperation::OpenVirtualSource { .. }
             | EditorOperation::RefreshVirtualDocument { .. } => ("editor.virtual", "editor.read"),
-            EditorOperation::CompareDocuments { .. } => ("editor.diff", "editor.read"),
+            EditorOperation::CompareDocuments { .. }
+            | EditorOperation::OpenDocumentComparison { .. } => ("editor.diff", "editor.read"),
             EditorOperation::OpenDocument {
                 resource: api::ResourceIdentity::Virtual { .. },
             } => ("editor.virtual", "editor.read"),
@@ -386,6 +431,11 @@ impl State {
                 title,
                 language,
                 text,
+            }
+            | EditorOperation::OpenVirtualSource {
+                title,
+                language,
+                text,
             } => {
                 if self.plugin_services.context.is_some() {
                     return Err(Failure::new(
@@ -467,7 +517,8 @@ impl State {
             | EditorOperation::ReadDocumentSelection { document }
             | EditorOperation::ReplaceDocumentRange { document, .. }
             | EditorOperation::ApplyEdits { document, .. } => check(document),
-            EditorOperation::CompareDocuments { left, right } => {
+            EditorOperation::CompareDocuments { left, right }
+            | EditorOperation::OpenDocumentComparison { left, right, .. } => {
                 check(left)?;
                 check(right)?;
                 Ok(None)
@@ -612,6 +663,7 @@ impl Instance {
                     if matches!(
                         pending.call.operation(),
                         EditorOperation::OpenVirtualDocument { .. }
+                            | EditorOperation::OpenVirtualSource { .. }
                     ) && !matches!(&update, api::RequestUpdate::Completed { result: Ok(_) })
                     {
                         if let Some(resource) = pending.call.virtual_document() {

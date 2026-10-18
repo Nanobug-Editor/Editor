@@ -60,6 +60,53 @@ impl Selection {
 }
 
 impl ExtensionPanel {
+    /// A profile-only actor cancels installation and acknowledges retirement without closing any project.
+    pub(crate) fn shutdown_management(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Task<Result<(), String>> {
+        self.worker.cancel_installation();
+        let worker = self.worker.clone();
+        let receipt = worker.request_shutdown();
+        cx.background_executor().spawn(async move {
+            match receipt?.await {
+                Ok(result) => result,
+                Err(_)
+                    if worker
+                        .shutdown_complete
+                        .load(std::sync::atomic::Ordering::Acquire) =>
+                {
+                    Ok(())
+                }
+                Err(error) => Err(error.to_string()),
+            }
+        })
+    }
+    /// Global and project roots use the same manager lifecycle and freshness policy.
+    pub(crate) fn open_manager(&mut self, cx: &mut Context<Self>) {
+        let needs_refresh = {
+            let state = self.worker.state.lock().unwrap();
+            !state.market.refreshing
+                && (!state.market.fresh()
+                    || self.market_view.needs_check(std::time::Instant::now()))
+        };
+        if needs_refresh {
+            self.refresh_online_market();
+        }
+        if !self.manager_open {
+            self.manager_detail_tab = DetailTab::Overview;
+            self.manager_log_view = None;
+            self.manager_detail_scroll.set_offset(Default::default());
+        }
+        self.manager_open = true;
+        cx.notify();
+    }
+    /// Closing the native manager withdraws only its viewing state, not other project resources.
+    pub(crate) fn close_manager(&mut self, cx: &mut Context<Self>) {
+        self.manager_open = false;
+        self.manager_log_view = None;
+        cx.notify();
+    }
     /// Install and destructive lifecycle actions have explicit, reviewable native controls.
     pub(super) fn manager(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         if self.manager_search.is_none() {
@@ -239,6 +286,13 @@ impl ExtensionPanel {
         for (id, name, version) in &choices {
             let row_id = id.clone();
             let selected = selected_id.as_ref() == Some(id);
+            let upgrade = snapshot.state.catalog.as_ref().and_then(|catalog| {
+                catalog
+                    .plugins
+                    .iter()
+                    .find(|listing| &listing.id == id)
+                    .and_then(|listing| self.market_upgrade(listing))
+            });
             list = list.child(
                 // Local Base buttons retain pointer, keyboard and accessibility behavior in both lists.
                 Button::new(SharedString::from(format!("plugin-row-{id}")))
@@ -269,6 +323,25 @@ impl ExtensionPanel {
                             .items_center()
                             .text_size(cx.theme().font_size)
                             .child(div().flex_1().min_w(px(0.)).truncate().child(name.clone()))
+                            .when_some(upgrade, |row, upgrade| {
+                                row.child(
+                                    div()
+                                        .debug_selector({
+                                            let id = id.clone();
+                                            move || format!("plugin-row-{id}-update")
+                                        })
+                                        .flex_shrink_0()
+                                        .text_xs()
+                                        .text_color(cx.theme().primary)
+                                        .child(
+                                            t!(
+                                                "plugins.update_to_version",
+                                                version = upgrade.version.clone()
+                                            )
+                                            .to_string(),
+                                        ),
+                                )
+                            })
                             .child(
                                 div()
                                     .text_xs()
@@ -356,27 +429,29 @@ impl ExtensionPanel {
                     Button::new("market-refresh")
                         .debug_selector(|| "market-refresh".into())
                         .label(t!("plugins.market_refresh").to_string())
-                        .disabled(snapshot.state.refreshing)
+                        .loading(snapshot.state.refreshing)
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.refresh_online_market();
                             cx.notify();
                         })),
                 )
             })
-            .child(
-                div()
-                    .px_2()
-                    .py_1()
-                    .border_t_1()
-                    .border_color(cx.theme().sidebar_border)
-                    .child(
-                        Button::new("install-local-plugin")
-                            .debug_selector(|| "install-local-plugin".into())
-                            .label(t!("plugins.install_local").to_string())
-                            .disabled(busy)
-                            .on_click(cx.listener(|this, _, _, cx| this.choose_package(cx))),
-                    ),
-            );
+            .when(!busy, |sidebar| {
+                sidebar.child(
+                    div()
+                        .px_2()
+                        .py_1()
+                        .border_t_1()
+                        .border_color(cx.theme().sidebar_border)
+                        .child(
+                            Button::new("install-local-plugin")
+                                .debug_selector(|| "install-local-plugin".into())
+                                .label(t!("plugins.install_local").to_string())
+                                .disabled(busy)
+                                .on_click(cx.listener(|this, _, _, cx| this.choose_package(cx))),
+                        ),
+                )
+            });
         let detail = self.manager_details(&selection, &snapshot, cx);
         h_flex()
             .id("runtime-plugin-manager")

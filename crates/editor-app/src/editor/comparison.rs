@@ -1,10 +1,28 @@
 //! Bounded document comparison over the existing native editor sessions.
 
+use crate::ui::controls::aligned_editor::{AlignmentGroup, AlignmentPane, AlignmentStatus};
 use crate::*;
 use gpui_base::TestSupportExt as _;
 use gpui_base::input::{RangeDecoration, RangeDecorationCollection, RangeDecorationStyle};
 use gpui_kit::Hsla;
 use plugin_runtime::plugin_protocol::api;
+mod presentation;
+mod sessions;
+pub(crate) use sessions::ComparisonView;
+
+/// Share only bounded immutable byte intervals with native comparison consumers. Editor ownership,
+/// presentation and lifecycle stay private to their callers; no document text or mutable state leaks.
+pub(crate) fn changed_byte_ranges(
+    left: &str,
+    right: &str,
+) -> Result<Vec<[std::ops::Range<usize>; 2]>, ()> {
+    diff::compare(left, right).map(|hunks| {
+        hunks
+            .into_iter()
+            .map(|hunk| [hunk.left, hunk.right])
+            .collect()
+    })
+}
 
 /// Own only comparison decorations and the temporary left-pane input restriction.
 pub(crate) struct DocumentComparison {
@@ -19,9 +37,21 @@ pub(crate) struct DocumentComparison {
     right_title: String,
     left_marks: RangeDecorationCollection,
     right_marks: RangeDecorationCollection,
+    inline_marks: [RangeDecorationCollection; 2],
     // Immutable byte ranges are sufficient to recolor live comparisons; text stays in EditorState.
     hunks: Vec<diff::Hunk>,
     colors: [Hsla; 3],
+    /// Only the additive file-bound API retains a view across edits and tab switches.
+    persistent: Option<String>,
+    /// Only immutable derived unified text is cached; it can never edit either source.
+    unified_editor: Option<Entity<EditorState>>,
+    unified_marks: Option<RangeDecorationCollection>,
+    unified_hunks: Vec<std::ops::Range<usize>>,
+    /// Alignment shares immutable row geometry while both EditorStates retain their sessions.
+    alignment: AlignmentGroup,
+    synchronized: Cell<bool>,
+    /// Independent-mode navigation uses measured native viewports and never changes selection.
+    navigation: Rc<std::cell::RefCell<[Option<crate::editor::viewport::Locator>; 2]>>,
 }
 
 /// Resolve deletion, insertion and modification colors from the current local theme.
@@ -31,6 +61,37 @@ fn comparison_colors(cx: &App) -> [Hsla; 3] {
         cx.theme().success.opacity(0.20),
         cx.theme().warning.opacity(0.20),
     ]
+}
+
+/// Refreshes source revisions without replacing native entities or their selection/history.
+fn configure_alignment(comparison: &mut DocumentComparison, window: &Window, cx: &mut App) {
+    let Some(router) = crate::ui::controls::aligned_pointer::for_window(window, cx) else {
+        return;
+    };
+    let _ = comparison.alignment.configure(
+        vec![
+            AlignmentPane {
+                editor: comparison.left_editor.clone(),
+                revision: comparison.left.revision,
+                label: comparison.left_title.clone(),
+                input_factory: None,
+                // PaneView supplies local appearance and the sole physical readonly a11y node.
+                native_authority_factory: None,
+            },
+            AlignmentPane {
+                editor: comparison.right_editor.clone(),
+                revision: comparison.right.revision,
+                label: comparison.right_title.clone(),
+                input_factory: None,
+                native_authority_factory: None,
+            },
+        ],
+        &router,
+        cx,
+    );
+    comparison
+        .alignment
+        .set_enabled(comparison.synchronized.get(), cx);
 }
 
 /// Build only this comparison's owner ranges; unrelated diagnostics and marks remain untouched.
@@ -66,6 +127,26 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<api::EditorValue, api::Failure> {
+        self.install_document_comparison(
+            left,
+            right,
+            request.authority().clone(),
+            Some(request),
+            window,
+            cx,
+        )
+    }
+
+    /// Native tab activation can reuse already admitted ownership without forging another request.
+    fn install_document_comparison(
+        &mut self,
+        left: &api::DocumentVersion,
+        right: &api::DocumentVersion,
+        authority: plugin_runtime::EditorAuthority,
+        request: Option<&plugin_runtime::EditorRequest>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<api::EditorValue, api::Failure> {
         let locate = |target: &api::DocumentVersion| {
             (0..self.tabs.len()).find(|index| {
                 self.plugin_document_version(*index)
@@ -88,6 +169,14 @@ impl EditorApp {
             return Err(api::Failure::new(
                 api::ErrorCode::InvalidRequest,
                 "Comparison requires distinct sessions",
+            ));
+        }
+        if self.plugin_window_mounts.contains_key(&left.id)
+            || self.plugin_window_mounts.contains_key(&right.id)
+        {
+            return Err(api::Failure::new(
+                api::ErrorCode::Conflict,
+                "A comparison source is mounted in another work window",
             ));
         }
         let live = |index: usize| {
@@ -144,7 +233,7 @@ impl EditorApp {
             )
         })?;
         // Expensive pure comparison is cancellable until native focus/decorations actually change.
-        if !request.authority().is_live() || !request.enter_side_effect() {
+        if !authority.is_live() || request.is_some_and(|request| !request.enter_side_effect()) {
             return Err(api::Failure::new(
                 api::ErrorCode::Cancelled,
                 "Comparison did not execute",
@@ -172,8 +261,10 @@ impl EditorApp {
         let right_marks = right_editor.update(cx, |editor, cx| {
             editor.create_range_decorations_collection(comparison_marks(&hunks, colors, false), cx)
         });
-        self.document_comparison = Some(DocumentComparison {
-            authority: request.authority().clone(),
+        let inline_marks =
+            presentation::create_inline_marks(&left_editor, &right_editor, &hunks, cx);
+        let mut comparison = DocumentComparison {
+            authority,
             left: left.clone(),
             right: right.clone(),
             left_editor,
@@ -183,9 +274,19 @@ impl EditorApp {
             right_title: self.tabs[ri].title(),
             left_marks,
             right_marks,
+            inline_marks,
             hunks,
             colors,
-        });
+            persistent: None,
+            unified_editor: None,
+            unified_marks: None,
+            unified_hunks: Vec::new(),
+            alignment: AlignmentGroup::new(cx),
+            synchronized: Cell::new(true),
+            navigation: Rc::new(std::cell::RefCell::new([None, None])),
+        };
+        configure_alignment(&mut comparison, window, cx);
+        self.document_comparison = Some(comparison);
         self.editor_panel.update(cx, |_, cx| cx.notify());
         cx.notify();
         Ok(api::EditorValue::DocumentsCompared {
@@ -196,6 +297,8 @@ impl EditorApp {
 
     /// Invalidate changed versions/authority, returning keys only from a pane being unmounted.
     pub(crate) fn sync_document_comparison(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_comparison_views(window, cx);
+        self.refresh_persistent_comparison(window, cx);
         if !self.document_comparison_is_current() {
             // Dismiss the popup while its previous left focus is still mounted, then reuse
             // the same selective repair as direct keyboard focus on the retired pane.
@@ -233,6 +336,8 @@ impl EditorApp {
                 .right_marks
                 .set(comparison_marks(&comparison.hunks, colors, false), cx);
             comparison.colors = colors;
+            presentation::refresh_inline_marks(comparison, cx);
+            self.prepare_unified_comparison(window, cx);
         }
     }
 
@@ -252,6 +357,8 @@ impl EditorApp {
             })
         };
         comparison.authority.is_live()
+            && !self.plugin_window_mounts.contains_key(&comparison.left.id)
+            && !self.plugin_window_mounts.contains_key(&comparison.right.id)
             && live(&comparison.left)
             && live(&comparison.right)
             && self.active_tab_index().is_some_and(|index| {
@@ -260,11 +367,37 @@ impl EditorApp {
             })
     }
 
+    /// Exposes current split-view geometry to native consumers without lending an unmounted or
+    /// stale source projection. Unified mode owns its separate immutable display geometry.
+    pub(crate) fn comparison_alignment(&self) -> Option<&AlignmentGroup> {
+        if !self.document_comparison_is_current()
+            || self.active_comparison.as_ref().is_some_and(|id| {
+                self.comparison_views
+                    .iter()
+                    .any(|view| &view.id == id && view.unified)
+            })
+        {
+            return None;
+        }
+        self.document_comparison
+            .as_ref()
+            .map(|comparison| &comparison.alignment)
+    }
+
     /// Dispose only our owners; diagnostics and other editor decorations survive closure.
     pub(crate) fn close_document_comparison(&mut self, cx: &mut Context<Self>) {
         if let Some(comparison) = self.document_comparison.take() {
+            // A closed comparison cannot be revived by retained paint/input callbacks. Retirement
+            // releases its row budget immediately while the pointer router finishes old gestures.
+            comparison.alignment.retire(cx);
             comparison.left_marks.dispose(cx);
             comparison.right_marks.dispose(cx);
+            for marks in comparison.inline_marks {
+                marks.dispose(cx);
+            }
+            if let Some(marks) = comparison.unified_marks {
+                marks.dispose(cx);
+            }
             comparison.left_editor.update(cx, |editor, cx| {
                 editor.set_readonly(comparison.left_readonly, cx)
             });
@@ -278,6 +411,7 @@ impl EditorApp {
         self.document_comparison.as_ref().is_some_and(|comparison| {
             [&comparison.left_editor, &comparison.right_editor]
                 .into_iter()
+                .chain(comparison.unified_editor.as_ref())
                 .any(|editor| {
                     !editor.read(cx).presentation().is_editable()
                         && editor
@@ -288,7 +422,7 @@ impl EditorApp {
         })
     }
 
-    /// Render each existing entity once, with independent native scrolling and local appearance.
+    /// Render one source frame per side over shared alignment geometry and the original sessions.
     pub(crate) fn render_document_comparison(
         &self,
         window: &mut Window,
@@ -299,6 +433,35 @@ impl EditorApp {
             return None;
         }
         let comparison = self.document_comparison.as_ref()?;
+        comparison
+            .alignment
+            .set_enabled(comparison.synchronized.get(), cx);
+        comparison.alignment.refresh_native_overlays(cx);
+        if self.active_comparison.as_ref().is_some_and(|id| {
+            self.comparison_views
+                .iter()
+                .any(|view| &view.id == id && view.unified)
+        }) {
+            if let Some(editor) = &comparison.unified_editor {
+                let body = crate::ui::controls::readonly_editor(
+                    "unified-diff",
+                    t!("editor.diff_unified").to_string(),
+                    editor,
+                    window,
+                    cx,
+                );
+                return Some(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .size_full()
+                        .min_h_0()
+                        .child(self.comparison_toolbar(cx))
+                        .child(div().flex_1().min_h_0().child(body))
+                        .into_any_element(),
+                );
+            }
+        }
         let left = comparison.left_editor.clone();
         let left_title = comparison.left_title.clone();
         let right_title = comparison.right_title.clone();
@@ -309,37 +472,33 @@ impl EditorApp {
             t!("editor.readonly_label")
         );
         let right_label = format!("{} · {}", t!("editor.diff_right"), right_title);
-        let left_input = crate::ui::controls::readonly_editor(
-            "document-diff-left-input",
-            left_label.clone(),
-            &left,
-            window,
-            cx,
-        );
-        let right = self.render_native_editor(window, cx);
+        let alignment = self.comparison_alignment()?;
+        let left_input = alignment.pane(0).unwrap_or_else(|| {
+            crate::ui::controls::readonly_editor(
+                "document-diff-left-input",
+                left_label.clone(),
+                &left,
+                window,
+                cx,
+            )
+        });
+        let right = self.render_native_editor_aligned(alignment, 1, window, cx);
         let menu_target = self.plugin_document_menu_target(&comparison.left);
         let left_focus = left.clone();
+        let left_projection = comparison.alignment.clone();
+        let navigation = comparison.navigation.clone();
+        let sources = [
+            comparison.left_editor.clone(),
+            comparison.right_editor.clone(),
+        ];
         Some(
             div()
+                .relative()
                 .flex()
                 .flex_col()
                 .size_full()
                 .min_h_0()
-                .child(
-                    div().flex().justify_end().child(
-                        Button::new("close-document-diff")
-                            .label(t!("editor.close_diff").to_string())
-                            .accessibility_label(t!("editor.close_diff").to_string())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_plugin_document_menu(window, cx);
-                                this.close_document_comparison(cx);
-                                // An explicit Close always returns keys to the current document;
-                                // automatic invalidation does so only for an unmounted focused pane.
-                                this.editor
-                                    .update(cx, |editor, cx| editor.focus(window, cx));
-                            })),
-                    ),
-                )
+                .child(self.comparison_toolbar(cx))
                 .child(
                     div()
                         .flex()
@@ -353,6 +512,7 @@ impl EditorApp {
                                 .debug_selector(|| "document-diff-left".into())
                                 // Admit host document shortcuts even inside the panel's PluginSurface.
                                 .key_context("NativeEditorSource")
+                                .relative()
                                 .capture_any_mouse_down(cx.listener(
                                     move |this, event: &MouseDownEvent, window, cx| {
                                         if event.button == MouseButton::Right {
@@ -362,7 +522,16 @@ impl EditorApp {
                                                 .update(cx, |editor, cx| editor.focus(window, cx));
                                             this.open_plugin_document_menu(
                                                 menu_target.clone(),
-                                                event.position,
+                                                left_projection
+                                                    .project_bounds(
+                                                        0,
+                                                        Bounds::new(
+                                                            event.position,
+                                                            size(px(1.), px(1.)),
+                                                        ),
+                                                        cx,
+                                                    )
+                                                    .map_or(event.position, |bounds| bounds.origin),
                                                 window,
                                                 cx,
                                             );
@@ -390,6 +559,7 @@ impl EditorApp {
                                 .aria_label(right_label)
                                 .test_support()
                                 .debug_selector(|| "document-diff-right".into())
+                                .relative()
                                 .flex()
                                 .flex_col()
                                 .flex_1()
@@ -403,6 +573,21 @@ impl EditorApp {
                                 )))
                                 .child(right),
                         ),
+                )
+                .child(
+                    gpui_kit::canvas(
+                        |_, _, _| (),
+                        move |_, _, window, cx| {
+                            presentation::navigate_native_viewports(
+                                &navigation,
+                                &sources,
+                                window,
+                                cx,
+                            );
+                        },
+                    )
+                    .absolute()
+                    .size_full(),
                 )
                 .into_any_element(),
         )

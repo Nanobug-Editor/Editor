@@ -290,7 +290,7 @@ impl EditorApp {
                 }
                 panel.update(cx, |panel, cx| {
                     if panel.visible.get() {
-                        panel.hide();
+                        panel.hide(cx);
                     } else {
                         panel.show(window, cx);
                     }

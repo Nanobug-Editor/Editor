@@ -1,5 +1,6 @@
 //! Owns window chrome, dock panels, settings UI, and shell rendering.
 
+pub(super) use crate::ui::controls::window::title_bar_window_control;
 use crate::*;
 
 /// Share one document scope between default keys and unbound shortcut metadata.
@@ -75,60 +76,6 @@ impl Drop for WindowsTimerResolution {
             }
         }
     }
-}
-
-/// Draws the same window glyph and native control region as GPUI Kit's TitleBar.
-pub(super) fn title_bar_window_control(
-    id: &'static str,
-    icon: IconName,
-    area: WindowControlArea,
-    close: bool,
-    cx: &App,
-) -> impl IntoElement {
-    let hover_foreground = if close {
-        cx.theme().danger_foreground
-    } else {
-        cx.theme().secondary_foreground
-    };
-    let hover_background = if close {
-        cx.theme().danger
-    } else {
-        cx.theme().secondary_hover
-    };
-    let active_background = if close {
-        cx.theme().danger_active
-    } else {
-        cx.theme().secondary_active
-    };
-    div()
-        .id(id)
-        .flex()
-        .w(px(34.))
-        .h_full()
-        .flex_shrink_0()
-        .justify_center()
-        .content_center()
-        .items_center()
-        .text_color(cx.theme().foreground)
-        .hover(|style| style.bg(hover_background).text_color(hover_foreground))
-        .active(|style| style.bg(active_background).text_color(hover_foreground))
-        .when(cfg!(target_os = "windows"), |this| {
-            this.window_control_area(area)
-        })
-        .when(!cfg!(target_os = "windows"), |this| {
-            this.on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                match area {
-                    WindowControlArea::Min => window.minimize_window(),
-                    WindowControlArea::Max => window.zoom_window(),
-                    WindowControlArea::Close => {
-                        window.dispatch_action(Box::new(app::projects::CloseWindow), cx)
-                    }
-                    WindowControlArea::Drag => {}
-                }
-            })
-        })
-        .child(Icon::new(icon).small())
 }
 
 #[derive(Clone, Copy)]
@@ -330,6 +277,7 @@ impl EditorApp {}
 
 impl Render for EditorApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.dark_theme = cx.theme().is_dark();
         if self.provider_generation != self.providers.feature_generation() && !self.shutting_down {
             self.sync_dynamic_languages(cx);
         }
@@ -354,6 +302,7 @@ impl Render for EditorApp {
         self.sync_plugin_documents(cx);
         self.sync_dynamic_language_servers(cx);
         self.sync_run_controls(window, cx);
+        self.sync_project_menu(window, cx);
         self.dispatch_editor_requests(window, cx);
         self.sync_plugin_document_menu(window, cx);
         self.sync_document_comparison(window, cx);
@@ -365,7 +314,6 @@ impl Render for EditorApp {
         let cursor = self.editor.read(cx).cursor_position();
 
         let shell_style = component_styles(cx, ThemeComponent::AppShell).base;
-        let title_bar_style = component_styles(cx, ThemeComponent::WindowTitleBar).base;
         let status_style = component_styles(cx, ThemeComponent::StatusBar).base;
         // Observe the exact entry chosen for this frame before confirmation can rebuild the same severity later.
         let plugin_indicator = self.plugin_indicator(cx);
@@ -429,9 +377,9 @@ impl Render for EditorApp {
             .on_action(
                 cx.listener(|this, _: &app::projects::ShowHome, window, cx| {
                     if let Some(owner) = this.project_window.clone() {
-                        window.defer(cx, move |_, cx| {
+                        window.defer(cx, move |window, cx| {
                             let _ = owner.update(cx, |host, cx| {
-                                host.show_home(cx);
+                                host.show_home(window, cx);
                             });
                         });
                     }
@@ -483,29 +431,16 @@ impl Render for EditorApp {
             .bg(shell_style.background.unwrap_or(cx.theme().background))
             .text_color(shell_style.foreground.unwrap_or(cx.theme().foreground))
             .child(
-                h_flex()
-                    .id("custom-title-bar")
-                    .w_full()
-                    .h(px(34.))
-                    .items_center()
-                    .bg(title_bar_style.background.unwrap_or(cx.theme().tab_bar))
-                    .text_color(title_bar_style.foreground.unwrap_or(cx.theme().foreground))
-                    .text_size(px(title_bar_style.font_size_px.unwrap_or(14.)))
-                    .border_b_1()
-                    .border_color(title_bar_style.border.unwrap_or(cx.theme().border))
+                crate::ui::controls::window::editor_title_bar(cx)
                     .child(
                         h_flex()
                             .h_full()
                             .items_center()
                             .gap_2()
                             .px_3()
-                            .child(
-                                // Preserve the supplied mark's color in both editor themes.
-                                gpui_kit::img(assets::APP_ICON_PATH)
-                                    .size(px(24.))
-                                    .flex_shrink_0(),
-                            )
-                            .child(div().text_sm().font_semibold().child(app::APP_NAME)),
+                            // Keep the dropdown outside the native drag region so its button owns input.
+                            .child(self.render_application_menu_trigger(cx))
+                            .child(self.render_project_menu_trigger(cx)),
                     )
                     .child(
                         div()
@@ -532,61 +467,6 @@ impl Render for EditorApp {
                     .child(self.render_run_controls(cx))
                     .child(self.render_extensions_button(cx))
                     .child(self.render_settings_dialog(cx))
-                    .child(self.render_shortcuts_trigger(cx))
-                    .child(self.render_shortcuts_menu_trigger(cx))
-                    .when(self.project_window.is_some(), |bar| {
-                        let owner = self.project_window.clone().unwrap();
-                        bar.child(
-                            Button::new("project-open-another")
-                                .debug_selector(|| "project-open-another".into())
-                                .small()
-                                .ghost()
-                                .label(t!("projects.open_folder").to_string())
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(Box::new(app::projects::OpenFolder), cx)
-                                }),
-                        )
-                        .child(
-                            Button::new("project-show-home")
-                                .debug_selector(|| "project-show-home".into())
-                                .small()
-                                .ghost()
-                                .label(t!("projects.home").to_string())
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(Box::new(app::projects::ShowHome), cx)
-                                }),
-                        )
-                        .child(
-                            Button::new("project-close-project")
-                                .debug_selector(|| "project-close-project".into())
-                                .small()
-                                .ghost()
-                                .label(t!("projects.close_project").to_string())
-                                .accessibility_label(t!("projects.close_project").to_string())
-                                .on_click(move |_, window, cx| {
-                                    let owner = owner.clone();
-                                    window.defer(cx, move |window, cx| {
-                                        let _ = owner.update(cx, |host, cx| {
-                                            host.request_close(
-                                                app::projects::CloseIntent::Home,
-                                                window,
-                                                cx,
-                                            );
-                                        });
-                                    });
-                                }),
-                        )
-                        .child(
-                            Button::new("project-quit-application")
-                                .debug_selector(|| "project-quit-application".into())
-                                .small()
-                                .ghost()
-                                .label(t!("projects.quit_application").to_string())
-                                .on_click(|_, window, cx| {
-                                    window.dispatch_action(Box::new(extensions::QuitEditor), cx)
-                                }),
-                        )
-                    })
                     .child(self.render_window_controls(window, cx)),
             )
             .child(h_flex().flex_1().min_h_0().child(self.dock_area.clone()))
@@ -601,16 +481,10 @@ impl Render for EditorApp {
                     .child(
                         StatusBar::new()
                             .left(self.render_plugin_toolbar(explorer_panel_icon(cx), window, cx))
-                            // Persistent document indicators stay in the footer; operation notices live in host messages.
-                            .when(
-                                self.active_text_tab_index().is_some()
-                                    && self
-                                        .editor
-                                        .read(cx)
-                                        .diagnostics()
-                                        .is_some_and(|set| !set.is_empty()),
-                                |bar| bar.right(self.render_syntax_error_indicator(cx)),
-                            )
+                            // Any open file may contribute; an entirely empty projection has no counter entry.
+                            .when_some(self.render_syntax_error_indicator(cx), |bar, indicator| {
+                                bar.right(indicator)
+                            })
                             // Keep plugin indicators immediately before the cursor position.
                             .when_some(plugin_indicator, |bar, kind| {
                                 bar.right(self.render_plugin_indicator(kind, cx))
@@ -631,9 +505,10 @@ impl Render for EditorApp {
             .when_some(self.shortcut_panel.as_ref(), |shell, panel| {
                 shell.child(panel.clone())
             })
-            .when_some(self.render_shortcuts_menu(), |shell, menu| {
+            .when_some(self.render_application_menu(), |shell, menu| {
                 shell.child(menu)
             })
+            .when_some(self.render_project_menu(), |shell, menu| shell.child(menu))
             // A pending leave decision covers the shell until the user keeps or stops the sessions.
             .when_some(self.render_leave_confirmation(cx), |shell, confirm| {
                 shell.child(confirm)
@@ -655,7 +530,6 @@ impl Render for EditorApp {
             .child(self.render_file_transfer(cx))
             .child(self.render_workspace_receipts(cx))
             .child(self.render_workspace_plan(window, cx))
-            .child(self.render_problems(window, cx))
             .children(self.render_language_features(window, cx))
             .child(
                 div()
@@ -717,46 +591,6 @@ impl Render for EditorApp {
 
 impl EditorApp {
     fn render_window_controls(&self, window: &Window, cx: &Context<Self>) -> impl IntoElement {
-        let supported = window.window_controls();
-        h_flex()
-            .id("window-controls")
-            .h_full()
-            .items_center()
-            .flex_shrink_0()
-            .when(!cfg!(target_os = "macos") && supported.minimize, |this| {
-                this.child(title_bar_window_control(
-                    "minimize",
-                    IconName::WindowMinimize,
-                    WindowControlArea::Min,
-                    false,
-                    cx,
-                ))
-            })
-            .when(!cfg!(target_os = "macos") && supported.maximize, |this| {
-                this.child(title_bar_window_control(
-                    if window.is_maximized() {
-                        "restore"
-                    } else {
-                        "maximize"
-                    },
-                    if window.is_maximized() {
-                        IconName::WindowRestore
-                    } else {
-                        IconName::WindowMaximize
-                    },
-                    WindowControlArea::Max,
-                    false,
-                    cx,
-                ))
-            })
-            .when(!cfg!(target_os = "macos"), |this| {
-                this.child(title_bar_window_control(
-                    "close",
-                    IconName::WindowClose,
-                    WindowControlArea::Close,
-                    true,
-                    cx,
-                ))
-            })
+        crate::ui::controls::window::native_window_controls(window, cx)
     }
 }

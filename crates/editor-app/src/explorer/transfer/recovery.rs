@@ -180,7 +180,7 @@ impl Worker {
                 // A change after the review's inspection is new information, not covered by force consent.
                 return Err(format!(
                     "{}: {}",
-                    change.path.display(),
+                    editor_core::display_path(&change.path),
                     t!("transfer.changed")
                 ));
             }

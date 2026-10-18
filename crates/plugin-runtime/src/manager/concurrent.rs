@@ -157,11 +157,18 @@ impl Manager {
         let previous = self
             .workspace_open
             .then(|| (self.environment.clone(), self.trusted));
+        let application = self
+            .is_application_management()
+            .then(|| self.environment.clone());
         self.select_workspace(environment, trusted).ok()?;
         let result = operation(self);
         if let Some((environment, trusted)) = previous {
             // The original scope remains live unless this operation explicitly retired it.
             let _ = self.select_workspace(environment, trusted);
+        } else if let Some(environment) = application {
+            // Polling a real project's deferred result must not lend its queues or settings to
+            // the profile actor that happened to drive this tick.
+            self.select_application(environment);
         }
         Some(result)
     }
@@ -253,6 +260,8 @@ impl Manager {
         }
         if !restoring {
             self.start_scope_plugins();
+        } else {
+            self.prepare_dormant_scope_plugins()?;
         }
         Ok(())
     }

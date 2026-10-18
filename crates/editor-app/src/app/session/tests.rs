@@ -15,6 +15,8 @@ use gpui_kit::{
 use plugin_runtime::{Installed, plugin_protocol::Manifest};
 use std::{cell::RefCell, rc::Rc};
 
+mod sidebar;
+
 /// Remove only the isolated workspace's generated session file, including on assertion failure.
 struct SessionFile(PathBuf);
 
@@ -49,6 +51,27 @@ fn outline_visibility_defaults_hidden_and_preserves_saved_choice() {
         state.save();
         assert_eq!(
             SessionState::load(directory.path()).outline_visible,
+            visible
+        );
+    }
+}
+
+/// New and legacy sessions hide messages; either explicit visibility choice survives reload.
+#[test]
+fn messages_visibility_defaults_hidden_and_preserves_saved_choice() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut state = SessionState::for_workspace(directory.path());
+    let _cleanup = SessionFile(state.file_path().unwrap());
+    assert!(!state.messages_visible);
+    let mut legacy = serde_json::to_value(&state).unwrap();
+    legacy.as_object_mut().unwrap().remove("messages_visible");
+    let migrated: SessionState = serde_json::from_value(legacy).unwrap();
+    assert!(!migrated.messages_visible);
+    for visible in [true, false] {
+        state.messages_visible = visible;
+        state.save();
+        assert_eq!(
+            SessionState::load(directory.path()).messages_visible,
             visible
         );
     }
@@ -313,7 +336,10 @@ fn plugin_dock_layout_survives_delayed_startup(cx: &mut TestAppContext) {
                     cx,
                 );
                 area.set_dock_size(DockPlacement::Right, px(317.), window, cx);
-                area.toggle_dock(DockPlacement::Right, window, cx);
+                // Messages now starts hidden; arrange a closed saved dock independently of that default.
+                if area.is_dock_open(DockPlacement::Right) {
+                    area.toggle_dock(DockPlacement::Right, window, cx);
+                }
                 assert!(!area.is_dock_open(DockPlacement::Right));
             });
         })

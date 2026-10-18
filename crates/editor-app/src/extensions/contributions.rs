@@ -17,6 +17,30 @@ pub(crate) use owner::icon_rules;
 pub(crate) use owner::{CatalogView, asset, project_icon_rules, theme};
 use owner::{asset_prefix, project_catalog};
 
+/// Application management publishes only globally enabled resource metadata, never workspace tools.
+pub(crate) fn refresh_application_entries(root: &Path, installed: &[Installed]) {
+    let mut catalog = Catalog::default();
+    for entry in installed.iter().filter(|entry| {
+        entry.global_enabled.unwrap_or(entry.enabled) && entry.compatibility_error().is_none()
+    }) {
+        let Some(path) = &entry.manifest.contributions else {
+            continue;
+        };
+        let version = root
+            .join("packages")
+            .join(&entry.manifest.id)
+            .join(&entry.digest);
+        if let Ok(contribution) =
+            Contribution::read(&version, path, &entry.manifest.id, &entry.digest)
+        {
+            catalog
+                .plugins
+                .insert(entry.manifest.id.clone(), contribution);
+        }
+    }
+    owner::publish_user(root, catalog);
+}
+
 /// A snapshot lets render and document paths read plugin metadata without disk I/O.
 #[derive(Default)]
 struct Catalog {

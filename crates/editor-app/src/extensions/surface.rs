@@ -39,9 +39,13 @@ impl ExtensionPanel {
             .map(|status| status.message.as_str())
     }
 
-    /// Both a preview body and a source-only toolbar must deliver live theme and locale changes.
+    /// Both a preview body and a source-only toolbar deliver theme and locale to their live owner.
+    /// Cold sampling still supplies native context, but cannot acknowledge delivery before birth.
     pub(super) fn native_environment(&mut self, cx: &mut Context<Self>) -> protocol::Environment {
         let environment = environment(&self.workspace, cx);
+        if self.instance_epoch == 0 {
+            return environment;
+        }
         if self.last_theme.as_ref() != Some(&environment) {
             self.last_theme = Some(environment.clone());
             for entry in &self.entries {
@@ -82,6 +86,9 @@ impl ExtensionPanel {
                 .expect("an approved document has a surface");
             let visible = self.visible.clone();
             let epoch = self.instance_epoch;
+            let form_changes =
+                self.worker
+                    .form_change_sink(plugin.clone(), panel.clone(), epoch, visible.clone());
             self.native_ui = Some(cx.new(|cx| {
                 crate::ui::plugin::PluginView::new(
                     plugin.clone(),
@@ -100,6 +107,7 @@ impl ExtensionPanel {
                     window,
                     cx,
                 )
+                .with_form_changes(form_changes)
             }));
         }
         let key = format!(
@@ -112,31 +120,126 @@ impl ExtensionPanel {
         let parent = self.parent.clone();
         let expected_key = key.clone();
         let epoch = self.instance_epoch;
-        let editor: crate::ui::plugin::NativeEditorRenderer = Rc::new(move |target, window, cx| {
-            parent
-                .update(cx, |app, cx| {
-                    let index = app.active_text_tab_index()?;
-                    let selected = app.active_editor_preview(cx)?;
-                    let current = app.plugin_document_version(index).ok()?;
-                    // Borrowing current text for retained geometry grants no stale guest edit authority.
-                    if current.id != target.id
-                        || current.path != target.path
-                        || target.revision > current.revision
-                        || app.editor_preview_owner_key(&selected, cx).as_ref()
-                            != Some(&expected_key)
-                        || selected.read(cx).instance_epoch != epoch
+        let work_window = self.work_window;
+        let window_binding = self.work_window_source.clone();
+        let sync_source = window_binding
+            .as_ref()
+            .filter(|binding| {
+                self.visible.get()
+                    && binding
+                        .virtual_resource
+                        .as_ref()
+                        .is_none_or(|resource| resource.is_live())
+            })
+            .map(|binding| (binding.document.clone(), binding.editor.clone()))
+            .or_else(|| {
+                (!work_window)
+                    .then(|| self.main_code_source.clone())
+                    .flatten()
+            });
+        let visibility = self.visible.clone();
+        let editor: crate::ui::plugin::NativeEditorRenderer =
+            Rc::new(move |target, actions, alignment, window, cx| {
+                if work_window {
+                    if !visibility.get() {
+                        return None;
+                    }
+                    let Some(binding) = &window_binding else {
+                        return Some(
+                            div()
+                                .p_4()
+                                .child(t!("editor.detached_source").to_string())
+                                .into_any_element(),
+                        );
+                    };
+                    if binding.document.id != target.id
+                        || binding.document.path != target.path
+                        || binding.document.revision < target.revision
+                        || binding
+                            .virtual_resource
+                            .as_ref()
+                            .is_some_and(|resource| !resource.is_live())
                     {
                         return None;
                     }
-                    let source = app.render_native_editor(window, cx);
-                    Some(app.render_source_viewport_probe(source, selected, cx))
-                })
-                .ok()
-                .flatten()
-        });
+                    // PluginView disables stale buttons and rechecks exact authority on dispatch;
+                    // retaining their rails prevents a native edit from changing pane width.
+                    let body = alignment
+                        .as_ref()
+                        .and_then(|(group, index)| group.pane(*index));
+                    let source = crate::ui::controls::window_editor_body(&binding.editor, body, cx);
+                    return Some(if let Some(actions) = actions {
+                        let projection = alignment.map(|(group, index)| {
+                            Rc::new(move |offset, cx: &App| {
+                                group.project_range(index, offset..offset, cx)
+                            })
+                                as crate::ui::controls::EditorActionProjection
+                        });
+                        crate::ui::controls::with_projected_editor_actions(
+                            source,
+                            &binding.editor,
+                            actions,
+                            projection,
+                        )
+                    } else {
+                        source
+                    });
+                }
+                parent
+                    .update(cx, |app, cx| {
+                        let index = app.active_text_tab_index()?;
+                        let selected = app.active_editor_preview(cx)?;
+                        let current = app.plugin_document_version(index).ok()?;
+                        // Borrowing current text for retained geometry grants no stale guest edit authority.
+                        if current.id != target.id
+                            || current.path != target.path
+                            || target.revision > current.revision
+                            || app.editor_preview_owner_key(&selected, cx).as_ref()
+                                != Some(&expected_key)
+                            || selected.read(cx).instance_epoch != epoch
+                        {
+                            return None;
+                        }
+                        let source = if let Some((group, index)) = &alignment {
+                            app.render_native_editor_aligned(group, *index, window, cx)
+                        } else {
+                            app.render_native_editor(window, cx)
+                        };
+                        let source = if let Some(actions) = actions {
+                            let projection = alignment.map(|(group, index)| {
+                                Rc::new(move |offset, cx: &App| {
+                                    group.project_range(index, offset..offset, cx)
+                                })
+                                    as crate::ui::controls::EditorActionProjection
+                            });
+                            crate::ui::controls::with_projected_editor_actions(
+                                source,
+                                &app.editor,
+                                actions,
+                                projection,
+                            )
+                        } else {
+                            source
+                        };
+                        Some(app.render_source_viewport_probe(source, selected, cx))
+                    })
+                    .ok()
+                    .flatten()
+            });
+        let action_parent = self.parent.clone();
         view.update(cx, |view, cx| {
             view.set_scene_current(interactive, cx);
             view.native_editor = Some(editor);
+            view.set_code_sync_source(sync_source, cx);
+            view.action_source_current = Some(Rc::new(move |source, cx| {
+                action_parent.upgrade().is_some_and(|parent| {
+                    let app = parent.read(cx);
+                    (0..app.tabs.len()).any(|index| {
+                        app.plugin_document_version(index)
+                            .is_ok_and(|current| current == *source)
+                    })
+                })
+            }));
             view.set_viewport_enabled(self.viewport_sync_enabled, cx);
             view.update_trees(&self.trees, cx);
             view.update_images(&key, &self.images, window, cx)

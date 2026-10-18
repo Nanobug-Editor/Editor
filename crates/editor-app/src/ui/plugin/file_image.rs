@@ -60,6 +60,7 @@ impl PluginView {
         };
         let transform = viewport.as_ref().and_then(|v| v.transform);
         let revision = self.document.revision;
+        let gesture = self.action_gesture(id);
         let authority = (self.document.file.clone(), self.document.source.clone());
         let measured_authority = authority.clone();
         let node = id.to_owned();
@@ -69,6 +70,9 @@ impl PluginView {
             .or_default()
             .clone();
         let owner = cx.entity().downgrade();
+        let released_owner = owner.clone();
+        let released_node = node.clone();
+        let target_window = self.window;
         let target_node = node.clone();
         let input = viewport.is_some();
         let image = gpui_kit::canvas(
@@ -89,27 +93,31 @@ impl PluginView {
                     let measured_authority = measured_authority.clone();
                     // Prepaint may not update its rendering entity; publish after the frame through the scene gate.
                     cx.defer(move |cx| {
-                        let accepted = owner.update(cx, |view, cx| {
-                            if (view.document.file.clone(), view.document.source.clone())
-                                != measured_authority
-                            {
-                                return false;
-                            }
-                            view.emit_version(
-                                &node,
-                                revision,
-                                Action::ViewportInput(ui::ViewportInput {
-                                    content,
-                                    event: ui::CanvasEvent::Resize {
-                                        width: area.width,
-                                        height: area.height,
-                                        grid: None,
-                                    },
-                                }),
-                                cx,
-                            )
+                        let accepted = target_window.update(cx, |_, window, cx| {
+                            owner.update(cx, |view, cx| {
+                                if (view.document.file.clone(), view.document.source.clone())
+                                    != measured_authority
+                                    || !view.action_gesture_current(&node, gesture)
+                                {
+                                    return false;
+                                }
+                                view.emit_version_in(
+                                    &node,
+                                    revision,
+                                    Action::ViewportInput(ui::ViewportInput {
+                                        content,
+                                        event: ui::CanvasEvent::Resize {
+                                            width: area.width,
+                                            height: area.height,
+                                            grid: None,
+                                        },
+                                    }),
+                                    window,
+                                    cx,
+                                )
+                            })
                         });
-                        if matches!(accepted, Ok(true)) {
+                        if matches!(accepted, Ok(Ok(true))) {
                             measurement.set(Some((area, content)));
                         }
                     });
@@ -117,6 +125,14 @@ impl PluginView {
                 bounds
             },
             move |bounds, _, window, _| {
+                if let Some(gesture) = gesture {
+                    Self::track_visual_releases(
+                        released_owner.clone(),
+                        released_node.clone(),
+                        gesture,
+                        window,
+                    );
+                }
                 let target =
                     image_target(bounds, (content.width, content.height), sizing, transform);
                 // Intrinsic dimensions arrive after protocol validation; enforce the same GPU extent quota here.
@@ -135,13 +151,18 @@ impl PluginView {
         )
         .size_full();
         let emit = Rc::new(
-            move |view: &mut PluginView, event: ui::CanvasEvent, cx: &mut Context<PluginView>| {
+            move |view: &mut PluginView,
+                  event: ui::CanvasEvent,
+                  window: &mut Window,
+                  cx: &mut Context<PluginView>| {
                 input
                     && (view.document.file.clone(), view.document.source.clone()) == authority
-                    && view.emit_version(
+                    && view.action_gesture_current(&node, gesture)
+                    && view.emit_version_in(
                         &node,
                         revision,
                         Action::ViewportInput(ui::ViewportInput { content, event }),
+                        window,
                         cx,
                     )
             },
@@ -156,7 +177,7 @@ impl PluginView {
             .overflow_hidden()
             .child(image)
             .on_scroll_wheel(cx.listener(
-                move |view, event: &gpui_kit::ScrollWheelEvent, _, cx| {
+                move |view, event: &gpui_kit::ScrollWheelEvent, window, cx| {
                     let bounds = wheel_bounds.get();
                     let local = event.position - bounds.origin;
                     let delta = event.delta.pixel_delta(px(view
@@ -175,6 +196,7 @@ impl PluginView {
                             delta_y: delta.y / px(1.),
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     ) {
                         cx.stop_propagation();
@@ -189,9 +211,18 @@ impl PluginView {
         ] {
             let down = emit.clone();
             let down_bounds = measured.clone();
+            let down_node = id.to_owned();
             element = element.on_mouse_down(
                 button,
-                cx.listener(move |view, event: &gpui_kit::MouseDownEvent, _, cx| {
+                cx.listener(move |view, event: &gpui_kit::MouseDownEvent, window, cx| {
+                    let press = if let Some(gesture) = gesture {
+                        if !view.action_gesture_current(&down_node, Some(gesture)) {
+                            return;
+                        }
+                        Some(view.press_visual(&down_node, index, gesture))
+                    } else {
+                        None
+                    };
                     let p = event.position - down_bounds.get().origin;
                     if down(
                         view,
@@ -203,17 +234,26 @@ impl PluginView {
                             clicks: event.click_count as u8,
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     ) {
                         cx.stop_propagation();
+                    } else if let Some(press) = press {
+                        view.forget_visual_press(&down_node, index, press);
                     }
                 }),
             );
             let up = emit.clone();
             let up_bounds = measured.clone();
+            let up_node = id.to_owned();
             element = element.on_mouse_up(
                 button,
-                cx.listener(move |view, event: &gpui_kit::MouseUpEvent, _, cx| {
+                cx.listener(move |view, event: &gpui_kit::MouseUpEvent, window, cx| {
+                    if let Some(gesture) = gesture
+                        && !view.accept_visual_release(&up_node, index, gesture)
+                    {
+                        return;
+                    }
                     let p = event.position - up_bounds.get().origin;
                     if up(
                         view,
@@ -225,6 +265,7 @@ impl PluginView {
                             clicks: event.click_count as u8,
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     ) {
                         cx.stop_propagation();
@@ -232,15 +273,22 @@ impl PluginView {
                 }),
             );
         }
+        let moved_node = id.to_owned();
         element
-            .on_mouse_move(
-                cx.listener(move |view, event: &gpui_kit::MouseMoveEvent, _, cx| {
+            .on_mouse_move(cx.listener(
+                move |view, event: &gpui_kit::MouseMoveEvent, window, cx| {
                     let p = event.position - measured.get().origin;
                     let button = match event.pressed_button {
                         Some(gpui_kit::MouseButton::Middle) => 1,
                         Some(gpui_kit::MouseButton::Right) => 2,
                         _ => 0,
                     };
+                    if let Some(gesture) = gesture
+                        && event.pressed_button.is_some()
+                        && !view.visual_press_current(&moved_node, button, gesture)
+                    {
+                        return;
+                    }
                     emit(
                         view,
                         ui::CanvasEvent::Pointer {
@@ -251,10 +299,11 @@ impl PluginView {
                             clicks: 0,
                             shift: event.modifiers.shift,
                         },
+                        window,
                         cx,
                     );
-                }),
-            )
+                },
+            ))
             .into_any_element()
     }
 }

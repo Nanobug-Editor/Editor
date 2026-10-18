@@ -152,6 +152,13 @@ impl Instance {
             .cloned()
             .collect()
     }
+    /// A denied scene callback may release only an exact host request owned by this live instance.
+    /// Failure is already returned by admission; an obsolete or forged handle changes no resource.
+    pub(crate) fn release_undelivered_tree_page(&self, request: &tree::Request) {
+        if let Ok(resource) = self.store.data().owned_tree(&request.tree) {
+            resource.release_undelivered(request);
+        }
+    }
     /// Validate the tree epoch before ordinary UI callbacks or typed native commands can run.
     pub(crate) fn validate_tree_event(&self, event: &tree::Event) -> Result<(), Failure> {
         self.store

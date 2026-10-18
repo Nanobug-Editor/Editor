@@ -472,10 +472,17 @@ fn command(
         }),
         "Archived packaging scripts cannot be called"
     );
-    log(format!("Building: {program}\n").as_bytes());
+    log(format!(
+        "Building: {}\n",
+        platform_windows::display_path(Path::new(program))
+    )
+    .as_bytes());
     let mut child = HostProcess::spawn(Path::new(program), args, root, &BTreeMap::new())
         .with_context(|| {
-            format!("Could not start {program}; install/configure the required toolchain")
+            format!(
+                "Could not start {}; install/configure the required toolchain",
+                platform_windows::display_path(Path::new(program))
+            )
         })?;
     let mut output = Vec::new();
     loop {
@@ -496,7 +503,11 @@ fn command(
                     log(&bytes);
                 }
                 Update::Exited { code } => {
-                    anyhow::ensure!(code == 0, "{program} failed with exit code {code}");
+                    anyhow::ensure!(
+                        code == 0,
+                        "{} failed with exit code {code}",
+                        platform_windows::display_path(Path::new(program))
+                    );
                     return Ok(output);
                 }
                 Update::Terminated => anyhow::bail!("Build process terminated"),

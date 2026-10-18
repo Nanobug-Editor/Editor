@@ -131,6 +131,8 @@ impl PluginView {
                         child.kind,
                         Kind::Button { .. }
                             | Kind::NativeEditor { .. }
+                            | Kind::EditorWithActions { .. }
+                            | Kind::ReadonlyCode { .. }
                             | Kind::Input(_)
                             | Kind::Checkbox { .. }
                             | Kind::Choice { .. }

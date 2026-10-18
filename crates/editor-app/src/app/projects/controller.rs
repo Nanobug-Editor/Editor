@@ -5,18 +5,32 @@ use platform_windows::directory_identity::DirectoryIdentity;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
+mod choices;
+pub(super) use choices::{
+    ProjectChoice, focus_project, mark_opened, project_choices, recent_paths,
+};
+
 /// A pending trust prompt reserves the same directory identity as an already active project.
 #[derive(Clone)]
 pub(super) struct Entry {
     pub(super) host: WeakEntity<ProjectWindow>,
     pub(super) handle: AnyWindowHandle,
     pub(super) directory: Option<DirectoryIdentity>,
+    /// Profile and activated root distinguish real editors from homes and trust reservations.
+    profile: PathBuf,
+    project: Option<PathBuf>,
+    /// Successful opens order live windows even after their recent record is removed.
+    opened_order: u64,
+    /// Native activation order is separate from recent-list ordering and ignores auxiliary dialogs.
+    activated_order: u64,
 }
 #[derive(Default)]
 struct Windows {
     entries: BTreeMap<WindowId, Entry>,
     recent: BTreeMap<PathBuf, Rc<RefCell<RecentProjects>>>,
     quit: Option<QuitRound>,
+    opened_order: u64,
+    activated_order: u64,
 }
 impl Global for Windows {}
 
@@ -266,6 +280,7 @@ pub(super) fn cleaned(handle: AnyWindowHandle, result: Result<(), String>, cx: &
                     .collect::<Vec<_>>();
                 cx.global_mut::<Windows>().quit = None;
                 for entry in entries {
+                    unregister(entry.handle, cx);
                     let _ = entry
                         .handle
                         .update(cx, |_, window, _| window.remove_window());
@@ -301,8 +316,36 @@ fn ensure(cx: &mut App) {
     }
 }
 
+/// Resolve an existing ancestor so first-time profile creation cannot change its shared key.
+/// Host-selected absolute paths preserve symlink identity without creating directories here.
+fn profile_key(profile: &Path) -> PathBuf {
+    let mut ancestor = profile.to_owned();
+    let mut suffix = Vec::new();
+    loop {
+        if let Ok(mut canonical) = std::fs::canonicalize(&ancestor) {
+            for name in suffix.iter().rev() {
+                canonical.push(name);
+            }
+            return canonical;
+        }
+        let Some(name) = ancestor.file_name().map(|name| name.to_owned()) else {
+            return profile.to_owned();
+        };
+        let Some(parent) = ancestor.parent().map(Path::to_owned) else {
+            return profile.to_owned();
+        };
+        suffix.push(name);
+        ancestor = parent;
+    }
+}
+
 /// Register a native root once; auxiliary settings/plugin windows never count as project windows.
-pub(super) fn register(host: WeakEntity<ProjectWindow>, handle: AnyWindowHandle, cx: &mut App) {
+pub(super) fn register(
+    host: WeakEntity<ProjectWindow>,
+    handle: AnyWindowHandle,
+    profile: PathBuf,
+    cx: &mut App,
+) {
     ensure(cx);
     cx.global_mut::<Windows>().entries.insert(
         handle.window_id(),
@@ -310,14 +353,29 @@ pub(super) fn register(host: WeakEntity<ProjectWindow>, handle: AnyWindowHandle,
             host,
             handle,
             directory: None,
+            profile: profile_key(&profile),
+            project: None,
+            opened_order: 0,
+            activated_order: 0,
         },
     );
+    mark_active(handle, cx);
+    cx.refresh_windows();
+}
+
+/// Track only registered editor roots; focus changes never reorder project history.
+pub(super) fn mark_active(handle: AnyWindowHandle, cx: &mut App) {
+    let state = cx.global_mut::<Windows>();
+    state.activated_order = state.activated_order.saturating_add(1);
+    if let Some(entry) = state.entries.get_mut(&handle.window_id()) {
+        entry.activated_order = state.activated_order;
+    }
 }
 
 /// Records use one application authority per profile; stale home snapshots cannot replace recent opens.
 pub(super) fn recent(profile: &Path, cx: &mut App) -> Rc<RefCell<RecentProjects>> {
     ensure(cx);
-    let key = profile.canonicalize().unwrap_or_else(|_| profile.into());
+    let key = profile_key(profile);
     cx.global_mut::<Windows>()
         .recent
         .entry(key)
@@ -331,8 +389,12 @@ pub(super) fn reserve(handle: AnyWindowHandle, identity: Option<DirectoryIdentit
         .entries
         .get_mut(&handle.window_id())
     {
+        if entry.directory != identity {
+            entry.project = None;
+        }
         entry.directory = identity;
     }
+    cx.refresh_windows();
 }
 
 /// Consent rechecks the leased identity, including a directory replaced at the same pathname.
@@ -367,10 +429,12 @@ pub(super) fn unregister(handle: AnyWindowHandle, cx: &mut App) {
             cx.defer(advance_quit);
         }
     }
+    cx.refresh_windows();
 }
 
 /// Activate an existing real directory owner; optional files use that owner's ordinary document route.
 pub(super) fn activate(entry: Entry, file: Option<PathBuf>, cx: &mut App) {
+    mark_active(entry.handle, cx);
     let _ = entry.handle.update(cx, |_, window, cx| {
         window.activate_window();
         let _ = entry.host.update(cx, |host, cx| {
@@ -392,10 +456,15 @@ pub(super) fn open(profile: PathBuf, path: Option<PathBuf>, cx: &mut App) -> any
     options.window_background = theme::window_background(cx);
     options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
         None,
-        size(px(1280.), px(820.)),
+        if path.is_some() {
+            size(px(1280.), px(820.))
+        } else {
+            size(px(DEFAULT_WINDOW_WIDTH), px(DEFAULT_WINDOW_HEIGHT))
+        },
         cx,
     )));
     options.inactive_frame_interval = None;
+    options.window_min_size = Some(size(px(720.), px(480.)));
     gpui_kit::open_window(options, cx, move |window, cx| {
         window.set_window_title(app::APP_NAME);
         cx.new(|cx| {
@@ -409,14 +478,16 @@ pub(super) fn open(profile: PathBuf, path: Option<PathBuf>, cx: &mut App) -> any
     Ok(())
 }
 
-/// Home requests reuse an unopened home or create one while every project window stays mounted.
-pub(super) fn home(profile: PathBuf, cx: &mut App) -> anyhow::Result<()> {
+/// Repeated argument-free launches foreground the last-used root in this profile.
+/// Only a profile with no native roots creates an empty editor window.
+pub(super) fn activate_or_open(profile: PathBuf, cx: &mut App) -> anyhow::Result<()> {
     ensure(cx);
     if let Some(entry) = cx
         .global::<Windows>()
         .entries
         .values()
-        .find(|entry| entry.directory.is_none() && entry.host.upgrade().is_some())
+        .filter(|entry| entry.profile == profile_key(&profile) && entry.host.upgrade().is_some())
+        .max_by_key(|entry| entry.activated_order)
         .cloned()
     {
         activate(entry, None, cx);

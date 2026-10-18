@@ -1,0 +1,49 @@
+{
+  "repository": "Nanobug-Editor/Editor",
+  "repository_id": 1383197432,
+  "planning_date": "2026-10-15",
+  "mode": "user-scenarios",
+  "approved": true,
+  "publication_method": "GitHub REST API using existing repository Git credential; connector create_issue returned 403 and created no issue",
+  "issues": [
+    {
+      "ticket": "01",
+      "stable_id": "nanobug-git-remaining-2026-10-15/01",
+      "number": 119,
+      "database_id": 5865985342,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/119",
+      "state_at_publication": "open",
+      "state_verified": "closed",
+      "state_reason_verified": "completed",
+      "verified_at": "2026-10-16T02:43:22Z",
+      "delivered_commit": "09510cc58a8b434b815dfa5f9a7a3207f1221a55",
+      "labels": ["ready-for-agent"]
+    },
+    {
+      "ticket": "02",
+      "stable_id": "nanobug-git-remaining-2026-10-15/02",
+      "number": 120,
+      "database_id": 5865985809,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/120",
+      "state_at_publication": "open",
+      "execution_state": "completed",
+      "state_verified": "closed",
+      "state_reason_verified": "completed",
+      "verified_at": "2026-10-18T05:23:58.3032713Z",
+      "completed_at": "2026-10-18T05:23:57Z",
+      "delivered_commit": "a8cd5140862d2d58e8b41d67998ba6433ee11143",
+      "candidate_version": "0.1.7",
+      "candidate_sha256": "8034109e64266b12e17d70fcb7c513de81d1b2130b690baa117ae44450135d71",
+      "source_archive_sha256": "cd6973de71c069459ac73eee7369772d23ef8b56f2fca90ab45b4fc8b71a45c7",
+      "completion_method": "ordinary commit and verified origin push, then GitHub REST close/readback using existing repository Git authentication; connector update returned integration 403",
+      "resumed_at": "2026-10-17T03:33:21Z",
+      "continued_at": "2026-10-18T01:59:51Z",
+      "paused_at": "2026-10-16T03:57:25Z",
+      "labels": ["ready-for-agent"]
+    }
+  ],
+  "native_dependencies": [
+    { "blocked_issue": 120, "blocking_issue": 119, "blocking_database_id": 5865985342, "readback_verified": true }
+  ],
+  "parent_issue_modified": false
+}

@@ -22,6 +22,9 @@ pub(crate) enum FileProviderChoice {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionState {
+    /// A valid saved empty document session must remain empty instead of using first-open fallback.
+    #[serde(skip)]
+    pub(crate) document_session_loaded: bool,
     /// Startup failures must not replace damaged data or targets of an unfinished migration.
     #[serde(skip)]
     persistence_blocked: bool,
@@ -46,9 +49,12 @@ pub struct SessionState {
     /// Cursor tracking may be disabled without disabling tree updates or explicit navigation.
     #[serde(default = "default_true")]
     pub outline_follow_cursor: bool,
-    /// Host messages themselves are transient; only panel visibility is restored across runs.
-    #[serde(default = "default_true")]
+    /// Fresh and legacy sessions hide messages; explicit visibility restores without message history.
+    #[serde(default)]
     pub messages_visible: bool,
+    /// Problems lives in the native dock; older sessions keep it hidden until explicitly opened.
+    #[serde(default)]
+    pub problems_visible: bool,
     /// Newly introduced project roots start expanded for previously saved workspaces too.
     #[serde(default = "default_true")]
     pub explorer_root_expanded: bool,
@@ -68,6 +74,10 @@ pub struct SessionState {
     pub plugin_dock_sizes: std::collections::BTreeMap<String, f32>,
     #[serde(default)]
     pub plugin_panel_visibility: std::collections::BTreeMap<String, bool>,
+    /// Legacy records default to zero; successful sidebar restoration acknowledges this migration once.
+    /// New layouts start current so later user moves to an outer dock remain authoritative.
+    #[serde(default)]
+    pub(crate) plugin_sidebar_layout_version: u32,
     /// Import-only records preserve historical data until the authorized private write is acknowledged.
     /// They never select a layout or control current guest behavior.
     #[serde(
@@ -134,6 +144,7 @@ impl SessionState {
 
     pub fn for_workspace(workspace: &Path) -> Self {
         Self {
+            document_session_loaded: false,
             persistence_blocked: false,
             profile_directory: None,
             file_view_providers: Default::default(),
@@ -146,7 +157,8 @@ impl SessionState {
             explorer_visible: true,
             outline_visible: false,
             outline_follow_cursor: true,
-            messages_visible: true,
+            messages_visible: false,
+            problems_visible: false,
             explorer_root_expanded: true,
             explorer_reveal_on_tab_switch: false,
             extension_height: default_extension_height(),
@@ -154,6 +166,7 @@ impl SessionState {
             native_terminal_visible: false,
             plugin_dock_sizes: Default::default(),
             plugin_panel_visibility: Default::default(),
+            plugin_sidebar_layout_version: 1,
             legacy_preview_modes: Default::default(),
             legacy_preview_sync: Default::default(),
             legacy_preview_toolbar: Default::default(),
@@ -217,11 +230,17 @@ impl SessionState {
                 if let Ok(saved) = serde_json::from_str::<Self>(&contents) {
                     if saved.workspace == state.workspace {
                         state = saved;
+                        state.document_session_loaded = true;
                         state.profile_directory = profile.clone();
                         state.window_width = state.window_width.clamp(800., 7680.);
                         state.window_height = state.window_height.clamp(500., 4320.);
                         state.explorer_width = state.explorer_width.clamp(220., 520.);
                         state.extension_height = state.extension_height.clamp(140., 1200.);
+                        // No legacy tree means the current default will be constructed. Mark it
+                        // before a new user move is saved, without lowering future layout versions.
+                        if state.dock_layout.is_none() && state.plugin_sidebar_layout_version < 1 {
+                            state.plugin_sidebar_layout_version = 1;
+                        }
                     } else {
                         state.block_persistence();
                     }

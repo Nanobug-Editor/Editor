@@ -1,6 +1,30 @@
 //! Portable native UI: plugins own state, while the host owns layout, input and theme.
 //! Protocol 7 composes canvases with native controls through independently negotiated capabilities.
 //! No GPUI objects cross this interface.
+//!
+//! `ui.windows` 1.0 permits a workspace package to declare `Panel.position = "window"`,
+//! with the ordinary `ui.panels` grant. Publish its `api::View` before requesting visibility
+//! through `EditorOperation::SetPanelVisibility`. Native close hides only that surface;
+//! it never terminates native processes, aborts a domain operation or discards a document.
+//! Disable/trust loss/project closure revoke the surface through the normal instance lifecycle.
+//! `ui.visibility` 1.0 with `ui.panels` consent opts into [`crate::api::Notification::PanelVisibility`].
+//! Observe the initial state for every declared panel of a live instance and subsequent changes;
+//! aggregate these states to pause optional refresh timers when no native surface is displayed.
+//! Dock tab selection, containing dock collapse and platform window visibility all participate.
+//! These observations never activate an instance or replace normal completion/cancellation handling.
+//! A window may set `editor_layout` and `source` to mount its one exact NativeEditor reference
+//! after negotiating `editor.layout` and `editor.read`. The source must already be open in
+//! this workspace; virtual sources must belong to the publishing instance. The host borrows
+//! the existing document/IME/Undo session and suppresses its main-editor mount while visible.
+//! Readonly source snapshots use ordinary native presentation nodes and grant no edit authority.
+//!
+//! `ui.code_editor` 1.1 adds [`Document::code_alignment`]. Opted-in two/three-pane `sync_group`s
+//! align logical rows and native soft wraps with zero-byte visual gaps. Original editors retain
+//! text, selection, composition and Undo. A scene shares 4M comparison cells, admits at most four
+//! groups, and bounds each source to 1 MiB/2001 logical rows (including the empty EOF row).
+//! Native measurement has a separate finite height limit. Exceeding any limit displays an explicit
+//! independent-layout fallback. Native search/code-action panels pause the whole group until closed.
+//! This presentation does not grant editor.read/write or relax exact document-version checks.
 
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -30,6 +54,8 @@ mod tests;
 #[cfg(test)]
 mod tools_tests;
 mod validate;
+#[cfg(test)]
+mod workbench_tests;
 
 pub const VERSION: u32 = 1;
 
@@ -75,6 +101,12 @@ pub struct Document {
     /// Requires ui.code_highlighting, editor.read and the owning preview's exact source version.
     #[serde(default)]
     pub code_highlighting: bool,
+    /// Align native code panes sharing a `sync_group` with display-only blank rows.
+    /// Requires `ui.code_editor` 1.1; false preserves independent native pane layout.
+    /// The host keeps source bytes, selections, IME and Undo in their existing editor sessions.
+    /// Layout/algorithm limits are shown explicitly; alignment never pads the source text.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub code_alignment: bool,
     /// Bind one active source-mapped Scroll to native source viewport notifications and locate requests.
     /// Requires editor.viewport, ui.richtext, editor.read and this preview's exact source identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -110,6 +142,12 @@ impl Document {
             match &node.kind {
                 Kind::Textarea(_) => {
                     required.insert("ui.native", semver::Version::new(1, 1, 0));
+                }
+                Kind::ReadonlyCode { .. } => {
+                    required.insert("ui.code_editor", semver::Version::new(1, 0, 0));
+                }
+                Kind::EditorWithActions { .. } => {
+                    required.insert("editor.actions", semver::Version::new(1, 0, 0));
                 }
                 Kind::Canvas(canvas) => {
                     let version = if canvas.scroll.is_some() || canvas.font != Default::default() {
@@ -164,6 +202,11 @@ impl Document {
         if self.code_highlighting {
             required.insert("ui.code_highlighting", semver::Version::new(1, 0, 0));
         }
+        if self.code_alignment {
+            // Install this after visiting nodes: a readonly node's 1.0 floor must never
+            // downgrade the document-level alignment requirement.
+            required.insert("ui.code_editor", semver::Version::new(1, 1, 0));
+        }
         if self.editor_viewport.is_some() {
             required.insert("editor.viewport", semver::Version::new(1, 0, 0));
         }
@@ -184,6 +227,7 @@ impl Document {
             editor_image_input: false,
             link_events: false,
             code_highlighting: false,
+            code_alignment: false,
             editor_viewport: None,
             dialog: None,
             menu: None,
@@ -198,6 +242,13 @@ impl Document {
     /// Enable source-pane image input for this versioned preview without exposing native pixel bytes.
     pub fn editor_image_input(mut self, enabled: bool) -> Self {
         self.editor_image_input = enabled;
+        self
+    }
+
+    /// Opt all active `sync_group` code panes into bounded display-row alignment.
+    /// The caller must negotiate `ui.code_editor` 1.1; this grants no text-write authority.
+    pub fn code_alignment(mut self, enabled: bool) -> Self {
+        self.code_alignment = enabled;
         self
     }
 
@@ -219,7 +270,9 @@ impl Document {
                 return None;
             }
             match &node.kind {
-                Kind::NativeEditor { document } => Some(document),
+                Kind::NativeEditor { document } | Kind::EditorWithActions { document, .. } => {
+                    Some(document)
+                }
                 Kind::Column { children } | Kind::Row { children } => {
                     children.iter().find_map(active)
                 }
@@ -247,6 +300,36 @@ impl Document {
                 .as_ref()
                 .and_then(|toolbar| toolbar.find(id))
         })
+    }
+    /// Line-edge actions retain source authority in addition to the ordinary UI scene revision.
+    /// Native hosts must revalidate this exact version immediately before forwarding an event.
+    pub fn editor_action_source(&self, id: &str) -> Option<&crate::api::DocumentVersion> {
+        fn find<'a>(node: &'a Node, id: &str) -> Option<&'a crate::api::DocumentVersion> {
+            match &node.kind {
+                Kind::EditorWithActions {
+                    document,
+                    left,
+                    right,
+                    ..
+                } if left
+                    .iter()
+                    .chain(right)
+                    .any(|action| action.content.find(id).is_some()) =>
+                {
+                    Some(document)
+                }
+                Kind::Column { children } | Kind::Row { children } => {
+                    children.iter().find_map(|node| find(node, id))
+                }
+                Kind::Scroll { content } => find(content, id),
+                Kind::Tabs { tabs, selected } => tabs
+                    .iter()
+                    .find(|tab| tab.id == *selected)
+                    .and_then(|tab| find(&tab.content, id)),
+                _ => None,
+            }
+        }
+        self.active_node(id).and_then(|_| find(&self.root, id))
     }
 }
 
@@ -351,6 +434,14 @@ pub struct Layout {
     pub gap: f32,
 }
 
+/// A small native control group anchored to the existing source's UTF-8 offset.
+/// The host clips it with the source viewport and never inserts rows into the source text.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EditorAction {
+    pub offset: usize,
+    pub content: Box<Node>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Kind {
@@ -363,6 +454,35 @@ pub enum Kind {
     /// Only one reference is permitted, in the root of a negotiated file layout.
     NativeEditor {
         document: crate::api::DocumentVersion,
+    },
+    /// Borrow the same unique native source with version-bound controls at its line edges.
+    /// Requires `editor.actions` 1.0 and the ordinary layout/read grants. Controls use normal
+    /// UI events; offsets are UTF-8 bytes, and offscreen/folded anchors have no active hit area.
+    EditorWithActions {
+        document: crate::api::DocumentVersion,
+        left: Vec<EditorAction>,
+        right: Vec<EditorAction>,
+        /// Optional group shared with two/three currently displayed code panes in this document.
+        /// Native source ownership/revision and actual layout are rechecked before every scroll.
+        /// This changes only native vertical scroll, never selection, focus, text or Undo.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sync_group: Option<String>,
+    },
+    /// Immutable literal source with native selection, copying, line numbers and scrolling.
+    /// Requires `ui.code_editor` 1.0. Text is at most 256 KiB; ranges are UTF-8 boundaries.
+    /// A complete document allows at most 8 literal panes and 1 MiB of aggregate literal bytes.
+    /// These supplied bytes carry no document, file, edit or language-tool authority.
+    ReadonlyCode {
+        text: String,
+        #[serde(default)]
+        changes: Vec<crate::api::TextRange>,
+        /// Optional native scroll group, limited to 4 groups and 3 members per group.
+        /// IDs use 1..64 ASCII letters/digits/./_/-; inactive tabs never drive synchronization.
+        /// Mapping admits at most 2,000 logical rows per pane and an aggregate 4M diff-cell
+        /// rebuild budget. Content/layout outside these bounds visibly retains independent
+        /// scrolling. Old messages omit this field and retain independent scrolling unchanged.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sync_group: Option<String>,
     },
     /// Display this context's file using controlled decoding. Requires `ui.file_images` and
     /// `workspace.read`; the guest chooses sizing, while the host performs native layout/painting.
@@ -711,7 +831,9 @@ impl Node {
         }
         match &self.kind {
             Kind::Tree { .. } => "tree",
-            Kind::NativeEditor { .. } => "editor",
+            Kind::NativeEditor { .. }
+            | Kind::EditorWithActions { .. }
+            | Kind::ReadonlyCode { .. } => "editor",
             Kind::SideTabs(_) => "tab_bar",
             Kind::Canvas(_) => "canvas",
             Kind::Column { .. } | Kind::Row { .. } => "container",
@@ -741,6 +863,10 @@ impl Node {
                 children.iter().for_each(|n| n.visit(visitor))
             }
             Kind::Scroll { content } => content.visit(visitor),
+            Kind::EditorWithActions { left, right, .. } => left
+                .iter()
+                .chain(right)
+                .for_each(|action| action.content.visit(visitor)),
             Kind::Tabs { tabs, .. } => tabs.iter().for_each(|t| t.content.visit(visitor)),
             _ => {}
         }
@@ -778,6 +904,10 @@ impl Node {
                 children.iter().find_map(|n| n.find(id))
             }
             Kind::Scroll { content } => content.find(id),
+            Kind::EditorWithActions { left, right, .. } => left
+                .iter()
+                .chain(right)
+                .find_map(|action| action.content.find(id)),
             Kind::Tabs { tabs, selected } => tabs
                 .iter()
                 .find(|t| &t.id == selected)

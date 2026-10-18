@@ -82,6 +82,12 @@ impl Manager {
             environment: self.environment.clone(),
             host_resources: self.host_resources.clone(),
             previous_digest: self.installed.get(id).map(|entry| entry.digest.clone()),
+            // The admission marker records install intent independently from retained user data.
+            // A different package digest is always an update and must retain strict dependency rollback.
+            allow_optional_failure: self.installed.get(id).is_none_or(|entry| {
+                entry.digest == package.digest
+                    && self.dormant_preparation_pending(id, &package.digest)
+            }),
             replaced_records: self.replacement_records(&package.manifest),
             package: package.clone(),
             grants,
@@ -393,7 +399,10 @@ impl Manager {
     ) -> anyhow::Result<()> {
         crate::capabilities::require_current(&package.manifest)?;
         anyhow::ensure!(
-            self.trusted && self.workspace_open,
+            self.trusted
+                && (self.workspace_open
+                    || (self.is_application_management()
+                        && package.manifest.scope == api::InstanceScope::Application)),
             "Workspace is restricted or closed"
         );
         anyhow::ensure!(

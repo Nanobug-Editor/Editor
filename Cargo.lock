@@ -1860,6 +1860,7 @@ dependencies = [
  "raw-window-handle",
  "regex",
  "resvg 0.45.1",
+ "ropey",
  "rust-i18n",
  "semver",
  "serde",
@@ -1873,6 +1874,7 @@ dependencies = [
  "unicode-segmentation",
  "url",
  "wasmtime",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

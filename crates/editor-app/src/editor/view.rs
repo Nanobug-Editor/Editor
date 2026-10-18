@@ -222,14 +222,22 @@ impl EditorApp {
                         .on_click(cx.listener({
                             let item = item.clone();
                             move |this, event: &ClickEvent, window, cx| {
-                                // A single click selects only; double clicks activate the row.
-                                if event.click_count() != 2 {
-                                    return;
-                                }
                                 if is_folder {
-                                    this.toggle_explorer_directory(Path::new(item.id.as_str()), cx);
-                                } else {
+                                    if event.click_count() == 2 {
+                                        this.toggle_explorer_directory(
+                                            Path::new(item.id.as_str()),
+                                            cx,
+                                        );
+                                    }
+                                } else if event.click_count() == 2 {
                                     this.open_file(PathBuf::from(item.id.as_str()), window, cx);
+                                } else {
+                                    // Browsing keeps the tree's focus and reuses one disposable tab.
+                                    this.open_preview_file(
+                                        PathBuf::from(item.id.as_str()),
+                                        window,
+                                        cx,
+                                    );
                                 }
                             }
                         }))
@@ -310,43 +318,68 @@ impl EditorApp {
     fn render_tabs(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tab_styles = component_styles(cx, ThemeComponent::EditorTab);
         let close_styles = component_styles(cx, ThemeComponent::EditorTabClose);
-        let tabs = self.tabs.iter().enumerate().map(|(index, tab)| {
-            let path = tab.path().to_path_buf();
-            let is_active = self.active_path.as_ref() == Some(&path);
-            let is_external = !path.starts_with(self.workspace.root());
-            let is_dirty = tab.is_dirty();
-            let disk_state = tab
-                .text
-                .as_ref()
-                .map_or(DiskState::Synced, |text| text.disk_state);
-            let name = if tab.virtual_document.is_some() {
-                format!("{} · {}", tab.title(), t!("editor.readonly_label"))
-            } else {
-                tab.title()
-            };
-            let icon = file_icon(
-                &self.providers,
-                &path,
-                false,
-                &theme::active_theme(self.dark_theme),
-            );
-            let activate_path = path.clone();
-            let context_path = path.clone();
-            let close_path = path.clone();
-            let middle_close_path = path.clone();
-            let drop_path = path.clone();
-            let drag_payload = EditorTabDrag {
-                path: path.clone(),
-                label: name.clone(),
-            };
-            // Keep the full document path in the tooltip even when the tab label is truncated.
-            let tooltip_path = path.to_string_lossy().into_owned();
-            // Both project and external files use the theme's selected underline color.
-            let selected_color = tab_styles.selected.border.unwrap_or(cx.theme().primary);
-            let separator_color = tab_styles.base.border.unwrap_or(cx.theme().border);
-            let external_background = gpui_kit::rgb(0xfff4c2);
-            h_flex()
-                .id(format!("editor-tab:{}", path.to_string_lossy()))
+        let visible_count = self
+            .tabs
+            .iter()
+            .filter(|tab| {
+                tab.virtual_document
+                    .as_ref()
+                    .is_none_or(|source| !source.hidden)
+            })
+            .count();
+        let total_count = visible_count + self.comparison_views.len();
+        let tabs = self
+            .tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, tab)| {
+                tab.virtual_document
+                    .as_ref()
+                    .is_none_or(|source| !source.hidden)
+            })
+            .map(|(index, tab)| {
+                let path = tab.path().to_path_buf();
+                let is_active =
+                    self.active_comparison.is_none() && self.active_path.as_ref() == Some(&path);
+                let is_external = !path.starts_with(self.workspace.root());
+                let is_dirty = tab.is_dirty();
+                let disk_state = tab
+                    .text
+                    .as_ref()
+                    .map_or(DiskState::Synced, |text| text.disk_state);
+                let name = if tab.virtual_document.is_some() {
+                    format!("{} · {}", tab.title(), t!("editor.readonly_label"))
+                } else {
+                    tab.title()
+                };
+                let icon = file_icon(
+                    &self.providers,
+                    &path,
+                    false,
+                    &theme::active_theme(self.dark_theme),
+                );
+                let activate_path = path.clone();
+                let context_path = path.clone();
+                let close_path = path.clone();
+                let middle_close_path = path.clone();
+                let drop_path = path.clone();
+                let drag_payload = EditorTabDrag {
+                    path: path.clone(),
+                    label: name.clone(),
+                };
+                // Keep the full document path in the tooltip even when the tab label is truncated.
+                let tooltip_path = editor_core::display_path(&path).to_string();
+                // Both project and external files use the theme's selected underline color.
+                let selected_color = tab_styles.selected.border.unwrap_or(cx.theme().primary);
+                let separator_color = tab_styles.base.border.unwrap_or(cx.theme().border);
+                let external_background = gpui_kit::rgb(0xfff4c2);
+                crate::ui::controls::file_tab(
+                    format!("editor-tab:{}", path.to_string_lossy()),
+                    name.clone(),
+                    is_active,
+                    index,
+                    total_count,
+                )
                 .debug_selector(move || format!("editor-tab-{index}").into())
                 .relative()
                 .h_full()
@@ -444,6 +477,9 @@ impl EditorApp {
                             }
                         )),
                 )
+                .when(tab.preview, |this| {
+                    this.child(crate::ui::controls::preview_tab_badge(cx))
+                })
                 .child(
                     div()
                         .id(format!("close-editor-tab:{}", path.to_string_lossy()))
@@ -462,11 +498,14 @@ impl EditorApp {
                             this.close_tab(close_path.clone(), window, cx);
                         })),
                 )
-                .on_click(cx.listener(move |this, _, window, cx| {
+                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                     // A tab click activates existing content and follows the explorer preference.
                     if let Some(index) =
                         this.tabs.iter().position(|tab| tab.path() == activate_path)
                     {
+                        if event.click_count() == 2 {
+                            this.keep_tab(index);
+                        }
                         this.activate_tab(index, window, cx);
                     }
                 }))
@@ -494,7 +533,7 @@ impl EditorApp {
                         this.close_tab(middle_close_path.clone(), window, cx);
                     }),
                 )
-        });
+            });
 
         let measured_viewport = self.tabs_scroll.bounds().size.width;
         let viewport = if measured_viewport > px(0.) {
@@ -502,7 +541,7 @@ impl EditorApp {
         } else {
             (window.bounds().size.width - px(EXPLORER_INITIAL_WIDTH) - px(24.)).max(px(0.))
         };
-        let content_width = px(190.) * self.tabs.len();
+        let content_width = px(190.) * total_count;
         let max_scroll = if measured_viewport > px(0.) {
             self.tabs_scroll.max_offset().x
         } else {
@@ -573,7 +612,39 @@ impl EditorApp {
                             .flex_none()
                             .w_auto()
                             .min_w_full()
-                            .children(tabs),
+                            .children(tabs)
+                            .children(self.comparison_views.iter().enumerate().map(
+                                |(index, view)| {
+                                    let activate = cx.entity().downgrade();
+                                    let close = activate.clone();
+                                    let activate_id = view.id.clone();
+                                    let close_id = view.id.clone();
+                                    crate::ui::controls::comparison_tab(
+                                        view.id.clone(),
+                                        view.title.clone(),
+                                        self.active_comparison.as_ref() == Some(&view.id),
+                                        view.preview,
+                                        visible_count + index,
+                                        total_count,
+                                        move |pin, window, cx| {
+                                            let _ = activate.update(cx, |app, cx| {
+                                                app.activate_comparison_view(
+                                                    &activate_id,
+                                                    pin,
+                                                    window,
+                                                    cx,
+                                                )
+                                            });
+                                        },
+                                        move |window, cx| {
+                                            let _ = close.update(cx, |app, cx| {
+                                                app.close_comparison_view(&close_id, window, cx)
+                                            });
+                                        },
+                                        cx,
+                                    )
+                                },
+                            )),
                     ),
             )
             .when(max_scroll > px(0.) && self.tabs_hovered, |this| {

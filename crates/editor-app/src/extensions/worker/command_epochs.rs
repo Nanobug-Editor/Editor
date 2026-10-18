@@ -3,6 +3,13 @@
 use super::*;
 
 impl Published {
+    /// Visibility observations must never treat an old retirement epoch as a live callback owner.
+    pub(in crate::extensions) fn live_instance_epoch(&self, plugin: &str) -> Option<u64> {
+        self.instance_ids
+            .contains_key(plugin)
+            .then(|| self.instance_epochs.get(plugin).copied())
+            .flatten()
+    }
     /// Receipt consumers bind only an owner actually present in the latest live publication.
     pub(in crate::extensions) fn owner_epoch(&self, plugin: &str, owner: &str) -> Option<u64> {
         (self.instance_ids.get(plugin).map(String::as_str) == Some(owner))

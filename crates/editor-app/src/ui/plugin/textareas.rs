@@ -37,7 +37,7 @@ impl PluginView {
                 let subscription = cx.subscribe_in(
                     &state,
                     window,
-                    move |this, state, event: &InputEvent, _, cx| {
+                    move |this, state, event: &InputEvent, window, cx| {
                         if !matches!(event, InputEvent::Change) {
                             return;
                         }
@@ -49,7 +49,8 @@ impl PluginView {
                             return;
                         }
                         entry.last_value = value.clone();
-                        this.emit(&id, Action::Change(value), cx);
+                        let revision = entry.value_revision;
+                        this.form_changed(&id, state.entity_id(), revision, value, window, cx);
                     },
                 );
                 self.textareas.insert(
@@ -66,6 +67,7 @@ impl PluginView {
             let entry = self.textareas.get_mut(&node.id).unwrap();
             let replace = entry.value_revision != input.value_revision;
             if replace {
+                self.forms.cancel(&node.id);
                 entry.value_revision = input.value_revision;
                 entry.last_value = input.value.clone();
             }

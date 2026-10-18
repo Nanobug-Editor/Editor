@@ -205,6 +205,10 @@ fn inspect_history_and_upgrade(
             .is_empty()
     }));
     scroll_details(form, -350.);
+    if existing.is_some() {
+        // The installed page can update directly after history browsing without redirecting local details.
+        click(form, "plugin-manager-tabs-0");
+    }
     click(form, "market-install");
     if existing.is_none() {
         assert_eq!(server.downloads.load(Ordering::Acquire), 0);
@@ -226,6 +230,15 @@ fn inspect_history_and_upgrade(
     });
     form.update(|_, cx| panel.update(cx, |panel, cx| panel.poll(cx)));
     draw(form);
+    assert!(
+        form.debug_bounds("market-install").is_none(),
+        "a current installed version must not leave a disabled update button"
+    );
+    assert!(form.debug_bounds("plugin-row-toml-update").is_none());
+    assert_eq!(
+        form.update(|_, cx| panel.read(cx).manager_market),
+        existing.is_none()
+    );
     let records = Manager::read_registry(root).unwrap();
     assert_eq!(records["toml"].manifest.version, "0.2.3");
     assert_eq!(records["toml"].digest, release.sha256);
@@ -325,7 +338,10 @@ fn outage_and_withdrawal(
     );
     click(form, "market-version-0.2.3");
     scroll_details(form, -350.);
-    click(form, "market-install");
+    assert!(
+        form.debug_bounds("market-install").is_none(),
+        "withdrawn versions remain browsable without an install action"
+    );
     assert_eq!(revoked.downloads.load(Ordering::Acquire), 0);
     assert_eq!(
         Manager::read_registry(root).unwrap()["toml"]

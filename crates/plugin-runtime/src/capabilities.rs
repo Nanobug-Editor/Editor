@@ -97,6 +97,10 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
     let available = [
         ("package.assets".into(), Version::new(1, 0, 0)),
         ("ui.native".into(), Version::new(1, 1, 0)),
+        ("ui.windows".into(), Version::new(1, 0, 0)),
+        ("ui.visibility".into(), Version::new(1, 0, 0)),
+        ("ui.code_editor".into(), Version::new(1, 1, 0)),
+        ("editor.actions".into(), Version::new(1, 0, 0)),
         ("ui.interaction".into(), Version::new(1, 0, 0)),
         ("files.selection".into(), Version::new(1, 1, 0)),
         ("plugin.commands".into(), Version::new(1, 0, 0)),
@@ -128,8 +132,8 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("storage.editor".into(), Version::new(1, 0, 0)),
         ("storage.migration".into(), Version::new(1, 0, 0)),
         ("editor.documents".into(), Version::new(1, 1, 0)),
-        ("editor.virtual".into(), Version::new(1, 0, 0)),
-        ("editor.diff".into(), Version::new(1, 0, 0)),
+        ("editor.virtual".into(), Version::new(1, 1, 0)),
+        ("editor.diff".into(), Version::new(1, 1, 0)),
         ("editor.decorations".into(), Version::new(1, 0, 0)),
         ("editor.layout".into(), Version::new(1, 0, 0)),
         ("editor.viewport".into(), Version::new(1, 0, 0)),
@@ -143,7 +147,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.panels".into(), Version::new(1, 0, 0)),
         ("ui.clipboard".into(), Version::new(1, 0, 0)),
         // 1.7 presents an already-owned PTY; negotiation still grants no execution or UI authority.
-        ("process".into(), Version::new(1, 7, 0)),
+        ("process".into(), Version::new(1, 8, 0)),
         // 1.2 owns native roots; 1.3 opts into immutable diagnostic URIs; 1.4 adds shared native
         // references/code actions/signature consumers, gated again by standard server advertisement.
         ("language.lsp".into(), Version::new(1, 4, 0)),
@@ -179,7 +183,38 @@ mod terminal_tests {
             .unwrap();
             assert_eq!(
                 negotiate(&manifest).unwrap().capabilities["process"],
-                Version::new(1, 7, 0)
+                Version::new(1, 8, 0)
+            );
+        }
+    }
+}
+
+/// Optional visibility events are absent from the negotiated API of every older guest.
+#[cfg(test)]
+mod visibility_tests {
+    use super::*;
+
+    #[test]
+    fn panel_visibility_is_opt_in_and_independent_of_plugin_identity() {
+        for opt_in in [false, true] {
+            let mut manifest: Manifest = serde_json::from_value(serde_json::json!({
+                "id":"independent.visibility","name":"Visibility","version":"1.0.0","protocol":7,
+                "permissions":[],"storage_limit":1024,"api":{"base":"^1","required":{}}
+            }))
+            .unwrap();
+            if opt_in {
+                manifest
+                    .api
+                    .as_mut()
+                    .unwrap()
+                    .optional
+                    .insert("ui.visibility".into(), "^1".parse().unwrap());
+            }
+            let api = negotiate(&manifest).unwrap();
+            assert_eq!(api.capabilities.contains_key("ui.visibility"), opt_in);
+            assert!(
+                manifest.permissions.is_empty(),
+                "negotiation does not grant ui.panels consent"
             );
         }
     }

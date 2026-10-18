@@ -1,14 +1,17 @@
 //! Shared explorer-style menu appearance and a native popup with keyboard navigation.
 use gpui_kit::{
-    App, Context, Div, ElementId, FocusHandle, FontWeight, Hsla, InteractiveElement, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement, Pixels, Point, Render, Role, ScrollHandle,
-    SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred, div, point, px,
+    App, Context, Div, ElementId, FocusHandle, Focusable, FontWeight, Hsla, InteractiveElement,
+    IntoElement, KeyDownEvent, MouseButton, ParentElement, Pixels, Point, Render, Role,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred,
+    div, point, px,
 };
 use gpui_kit::{component::ActiveTheme as _, prelude::FluentBuilder as _};
 use plugin_runtime::plugin_protocol::ui::{Action, MenuItem};
+use std::collections::BTreeMap;
 use std::rc::Rc;
 #[cfg(test)]
 mod tests;
+mod view;
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct MenuStyle {
@@ -98,6 +101,15 @@ impl MenuStyle {
     }
 }
 
+/// Local row presentations retain the ordinary popup's identity and interaction model.
+#[derive(Clone)]
+pub(crate) enum MenuRowContent {
+    /// A non-interactive group label; callers also mark its MenuItem disabled for navigation.
+    Heading,
+    /// A two-line selectable row with an optional current-selection check.
+    Detail { secondary: String, checked: bool },
+}
+
 /// The popup owns focus/navigation/scrolling; callers receive stable item identities.
 pub(crate) struct PopupMenu {
     pub items: Vec<MenuItem>,
@@ -110,6 +122,9 @@ pub(crate) struct PopupMenu {
     scroll: ScrollHandle,
     /// The caller chooses a local layout width; actual rendering still clamps it to the viewport.
     width: f32,
+    /// Optional local height limit keeps navigation dropdowns compact without truncating records.
+    max_height: f32,
+    row_content: BTreeMap<String, MenuRowContent>,
     /// Optional trailing actions stay reachable while only the preceding items scroll.
     footer_items: usize,
     /// Dropdowns retain their trigger's lower edge rather than moving above it when long.
@@ -119,6 +134,12 @@ pub(crate) struct PopupMenu {
     /// Generic row diagnostics supplied by a caller; keyboard selection remains available for repair.
     notices: std::collections::BTreeMap<String, String>,
     sink: Rc<dyn Fn(Action, &mut Window, &mut App)>,
+    /// Search remains a Base input; the immutable snapshot is filtered without losing row identity.
+    search: Option<gpui_kit::Entity<gpui_base::input::InputState>>,
+    search_subscription: Option<gpui_kit::Subscription>,
+    source_items: Vec<MenuItem>,
+    /// Secondary actions do not select their containing row or dismiss the popup.
+    row_actions: BTreeMap<String, MenuItem>,
 }
 impl PopupMenu {
     /// Align a dropdown with the trigger's lower-right corner in window coordinates.
@@ -153,11 +174,17 @@ impl PopupMenu {
             closed: false,
             scroll: ScrollHandle::new(),
             width: 230.,
+            max_height: f32::INFINITY,
+            row_content: BTreeMap::new(),
             footer_items: 0,
             below_anchor: false,
             pointer_position: window.mouse_position(),
             notices: Default::default(),
             sink: Rc::new(sink),
+            search: None,
+            search_subscription: None,
+            source_items: Vec::new(),
+            row_actions: BTreeMap::new(),
         }
     }
     fn finish(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
@@ -187,6 +214,128 @@ impl PopupMenu {
         }
         self
     }
+    /// Add local group labels and two-line rows without changing public plugin menu contracts.
+    pub(crate) fn row_content(mut self, content: BTreeMap<String, MenuRowContent>) -> Self {
+        self.row_content = content;
+        self
+    }
+    /// Add a searchable header while retaining Base IME and the popup's original focus lease.
+    pub(crate) fn searchable(
+        mut self,
+        input: gpui_kit::Entity<gpui_base::input::InputState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        self.source_items = self.items.clone();
+        self.search_subscription = Some(cx.subscribe_in(
+            &input,
+            window,
+            |this, _, event: &gpui_base::input::InputEvent, window, cx| {
+                match event {
+                    gpui_base::input::InputEvent::Change => this.filter(cx),
+                    gpui_base::input::InputEvent::PressEnter { .. } => {
+                        if let Some(item) = this
+                            .selected
+                            .and_then(|index| this.items.get(index))
+                            .filter(|item| !item.disabled)
+                        {
+                            this.finish(Action::Select(item.id.clone()), window, cx);
+                        }
+                    }
+                    _ => {}
+                }
+            },
+        ));
+        input.read(cx).focus_handle(cx).focus(window, cx);
+        self.search = Some(input);
+        self.filter(cx);
+        self
+    }
+    /// Keep auxiliary row actions outside the primary button's hit target.
+    pub(crate) fn row_actions(
+        &mut self,
+        actions: BTreeMap<String, MenuItem>,
+        cx: &mut Context<Self>,
+    ) {
+        self.row_actions = actions;
+        cx.notify();
+    }
+    /// Filter only the scrollable records; pinned management commands remain available.
+    fn filter(&mut self, cx: &mut Context<Self>) {
+        let Some(input) = &self.search else {
+            return;
+        };
+        let query = input.read(cx).text().to_string().trim().to_lowercase();
+        let split = self.source_items.len().saturating_sub(self.footer_items);
+        let selected = self
+            .selected
+            .and_then(|index| self.items.get(index))
+            .map(|item| item.id.clone());
+        self.items = self.source_items.iter().enumerate().filter(|(index, item)| {
+            *index >= split || matches!(self.row_content.get(&item.id), Some(MenuRowContent::Heading))
+                || item.label.to_lowercase().contains(&query)
+                || matches!(self.row_content.get(&item.id), Some(MenuRowContent::Detail { secondary, .. }) if secondary.to_lowercase().contains(&query))
+        }).map(|(_, item)| item.clone()).collect();
+        self.selected = selected
+            .and_then(|id| {
+                self.items
+                    .iter()
+                    .position(|item| item.id == id && !item.disabled)
+            })
+            .or_else(|| self.items.iter().position(|item| !item.disabled));
+        self.scroll.set_offset(Default::default());
+        cx.notify();
+    }
+    /// Bound the full card height in logical pixels; invalid limits retain the viewport-only bound.
+    pub(crate) fn max_height(mut self, height: f32) -> Self {
+        if height.is_finite() && height > 0. {
+            self.max_height = height;
+        }
+        self
+    }
+    /// Replace a live snapshot while retaining focus and selection by identity. Removed selections
+    /// fall back to the first action; minimal scrolling keeps that highlight visible after layout.
+    pub(crate) fn replace_rows(
+        &mut self,
+        items: Vec<MenuItem>,
+        content: BTreeMap<String, MenuRowContent>,
+        cx: &mut Context<Self>,
+    ) {
+        let selected = self
+            .selected
+            .and_then(|index| self.items.get(index))
+            .map(|item| item.id.clone());
+        self.selected = selected
+            .and_then(|id| {
+                items
+                    .iter()
+                    .position(|item| item.id == id && !item.disabled)
+            })
+            .or_else(|| items.iter().position(|item| !item.disabled));
+        self.items = items;
+        self.row_content = content;
+        if self.search.is_some() {
+            self.source_items = self.items.clone();
+            self.filter(cx);
+        }
+        if let Some(index) = self
+            .selected
+            .filter(|index| *index < self.items.len().saturating_sub(self.footer_items))
+        {
+            // The new row geometry is resolved during prepaint; old offsets cannot follow a row
+            // moving between groups or disappearing in a peer window.
+            self.scroll.scroll_to_item(index);
+        }
+        cx.notify();
+    }
+    /// Content determines its actual row height, including fixed footers and viewport clipping.
+    fn row_height(&self, item: &MenuItem) -> f32 {
+        match self.row_content.get(&item.id) {
+            Some(MenuRowContent::Heading) => 26.,
+            Some(MenuRowContent::Detail { .. }) => 50.,
+            None => 29.,
+        }
+    }
     /// Pin a bounded number of final actions; callers still use one identity/navigation list.
     pub fn fixed_footer(mut self, count: usize) -> Self {
         self.footer_items = count.min(self.items.len());
@@ -198,6 +347,20 @@ impl PopupMenu {
         self
     }
     fn key(&mut self, key: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(input) = &self.search {
+            use gpui_kit::EntityInputHandler as _;
+            let composing = input.update(cx, |state, cx| {
+                state.marked_text_range(window, cx).is_some()
+            });
+            if composing
+                || !matches!(
+                    key.keystroke.key.as_str(),
+                    "escape" | "up" | "down" | "home" | "end"
+                )
+            {
+                return;
+            }
+        }
         cx.stop_propagation();
         match key.keystroke.key.as_str() {
             "escape" => self.finish(Action::Dismiss, window, cx),
@@ -239,140 +402,39 @@ impl PopupMenu {
             _ => {}
         }
     }
+    /// Base single-line bindings consume arrow/Home/End actions before raw key events.
+    /// Capture only list navigation while search owns focus; composition retains the input's actions.
+    fn search_navigation(
+        &mut self,
+        key: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use gpui_kit::EntityInputHandler as _;
+        let Some(input) = self.search.clone() else {
+            cx.propagate();
+            return;
+        };
+        if input.update(cx, |state, cx| {
+            state.marked_text_range(window, cx).is_some()
+        }) {
+            cx.propagate();
+            return;
+        }
+        self.key(
+            &KeyDownEvent {
+                keystroke: gpui_kit::Keystroke::parse(key).unwrap(),
+                is_held: false,
+                prefer_character_input: false,
+            },
+            window,
+            cx,
+        );
+    }
     /// Color diagnostic rows with the local danger token and expose their full reason on hover.
     pub fn notices(mut self, notices: std::collections::BTreeMap<String, String>) -> Self {
         self.notices = notices;
         self
-    }
-}
-impl Render for PopupMenu {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.closed {
-            return div().into_any_element();
-        }
-        let viewport = window.viewport_size();
-        let width = self.width.min((viewport.width / px(1.) - 16.).max(0.));
-        let height = (self.items.len() as f32 * 29. + 2. * self.style.padding_y + 2.)
-            .min((viewport.height / px(1.) - 16.).max(0.));
-        let left = self
-            .position
-            .x
-            .clamp(px(8.), (viewport.width - px(width + 8.)).max(px(8.)));
-        let top = self.position.y.clamp(
-            px(8.),
-            if self.below_anchor {
-                (viewport.height - px(8.)).max(px(8.))
-            } else {
-                (viewport.height - px(height + 8.)).max(px(8.))
-            },
-        );
-        let height = height.min((viewport.height - top - px(8.)) / px(1.));
-        let split = self.items.len().saturating_sub(self.footer_items);
-        let footer_height = self.footer_items as f32 * 29.;
-        let mut rows = div()
-            .id("menu-scroll")
-            .debug_selector(|| "native-menu-scroll".into())
-            .h(px((height
-                - footer_height
-                - 2. * self.style.padding_y
-                - 2.)
-                .max(0.)))
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll);
-        let mut footer = div().flex().flex_col().flex_shrink_0();
-        for (index, item) in self.items.iter().enumerate() {
-            let id = item.id.clone();
-            let debug = format!("native-menu-{}", id);
-            let row = self
-                .style
-                .row(
-                    SharedString::from(debug.clone()),
-                    item.label.clone(),
-                    self.selected == Some(index),
-                )
-                .debug_selector(move || debug.clone())
-                .flex_shrink_0()
-                .disabled(item.disabled)
-                // Non-actionable placeholders stay readable in both themes without looking enabled.
-                .when(item.disabled, |row| {
-                    row.text_color(cx.theme().muted_foreground)
-                })
-                .when_some(self.notices.get(&item.id).cloned(), |row, reason| {
-                    row.text_color(cx.theme().danger)
-                        .tooltip(move |window, cx| {
-                            super::Tooltip::new(reason.clone()).build(window, cx)
-                        })
-                })
-                .when(item.separator_before, |row| {
-                    row.border_t_1().border_color(self.style.border)
-                })
-                .on_mouse_move(
-                    cx.listener(move |this, event: &gpui_kit::MouseMoveEvent, _, cx| {
-                        if event.position != this.pointer_position && !this.items[index].disabled {
-                            this.selected = Some(index);
-                            cx.notify();
-                        }
-                        this.pointer_position = event.position;
-                    }),
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.finish(Action::Select(id.clone()), window, cx)
-                }))
-                .child(item.label.clone());
-            if index < split {
-                rows = rows.child(row);
-            } else {
-                footer = footer.child(row);
-            }
-        }
-        let card = self
-            .style
-            .card(width)
-            .id("native-popup-menu")
-            .debug_selector(|| "native-popup-menu".into())
-            .role(Role::Menu)
-            .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
-            .child(rows)
-            .when(self.footer_items > 0, |card| card.child(footer));
-        deferred(
-            anchored().position(point(px(0.), px(0.))).child(
-                div()
-                    .absolute()
-                    .w(viewport.width)
-                    .h(viewport.height)
-                    .track_focus(&self.focus)
-                    .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .on_mouse_up(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-                    .capture_key_down(cx.listener(Self::key))
-                    // A popup inside a dialog owns these actions as well as raw key events.
-                    // Without this boundary, Enter selects a row and also confirms the parent modal.
-                    .on_action(
-                        cx.listener(|this, _: &gpui_base::actions::Confirm, window, cx| {
-                            if let Some(item) = this
-                                .selected
-                                .and_then(|index| this.items.get(index))
-                                .filter(|item| !item.disabled)
-                            {
-                                this.finish(Action::Select(item.id.clone()), window, cx);
-                            }
-                            cx.stop_propagation();
-                        }),
-                    )
-                    .on_action(
-                        cx.listener(|this, _: &gpui_base::actions::Cancel, window, cx| {
-                            this.finish(Action::Dismiss, window, cx);
-                            cx.stop_propagation();
-                        }),
-                    )
-                    .on_any_mouse_down(cx.listener(|this, _, window, cx| {
-                        this.finish(Action::Dismiss, window, cx);
-                        cx.stop_propagation();
-                    }))
-                    .child(div().absolute().left(left).top(top).child(card)),
-            ),
-        )
-        .with_priority(20)
-        .into_any_element()
     }
 }
 

@@ -16,6 +16,26 @@ static USER_CATALOGS: LazyLock<Mutex<BTreeMap<PathBuf, Weak<RwLock<Arc<Catalog>>
 struct UserCatalogs(BTreeMap<PathBuf, Arc<RwLock<Arc<Catalog>>>>);
 impl gpui_kit::Global for UserCatalogs {}
 impl CatalogView {
+    /// Empty startup owns the user's immutable resources without registering a project catalog.
+    pub(crate) fn application(root: &Path, cx: &mut gpui_kit::App) -> Self {
+        if !cx.has_global::<UserCatalogs>() {
+            cx.set_global(UserCatalogs::default());
+        }
+        let user = cx
+            .global_mut::<UserCatalogs>()
+            .0
+            .entry(root.to_owned())
+            .or_default()
+            .clone();
+        USER_CATALOGS
+            .lock()
+            .unwrap()
+            .insert(root.to_owned(), Arc::downgrade(&user));
+        Self {
+            _project: Default::default(),
+            _user: user,
+        }
+    }
     /// Construct before publishing project entries so immutable icons/assets survive another window's refresh.
     pub(crate) fn new(
         providers: &crate::language::providers::Providers,
@@ -60,6 +80,17 @@ impl CatalogView {
                 .and_then(Weak::upgrade)
                 .expect("user contribution owner"),
         }
+    }
+}
+/// User-only publication cannot install language roles or change a project's contribution projection.
+pub(super) fn publish_user(root: &Path, catalog: Catalog) {
+    if let Some(state) = USER_CATALOGS
+        .lock()
+        .unwrap()
+        .get(root)
+        .and_then(Weak::upgrade)
+    {
+        *state.write().unwrap() = Arc::new(catalog);
     }
 }
 pub(super) fn project_catalog(providers: &crate::language::providers::Providers) -> Arc<Catalog> {

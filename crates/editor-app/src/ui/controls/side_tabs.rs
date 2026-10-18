@@ -10,10 +10,11 @@ use gpui_kit::{
     App, AppContext as _, Bounds, Context, DispatchPhase, Entity, FocusHandle, Focusable as _,
     FontWeight, Hsla, InteractiveElement, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, canvas, div, fill, px, size,
+    StatefulInteractiveElement, Styled, Subscription, Window, canvas, div, fill,
+    prelude::FluentBuilder as _, px, size,
 };
 use plugin_runtime::plugin_protocol::ui::{Action, SideTabs, SideTabsPosition};
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, collections::BTreeMap, rc::Rc};
 
 /// Keep row layout, reorder hit testing and the selected border on the same vertical grid.
 const TAB_HEIGHT: f32 = 32.;
@@ -55,6 +56,10 @@ pub(crate) struct SideTabBar {
     resizing: Option<(Pixels, f32)>,
     preview_width: Rc<Cell<Option<f32>>>,
     suppress_click: bool,
+    /// The containing source surface revokes gestures while preserving keyed rename and scroll.
+    gesture_incarnation: Option<u64>,
+    /// Close buttons keep focus even when source withdrawal changes their Base press identity.
+    close_focus: BTreeMap<String, FocusHandle>,
     sink: Rc<dyn Fn(Action, &mut Window, &mut App)>,
     preview: Rc<dyn Fn(&mut App)>,
 }
@@ -81,8 +86,51 @@ impl SideTabBar {
             resizing: None,
             preview_width,
             suppress_click: false,
+            gesture_incarnation: None,
+            close_focus: BTreeMap::new(),
             sink: Rc::new(sink),
             preview: Rc::new(preview),
+        }
+    }
+    /// A source refresh cannot adopt an earlier row/close press or captured reorder/resize.
+    /// Ordinary sidebars supply None, retaining their existing cross-render native behavior.
+    pub(crate) fn set_gesture_incarnation(
+        &mut self,
+        incarnation: Option<u64>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.gesture_incarnation != incarnation {
+            self.gesture_incarnation = incarnation;
+            self.drag = None;
+            self.resizing = None;
+            self.preview_width.set(None);
+            self.suppress_click = true;
+            cx.notify();
+        }
+        let model = &self.model;
+        self.close_focus.retain(|id, _| {
+            incarnation.is_some()
+                && model
+                    .items
+                    .iter()
+                    .any(|item| item.id == *id && item.closable)
+        });
+        if incarnation.is_some() {
+            for item in &self.model.items {
+                if item.closable {
+                    self.close_focus
+                        .entry(item.id.clone())
+                        .or_insert_with(|| cx.focus_handle());
+                }
+            }
+        }
+    }
+
+    /// Version only actual Base hit targets, leaving the rename input and scrolling ancestry intact.
+    fn gesture_id(&self, id: String) -> SharedString {
+        match self.gesture_incarnation {
+            Some(incarnation) => format!("{id}-action-{incarnation}").into(),
+            None => id.into(),
         }
     }
     pub fn update(
@@ -275,6 +323,7 @@ impl SideTabBar {
 }
 impl Render for SideTabBar {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let gesture = self.gesture_incarnation;
         let style = self.style.clone();
         let on_left = self.model.position == SideTabsPosition::Left;
         // Measure the selected row after scrolling, then paint its edge outside row clipping.
@@ -322,7 +371,7 @@ impl Render for SideTabBar {
                 let pressed = id.clone();
                 let context = id.clone();
                 let middle = id.clone();
-                let tab = Tab::new(SharedString::from(format!("select-{id}")))
+                let tab = Tab::new(self.gesture_id(format!("select-{id}")))
                     .selected(active)
                     .disabled(item.disabled)
                     .accessibility_label(item.label.clone())
@@ -340,7 +389,9 @@ impl Render for SideTabBar {
                     })
                     .capture_any_mouse_down(cx.listener(
                         move |this, event: &MouseDownEvent, window, cx| {
-                            if event.button != MouseButton::Left {
+                            if this.gesture_incarnation != gesture
+                                || event.button != MouseButton::Left
+                            {
                                 return;
                             }
                             if this
@@ -367,11 +418,12 @@ impl Render for SideTabBar {
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                            if this
-                                .model
-                                .items
-                                .iter()
-                                .any(|item| item.id == context && !item.disabled)
+                            if this.gesture_incarnation == gesture
+                                && this
+                                    .model
+                                    .items
+                                    .iter()
+                                    .any(|item| item.id == context && !item.disabled)
                             {
                                 this.emit(
                                     Action::Context {
@@ -389,11 +441,12 @@ impl Render for SideTabBar {
                     .on_mouse_down(
                         MouseButton::Middle,
                         cx.listener(move |this, _, window, cx| {
-                            if this
-                                .model
-                                .items
-                                .iter()
-                                .any(|i| i.id == middle && i.closable && !i.disabled)
+                            if this.gesture_incarnation == gesture
+                                && this
+                                    .model
+                                    .items
+                                    .iter()
+                                    .any(|i| i.id == middle && i.closable && !i.disabled)
                             {
                                 this.emit(Action::Close(middle.clone()), window, cx);
                             }
@@ -401,6 +454,9 @@ impl Render for SideTabBar {
                         }),
                     )
                     .on_click(cx.listener(move |this, _, window, cx| {
+                        if this.gesture_incarnation != gesture {
+                            return;
+                        }
                         if !this.suppress_click && this.editing.is_none() {
                             this.emit(Action::Select(clicked.clone()), window, cx);
                         }
@@ -416,7 +472,10 @@ impl Render for SideTabBar {
                 if item.closable {
                     let close = id.clone();
                     row = row.child(
-                        gpui_base::Button::new(SharedString::from(format!("close-{id}")))
+                        gpui_base::Button::new(self.gesture_id(format!("close-{id}")))
+                            .when_some(self.close_focus.get(&id), |button, focus| {
+                                button.track_focus(focus)
+                            })
                             .accessibility_label("关闭标签")
                             .disabled(item.disabled)
                             .w(px(28.))
@@ -433,7 +492,9 @@ impl Render for SideTabBar {
                             }))
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                this.emit(Action::Close(close.clone()), window, cx)
+                                if this.gesture_incarnation == gesture {
+                                    this.emit(Action::Close(close.clone()), window, cx);
+                                }
                             }))
                             .child("×"),
                     );
@@ -464,8 +525,8 @@ impl Render for SideTabBar {
             .cursor_col_resize()
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                    if this.editing.is_none() {
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    if this.gesture_incarnation == gesture && this.editing.is_none() {
                         this.resizing = Some((event.position.x, this.model.width));
                         this.drag = None;
                     }
@@ -537,14 +598,20 @@ impl Render for SideTabBar {
                         let released = paint_owner.clone();
                         window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
                             if phase == DispatchPhase::Capture {
-                                let _ = moved
-                                    .update(cx, |this, cx| this.pointer_move(event, window, cx));
+                                let _ = moved.update(cx, |this, cx| {
+                                    if this.gesture_incarnation == gesture {
+                                        this.pointer_move(event, window, cx);
+                                    }
+                                });
                             }
                         });
                         window.on_mouse_event(move |event: &MouseUpEvent, phase, window, cx| {
                             if phase == DispatchPhase::Capture {
-                                let _ = released
-                                    .update(cx, |this, cx| this.pointer_up(event, window, cx));
+                                let _ = released.update(cx, |this, cx| {
+                                    if this.gesture_incarnation == gesture {
+                                        this.pointer_up(event, window, cx);
+                                    }
+                                });
                             }
                         });
                     },

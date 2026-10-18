@@ -268,6 +268,19 @@ impl Processes {
             .map_err(|e| anyhow::anyhow!("Process input is unavailable: {e}"))?;
         Ok(())
     }
+    /// Disconnecting the only sender drains its bounded queue before the writer drops the pipe.
+    /// Do not enqueue a close sentinel: a full input queue must not make EOF admission race writes.
+    pub fn close_stdin(&mut self, id: u64) -> anyhow::Result<bool> {
+        let process = self
+            .items
+            .get_mut(&id)
+            .ok_or_else(|| anyhow::anyhow!("Unknown process handle"))?;
+        if process.master.is_some() {
+            return Ok(false);
+        }
+        process.input.take();
+        Ok(true)
+    }
     /// A PTY exposes console interruption; ordinary pipes require an application-specific protocol.
     pub fn request_exit(&mut self, id: u64) -> anyhow::Result<bool> {
         let process = self
