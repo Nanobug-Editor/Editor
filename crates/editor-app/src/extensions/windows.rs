@@ -70,8 +70,18 @@ impl Render for WorkWindow {
                     .flex_shrink_0()
                     .flex()
                     .items_center()
-                    .window_control_area(gpui_kit::WindowControlArea::Drag)
-                    .child(div().flex_1().pl_3().child(self.title.clone()))
+                    .child(
+                        // Native hit testing chooses the first matching caption region. Keep
+                        // dragging beside the buttons so it cannot mask their OS actions.
+                        div()
+                            .flex_1()
+                            .h_full()
+                            .pl_3()
+                            .flex()
+                            .items_center()
+                            .window_control_area(gpui_kit::WindowControlArea::Drag)
+                            .child(self.title.clone()),
+                    )
                     .child(crate::ui::controls::window::native_window_controls(
                         window, cx,
                     )),

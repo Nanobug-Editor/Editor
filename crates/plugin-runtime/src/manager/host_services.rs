@@ -1159,7 +1159,11 @@ impl Manager {
     /// Shared with the debug side so a debug call is routed to the same scope its provider was
     /// selected in; two answers about one workspace would otherwise be possible.
     pub(super) fn host_scope(&self) -> String {
-        scopes::workspace_key(&self.environment.workspace)
+        if self.is_application_management() {
+            "application".into()
+        } else {
+            scopes::workspace_key(&self.environment.workspace)
+        }
     }
     /// Every retained host session, newest identity last; finished sessions stay locatable by key.
     pub fn executions(&self) -> Vec<HostExecution> {

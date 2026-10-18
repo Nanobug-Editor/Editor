@@ -180,7 +180,10 @@ impl SettingsView {
         };
         let view = cx.entity();
         let field = draft_key;
-        let scope_control = if definition.scope == Scope::Project && !application {
+        let scope_control = if definition.scope == Scope::Project
+            && !application
+            && !self.owner.read(cx).workspace.as_os_str().is_empty()
+        {
             SegmentedTabs::new(SharedString::from(format!("{selector}-scope")))
                 .labels([
                     t!("settings.plugin_user").to_string(),

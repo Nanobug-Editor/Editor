@@ -181,6 +181,7 @@ impl EditorApp {
             cx,
         );
         self.tabs.push(OpenTab {
+            preview: false,
             path,
             file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             file_revision: 0,

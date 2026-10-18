@@ -35,22 +35,23 @@ impl UserBindings {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Self::default());
             }
-            Err(error) => return Err(format!("{}: {error}", path.display())),
+            Err(error) => return Err(format!("{}: {error}", editor_core::display_path(&path))),
         };
         let mut config: Self = serde_json::from_slice(&bytes)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+            .map_err(|error| format!("{}: {error}", editor_core::display_path(&path)))?;
         if config.schema != 1 {
             return Err(format!(
                 "{}: unsupported shortcut schema {}",
-                path.display(),
+                editor_core::display_path(&path),
                 config.schema
             ));
         }
         for (id, bindings) in &mut config.overrides {
             // Explicit conflict replacement can retain untouched upstream defaults in an
             // override. Reload must preserve such keys; only newly edited drafts restrict text.
-            *bindings = normalize(bindings, false)
-                .map_err(|error| format!("{}: {id}: {error:?}", path.display()))?;
+            *bindings = normalize(bindings, false).map_err(|error| {
+                format!("{}: {id}: {error:?}", editor_core::display_path(&path))
+            })?;
         }
         Ok(config)
     }
@@ -61,7 +62,8 @@ impl UserBindings {
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
         {
-            fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
+            fs::create_dir_all(parent)
+                .map_err(|error| format!("{}: {error}", editor_core::display_path(&parent)))?;
         }
         let contents = serde_json::to_string_pretty(self).map_err(|error| error.to_string())?;
         platform_windows::NativeFileStore

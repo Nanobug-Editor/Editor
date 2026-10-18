@@ -9,13 +9,16 @@ use gpui_kit::{AnyWindowHandle, AsyncApp};
 use std::{cell::RefCell, fs};
 
 mod bridge;
+mod caption_controls;
 mod exit_tests;
 mod fixture;
+mod idle_retention;
 mod input;
 mod lifecycle;
 mod matrix;
 mod scenario;
 pub(super) mod scene_probe;
+mod sidebar;
 mod windows;
 use bridge::Harness;
 use fixture::Fixture;
@@ -90,6 +93,18 @@ pub(super) fn probe_key_result(
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_workbench_smoke() {
     assert!(
+        !sidebar::requested(),
+        "complete acceptance refuses sidebar-only workflow"
+    );
+    assert!(
+        !caption_controls::requested(),
+        "complete acceptance refuses caption-only workflow"
+    );
+    assert!(
+        std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_none(),
+        "full workbench acceptance refuses the idle-state-only workflow"
+    );
+    assert!(
         std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_none(),
         "full workbench acceptance refuses the shortened history-only workflow"
     );
@@ -117,6 +132,18 @@ fn git_native_history_keyboard_phase_probe() {
 #[test]
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_visual_matrix() {
+    assert!(
+        !sidebar::requested(),
+        "complete acceptance refuses sidebar-only workflow"
+    );
+    assert!(
+        !caption_controls::requested(),
+        "complete acceptance refuses caption-only workflow"
+    );
+    assert!(
+        std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_none(),
+        "full visual acceptance refuses the idle-state-only workflow"
+    );
     assert!(
         std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_none(),
         "full visual acceptance refuses the shortened history-only workflow"
@@ -168,7 +195,8 @@ fn open(case: Case, fixture: Rc<Fixture>, cx: &mut App) -> anyhow::Result<Harnes
     let mut session = SessionState::load_in_profile(&fixture.workspace, &fixture.profile);
     session.workspace_trusted = true;
     session.messages_visible = false;
-    session.explorer_visible = false;
+    // Only the sidebar workflow starts from the ordinary new-user host visibility default.
+    session.explorer_visible = sidebar::requested();
     session
         .plugin_panel_visibility
         .insert("git/staging".into(), true);

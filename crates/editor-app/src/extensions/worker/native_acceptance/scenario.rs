@@ -12,6 +12,15 @@ mod tree_projection;
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
     eprintln!("native {}: activate", h.case.name);
     h.dpi(h.main, cx).await?;
+    if sidebar::requested() {
+        return sidebar::exercise(h, cx).await;
+    }
+    if caption_controls::requested() {
+        return caption_controls::exercise(h, cx).await;
+    }
+    if std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some() {
+        return idle_retention::exercise(h, cx).await;
+    }
     if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
         // The diagnostic skips unrelated editor/branch flows while retaining the same real
         // pointer, wheel, End and single Enter against the installed guest and native canvas.

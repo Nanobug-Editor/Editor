@@ -1,6 +1,7 @@
 //! Coordinates document opening, tab activation, saving, and explorer selection.
 
 use super::file_watch::{DiskContent, WatchedFile};
+use super::tabs::FileOpenMode;
 use crate::app::messages::MessageLevel;
 use crate::*;
 
@@ -222,7 +223,7 @@ impl EditorApp {
                 if new_state != DiskState::Synced {
                     self.record_host_message(
                         MessageLevel::Warning,
-                        format!("{}: {message}", path.display()),
+                        format!("{}: {message}", editor_core::display_path(&path)),
                         cx,
                     );
                 }
@@ -267,16 +268,16 @@ impl EditorApp {
         self.session_state.open_tabs = self
             .tabs
             .iter()
-            .filter(|tab| tab.virtual_document.is_none())
+            .filter(|tab| tab.virtual_document.is_none() && !tab.preview)
             .map(|tab| tab.path().to_string_lossy().into_owned())
             .collect();
         self.session_state.active_file = self
             .active_path
             .as_ref()
             .filter(|path| {
-                self.tabs
-                    .iter()
-                    .any(|tab| tab.path() == path.as_path() && tab.virtual_document.is_none())
+                self.tabs.iter().any(|tab| {
+                    tab.path() == path.as_path() && tab.virtual_document.is_none() && !tab.preview
+                })
             })
             .map(|path| path.to_string_lossy().into_owned());
         self.session_state.explorer_visible = self.explorer_visible;
@@ -316,9 +317,71 @@ impl EditorApp {
         });
     }
 
+    /// Open or keep a fixed document through explicit navigation, revealing and focusing its content.
     pub(crate) fn open_file(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         // Explorer and other explicit file navigation retain their reveal behavior.
-        self.open_file_with_navigation(path, true, true, window, cx);
+        self.open_file_with_navigation(path, true, true, FileOpenMode::Fixed, window, cx);
+    }
+
+    /// Browse a file without taking tree focus; pending platform input belongs to the old document.
+    pub(crate) fn open_preview_file(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .language_edits
+            .bridge
+            .as_ref()
+            .is_some_and(|bridge| bridge.read(cx).has_pending())
+        {
+            self.finish_linked_input(window, cx);
+            let owner = cx.entity().downgrade();
+            // Change must reach the original session before deciding whether its preview is disposable.
+            window.defer(cx, move |window, cx| {
+                let _ = owner.update(cx, |app, cx| app.open_preview_file(path, window, cx));
+            });
+            return;
+        }
+        self.open_file_with_navigation(path, false, false, FileOpenMode::Preview, window, cx);
+    }
+
+    /// Promotion is permanent for this tab incarnation and becomes eligible for session restoration.
+    pub(crate) fn keep_tab(&mut self, index: usize) {
+        if let Some(tab) = self.tabs.get_mut(index) {
+            if tab.preview {
+                tab.preview = false;
+                self.persist_session();
+            }
+        }
+    }
+
+    /// Prepare the new file first, then retire a clean preview with the normal document cleanup.
+    fn insert_file_tab(&mut self, tab: OpenTab, cx: &mut Context<Self>) -> usize {
+        let preview_index = tab
+            .preview
+            .then(|| self.tabs.iter().position(|previous| previous.preview))
+            .flatten();
+        if let Some(index) = preview_index {
+            // A queued Change may not yet have advanced DocumentSession. Never discard live edits.
+            let previous = &self.tabs[index];
+            let edited = previous.is_dirty()
+                || previous.text.as_ref().is_some_and(|text| {
+                    let digest: [u8; 32] =
+                        Sha256::digest(text.editor.read(cx).text().to_string().as_bytes()).into();
+                    digest != text.disk_digest
+                });
+            if edited {
+                self.keep_tab(index);
+            } else {
+                self.release_tab(index, cx);
+                self.tabs.insert(index, tab);
+                return index;
+            }
+        }
+        self.tabs.push(tab);
+        self.tabs.len() - 1
     }
 
     /// Apply explicit reveal/focus policies to existing tabs and newly opened documents alike.
@@ -327,34 +390,36 @@ impl EditorApp {
         path: PathBuf,
         reveal: bool,
         focus_editor: bool,
+        mode: FileOpenMode,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let path = path.canonicalize().unwrap_or(path);
         if let Some(index) = self.tabs.iter().position(|tab| tab.path() == path) {
+            if mode == FileOpenMode::Fixed {
+                self.keep_tab(index);
+            }
             self.activate_tab_with_navigation(index, reveal, focus_editor, window, cx);
             return;
         }
 
         if self.file_requires_readonly_view(&path, cx) {
-            self.tabs.push(OpenTab {
-                virtual_document: None,
-                path,
-                file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-                file_revision: 0,
-                opened_at: Instant::now(),
-                file_digest: None,
-                text: None,
-                file_error: None,
-            });
-            self.sync_watched_documents();
-            self.activate_tab_with_navigation(
-                self.tabs.len() - 1,
-                reveal,
-                focus_editor,
-                window,
+            let index = self.insert_file_tab(
+                OpenTab {
+                    preview: mode == FileOpenMode::Preview,
+                    virtual_document: None,
+                    path,
+                    file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                    file_revision: 0,
+                    opened_at: Instant::now(),
+                    file_digest: None,
+                    text: None,
+                    file_error: None,
+                },
                 cx,
             );
+            self.sync_watched_documents();
+            self.activate_tab_with_navigation(index, reveal, focus_editor, window, cx);
             cx.notify();
             return;
         }
@@ -364,24 +429,22 @@ impl EditorApp {
                 let document_path = opened.session.path().to_path_buf();
                 let language = self.language_for_path(&document_path);
                 let text = self.create_native_text_tab(opened, window, cx);
-                self.tabs.push(OpenTab {
-                    virtual_document: None,
-                    path: document_path,
-                    file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-                    file_revision: 0,
-                    opened_at: Instant::now(),
-                    file_digest: None,
-                    file_error: None,
-                    text: Some(text),
-                });
-                self.sync_watched_documents();
-                self.activate_tab_with_navigation(
-                    self.tabs.len() - 1,
-                    reveal,
-                    focus_editor,
-                    window,
+                let index = self.insert_file_tab(
+                    OpenTab {
+                        preview: mode == FileOpenMode::Preview,
+                        virtual_document: None,
+                        path: document_path,
+                        file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                        file_revision: 0,
+                        opened_at: Instant::now(),
+                        file_digest: None,
+                        file_error: None,
+                        text: Some(text),
+                    },
                     cx,
                 );
+                self.sync_watched_documents();
+                self.activate_tab_with_navigation(index, reveal, focus_editor, window, cx);
                 self.refresh_syntax_diagnostics(self.editor.entity_id(), cx);
                 let editor = self.editor.downgrade();
                 // Start highlighting only after the loaded text has painted once.
@@ -393,24 +456,23 @@ impl EditorApp {
                 // Unknown binary encodings still have a file identity, even without an installed viewer.
                 if matches!(&error, editor_core::DocumentError::Read { source, .. } if source.kind() == std::io::ErrorKind::InvalidData)
                 {
-                    self.tabs.push(OpenTab {
-                        virtual_document: None,
-                        path,
-                        file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-                        file_revision: 0,
-                        opened_at: Instant::now(),
-                        file_digest: None,
-                        text: None,
-                        file_error: None,
-                    });
-                    self.sync_watched_documents();
-                    self.activate_tab_with_navigation(
-                        self.tabs.len() - 1,
-                        reveal,
-                        focus_editor,
-                        window,
+                    let index = self.insert_file_tab(
+                        OpenTab {
+                            preview: mode == FileOpenMode::Preview,
+                            virtual_document: None,
+                            path,
+                            file_id: NEXT_FILE_ID
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                            file_revision: 0,
+                            opened_at: Instant::now(),
+                            file_digest: None,
+                            text: None,
+                            file_error: None,
+                        },
                         cx,
                     );
+                    self.sync_watched_documents();
+                    self.activate_tab_with_navigation(index, reveal, focus_editor, window, cx);
                     cx.notify();
                     return;
                 }
@@ -501,7 +563,7 @@ impl EditorApp {
         // Source navigation updates the document without taking keyboard focus from the debug
         // panel. Consecutive frame keys and step shortcuts must stay in the user's active surface.
         let previous_focus = window.focused(cx);
-        self.open_file_with_navigation(path.clone(), true, false, window, cx);
+        self.open_file_with_navigation(path.clone(), true, false, FileOpenMode::Fixed, window, cx);
         if self.active_path.as_deref() != Some(path.as_path()) {
             return false;
         }
@@ -563,6 +625,7 @@ impl EditorApp {
             path.clone(),
             self.session_state.explorer_reveal_on_tab_switch,
             true,
+            FileOpenMode::Fixed,
             window,
             cx,
         );
@@ -750,7 +813,9 @@ impl EditorApp {
             self.editor = editor;
         } else {
             // A binary file has no input target; retain background text state without lending it focus.
-            window.blur(cx);
+            if focus_editor {
+                window.blur(cx);
+            }
             self.dismiss_pointer_hover(cx);
         }
         // A completion index belongs to one document and must not cross tabs.
@@ -861,12 +926,7 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) {
         let was_active = self.active_path.as_ref() == Some(&path);
-        self.close_language_document(&path, cx);
-        self.sync_plugin_documents(cx);
-        if let Some(virtual_tab) = &self.tabs[index].virtual_document {
-            virtual_tab.resource.revoke();
-        }
-        self.tabs.remove(index);
+        self.release_tab(index, cx);
         self.sync_watched_documents();
         if !was_active {
             self.persist_session();
@@ -902,6 +962,17 @@ impl EditorApp {
             self.editor_panel.update(cx, |_, cx| cx.notify());
             cx.notify();
         }
+    }
+
+    /// Closing and preview replacement revoke the same language, plugin and text resources.
+    fn release_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+        let path = self.tabs[index].path().to_path_buf();
+        self.close_language_document(&path, cx);
+        self.sync_plugin_documents(cx);
+        if let Some(virtual_tab) = &self.tabs[index].virtual_document {
+            virtual_tab.resource.revoke();
+        }
+        self.tabs.remove(index);
     }
 
     pub(crate) fn move_tab_before(&mut self, source: &Path, target: &Path, cx: &mut Context<Self>) {
@@ -1040,7 +1111,8 @@ impl EditorApp {
                 tab.overwrite_confirmed = false;
                 let path = tab.path().to_path_buf();
                 // A successful routine save stays quiet; the document session still owns the write.
-                self.status = t!("status.saved", path = path.display()).to_string();
+                self.status =
+                    t!("status.saved", path = editor_core::display_path(&path)).to_string();
                 self.notify_language_document_saved(&path, value, cx);
             }
             Err(error) => {

@@ -29,6 +29,9 @@ fn with_messages(
     });
     form.simulate_resize(size(px(1100.), px(800.)));
     draw(form);
+    // A fresh workspace leaves messages closed until the user activates the status control.
+    assert!(form.debug_bounds("host-messages-panel").is_none());
+    click(form, "host-messages-toggle");
     scenario(form, slot.borrow_mut().take().unwrap(), root);
 }
 
@@ -449,6 +452,8 @@ fn host_messages_extend_legacy_layout_and_support_native_keyboard(cx: &mut TestA
         let app = slot.borrow_mut().take().unwrap();
         restored.simulate_resize(size(px(1100.), px(800.)));
         draw(restored);
+        assert!(restored.debug_bounds("host-messages-panel").is_none());
+        click(restored, "host-messages-toggle");
         let panel = restored.debug_bounds("host-messages-panel").unwrap();
         let peer_selector = restored.update(|_, cx| {
             let area = app.read(cx).dock_area.read(cx);
@@ -516,7 +521,7 @@ fn host_messages_record_file_failure_and_reopen_without_losing_history(cx: &mut 
     with_messages(cx, |form, app, root| {
         let panel = form
             .debug_bounds("host-messages-panel")
-            .expect("messages default to the right");
+            .expect("messages open on the right after activation");
         let editor = form.debug_bounds("editor-panel-content").unwrap();
         assert!(panel.left() >= editor.right());
         form.update(|window, cx| {

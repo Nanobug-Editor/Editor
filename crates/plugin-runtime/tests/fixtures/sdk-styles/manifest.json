@@ -1,0 +1,11 @@
+{
+  "id": "sdk-styles-fixture",
+  "name": "Native styles SDK regression",
+  "version": "1.0.0",
+  "protocol": 7,
+  "component": "sdk-styles-fixture.wasm",
+  "api": {"base":"^1","required":{"ui.native":"^1","ui.panels":"^1","ui.styles":"^1"}},
+  "permissions": ["ui.panels"],
+  "panels": [{"id":"welcome","title":"Native styles fixture","position":"right"}],
+  "storage_limit": 1024
+}

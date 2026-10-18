@@ -49,9 +49,15 @@ fn old_record(id: &str) -> Value {
 #[test]
 fn retired_ui_registry_preserves_records_data_and_current_peers() {
     let directory = tempfile::tempdir().unwrap();
+    // Replacement exercises a trusted project transaction; empty management has no migration owner.
+    let project = tempfile::tempdir().unwrap();
+    let environment = Environment {
+        workspace: project.path().canonicalize().unwrap().display().to_string(),
+        ..Environment::default()
+    };
     let root = directory.path();
     let peer = resource_package("current-peer", "1.0.0");
-    let mut manager = Manager::open(root.into(), Environment::default()).unwrap();
+    let mut manager = Manager::open(root.into(), environment.clone()).unwrap();
     manager.install(&peer, Default::default()).unwrap();
     drop(manager);
     let registry = root.join("registry.json");
@@ -72,7 +78,7 @@ fn retired_ui_registry_preserves_records_data_and_current_peers() {
     std::fs::write(&data, b"opaque user data").unwrap();
     std::fs::write(&settings, br#"{"user":{"label":"saved"},"projects":{}}"#).unwrap();
 
-    let mut manager = Manager::open(root.into(), Environment::default()).unwrap();
+    let mut manager = Manager::open(root.into(), environment.clone()).unwrap();
     assert!(
         manager.installed["current-peer"]
             .compatibility_error()
@@ -113,7 +119,7 @@ fn retired_ui_registry_preserves_records_data_and_current_peers() {
         original
     );
     drop(manager);
-    let mut manager = Manager::open(root.into(), Environment::default()).unwrap();
+    let mut manager = Manager::open(root.into(), environment).unwrap();
     assert!(
         manager.installed["old-command"]
             .compatibility_error()

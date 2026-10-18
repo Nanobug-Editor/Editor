@@ -3,13 +3,10 @@
 use gpui_kit::{AssetSource, Result, SharedString, assets::Assets};
 use std::borrow::Cow;
 
-/// Asset path of the supplied product mark, rendered in full color in the native title bar.
-pub(crate) const APP_ICON_PATH: &str = "branding/nanobug.png";
-
-// The default bundle omits these configuration, shortcut and message actions; embed their catalog SVGs.
+// The default bundle omits these menu, configuration, shortcut and message actions; embed their catalog SVGs.
 gpui_kit::assets::icon_assets!(
     SupplementalIcons,
-    [Lock, SquarePen, Keyboard, RotateCcw, Broom]
+    [Menu, Lock, SquarePen, Keyboard, RotateCcw, Broom]
 );
 
 macro_rules! file_icons {
@@ -27,9 +24,9 @@ macro_rules! file_icons {
 }
 
 file_icons! {
-    // The title bar, repository READMEs, and Windows ICO share the same supplied artwork.
+    // Retain the product artwork used by repository READMEs and the Windows ICO.
     "branding/nanobug.png" => "../../assets/branding/nanobug.png",
-    // Run actions use editor-owned monochrome geometry, including filled Play/Stop treatment.
+    // Supplied execution outlines share one visual weight and inherit the buttons' theme colors.
     "icons/run-build.svg" => "../../assets/icons/run-build.svg",
     "icons/run-start.svg" => "../../assets/icons/run-start.svg",
     "icons/run-debug.svg" => "../../assets/icons/run-debug.svg",
@@ -131,10 +128,11 @@ mod tests {
         }
     }
 
-    /// Configuration, shortcut and message controls resolve from the selected extra icon bundle.
+    /// Menu, configuration, shortcut and message controls resolve from the selected extra icon bundle.
     #[test]
     fn exposes_supplemental_action_icons() {
         for icon in [
+            gpui_kit::assets::IconName::Menu,
             gpui_kit::assets::IconName::Lock,
             gpui_kit::assets::IconName::SquarePen,
             gpui_kit::assets::IconName::Keyboard,

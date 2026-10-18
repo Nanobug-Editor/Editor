@@ -267,14 +267,14 @@ impl EditorApp {
             }
             let active = self.file_panel_is_active(panel, &selected, cx);
             panel.update(cx, |panel, cx| {
-                // The same preview panel can stay selected across a tab switch. Withdraw the
-                // original wait before the next document is allowed to demand this view.
+                // A tab/path switch withdraws the original view intent. Editing this same document
+                // must retain first birth; only the separately versioned source snapshot changes.
                 if !active
                     || panel
                         .preview_version
                         .as_ref()
                         .zip(version.as_ref())
-                        .is_some_and(|(old, next)| old != next)
+                        .is_some_and(|(old, next)| old.id != next.id || old.path != next.path)
                 {
                     panel.view_demand.borrow_mut().cancel();
                 }
@@ -418,11 +418,12 @@ impl EditorApp {
                         .cloned();
                     let version = file.as_ref().map(|file| file.version.clone());
                     let source = file.as_ref().and_then(|file| file.text.clone());
+                    // Saving/refreshing this same file changes its snapshot, not the selected view intent.
                     if panel
                         .preview_file
                         .as_ref()
                         .zip(version.as_ref())
-                        .is_some_and(|(old, next)| old != next)
+                        .is_some_and(|(old, next)| old.id != next.id || old.path != next.path)
                     {
                         panel.view_demand.borrow_mut().cancel();
                     }

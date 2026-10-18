@@ -6,6 +6,7 @@
 #![cfg(windows)]
 mod host_messages;
 mod selector;
+mod toolbar;
 // Plugin-owned forms replace the retired B3 modal assertions; actual-package coverage lives in
 // extensions::native_configuration_tests and ui::plugin_form::{tree,fault,rollout}_tests.
 use crate::ui::controls::DialogContent;
@@ -999,19 +1000,14 @@ fn run_group_precedes_the_plugin_icon_and_is_separated_by_a_rule(cx: &mut TestAp
     assert!(divider.origin.x >= controls.origin.x);
     assert!(divider.origin.x <= plugins.origin.x);
 
-    // Every control the layout promises is present, including Stop, which is disabled while idle.
-    for selector in [
-        "run-config-selector",
-        "run-build",
-        "run-start",
-        "run-debug",
-        "run-stop",
-    ] {
+    // Launch controls stay available; idle workspaces do not reserve a Stop slot.
+    for selector in ["run-config-selector", "run-build", "run-start", "run-debug"] {
         assert!(
             cx.debug_bounds(selector).is_some(),
             "{selector} is part of the run group"
         );
     }
+    assert!(cx.debug_bounds("run-stop").is_none());
     // No session exists yet, so no session state is advertised.
     assert!(cx.debug_bounds("run-session-state").is_none());
 

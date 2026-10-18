@@ -338,34 +338,17 @@ fn special_copy_text(command: Command, target: &Path, project_root: &Path) -> Op
         Command::CopyFileName => target
             .file_name()
             .map(|name| name.to_string_lossy().into_owned()),
-        Command::CopyAbsolutePath => Some(clipboard_path_text(target)),
+        Command::CopyAbsolutePath => Some(editor_core::display_path(target).to_string()),
         Command::CopyProjectRoot => target.strip_prefix(project_root).ok().map(|relative| {
             // A root selection has no remaining components; represent the current directory as '.'.
             if relative.as_os_str().is_empty() {
                 ".".to_owned()
             } else {
-                clipboard_path_text(relative)
+                editor_core::display_path(relative).to_string()
             }
         }),
         _ => None,
     }
-}
-
-/// Hide Windows verbatim prefixes from text paths while preserving valid UNC paths.
-fn clipboard_path_text(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    #[cfg(windows)]
-    {
-        if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
-            return format!(r"\\{}", unc);
-        }
-        if let Some(local) = text.strip_prefix(r"\\?\") {
-            if local.as_bytes().get(1) == Some(&b':') {
-                return local.to_owned();
-            }
-        }
-    }
-    text.into_owned()
 }
 
 #[cfg(test)]

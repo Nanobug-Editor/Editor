@@ -2,13 +2,14 @@ use ignore::WalkBuilder;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+/// Messages present native paths readably while callers retain canonical failure targets.
 #[derive(Debug, Error)]
 pub enum WorkspaceError {
-    #[error("workspace does not exist: {0}")]
+    #[error("workspace does not exist: {}", crate::display_path(.0))]
     Missing(PathBuf),
-    #[error("workspace is not a directory: {0}")]
+    #[error("workspace is not a directory: {}", crate::display_path(.0))]
     NotDirectory(PathBuf),
-    #[error("failed to resolve workspace {path}: {source}")]
+    #[error("failed to resolve workspace {}: {source}", crate::display_path(.path))]
     Resolve {
         path: PathBuf,
         #[source]

@@ -178,7 +178,11 @@ impl Manager {
     pub fn service_choices(&mut self) -> Vec<Choice> {
         self.refresh_services();
         let broker = self.plugin_services.lock().unwrap();
-        let mut choices = broker.choices(&scopes::workspace_key(&self.environment.workspace));
+        let mut choices = if self.workspace_open {
+            broker.choices(&scopes::workspace_key(&self.environment.workspace))
+        } else {
+            Vec::new()
+        };
         choices.extend(broker.choices("application"));
         choices
     }
@@ -190,6 +194,10 @@ impl Manager {
         contract: &str,
         provider: Option<&str>,
     ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            scope != Scope::Project || self.workspace_open,
+            "Project settings require an open workspace"
+        );
         let choices = self.service_choices();
         let choice = choices
             .iter()

@@ -24,7 +24,15 @@ fn a_project_failure_preserves_the_shared_user_theme(cx: &mut gpui_kit::TestAppC
         .unwrap(),
     );
     let package = crate::extensions::language_tests::packages::repack(files).unwrap();
-    let mut manager = Manager::open(store.path().into(), Default::default()).unwrap();
+    // Project publication requires a real workspace; an empty manager only publishes user resources.
+    let mut manager = Manager::open(
+        store.path().into(),
+        plugin_runtime::plugin_protocol::Environment {
+            workspace: b.path().canonicalize().unwrap().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
     manager.install(&package, Default::default()).unwrap();
     let mut entries = manager.published_entries();
     let first = crate::language::providers::Providers::new(store.path(), a.path());
@@ -128,9 +136,18 @@ fn a_mismatched_discovery_identity_is_refused() {
 #[test]
 fn incompatible_resource_records_do_not_publish_contributions() {
     let directory = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
     let package =
         crate::extensions::language_tests::packages::language_package("me.custom-language");
-    let mut manager = Manager::open(directory.path().into(), Default::default()).unwrap();
+    // Verify project publication rather than the dormant application-management snapshot.
+    let mut manager = Manager::open(
+        directory.path().into(),
+        plugin_runtime::plugin_protocol::Environment {
+            workspace: project.path().canonicalize().unwrap().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
     manager.install(&package, Default::default()).unwrap();
     let mut entries = manager.published_entries();
     refresh_entries(directory.path(), &entries);

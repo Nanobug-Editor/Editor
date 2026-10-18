@@ -715,7 +715,7 @@ impl EditorApp {
         self.workspace.root().display().to_string()
     }
 
-    /// The title-bar run group: a uniform dropdown, build, run, debug and stop, then a short rule.
+    /// The title-bar run group hides Stop when no managed execution or preparation remains active.
     pub(crate) fn render_run_controls(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let selected = self.run_controls.selected().cloned();
         // A session for the selected configuration decides whether Stop is meaningful.
@@ -908,7 +908,11 @@ impl EditorApp {
                         Err(reason) => Some(reason.to_owned()),
                     });
                 Button::new("run-debug-action")
-                    .icon(Icon::default().path("icons/run-debug.svg"))
+                    .icon(
+                        Icon::default()
+                            .path("icons/run-debug.svg")
+                            .text_color(cx.theme().success),
+                    )
                     .accessibility_label(t!("run.form_debug"))
                     .small()
                     .compact()
@@ -919,41 +923,44 @@ impl EditorApp {
                     )
                     .on_click(cx.listener(|this, _, window, cx| this.debug_selected(window, cx)))
             }))
-            .child(
-                div().debug_selector(|| "run-stop".into()).child(
-                    Button::new("run-stop-action")
-                        .debug_selector(move || {
-                            if stopping {
-                                "run-terminate"
+            // Visibility follows all managed work; activation still targets only the selection.
+            .when(self.run_controls.has_work_in_flight(), |group| {
+                group.child(
+                    div().debug_selector(|| "run-stop".into()).child(
+                        Button::new("run-stop-action")
+                            .debug_selector(move || {
+                                if stopping {
+                                    "run-terminate"
+                                } else {
+                                    "run-stop-action"
+                                }
+                                .into()
+                            })
+                            .icon(Icon::default().path("icons/run-stop.svg"))
+                            .accessibility_label(if stopping {
+                                t!("run.force")
                             } else {
-                                "run-stop-action"
-                            }
-                            .into()
-                        })
-                        .icon(Icon::default().path("icons/run-stop.svg"))
-                        .accessibility_label(if stopping {
-                            t!("run.force")
-                        } else {
-                            t!("run.stop")
-                        })
-                        .small()
-                        .compact()
-                        .ghost()
-                        .disabled(!running)
-                        .tooltip(if stopping {
-                            t!("run.force_hint")
-                        } else {
-                            t!("run.stop_hint")
-                        })
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if stopping {
-                                this.terminate_selected_run(cx);
+                                t!("run.stop")
+                            })
+                            .small()
+                            .compact()
+                            .ghost()
+                            .disabled(!running)
+                            .tooltip(if stopping {
+                                t!("run.force_hint")
                             } else {
-                                this.stop_selected_run(cx);
-                            }
-                        })),
-                ),
-            )
+                                t!("run.stop_hint")
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if stopping {
+                                    this.terminate_selected_run(cx);
+                                } else {
+                                    this.stop_selected_run(cx);
+                                }
+                            })),
+                    ),
+                )
+            })
             .child(
                 // The short vertical rule keeps the run group distinct from the plugin icon.
                 div()
@@ -2181,7 +2188,11 @@ impl EditorApp {
             }) {
                 // A save that did not take effect must not be treated as a successful preparation.
                 // The detailed disk failure was already retained by save_document_at; do not duplicate it.
-                self.status = t!("run.save_failed_named", path = path.display()).to_string();
+                self.status = t!(
+                    "run.save_failed_named",
+                    path = editor_core::display_path(&path)
+                )
+                .to_string();
                 cx.notify();
                 return false;
             }

@@ -246,7 +246,7 @@ impl EditorApp {
                     .child(
                         div()
                             .text_color(cx.theme().muted_foreground)
-                            .child(delete.path.display().to_string()),
+                            .child(editor_core::display_path(&delete.path).to_string()),
                     )
                     .when_some(delete.error.clone(), |this, error| {
                         this.child(div().text_color(cx.theme().danger_foreground).child(error))

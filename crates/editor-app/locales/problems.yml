@@ -3,8 +3,14 @@ problems.title:
   en: "Problems (%{count})"
   zh-CN: "问题 (%{count})"
 problems.empty:
-  en: "No problems in this document"
-  zh-CN: "当前文档没有问题"
+  en: "No problems in open files"
+  zh-CN: "已打开的文件没有问题"
+problems.file:
+  en: "%{path} (%{count})"
+  zh-CN: "%{path} (%{count})"
+problems.summary:
+  en: "Problems: %{count} (%{errors} errors, %{warnings} warnings)"
+  zh-CN: "问题：%{count}（%{errors} 个错误，%{warnings} 个警告）"
 problems.language_source:
   en: "Language diagnostics"
   zh-CN: "语言诊断"
@@ -20,9 +26,6 @@ problems.information:
 problems.hint:
   en: "Hint"
   zh-CN: "提示"
-problems.reveal:
-  en: "Reveal location"
-  zh-CN: "定位问题"
 problems.close:
   en: "Close"
   zh-CN: "关闭"

@@ -26,16 +26,12 @@ fn project_home_cleanup_persistence_failure_allows_retry(cx: &mut TestAppContext
             .share_mode(1)
             .open(session)
             .unwrap();
-        click(visual, "project-close-project");
+        request_close_project(visual);
         assert!(visual.debug_bounds("project-error").is_some());
         assert!(visual.debug_bounds("editor-shell").is_some());
         drop(locked);
-        click(visual, "project-close-project");
-        assert!(visual.debug_bounds("project-open-folder").is_some());
-        assert!(
-            visual.debug_bounds("project-error").is_none(),
-            "a successful retry must retire the old failure banner"
-        );
+        request_close_project(visual);
+        assert_eq!(window_count(visual), 0);
     });
 }
 
@@ -85,7 +81,7 @@ fn project_home_close_refuses_clean_deleted_tab_in_bulk_save(cx: &mut TestAppCon
         visual.run_until_parked();
         visual.simulate_input("changed 中文🙂\n");
         visual.run_until_parked();
-        click(visual, "project-close-project");
+        request_close_project(visual);
         click(visual, "project-close-save");
         assert!(visual.debug_bounds("editor-shell").is_some());
         assert!(

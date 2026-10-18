@@ -6,6 +6,7 @@ use gpui_kit::{TestAppContext, gpui};
 mod code_highlighting;
 mod combination;
 mod distribution;
+mod embedded_html;
 mod first_open;
 mod format_toolbar;
 mod harness;
@@ -66,7 +67,7 @@ fn delivered_markdown_preview_tracks_unsaved_native_edits_and_reclaims_split(
     cx: &mut TestAppContext,
 ) {
     use super::composable_tests::{publish, pump};
-    let package = Package::read(&crate::test_packages::archive("markdown")).unwrap();
+    let package = Package::read(&crate::test_packages::archive("markdown-0.18.2")).unwrap();
     assert!(
         package.manifest.component.is_some(),
         "the preview requires the independently built guest"
@@ -79,7 +80,7 @@ fn delivered_markdown_preview_tracks_unsaved_native_edits_and_reclaims_split(
     });
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("notes.md");
-    let original = "# 中文标题\n\n**粗体** *斜体* ~~删除~~ [链接](next.md)\n\n> 引用\n\n- item\n- [ ] 任务\n\n| 名称 | 数值 |\n| --- | --- |\n| 表格 | 42 |\n\n```rust\nfn main() {}\n```\n\n![替代文字](missing.png)\n";
+    let original = "# 中文标题\n\n**粗体** *斜体* ~~删除~~ [链接](next.md)\n\n> 引用\n\n---\n\n- item\n- [ ] 任务\n\n| 名称 | 数值 |\n| --- | --- |\n| 表格 | 42 |\n\n```rust\nfn main() {}\n```\n\n![替代文字](missing.png)\n";
     std::fs::write(&path, original).unwrap();
     std::fs::write(root.path().join("plain.txt"), "plain").unwrap();
     let mut manager = plugin_runtime::Manager::open(

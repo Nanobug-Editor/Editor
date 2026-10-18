@@ -18,6 +18,38 @@ impl ExtensionPanel {
             .min_h(px(0.))
             .overflow_hidden()
             .bg(cx.theme().background);
+        let displayed_id = selection
+            .manifest(self.manager_market)
+            .map(|manifest| manifest.id.as_str());
+        // The operation belongs to its receipt, even when filtering removes every selectable manifest.
+        // A selected install/restart/uninstall keeps its own loader; every other receipt is shown here.
+        if let Some(progress) = self.progress.as_ref().filter(|progress| {
+            matches!(
+                progress.action,
+                LifecycleAction::Enable | LifecycleAction::Disable | LifecycleAction::Inspect
+            ) || displayed_id != Some(progress.id.as_str())
+        }) {
+            let target = self
+                .entries
+                .iter()
+                .find(|entry| entry.manifest.id == progress.id)
+                .map(|entry| entry.manifest.name.clone())
+                .unwrap_or_else(|| {
+                    Path::new(&progress.id)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| progress.id.clone())
+                });
+            detail = detail.child(
+                div().px_5().py_2().flex_shrink_0().child(
+                    Button::new("plugin-manager-operation-progress")
+                        .debug_selector(|| "plugin-manager-operation-progress".into())
+                        .ghost()
+                        .loading(true)
+                        .label(t!("plugins.operation_in_progress", plugin = target).to_string()),
+                ),
+            );
+        }
         // Failed first installs have no installed log owner; market action failures stay visible here.
         if let Some(status) = self
             .status

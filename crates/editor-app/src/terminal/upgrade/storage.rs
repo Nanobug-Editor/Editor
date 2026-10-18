@@ -111,7 +111,7 @@ pub(super) fn read(path: &Path, limit: u64) -> anyhow::Result<Option<Vec<u8>>> {
     anyhow::ensure!(
         metadata.is_file() && !metadata.file_type().is_symlink() && metadata.len() <= limit,
         "Invalid or oversized migration file: {}",
-        path.display()
+        editor_core::display_path(&path)
     );
     let bytes = std::fs::read(path)?;
     anyhow::ensure!(
@@ -155,7 +155,7 @@ pub(super) fn resume(locations: &Locations) -> anyhow::Result<bool> {
         anyhow::ensure!(
             current.as_ref().map(|bytes| digest(bytes)) == target.before,
             "Migration conflict; newer data retained: {}",
-            path.display()
+            editor_core::display_path(&path)
         );
         atomic(&path, &target.bytes)?;
     }

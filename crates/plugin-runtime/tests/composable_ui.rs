@@ -8,6 +8,77 @@ use std::io::{Cursor, Write};
 #[path = "composable_ui/icons.rs"]
 mod ui_icons;
 
+/// A real SDK guest must negotiate reusable presentation, even when its data file supplies the tree.
+#[test]
+#[ignore = "opt-in real WASM/native integration; build the independent sdk-styles fixture through --plugin-package"]
+fn native_content_styles_require_negotiation_before_publication() {
+    for negotiated in [false, true] {
+        let package = package_with_ui_from(
+            "sdk-styles-fixture",
+            |manifest| {
+                if !negotiated {
+                    manifest["api"]["required"]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("ui.styles");
+                }
+            },
+            |tree| {
+                tree["content_styles"] = json!({"prose":{"font":{"size_px":16},"line_height":1.5}});
+                tree["root"] = json!({"id":"prose","role":"prose","layout":{"align":"center"},
+                "kind":{"type":"text","text":"README"}});
+            },
+        );
+        let directory = tempfile::tempdir().unwrap();
+        let mut manager =
+            Manager::open(directory.path().join("plugins"), Environment::default()).unwrap();
+        let result = manager.install(&package, package.manifest.permissions.clone());
+        if negotiated {
+            result.unwrap();
+            // Installation prepares metadata; showing the declared view is the public business demand.
+            let availability = manager.availability("sdk-styles-fixture").unwrap();
+            let demand = manager
+                .begin_demand(
+                    &availability,
+                    plugin_runtime::DemandReason::View("welcome".into()),
+                    60_000,
+                )
+                .unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            loop {
+                manager.poll();
+                if let plugin_runtime::plugin_protocol::api::RequestUpdate::Completed { result } =
+                    demand.status()
+                {
+                    result.unwrap();
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "native style view demand must finish"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            let document = &manager.live["sdk-styles-fixture"].views["welcome"];
+            assert_eq!(
+                document.root.id, "prose",
+                "the guest must publish the composed asset tree"
+            );
+            assert_eq!(document.content_styles["prose"].font.size_px, Some(16.));
+        } else {
+            assert_eq!(
+                result
+                    .unwrap_err()
+                    .downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
+                    .unwrap()
+                    .code,
+                plugin_runtime::plugin_protocol::api::ErrorCode::CapabilityUnavailable
+            );
+            assert!(manager.live.is_empty());
+        }
+    }
+}
+
 /// Owned content defaults and adjustable native panes are independently negotiated before publication.
 #[test]
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
@@ -57,14 +128,26 @@ fn package(edit: impl FnOnce(&mut Value)) -> Package {
 
 /// Package mutations remain at the installed ZIP boundary rather than bypassing negotiation.
 fn package_with_ui(edit: impl FnOnce(&mut Value), edit_ui: impl FnOnce(&mut Value)) -> Package {
-    let root = test_packages::archive("capability-example");
+    package_with_ui_from("capability-example", edit, edit_ui)
+}
+
+/// Choose an explicit SDK-generation snapshot while retaining the same public install boundary.
+fn package_with_ui_from(
+    id: &str,
+    edit: impl FnOnce(&mut Value),
+    edit_ui: impl FnOnce(&mut Value),
+) -> Package {
+    let root = test_packages::archive(id);
     let mut files = Package::read(&root).unwrap().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     // Each test explicitly chooses its drawing capability contract.
-    manifest["api"]["optional"]
-        .as_object_mut()
-        .unwrap()
-        .remove("ui.canvas");
+    if let Some(optional) = manifest
+        .get_mut("api")
+        .and_then(|api| api.get_mut("optional"))
+        .and_then(Value::as_object_mut)
+    {
+        optional.remove("ui.canvas");
+    }
     edit(&mut manifest);
     files.insert(
         "manifest.json".into(),

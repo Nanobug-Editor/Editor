@@ -113,7 +113,7 @@ pub(crate) fn tree_items<'a>(
     let project_name = root
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| root.to_string_lossy().into_owned());
+        .unwrap_or_else(|| editor_core::display_path(root).to_string());
     vec![
         TreeItem::new(root.to_string_lossy().into_owned(), project_name)
             .children(into_items(root_node))

@@ -1,166 +1,321 @@
-//! Problems is a native projection of DocumentDiagnostics; no diagnostic or text cache lives here.
+//! Docked Problems projects live diagnostics; selection, disclosure, scrolling and focus are presentation state.
+mod model;
+mod panel;
+mod view;
+
 use super::*;
-use gpui_base::{StyledExt as _, TestSupportExt as _};
-use gpui_kit::{AnyElement, FocusHandle, KeyDownEvent};
+use gpui_kit::{FocusHandle, KeyDownEvent};
+use model::{ProblemKey, Row};
+use panel::ProblemsPanel;
 use plugin_runtime::{
     LanguageFixOrigin,
     plugin_protocol::{api, direct},
 };
+use std::collections::{BTreeMap, BTreeSet};
 
-/// Only modal interaction state is retained; every render and action consults the document model.
-#[derive(Default)]
+/// One workspace's interaction state shares a dock leaf, without copying diagnostic or text truth.
 pub(crate) struct ProblemsState {
-    open: bool,
-    focus: Option<FocusHandle>,
+    pub(crate) panel: Entity<ProblemsPanel>,
+    open: Rc<Cell<bool>>,
+    focus: FocusHandle,
+    close_focus: FocusHandle,
     previous: Option<FocusHandle>,
-    /// Focus belongs to each painted Base row; these handles contain no diagnostic payload.
+    /// A source editor may be replaced by cross-file navigation while this nonmodal panel stays open.
+    return_to_editor: bool,
+    /// Base row handles contain no diagnostic payload; selection retains only an exact lookup key.
     rows: Vec<FocusHandle>,
-    selected: usize,
-    document: Option<api::DocumentVersion>,
+    /// File paths retain disclosure state through diagnostic replacement, without retaining markers.
+    collapsed: BTreeSet<PathBuf>,
+    groups: BTreeMap<PathBuf, FocusHandle>,
+    selected: Option<ProblemKey>,
+    /// Track the selected row's focus slot through same-length publication reordering.
+    selected_index: usize,
     scroll: ScrollHandle,
 }
 
-/// A frame-local row carries an owned lookup key, never mutable diagnostic or document truth.
-struct Row {
-    label: String,
-    source: String,
-    position: gpui_base::input::Position,
-    collection: Option<(String, String)>,
+impl ProblemsState {
+    /// Bind the native leaf to its editor owner and restore only saved presentation state.
+    pub(crate) fn new(parent: WeakEntity<EditorApp>, visible: bool, cx: &mut App) -> Self {
+        let open = Rc::new(Cell::new(visible));
+        let focus = cx.focus_handle();
+        let close_focus = cx.focus_handle();
+        let panel = cx.new(|cx| {
+            ProblemsPanel::new(parent, open.clone(), focus.clone(), close_focus.clone(), cx)
+        });
+        Self {
+            panel,
+            open,
+            focus,
+            close_focus,
+            previous: None,
+            return_to_editor: false,
+            rows: Vec::new(),
+            collapsed: BTreeSet::new(),
+            groups: BTreeMap::new(),
+            selected: None,
+            selected_index: 0,
+            scroll: ScrollHandle::new(),
+        }
+    }
+
+    /// Hide returns focus only if this panel still owns the user's current focus lease.
+    fn owns_focus(&self, window: &Window, cx: &App) -> bool {
+        self.focus.is_focused(window)
+            || self.focus.contains_focused(window, cx)
+            || self.close_focus.is_focused(window)
+            || self.rows.iter().any(|focus| focus.is_focused(window))
+            || self.groups.values().any(|focus| focus.is_focused(window))
+    }
 }
 
 impl EditorApp {
-    /// Open the current document's native problem list and preserve the previous focus lease.
+    /// Add the default bottom leaf only when absent, including migration of older saved layouts.
+    pub(crate) fn ensure_problems_dock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let panel = dock::panel_handle(self.problems.panel.clone());
+        let id = gpui_base::dock::PanelId::from(self.problems.panel.entity_id());
+        let height = px(self
+            .session_state
+            .plugin_dock_sizes
+            .get("bottom")
+            .copied()
+            .unwrap_or(260.));
+        self.dock_area.update(cx, |area, cx| {
+            if area.panel(id).is_none() {
+                local_dock::add_panel_view(
+                    area,
+                    panel,
+                    gpui_base::dock::DockPlacement::Bottom,
+                    Some(height),
+                    window,
+                    cx,
+                );
+            }
+        });
+    }
+
+    /// Reveal the workspace list in its current dock position and preserve the previous focus target.
     pub(crate) fn show_problems(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.prune_direct_diagnostics(cx);
-        if !self.problems.open {
+        if !self.problems.owns_focus(window, cx) {
             self.problems.previous = window.focused(cx);
-            self.problems.focus = Some(cx.focus_handle());
-            self.problems.open = true;
+            self.problems.return_to_editor = self.editor.focus_handle(cx).is_focused(window);
         }
-        self.problems.focus.as_ref().unwrap().focus(window, cx);
-        cx.notify();
-    }
-
-    /// Return focus only while this modal still owns it; a later user focus change remains intact.
-    fn close_problems(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.problems.open = false;
-        let owns_focus =
-            self.problems.focus.as_ref().is_some_and(|focus| {
-                focus.is_focused(window) || focus.contains_focused(window, cx)
-            }) || self
-                .problems
-                .rows
-                .iter()
-                .any(|focus| focus.is_focused(window));
-        if owns_focus && let Some(previous) = self.problems.previous.take() {
-            previous.focus(window, cx);
-        }
-        self.problems.focus = None;
-        self.problems.rows.clear();
-        cx.notify();
-    }
-
-    /// Build the same legacy union and direct source set that feeds native underlines and hovers.
-    fn problem_rows(&self, cx: &App) -> Vec<Row> {
-        let Some(index) = self.active_text_tab_index() else {
-            return Vec::new();
-        };
-        let tab = self.tabs[index].text.as_ref().unwrap();
-        let text = tab.editor.read(cx).text();
-        let mut rows: Vec<_> = tab
-            .diagnostics
-            .legacy_projection()
+        self.problems.open.set(true);
+        self.session_state.problems_visible = true;
+        self.ensure_problems_dock(window, cx);
+        let id = gpui_base::dock::PanelId::from(self.problems.panel.entity_id());
+        self.dock_area.update(cx, |area, cx| {
+            // A user may have moved this leaf; reopen its actual dock instead of forcing it below.
+            let placement = [
+                gpui_base::dock::DockPlacement::Left,
+                gpui_base::dock::DockPlacement::Right,
+                gpui_base::dock::DockPlacement::Bottom,
+            ]
             .into_iter()
-            .map(|item| Row {
-                label: format!(
-                    "{}:{} · {}",
-                    item.range.start.line + 1,
-                    item.range.start.character + 1,
-                    item.message
-                ),
-                source: item
-                    .source
-                    .map(|source| source.to_string())
-                    .unwrap_or_else(|| t!("problems.language_source").to_string()),
-                position: item.range.start,
-                collection: None,
-            })
-            .collect();
-        for (key, publication) in tab
-            .diagnostics
-            .direct
-            .iter()
-            .filter(|(_, item)| item.collection.is_live())
-        {
-            for item in &publication.items {
-                let position = text.offset_to_position(item.range.start);
-                let severity = t!(match item.severity {
-                    plugin_runtime::plugin_protocol::diagnostics::Severity::Error =>
-                        "problems.error",
-                    plugin_runtime::plugin_protocol::diagnostics::Severity::Warning =>
-                        "problems.warning",
-                    plugin_runtime::plugin_protocol::diagnostics::Severity::Information =>
-                        "problems.information",
-                    plugin_runtime::plugin_protocol::diagnostics::Severity::Hint => "problems.hint",
-                });
-                rows.push(Row {
-                    label: format!(
-                        "{severity} · {}:{} · {}",
-                        position.line + 1,
-                        position.character + 1,
-                        item.message
-                    ),
-                    source: publication.source(),
-                    position,
-                    collection: Some((key.clone(), item.id.clone())),
-                });
+            .find(|placement| {
+                area.layout(*placement)
+                    .is_some_and(|layout| layout.find_panel_node(id).is_some())
+            });
+            if let Some(placement) = placement
+                && !area.is_dock_open(placement)
+            {
+                area.toggle_dock(placement, window, cx);
             }
-        }
-        rows.sort_by_key(|row| (row.position, row.source.clone()));
-        rows
+            area.select_panel(id, window, cx);
+            cx.notify();
+        });
+        self.problems.focus.focus(window, cx);
+        self.capture_dock_layout(cx);
+        self.persist_session();
+        cx.notify();
     }
 
-    /// Arrow selection scrolls and focuses the live Base row; Base owns Enter and Escape delivery.
+    /// Hiding this leaf leaves peer panels and their running resources intact.
+    fn close_problems(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let owns_focus = self.problems.owns_focus(window, cx);
+        self.problems.open.set(false);
+        self.session_state.problems_visible = false;
+        let previous = self.problems.previous.take();
+        let previous = if std::mem::take(&mut self.problems.return_to_editor) {
+            Some(self.editor.focus_handle(cx))
+        } else {
+            previous
+        };
+        if owns_focus {
+            previous
+                .unwrap_or_else(|| self.editor.focus_handle(cx))
+                .focus(window, cx);
+        }
+        self.problems.rows.clear();
+        self.dock_area.update(cx, |_, cx| cx.notify());
+        self.capture_dock_layout(cx);
+        self.persist_session();
+        cx.notify();
+    }
+
+    /// File disclosure keeps its own focus so collapsing cannot activate a hidden diagnostic.
+    fn set_problem_file_expanded(
+        &mut self,
+        path: &Path,
+        expanded: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.problem_rows(cx).iter().any(|row| row.path == path) {
+            return;
+        }
+        if expanded {
+            self.problems.collapsed.remove(path);
+        } else {
+            self.problems.collapsed.insert(path.to_path_buf());
+        }
+        if let Some(focus) = self.problems.groups.get(path) {
+            focus.focus(window, cx);
+        }
+        cx.notify();
+    }
+
+    /// Arrows skip collapsed diagnostics; a focused header also supports explicit left/right disclosure.
     fn problems_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if event.keystroke.modifiers != Default::default() {
             return;
         }
-        let length = self.problem_rows(cx).len();
-        match event.keystroke.key.as_str() {
-            "up" => self.problems.selected = self.problems.selected.saturating_sub(1),
-            "down" => {
-                self.problems.selected = (self.problems.selected + 1).min(length.saturating_sub(1))
-            }
-            "home" => self.problems.selected = 0,
-            "end" => self.problems.selected = length.saturating_sub(1),
-            _ => return,
+        if event.keystroke.key == "escape" {
+            self.close_problems(window, cx);
+            cx.stop_propagation();
+            return;
         }
-        if let Some(focus) = self.problems.rows.get(self.problems.selected) {
+        let group = self
+            .problems
+            .groups
+            .iter()
+            .find(|(_, focus)| focus.is_focused(window))
+            .map(|(path, _)| path.clone());
+        if let Some(path) = &group
+            && matches!(event.keystroke.key.as_str(), "left" | "right")
+        {
+            self.set_problem_file_expanded(path, event.keystroke.key == "right", window, cx);
+            cx.stop_propagation();
+            return;
+        }
+        let all_rows = self.problem_rows(cx);
+        let rows = self.visible_problem_rows(&all_rows);
+        if rows.is_empty() {
+            // With every group collapsed, arrows still reach each Base disclosure trigger.
+            let groups = self.problems.groups.values().collect::<Vec<_>>();
+            let selected = groups
+                .iter()
+                .position(|focus| focus.is_focused(window))
+                .unwrap_or(0);
+            let index = match event.keystroke.key.as_str() {
+                "up" => selected.saturating_sub(1),
+                "down" => (selected + 1).min(groups.len().saturating_sub(1)),
+                "home" => 0,
+                "end" => groups.len().saturating_sub(1),
+                _ => return,
+            };
+            if let Some(focus) = groups.get(index) {
+                focus.focus(window, cx);
+            }
+            cx.stop_propagation();
+            return;
+        }
+        let selected = self.selected_problem_index(&rows);
+        let index = match event.keystroke.key.as_str() {
+            "up" if group.is_some() => rows
+                .iter()
+                .rposition(|row| row.path < *group.as_ref().unwrap())
+                .unwrap_or(0),
+            "down" if group.is_some() => rows
+                .iter()
+                .position(|row| row.path >= *group.as_ref().unwrap())
+                .unwrap_or(rows.len() - 1),
+            "up" => selected.saturating_sub(1),
+            "down" => (selected + 1).min(rows.len().saturating_sub(1)),
+            "home" => 0,
+            "end" => rows.len().saturating_sub(1),
+            _ => return,
+        };
+        if let Some(row) = rows.get(index) {
+            self.problems.selected = Some(row.key.clone());
+            self.problems.scroll.scroll_to_item(row.list_index);
+        }
+        if let Some(focus) = self.problems.rows.get(index) {
             focus.focus(window, cx);
         }
-        self.problems.scroll.scroll_to_item(self.problems.selected);
         cx.stop_propagation();
         cx.notify();
     }
 
-    /// Reveal only a row reconstructed from the live model, rather than a stale rendered payload.
-    fn reveal_problem(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(position) = self
+    /// Re-resolve a painted key; replacement or disclosure cannot activate a changed/hidden row.
+    fn select_problem(&mut self, key: &ProblemKey, window: &mut Window, cx: &mut Context<Self>) {
+        if self
             .problem_rows(cx)
-            .get(self.problems.selected)
-            .map(|row| row.position)
+            .iter()
+            .any(|row| &row.key == key && !self.problems.collapsed.contains(&row.path))
+        {
+            self.problems.selected = Some(key.clone());
+            self.reveal_problem(window, cx);
+        }
+    }
+
+    /// Navigate the selected live document without hiding the list, keeping other files reachable.
+    fn reveal_problem(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(key) = self.problems.selected.as_ref() else {
+            return;
+        };
+        let Some(row) = self
+            .problem_rows(cx)
+            .into_iter()
+            .find(|row| &row.key == key)
         else {
             return;
         };
-        self.close_problems(window, cx);
-        self.editor.update(cx, |editor, cx| {
-            editor.unfold_at(position, cx);
-            editor.set_cursor_position(position, window, cx);
-        });
-        self.editor.focus_handle(cx).focus(window, cx);
+        let Some(index) = (0..self.tabs.len()).find(|index| {
+            self.plugin_document_version(*index).ok().as_ref() == Some(&row.key.document)
+        }) else {
+            return;
+        };
+        let editor = self.tabs[index].text.as_ref().unwrap().editor.clone();
+        self.activate_tab(index, window, cx);
+        // Native linked input can defer activation. Recheck the target after that deferred switch.
+        if self.editor.entity_id() == editor.entity_id() {
+            self.reveal_problem_location(&row.key, window, cx);
+        } else {
+            let owner = cx.entity().downgrade();
+            window.defer(cx, move |window, cx| {
+                let _ = owner.update(cx, |app, cx| {
+                    app.reveal_problem_location(&row.key, window, cx);
+                });
+            });
+        }
+        cx.notify();
     }
 
-    /// A fix/related action re-resolves collection, diagnostic ID, source revision and original owner.
+    /// A deferred tab switch may outlive its publication; never navigate the outgoing or newer document.
+    fn reveal_problem_location(
+        &mut self,
+        key: &ProblemKey,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let current = self
+            .active_text_tab_index()
+            .and_then(|index| self.plugin_document_version(index).ok());
+        if current.as_ref() != Some(&key.document)
+            || !self.problem_rows(cx).iter().any(|row| &row.key == key)
+        {
+            return;
+        }
+        self.editor.update(cx, |editor, cx| {
+            editor.unfold_at(key.range.start, cx);
+            editor.set_cursor_position(key.range.start, window, cx);
+        });
+        self.editor.focus_handle(cx).focus(window, cx);
+        self.problems.return_to_editor = true;
+    }
+
+    /// Fixes and related locations retain their original collection, document revision and owner gates.
     fn problem_action(
         &mut self,
         document: api::DocumentVersion,
@@ -210,11 +365,11 @@ impl EditorApp {
                     position: item.position,
                     label: Some(item.message.clone()),
                 });
-            self.close_problems(window, cx);
             if let Some(fix) = action {
                 self.submit_native_language_fix(origin, document, fix, cx)?;
             } else if let Some(location) = location {
                 self.navigate_language_location(&origin, &document, location, window, cx)?;
+                self.problems.return_to_editor = true;
             }
             Ok::<(), api::Failure>(())
         })();
@@ -222,221 +377,5 @@ impl EditorApp {
             self.status = error.message;
             cx.notify();
         }
-    }
-
-    /// Base supplies focus trapping and dismissal; local buttons and theme tokens own all appearance.
-    pub(crate) fn render_problems(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        if !self.problems.open {
-            return div().into_any_element();
-        }
-        let document = self
-            .active_text_tab_index()
-            .and_then(|index| self.plugin_document_version(index).ok());
-        let document_changed = self.problems.document != document;
-        if document_changed {
-            self.problems.document = document.clone();
-            self.problems.selected = 0;
-            self.problems.scroll.scroll_to_item(0);
-        }
-        let rows = self.problem_rows(cx);
-        self.problems.selected = self.problems.selected.min(rows.len().saturating_sub(1));
-        let dialog_focus = self.problems.focus.as_ref().unwrap();
-        let owns_focus = dialog_focus.is_focused(window)
-            || dialog_focus.contains_focused(window, cx)
-            || self
-                .problems
-                .rows
-                .iter()
-                .any(|focus| focus.is_focused(window));
-        let rows_changed = self.problems.rows.len() != rows.len();
-        self.problems
-            .rows
-            .resize_with(rows.len(), || cx.focus_handle());
-        // The initial Dialog focus is above the body, so its keys cannot reach a descendant
-        // listener. Enter the selected native row, including before the deferred first paint.
-        // If live publications remove a focused row, keep focus inside this modal without
-        // pulling it back from an unrelated control the user selected in the meantime.
-        if dialog_focus.is_focused(window) || ((rows_changed || document_changed) && owns_focus) {
-            self.problems
-                .rows
-                .get(self.problems.selected)
-                .unwrap_or(dialog_focus)
-                .focus(window, cx);
-        }
-        let mut sources = BTreeMap::<String, usize>::new();
-        for row in &rows {
-            *sources.entry(row.source.clone()).or_default() += 1;
-        }
-        let mut list = div()
-            .id("native-problems-list")
-            .debug_selector(|| "native-problems-list".into())
-            .h(px(260.))
-            .overflow_y_scroll()
-            .track_scroll(&self.problems.scroll)
-            .flex()
-            .flex_col();
-        for (index, row) in rows.iter().enumerate() {
-            list = list.child(
-                Button::new(format!("native-problem-{index}"))
-                    .track_focus(&self.problems.rows[index])
-                    .label(row.label.clone())
-                    .accessibility_label(format!("{} · {}", row.source, row.label))
-                    .w_full()
-                    .h(px(40.))
-                    .flex_shrink_0()
-                    .ghost()
-                    .when(index == self.problems.selected, |button| button.primary())
-                    .debug_selector(move || format!("native-problem-{index}"))
-                    .on_click(
-                        cx.listener(move |app, event: &gpui_kit::ClickEvent, window, cx| {
-                            app.problems.selected = index;
-                            // Pointer selection exposes details; a complete native keyboard click
-                            // reveals the selected position, without stealing Enter from fix buttons.
-                            if event.is_keyboard() {
-                                app.reveal_problem(window, cx);
-                            } else {
-                                cx.notify();
-                            }
-                        }),
-                    ),
-            );
-        }
-        let mut body = div()
-            .p_4()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .bg(cx.theme().popover)
-            .text_color(cx.theme().popover_foreground)
-            .capture_key_down(cx.listener(Self::problems_key))
-            .child(
-                div()
-                    .id("native-problems-heading")
-                    .role(gpui_kit::Role::Heading)
-                    .aria_label(t!("problems.title", count = rows.len()).to_string())
-                    .font_semibold()
-                    .child(t!("problems.title", count = rows.len()).to_string())
-                    // Observe the same native heading in headless tests, without alternate properties.
-                    .test_support(),
-            )
-            .children(
-                sources
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, (source, count))| {
-                        let label = format!("{source}: {count}");
-                        div()
-                            .id(format!("native-problems-source-{index}"))
-                            .role(gpui_kit::Role::Label)
-                            .aria_label(label.clone())
-                            .text_sm()
-                            .child(label)
-                            .test_support()
-                    }),
-            )
-            .child(list);
-        if rows.is_empty() {
-            body = body.child(t!("problems.empty").to_string());
-        }
-        if let Some((key, id)) = rows
-            .get(self.problems.selected)
-            .and_then(|row| row.collection.as_ref())
-            && let Some(document) = &document
-            && let Some(index) = self.active_text_tab_index()
-            && let Some(publication) = self.tabs[index]
-                .text
-                .as_ref()
-                .unwrap()
-                .diagnostics
-                .direct
-                .get(key)
-            && let Some(item) = publication.items.iter().find(|item| &item.id == id)
-        {
-            for (index, related) in item.related.iter().enumerate() {
-                let (document, key, id) = (document.clone(), key.clone(), id.clone());
-                body = body.child(
-                    Button::new(format!("problem-related-{index}"))
-                        .label(related.message.clone())
-                        .accessibility_label(related.message.clone())
-                        .ghost()
-                        .debug_selector(move || format!("problem-related-{index}"))
-                        .on_click(cx.listener(move |app, _, window, cx| {
-                            app.problem_action(
-                                document.clone(),
-                                key.clone(),
-                                id.clone(),
-                                None,
-                                Some(index),
-                                window,
-                                cx,
-                            )
-                        })),
-                );
-            }
-            for (index, fix) in item.fixes.iter().enumerate() {
-                let (document, key, id) = (document.clone(), key.clone(), id.clone());
-                body = body.child(
-                    Button::new(format!("problem-fix-{index}"))
-                        .label(fix.title.clone())
-                        .accessibility_label(fix.title.clone())
-                        .debug_selector(move || format!("problem-fix-{index}"))
-                        .on_click(cx.listener(move |app, _, window, cx| {
-                            app.problem_action(
-                                document.clone(),
-                                key.clone(),
-                                id.clone(),
-                                Some(index),
-                                None,
-                                window,
-                                cx,
-                            )
-                        })),
-                );
-            }
-        }
-        body = body.child(
-            div()
-                .flex()
-                .gap_2()
-                .child(
-                    Button::new("problem-reveal")
-                        .label(t!("problems.reveal").to_string())
-                        .accessibility_label(t!("problems.reveal").to_string())
-                        .debug_selector(|| "problem-reveal".into())
-                        .disabled(rows.is_empty())
-                        .on_click(cx.listener(|app, _, window, cx| app.reveal_problem(window, cx))),
-                )
-                .child(
-                    Button::new("problem-close")
-                        .label(t!("problems.close").to_string())
-                        .accessibility_label(t!("problems.close").to_string())
-                        .debug_selector(|| "problem-close".into())
-                        .on_click(cx.listener(|app, _, window, cx| app.close_problems(window, cx))),
-                ),
-        );
-        let weak = cx.entity().downgrade();
-        gpui_base::Dialog::new(cx)
-            .focus_handle(self.problems.focus.as_ref().unwrap().clone())
-            .close_on_backdrop_press(false)
-            .on_cancel(move |_, window, cx| {
-                let _ = weak.update(cx, |app, cx| app.close_problems(window, cx));
-                true
-            })
-            .on_ok(|_, _, _| false)
-            .top(px(54.))
-            .popup(
-                gpui_base::DialogPopup::new()
-                    .w(px(680.))
-                    .max_h(px(650.))
-                    .rounded(cx.theme().radius_lg)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .child(body),
-            )
-            .into_any_element()
     }
 }

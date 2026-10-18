@@ -79,6 +79,22 @@ impl Case {
 
 /// Only this returned Child handle can be terminated; there is no process-name or user-window search.
 pub(super) fn run(case: Case) -> anyhow::Result<()> {
+    // Each narrow receipt has one scope; inherited diagnostic flags cannot shorten another workflow.
+    let narrow = [
+        sidebar::requested(),
+        caption_controls::requested(),
+        std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some(),
+        std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some(),
+    ];
+    ensure!(
+        narrow.into_iter().filter(|active| *active).count() <= 1,
+        "native diagnostic workflows are mutually exclusive"
+    );
+    ensure!(
+        std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_PHASES").is_none()
+            || std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some(),
+        "history phases require the history-only workflow"
+    );
     let candidate = std::env::var_os("NANOBUG_GIT_CANDIDATE").context("candidate required")?;
     let output = PathBuf::from(
         std::env::var_os("NANOBUG_GIT_NATIVE_OUTPUT").context("native output required")?,
@@ -122,7 +138,12 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
         .stdout(log.try_clone()?)
         .stderr(log)
         .spawn()?;
-    let deadline = Instant::now() + Duration::from_secs(480);
+    let deadline = Instant::now()
+        + Duration::from_secs(if caption_controls::requested() || sidebar::requested() {
+            180
+        } else {
+            480
+        });
     let status = loop {
         if let Some(status) = child.try_wait()? {
             break status;
@@ -155,7 +176,42 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
         "receipt belongs to a different case"
     );
     // The separately named keyboard diagnostic has an explicit, narrower evidence contract.
-    let images: &[&str] = if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
+    let images: &[&str] = if sidebar::requested() {
+        ensure!(
+            evidence["workflow"] == "shared-sidebar-only",
+            "sidebar receipt has wrong scope"
+        );
+        ensure!(
+            evidence["observations"]["shared_sidebar_complete"]["three_independent_peers"] == true,
+            "shared-sidebar workflow incomplete"
+        );
+        &[
+            "sidebar-before.png",
+            "sidebar-after-drag.png",
+            "sidebar-after-reopen.png",
+        ]
+    } else if caption_controls::requested() {
+        ensure!(
+            evidence["workflow"] == "caption-controls-loaded-commit",
+            "caption receipt has wrong scope"
+        );
+        ensure!(
+            evidence["observations"]["caption_controls_complete"]["actual_os_caption_mouse"]
+                == true,
+            "loaded caption workflow incomplete"
+        );
+        &[
+            "caption-loaded-before.png",
+            "caption-loaded-after-restore.png",
+        ]
+    } else if std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some() {
+        &[
+            "idle-state-before.png",
+            "idle-state-after.png",
+            "idle-menu-before.png",
+            "idle-menu-after.png",
+        ]
+    } else if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
         &["history-keyboard-probe.png"]
     } else {
         &[

@@ -10,7 +10,13 @@ mod form_delivery;
 mod marketplace;
 #[cfg(all(test, windows))]
 mod native_acceptance;
+#[cfg(all(test, windows))]
+mod native_close_tests;
 mod preparation;
+#[cfg(test)]
+// The cross-feature native regression retains private actor seams without widening production APIs.
+#[path = "../tests/plugin_preview_activation.rs"]
+mod preview_activation_tests;
 #[cfg(all(test, windows))]
 mod registry_startup_tests;
 mod resize;
@@ -707,6 +713,7 @@ impl Worker {
             .into_iter()
             .filter_map(|(id, entry)| {
                 (trusted
+                    && !environment.workspace.is_empty()
                     && entry.compatibility_error().is_none()
                     && (entry.enabled || entry.project_enabled_in(&environment.workspace)))
                 .then_some((id, entry.manifest.name))

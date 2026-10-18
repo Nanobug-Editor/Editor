@@ -8,12 +8,16 @@ pub(crate) use canvas::CanvasView;
 mod code;
 mod code_sync;
 mod containers;
+#[cfg(test)]
+mod content_styles_tests;
 pub(crate) mod controls;
 mod file_image;
 mod form_delivery;
 pub(crate) use form_delivery::{FormChangeSink, FormReceipt};
 #[cfg(test)]
 mod form_delivery_tests;
+#[cfg(test)]
+mod image_dimensions_tests;
 pub(crate) mod images;
 mod layout;
 mod leaf;
@@ -407,7 +411,9 @@ impl PluginView {
         let next_dialog = document.dialog.as_ref().map(|d| d.id.clone());
         let menu_changed = self.document.menu.as_ref().map(|menu| &menu.id)
             != document.menu.as_ref().map(|menu| &menu.id);
-        if self.environment != environment {
+        if self.environment != environment
+            || self.document.content_styles != document.content_styles
+        {
             self.virtual_blocks.clear();
         }
         self.virtual_blocks.retain(&document);

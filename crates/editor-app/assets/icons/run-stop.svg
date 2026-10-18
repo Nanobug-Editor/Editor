@@ -1,4 +1,4 @@
-<!-- A filled square matches the prototype's Stop action and remains recognizable while disabled. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-  <rect x="5" y="5" width="14" height="14" rx="1"/>
+<!-- Preserve the supplied outline; its 77.672-unit filled contour plus 2.328-unit edge stroke gives a shared 80/1024 visual weight. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="currentColor" stroke="currentColor" stroke-width="2.328" stroke-linejoin="round">
+  <path d="M851.8162963 163.32420741v697.35158518H172.1837037V163.32420741h679.6325926m19.41807407-77.6722963H152.76562963c-32.16118518 0-58.25422222 26.09303703-58.25422222 58.25422222v736.18773334c0 32.16118518 26.09303703 58.25422222 58.25422222 58.25422222h718.46874074c32.16118518 0 58.25422222-26.09303703 58.25422222-58.25422222V143.90613333c0-32.16118518-26.09303703-58.25422222-58.25422222-58.25422222z"/>
 </svg>

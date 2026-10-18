@@ -108,9 +108,13 @@ fn load_plugin_language(
     let grammar_path = plugin_asset(plugin_root, &contribution.grammar)?;
     let highlights_path = plugin_asset(plugin_root, &contribution.highlights)?;
     let grammar_bytes = fs::read(&grammar_path)
-        .with_context(|| format!("read grammar {}", grammar_path.display()))?;
-    let query = fs::read_to_string(&highlights_path)
-        .with_context(|| format!("read highlights {}", highlights_path.display()))?;
+        .with_context(|| format!("read grammar {}", editor_core::display_path(&grammar_path)))?;
+    let query = fs::read_to_string(&highlights_path).with_context(|| {
+        format!(
+            "read highlights {}",
+            editor_core::display_path(&highlights_path)
+        )
+    })?;
     let injections = contribution
         .injections
         .as_ref()
@@ -309,16 +313,21 @@ fn plugin_asset(plugin_root: &Path, relative_path: &Path) -> anyhow::Result<Path
     let path = plugin_root
         .join(relative_path)
         .canonicalize()
-        .with_context(|| format!("resolve plugin asset {}", relative_path.display()))?;
+        .with_context(|| {
+            format!(
+                "resolve plugin asset {}",
+                editor_core::display_path(&relative_path)
+            )
+        })?;
     ensure!(
         path.starts_with(plugin_root),
         "plugin asset escapes its directory: {}",
-        relative_path.display()
+        editor_core::display_path(&relative_path)
     );
     ensure!(
         path.is_file(),
         "plugin asset is not a file: {}",
-        path.display()
+        editor_core::display_path(&path)
     );
     Ok(path)
 }

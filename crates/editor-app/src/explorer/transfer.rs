@@ -573,7 +573,7 @@ impl EditorApp {
                     outcome
                         .skipped
                         .iter()
-                        .map(|path| path.display().to_string())
+                        .map(|path| editor_core::display_path(&path).to_string())
                         .collect::<Vec<_>>()
                         .join("\n")
                 ));

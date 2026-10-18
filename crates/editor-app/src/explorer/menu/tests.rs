@@ -94,11 +94,21 @@ fn special_copy_follows_copy_and_uses_the_selected_path() {
 fn copied_windows_paths_omit_verbatim_prefixes() {
     // Canonicalized workspace paths use verbatim syntax, but users expect pasteable paths.
     assert_eq!(
-        clipboard_path_text(Path::new(r"\\?\C:\project\src\main.rs")),
+        special_copy_text(
+            Command::CopyAbsolutePath,
+            Path::new(r"\\?\C:\project\src\main.rs"),
+            Path::new(r"C:\project"),
+        )
+        .unwrap(),
         r"C:\project\src\main.rs"
     );
     assert_eq!(
-        clipboard_path_text(Path::new(r"\\?\UNC\server\share\main.rs")),
+        special_copy_text(
+            Command::CopyAbsolutePath,
+            Path::new(r"\\?\UNC\server\share\main.rs"),
+            Path::new(r"\\server\share"),
+        )
+        .unwrap(),
         r"\\server\share\main.rs"
     );
     // Match the reported nested Windows project path, including native separators.

@@ -83,6 +83,7 @@
 
 ## 验证与交付
 
+- 构建内容不同的源码快照或其他工作区时，为每份源码使用独立 Cargo 输出目录；构建副本前用 `cargo metadata --no-deps --format-version 1` 核对 `workspace_root` 和 `target_directory`。源码中接口存在但编译报缺失时，先按[缓存诊断记录](docs/project/verification/build-cache-2026-10-18.md)核对产物来源。
 - 代码变更先运行受影响模块的针对性测试；编辑、插件、工具链、搜索、历史或 Git 缺陷补充可观察行为的回归测试。优先从插件包进入公开管理器和宿主集成验证，不为特定插件新增测试专用宿主 API。
 - 每个实现阶段交付前至少执行以下检查；这些命令不包含 `editor-app` 的 UI 测试，也不会执行 ignored 测试：
 

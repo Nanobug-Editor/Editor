@@ -480,9 +480,10 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         form.simulate_click(newer.center(), Default::default());
         form.run_until_parked();
         form.update(|window, cx| window.draw(cx).clear(cx));
-        let disabled_install = form.debug_bounds("market-install").unwrap();
-        form.simulate_click(disabled_install.center(), Default::default());
-        form.run_until_parked();
+        assert!(
+            form.debug_bounds("market-install").is_none(),
+            "incompatible history hides the install action"
+        );
         assert!(
             form.debug_bounds("confirm-market-install").is_none(),
             "incompatible history cannot install"

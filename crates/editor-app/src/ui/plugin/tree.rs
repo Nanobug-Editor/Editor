@@ -52,6 +52,15 @@ pub(super) struct TreeView {
     _pulse: gpui_kit::Task<()>,
 }
 impl TreeView {
+    /// Tests observe Base's real selection even when virtualization does not paint that row.
+    #[cfg(test)]
+    fn native_selected_id(&self, cx: &App) -> Option<String> {
+        self.tree
+            .read(cx)
+            .selected_item()
+            .map(|item| item.id.to_string())
+    }
+
     /// Native callbacks always keep the original scene revision and immutable resource incarnation.
     fn new(
         resource: Arc<TreeResource>,
@@ -575,6 +584,15 @@ impl Render for TreeView {
 }
 
 impl PluginView {
+    /// Readonly native-test observation; outer None means the requested tree is not mounted.
+    /// This is not a plugin/SDK capability and never selects, reveals or scrolls an item.
+    #[cfg(test)]
+    pub(crate) fn native_tree_selected_id(&self, node: &str, cx: &App) -> Option<Option<String>> {
+        self.trees
+            .get(node)
+            .map(|tree| tree.read(cx).native_selected_id(cx))
+    }
+
     /// Source binding and withdrawal change before resource publication or another native frame.
     /// Keep the same TreeState while revoking every retained callback with its captured credential.
     pub(super) fn sync_tree_action_gestures(&mut self, cx: &mut Context<Self>) {

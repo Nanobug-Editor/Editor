@@ -1,8 +1,11 @@
 //! Native project ownership and shared application routing before and after selection.
 
+mod clone_repository;
 mod close;
 mod controller;
+mod empty;
 mod recent;
+pub(crate) mod switcher;
 mod view;
 
 #[cfg(test)]
@@ -11,19 +14,23 @@ mod view;
 mod tests;
 
 use crate::*;
+use gpui_base::input::InputState;
 use gpui_kit::PathPromptOptions;
 use recent::RecentProjects;
+
+/// Empty startup uses the editor's default geometry without loading any project's session.
+pub(crate) const DEFAULT_WINDOW_WIDTH: f32 = 1280.;
+pub(crate) const DEFAULT_WINDOW_HEIGHT: f32 = 820.;
 
 /// Leaving a project and closing a window share consent and resource cleanup.
 #[derive(Clone, Copy)]
 pub(crate) enum CloseIntent {
-    Home,
     Window,
     /// All native roots gather consent before any project begins resource retirement.
     Application,
 }
 actions!(projects, [OpenFolder, ShowHome, CloseWindow]);
-/// The shell and project home use the same application-wide consent coordinator.
+/// Empty and active editor windows use the same application-wide consent coordinator.
 pub(crate) fn quit_application(cx: &mut App) {
     controller::quit(cx);
 }
@@ -41,7 +48,7 @@ pub(crate) fn open_request(
         t!("projects.external_quitting")
     );
     let Some(path) = path else {
-        return controller::home(profile, cx);
+        return controller::activate_or_open(profile, cx);
     };
     let file = path.is_file().then(|| path.clone());
     let root = if file.is_some() {
@@ -99,7 +106,7 @@ enum Decision {
     },
 }
 
-/// One native window owns a home or one editor; an unopened home owns no project resources.
+/// One native editor window may be empty; workspace resources exist only after explicit selection.
 pub(crate) struct ProjectWindow {
     editor: Option<Entity<EditorApp>>,
     profile: PathBuf,
@@ -110,28 +117,56 @@ pub(crate) struct ProjectWindow {
     close_state: CloseState,
     focus: FocusHandle,
     modal_focus: FocusHandle,
-    scroll: ScrollHandle,
+    /// A user-requested clone owns its inputs and native process until completion or cancellation.
+    clone_project: Option<clone_repository::CloneProject>,
+    project_menu: switcher::ProjectMenuState,
+    titlebar_should_move: bool,
+    /// Global dialogs can be opened before selecting a workspace.
+    pub(in crate::app) dialog: Option<Entity<app_dialog::AppDialog>>,
+    pub(in crate::app) dialog_window: Option<WindowHandle<Root>>,
+    pub(in crate::app) _dialog_closed_subscription: Option<Subscription>,
+    pub(in crate::app) settings_section: app::settings::SettingsSection,
+    extensions: Option<Entity<extensions::ExtensionPanel>>,
+    extensions_window: Option<WindowHandle<Root>>,
+    _extensions_closed_subscription: Option<Subscription>,
+    pub(in crate::app) plugin_settings: Option<Entity<extensions::SettingsView>>,
+    application_popup: Option<Entity<crate::ui::controls::menu::PopupMenu>>,
+    application_anchor: Rc<Cell<Point<Pixels>>>,
+    _activation_subscription: Subscription,
 }
 
 impl ProjectWindow {
-    /// Preserve this project's documents while routing to a shared or newly created home.
-    pub(super) fn show_home(&mut self, cx: &mut Context<Self>) {
+    /// The legacy project-management command now opens this window's project dropdown.
+    pub(super) fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if controller::is_quitting(cx) {
             return;
         }
-        self.error = controller::home(self.profile.clone(), cx)
-            .err()
-            .map(|error| error.to_string());
-        cx.notify();
+        if let Some(editor) = self.editor.clone() {
+            editor.update(cx, |app, cx| {
+                let focus = window
+                    .focused(cx)
+                    .unwrap_or_else(|| app.editor.focus_handle(cx));
+                app.open_project_menu(focus, window, cx);
+            });
+        } else {
+            let focus = window.focused(cx).unwrap_or_else(|| self.focus.clone());
+            self.open_project_menu(focus, window, cx);
+        }
     }
-    /// Create a home in the selected user profile without initializing workspace tools.
+    /// Create an empty editor shell in the selected profile without initializing workspace tools.
     pub(crate) fn new(profile: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        app::bind_editor_shell_keys(cx);
         let recent = controller::recent(&profile, cx);
         let error = recent.borrow().error.clone();
         let handle = window.window_handle();
-        controller::register(cx.entity().downgrade(), handle, cx);
+        controller::register(cx.entity().downgrade(), handle, profile.clone(), cx);
         cx.on_release(move |_, cx| controller::unregister(handle, cx))
             .detach();
+        let activation_subscription = cx.observe_window_activation(window, |_, window, cx| {
+            if window.is_window_active() {
+                controller::mark_active(window.window_handle(), cx);
+            }
+        });
         let this = Self {
             editor: None,
             profile,
@@ -142,8 +177,22 @@ impl ProjectWindow {
             close_state: CloseState::Idle,
             focus: cx.focus_handle(),
             modal_focus: cx.focus_handle(),
-            scroll: ScrollHandle::new(),
+            clone_project: None,
+            project_menu: Default::default(),
+            titlebar_should_move: false,
+            dialog: None,
+            dialog_window: None,
+            _dialog_closed_subscription: None,
+            settings_section: app::settings::SettingsSection::AppearanceAndBehavior,
+            extensions: None,
+            extensions_window: None,
+            _extensions_closed_subscription: None,
+            plugin_settings: None,
+            application_popup: None,
+            application_anchor: Default::default(),
+            _activation_subscription: activation_subscription,
         };
+        window.set_window_title(app::APP_NAME);
         this.install_close_gate(window, cx);
         this.focus.focus(window, cx);
         this
@@ -155,6 +204,7 @@ impl ProjectWindow {
         if self.close_state == CloseState::Cleaning
             || controller::is_quitting(cx)
             || self.decision.is_some()
+            || self.clone_project.is_some()
         {
             return;
         }
@@ -273,9 +323,14 @@ impl ProjectWindow {
             editor.update(cx, |app, _| app.project_window = Some(owner));
             self.editor = Some(editor);
             self.decision = None;
+            controller::mark_opened(window.window_handle(), root.clone(), cx);
             // Construction installs the legacy standalone gate; the project window supersedes it.
             self.install_close_gate(window, cx);
-            window.set_window_title(&format!("{} — {}", root.display(), app::APP_NAME));
+            window.set_window_title(&format!(
+                "{} — {}",
+                editor_core::display_path(&root),
+                app::APP_NAME
+            ));
             if let Err(error) = self.recent.borrow_mut().opened(&root) {
                 self.error = Some(error.to_string());
             }
@@ -289,7 +344,11 @@ impl ProjectWindow {
 
     /// A delayed platform selection can affect only this same unopened window.
     pub(super) fn choose_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.choosing || self.close_state == CloseState::Cleaning || controller::is_quitting(cx)
+        if self.choosing
+            || self.close_state == CloseState::Cleaning
+            || controller::is_quitting(cx)
+            || self.decision.is_some()
+            || self.clone_project.is_some()
         {
             return;
         }

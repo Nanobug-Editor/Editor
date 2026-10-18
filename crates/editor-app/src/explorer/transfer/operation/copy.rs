@@ -18,8 +18,8 @@ impl Worker {
         } else {
             None
         };
-        let mut input =
-            fs::File::open(source).map_err(|error| format!("{}: {error}", source.display()))?;
+        let mut input = fs::File::open(source)
+            .map_err(|error| format!("{}: {error}", editor_core::display_path(&source)))?;
         let mut temporary = tempfile::Builder::new()
             .prefix(".me-transfer-")
             .tempfile_in(target.parent().unwrap())
@@ -29,13 +29,13 @@ impl Worker {
             self.check_cancel()?;
             let count = input
                 .read(&mut buffer)
-                .map_err(|error| format!("{}: {error}", source.display()))?;
+                .map_err(|error| format!("{}: {error}", editor_core::display_path(&source)))?;
             if count == 0 {
                 break;
             }
             temporary
                 .write_all(&buffer[..count])
-                .map_err(|error| format!("{}: {error}", target.display()))?;
+                .map_err(|error| format!("{}: {error}", editor_core::display_path(&target)))?;
             self.bytes += count as u64;
             if self.bytes % (4 * 1024 * 1024) < count as u64 {
                 let _ = self.events.unbounded_send(Event::Progress {
@@ -69,7 +69,11 @@ impl Worker {
         }
         entries.push(Entry::file(target, temporary, before.clone())?);
         if snapshot::stamp(source)? != source_stamp || snapshot::stamp(target)? != *original {
-            return Err(format!("{}: {}", target.display(), t!("transfer.changed")));
+            return Err(format!(
+                "{}: {}",
+                editor_core::display_path(&target),
+                t!("transfer.changed")
+            ));
         }
         // Final dirty protection and publication run in one UI callback; no expensive hashes follow authorization.
         self.publish(Plan {

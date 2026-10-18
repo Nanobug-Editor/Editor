@@ -133,7 +133,9 @@ impl Manager {
         value: Option<Value>,
     ) -> anyhow::Result<()> {
         anyhow::ensure!(
-            self.trusted && self.workspace_open,
+            self.trusted
+                && (self.workspace_open
+                    || (self.is_application_management() && scope == Scope::User)),
             "Workspace is restricted or closed"
         );
         let entry = self
@@ -195,7 +197,7 @@ impl Manager {
                     Some(current.snapshot()?),
                     true,
                 ));
-            } else {
+            } else if self.workspace_open || manifest.scope == api::InstanceScope::Application {
                 // Disabled guests can validate configuration but must not run activation or acquire resources.
                 owners.push((
                     None,

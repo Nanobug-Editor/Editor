@@ -6,19 +6,20 @@ pub trait DocumentStore {
     fn write_utf8(&self, path: &Path, contents: &str) -> Result<(), DocumentError>;
 }
 
+/// Human-readable failures preserve their exact native target in the typed path fields.
 #[derive(Debug, Error)]
 pub enum DocumentError {
-    #[error("document is readonly: {0}")]
+    #[error("document is readonly: {}", crate::display_path(.0))]
     ReadOnly(PathBuf),
-    #[error("document has no file name: {0}")]
+    #[error("document has no file name: {}", crate::display_path(.0))]
     MissingFileName(PathBuf),
-    #[error("failed to read {path}: {source}")]
+    #[error("failed to read {}: {source}", crate::display_path(.path))]
     Read {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to write {path}: {source}")]
+    #[error("failed to write {}: {source}", crate::display_path(.path))]
     Write {
         path: PathBuf,
         #[source]

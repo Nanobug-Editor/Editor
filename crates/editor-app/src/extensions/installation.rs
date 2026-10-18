@@ -90,7 +90,8 @@ impl Render for InstallationView {
                                 .child(
                                     t!(
                                         "plugin_installation.program",
-                                        value = prompt.program.display().to_string()
+                                        value =
+                                            editor_core::display_path(&prompt.program).to_string()
                                     )
                                     .to_string(),
                                 )
@@ -104,7 +105,8 @@ impl Render for InstallationView {
                                 .child(
                                     t!(
                                         "plugin_installation.target",
-                                        value = prompt.target.display().to_string()
+                                        value =
+                                            editor_core::display_path(&prompt.target).to_string()
                                     )
                                     .to_string(),
                                 )

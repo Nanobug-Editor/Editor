@@ -23,7 +23,7 @@ fn project_home_close_commits_chinese_ime_preedit(cx: &mut TestAppContext) {
         });
         visual.run_until_parked();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "original\n");
-        click(visual, "project-close-project");
+        request_close_project(visual);
         assert!(visual.debug_bounds("project-close-save").is_some());
         click(visual, "project-decision-cancel");
         // Closing consent must not create an extra history entry or another undo implementation.
@@ -39,9 +39,9 @@ fn project_home_close_commits_chinese_ime_preedit(cx: &mut TestAppContext) {
             visual.update(|_, cx| editor.read(cx).editor.read(cx).value().to_string()),
             "中文🙂"
         );
-        click(visual, "project-close-project");
+        request_close_project(visual);
         click(visual, "project-close-save");
-        assert!(visual.debug_bounds("project-open-folder").is_some());
+        assert_eq!(window_count(visual), 0);
         assert_eq!(std::fs::read_to_string(path).unwrap(), "中文🙂");
     });
 }

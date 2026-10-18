@@ -67,13 +67,13 @@ pub(super) fn check_target(root: &Path, path: &Path) -> Result<(), String> {
             Ok(meta) if is_link(&meta) => {
                 return Err(format!(
                     "{}: {}",
-                    current.display(),
+                    editor_core::display_path(&current),
                     t!("transfer.link_target")
                 ));
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(format!("{}: {error}", current.display())),
+            Err(error) => return Err(format!("{}: {error}", editor_core::display_path(&current))),
         }
     }
     Ok(())
@@ -136,13 +136,13 @@ pub(super) fn check_ancestors(path: &Path) -> Result<(), String> {
             Ok(metadata) if is_link(&metadata) => {
                 return Err(format!(
                     "{}: {}",
-                    ancestor.display(),
+                    editor_core::display_path(&ancestor),
                     t!("transfer.link_target")
                 ));
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(format!("{}: {error}", ancestor.display())),
+            Err(error) => return Err(format!("{}: {error}", editor_core::display_path(&ancestor))),
         }
     }
     Ok(())
@@ -153,12 +153,12 @@ pub(super) fn stamp(path: &Path) -> Result<Stamp, String> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(value) => value,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Stamp::Missing),
-        Err(error) => return Err(format!("{}: {error}", path.display())),
+        Err(error) => return Err(format!("{}: {error}", editor_core::display_path(&path))),
     };
     if is_link(&metadata) {
         return Err(format!(
             "{}: {}",
-            path.display(),
+            editor_core::display_path(&path),
             t!("transfer.link_target")
         ));
     }
@@ -181,7 +181,7 @@ pub(super) fn stamp(path: &Path) -> Result<Stamp, String> {
     if !metadata.is_dir() {
         return Err(format!(
             "{}: {}",
-            path.display(),
+            editor_core::display_path(&path),
             t!("transfer.unsupported")
         ));
     }
@@ -218,7 +218,11 @@ pub(super) fn stamp(path: &Path) -> Result<Stamp, String> {
                 digest.update(hash);
             }
             Stamp::Missing => {
-                return Err(format!("{}: {}", path.display(), t!("transfer.changed")));
+                return Err(format!(
+                    "{}: {}",
+                    editor_core::display_path(&path),
+                    t!("transfer.changed")
+                ));
             }
         }
     }
@@ -272,7 +276,7 @@ fn copy_directory(source: &Path, target: &Path) -> Result<(), String> {
         if is_link(&metadata) {
             return Err(format!(
                 "{}: {}",
-                from.display(),
+                editor_core::display_path(&from),
                 t!("transfer.link_target")
             ));
         }
@@ -284,7 +288,7 @@ fn copy_directory(source: &Path, target: &Path) -> Result<(), String> {
         } else {
             return Err(format!(
                 "{}: {}",
-                from.display(),
+                editor_core::display_path(&from),
                 t!("transfer.unsupported")
             ));
         }
@@ -334,7 +338,7 @@ pub(super) fn restore(snapshot: &Snapshot, path: &Path) -> Result<(), String> {
                 if is_link(&meta) {
                     return Err(format!(
                         "{}: {}",
-                        path.display(),
+                        editor_core::display_path(&path),
                         t!("transfer.link_target")
                     ));
                 }

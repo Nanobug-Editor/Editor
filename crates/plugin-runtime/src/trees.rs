@@ -161,6 +161,26 @@ impl TreeResource {
         state.snapshot.revision += 1;
         Ok(Some(request))
     }
+    /// A scene rejection never reached the provider. Release only its exact pending request so the
+    /// current native owner can ask again. Keep cached pages, sibling requests, cursors and epoch.
+    pub(crate) fn release_undelivered(&self, request: &tree::Request) {
+        if request.tree != self.handle || !self.is_live() {
+            return;
+        }
+        let mut state = self.state.lock().unwrap();
+        if state
+            .pending
+            .get(&request.sequence)
+            .is_none_or(|pending| pending.request != *request)
+        {
+            return;
+        }
+        state.pending.remove(&request.sequence);
+        if let Some(branch) = state.snapshot.branches.get_mut(&request.parent) {
+            branch.loading = false;
+        }
+        state.snapshot.revision += 1;
+    }
     /// Native disclosure and keyboard collapse cancel every pending descendant before a late reply.
     pub fn collapse(&self, node: &str) {
         let mut state = self.state.lock().unwrap();

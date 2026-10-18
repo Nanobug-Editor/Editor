@@ -69,7 +69,7 @@ impl Resources {
                     errors.push(
                         rust_i18n::t!(
                             "transfer.cleanup_failed",
-                            path = entry.0.display(),
+                            path = editor_core::display_path(&entry.0),
                             error = error
                         )
                         .to_string(),

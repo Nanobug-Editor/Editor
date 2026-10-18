@@ -2,9 +2,9 @@
 use super::*;
 use gpui_kit::VisualTestContext;
 
-/// Inspect the delivered ZIP so all native scenarios execute its real component and resources.
+/// Inspect the current local candidate so native regressions execute its real component and resources.
 fn delivered_package() -> Package {
-    Package::read(&crate::test_packages::archive("markdown")).unwrap()
+    Package::read(&crate::test_packages::archive("markdown-0.18.2")).unwrap()
 }
 
 /// Remove one declared permission before public installation, preserving the actual guest and assets.

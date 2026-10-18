@@ -12,6 +12,8 @@ pub(crate) static NEXT_FILE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic
 
 /// A file tab owns its identity independently of native text editing resources.
 pub(crate) struct OpenTab {
+    /// Only one unedited explorer preview may be replaced; saving and Undo never restore this flag.
+    pub(crate) preview: bool,
     /// Virtual identities carry revocable ownership and never represent a backing disk file.
     pub(crate) virtual_document: Option<VirtualTab>,
     pub(crate) path: PathBuf,
@@ -24,6 +26,13 @@ pub(crate) struct OpenTab {
     pub(crate) text: Option<TextTab>,
     /// File failures retain the tab and its retry target, including unavailable viewer authority.
     pub(crate) file_error: Option<String>,
+}
+
+/// Explicit navigation keeps a document; explorer browsing reuses the single preview slot.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum FileOpenMode {
+    Fixed,
+    Preview,
 }
 
 impl OpenTab {

@@ -111,6 +111,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("lifecycle.activation".into(), Version::new(1, 0, 0)),
         ("ui.tools".into(), Version::new(1, 0, 0)),
         ("ui.content_colors".into(), Version::new(1, 0, 0)),
+        ("ui.styles".into(), Version::new(1, 0, 0)),
         ("ui.incremental".into(), Version::new(1, 0, 0)),
         ("ui.icons".into(), Version::new(1, 0, 0)),
         ("ui.richtext".into(), Version::new(1, 0, 0)),

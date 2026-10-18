@@ -186,7 +186,7 @@ pub struct ExtensionPanel {
     workspace: PathBuf,
     root: PathBuf,
     /// This view publishes only the language roles belonging to its project.
-    providers: crate::language::providers::Providers,
+    providers: Option<crate::language::providers::Providers>,
     /// Every panel retains its project's immutable contribution projection.
     _catalog: contributions::CatalogView,
     worker: Arc<Worker>,
@@ -441,15 +441,54 @@ impl ExtensionPanel {
         cx: &mut Context<Self>,
     ) -> Self {
         let root = providers.store_root();
+        Self::new_owner(
+            parent,
+            workspace,
+            visible,
+            trusted,
+            root,
+            Some(providers),
+            cx,
+        )
+    }
+    /// Application management shares the profile store without a workspace projection or plugin demand.
+    pub(crate) fn new_application(profile: &Path, cx: &mut Context<Self>) -> Self {
+        Self::new_owner(
+            WeakEntity::new_invalid(),
+            PathBuf::new(),
+            Rc::new(Cell::new(false)),
+            true,
+            profile_runtime_root(profile),
+            None,
+            cx,
+        )
+    }
+    /// Only actual projects register language providers; empty management owns immutable user resources.
+    fn new_owner(
+        parent: WeakEntity<EditorApp>,
+        workspace: PathBuf,
+        visible: Rc<Cell<bool>>,
+        trusted: bool,
+        root: PathBuf,
+        providers: Option<crate::language::providers::Providers>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let environment = environment(&workspace, cx);
-        let catalog = contributions::CatalogView::new(&providers, cx);
-        // Installed declarations are available before restored editor tabs are opened.
-        if trusted {
-            if let Err(error) = contributions::refresh_for_project(&providers, &root, &workspace) {
-                tracing::warn!(%error, "installed plugin contributions unavailable");
-            }
+        let catalog = if let Some(providers) = &providers {
+            contributions::CatalogView::new(providers, cx)
         } else {
-            contributions::refresh_project_entries(&providers, &root, &[], false);
+            contributions::CatalogView::application(&root, cx)
+        };
+        // Installed declarations are available before restored editor tabs are opened.
+        if let Some(providers) = &providers {
+            if trusted {
+                if let Err(error) = contributions::refresh_for_project(providers, &root, &workspace)
+                {
+                    tracing::warn!(%error, "installed plugin contributions unavailable");
+                }
+            } else {
+                contributions::refresh_project_entries(providers, &root, &[], false);
+            }
         }
         let pool = runtime_owners::for_application(cx);
         let worker = Arc::new(Worker::start_in_pool(
@@ -607,8 +646,10 @@ impl ExtensionPanel {
             parent,
             visible: Rc::new(Cell::new(initially_visible)),
             panel_visibility: Default::default(),
-            providers: crate::language::providers::Providers::for_workspace(&workspace)
-                .expect("project panel provider owner"),
+            providers: Some(
+                crate::language::providers::Providers::for_workspace(&workspace)
+                    .expect("project panel provider owner"),
+            ),
             _catalog: contributions::CatalogView::for_project(
                 &crate::language::providers::Providers::for_workspace(&workspace)
                     .expect("project panel provider owner"),
@@ -691,7 +732,9 @@ impl ExtensionPanel {
         if !trusted {
             self.worker.cancel_installation();
             // Startup declarations can exist before the worker publishes any installed entries.
-            contributions::refresh_project_entries(&self.providers, &self.root, &[], false);
+            if let Some(providers) = &self.providers {
+                contributions::refresh_project_entries(providers, &self.root, &[], false);
+            }
         }
         self.worker
             .trusted
@@ -892,21 +935,25 @@ impl ExtensionPanel {
             });
         }
         if contributions_changed {
-            contributions::refresh_project_entries(
-                &self.providers,
-                &self.root,
-                &self.entries,
-                self.worker
-                    .trusted
-                    .load(std::sync::atomic::Ordering::Acquire),
-            );
-            let parent = self.parent.clone();
-            cx.defer(move |cx| {
-                let _ = parent.update(cx, |app, cx| {
-                    app.pending_contribution_sync = true;
-                    cx.notify();
+            if let Some(providers) = &self.providers {
+                contributions::refresh_project_entries(
+                    providers,
+                    &self.root,
+                    &self.entries,
+                    self.worker
+                        .trusted
+                        .load(std::sync::atomic::Ordering::Acquire),
+                );
+                let parent = self.parent.clone();
+                cx.defer(move |cx| {
+                    let _ = parent.update(cx, |app, cx| {
+                        app.pending_contribution_sync = true;
+                        cx.notify();
+                    });
                 });
-            });
+            } else {
+                contributions::refresh_application_entries(&self.root, &self.entries);
+            }
         }
         self.refresh_tool_icons();
         if self.surface_id.is_none() {

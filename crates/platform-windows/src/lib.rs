@@ -1,3 +1,5 @@
+/// Reuse the core presentation rule across native adapters and runtime diagnostics.
+pub use editor_core::{DisplayPath, display_path};
 use editor_core::{DocumentError, DocumentStore};
 use std::{
     fs,
@@ -53,23 +55,24 @@ impl DocumentStore for NativeFileStore {
     }
 }
 
+/// Native history diagnostics format paths without changing their retry targets or I/O causes.
 #[derive(Debug, Error)]
 pub enum HistoryError {
     #[error("a local data directory is unavailable")]
     DataDirectoryUnavailable,
-    #[error("failed to create history directory {path}: {source}")]
+    #[error("failed to create history directory {}: {source}", display_path(.path))]
     CreateDirectory {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to read {path}: {source}")]
+    #[error("failed to read {}: {source}", display_path(.path))]
     Read {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("failed to write history snapshot {path}: {source}")]
+    #[error("failed to write history snapshot {}: {source}", display_path(.path))]
     Write {
         path: PathBuf,
         #[source]
@@ -150,6 +153,40 @@ fn stable_path_hash(path: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Native read errors expose a readable target while retaining the exact canonical I/O path.
+    #[cfg(windows)]
+    #[test]
+    fn native_path_errors_display_without_verbatim_prefixes() {
+        let directory = tempfile::tempdir().unwrap();
+        let canonical = directory.path().canonicalize().unwrap();
+        let target = canonical.join("missing 中文.txt");
+        let error = NativeFileStore.read_utf8(&target).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            !message.contains(r"\\?\"),
+            "native read error leaked its path: {message}"
+        );
+        assert!(message.contains(&display_path(&target).to_string()));
+        let DocumentError::Read { path, .. } = error else {
+            panic!("the native read must retain its typed target and cause");
+        };
+        assert_eq!(path, target);
+
+        let blocker = canonical.join("file.txt");
+        fs::write(&blocker, "not a directory").unwrap();
+        let target = blocker.join("history");
+        let error = LocalHistory::at(&target).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            !message.contains(r"\\?\"),
+            "history error leaked its path: {message}"
+        );
+        let HistoryError::CreateDirectory { path, .. } = error else {
+            panic!("history creation must retain its typed target and cause");
+        };
+        assert_eq!(path, target);
+    }
 
     #[test]
     fn snapshot_is_stored_outside_the_project() {

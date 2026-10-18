@@ -42,8 +42,8 @@ fn native_community_language_diagnostics_fix_preview_source_revision_and_undo(
             ),
             2
         );
-        // Open from the editor's shortcut without clicking a child first: Base keeps initial
-        // focus on its Dialog, so row arrows must work from that actual dispatch path too.
+        // Opening the dock from the editor shortcut must focus its initial Base row,
+        // so arrow selection works before any pointer gesture.
         visual.simulate_keystrokes("ctrl-shift-m");
         draw(visual);
         let visible_fix = |visual: &mut VisualTestContext, label: &str| {
@@ -62,7 +62,7 @@ fn native_community_language_diagnostics_fix_preview_source_revision_and_undo(
         draw(visual);
         assert!(
             visible_fix(visual, "Create default configuration"),
-            "Down from the initially focused Base Dialog must select the other source and its fix"
+            "Down from the initial dock row must select the other source and its fix"
         );
         visual.simulate_keystrokes("up");
         draw(visual);
@@ -84,7 +84,7 @@ fn native_community_language_diagnostics_fix_preview_source_revision_and_undo(
         });
         visual.simulate_event(gpui_kit::KeyUpEvent { keystroke });
         draw(visual);
-        assert!(visual.debug_bounds("native-problems-list").is_none());
+        assert!(visual.debug_bounds("native-problems-list").is_some());
         assert_eq!(
             visual.update(|_, cx| app.read(cx).editor.read(cx).cursor()),
             12
@@ -92,10 +92,10 @@ fn native_community_language_diagnostics_fix_preview_source_revision_and_undo(
         assert_eq!(text(visual, &app), original);
         select_problem(visual, &app, "teh");
         assert!(
-            visual.update(|window, _| gpui_base::test_support::snapshots(window)
+            !visual.update(|window, _| gpui_base::test_support::snapshots(window)
                 .iter()
                 .any(|node| node.role() == Some(gpui_kit::Role::Dialog))),
-            "Problems preserves Base modal semantics"
+            "Problems remains a nonmodal native dock panel"
         );
         click(visual, "problem-related-0");
         assert_eq!(

@@ -165,7 +165,9 @@ impl Worker {
                 // Waiting for this project's mailbox never holds the shared owner. Each dispatch/poll
                 // borrows only its routed projection; other projects' processes and transports stay live.
                 let mut manager = shared.lock().unwrap();
-                if pool.installation_active() && !manager.workspace_is_open(&environment.workspace)
+                if !environment.workspace.is_empty()
+                    && pool.installation_active()
+                    && !manager.workspace_is_open(&environment.workspace)
                 {
                     if let Some(work) = work.take() {
                         deferred.push_back(work);
@@ -173,7 +175,9 @@ impl Worker {
                     // No project resources exist yet; receive/timer waits above release the shared owner.
                     continue;
                 }
-                {
+                if environment.workspace.is_empty() {
+                    manager.select_application(environment.clone());
+                } else {
                     if let Err(error) = manager.select_workspace(
                         environment.clone(),
                         authority.load(std::sync::atomic::Ordering::Acquire),
@@ -557,9 +561,12 @@ impl Worker {
                         }
                         Some(Work::Shutdown(ack)) => {
                             if let Some(ack) = ack {
-                                let result = pool
-                                    .close_project(&mut manager)
-                                    .map_err(|error| format!("{error:#}"));
+                                let result = (if environment.workspace.is_empty() {
+                                    Ok(())
+                                } else {
+                                    pool.close_project(&mut manager)
+                                })
+                                .map_err(|error| format!("{error:#}"));
                                 if result.is_ok() {
                                     drop(manager);
                                     actor_complete
@@ -572,7 +579,9 @@ impl Worker {
                                 let _ = ack.send(result.clone());
                                 result.map_err(anyhow::Error::msg)
                             } else {
-                                pool.abandon_project(&mut manager);
+                                if !environment.workspace.is_empty() {
+                                    pool.abandon_project(&mut manager);
+                                }
                                 drop(manager);
                                 actor_complete.store(true, std::sync::atomic::Ordering::Release);
                                 return;
@@ -588,7 +597,15 @@ impl Worker {
                                 .clone()
                                 .unwrap_or_default();
                             // Public installation owns preparation and cutover; document opening never selects a package.
-                            if package.manifest.component.is_some() {
+                            if manager.is_application_management()
+                                && package.manifest.scope == api::InstanceScope::Workspace
+                            {
+                                manager.install_with_control(
+                                    &package,
+                                    package.manifest.permissions.clone(),
+                                    &control,
+                                )
+                            } else if package.manifest.component.is_some() {
                                 let mutation = pool
                                     .reserve_installation()
                                     .expect("installation lane admitted under shared owner");
@@ -704,6 +721,11 @@ impl Worker {
                                 .copied()
                                 .unwrap_or(0);
                             if epoch == current {
+                                let source_callback = matches!(
+                                    &event,
+                                    api::Notification::Preview { .. }
+                                        | api::Notification::FilePreview { .. }
+                                );
                                 let native_callback = matches!(
                                     event,
                                     api::Notification::Ui(_)
@@ -737,6 +759,27 @@ impl Worker {
                                     {
                                         // Retirement can finish between the native sample and actor dispatch.
                                         // A visibility observation never creates another callback owner.
+                                        Ok(())
+                                    }
+                                    Err(error)
+                                        if source_callback
+                                            && manager.instance_id(&id).is_none()
+                                            && manager
+                                                .installed
+                                                .get(&id)
+                                                .is_some_and(|entry| entry.error.is_none())
+                                            && manager.availability(&id).is_ok()
+                                            && error
+                                                .downcast_ref::<api::Failure>()
+                                                .is_some_and(|failure| {
+                                                    failure.code == api::ErrorCode::InvalidState
+                                                }) =>
+                                    {
+                                        // An enabled cold view has static metadata but no callback owner yet.
+                                        // First birth advances its epoch; native polling clears the retained
+                                        // file/text markers and resends the current source to that exact owner.
+                                        // Validation already ran: permission, malformed input and guest faults
+                                        // must still reach the ordinary error path, without waking hidden views.
                                         Ok(())
                                     }
                                     Err(error)

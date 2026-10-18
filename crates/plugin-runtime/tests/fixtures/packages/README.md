@@ -1,5 +1,15 @@
 # Frozen plugin test inputs
 
+`markdown-0.18.2.zip` is the current local README presentation candidate: paragraph alignment,
+accessible image alt semantics and Primer metrics through public `ui.styles`. The 0.18.0/0.18.1
+local candidates remain preserved. `sdk-styles-fixture-1.0.0.zip` is an independent minimal current-SDK
+consumer for reusable style negotiation and demand-owned view activation; its source is in ../sdk-styles.
+Each explicit ledger entry
+records its actual public SDK digest and leaves uncommitted source/host revisions null. Native
+Markdown behavior regressions select this archive explicitly; bare `markdown` and marketplace
+distribution snapshots keep the reviewed 0.17.2 package. Neither the new fixture nor a successful
+build changes marketplace admission or any already published ZIP.
+
 The adjacent `sdk-canvas` project independently exercises the current `editor.layout` contract: it
 publishes a native source bound to the exact Preview version beside a zoomable SVG canvas. No
 placeholder source is published during Prepare; unsaved text comes only from Preview. Build it with

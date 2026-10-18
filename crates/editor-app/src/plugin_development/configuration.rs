@@ -261,12 +261,16 @@ pub(crate) fn validate(arguments: &serde_json::Value) -> Result<serde_json::Valu
                         "{}",
                         t!(
                             "plugin_dev.missing_description",
-                            path = description.path.display()
+                            path = editor_core::display_path(&description.path)
                         )
                     );
                 }
                 return Err(error.context(
-                    t!("plugin_dev.project_read_failed", path = project.display()).to_string(),
+                    t!(
+                        "plugin_dev.project_read_failed",
+                        path = editor_core::display_path(&project)
+                    )
+                    .to_string(),
                 ));
             }
         }

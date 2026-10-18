@@ -7,6 +7,24 @@ use gpui_kit::{
     Window, WindowControlArea, div, prelude::FluentBuilder as _, px,
 };
 
+/// The same editor caption appearance is used before and after a workspace is selected.
+pub(crate) fn editor_title_bar(cx: &App) -> Stateful<Div> {
+    let style =
+        crate::ui::theme::component_styles(cx, plugin_schema::ThemeComponent::WindowTitleBar).base;
+    h_flex()
+        .id("custom-title-bar")
+        .debug_selector(|| "custom-title-bar".into())
+        .w_full()
+        .h(px(34.))
+        .flex_shrink_0()
+        .items_center()
+        .bg(style.background.unwrap_or(cx.theme().tab_bar))
+        .text_color(style.foreground.unwrap_or(cx.theme().foreground))
+        .text_size(px(style.font_size_px.unwrap_or(14.)))
+        .border_b_1()
+        .border_color(style.border.unwrap_or(cx.theme().border))
+}
+
 /// Native caption regions retain the platform close gate in both shell states.
 pub(crate) fn native_window_controls(window: &Window, cx: &App) -> Stateful<Div> {
     let supported = window.window_controls();

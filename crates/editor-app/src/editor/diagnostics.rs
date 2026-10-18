@@ -351,41 +351,6 @@ impl EditorApp {
         self.editor.focus_handle(cx).focus(window, cx);
         cx.notify();
     }
-
-    /// The count is scoped to the active document, just like the F8 action.
-    pub(crate) fn render_syntax_error_indicator(&self, cx: &Context<Self>) -> impl IntoElement {
-        let count = self
-            .editor
-            .read(cx)
-            .diagnostics()
-            .map_or(0, |set| set.len());
-        // Recovery diagnostics are capped; make the displayed count honest about that limit.
-        let capped = self.active_text_tab_index().is_some_and(|index| {
-            self.tabs[index]
-                .text
-                .as_ref()
-                .expect("active text capability")
-                .diagnostics
-                .syntax
-                .len()
-                == crate::language::diagnostics::MAX_DIAGNOSTICS
-        });
-        let display_count = if capped {
-            format!("{count}+")
-        } else {
-            count.to_string()
-        };
-        let label = t!("diagnostics.count", count = display_count).to_string();
-        let tooltip = t!("diagnostics.navigate").to_string();
-        div()
-            .id("syntax-error-indicator")
-            .debug_selector(|| "syntax-error-indicator".into())
-            .text_color(cx.theme().danger)
-            .cursor_pointer()
-            .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-            .on_click(cx.listener(|app, _, window, cx| app.show_problems(window, cx)))
-            .child(label)
-    }
 }
 
 /// Wrap navigation without selecting the marker that is already under the caret.

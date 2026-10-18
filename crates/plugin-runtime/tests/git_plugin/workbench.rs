@@ -12,12 +12,18 @@ mod linked;
 mod native_guards;
 #[path = "workbench/network.rs"]
 mod network;
+#[path = "workbench/observation_failures.rs"]
+mod observation_failures;
 #[path = "workbench/operations.rs"]
 mod operations;
 #[path = "workbench/package_lifecycle.rs"]
 mod package_lifecycle;
+#[path = "workbench/project_loading.rs"]
+mod project_loading;
 #[path = "workbench/recovery.rs"]
 mod recovery;
+#[path = "workbench/refresh_stability.rs"]
+mod refresh_stability;
 #[path = "workbench/scene_activity.rs"]
 mod scene_activity;
 #[path = "workbench/scene_receipts.rs"]

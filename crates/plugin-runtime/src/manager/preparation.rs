@@ -9,6 +9,8 @@ pub struct InstallationPreparation {
     /// Background preparation cannot substitute different native SDK inputs for the owner manager.
     pub(super) host_resources: crate::HostResources,
     pub(super) previous_digest: Option<String>,
+    /// Pending cold admission remains a first install even when an earlier uninstall retained private files.
+    pub(super) allow_optional_failure: bool,
     pub(super) replaced_records: BTreeMap<String, Installed>,
     pub(super) package: Package,
     pub(super) grants: BTreeSet<String>,
@@ -94,7 +96,7 @@ impl InstallationPreparation {
             Some(&mut next),
             &configuration,
             control,
-            self.previous_digest.is_none(),
+            self.allow_optional_failure,
             &dependency_logs,
         )?;
         Ok(PreparedInstallation {

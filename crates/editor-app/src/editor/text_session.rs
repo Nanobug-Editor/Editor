@@ -66,6 +66,19 @@ impl EditorApp {
                     .iter()
                     .position(|tab| tab.owns_editor(&changed_editor))
                 {
+                    if this.tabs[index].preview
+                        && this.tabs[index].text.as_ref().is_some_and(|text| {
+                            let digest: [u8; 32] = Sha256::digest(
+                                changed_editor.read(cx).text().to_string().as_bytes(),
+                            )
+                            .into();
+                            !text.suppress_change && digest == text.disk_digest
+                        })
+                    {
+                        // Base also emits Change for Delete at EOF and identical replacements.
+                        // Keep untouched previews clean so the replacement guard can release them.
+                        return;
+                    }
                     let Some(tab) = this.tabs[index].text.as_mut() else {
                         return;
                     };
@@ -80,6 +93,8 @@ impl EditorApp {
                         this.status =
                             t!("status.modified", revision = tab.session.revision()).to_string();
                     }
+                    // Promotion belongs to the first content edit, independently of later save/Undo.
+                    this.keep_tab(index);
                 }
                 this.refresh_syntax_diagnostics(changed_editor.entity_id(), cx);
                 this.sync_plugin_documents(cx);

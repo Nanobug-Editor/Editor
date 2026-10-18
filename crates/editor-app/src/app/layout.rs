@@ -60,8 +60,14 @@ impl EditorApp {
             .read(cx)
             .entries
             .iter()
-            .any(|entry| entry.enabled && !entry.manifest.panels.is_empty())
-            && self.plugin_panels.is_empty()
+            .filter(|entry| entry.enabled)
+            .any(|entry| {
+                entry.manifest.panels.iter().any(|panel| {
+                    !self
+                        .plugin_panels
+                        .contains_key(&format!("{}/{}", entry.manifest.id, panel.id))
+                })
+            })
         {
             return;
         }
@@ -78,6 +84,7 @@ impl EditorApp {
             "HostMessages".to_owned(),
             "Outline".to_owned(),
             "NativeTerminal".to_owned(),
+            "Problems".to_owned(),
         ]);
         // Explorer can have moved outside the center, so retain its entity independently.
         bind_panel("Explorer", &self.explorer_panel, cx);
@@ -85,6 +92,7 @@ impl EditorApp {
         bind_panel("Outline", &self.outline_panel, cx);
         bind_panel("HostMessages", &self.messages, cx);
         bind_panel("NativeTerminal", &self.terminal, cx);
+        bind_panel("Problems", &self.problems.panel, cx);
         for (key, panel) in &self.plugin_panels {
             // File-scoped previews belong to the editor's inner split, never to the outer layout.
             if panel.read(cx).is_editor_preview() {
@@ -97,10 +105,11 @@ impl EditorApp {
         // Disabled or uninstalled contributions must not create blank placeholder panels.
         prune_unavailable(&mut layout, &names);
         self.pending_dock_restore = false;
-        if let Err(error) = self
+        let restored = self
             .dock_area
-            .update(cx, |area, cx| area.load(layout, window, cx))
-        {
+            .update(cx, |area, cx| area.load(layout, window, cx));
+        let loaded = restored.is_ok();
+        if let Err(error) = restored {
             tracing::warn!(%error, "saved dock layout could not be restored");
         } else if !has_messages {
             // Extend an older saved tree after loading it; replacing the right dock would lose its peers.
@@ -123,6 +132,7 @@ impl EditorApp {
             });
         }
         self.ensure_terminal_dock(window, cx);
+        self.ensure_problems_dock(window, cx);
         // An older saved layout has no outline. Add one beside its surviving Explorer without
         // replacing the user's other split sizes or keeping a second persisted layout tree.
         let outline = dock::panel_handle(self.outline_panel.clone());
@@ -172,6 +182,55 @@ impl EditorApp {
                 );
             }
         });
+        if loaded {
+            self.migrate_plugin_sidebar_layout(window, cx);
+        }
+    }
+
+    /// Move only legacy default-left leaves after loading all current bindings successfully.
+    /// Stable panel identities survive Base normalization; custom right/bottom/center placements
+    /// and every session already at this or a future version retain their own authority.
+    fn migrate_plugin_sidebar_layout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.session_state.plugin_sidebar_layout_version >= 1 {
+            return;
+        }
+        let mut candidates = Vec::new();
+        for entry in &self.extensions.read(cx).entries {
+            if !entry.enabled {
+                continue;
+            }
+            for panel in entry
+                .manifest
+                .panels
+                .iter()
+                .filter(|panel| panel.position == "left")
+            {
+                if let Some(view) = self
+                    .plugin_panels
+                    .get(&format!("{}/{}", entry.manifest.id, panel.id))
+                {
+                    candidates.push(gpui_base::dock::PanelId::from(view.entity_id()));
+                }
+            }
+        }
+        let completed = self.dock_area.update(cx, |area, cx| {
+            for panel in candidates {
+                // Recheck each current region after a move instead of reusing invalidated node IDs.
+                if area
+                    .layout(gpui_base::dock::DockPlacement::Left)
+                    .is_some_and(|tree| tree.find_panel_node(panel).is_some())
+                    && !local_dock::move_to_left_sidebar(area, panel, window, cx)
+                {
+                    return false;
+                }
+            }
+            true
+        });
+        if completed {
+            self.session_state.plugin_sidebar_layout_version = 1;
+            self.capture_dock_layout(cx);
+            self.persist_session();
+        }
     }
 }
 

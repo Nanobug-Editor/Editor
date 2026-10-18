@@ -154,7 +154,7 @@ fn shortcuts_language_commands_keep_overrides_after_shell_initialization(cx: &mu
     );
 }
 
-/// Opening from keys, the pointer, or the application menu retains the original editing target.
+/// Opening from keys or the application menu retains the original editing target.
 #[gpui::test]
 fn shortcuts_open_and_restore_focus(cx: &mut TestAppContext) {
     with_editor(cx, false, vec![], |visual, app, _| {
@@ -182,24 +182,7 @@ fn shortcuts_open_and_restore_focus(cx: &mut TestAppContext) {
                 .focus_handle(cx)
                 .is_focused(window)
         }));
-        click(visual, "shortcuts-trigger");
-        visual.simulate_input(&rust_i18n::t!("shortcuts.operation.Copy"));
-        draw(visual);
-        assert!(
-            visual
-                .debug_bounds("shortcut-operation-input::Copy")
-                .is_some()
-        );
-        visual.simulate_keystrokes("escape");
-        draw(visual);
-        assert!(visual.update(|window, cx| {
-            app.read(cx)
-                .editor
-                .read(cx)
-                .focus_handle(cx)
-                .is_focused(window)
-        }));
-        click(visual, "shortcuts-menu-trigger");
+        click(visual, "application-menu-trigger");
         click(visual, "native-menu-item-shortcuts");
         visual.simulate_input(&rust_i18n::t!("shortcuts.operation.Copy"));
         draw(visual);

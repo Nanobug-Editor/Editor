@@ -55,7 +55,7 @@ impl EditorApp {
                     "transfer.progress",
                     completed = active.completed,
                     bytes = active.bytes,
-                    path = active.path.display()
+                    path = editor_core::display_path(&active.path)
                 )
                 .to_string(),
                 move |_, _| {
@@ -144,8 +144,8 @@ impl EditorApp {
             .collect();
             let subsequent_owner = owner.clone();
             let mut details = vec![
-                prompt.source.display().to_string(),
-                prompt.target.display().to_string(),
+                editor_core::display_path(&prompt.source).to_string(),
+                editor_core::display_path(&prompt.target).to_string(),
             ];
             if protected {
                 details.push(t!("transfer.dirty_target").to_string());
@@ -154,7 +154,7 @@ impl EditorApp {
                 details = prompt
                     .affected
                     .iter()
-                    .map(|path| path.display().to_string())
+                    .map(|path| editor_core::display_path(&path).to_string())
                     .collect();
                 details.push(
                     if prompt.discard {

@@ -220,7 +220,19 @@ impl Manager {
                     api::Failure::new(api::ErrorCode::InvalidHandle, "UI panel is unavailable")
                 })?;
             // Reject stale host callbacks before calling WASM; they are not plugin crashes.
-            document.validate_event(event)?;
+            if let Err(failure) = document.validate_event(event) {
+                if failure.code == api::ErrorCode::StaleRevision
+                    && let ui::Action::Tree(plugin_protocol::tree::Event::Request(request)) =
+                        &event.action
+                    && let Some(instance) = self.live.get(id)
+                {
+                    // Keep rejecting obsolete input. The provider never received this page, so
+                    // its native owner must be free to create a fresh scene-bound request instead
+                    // of waiting for a false provider timeout. No business action is replayed.
+                    instance.release_undelivered_tree_page(request);
+                }
+                return Err(failure.into());
+            }
             if let ui::Action::Tree(tree_event) = &event.action {
                 let instance = self.live.get(id).expect("validated UI owner");
                 instance.validate_tree_event(tree_event)?;

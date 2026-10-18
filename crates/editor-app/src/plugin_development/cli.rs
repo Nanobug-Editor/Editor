@@ -145,10 +145,14 @@ pub(crate) fn run_cli() -> anyhow::Result<bool> {
                 }
             })();
             match result {
-                Ok(output) => println!("OK {} -> {}", path.display(), output.display()),
+                Ok(output) => println!(
+                    "OK {} -> {}",
+                    editor_core::display_path(&path),
+                    editor_core::display_path(&output)
+                ),
                 Err(error) => {
                     failed = true;
-                    eprintln!("FAILED {}: {error:#}", path.display());
+                    eprintln!("FAILED {}: {error:#}", editor_core::display_path(&path));
                 }
             }
         }

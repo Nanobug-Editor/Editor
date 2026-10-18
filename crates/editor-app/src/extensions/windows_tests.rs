@@ -4,6 +4,7 @@ use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use plugin_runtime::Manager;
 use serde_json::json;
+mod close_error;
 mod comparisons;
 mod merge;
 mod shutdown;

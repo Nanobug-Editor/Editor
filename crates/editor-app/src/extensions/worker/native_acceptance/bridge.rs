@@ -30,7 +30,13 @@ impl Harness {
             last_frame_log: Cell::new(None),
             evidence: RefCell::new(serde_json::json!({
                 "case": case.name,
-                "workflow": if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
+                "workflow": if sidebar::requested() {
+                    "shared-sidebar-only"
+                } else if caption_controls::requested() {
+                    "caption-controls-loaded-commit"
+                } else if std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some() {
+                    "idle-refresh-state-only"
+                } else if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
                     "history-keyboard-only"
                 } else {
                     "complete-workbench"

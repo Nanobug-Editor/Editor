@@ -104,6 +104,84 @@ plugins.market_browsing_version:
 plugins.market_installed_version:
   en: "Installed %{version}"
   zh-CN: "已安装 %{version}"
+plugins.update_to_version:
+  en: "Update to %{version}"
+  zh-CN: "可更新至 %{version}"
+plugins.operation_in_progress:
+  en: "Working on %{plugin}…"
+  zh-CN: "正在处理 %{plugin}…"
+plugins.version_installed:
+  en: "Installed"
+  zh-CN: "已安装"
+plugins.version_browsing:
+  en: "Browsing"
+  zh-CN: "浏览中"
+plugins.info_basic:
+  en: "Plugin information"
+  zh-CN: "基本资料"
+plugins.info_compatibility:
+  en: "Compatibility and permissions"
+  zh-CN: "兼容性与权限"
+plugins.info_statistics:
+  en: "Catalog and statistics"
+  zh-CN: "目录与统计"
+plugins.info_id:
+  en: "Plugin ID"
+  zh-CN: "插件标识"
+plugins.info_version:
+  en: "Version"
+  zh-CN: "版本"
+plugins.info_maintainers:
+  en: "Maintainers"
+  zh-CN: "维护者"
+plugins.info_category:
+  en: "Category"
+  zh-CN: "分类"
+plugins.info_tags:
+  en: "Tags"
+  zh-CN: "标签"
+plugins.info_repository:
+  en: "Repository"
+  zh-CN: "源码仓库"
+plugins.info_license:
+  en: "License"
+  zh-CN: "许可协议"
+plugins.info_published:
+  en: "Published"
+  zh-CN: "发布时间"
+plugins.info_scope:
+  en: "Instance scope"
+  zh-CN: "实例作用域"
+plugins.info_permissions:
+  en: "Requested permissions"
+  zh-CN: "申请权限"
+plugins.info_host:
+  en: "Editor version"
+  zh-CN: "编辑器版本"
+plugins.info_platforms:
+  en: "Platforms"
+  zh-CN: "支持平台"
+plugins.info_downloads:
+  en: "Downloads"
+  zh-CN: "下载次数"
+plugins.info_fetched:
+  en: "Catalog fetched"
+  zh-CN: "目录获取时间"
+plugins.info_measured:
+  en: "Statistics measured"
+  zh-CN: "统计时间"
+plugins.info_none:
+  en: "None"
+  zh-CN: "无"
+plugins.scope_workspace:
+  en: "Workspace"
+  zh-CN: "工作区"
+plugins.scope_application:
+  en: "Application"
+  zh-CN: "应用"
+plugins.all_platforms:
+  en: "All platforms"
+  zh-CN: "所有平台"
 plugins.installed_incompatible:
   en: "Incompatible; please update. %{reason} Settings and enablement are preserved."
   zh-CN: "不兼容，请更新。%{reason} 原有设置和启用范围已保留。"

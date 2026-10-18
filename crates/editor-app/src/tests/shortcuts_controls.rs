@@ -238,7 +238,7 @@ fn shortcuts_controls_opener_and_enter_variants(cx: &mut TestAppContext) {
         draw(visual);
         assert!(visual.debug_bounds("shortcuts-panel").is_none());
 
-        click(visual, "shortcuts-menu-trigger");
+        click(visual, "application-menu-trigger");
         click(visual, "native-menu-item-shortcuts");
         visual.simulate_keystrokes("alt-right");
         draw(visual);

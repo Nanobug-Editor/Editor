@@ -263,6 +263,9 @@ impl Manager {
         let previous = self
             .workspace_open
             .then(|| (self.environment.clone(), self.trusted));
+        let application = self
+            .is_application_management()
+            .then(|| self.environment.clone());
         if let Some(target) = target.filter(|scope| scope != &self.host_scope()) {
             if let Some(project) = self.parked.get(&target) {
                 let environment = project.environment.clone();
@@ -273,6 +276,8 @@ impl Manager {
         let result = self.commit_project_demand(prepared);
         if let Some((environment, trusted)) = previous {
             let _ = self.select_workspace(environment, trusted);
+        } else if let Some(environment) = application {
+            self.select_application(environment);
         }
         result
     }

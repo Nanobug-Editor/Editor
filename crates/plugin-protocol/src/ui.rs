@@ -31,6 +31,8 @@ use std::ops::Range;
 
 mod controls;
 pub use controls::*;
+mod styles;
+pub use styles::*;
 mod canvas;
 pub use canvas::*;
 mod events;
@@ -60,6 +62,9 @@ pub const VERSION: u32 = 1;
 /// Replace a panel's complete view atomically. Revision is echoed in user events.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {
+    /// Bounded role-scoped native typography and decoration; requires `ui.styles`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub content_styles: std::collections::BTreeMap<String, ContentStyle>,
     /// Plugin-owned RGB defaults keyed by `role.property`, overridden by user theme tokens.
     /// Requires `ui.content_colors`; native control behavior and general chrome remain host-owned.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -123,6 +128,9 @@ impl Document {
         let mut required =
             std::collections::BTreeMap::from([("ui.native", semver::Version::new(1, 0, 0))]);
         let mut visit = |node: &Node| {
+            if node.layout.align.is_some() || node.layout.margin != Edges::default() {
+                required.insert("ui.styles", semver::Version::new(1, 0, 0));
+            }
             if !node.links.is_empty() {
                 required.insert("ui.links", semver::Version::new(1, 0, 0));
             }
@@ -182,6 +190,9 @@ impl Document {
         if self.link_events {
             required.insert("ui.links", semver::Version::new(1, 0, 0));
         }
+        if !self.content_styles.is_empty() {
+            required.insert("ui.styles", semver::Version::new(1, 0, 0));
+        }
         if self.editor_toolbar.is_some() {
             required.insert("editor.toolbar", semver::Version::new(1, 0, 0));
         }
@@ -203,6 +214,7 @@ impl Document {
     }
     pub fn new(root: Node) -> Self {
         Self {
+            content_styles: Default::default(),
             content_colors: Default::default(),
             tools: Vec::new(),
             editor_layout: false,
@@ -400,6 +412,12 @@ pub struct SourceRange {
 /// Layout contains geometry only. Color and typography always come from the active theme.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Layout {
+    /// Optional horizontal content alignment, requiring `ui.styles`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub align: Option<Alignment>,
+    /// Nonnegative physical-pixel margins, requiring `ui.styles` when nonzero.
+    #[serde(default, skip_serializing_if = "Edges::is_zero")]
+    pub margin: Edges,
     /// Native adjustable panes on a Row/Column, requiring `ui.native >=1.1`; cannot combine with wrap.
     #[serde(default)]
     pub resizable: bool,
@@ -505,10 +523,13 @@ pub enum Kind {
     /// Document-relative paths require `workspace.read`, HTTP(S) requires `network.images`.
     /// The host limits reads to 8 MiB and 30 seconds and never follows redirects or uses credentials.
     /// Failures affect this image only; markup image tags remain unable to perform ambient reads.
+    /// Without a visual viewport, Layout width/height size the bitmap area.
+    /// One omitted dimension preserves the intrinsic ratio; both dimensions choose the displayed ratio.
+    /// The image fits a narrower container proportionally; omitted sizes do not enlarge intrinsic pixels.
     Image {
         /// Relative percent-encoded URI or credential-free HTTP(S) URL, at most 4096 UTF-8 bytes.
         source: String,
-        /// Localized alternative text used while loading or displaying a per-image failure.
+        /// Accessible image name and loading/failure fallback; never a caption on a loaded bitmap.
         alt: String,
     },
     Button {

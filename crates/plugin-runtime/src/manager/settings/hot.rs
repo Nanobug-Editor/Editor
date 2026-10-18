@@ -29,14 +29,17 @@ impl Manager {
             self.engine = Some(Instance::engine()?);
         }
         let selected_scope = scopes::workspace_key(&self.environment.workspace);
-        let mut scopes = vec![(
-            if entry.manifest.scope == api::InstanceScope::Application {
-                "application".into()
-            } else {
-                selected_scope.clone()
-            },
-            self.environment.clone(),
-        )];
+        let mut scopes = Vec::new();
+        if self.workspace_open || entry.manifest.scope == api::InstanceScope::Application {
+            scopes.push((
+                if entry.manifest.scope == api::InstanceScope::Application {
+                    "application".into()
+                } else {
+                    selected_scope.clone()
+                },
+                self.environment.clone(),
+            ));
+        }
         if scope == Scope::User && entry.manifest.scope == api::InstanceScope::Workspace {
             scopes.extend(
                 self.parked

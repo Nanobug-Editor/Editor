@@ -1,4 +1,4 @@
-//! Project-level consent precedes irreversible cleanup; completion decides home versus application exit.
+//! Project-level consent precedes resource cleanup; success closes this window or completes application exit.
 
 use super::*;
 use gpui_kit::EntityInputHandler as _;
@@ -37,6 +37,17 @@ impl ProjectWindow {
             return false;
         }
         let Some(editor) = self.editor.clone() else {
+            if self.has_running_clone() {
+                self.decision = Some(Decision::Leave {
+                    intent,
+                    documents: Vec::new(),
+                    dirty: false,
+                    running: true,
+                });
+                self.modal_focus.focus(window, cx);
+                cx.notify();
+                return false;
+            }
             if matches!(intent, CloseIntent::Application) {
                 controller::approve(
                     window.window_handle(),
@@ -48,7 +59,7 @@ impl ProjectWindow {
                 );
                 return false;
             }
-            controller::close_window(window.window_handle(), window, cx);
+            self.start_cleanup(intent, window, cx);
             return false;
         };
         // Begin FIFO replay; the shared evaluation commits IME only after its deferred tail has drained.
@@ -110,8 +121,9 @@ impl ProjectWindow {
             return;
         }
         let dirty = app.tabs.iter().any(OpenTab::is_dirty);
-        let running =
-            app.run_controls.has_work_in_flight() || app.terminal.read(cx).has_running_programs();
+        let running = app.run_controls.has_work_in_flight()
+            || app.terminal.read(cx).has_running_programs()
+            || self.has_running_clone();
         if dirty || running {
             self.decision = Some(Decision::Leave {
                 intent,
@@ -146,13 +158,28 @@ impl ProjectWindow {
             return;
         };
         let intent = *intent;
+        let approved_running = *running;
         let Some(editor) = self.editor.clone() else {
+            self.decision = None;
+            if matches!(intent, CloseIntent::Application) {
+                controller::approve(
+                    window.window_handle(),
+                    controller::Consent {
+                        documents: Vec::new(),
+                        running: approved_running,
+                    },
+                    cx,
+                );
+            } else {
+                self.start_cleanup(intent, window, cx);
+            }
             return;
         };
         let app = editor.read(cx);
         let new_running = !*running
             && (app.run_controls.has_work_in_flight()
-                || app.terminal.read(cx).has_running_programs());
+                || app.terminal.read(cx).has_running_programs()
+                || self.has_running_clone());
         if document_versions(app, cx) != *documents
             || new_running
             || app
@@ -176,7 +203,7 @@ impl ProjectWindow {
                 let unchanged = text.disk_state == DiskState::Synced
                     && std::fs::read(tab.path())
                         .is_ok_and(|bytes| Sha256::digest(bytes).as_slice() == text.disk_digest);
-                (!unchanged).then(|| tab.path().display().to_string())
+                (!unchanged).then(|| editor_core::display_path(&tab.path()).to_string())
             });
             if let Some(path) = conflict {
                 self.error = Some(t!("projects.disk_conflict", path = path).to_string());
@@ -197,7 +224,8 @@ impl ProjectWindow {
                 controller::Consent {
                     documents: document_versions(app, cx),
                     running: app.run_controls.has_work_in_flight()
-                        || app.terminal.read(cx).has_running_programs(),
+                        || app.terminal.read(cx).has_running_programs()
+                        || self.has_running_clone(),
                 },
                 cx,
             );
@@ -214,13 +242,14 @@ impl ProjectWindow {
         cx: &mut App,
     ) -> bool {
         match &self.editor {
-            None => consent.documents.is_empty(),
+            None => consent.documents.is_empty() && consent.running == self.has_running_clone(),
             Some(editor) => {
                 let app = editor.read(cx);
                 let native = app.editor.clone();
                 let current = document_versions(app, cx) == consent.documents
                     && (app.run_controls.has_work_in_flight()
-                        || app.terminal.read(cx).has_running_programs())
+                        || app.terminal.read(cx).has_running_programs()
+                        || self.has_running_clone())
                         == consent.running
                     && app
                         .language_edits
@@ -241,20 +270,20 @@ impl ProjectWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.editor.is_none() {
-            self.close_state = CloseState::Cleaning;
-            controller::cleaned(window.window_handle(), Ok(()), cx);
-        } else {
-            self.start_cleanup(CloseIntent::Application, window, cx);
-        }
+        self.start_cleanup(CloseIntent::Application, window, cx);
     }
 
     /// Keep the editor alive until its workers acknowledge shutdown; replacing the view occurs last.
     fn start_cleanup(&mut self, intent: CloseIntent, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(editor) = self.editor.clone() else {
-            return;
+        // The decision has been accepted. Only now cancel cloning and close application dialogs.
+        self.clone_project = None;
+        self.close_global_dialogs(cx);
+        let project_cleanup = if let Some(editor) = self.editor.clone() {
+            editor.update(cx, |app, cx| app.prepare_project_shutdown(cx))
+        } else {
+            Ok(cx.background_executor().spawn(async { Ok(()) }))
         };
-        let task = match editor.update(cx, |app, cx| app.prepare_project_shutdown(cx)) {
+        let task = match project_cleanup {
             Ok(task) => task,
             Err(error) => {
                 self.close_state = CloseState::Failed;
@@ -268,11 +297,30 @@ impl ProjectWindow {
                 return;
             }
         };
+        let application_cleanup = self
+            .extensions
+            .as_ref()
+            .map(|panel| panel.update(cx, |panel, cx| panel.shutdown_management(cx)));
         self.close_state = CloseState::Cleaning;
         self.focus.focus(window, cx);
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
-            let result = task.await;
+            let (project, application) = futures::join!(task, async {
+                if let Some(task) = application_cleanup {
+                    task.await
+                } else {
+                    Ok(())
+                }
+            });
+            let errors = [project, application]
+                .into_iter()
+                .filter_map(Result::err)
+                .collect::<Vec<_>>();
+            let result = if errors.is_empty() {
+                Ok(())
+            } else {
+                Err(errors.join("\n"))
+            };
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Err(error) = result {
                     this.close_state = CloseState::Failed;
@@ -304,10 +352,6 @@ impl ProjectWindow {
                 window.set_window_title(app::APP_NAME);
                 controller::local_cleanup_settled(window.window_handle(), cx);
                 match intent {
-                    CloseIntent::Home => {
-                        this.focus.focus(window, cx);
-                        cx.notify();
-                    }
                     CloseIntent::Window => {
                         controller::close_window(window.window_handle(), window, cx);
                     }

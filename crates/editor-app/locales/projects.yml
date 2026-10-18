@@ -1,10 +1,82 @@
 _version: 2
+projects.empty_editor_hint:
+  en: "Choose a folder or clone a project from the upper-left menu, or drop a file here to open it."
+  zh-CN: "从左上角选择文件夹或克隆项目，也可将文件拖到这里打开。"
 projects.welcome:
   en: "Start your work"
   zh-CN: "开始你的工作"
+projects.window_title:
+  en: "Welcome to %{app}"
+  zh-CN: "欢迎使用 %{app}"
+projects.open:
+  en: "Open"
+  zh-CN: "打开"
+projects.search:
+  en: "Search projects"
+  zh-CN: "搜索项目"
+projects.empty_title:
+  en: "Your projects start here"
+  zh-CN: "从这里开始你的项目"
+projects.empty_hint:
+  en: "Open a local folder or clone a Git repository."
+  zh-CN: "打开本地文件夹，或克隆 Git 仓库。"
+projects.no_results:
+  en: "No matching projects"
+  zh-CN: "没有匹配的项目"
+projects.search_hint:
+  en: "Try another project name or path."
+  zh-CN: "试试其他项目名称或路径。"
+projects.clone:
+  en: "Clone repository"
+  zh-CN: "克隆仓库"
+projects.clone_url:
+  en: "Repository URL"
+  zh-CN: "仓库地址"
+projects.clone_destination:
+  en: "Destination folder"
+  zh-CN: "目标文件夹"
+projects.clone_destination_hint:
+  en: "Choose a new folder inside an existing directory."
+  zh-CN: "选择现有目录中的一个新文件夹。"
+projects.clone_auth:
+  en: "Uses your installed Git and its authentication settings."
+  zh-CN: "使用本机已安装的 Git 及其认证配置。"
+projects.clone_start:
+  en: "Clone"
+  zh-CN: "克隆"
+projects.clone_progress:
+  en: "Cloning repository…"
+  zh-CN: "正在克隆仓库…"
+projects.clone_close_details:
+  en: "Closing will cancel the repository clone. Any partial files will be retained."
+  zh-CN: "关闭会取消正在进行的仓库克隆；已生成的文件会保留。"
+projects.clone_invalid:
+  en: "Enter a repository address and an absolute path to a new folder with an existing parent."
+  zh-CN: "请输入仓库地址和新文件夹的绝对路径，父目录必须已存在。"
+projects.clone_failure:
+  en: "Git could not clone the repository. Check the address, connection and Git authentication. Any partial files are retained."
+  zh-CN: "Git 未能克隆仓库，请检查地址、连接和 Git 认证。已生成的文件会保留。"
+projects.clone_missing_git:
+  en: "Git is unavailable. Install or configure Git before cloning."
+  zh-CN: "找不到 Git，请安装或配置 Git 后再克隆。"
+projects.clone_credentials:
+  en: "Keep credentials out of the repository URL. Use your Git credential manager or SSH agent."
+  zh-CN: "仓库地址中不能包含凭据，请使用 Git 凭据管理器或 SSH Agent。"
+projects.clone_timeout:
+  en: "Cloning timed out. Check your connection and retry. Any partial files are retained."
+  zh-CN: "克隆超时，请检查连接后重试。已生成的文件会保留。"
 projects.open_folder:
-  en: "Open folder"
-  zh-CN: "打开文件夹"
+  en: "Open new project"
+  zh-CN: "打开新项目"
+projects.select_folder:
+  en: "Select folder"
+  zh-CN: "选择文件夹"
+projects.switch:
+  en: "Switch project"
+  zh-CN: "切换项目"
+projects.opened:
+  en: "Open projects"
+  zh-CN: "已打开项目"
 projects.projects:
   en: "Projects"
   zh-CN: "项目"
@@ -21,8 +93,8 @@ projects.close_project:
   en: "Close project"
   zh-CN: "关闭项目"
 projects.home:
-  en: "Projects home"
-  zh-CN: "项目首页"
+  en: "Project management"
+  zh-CN: "项目管理"
 projects.quit_application:
   en: "Quit application"
   zh-CN: "退出应用"

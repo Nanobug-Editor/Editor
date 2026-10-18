@@ -496,7 +496,7 @@ fn tab_clicks_reveal_only_when_enabled(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn file_single_click_selects_and_double_click_opens(cx: &mut TestAppContext) {
+fn file_single_click_previews_and_double_click_keeps_existing_tab(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
     std::fs::write(directory.path().join("a.txt"), "initial").unwrap();
     std::fs::write(directory.path().join("b.txt"), "target").unwrap();
@@ -520,9 +520,9 @@ fn file_single_click_selects_and_double_click_opens(cx: &mut TestAppContext) {
     redraw(window_cx);
     window_cx.update(|_, cx| {
         let app = app.read(cx);
-        assert_eq!(app.tabs.len(), 1);
-        assert_eq!(app.active_path.as_ref(), Some(&initial));
-        assert_eq!(app.editor.read(cx).value().to_string(), "initial");
+        assert_eq!(app.tabs.len(), 2);
+        assert_eq!(app.active_path.as_ref(), Some(&target));
+        assert_eq!(app.editor.read(cx).value().to_string(), "target");
         assert_eq!(
             Path::new(app.tree_state.read(cx).selected_item().unwrap().id.as_str()),
             target
