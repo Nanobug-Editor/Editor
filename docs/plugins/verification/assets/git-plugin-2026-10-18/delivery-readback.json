@@ -1,0 +1,15 @@
+{
+  "repository": "Nanobug-Editor/Editor",
+  "number": 120,
+  "database_id": 5865985809,
+  "url": "https://github.com/Nanobug-Editor/Editor/issues/120",
+  "state": "closed",
+  "state_reason": "completed",
+  "closed_at": "2026-10-18T05:23:57Z",
+  "updated_at": "2026-10-18T05:23:57Z",
+  "verified_at": "2026-10-18T05:23:58.3032713Z",
+  "delivered_commit": "a8cd5140862d2d58e8b41d67998ba6433ee11143",
+  "acceptance_checked": 8,
+  "update_method": "GitHub REST using existing repository Git credential in process memory; connector update_issue returned integration403",
+  "parent_issue_modified": false
+}

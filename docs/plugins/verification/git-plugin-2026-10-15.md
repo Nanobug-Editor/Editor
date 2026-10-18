@@ -1,6 +1,14 @@
 # Git 插件实施验证（2026-10-15）
 
-状态：2026-10-18 最终独立 0.1.7 已完成行为验收，等待普通提交、推送与 #120 关闭读回。#119 已读回 closed/completed；#120 当前仍 open。Git 保持外部独立项目、显式安装 ZIP 和公开 SDK，无随附或内置注册。本版业务覆盖按原全量有效 43 项加修正视口夹具的 1 项分别验证；原全量的一项夹具失败与真实退出码保留。#119 最终交付与历史结果保留，上一轮[暂停现场](git-plugin-paused-2026-10-16.md)不再表示当前执行状态。依据为[已确认规格](../specs/git-plugin.md)。
+状态：2026-10-18 最终独立 0.1.7 已完成验收与交付；#119、#120 均重新读回 closed/completed。普通交付提交 `a8cd5140862d2d58e8b41d67998ba6433ee11143` 已推送 origin 并核对远端 OID。Git 保持外部独立项目、显式安装 ZIP 和公开 SDK，无随附或内置注册。本版业务覆盖按原全量有效 43 项加修正视口夹具的 1 项分别验证；原全量的一项夹具失败与真实退出码保留。#119 最终交付与历史结果保留，上一轮[暂停现场](git-plugin-paused-2026-10-16.md)不再表示当前执行状态。依据为[已确认规格](../specs/git-plugin.md)。
+
+## 最终交付与工单关闭
+
+宿主通用支持、回归及正式资产的普通交付为 [`a8cd5140862d2d58e8b41d67998ba6433ee11143`](https://github.com/Nanobug-Editor/Editor/commit/a8cd5140862d2d58e8b41d67998ba6433ee11143)，tree `c1e384a52f68de2cfcbf38f890fc01d50349b369` 与最终 QA17 固定树逐项一致，父提交为真实分支 `2b9e1548a91925493ac89f397ff1cd8c0c0380e0`；私有 QA 快照没有作为分支历史推送。[源交付与远端核验回执](assets/git-plugin-2026-10-18/source-delivery.json)保存提交／tree／父节点及远端 OID 读回。
+
+源交付推送并核对后才关闭 #120，关闭时间 2026-10-18 05:23:57 UTC、独立读回 05:23:58 UTC；[关闭读回回执](assets/git-plugin-2026-10-18/delivery-readback.json)记录 closed/completed、8 项验收勾选及 source commit。GitHub 连接器写入返回 integration 403，已按现有仓库授权通过进程内 Git 认证调用 GitHub REST 完成；凭据未写入文件或日志。随后可读连接器再次确认 #119、#120 均 closed/completed；父设计议题未修改。
+
+QA16→QA17 的最终五项结果文档增量已完成 Standards 硬性 0／判断性 0、全部 12 baseline，Spec a0／b0／c0；覆盖回执、冻结 runner、原始日志及 43 个未变用例源码均已核对。本地源交付之后只同步真实关闭状态、进度索引和读回资产；真实工作区的其他任务改动保留。独立插件安装 ZIP、52 项源码归档及摘要交付在下节所列目录，未创建远程插件仓库、GitHub Release 或市场登记。
 
 ## 2026-10-18：0.1.7 最终独立候选（行为验收完成）
 
@@ -10,7 +18,7 @@
 
 最终访客 101/101、0 ignored、5.17 秒通过，公开 CLI 打包 7.62 秒，格式检查通过；Root 在私有 global／system／template／hooks 配置下再次验证 101/101、0 ignored、6.07 秒（`target/git120-final-017-guest-private-tests-2026-10-18.log`）。完整 Guest 固定范围 `6b8433ed8cc04d9179c9a74204943facb10de883...44a2eaefc2b0a14eef06b49e9e76f22f913ccb80`／tree `c32c32430e4e321acc6df25465f7e65aeb06c2ef`，12 个 QA 提交、31 文件，3989 增加／378 删除；Standards 硬性 0／判断性 0、全部 12 baseline，Spec a0／b0／c0。该私有 QA 固定点只用于审查，独立项目没有新增 Git 元数据或远程仓库。
 
-宿主格式、workspace check 通过，后者 3.98 秒、80 条既有警告；非 UI workspace 77 组／278 passed／299 ignored／0 failed（`target/git120-qa14-{fmt,workspace-check,workspace-tests}-2026-10-18.log`）。最终源码复核后再次执行规定三项检查均通过：格式 3.77 秒、check 1.58 秒／80 条既有警告、非 UI 77 组／278 passed／299 ignored／0 failed（`target/git120-final-017-host-{fmt,workspace-check,workspace-tests}-2026-10-18.log`）。第一次默认并发测试构建因 Windows mmap 报页面文件不足（OS 1455），随后有级联类型错误；没有修改无差异的导航源码或全局系统配置，以 `--jobs 1` 重跑已通过，失败原日志保留为 `target/git120-qa14-workspace-tests-oom-2026-10-18.log`。以上检查在只含本任务增量的 `target/git-ticket119-source/` 导出中执行，显式共享宿主 `target`；真实工作区的其他未提交改动不作为候选输入。QA14 之后的生产及测试源码均未变化，后续只有文档和验收资产。尚未提交推送或关闭 #120。
+宿主格式、workspace check 通过，后者 3.98 秒、80 条既有警告；非 UI workspace 77 组／278 passed／299 ignored／0 failed（`target/git120-qa14-{fmt,workspace-check,workspace-tests}-2026-10-18.log`）。最终源码复核后再次执行规定三项检查均通过：格式 3.77 秒、check 1.58 秒／80 条既有警告、非 UI 77 组／278 passed／299 ignored／0 failed（`target/git120-final-017-host-{fmt,workspace-check,workspace-tests}-2026-10-18.log`）。第一次默认并发测试构建因 Windows mmap 报页面文件不足（OS 1455），随后有级联类型错误；没有修改无差异的导航源码或全局系统配置，以 `--jobs 1` 重跑已通过，失败原日志保留为 `target/git120-qa14-workspace-tests-oom-2026-10-18.log`。以上检查在只含本任务增量的 `target/git-ticket119-source/` 导出中执行，显式共享宿主 `target`；真实工作区的其他未提交改动不作为候选输入。QA14 之后的生产及测试源码均未变化，后续只有文档和验收资产。相关源交付已普通推送并读回 #120 closed/completed，见前节回执。
 
 最终 0.1.7 五项实际包窗口回归已通过 5/5、0 ignored、343.07 秒（`target/git120-final-017-window-regressions-2026-10-18.log`），使用恢复后 clean-source runner `e6ae18b7190ad6c7aba9df0997bec115e3034f6458bd6336b741ba38ab50a852`。共享 UI 81 项按生产控件源码未变复用原通过记录；新增场景追踪只在测试环境显式启用，不替代最终 D3D 原生矩阵。
 
@@ -26,7 +34,7 @@
 
 实际执行入口为冻结 `target/git120-scene-activity-runner-2026-10-18/git_plugin-bedae8640c39723e.exe --ignored --nocapture --test-threads=1`；定向复验使用 `target/git120-scene-activity-viewport-runner-2026-10-18/git_plugin-bedae8640c39723e.exe --exact workbench::scene_activity::git_package_history_activity_defers_automatic_refresh_until_quiet --ignored --nocapture --test-threads=1`。两者加载同一最终 ZIP，均由各私有测试子进程进入公开 Package／Manager，按既有隔离配置处理 Git、模板及 hooks。
 
-宿主完整固定点至 QA14 `23bf796c7ffc1f02209127116e9284af309c697c`／tree `4a902173008467231fcd4399dad294bd4b2fdfe6` 的双轴复审均为 0（14 个 QA 提交、71 文件、11470 增加／29 删除，Standards 硬性 0／判断性 0、全部 12 baseline，Spec a0／b0／c0）。新增活动场景和规格空闲策略已纳入；此后只增补验收文档与正式截图资产，最终交付前仍核对增量固定点。QA 快照不表示真实分支已经提交。 QA14→QA16 `7fc0daf86048d90e57ccca497bc9324aef2fc973` 的 79 项文档／资产增量已完成 Standards 硬性 0／判断性 0 与 Spec a0／b0／c0；72 个原始文件的固定 Git 字节、大小及 SHA-256 全部匹配，57 个新增本地链接有效。资产目录专用属性保留捕获字节及 Windows JSON 的 CRLF，不影响源码检查。
+宿主完整固定点至 QA14 `23bf796c7ffc1f02209127116e9284af309c697c`／tree `4a902173008467231fcd4399dad294bd4b2fdfe6` 的双轴复审均为 0（14 个 QA 提交、71 文件、11470 增加／29 删除，Standards 硬性 0／判断性 0、全部 12 baseline，Spec a0／b0／c0）。新增活动场景和规格空闲策略已纳入；此后的验收文档和截图增量已在 QA16、QA17 复审，真实源交付 tree 等于 QA17；私有 QA 快照仅用于审查。 QA14→QA16 `7fc0daf86048d90e57ccca497bc9324aef2fc973` 的 79 项文档／资产增量已完成 Standards 硬性 0／判断性 0 与 Spec a0／b0／c0；72 个原始文件的固定 Git 字节、大小及 SHA-256 全部匹配，57 个新增本地链接有效。资产目录专用属性保留捕获字节及 Windows JSON 的 CRLF，不影响源码检查。
 
 ### 最终原生工作流及八组合
 
