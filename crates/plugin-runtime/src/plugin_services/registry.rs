@@ -97,9 +97,10 @@ impl Broker {
                 selection.preference = preference;
             }
         }
+        self.refresh_collections();
         self.retire_calls();
     }
-    fn preference(&self, scope: &str, contract: &str) -> Option<&String> {
+    pub(super) fn preference(&self, scope: &str, contract: &str) -> Option<&String> {
         self.preferences
             .projects
             .get(scope)
@@ -231,6 +232,15 @@ impl Broker {
         }
         if reference.pinned {
             return Ok(());
+        }
+        if let Some(alive) = &reference.collection {
+            if !alive.load(Ordering::Acquire) {
+                return Err(Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Service collection was replaced",
+                ));
+            }
+            return self.validate_set(caller, &reference.contract, reference.revision);
         }
         let current = self
             .resolve(caller, &reference.contract, &reference.dependency)

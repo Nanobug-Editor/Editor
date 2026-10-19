@@ -1,0 +1,1015 @@
+{
+  "format": "nanobug.relative-source-delta.v1",
+  "issue": 121,
+  "state": "validated-s1-awaiting-independent-baseline-not-for-automatic-staging",
+  "captured_utc": "2026-10-19T11:46:31.3827907Z",
+  "workspace": "C:\\Users\\Tmiracle\\.codex\\worktrees\\vue-typescript-s1\\Editor",
+  "head": "eace01458ff422cdb37947c2a7674681336550ee",
+  "baseline": {
+    "file_count": 1743,
+    "files_index": "target/s1-resume-2026-10-19/external-main-baseline-files.json",
+    "files_index_sha256": "a6d477b85d5f07ec50dad3acde94ebd7d6e788664b042de0411ac272abb16ed7",
+    "archive": "target/s1-resume-2026-10-19/external-main-baseline.zip",
+    "archive_sha256": "cd133a3110d7bcf158d528a9a73a99085b3f37bdafb794d9fcba521265b735e2",
+    "meaning": "Frozen external main working-tree snapshot; its existing changes are not S1 work."
+  },
+  "summary": {
+    "delta_entries": 153,
+    "added": 77,
+    "modified": 76,
+    "deleted": 0,
+    "unchanged_baseline_entries": 1667
+  },
+  "entries": [
+    {
+      "path": "crates/editor-app/locales/app.yml",
+      "kind": "modified",
+      "baseline_sha256": "acb63f37f386b8cd10186569c0a46c5e36a8c8ce4f1022982f9987a518453dea",
+      "current_sha256": "440438978f1b61c4d6cd6389680ebac7867a5379158c656f3a8b60e32a02172a"
+    },
+    {
+      "path": "crates/editor-app/src/app/language_servers.rs",
+      "kind": "modified",
+      "baseline_sha256": "51acabd7ac5571502f2261fcd61d8affb5a1efb0951ed9ca365359a65201b6a8",
+      "current_sha256": "783346b57d709582b9dd005894ff19e5f2481d1fc68123e7ad49903f5894aa85"
+    },
+    {
+      "path": "crates/editor-app/src/app/language_servers/contexts.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "c79d831a8850e791560cc35836b823dd2f6c30af679011a98ee5401f5f607ac8"
+    },
+    {
+      "path": "crates/editor-app/src/app/language_servers/demands.rs",
+      "kind": "modified",
+      "baseline_sha256": "724bc5f6124aedef2c6c7a8533291757465131d040cb9a072106ce02fc20951b",
+      "current_sha256": "4a6737f579b1b614fac169dfa51f252f91ca479edac386cffed756cd81c4477e"
+    },
+    {
+      "path": "crates/editor-app/src/app/language_servers/snapshots.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "52ce89870d331128b6df624c1de21fd862e9873bdf21a28af355a11204feb700"
+    },
+    {
+      "path": "crates/editor-app/src/app/plugins.rs",
+      "kind": "modified",
+      "baseline_sha256": "2b391c113ad8d2b4afd41f9d7b0f8aa7dc9cd7e405733a807e3f06e69dfa8b68",
+      "current_sha256": "e6f71f2423e7fe019a55373b9cd315aa3affbec437c548fbddffd07f8347f5cf"
+    },
+    {
+      "path": "crates/editor-app/src/editor/definition_tests.rs",
+      "kind": "modified",
+      "baseline_sha256": "b58c569c12c76567bc8b0591a4c966b519915482574090e39f87c23d6252e537",
+      "current_sha256": "93e4b2f82a61449170ae13bd2d2ef2c9c27bcbd3b0196533eff89e19c112824e"
+    },
+    {
+      "path": "crates/editor-app/src/editor/diagnostics.rs",
+      "kind": "modified",
+      "baseline_sha256": "304ff26e1f179e47f8b685aead4232d7b9c14a480d7469e31d48e1eaa90703cf",
+      "current_sha256": "1190fe389587991ed94bb25396af9da6c74c028c9046a5b18bca47eeea42e387"
+    },
+    {
+      "path": "crates/editor-app/src/editor/diagnostics/publications.rs",
+      "kind": "modified",
+      "baseline_sha256": "bce1a90490d656f9a832e84f8d05e7cf94bd207672c903781227b55f41e60341",
+      "current_sha256": "c0dfa48318ea1dc6a3161e3275f20a59cd9b7066223d3f53ddd86911a0afc4d5"
+    },
+    {
+      "path": "crates/editor-app/src/editor/diagnostics/tests.rs",
+      "kind": "modified",
+      "baseline_sha256": "af3c7f3dd09fe1b428b1c152e1484b03e6ea0ae4a8abe8ff9f5ed185bdf2852c",
+      "current_sha256": "5f1a2aa75913e1afa6df83fb0105178990616e04013a6eb50fb4fa25e1759c47"
+    },
+    {
+      "path": "crates/editor-app/src/editor/diagnostics/tests/problems.rs",
+      "kind": "modified",
+      "baseline_sha256": "bc9258614f8f3d99091b24c571cb450b75802be91992cd1e92059fab24c463e5",
+      "current_sha256": "686a6f6dabd73ac832f4411de7627a2bc7f3eef31292515516d8065235afe1c0"
+    },
+    {
+      "path": "crates/editor-app/src/editor/documents.rs",
+      "kind": "modified",
+      "baseline_sha256": "7064d57d8c5568b39bb6720a53021f14d1c845d532dd808ed29a6a569ecbcdf6",
+      "current_sha256": "818cf8b8b1be6d79ba277dbc02fbfa7fac0fac8b2eaea4edd07df614e55ac9e1"
+    },
+    {
+      "path": "crates/editor-app/src/editor/language_edits.rs",
+      "kind": "modified",
+      "baseline_sha256": "cce18ec5aa74f1ab2c904c2ce099500b7bd623f30ee6ec62ce8d47ce233b47fe",
+      "current_sha256": "2d8bc7d1304f24989df2bab608b66ad01bc6782840534b5cd1fe8f16e8d61773"
+    },
+    {
+      "path": "crates/editor-app/src/editor/language_edits/formatting.rs",
+      "kind": "modified",
+      "baseline_sha256": "b32c2d3a9e88c99f94851851ed759278935cb202cf1bd61d4eec4688c4dc3581",
+      "current_sha256": "af6d5b96ed814dddf8a38ee02ee8d3e3f571f811800e5cdae563ca3e8eea3a08"
+    },
+    {
+      "path": "crates/editor-app/src/editor/language_edits/rename.rs",
+      "kind": "modified",
+      "baseline_sha256": "b43357821336dec5638e578f288108618602b08f1b9f2a5a3cca98572ca081db",
+      "current_sha256": "0350ba36d1ecba586ac2d35ce096be61429e2b4ec298dd96580927f14b0046df"
+    },
+    {
+      "path": "crates/editor-app/src/editor/language_features/requests.rs",
+      "kind": "modified",
+      "baseline_sha256": "ef80e5b5361b07672bea192441732351f88205591a49272f3c47b72b36ab588a",
+      "current_sha256": "48f8ad9e06b2daad5f55c22e7500990409ca21b58e7251f20b399710b103b899"
+    },
+    {
+      "path": "crates/editor-app/src/editor/language_features/requests/demand.rs",
+      "kind": "modified",
+      "baseline_sha256": "3e32d546f9dab68ab0704d9914e6ef0954e7bfa990ce214a04b9c0c6befac9df",
+      "current_sha256": "6081fc2ab8b263c581bca5db393968af1bcded28f65fd21fa9102ef7b363ba74"
+    },
+    {
+      "path": "crates/editor-app/src/editor/source.rs",
+      "kind": "modified",
+      "baseline_sha256": "e4021fa1b9ccf3c870626ab35b50899355c4af741d057ce308b0579206ba3f1e",
+      "current_sha256": "cc583f6c08aaf546ef84d0657425c869a6b8e1014481bc5b7326ff7295c94ec0"
+    },
+    {
+      "path": "crates/editor-app/src/editor/text_session.rs",
+      "kind": "modified",
+      "baseline_sha256": "6d96e75c8f41d146771a1553c28b8c223d881556b4043e71a68a58915936a036",
+      "current_sha256": "1ffea4b25fe44d0e5c464a46551ead70bbb41c527afe320cb2db3252d4417348"
+    },
+    {
+      "path": "crates/editor-app/src/extensions.rs",
+      "kind": "modified",
+      "baseline_sha256": "ae4c32c89473cb39a30fad2da562b6094aa5d0869cafec1e29b7da83ab3c4881",
+      "current_sha256": "77ceac26577264ced3c3a56246a2e4a77b682e560f7918481d2775b5842079a3"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/editor_requests.rs",
+      "kind": "modified",
+      "baseline_sha256": "43cc8aeb40042d5aaa098fec6feeeb39418a5741cb3a5a7bcc2b3137bcd8ec95",
+      "current_sha256": "77a59040ceda4a203366c05e1c08694c2d92d7a8664caff9d506cd23fc591b7f"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/editor_requests/language_control.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "949a10b0d39f6e6cb3f0a8ddf5ec1ea23a055f897b0b2e456efe6950439c185a"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/package_ui_test_support.rs",
+      "kind": "modified",
+      "baseline_sha256": "ee66cd40bf0784f6d628935e35eca7cd7392329cd8701a97cef89e2c28d3f62f",
+      "current_sha256": "eb85bf9ed3bc97d0b07ad970a267dc98a2343b1dd3a4a2ae5876ed0d397c16b0"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/surface.rs",
+      "kind": "modified",
+      "baseline_sha256": "fc3e0fc93705a51ddc19b8fe553f782944f3bb2ba7eb3962eceba43af07fec29",
+      "current_sha256": "d9db47931b47c02e0068f8c2cd9c5314347028e6d285c0fa8e45a917721b9dd2"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker.rs",
+      "kind": "modified",
+      "baseline_sha256": "aef45b8b8f3baec63074b9a9c67c23d189f8673617c7ff6dd6b9657c14e02058",
+      "current_sha256": "7d24d7d3b21ebfe4f4dd674ca97fcab2f433eeca8abd330e48efc20ce2a91ca7"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_acceptance/scene_probe.rs",
+      "kind": "modified",
+      "baseline_sha256": "6b7e24f5a61ed649273c7f223e4643444f2b0399555f409d6cfc3783a643e1f9",
+      "current_sha256": "fecc696f5195b14c655bfa909d2fb17b9914b1dca6ae8bbe6b3c7733c3ef01a0"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_language_control_tests.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "a7d941e92fb961c1e1970f19cd4afe659d87dc281a749784a041de76bf7e9370"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_language_control_tests/module_timeout.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "e2ea094956c10fb1f1b37994fbccb7538a1a3d1a8a1c68bc4d6bcca29c715dc3"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/runner.rs",
+      "kind": "modified",
+      "baseline_sha256": "ba77748ad076466e55038367e8ab6f3acbc8e508f89c7cb840e2b60a5bbbc9c4",
+      "current_sha256": "d4bd554a5d00cb9e0a90ae00ed8fa15de792738d3b2d203cb18a62ac8bb4c73a"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/typescript_package_tests.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "7e60e34016d088ff04c7490fda7d7798abd2e083febe98f4e0d87ec67a6a2437"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/vue_test_support.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "11483f08d92f69e335ddf285b782b9b186a07ee3cf23871e60b6eab34fa73bb4"
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/vue_typescript_tests.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "32822c8bf6a622a53706aad0f9cef854f66a77200ac7b656cc71cc0c20bf9a09"
+    },
+    {
+      "path": "crates/editor-app/src/language/completion.rs",
+      "kind": "modified",
+      "baseline_sha256": "e979963941e460a3a7fd90def052fe5391cfcef39a54f69fd4c568871855305c",
+      "current_sha256": "4366eb9348f0c52b6f9ec0429e6572a46317295be0dbc6b14eb0790bbb0537fc"
+    },
+    {
+      "path": "crates/editor-app/src/language/hover.rs",
+      "kind": "modified",
+      "baseline_sha256": "774fedf198cf5fab9fd16877a09c88f48b0594af2891be52d1ad73f69030e45d",
+      "current_sha256": "533da58e18d0b3b52d35ce8306ba637041b86643f51547ae24bf6e52685dc78c"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation.rs",
+      "kind": "modified",
+      "baseline_sha256": "0411f98d4610120dcbdf5952a3727c7d9aef1ea3aff3f3ef5f5a1542deedff23",
+      "current_sha256": "188478a5455776708685c3a56b2dade7ade137b4cd4b3c24affa9dc36b456e79"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/context_tests.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "3ca18218231ba03ca4cd15f2d54ccbfa2dad6916b379834a92a751514bba4148"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/context.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "d4bd19523a08ec2d41c23fe1ea7e73d70e1026f10524f1470d4d27e21c96f8e8"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/control_handshake_tests.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "9b0f726d414c334243beddd933689970d537663ead9f8b678e4c655797fccff8"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/control.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "6f21ef324cf4bf0adec42a9279990fd29237de25c93ec2aed00d711dd39abaf1"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/documents.rs",
+      "kind": "modified",
+      "baseline_sha256": "dde5435bc36ba9fa34e4a1cef5cfc592d3dfb314e247e7b09a4e9f383ecabf7b",
+      "current_sha256": "777c734b82d7485a3b5579ced3327d81753464ece38f1729329c9cdfa27b17f1"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/recovery.rs",
+      "kind": "modified",
+      "baseline_sha256": "301086250b962ab186edec50fdf0504a8842f564b0ac79805f1aab828398d5c4",
+      "current_sha256": "7a584ab04e685c4d1937b410a328bcc485ec4c1bf1b469d5bd276e878eafe99c"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/runtime_log_tests.rs",
+      "kind": "modified",
+      "baseline_sha256": "8f82a494cb056b48906de2bac293324e3ab9f22ce4f691fb45388e9c20499a65",
+      "current_sha256": "9d8b781aeea3b17e88e0ca78892de1f26058be9cce0a3c70109c6e8165133657"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/snapshots.rs",
+      "kind": "modified",
+      "baseline_sha256": "ed66ee31abd21b3d58c9f1bfa3e3dd67631b583e05ba51f52b96e1dc799bc518",
+      "current_sha256": "ab2c40c753b3e9e955e5d1b6d20bd4a4e50c05b081892d3142d6636d276a60c1"
+    },
+    {
+      "path": "crates/editor-app/src/language/navigation/startup.rs",
+      "kind": "modified",
+      "baseline_sha256": "d610806c41428c349434c8512fd4e3e9f49e9fdeb7582b9e7e3175b856ee3212",
+      "current_sha256": "1730033056354f3422cf81bb24686249f1f69973032159d40d302f434e578749"
+    },
+    {
+      "path": "crates/editor-app/src/language/providers.rs",
+      "kind": "modified",
+      "baseline_sha256": "70069801b29a79f93d8e792c1616e4184bbddb5dba8949784a3cb2b3126eb1ee",
+      "current_sha256": "b87ff9457b54e6fdf93563b460949851add256f17c7b13f828ddcab9635078ed"
+    },
+    {
+      "path": "crates/editor-app/src/language/providers/context_tests.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "82008830addbcde183eac507c67ece061a4f1d66a3bb519e926b552d18f3c1b4"
+    },
+    {
+      "path": "crates/editor-app/src/language/providers/selection.rs",
+      "kind": "modified",
+      "baseline_sha256": "88452520cdf6bdceb95c25551fafa8a5b9aebfc305836900994fe0dc6f4bf2bb",
+      "current_sha256": "c6b184557c02fc7a8b7c0d9257f55c0d8ba7833f799c49b39236ce0e1a27624d"
+    },
+    {
+      "path": "crates/editor-app/src/sdk_export.rs",
+      "kind": "modified",
+      "baseline_sha256": "3b1ab8f1d6dbc100bdb1e75b655d4d49db40150c2d744a7253aec9184bc67d5c",
+      "current_sha256": "0a3689e6d1497692f11c6e434aae5bf40682b19163eee642212d2a482e0f16ab"
+    },
+    {
+      "path": "crates/editor-app/src/tests/language_editing.rs",
+      "kind": "modified",
+      "baseline_sha256": "842a1b4e8f1042e49b36ff971f9650eb942dfee9dd67f179d0e90f0ce19379ec",
+      "current_sha256": "7e73621398a411f3a917db2b0e7e65831a4a81105f08b14ed21c45ec61edffe4"
+    },
+    {
+      "path": "crates/editor-app/src/tests/language_editing/contexts.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "45a3dbe6ed221a4ed113b120c0378a517cb8cfd160207aafe33022eb4f3e4438"
+    },
+    {
+      "path": "crates/editor-app/src/tests/language_editing/control_lifetime.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "e131c2ac5680940b17a1e0c5f25eef48348a8214c9533e24739a3b1a0fdfe7d7"
+    },
+    {
+      "path": "crates/editor-app/src/tests/language_editing/definition_offsets.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "e1fb2e689e8232c0e90217b30c8b6a2612d25d6e322e0b8a100144169d5db8cf"
+    },
+    {
+      "path": "crates/editor-app/src/tests/language_editing/module_imports.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "1553b2e789c44633be0e8f3eb75c87a26a331e6042e9c3f947e421667dbe5aaf"
+    },
+    {
+      "path": "crates/editor-app/src/tests/language_editing/module_imports/error_budget.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "92462152e875b355f503c444f3c5b12a0954b46623e2184c0861282be415cb07"
+    },
+    {
+      "path": "crates/editor-app/src/tests/language_editing/module_imports/uncertain.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "66758192a94361305681ff137341e2e0e9d19c603d5411d391caa8912fd29ad0"
+    },
+    {
+      "path": "crates/plugin-protocol/README.md",
+      "kind": "modified",
+      "baseline_sha256": "1e27e4032793fff7684f621d08bd59ba3ba3e70a0bd81659b20d59e35bdbfb98",
+      "current_sha256": "51e753c41d797c1f848b3deaac0c63f2c6e99c4555dffcb2104fb1d608a235b0"
+    },
+    {
+      "path": "crates/plugin-protocol/src/api.rs",
+      "kind": "modified",
+      "baseline_sha256": "a1f8f7982dbc4af6a74eee4b9843ab6dd0af1713edaa42255e9203af9d417798",
+      "current_sha256": "ff2c1e824af20cde283e399e20ee545ea0e1bef849d1a600d7da7558c41f2f83"
+    },
+    {
+      "path": "crates/plugin-protocol/src/language_context.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "064a93f7f5a371e9fa1728f2877aede971e2f7ef72d42f894c592bc68fa750a6"
+    },
+    {
+      "path": "crates/plugin-protocol/src/language_control.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "beba6985e6c88847d4fa996d67eb1fc28ee6e3691dc4e0f1c68bc2038254e232"
+    },
+    {
+      "path": "crates/plugin-protocol/src/language.rs",
+      "kind": "modified",
+      "baseline_sha256": "8b91527aa670ed0dcad4af9d32feb2b982f972efa23bbeaad96629a8c0f6caed",
+      "current_sha256": "542b079a3b78a79506f27691ca1db095446844f4d09918f41deb2b16f60e8685"
+    },
+    {
+      "path": "crates/plugin-protocol/src/lib.rs",
+      "kind": "modified",
+      "baseline_sha256": "4408962360d9325aa5db3d685d89d401b7bb262671be18519632f4aeba41d95c",
+      "current_sha256": "0b2f7a4109fd6cb688bb8f53fc9ddff4a641b61d4ebc0702856606bf76732f88"
+    },
+    {
+      "path": "crates/plugin-protocol/src/service.rs",
+      "kind": "modified",
+      "baseline_sha256": "086ed0bdf1e127b4335fb05d913eda3f82fe4ee30f0ef22720e88b3a4327c183",
+      "current_sha256": "55ca6ed4d5bbf8deb3c45ac1128db865a7ad55fe541516b1d7c878d0c5e82858"
+    },
+    {
+      "path": "crates/plugin-runtime/examples/lsp_fixture.rs",
+      "kind": "modified",
+      "baseline_sha256": "ff059cffb5f798f3f2b551d5752ee3c5857822c863e5bfa49d9c77252ef66bc9",
+      "current_sha256": "1edb72ebb27432ddf71061f645c7c32355975b5fd7c0dced82382f3b9e8f8b0a"
+    },
+    {
+      "path": "crates/plugin-runtime/src/capabilities.rs",
+      "kind": "modified",
+      "baseline_sha256": "067d2ed39ac8256edd78755c55e6fbf7e4eec47f90e0568910a1026d493ddb3d",
+      "current_sha256": "8f0057ad50dfbb9832f0031158696853f4203d29d434ad85540c48de2fc55019"
+    },
+    {
+      "path": "crates/plugin-runtime/src/direct.rs",
+      "kind": "modified",
+      "baseline_sha256": "8156ebd1b9606b71ea240d1aebc69e89695099467f29ddca7589323f58ce4775",
+      "current_sha256": "ca0fe132aa56a00daba0cbbdd6d1aa019a8a4e070cf6bbbc21043ba8af490e8c"
+    },
+    {
+      "path": "crates/plugin-runtime/src/editor_requests.rs",
+      "kind": "modified",
+      "baseline_sha256": "65ab03ac37f35eb609e59c58956407d647fccd9c053fcfc60972369525ecd172",
+      "current_sha256": "f703540a83584f8ceb5f267d71ff00d47ddfce1609ec8cff4a55a010392d300a"
+    },
+    {
+      "path": "crates/plugin-runtime/src/instance.rs",
+      "kind": "modified",
+      "baseline_sha256": "8621dd44597f84a2acc79f184ca3c3174fdd3449377fec70a2dec6d272a57e0f",
+      "current_sha256": "46f1c713cd46b9d56134e11c9ccaa5e393b08c212a100811ea348514242ef137"
+    },
+    {
+      "path": "crates/plugin-runtime/src/instance/compiled.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "17c7af6b2e34a05103ebb255053e337e396fea76706e47610599b2ad350a6bb0"
+    },
+    {
+      "path": "crates/plugin-runtime/src/instance/editor_requests.rs",
+      "kind": "modified",
+      "baseline_sha256": "de67a2310862460ebd27b125142be3736525f0c446b2ea15b8fbb1c84ac1c4d5",
+      "current_sha256": "27bdcf268f904725eca981001a3796628bd4e20c762b4ac969f3a16ea2785c86"
+    },
+    {
+      "path": "crates/plugin-runtime/src/instance/language_control.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "38383a8fa8c83b5de5e0c18f1a458723a0d4e7d4d39bd950333d6ca2933bbfbc"
+    },
+    {
+      "path": "crates/plugin-runtime/src/instance/plugin_services.rs",
+      "kind": "modified",
+      "baseline_sha256": "d24fac5d5c5b537af6419683480ac5a6b4ab8952790dfd7c0f005346bef2017c",
+      "current_sha256": "b10e26d6c3dc3e31b671752612044e45019b3fc342cdb011e3eeb568cfa13557"
+    },
+    {
+      "path": "crates/plugin-runtime/src/instance/plugin_services/collections.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "be859d45516fa6818fee34d96ce1e6d755d3375936ee062c5fdfb6ba010287aa"
+    },
+    {
+      "path": "crates/plugin-runtime/src/instance/workspace_files/native.rs",
+      "kind": "modified",
+      "baseline_sha256": "2801448ecc718d7ffa31eee86864b66c6579fd19c7a045ac54aec3f5d7f2acb9",
+      "current_sha256": "0d1b860fc1f9b418a622af1863fa9787e16bcb9a84d5956977426c392316b8fd"
+    },
+    {
+      "path": "crates/plugin-runtime/src/language_bindings.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "4efde4d8d56e872a227a6df81ef5b3533cd6e58d6177da796cadb4b4f8edfa8d"
+    },
+    {
+      "path": "crates/plugin-runtime/src/language_service.rs",
+      "kind": "modified",
+      "baseline_sha256": "24dd37e7ed07fa35ea14ff988adb36533133af84c026ac4d74dd39f6cb28a0cc",
+      "current_sha256": "d4d1e93aeed2b5b66a561f692f871ee7bc1ebf907fb88736f0b2b1c2f97ad1fa"
+    },
+    {
+      "path": "crates/plugin-runtime/src/language_service/consumers.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "fc38ee84cd7f6f8dc79bb1a06e855c0a5108a7df3f516a5f8a882f4868c9e67d"
+    },
+    {
+      "path": "crates/plugin-runtime/src/language_service/modules.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "5a4a38a3655c3184566adbee4ce0d0bec988e50e379ba1b2af7caa8ac6aa1d34"
+    },
+    {
+      "path": "crates/plugin-runtime/src/lib.rs",
+      "kind": "modified",
+      "baseline_sha256": "761a44f1a570c34766c1e5ad46280e985c64ed9c0336a0a5e12368a9107f6e26",
+      "current_sha256": "f0aa3559de5bdb50cfd7936083a5fb0fdeaa471c7ba0cfc8e82db2e077b19dae"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager.rs",
+      "kind": "modified",
+      "baseline_sha256": "9183539e5967c559bd2bca4ddd3c7c323e77b6caa7fa04e7a50ffe703bed6599",
+      "current_sha256": "3b47f9fa3aa673cb8a80891399105e9370de160b2c53a0a761895a2807fd2454"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/activation/deferred.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "69f94cf77c341d4ff91404e7e3fea337c56204118c10ee68067fc9e31fb588fc"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/activation/driver.rs",
+      "kind": "modified",
+      "baseline_sha256": "56599fd447e4efab7b62fd0074fcd81cf3816d3f883d2379f1b23ec19c96b46b",
+      "current_sha256": "f63ba892270ef585c01e109b282e1d446166ca7845997a5b6627fcb2064f30cf"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/activation/language_preparation.rs",
+      "kind": "modified",
+      "baseline_sha256": "e0bc08623c789f9886b1be76e2ba0f9acf44054eb985578943ceb8cbcf9f3fcf",
+      "current_sha256": "da7b46dd817ea951bbbf15de008bee30c87dbd8cd4f443c09fb945ad1368b5d7"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/activation/mod.rs",
+      "kind": "modified",
+      "baseline_sha256": "9f5c3d7d6f77c15bca644b21f878bd01ff10d6e280b4d997de1b2fe515cd332e",
+      "current_sha256": "751ee0b311eb5ab60fd6592173ad2deeaa534248a40bf5a251e0a043b46323fd"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/activation/preparation.rs",
+      "kind": "modified",
+      "baseline_sha256": "10ec1f8897f98d6e23819b39b932b9c4e9b8fa7e4e039ad4f656d537453bc321",
+      "current_sha256": "2038c7726d5f422326ee3f9800806ce0cbc119f5790160ae4eac7abbec286249"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/activation/roles.rs",
+      "kind": "modified",
+      "baseline_sha256": "c932d48932c97e9f4e257e38655cf9cd7286291db280008d31d217578cdd8f88",
+      "current_sha256": "ab5f4da1697977c01942d5875215fce359172d5d3395ef6c845b3525c96f2f93"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/activation/types.rs",
+      "kind": "modified",
+      "baseline_sha256": "c414c6c1d06f18a5f22f9d5f257585ecf3d02284956e7e13ed80d2ae2b866037",
+      "current_sha256": "ca712098b73683364ce87405313d9232fa12fb04369b61aef423cd8c5f608172"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/concurrent.rs",
+      "kind": "modified",
+      "baseline_sha256": "8cef85c279481ef9388972c3099afec11580468bb8d8fdccf25fdd1d939ad567",
+      "current_sha256": "b8c5b5791e123ead3c6240c4cb1f7772cea48c07785e628a7aaa0d8e6a55ad4a"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/dependencies.rs",
+      "kind": "modified",
+      "baseline_sha256": "b1329442fca2e8ea0ef2aaefaf9cca004ed7191dcf6feb4e06f541c5736e4cf9",
+      "current_sha256": "7ca58b12b8dd0ebfcf33ddf4a7fb151b970dcda5c82d0174b408f934fdfa9463"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/direct.rs",
+      "kind": "modified",
+      "baseline_sha256": "b20af2e36216e9a41e263f53d8cd7b6be2bd925499c1f272e4a4704ed6dbd7fc",
+      "current_sha256": "c92de158b2bcb9a79c35ccf6fa2c9ac6889029c52f4d186ca704f68ae702ebb6"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/host_services.rs",
+      "kind": "modified",
+      "baseline_sha256": "2287bfc5d3104302b744e6122615c0735d9a12dd1cad5002fff01d73418976e5",
+      "current_sha256": "22307f427e053e5d084facf19d911ee7a0d2f0797f6c0e4541c4a1287e6451dc"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/language.rs",
+      "kind": "modified",
+      "baseline_sha256": "824228c3c982a342a4037554f8ba1ac57d5076fdd56b594bd4315cb13527f383",
+      "current_sha256": "8bf2151e4ad3ae771d3033eac5e9fca8747b60daad2fabdb17c14071ca63a785"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/language/contexts.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "169b4f45a5a20e83c96fbe3f9ee599553f9aa5d032c823c8958c8bbe8224fc58"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/language/delegation.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "12296e9da84aba1df528a864b2b054dc18c81e07383fab701eb42f852bb52970"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/native_execution.rs",
+      "kind": "modified",
+      "baseline_sha256": "8439683a2b58da121fdfed61064299bca6021d15e60971628a87253abd463f33",
+      "current_sha256": "6b9b6cd2f3aa7bb33e901c1ac160b458b13b3b040ef99fc76a20ad5522b8f7db"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/plugin_services.rs",
+      "kind": "modified",
+      "baseline_sha256": "c3465914f40dbf5053756036e65982e06333fc9635e45d582c46be04ef3135cd",
+      "current_sha256": "eb2ee5a036181bf75f01d9c8c53c52e5b2544592918afef4f17c261cb0653f3a"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/scopes.rs",
+      "kind": "modified",
+      "baseline_sha256": "d732e34f3bd584830fe9d40f13dc8350cdba92d6da2f347364097ccd53a40e75",
+      "current_sha256": "02e8e2340dcbb5ddb0c333530c164cd7741d7feceb9afff215485dc27f52e470"
+    },
+    {
+      "path": "crates/plugin-runtime/src/manager/targets.rs",
+      "kind": "modified",
+      "baseline_sha256": "5c822c5d7d89c6c9860a66ff01650eeb13d2b370fc6b0811e5d22dc4d23ef890",
+      "current_sha256": "8e49b903bda6ba7345ee9752e92e64c2d43f0f2632bd6fcc79fb34267e24afa1"
+    },
+    {
+      "path": "crates/plugin-runtime/src/native_modules.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "8c219278714713466c585a6f1e6c0c61994642eec7659e2f3aa9f89877a484f7"
+    },
+    {
+      "path": "crates/plugin-runtime/src/native_modules/validation.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "a0074993f37543ed1a023b54bed82b1cb0e4e06a23ab6d3c68ea2818f0f6b200"
+    },
+    {
+      "path": "crates/plugin-runtime/src/package.rs",
+      "kind": "modified",
+      "baseline_sha256": "6b1140a0a5977fe1564b09477323e009222ef2902ea5dde954cb2cf404b83b62",
+      "current_sha256": "bca1f4dc4d9683abd8131626f35046138b36ab025596ef29d35afc9f6430d5ad"
+    },
+    {
+      "path": "crates/plugin-runtime/src/plugin_services.rs",
+      "kind": "modified",
+      "baseline_sha256": "9247dd0fa0a28cb2dae6e3b526b03982b62b1c69475ff86674d892361894c459",
+      "current_sha256": "3f6453cbecc7891cee9628163183bc6a15ea4d3cb47e986a6c77521e4ce6a6a1"
+    },
+    {
+      "path": "crates/plugin-runtime/src/plugin_services/availability.rs",
+      "kind": "modified",
+      "baseline_sha256": "0af88fc57dcd6c248be79ec555764cb7d6a614447704b410da9322c86c169b64",
+      "current_sha256": "b40bf25b1811402af89c89ac83cb91b140800d20370febd3ced9e928dd7b79b8"
+    },
+    {
+      "path": "crates/plugin-runtime/src/plugin_services/collections.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "d8c83598a165cdf36b87314fc88bb83c35cfba372ceeb19aca327466db8c0270"
+    },
+    {
+      "path": "crates/plugin-runtime/src/plugin_services/registry.rs",
+      "kind": "modified",
+      "baseline_sha256": "fb7ef107c7c74cbeb5f81a8f92ecc945ea31af93186aab2686b3e479da5daeb0",
+      "current_sha256": "3170337615e3ad28b4e457eb41042048cf4738360f8f1e69afbf548b45a17841"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/language-delegate/Cargo.lock",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "1c3a52040215bfc74bb70d0604d8122f48d01058f12a9a8d459d6ac9c5f58ebb"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/language-delegate/Cargo.toml",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "673207e6de62266ab4abd87bd2ca32795c8b7f952bdcfa19ffa68e69f6971d2a"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/language-delegate/manifest.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "bbb6a1b80eb3e237f7eb31b335e1e55a010b9a04509b6ff01c339753e3b10aa2"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/language-delegate/nanobug-plugin.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "74d17086bf8d017ae6d6839ccb407f1d5bc3726dcbc35a8429bcc48b68049fc6"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/language-delegate/src/lib.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "01c54078d34057b96f2e4e2feae799b288a561f50431f5f5e9d0b2f6c86be038"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/native-consumers/Cargo.lock",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "c152ff6f3b39290a3111dfd49168c5a4ca555ad15007fe61cc226043ef666171"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/native-consumers/Cargo.toml",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "cb9580bb4f7f5e8e192364bc586498ca1dce2dba53be0a8cccfd8ce7ab9dc727"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/native-consumers/manifest.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "9db2821da5d798e1eca53d48ac916ff62178c526de1417b2d5ca358ca9f78e08"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/native-consumers/nanobug-plugin.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "2f826139bcb3db0aac61560e138742e199c47471edcc4056b2b23287afc853e1"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/native-consumers/src/lib.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "c416b7bb1e1a86e17f2149ff1c98c0b560749a47dc44742dce1c0a9179df22d2"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/project-context/Cargo.lock",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "5500dfc472e02b408db27db6301569e680da34cad972b80b8db8c5150866c93c"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/project-context/Cargo.toml",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "0b6c5c5266f6a9717a88b821175a6bf1153751d71cfaeb3a80089d6a16fa328b"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/project-context/manifest.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "de4f3acb6742ce5b47ca596c15549da18db88bb5257553895c1f4971b7438a75"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/project-context/nanobug-plugin.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "bcadd35c42947ffe377ca0610e1c81ab972aff8a5bc15afaad3f73153acb709a"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/project-context/plugin.toml",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "896439d2e729e5c7a8ae998992fa53cfb0b75ec36b8fe05030018332377eca0d"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/project-context/src/lib.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "a532d96e74494f7e3b9064fe0fe6e0d8c77b9fa0c79ae84f429645f14149b2a7"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/service-set/Cargo.lock",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "f5fdcbe37989f40a5472ed0c1a0ca567918f8e52b6dbd0fdfb163e7ff2295bfc"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/service-set/Cargo.toml",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "4ab426a443428f76f444c0f41f66f660b443ba28e512de98a803b7ea3c094a28"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/fixtures/service-set/src/lib.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "2a6f76fb50ccb82f5f7526e6af1a1f194f51a8856ac8130aad216e4e171a6834"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/language_contexts.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "8c5b4bd98266f65f265a1753d5ac176c16f0c8e28b84797926b6a8e64b8755a8"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/language_contexts/compiled.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "c14bfff349bca55e6fb7ebca2e4d344884d8c00cc3725251d09fd14114a14a26"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/language_contexts/permissions.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "ed1f3547adaeafcdbb8c32341d5f5300897531d2f7c595038747ec6d49af7e24"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/language_contexts/retirement.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "b05f8ae320e580c340253afb5ac130934abf6de645c55a59f29ec7982bba6551"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/language_declarative.rs",
+      "kind": "modified",
+      "baseline_sha256": "c0898eef727b28ac9fb98a874ca75f925b44e8fef0ce5e6f56b16a9599a534b3",
+      "current_sha256": "3fed7a2a6dde430bfee66e8bf7f2660bcfe20edd4ebed917edbca45d6712eb8c"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/native_modules.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "3c0a76ed735c9f023701435aa5db0fbdcee59f8beb4b7835552330d8226997f3"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/native_modules/consumers.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "ebc97ebdc2b5480465c4fde16fd7a5a65500a42d8416822f0907550aa3d60f8f"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/native_modules/consumers/release.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "f0d602fc0010c01cc8c46bb778242ce44103b4a1ffd09d7a01407ad6083a16aa"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/plugin_services.rs",
+      "kind": "modified",
+      "baseline_sha256": "02e94cd78a84fa7783bb1792e33678e7d5e481d38abb4a1942e69cced00f6985",
+      "current_sha256": "cef838448f530542558f6e619cd5674b8e95595bc5033f3135b3c62c5f37a8a7"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/service_sets.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "43f138a907149d17e50a06c93200901347c1f27048f75c91fd6e25252f87728f"
+    },
+    {
+      "path": "crates/plugin-runtime/tests/vue_compatibility.rs",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "df2cfefbb0012fe3c8921145006b307df0e1f49cb55ac0e98a05848f162adca8"
+    },
+    {
+      "path": "docs/plugins/README.md",
+      "kind": "modified",
+      "baseline_sha256": "e6f8138afa8486c109d4cefe0cfdd9246831b37fc124b2cf8b1c2e322b9c4104",
+      "current_sha256": "e9d37e68cae6afb05f722df390ddb068af17ff48a2a40caf9b80a40220e5ec4c"
+    },
+    {
+      "path": "docs/plugins/specs/vue-multi-backend.md",
+      "kind": "modified",
+      "baseline_sha256": "49738c55f9c161b8f590ab8472a42bd3dd8d6fd45248a103f71acc11f8694ed3",
+      "current_sha256": "26e4251981cddaa78f9b8e9f48c8971fc09eab4d4e1edf6a8671bdd84a58929d"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/publication.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "2900a6f2d092771635f8ab11a623507ee9f138a7442e23eef9f9fdd01b1bf6c8"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/README.md",
+      "kind": "modified",
+      "baseline_sha256": "0a635a927d62ed8c9035f091221d3ec6eab9827e5e819706c58235f2e5c6e6f4",
+      "current_sha256": "b61ec5f0902e5926aaba2e0da8c5483d4ae5900005db8ed5e0c26a325f6f9a43"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/replan-proposal.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "ae7581122b92c77f43ac99e8a75ebcfe109e56666437e2269d9b360e08bfcbbd"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/scenarios/01-real-projects.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "529ae322a6413d93c2737f089850199a4d648da12e8c70b647e274c42d76130a"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/scenarios/02-edit-and-refactor.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "a61af56d17fd05441e816917d13c746dca8bdbc59030b28182a9fcbeae8dfd69"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/scenarios/03-sfc-language.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "579399a3d1b5886e064cacc6805e5e9a04e5b9ef700a14c26c9fc1c2dc6a1d31"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/scenarios/04-ecosystem.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "4cf735327582b93c08deb66c8671dea39648aaa0a3ddfc82a02ef746c6192dfc"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/scenarios/05-recovery.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "5a073ce49d8432db59491946bacffd986cb461f5a7d6dc2e5da81ec351fa825e"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/scenarios/06-joint-delivery.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "f41917317ce7ac8a2468837c5dc37af7641b6a82c391960001c4f6f8662cbceb"
+    },
+    {
+      "path": "docs/plugins/tickets/vue-typescript/scenarios/publication.json",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "c3bfdd4f0e0bbfca514e0163b83c5284e33bdf87ad88fbfe9c6e0db5e945c48d"
+    },
+    {
+      "path": "docs/plugins/verification/vue-typescript-host-context-checkpoint-2026-10-15.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "8904d580b76fb97f8d3464ae13cf533410d2da7e815e540152df3aec46de29ac"
+    },
+    {
+      "path": "docs/plugins/verification/vue-typescript-implementation-2026-10-15.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "a9660f4b9972c62e473c5b713e18599ea73b9fcbb395f5af2c5ef5c8224d5c4c"
+    },
+    {
+      "path": "docs/plugins/verification/vue-typescript-paused-2026-10-15-2251.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "55b2be9fc5df7b527e2a029e3de91c0ebc7531137f809261a19cac789c53107f"
+    },
+    {
+      "path": "docs/plugins/verification/vue-typescript-paused-2026-10-15.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "95f731ede51bf1c41d0717b869e0088b3026a169ec905d864dc6df5960c46986"
+    },
+    {
+      "path": "docs/plugins/verification/vue-typescript-s1-resume-2026-10-19.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "de5e32244f8ef7e07358b6c9a7b04a6b028577fc8fd7848ad3b80b88ffffef78"
+    },
+    {
+      "path": "docs/plugins/verification/vue-typescript-s1-s5-checkpoint-2026-10-15.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "4cd5f51ede87dc09b37994d649203187232d525c01c84912933c79ad9f053468"
+    },
+    {
+      "path": "docs/plugins/verification/vue-typescript-s5-runtime-2026-10-15.md",
+      "kind": "added",
+      "baseline_sha256": null,
+      "current_sha256": "ad8d6bd342342b5a66b9e958daada810bda45693f6969ec32870b7538c96fa0e"
+    }
+  ],
+  "external_baseline_exclusions": {
+    "rule": "Baseline files absent from entries remain byte-identical and must not be attributed to S1.",
+    "critical_unchanged_files": [
+      {
+        "path": "AGENTS.md",
+        "sha256": "2dec63756817d99d62cc1e8147610326f375e9f56f60562c29d53073f0b2497d"
+      },
+      {
+        "path": "Cargo.toml",
+        "sha256": "86ae0a017bb7fa218d38dbe052b0fbdae49d924ea0eb10b5c5e2be68915650e0"
+      },
+      {
+        "path": "Cargo.lock",
+        "sha256": "b1d693f421305b919cef3af397e5d784425011dca2dff95134712a1a375efb3b"
+      },
+      {
+        "path": "README.md",
+        "sha256": "7c74e690b0717b57c71cf8612b2cc7e122bf7b4bb324e55635868c45c382e764"
+      },
+      {
+        "path": "README.zh-CN.md",
+        "sha256": "fa2f23c1e17818d94a196ebfd7406f9fff2730fb2b1c5ca715ce48df0a9dedac"
+      },
+      {
+        "path": "crates/editor-app/src/main.rs",
+        "sha256": "a6e3cc224ee790d9728a2e45dd280bc1e29289ccc1e335cff843cc47ad3cad48"
+      },
+      {
+        "path": "crates/editor-app/src/app/layout.rs",
+        "sha256": "3ac34f9546cb27ba0e9a9c3186dcdd6b38344b78f8ad4f5dec973928dcb5d6fc"
+      },
+      {
+        "path": "crates/editor-app/src/app/session.rs",
+        "sha256": "994e1e144e7e9530d5ea7bb90ffa6070b56d1aff8b39881dc9dea687ba6b82bc"
+      },
+      {
+        "path": "crates/editor-app/src/app/messages.rs",
+        "sha256": "020533a798b8beaabd190054ec1a2ace77ecaf696617e86bb27d76f530a4e343"
+      },
+      {
+        "path": "crates/platform-windows/src/lib.rs",
+        "sha256": "3b2c8c9c6283b1109821ba2b7099c42a2857300d683d17b8ab102e0637ae5f99"
+      },
+      {
+        "path": "crates/editor-app/src/ui/controls.rs",
+        "sha256": "21e62fc8e337563eb3cd81401d2812dda1e4515f9a7f4ebd04f287c24fccfa25"
+      }
+    ],
+    "local_ui_unchanged": true,
+    "local_ui_baseline_files": 132,
+    "original_trees_untouched": true
+  },
+  "bookkeeping_excluded": [
+    "docs/plugins/verification/vue-typescript-s1-diff-2026-10-19.json",
+    "target/**",
+    ".git/**"
+  ],
+  "review_notes": [
+    "This manifest is a dated WIP snapshot. Recalculate after later source changes before staging.",
+    "Ordinary HEAD diff includes the external UI/Git/window working-tree overlay and is not the S1 commit boundary.",
+    "Copied S2-S6 ticket text and older verification documents are historical evidence only; issues 122-126 remain paused.",
+    "All paths require scope and validation review; this manifest does not authorize staging every entry.",
+    "No index mutation or temporary baseline commit was performed by this audit."
+  ],
+  "known_baseline_check_failures": [
+    {
+      "check": "git diff --check (entire integration tree)",
+      "path": "crates/editor-app/src/ui/controls.rs",
+      "line": 54,
+      "reason": "Existing trailing space in diagnostic_popup re-export; unchanged from frozen baseline and original main. S1 scoped diff check passes."
+    }
+  ]
+}

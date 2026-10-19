@@ -13,6 +13,7 @@ use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
 mod cloud;
 mod commands;
+mod compiled;
 mod data_files;
 mod decorations;
 mod diagnostics;
@@ -22,6 +23,7 @@ mod editor_requests;
 pub(crate) mod file_discovery;
 mod icons;
 mod image_inputs;
+mod language_control;
 mod plugin_services;
 mod preferences;
 mod private;
@@ -37,6 +39,7 @@ mod tools;
 mod trees;
 mod workspace_events;
 mod workspace_files;
+pub(crate) use compiled::CompiledCode;
 use resource_roots::ResourceRoots;
 pub(crate) use workspace_files::NativeDocumentRequests;
 wasmtime::component::bindgen!({path:"../plugin-protocol/wit",world:"plugin",require_store_data_send:true});
@@ -97,6 +100,11 @@ struct State {
     processes: Processes,
     /// Service definitions and process handles cannot be retargeted by guest request fields.
     services: std::collections::BTreeMap<String, plugin_protocol::process::Service>,
+    /// Native control is restricted to declarations owned by this exact package incarnation.
+    language_providers: std::collections::BTreeMap<String, plugin_protocol::language::Provider>,
+    /// Validated package-only exports become visible only after activation has committed.
+    module_exports:
+        std::collections::BTreeMap<String, plugin_protocol::language_control::ModuleExport>,
     process_handles: std::collections::BTreeMap<u64, (api::ResourceHandle, String)>,
     /// Original calling workspace stays fixed even for resources held by an application provider.
     process_display_scopes: std::collections::BTreeMap<u64, String>,
@@ -194,6 +202,8 @@ pub struct Instance {
     pub(crate) configuration: plugin_protocol::settings::Effective,
     /// Host invocation IDs cannot be confused with stale completions after another call.
     next_call: u64,
+    /// Immutable code may initialize later isolated role Stores while this exact owner remains live.
+    compiled: CompiledCode,
     store: Store<State>,
     bindings: Plugin,
     /// Validated documents keyed by their declared panel; publication is atomic across one reply.
@@ -280,6 +290,7 @@ impl Instance {
             assets,
             snapshot,
             host_resources,
+            None,
             false,
         )
     }
@@ -293,6 +304,7 @@ impl Instance {
         data: PathBuf,
         assets: PathBuf,
         host_resources: crate::HostResources,
+        compiled: &CompiledCode,
     ) -> anyhow::Result<Self> {
         Self::prepare_with_mode(
             engine,
@@ -304,6 +316,7 @@ impl Instance {
             assets,
             None,
             host_resources,
+            Some(compiled),
             true,
         )
     }
@@ -318,6 +331,7 @@ impl Instance {
         assets: PathBuf,
         snapshot: Option<Snapshot>,
         host_resources: crate::HostResources,
+        compiled: Option<&CompiledCode>,
         pure: bool,
     ) -> anyhow::Result<Self> {
         let api = super::capabilities::negotiate(manifest)?;
@@ -336,14 +350,15 @@ impl Instance {
         if !pure {
             std::fs::create_dir_all(&data)?;
         }
-        let component = Component::new(engine, bytes).inspect_err(|error| {
-            host_resources.logs.append(
-                &manifest.id,
-                crate::LogLevel::Error,
-                "wasm/compile",
-                format!("{error:#}"),
-            );
-        })?;
+        let compiled = CompiledCode::prepare(
+            engine,
+            bytes,
+            compiled,
+            &host_resources.logs,
+            &manifest.id,
+            pure,
+        )?;
+        let component = compiled.component();
         let mut linker = Linker::<State>::new(engine);
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
         Plugin::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
@@ -426,7 +441,13 @@ impl Instance {
             permissions: manifest.permissions.clone(),
             processes: Processes::default(),
             services: manifest.services.clone(),
+            language_providers: manifest
+                .language_servers
+                .iter()
+                .map(|provider| (provider.id.clone(), provider.clone()))
+                .collect(),
             process_handles: Default::default(),
+            module_exports: manifest.module_exports.clone(),
             process_display_scopes: Default::default(),
             process_dependencies: Default::default(),
             workspace: PathBuf::from(&environment.workspace),
@@ -461,7 +482,7 @@ impl Instance {
         store.set_fuel(100_000_000)?;
         store.set_epoch_deadline(crate::faults::CALL_DEADLINE_MS / crate::faults::EPOCH_TICK_MS);
         let bindings =
-            Plugin::instantiate(&mut store, &component, &linker).inspect_err(|error| {
+            Plugin::instantiate(&mut store, component, &linker).inspect_err(|error| {
                 store.data().host_resources.logs.append(
                     &manifest.id,
                     crate::LogLevel::Error,
@@ -475,6 +496,7 @@ impl Instance {
             file_sources: Default::default(),
             configuration: Default::default(),
             next_call: 1,
+            compiled,
             store,
             bindings,
             views: Default::default(),
@@ -694,6 +716,24 @@ impl Instance {
                 && self.store.data().staged_writes.is_none()
         );
         self.store.data_mut().activation_committed = true;
+        let state = self.store.data();
+        if state.permissions.contains("native.modules") && !state.module_exports.is_empty() {
+            state
+                .host_resources
+                .modules
+                .publish(crate::native_modules::Publisher {
+                    instance: state.plugin_services.principal.instance.clone(),
+                    scope: state.plugin_services.principal.scope.clone(),
+                    root: state.assets.clone(),
+                    digest: state
+                        .assets
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    alive: state.plugin_services.alive.clone(),
+                    exports: state.module_exports.clone(),
+                });
+        }
     }
     /// Restore only files touched by this transaction; unrelated plugin data stays intact.
     pub(crate) fn rollback_data(originals: &[(PathBuf, Option<Vec<u8>>)]) -> anyhow::Result<()> {
@@ -708,6 +748,17 @@ impl Instance {
     }
     /// Seal published work at retirement, after any final snapshot has used its still-live owned resources.
     pub(crate) fn quiesce(&mut self) {
+        // Stop borrowed native workers before revoking source metadata or allowing package cleanup.
+        self.store
+            .data()
+            .host_resources
+            .modules
+            .revoke_owner(&self.store.data().plugin_services.principal.instance);
+        self.store
+            .data()
+            .host_resources
+            .bindings
+            .revoke_owner(&self.store.data().plugin_services.principal.instance);
         self.store.data_mut().activation_committed = false;
         self.store.data_mut().http_streams.clear();
         self.store.data_mut().timers.clear();

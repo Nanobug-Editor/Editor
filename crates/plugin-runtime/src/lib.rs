@@ -34,7 +34,7 @@ pub mod logs;
 pub use logs::{LogLevel, LogRecord, RuntimeLogs};
 mod request_state;
 pub use document_events::DocumentEvents;
-pub use editor_requests::{EditorAuthority, EditorRequest};
+pub use editor_requests::{EditorAuthority, EditorRequest, LanguageControlMetadata};
 mod workspace_resources;
 pub use workspace_resources::{AuthorizedFile, FileGuard, WorkspaceBatch, WorkspaceRequest};
 /// Secure disk preparation and current-session recovery do not own native document text or history.
@@ -43,7 +43,9 @@ pub mod workspace_io;
 pub use plugin_protocol::api::RequestUpdate;
 pub use request_state::Completion;
 mod instance;
+mod language_bindings;
 mod language_service;
+pub use language_bindings::LanguageBindings;
 pub use language_service::{LanguageService, ServiceProcess};
 /// Shared project builds, validated development directories and atomic ZIP publication.
 pub mod development;
@@ -93,5 +95,13 @@ pub struct HostResources {
     pub sdk: Option<Result<plugin_protocol::api::SdkDescriptor, String>>,
     /// One process-local log owner is shared by live, prepared and retired sources; never exposed to WASI.
     pub logs: RuntimeLogs,
+    /// Immutable native module publications and consumer leases share the same manager lifetimes.
+    pub modules: NativeModules,
+    /// Delegated language providers redeem only native plans sealed to their original document intent.
+    pub bindings: LanguageBindings,
 }
+mod native_modules;
 mod native_path;
+pub use native_modules::{
+    NativeModuleAttachment, NativeModuleDescriptor, NativeModuleLease, NativeModules,
+};

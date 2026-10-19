@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Clone)]
 pub(crate) struct DocumentLease {
     pub uri: Uri,
+    /// The recognized source language is per document, independently of its shared analysis provider.
+    pub(super) language_id: String,
     active: Arc<AtomicBool>,
 }
 impl DocumentLease {
@@ -22,12 +24,19 @@ impl LanguageServer {
     }
     /// All providers for the same open document share one lifetime; reopening allocates a fresh one.
     pub(crate) fn open_document(&self, uri: Uri) -> DocumentLease {
+        self.open_document_for_language(uri, &self.service.provider.language)
+    }
+
+    /// Bind an actual recognized language before native features attach. Subsequent generic opens
+    /// preserve it, so one JS/TS/JSX/TSX context never sends every source as the primary language.
+    pub(crate) fn open_document_for_language(&self, uri: Uri, language: &str) -> DocumentLease {
         self.documents
             .lock()
             .unwrap()
             .entry(uri.as_str().into())
             .or_insert_with(|| DocumentLease {
                 uri,
+                language_id: language.into(),
                 active: Arc::new(AtomicBool::new(true)),
             })
             .clone()

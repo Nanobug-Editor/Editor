@@ -1,0 +1,137 @@
+{
+  "date": "2026-10-15",
+  "mode": "user-scenarios",
+  "approved": true,
+  "repository": "Nanobug-Editor/Editor",
+  "parent": {
+    "number": 107,
+    "id": 5863452838,
+    "url": "https://github.com/Nanobug-Editor/Editor/issues/107",
+    "state": "open"
+  },
+  "preserves": "../publication.json",
+  "native_relationships_verified": true,
+  "tickets": [
+    {
+      "local": 1,
+      "key": "S1",
+      "file": "scenarios/01-real-projects.md",
+      "title": "Vue/TS S1：安装真实插件并打开混合项目",
+      "old_refs": [
+        108,
+        109,
+        110,
+        111,
+        112
+      ],
+      "state": "open",
+      "number": 121,
+      "id": 5866281003,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/121",
+      "blocked_by": []
+    },
+    {
+      "local": 2,
+      "key": "S2",
+      "file": "scenarios/02-edit-and-refactor.md",
+      "title": "Vue/TS S2：在混合项目中编辑、补全和跨文件重构",
+      "old_refs": [
+        109,
+        112,
+        113
+      ],
+      "state": "open",
+      "number": 122,
+      "id": 5866281303,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/122",
+      "blocked_by": [
+        121
+      ]
+    },
+    {
+      "local": 3,
+      "key": "S3",
+      "file": "scenarios/03-sfc-language.md",
+      "title": "Vue/TS S3：使用首批 Vue 写法、SFC 高亮和块格式化",
+      "old_refs": [
+        111,
+        114,
+        115
+      ],
+      "state": "open",
+      "number": 123,
+      "id": 5866281601,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/123",
+      "blocked_by": [
+        121
+      ]
+    },
+    {
+      "local": 4,
+      "key": "S4",
+      "file": "scenarios/04-ecosystem.md",
+      "title": "Vue/TS S4：安装专门生态插件参与 Vue 分析",
+      "old_refs": [
+        110,
+        112,
+        116
+      ],
+      "state": "open",
+      "number": 124,
+      "id": 5866281901,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/124",
+      "blocked_by": [
+        121
+      ]
+    },
+    {
+      "local": 5,
+      "key": "S5",
+      "file": "scenarios/05-recovery.md",
+      "title": "Vue/TS S5：在离线、更新或后端故障后恢复使用",
+      "old_refs": [
+        109,
+        110,
+        112,
+        114,
+        117
+      ],
+      "state": "open",
+      "number": 125,
+      "id": 5866282122,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/125",
+      "blocked_by": [
+        121
+      ]
+    },
+    {
+      "local": 6,
+      "key": "S6",
+      "file": "scenarios/06-joint-delivery.md",
+      "title": "Vue/TS S6：完成跨插件联合验收与可审核交付",
+      "old_refs": [
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118
+      ],
+      "state": "open",
+      "number": 126,
+      "id": 5866282429,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/126",
+      "blocked_by": [
+        122,
+        123,
+        124,
+        125
+      ]
+    }
+  ]
+}

@@ -4,6 +4,29 @@ use semver::Version;
 
 /// Production admission and instance preparation enforce the same current baseline.
 pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
+    // Composable contracts are new semantics, not an automatic expansion of old service grants.
+    if manifest
+        .plugin_services
+        .provides
+        .values()
+        .any(|contract| contract.collection)
+        || manifest
+            .plugin_services
+            .requires
+            .values()
+            .any(|dependency| dependency.collection)
+    {
+        anyhow::ensure!(
+            manifest
+                .api
+                .as_ref()
+                .and_then(|api| api.required.get("plugin.services"))
+                .is_some_and(|range| range.matches(&Version::new(1, 2, 0))
+                    && !range.matches(&Version::new(1, 1, 0))
+                    && !range.matches(&Version::new(1, 0, 0))),
+            "Composable service declarations require plugin.services >=1.2"
+        );
+    }
     anyhow::ensure!(
         manifest.protocol == 7,
         "插件不兼容：协议 {} 已停止支持，请使用新版 SDK 更新插件（需要协议 7）。",
@@ -159,7 +182,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.collections".into(), Version::new(1, 0, 0)),
         ("ui.tree".into(), Version::new(1, 2, 0)),
         ("ui.grid".into(), Version::new(1, 0, 0)),
-        ("plugin.services".into(), Version::new(1, 1, 0)),
+        ("plugin.services".into(), Version::new(1, 2, 0)),
         ("workspace.files".into(), Version::new(1, 3, 0)),
         ("host.sdk".into(), Version::new(1, 0, 0)),
         ("storage.private".into(), Version::new(1, 2, 0)),
@@ -185,7 +208,9 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("process".into(), Version::new(1, 8, 0)),
         // 1.2 owns native roots; 1.3 opts into immutable diagnostic URIs; 1.4 adds shared native
         // references/code actions/signature consumers, gated again by standard server advertisement.
-        ("language.lsp".into(), Version::new(1, 4, 0)),
+        ("language.lsp".into(), Version::new(1, 5, 0)),
+        ("language.control".into(), Version::new(1, 0, 0)),
+        ("language.modules".into(), Version::new(1, 0, 0)),
         // Pure references/actions/signature help remain explicitly experimental until wider use.
         ("language.direct".into(), Version::new(0, 1, 0)),
         ("language.completion".into(), Version::new(1, 0, 0)),

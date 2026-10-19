@@ -73,6 +73,7 @@ pub(super) fn provider(
         contracts: [(
             host_services::EXECUTION_CONTRACT.into(),
             Contract {
+                collection: false,
                 preparation: Default::default(),
                 enabled_setting: None,
                 platforms: Vec::new(),

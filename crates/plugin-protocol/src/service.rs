@@ -108,6 +108,10 @@ pub struct Method {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Contract {
+    /// plugin.services 1.2: explicitly permits collection discovery. False retains ordinary
+    /// single-provider semantics; declaring this never overrides the user's provider selection.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collection: bool,
     /// dependencies 1.2: provider-owned native services prepared before invoking these methods.
     /// This metadata changes neither method signatures nor delegated caller permissions.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -125,6 +129,10 @@ pub struct Contract {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Dependency {
+    /// plugin.services 1.2: permits OpenSet for this dependency. Both consumer and providers must
+    /// opt in; Open itself remains single-provider even when this flag is true.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collection: bool,
     pub version: VersionReq,
     #[serde(default)]
     pub optional: bool,
@@ -178,6 +186,7 @@ impl Declarations {
                             | "ui.interaction"
                             | "commands.call"
                             | "process.exec"
+                            | "native.modules"
                             | "network.http"
                     ) && !(p.starts_with("network.http:http://")
                         || p.starts_with("network.http:https://"))
@@ -218,6 +227,17 @@ pub enum Operation {
     Open {
         contract: String,
     },
+    /// plugin.services 1.2: snapshot up to MAX_SET_MEMBERS explicitly composable providers. An
+    /// explicit host selection restricts the set to that provider. No callback runs on discovery.
+    OpenSet {
+        contract: String,
+    },
+    /// Check an OpenSet revision after asynchronous preparation, including optional empty sets.
+    /// This grants no reference; changed membership/configuration/selection returns InvalidHandle.
+    ValidateSet {
+        contract: String,
+        revision: u64,
+    },
     Call {
         reference: ResourceHandle,
         method: String,
@@ -230,6 +250,26 @@ pub enum Operation {
         request: ResourceHandle,
         result: Result<Value, Failure>,
     },
+}
+
+/// A bounded composition is deliberately smaller than the per-instance resource handle quota.
+pub const MAX_SET_MEMBERS: usize = 16;
+
+/// One caller-owned collection snapshot. Release each member reference through CloseResource.
+/// Member order is stable discovery order, not semantic transform or override precedence.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceSet {
+    pub revision: u64,
+    pub members: Vec<SetMember>,
+}
+
+/// The provider name is descriptive only; all calls and module imports use the owned reference.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetMember {
+    pub provider: String,
+    pub reference: ResourceHandle,
 }
 
 /// Source and scope are host metadata, never accepted from consumer-provided arguments.
@@ -307,6 +347,37 @@ pub mod guest {
             _ => Err(Failure::new(
                 ErrorCode::OperationFailed,
                 "Expected service reference",
+            )),
+        }
+    }
+    /// Discover an explicitly declared collection without invoking or starting its providers.
+    /// A missing optional collection returns an empty set; other compatibility failures are explicit.
+    pub fn open_set(contract: impl Into<String>) -> Result<ServiceSet, Failure> {
+        match api::guest::request(api::Operation::Service {
+            operation: Operation::OpenSet {
+                contract: contract.into(),
+            },
+        })? {
+            api::Value::ServiceSet(set) => Ok(set),
+            _ => Err(Failure::new(
+                ErrorCode::OperationFailed,
+                "Expected a service collection",
+            )),
+        }
+    }
+    /// Reject stale preparation before publishing a composition. This comparison token conveys no
+    /// module or file access and does not prevent later changes; attached leases retain their guards.
+    pub fn validate_set(contract: impl Into<String>, revision: u64) -> Result<(), Failure> {
+        match api::guest::request(api::Operation::Service {
+            operation: Operation::ValidateSet {
+                contract: contract.into(),
+                revision,
+            },
+        })? {
+            api::Value::Unit => Ok(()),
+            _ => Err(Failure::new(
+                ErrorCode::OperationFailed,
+                "Expected collection validation",
             )),
         }
     }

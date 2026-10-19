@@ -30,9 +30,15 @@ impl Manager {
                 "Language result owner was retired",
             ));
         }
-        if let crate::LanguageFixOrigin::Lsp(service) = origin {
+        if let crate::LanguageFixOrigin::Lsp(service)
+        | crate::LanguageFixOrigin::GuardedLsp { service, .. } = origin
+        {
             self.check_language_origin(service)?;
-            return service.submit_language_fix(document, fix);
+            let guard = match origin {
+                crate::LanguageFixOrigin::GuardedLsp { guard, .. } => Some(guard.clone()),
+                _ => None,
+            };
+            return service.submit_language_fix(document, fix, guard);
         }
         let instance = self.live.get_mut(origin.owner()).ok_or_else(|| {
             Failure::new(ErrorCode::InvalidHandle, "Language instance is unavailable")

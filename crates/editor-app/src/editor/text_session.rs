@@ -18,7 +18,8 @@ impl EditorApp {
         let server = if opened.session.is_readonly() {
             None
         } else {
-            self.language_servers.get(&language).cloned()
+            self.language_server_for_path(opened.session.path())
+                .cloned()
         };
         let document_path = opened.session.path().to_path_buf();
         let readonly = opened.session.is_readonly();
@@ -42,8 +43,8 @@ impl EditorApp {
             editor.set_readonly(readonly, cx);
         });
         if let Some(server) = server {
-            // All tabs for a plugin language share its workspace server.
-            attach_language_server(&editor, &document_path, server, app, cx);
+            // Each source uses its selected project's owned transport; related sources may share it.
+            attach_language_server(&editor, &document_path, &language, server, app, cx);
         }
         // Definition markers use their own layer beside plugin syntax highlighting.
         // One native adapter survives grammar/fold updates and ordinary document Undo.
@@ -97,6 +98,7 @@ impl EditorApp {
                     this.keep_tab(index);
                 }
                 this.refresh_syntax_diagnostics(changed_editor.entity_id(), cx);
+                this.prune_related_semantic_diagnostics(cx);
                 this.sync_plugin_documents(cx);
                 cx.notify();
             }

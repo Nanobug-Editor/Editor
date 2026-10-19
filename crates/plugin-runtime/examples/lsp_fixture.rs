@@ -1,6 +1,7 @@
 //! Test-only stdio server records the real wire and echoes unsaved text through diagnostics.
 use serde_json::{Value, json};
 use std::io::{BufRead, Read, Write};
+use std::path::{Path, PathBuf};
 
 /// Flush each frame so tests observe protocol order without simulated transport.
 fn send(value: Value) {
@@ -10,8 +11,27 @@ fn send(value: Value) {
     output.write_all(&bytes).unwrap();
     output.flush().unwrap();
 }
+
+/// Match only the fixture's explicitly selected physical dependency, independently of URI spelling.
+fn is_related_source(document: &Value, expected: &Path) -> bool {
+    document["uri"]
+        .as_str()
+        .and_then(|uri| url::Url::parse(uri).ok())
+        .and_then(|uri| uri.to_file_path().ok())
+        .and_then(|path| path.canonicalize().ok())
+        .is_some_and(|path| path == expected)
+}
+
 fn main() {
     let log = std::env::args().nth(1).expect("wire log path");
+    // This opt-in backend reads one declared dependency from its overlay or, after didClose, disk.
+    // The response demonstrates source lifetime behavior; it does not emulate a compiler's semantics.
+    let related_source = std::env::args()
+        .collect::<Vec<_>>()
+        .windows(2)
+        .find(|pair| pair[0] == "--related-source")
+        .map(|pair| PathBuf::from(&pair[1]).canonicalize().unwrap());
+    let mut related_overlay = None::<String>;
     // Startup arguments are observable independently of initialization JSON.
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -71,7 +91,27 @@ fn main() {
         }
         let result = match method {
             "initialize" => {
-                json!({"capabilities":{"completionProvider":{},"definitionProvider":true,"referencesProvider":true,"signatureHelpProvider":{},"codeActionProvider":true,"textDocumentSync":{"openClose":true,"change":1,"save":true}}})
+                let mut result = json!({"capabilities":{"completionProvider":{},"definitionProvider":true,"referencesProvider":true,"signatureHelpProvider":{},"codeActionProvider":true,"textDocumentSync":{"openClose":true,"change":1,"save":true}}});
+                if related_source.is_some() {
+                    result["capabilities"]["hoverProvider"] = json!(true);
+                }
+                // Only this test server interprets fixtureControl. Tests exercise real framed
+                // initialization replies; the production host never knows these fixture names.
+                if params["capabilities"]["experimental"]["nanobugControl"] == 1 {
+                    let marker = params["initializationOptions"]
+                        .get("fixtureControl")
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            json!({"version":1,"methods":[
+                                "fixture/barrier", "fixture/pending", "fixture/refuse",
+                                "fixture/context/documents", "fixture/context/all-documents"
+                            ]})
+                        });
+                    if !marker.is_null() {
+                        result["capabilities"]["experimental"] = json!({"nanobugControl":marker});
+                    }
+                }
+                result
             }
             "initialized" => {
                 send(
@@ -97,6 +137,12 @@ fn main() {
                     .as_str()
                     .or_else(|| params["contentChanges"][0]["text"].as_str())
                     .unwrap();
+                if related_source
+                    .as_ref()
+                    .is_some_and(|expected| is_related_source(document, expected))
+                {
+                    related_overlay = Some(source.to_owned());
+                }
                 send(
                     json!({"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{
                     "uri":document["uri"],"version":document["version"],"diagnostics":[{
@@ -105,7 +151,24 @@ fn main() {
                 );
                 continue;
             }
+            "textDocument/didClose" => {
+                if related_source
+                    .as_ref()
+                    .is_some_and(|expected| is_related_source(&params["textDocument"], expected))
+                {
+                    related_overlay = None;
+                }
+                continue;
+            }
+            "textDocument/hover" if related_source.is_some() => {
+                let source = related_overlay.clone().unwrap_or_else(|| {
+                    std::fs::read_to_string(related_source.as_ref().unwrap()).unwrap()
+                });
+                json!({"contents":{"kind":"plaintext","value":source}})
+            }
             "textDocument/completion" => json!([{"label":"fixture-completion"}]),
+            // This mode has no declaration model; Base must display only its source-state hover.
+            "textDocument/definition" if related_source.is_some() => json!([]),
             "textDocument/definition" => {
                 json!({"uri":params["textDocument"]["uri"],"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}})
             }
@@ -165,6 +228,39 @@ fn main() {
                 Value::Null
             }
             "fixture/pending" => continue,
+            "fixture/context/documents" | "fixture/context/all-documents" => {
+                // This test backend selects an explicit project member; the host has no language
+                // or filename rule and must keep unrelated candidate text private.
+                let query = &params["arguments"];
+                let target = query["target"]["id"].as_str().unwrap();
+                let documents = query["candidates"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|candidate| candidate["id"].as_str())
+                    .filter(|id| {
+                        method == "fixture/context/all-documents"
+                            || *id == target
+                            || *id == "related"
+                    })
+                    .collect::<Vec<_>>();
+                json!({"generation":"fixture-graph-1","documents":documents})
+            }
+            "fixture/refuse" => {
+                // A valid per-request refusal must leave the shared framed connection usable.
+                let mut error = json!({"code":-32042,"message":"fixture request refused"});
+                if args.iter().any(|arg| arg == "--large-control-error") {
+                    // Seventy KiB of UTF-8 fits a normal LSP frame but exceeds control's byte budget.
+                    error["message"] = json!("🙂".repeat(70 * 1024 / 4));
+                }
+                if args.iter().any(|arg| arg == "--released-on-refuse") {
+                    // This backend retains no adapters. The explicit receipt releases only this
+                    // request's imports; plain refusal still communicates no lifetime disposition.
+                    error["data"] = json!({"version":1,"imports":"released"});
+                }
+                send(json!({"jsonrpc":"2.0","id":id,"error":error}));
+                continue;
+            }
             "fixture/block-with-ready" => {
                 // A reply much larger than the native pipe buffer tests the caller's existing deadline.
                 // Stop reading stdin only after publishing the request, readiness, and a receipt barrier.

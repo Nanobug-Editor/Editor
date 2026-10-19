@@ -250,13 +250,14 @@ fn semantic_diagnostics_merge_and_clear(cx: &mut TestAppContext) {
                     Diagnostic::new(Position::new(0, 10)..Position::new(0, 11), "warning")
                         .with_severity(DiagnosticSeverity::Warning),
                 ],
+                None,
                 cx,
             );
             let entries: Vec<_> = app.editor.read(cx).diagnostics().unwrap().iter().collect();
             assert_eq!(entries.len(), 2);
             assert_eq!(entries[0].message.as_str(), "cannot find function missing");
             assert_eq!(entries[1].severity, DiagnosticSeverity::Warning);
-            app.apply_semantic_diagnostics(editor_id, Vec::new(), cx);
+            app.apply_semantic_diagnostics(editor_id, Vec::new(), None, cx);
             assert_eq!(
                 app.editor
                     .read(cx)

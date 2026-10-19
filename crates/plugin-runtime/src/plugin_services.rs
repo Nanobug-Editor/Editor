@@ -14,6 +14,7 @@ use std::{
     },
 };
 mod availability;
+mod collections;
 mod registry;
 
 pub(crate) type Shared = Arc<Mutex<Broker>>;
@@ -30,6 +31,8 @@ pub(crate) struct Provider {
 }
 #[derive(Clone)]
 pub(crate) struct Reference {
+    /// Collection references share a complete membership epoch, separate from single selection.
+    pub collection: Option<Arc<AtomicBool>>,
     pub provider: Provider,
     pub contract: String,
     pub dependency: Dependency,
@@ -171,6 +174,7 @@ pub(crate) struct Preferences {
 
 #[derive(Default)]
 pub(crate) struct Broker {
+    collections: BTreeMap<(String, String), collections::CollectionState>,
     providers: BTreeMap<String, Provider>,
     queue: VecDeque<Call>,
     /// These slots also count toward the existing 256-call queue and Manager's shared 64 activation waits.
@@ -230,6 +234,7 @@ impl Broker {
                 )
             })?;
         let dependency = Dependency {
+            collection: false,
             version: semver::VersionReq::parse("^1").unwrap(),
             optional: false,
             methods: provider.contracts[&id].methods.clone(),
@@ -242,6 +247,7 @@ impl Broker {
         call: Call,
         result: Result<Value, Failure>,
     ) -> Result<(), Failure> {
+        self.validate_call(&call)?;
         if !self.context_alive(&call.context) || call.completion.status().is_terminal() {
             return Err(Failure::new(
                 ErrorCode::InvalidHandle,

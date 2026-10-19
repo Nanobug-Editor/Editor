@@ -799,6 +799,7 @@ impl Manager {
         for service in self
             .language_services
             .values()
+            .filter(|prepared| prepared.owns_service)
             .filter_map(|prepared| prepared.service.as_ref().ok())
         {
             service.poll_requests();
@@ -806,6 +807,7 @@ impl Manager {
         self.advance_terminal_exits();
         self.native_executions.poll(&self.plugin_services);
         self.route_services();
+        self.poll_delegated_languages();
         self.poll_parked();
         // Host sessions end when their pinned provider incarnation is gone, without replaying work.
         let present = self
@@ -896,6 +898,7 @@ mod icon_tests {
                 structure_providers: Default::default(),
                 direct_language_providers: Default::default(),
                 services: Default::default(),
+                module_exports: Default::default(),
                 settings: Default::default(),
                 settings_hook: false,
                 id: "example".into(),
@@ -976,6 +979,7 @@ mod scope_tests {
             structure_providers: Default::default(),
             direct_language_providers: Default::default(),
             services: Default::default(),
+            module_exports: Default::default(),
             settings: Default::default(),
             settings_hook: false,
             id: "example".into(),

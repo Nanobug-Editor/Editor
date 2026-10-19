@@ -1,0 +1,6 @@
+{
+  "id":"native-consumers-fixture","name":"Native consumer lifecycle fixture","version":"0.1.2","protocol":7,
+  "api":{"base":"^1","required":{"plugin.services":"^1.1","language.control":"^1","language.modules":"^1","language.lsp":"^1.5","process":"^1"}},
+  "component":"plugin.wasm","storage_limit":1024,"permissions":[],
+  "plugin_services":{},"language_servers":[]
+}

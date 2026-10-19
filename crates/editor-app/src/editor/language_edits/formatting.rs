@@ -181,11 +181,32 @@ impl EditorApp {
             Ok(guard) => guard,
             Err(_) => return,
         };
+        let context_document = self
+            .extensions
+            .read(cx)
+            .language_provider_has_contexts(&reservation.key)
+            .then(
+                || plugin_runtime::plugin_protocol::language::DocumentContext {
+                    path: source.document.path.clone(),
+                    generation: reservation.availability.configuration_generation(),
+                },
+            );
+        if let Some(document) = &context_document {
+            self.retain_auxiliary_language_context(&reservation.key, document, cx);
+        }
         let mut wait = match self.extensions.read(cx).demand_entry(
             reservation.availability.clone(),
-            plugin_runtime::DemandReason::Language {
-                provider: reservation.key.clone(),
-                role: LanguageRole::Formatter,
+            if let Some(document) = &context_document {
+                plugin_runtime::DemandReason::LanguageDocument {
+                    provider: reservation.key.clone(),
+                    role: LanguageRole::Formatter,
+                    document: document.clone(),
+                }
+            } else {
+                plugin_runtime::DemandReason::Language {
+                    provider: reservation.key.clone(),
+                    role: LanguageRole::Formatter,
+                }
             },
             Some(guard.clone()),
         ) {
@@ -224,6 +245,14 @@ impl EditorApp {
                         return Err(());
                     }
                     app.sync_dynamic_language_servers(cx);
+                    if let Some(document) = &context_document {
+                        return Ok(app
+                            .extensions
+                            .read(cx)
+                            .language_document_service(&reservation.key, document)
+                            .and_then(Result::ok)
+                            .and_then(|plan| app.acquire_language_context_server(plan)));
+                    }
                     Ok(app
                         .language_edits
                         .formatters

@@ -5,9 +5,13 @@ use super::{
 };
 use crate::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
+mod contexts;
+mod control_lifetime;
+mod definition_offsets;
 mod formatting;
 mod language_features;
 mod linked;
+mod module_imports;
 mod persisted;
 mod queue;
 mod semantic;

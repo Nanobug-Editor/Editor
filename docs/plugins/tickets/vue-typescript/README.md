@@ -1,10 +1,31 @@
-# Vue 与 TypeScript 实施工单草案
+# Vue 与 TypeScript 实施工单
+
+> **2026-10-19 当前执行范围：仅恢复新工单 [#121 / S1](scenarios/01-real-projects.md)。#122–#126 继续暂停；旧 #108–#118 只作历史记录，不执行、不改写、不关闭。** 本轮状态、基线与未验证项见[恢复记录](../../verification/vue-typescript-s1-resume-2026-10-19.md)。
+>
+> 下方保留 2026-10-15 原索引及进度；其“连续实施”“可准备独立实现”和暂停阶段均是当时状态，不能覆盖上述本轮范围。六场景正文及 publication 映射原样保留，验收要求没有删减。
+
+## 2026-10-15 保存的历史索引
 
 日期：2026-10-15。
 
-状态：拆分待确认，尚未发布 GitHub issue。实施依据为[已确认方案](../../specs/vue-multi-backend.md)。用户已要求开始实施；当前已启动工具层协作验证，完整 P0 与正式实现尚未验收。工单草案不使用既有议题编号，不继承其他任务的完成状态。
+当前执行状态：用户已批准[剩余工作六场景方案](replan-proposal.md)，正式场景工单 #121–#126 已发布，父子与原生阻塞关系已读回核对，见[场景 publication 映射](scenarios/publication.json)。22:51 按最新指令暂停所有工单，原代码、候选包、测试与失败证据均保留，见[最新暂停检查点](../../verification/vue-typescript-paused-2026-10-15-2251.md)。恢复时只执行新 #121–#126；旧 #108–#118 保留历史进度，不再推进或关闭。
 
-以下按可观察的端到端行为拆分；不是按照协议、运行时、界面分别开水平工单。每张都包含所需公开契约、运行时/插件接入和相应行为验证。共享宿主改动较多，先按依赖顺序实施；本表不授权额外实施代理。
+## 剩余场景执行入口
+
+| 场景 | 正式工单 | 必要阻塞 | 当前状态 |
+| --- | --- | --- | --- |
+| S1 | [安装真实插件并打开混合项目](scenarios/01-real-projects.md)（[#121](https://github.com/Nanobug-Editor/Editor/issues/121)） | 无 | 暂停；定向验证未完成 |
+| S2 | [在混合项目中编辑、补全和跨文件重构](scenarios/02-edit-and-refactor.md)（[#122](https://github.com/Nanobug-Editor/Editor/issues/122)） | #121 | 暂停；定向验证与依赖验收未完成 |
+| S3 | [使用首批 Vue 写法、SFC 高亮和块格式化](scenarios/03-sfc-language.md)（[#123](https://github.com/Nanobug-Editor/Editor/issues/123)） | #121 | 暂停；定向验证与依赖验收未完成 |
+| S4 | [安装专门生态插件参与 Vue 分析](scenarios/04-ecosystem.md)（[#124](https://github.com/Nanobug-Editor/Editor/issues/124)） | #121 | 暂停；实际包联验未完成 |
+| S5 | [在离线、更新或后端故障后恢复使用](scenarios/05-recovery.md)（[#125](https://github.com/Nanobug-Editor/Editor/issues/125)） | #121 | 暂停；实际组合恢复未完成 |
+| S6 | [完成跨插件联合验收与可审核交付](scenarios/06-joint-delivery.md)（[#126](https://github.com/Nanobug-Editor/Editor/issues/126)） | #122、#123、#124、#125 | 暂停；待依赖验收 |
+
+以下旧工单仅保留原编号与历史证据，后续不再执行或关闭；剩余工作由新 #121–#126 承接，映射仅供追溯。已验证、已写未验证与尚未实现的证据不混用。
+
+状态：已发布父议题 [#107](https://github.com/Nanobug-Editor/Editor/issues/107) 与实施议题 #108–#118，并写入 [publication 映射](publication.json)，原生阻塞关系已建立。实施依据为[已确认方案](../../specs/vue-multi-backend.md)。用户已授权自主选择实施顺序、并行和子代理；正式插件、宿主与原生联合验收仍在进行，不继承其他任务的完成状态。
+
+每张工单以可观察行为验收，包含公开契约、运行时/插件接入与回归。当前按 S1–S6 推进剩余场景，依赖未验收时允许准备独立实现，但不提前关闭下游工单。
 
 | 序号 | 工单 | 阻塞项 | 端到端交付 |
 | --- | --- | --- | --- |
@@ -22,4 +43,4 @@
 
 工具层初步证据见[2026-10-15 P0 记录](../../verification/vue-typescript-p0-2026-10-15.md)。该记录中的直接 tsserver 结果不代替正式插件或宿主验收；组件属性差异、历史工具写入生成类型文件等问题必须在对应工单处理。
 
-确认拆分后，按[议题工作流](../../../agents/issue-tracker.md)核对跟踪器和重复议题，发布真实 issue 并维护原生阻塞关系；届时再写入 publication 映射。未经实际推送、验收与状态读回，不标记工单完成。发布版本另需显式授权。
+按[议题工作流](../../../agents/issue-tracker.md)执行测试、两轴审查、普通提交、推送及对应议题状态读回。未经实际推送与验收，不标记工单完成。父设计议题保持开放；版本发布未获授权。

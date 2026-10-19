@@ -1,0 +1,16 @@
+[package]
+name = "language-delegate-fixture"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+
+# This fixture consumes only the independently exported host SDK.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1"

@@ -1,0 +1,15 @@
+[package]
+name = "project-context-fixture"
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+
+# A real external SDK consumer; the host injects its approved cached SDK at build time.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }

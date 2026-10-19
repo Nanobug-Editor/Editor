@@ -20,10 +20,8 @@ impl EditorApp {
         let Some(index) = self.active_text_tab_index() else {
             return;
         };
-        let language = self.language_for_path(self.tabs[index].path());
         let Some(server) = self
-            .language_servers
-            .get(&language)
+            .language_server_for_path(self.tabs[index].path())
             .filter(|server| server.provides_editing())
             .cloned()
         else {
@@ -46,6 +44,17 @@ impl EditorApp {
         let captured_lease = lease.clone();
         let active = server.clone();
         let snapshot = source.clone();
+        // The original source and every provider-selected dirty dependency must remain current
+        // before the rename prompt can offer a semantic target from this analysis round.
+        let context = match self.capture_language_context(&server, &document, &source, cx) {
+            Ok(context) => context,
+            Err(error) => {
+                self.status = t!("editor.editing_failed", error = error.message).to_string();
+                cx.notify();
+                return;
+            }
+        };
+        let response_context = context.clone();
         self.language_edits.cancel_rename();
         self.language_edits.rename_pending = true;
         let request = self.language_edits.rename_request;
@@ -54,9 +63,11 @@ impl EditorApp {
                 .background_executor()
                 .scheduler_executor()
                 .spawn_dedicated(move |_| async move {
-                    server
-                        .prepare_rename_for(lease, snapshot, position)
-                        .map(|response| response)
+                    let operation = || server.prepare_rename_for(lease, snapshot, position);
+                    match &context {
+                        Some(context) => server.with_context_snapshot(context, operation),
+                        None => operation(),
+                    }
                 })
                 .await;
             let _ = this.update_in(cx, |app, window, cx| {
@@ -72,9 +83,11 @@ impl EditorApp {
                     || app.editor.read(cx).cursor() != cursor
                     || !active.is_active()
                     || !app
-                        .language_servers
-                        .get(&language)
+                        .language_server_for_path(&app.workspace.root().join(&document.path))
                         .is_some_and(|current| Arc::ptr_eq(current, &active))
+                    || response_context
+                        .as_ref()
+                        .is_some_and(|context| !app.language_context_is_current(context, cx))
                 {
                     return;
                 }
@@ -131,12 +144,10 @@ impl EditorApp {
         let Some(index) = self.active_text_tab_index() else {
             return;
         };
-        let language = self.language_for_path(self.tabs[index].path());
         if self.plugin_document_version(index).ok().as_ref() != Some(&form.document)
             || !form.lease.is_active()
             || !self
-                .language_servers
-                .get(&language)
+                .language_server_for_path(self.tabs[index].path())
                 .is_some_and(|current| Arc::ptr_eq(current, &form.server))
         {
             return;
@@ -144,6 +155,19 @@ impl EditorApp {
         let lease = form.lease.clone();
         let active = form.server.clone();
         let snapshot = form.source.clone();
+        // Confirmation takes a fresh immutable round; waiting in the name input does not retain
+        // permission to apply results computed from an earlier project graph.
+        let context = match self.capture_language_context(&active, &form.document, &form.source, cx)
+        {
+            Ok(context) => context,
+            Err(error) => {
+                self.status = t!("editor.editing_failed", error = error.message).to_string();
+                cx.notify();
+                return;
+            }
+        };
+        let response_context = context.clone();
+        let server = form.server.clone();
         self.language_edits.rename_request = self.language_edits.rename_request.wrapping_add(1);
         self.language_edits.rename_pending = true;
         let request = self.language_edits.rename_request;
@@ -154,8 +178,11 @@ impl EditorApp {
                 .background_executor()
                 .scheduler_executor()
                 .spawn_dedicated(move |_| async move {
-                    form.server
-                        .rename_for(lease, snapshot, form.position, new_name)
+                    let operation = || server.rename_for(lease, snapshot, form.position, new_name);
+                    match &context {
+                        Some(context) => server.with_context_snapshot(context, operation),
+                        None => operation(),
+                    }
                 })
                 .await;
             let _ = this.update_in(cx, |app, window, cx| {
@@ -164,9 +191,11 @@ impl EditorApp {
                 }
                 app.language_edits.rename_pending = false;
                 if !app
-                    .language_servers
-                    .get(&language)
+                    .language_server_for_path(&app.workspace.root().join(&form.document.path))
                     .is_some_and(|current| Arc::ptr_eq(current, &active))
+                    || response_context
+                        .as_ref()
+                        .is_some_and(|context| !app.language_context_is_current(context, cx))
                 {
                     return;
                 }

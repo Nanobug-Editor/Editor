@@ -2,6 +2,8 @@
 use plugin_runtime::plugin_protocol::settings::Scope;
 use plugin_schema::{Highlighter, LanguageDefinition};
 mod associations;
+#[cfg(test)]
+mod context_tests;
 mod editing;
 #[cfg(test)]
 mod fixtures;

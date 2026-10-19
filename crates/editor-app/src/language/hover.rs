@@ -1,9 +1,11 @@
 //! Connects the editor's hover popover to a plugin language server.
 
-use super::navigation::{DocumentLease, LanguageServer, file_uri, position_at_byte};
+use super::navigation::{
+    ContextCapture, DocumentLease, LanguageServer, file_uri, position_at_byte,
+};
 use anyhow::Result;
 use gpui_base::input::{HoverProvider, Rope};
-use gpui_kit::gpui::{App, Task, Window};
+use gpui_kit::gpui::{App, EntityId, Task, WeakEntity, Window};
 use lsp_types::{Hover, HoverContents, MarkedString, MarkupContent, MarkupKind, Uri};
 use std::{
     fs,
@@ -13,7 +15,14 @@ use std::{
 };
 
 /// Shares an in-flight hover result even when the editor cancels a mouse-move waiter.
-type SharedHoverResult = Arc<Mutex<Option<std::result::Result<Option<Hover>, String>>>>;
+type SharedHoverResult = Arc<
+    Mutex<
+        Option<(
+            std::result::Result<Option<Hover>, String>,
+            Option<ContextCapture>,
+        )>,
+    >,
+>;
 
 /// Keeps the latest document and symbol as the only reusable hover request.
 #[derive(Default)]
@@ -35,6 +44,8 @@ pub struct LanguageHoverProvider {
     server: Arc<LanguageServer>,
     document: DocumentLease,
     cache: Arc<Mutex<HoverCache>>,
+    /// Native input identity resolves dirty project candidates after the current input callback.
+    owner: Option<(WeakEntity<crate::EditorApp>, EntityId)>,
 }
 
 impl LanguageHoverProvider {
@@ -44,7 +55,19 @@ impl LanguageHoverProvider {
             document: server.open_document(file_uri(path)?),
             server,
             cache: Arc::new(Mutex::new(HoverCache::default())),
+            owner: None,
         })
+    }
+    /// Bind hover cache reuse to the complete native related-source vector, not only the symbol text.
+    pub(crate) fn for_editor(
+        path: &Path,
+        server: Arc<LanguageServer>,
+        app: WeakEntity<crate::EditorApp>,
+        editor: EntityId,
+    ) -> Option<Self> {
+        let mut provider = Self::new(path, server)?;
+        provider.owner = Some((app, editor));
+        Some(provider)
     }
 }
 
@@ -77,6 +100,12 @@ impl HoverProvider for LanguageHoverProvider {
                 && current.source == source
                 && current.symbol_start == symbol_start
                 && current.symbol_end == symbol_end
+                && current
+                    .result
+                    .lock()
+                    .expect("hover result lock poisoned")
+                    .as_ref()
+                    .is_none_or(|(_, context)| hover_context_current(&self.owner, context, cx))
             {
                 (current.result.clone(), cache.generation, false)
             } else {
@@ -98,25 +127,61 @@ impl HoverProvider for LanguageHoverProvider {
             let document = self.document.clone();
             let cache = self.cache.clone();
             let result_for_worker = shared_result.clone();
+            let owner = self.owner.clone();
             // This task outlives individual mouse-move waiters, which GPUI replaces on movement.
             cx.spawn(async move |cx| {
                 let is_current =
                     cache.lock().expect("hover cache lock poisoned").generation == generation;
-                let result = if is_current {
-                    cx.background_executor()
-                        .scheduler_executor()
-                        .spawn_dedicated(move |_| async move {
-                            fetch_hover(server, document, source, position, symbol_range)
-                        })
-                        .await
+                let context = if let Some((app, editor)) = &owner {
+                    cx.update(|cx| {
+                        app.upgrade()
+                            .ok_or_else(|| anyhow::anyhow!("Hover window closed"))?
+                            .read(cx)
+                            .capture_editor_language_context(&server, *editor, &source, cx)
+                    })
                 } else {
                     Ok(None)
                 };
+                let response_context = context.as_ref().ok().cloned().flatten();
+                let mut result = if is_current {
+                    match context {
+                        Ok(context) => {
+                            cx.background_executor()
+                                .scheduler_executor()
+                                .spawn_dedicated(move |_| async move {
+                                    let operation = || {
+                                        fetch_hover(
+                                            server.clone(),
+                                            document,
+                                            source,
+                                            position,
+                                            symbol_range,
+                                        )
+                                    };
+                                    match &context {
+                                        Some(context) => {
+                                            server.with_context_snapshot(context, operation)
+                                        }
+                                        None => operation(),
+                                    }
+                                })
+                                .await
+                        }
+                        Err(error) => Err(error),
+                    }
+                } else {
+                    Ok(None)
+                };
+                if result.is_ok()
+                    && !cx.update(|cx| hover_context_current(&owner, &response_context, cx))
+                {
+                    result = Err(anyhow::anyhow!("Hover project context changed"));
+                }
                 let result = result.map_err(|error| error.to_string());
                 let retry_on_next_hover = !matches!(result, Ok(Some(_)));
                 *result_for_worker
                     .lock()
-                    .expect("hover result lock poisoned") = Some(result);
+                    .expect("hover result lock poisoned") = Some((result, response_context));
                 if retry_on_next_hover {
                     // Empty or failed responses must not be cached while the server is starting.
                     let mut cache = cache.lock().expect("hover cache lock poisoned");
@@ -130,17 +195,20 @@ impl HoverProvider for LanguageHoverProvider {
 
         let document = self.document.clone();
         let server = self.server.clone();
+        let owner = self.owner.clone();
         cx.spawn(async move |cx| {
             // Presentation timing belongs to the pointer caller; keyboard requests
             // can consume cached or completed documentation without a hover delay.
             loop {
-                if let Some(result) = shared_result
+                if let Some((result, context)) = shared_result
                     .lock()
                     .expect("hover result lock poisoned")
                     .clone()
                 {
                     anyhow::ensure!(
-                        document.is_active() && server.is_active(),
+                        document.is_active()
+                            && server.is_active()
+                            && cx.update(|cx| hover_context_current(&owner, &context, cx)),
                         "LSP document owner has been retired"
                     );
                     return result.map_err(anyhow::Error::msg);
@@ -152,6 +220,20 @@ impl HoverProvider for LanguageHoverProvider {
             }
         })
     }
+}
+
+/// Positive cache entries retain all participating revisions; another file's edit expires them.
+fn hover_context_current(
+    owner: &Option<(WeakEntity<crate::EditorApp>, EntityId)>,
+    context: &Option<ContextCapture>,
+    cx: &App,
+) -> bool {
+    context.as_ref().is_none_or(|context| {
+        owner.as_ref().is_some_and(|(app, _)| {
+            app.upgrade()
+                .is_some_and(|app| app.read(cx).language_context_is_current(context, cx))
+        })
+    })
 }
 
 /// Fetch documentation and a bounded definition excerpt for one stable symbol position.

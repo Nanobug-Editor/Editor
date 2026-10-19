@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [Vue/TypeScript S1 正式基线复验](verification/vue-typescript-s1-delivery-2026-10-19.md)：2026-10-19 仅执行新工单 #121；正式基线上的门禁、真实插件与相关原生交互复验均通过，正在完成提交推送。此前过程见[恢复记录](verification/vue-typescript-s1-resume-2026-10-19.md)；#122–#126 暂停，旧 #108–#118 只作历史。
+
 - [Git 面板间距与文件图标](verification/git-panel-polish-2026-10-19.md)：独立 0.1.16 调整外层留白及预览内边距，配套宿主复用资源管理器文件图标并隐藏空菜单按钮；实际包原生回归、产物身份及既有格式检查例外见记录。
 
 - [Git 分支树保留与菜单状态更新](verification/git-branch-retention-2026-10-19.md)：独立 0.1.15 使用公开 `ui.tree 1.2` 缓存更新；分支筛选和面板显隐保留已加载页、选择及滚动，真实 ref 变化继续刷新。配套宿主、实际包／原生回归及规定检查通过，产物身份见记录。
@@ -34,7 +36,7 @@
 
 - [Git 加载与工作窗口超时回归](verification/git-loading-window-timeout-2026-10-18.md)：2026-10-18 新反馈独立记录；已修复过期树分页残留 loading，Package/Manager、两种无插桩原生恢复、正常仓库完整流程及工作区检查通过，本地修复版已生成。容器目录与实际仓库入口、原工作区两处格式偏差及尚未独立复现的整窗卡死边界见记录。
 
-- [Vue 多版本插件与 TypeScript 协作方案](specs/vue-multi-backend.md)、[11 张工单草案](tickets/vue-typescript/README.md)、[工具层协作初步验证](verification/vue-typescript-p0-2026-10-15.md)：已要求开始实施，Vue 2.6/2.7/3 真实工具探针的 24 项断言通过；正式切片待拆分确认，完整 P0、独立插件、宿主集成和原生验收尚未完成。
+- [Vue 多版本插件与 TypeScript 协作方案](specs/vue-multi-backend.md)、[已批准的六场景与当前执行范围](tickets/vue-typescript/README.md)、[历史工具层探针](verification/vue-typescript-p0-2026-10-15.md)：正式新工单为 #121–#126；本轮只实施 #121。原 11 张工单和 2026-10-15 暂停、测试记录保留追溯，不继承为当前源码或候选包的通过证据。
 - [Git 插件范围与原型方案](specs/git-plugin.md)、[实施验证记录](verification/git-plugin-2026-10-15.md)、[历史暂停现场](verification/git-plugin-paused-2026-10-16.md)、[场景工单与最终进度](tickets/git-plugin-remaining/README.md)：#119、#120 均已验收、普通推送并读回 closed／completed，100%。独立 0.1.7／52 项源码，访客 101/101、实际业务 43＋修正夹具 1、五窗口 5/5、正式原生完整流程／八组合、54 图核验及规定宿主检查有据，最终双轴无未解决项。原全量旧夹具失败按真实身份保留。Git 由宿主外独立项目和显式 ZIP 交付，不随宿主内置或自动恢复；系统 IME 候选弹窗仍未验证。
 - [独立插件市场规格与工单](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
 - [插件管理器共用布局](specs/plugin-manager-shared-layout.md)、[2026-10-13 验收记录](verification/plugin-manager-shared-layout-2026-10-13.md)：已安装与市场共用窗口框架，搜索框内置左侧筛选，详情按数据分区；浏览版本与实际安装实例的操作目标分别明确。实现与测试记录不继承市场服务工单的交付状态。

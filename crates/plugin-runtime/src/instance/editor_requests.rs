@@ -94,6 +94,10 @@ impl State {
             ));
         }
         let (capability, permission) = match &operation {
+            EditorOperation::LanguageRequest { request } => {
+                let _ = request; // Detailed schema/import admission follows shared permission checks.
+                ("language.control", "editor.read")
+            }
             EditorOperation::Diagnostics { publication } => {
                 self.diagnostic_collection(publication)?;
                 if !self.permissions.contains("editor.read") {
@@ -317,6 +321,11 @@ impl State {
                 "Editor request queue is full",
             ));
         }
+        let language_control = if let EditorOperation::LanguageRequest { request } = &operation {
+            Some(self.prepare_language_control(request)?)
+        } else {
+            None
+        };
         let workspace_request = if let EditorOperation::Workspace { operation } = &operation {
             Some(self.prepare_workspace_request(operation)?)
         } else {
@@ -345,6 +354,9 @@ impl State {
         if let Some(input) = image_input {
             self.mark_image_input_pending(&input.input.handle, handle.clone());
             call = call.with_image_input(input);
+        }
+        if let Some(metadata) = language_control {
+            call = call.with_language_control(metadata);
         }
         if let Some(resource) = virtual_document {
             call = call.with_virtual_document(resource);

@@ -68,6 +68,7 @@ fn native_problems_group_files_and_refresh_inactive_diagnostics(cx: &mut TestApp
                     .with_source("checker-a")
                     .with_severity(DiagnosticSeverity::Error),
                 ],
+                None,
                 cx,
             );
             app.apply_semantic_diagnostics(
@@ -80,6 +81,7 @@ fn native_problems_group_files_and_refresh_inactive_diagnostics(cx: &mut TestApp
                     .with_source("checker-b")
                     .with_severity(DiagnosticSeverity::Warning),
                 ],
+                None,
                 cx,
             );
             app.activate_tab(0, window, cx);
@@ -128,7 +130,7 @@ fn native_problems_group_files_and_refresh_inactive_diagnostics(cx: &mut TestApp
     visual.update(|window, cx| {
         app.update(cx, |app, cx| {
             let first = app.tabs[0].text.as_ref().unwrap().editor.entity_id();
-            app.apply_semantic_diagnostics(first, Vec::new(), cx);
+            app.apply_semantic_diagnostics(first, Vec::new(), None, cx);
             app.activate_tab(0, window, cx);
         })
     });
@@ -169,6 +171,7 @@ fn native_problems_keyboard_scroll_and_clear(cx: &mut TestAppContext) {
                         .with_severity(DiagnosticSeverity::Warning)
                     })
                     .collect(),
+                None,
                 cx,
             );
             app.show_problems(window, cx);
@@ -189,7 +192,7 @@ fn native_problems_keyboard_scroll_and_clear(cx: &mut TestAppContext) {
     visual.update(|_, cx| {
         app.update(cx, |app, cx| {
             let editor = app.tabs[0].text.as_ref().unwrap().editor.entity_id();
-            app.apply_semantic_diagnostics(editor, Vec::new(), cx);
+            app.apply_semantic_diagnostics(editor, Vec::new(), None, cx);
         })
     });
     draw(visual);
@@ -219,6 +222,7 @@ fn native_problems_disclosure_and_hidden_row_navigation(cx: &mut TestAppContext)
                         )
                         .with_severity(DiagnosticSeverity::Error),
                     ],
+                    None,
                     cx,
                 );
             }
@@ -258,7 +262,7 @@ fn native_problems_disclosure_and_hidden_row_navigation(cx: &mut TestAppContext)
     visual.update(|_, cx| {
         app.update(cx, |app, cx| {
             let editor = app.tabs[0].text.as_ref().unwrap().editor.entity_id();
-            app.apply_semantic_diagnostics(editor, Vec::new(), cx);
+            app.apply_semantic_diagnostics(editor, Vec::new(), None, cx);
         })
     });
     draw(visual);
@@ -275,6 +279,7 @@ fn native_problems_disclosure_and_hidden_row_navigation(cx: &mut TestAppContext)
                     )
                     .with_severity(DiagnosticSeverity::Error),
                 ],
+                None,
                 cx,
             );
             app.show_problems(window, cx);
@@ -345,7 +350,7 @@ fn check_all_collapsed_navigation(
     visual.update(|_, cx| {
         app.update(cx, |app, cx| {
             let editor = app.tabs[1].text.as_ref().unwrap().editor.entity_id();
-            app.apply_semantic_diagnostics(editor, Vec::new(), cx);
+            app.apply_semantic_diagnostics(editor, Vec::new(), None, cx);
         })
     });
     draw(visual);
@@ -383,6 +388,7 @@ fn native_problems_nonzero_status_counts(cx: &mut TestAppContext) {
                                 .with_severity(severity)
                         })
                         .collect(),
+                    None,
                     cx,
                 );
             })

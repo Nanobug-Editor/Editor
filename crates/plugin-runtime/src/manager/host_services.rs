@@ -720,6 +720,7 @@ pub(crate) fn dependency_from_declaration(
         return Err(Failure::new(ErrorCode::OperationFailed, incomplete));
     }
     Ok(Dependency {
+        collection: false,
         version: version
             .parse()
             .expect("the host's own version requirement is valid"),
@@ -778,6 +779,7 @@ pub(crate) fn execution_dependency() -> Result<Dependency, Failure> {
         ));
     }
     Ok(Dependency {
+        collection: false,
         // A newer provider may add methods, but these two must keep their exact shape.
         version: "^2"
             .parse()
@@ -883,6 +885,7 @@ pub(crate) fn session_provider(
         contracts: [(
             SESSION_CONTRACT.to_owned(),
             Contract {
+                collection: false,
                 preparation: Default::default(),
                 enabled_setting: None,
                 platforms: Vec::new(),
@@ -940,6 +943,7 @@ pub(crate) fn session_dependency() -> Result<Dependency, Failure> {
         .cloned()
         .ok_or_else(|| Failure::new(ErrorCode::UnsupportedOperation, "Unknown session contract"))?;
     Ok(Dependency {
+        collection: false,
         version: SESSION_CONTRACT_VERSION
             .parse()
             .expect("session contract version is valid"),

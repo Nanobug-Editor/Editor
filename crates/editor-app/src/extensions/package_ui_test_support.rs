@@ -41,12 +41,15 @@ pub(crate) fn demand(
 /// Publish only real, prepared role leases. A first role birth updates the catalog, not availability.
 pub(super) fn publish_catalog(state: &mut worker::Published, manager: &mut Manager) {
     let language = manager.language_services();
+    let bindings = manager.language_document_bindings();
     let direct = manager.direct_language_providers();
     let structure = manager.structure_providers();
     let changed = catalog_changed(&state.language_services, &language)
         || catalog_changed(&state.direct_language_providers, &direct)
-        || catalog_changed(&state.structure_providers, &structure);
+        || catalog_changed(&state.structure_providers, &structure)
+        || state.language_document_bindings != bindings;
     state.language_services = language;
+    state.language_document_bindings = bindings;
     state.direct_language_providers = direct;
     state.structure_providers = structure;
     if changed {
@@ -121,6 +124,14 @@ pub(super) fn pump(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App)
         .collect::<Vec<_>>();
     for work in work {
         let work = match work {
+            Work::ReleaseLanguageDocument {
+                workspace,
+                provider,
+                document,
+            } => {
+                manager.release_language_document_in_workspace(&workspace, &provider, &document);
+                continue;
+            }
             work @ (Work::Demand { .. } | Work::Invoke { .. }) => {
                 demands.dispatch(work, manager, &worker.state, trusted);
                 continue;
@@ -128,6 +139,14 @@ pub(super) fn pump(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App)
             work => work,
         };
         let work = match work {
+            Work::LanguageFix {
+                origin,
+                document,
+                fix,
+            } => {
+                manager.submit_language_fix(&origin, document, fix).unwrap();
+                continue;
+            }
             Work::ImportPreference {
                 plugin,
                 owner,
@@ -211,6 +230,7 @@ pub(super) fn pump(app: &Entity<EditorApp>, manager: &mut Manager, cx: &mut App)
         let mut state = owner.worker.state.lock().unwrap();
         // Publish recovered ownership/readiness through the same Manager projection as the real actor.
         state.publish_manager(manager);
+        state.editor_requests.extend(manager.take_editor_requests());
         publish_catalog(&mut state, manager);
         // Preserve the same approved resource join as the production worker's tree publication.
         state.trees = manager

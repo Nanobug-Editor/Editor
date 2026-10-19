@@ -142,8 +142,14 @@ impl LanguageServerConnection {
             uri.clone()
         };
         if self.snapshot_uris.is_some() || !self.diagnostics.is_open(uri.as_str()) {
+            let language_id = self
+                .documents
+                .get(uri.as_str())
+                .map_or(self.language_id.clone(), |document| {
+                    document.language_id.clone()
+                });
             self.notify("textDocument/didOpen", json!({
-                "textDocument":{"uri":wire,"languageId":self.language_id,"version":version,"text":source}
+                "textDocument":{"uri":wire,"languageId":language_id,"version":version,"text":source}
             }))?;
         } else {
             self.notify(

@@ -229,6 +229,8 @@ fn canvas(event: &CanvasEvent) -> serde_json::Value {
 /// Expose only the public result variant, never text, paths or clipboard contents.
 fn editor_value_kind(value: &api::EditorValue) -> &'static str {
     match value {
+        api::EditorValue::LanguageBinding { .. } => "language_binding",
+        api::EditorValue::Language(_) => "language",
         api::EditorValue::Workspace(_) => "workspace",
         api::EditorValue::Decorations { .. } => "decorations",
         api::EditorValue::DocumentOpened(_) => "document_opened",

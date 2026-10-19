@@ -12,6 +12,7 @@ mod documents;
 mod edits;
 mod images;
 mod interaction;
+mod language_control;
 mod navigation;
 mod viewport;
 
@@ -231,6 +232,10 @@ impl EditorApp {
             self.publish_plugin_diagnostics(request, cx);
             return;
         }
+        if matches!(request.operation(), Op::LanguageRequest { .. }) {
+            self.perform_language_control(request, cx);
+            return;
+        }
         if matches!(request.operation(), Op::SaveImageInput { .. }) {
             self.save_plugin_image(request, window, cx);
             return;
@@ -447,6 +452,7 @@ impl EditorApp {
             | Op::NavigateDocument { .. }
             | Op::LocateViewport { .. }
             | Op::Diagnostics { .. } => unreachable!(),
+            Op::LanguageRequest { .. } => unreachable!(),
         })();
         request.finish(result);
     }

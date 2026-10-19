@@ -12,6 +12,8 @@ mod marketplace;
 mod native_acceptance;
 #[cfg(all(test, windows))]
 mod native_close_tests;
+#[cfg(all(test, windows))]
+mod native_language_control_tests;
 mod preparation;
 #[cfg(test)]
 // The cross-feature native regression retains private actor seams without widening production APIs.
@@ -27,7 +29,13 @@ mod runner;
 mod shutdown_tests;
 pub(super) mod targets;
 #[cfg(test)]
+mod typescript_package_tests;
+#[cfg(test)]
 mod viewport_tests;
+#[cfg(test)]
+mod vue_test_support;
+#[cfg(test)]
+mod vue_typescript_tests;
 #[cfg(test)]
 mod worker_tests;
 use std::{
@@ -80,6 +88,12 @@ impl RunStatus {
 }
 
 pub enum Work {
+    /// Release the exact source intent without disturbing another document's analysis context.
+    ReleaseLanguageDocument {
+        workspace: String,
+        provider: String,
+        document: language::DocumentContext,
+    },
     /// User-selected language data goes back to the sealed original provider's ordinary plan admission.
     LanguageFix {
         origin: plugin_runtime::LanguageFixOrigin,
@@ -408,6 +422,8 @@ pub(super) struct Published {
     pub install_control: Option<plugin_runtime::InstallControl>,
     pub service_states: BTreeMap<String, String>,
     pub language_services: BTreeMap<String, Result<Arc<plugin_runtime::LanguageService>, String>>,
+    /// Original native document intents resolve to opaque actor-owned analysis slots.
+    pub language_document_bindings: BTreeMap<(String, language::DocumentContext), String>,
     /// Readonly structure workers publish independently of native language-service availability.
     pub structure_providers:
         BTreeMap<String, Result<Arc<plugin_runtime::StructureProvider>, String>>,

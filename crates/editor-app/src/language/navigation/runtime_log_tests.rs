@@ -97,6 +97,17 @@ fn installed_package(root: &Path, package: &Package) -> (Manager, LanguageServer
     manager
         .install(package, package.manifest.permissions.clone())
         .unwrap();
+    // Installation publishes a cold catalog. Request this selected role explicitly before
+    // reading its prepared plan; log/transport tests must not rely on eager global activation.
+    crate::extensions::demand_plugin_fixture(
+        &mut manager,
+        OWNER,
+        plugin_runtime::DemandReason::Language {
+            provider: SERVICE.into(),
+            role: plugin_runtime::LanguageRole::Lsp,
+        },
+    )
+    .unwrap();
     let service = manager.language_services()[SERVICE]
         .as_ref()
         .unwrap()

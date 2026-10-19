@@ -392,6 +392,7 @@ impl ExtensionPanel {
                             let explanation = match permission.as_str() {
                                 "assets.read" => t!("plugins.permission_assets"),
                                 "process.exec" => t!("plugins.permission_process"),
+                                "native.modules" => t!("plugins.permission_native_modules"),
                                 "dependencies.prepare" => {
                                     t!("plugins.permission_dependencies_prepare")
                                 }

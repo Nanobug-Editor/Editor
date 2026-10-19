@@ -70,8 +70,9 @@ impl EditorApp {
             .map(|path| self.language_for_path(path))
             .unwrap_or_default();
         let server = self
-            .language_servers
-            .get(&language)
+            .active_path
+            .as_deref()
+            .and_then(|path| self.language_server_for_path(path))
             .filter(|server| server.provides_editing())
             .cloned();
         if self.active_text_tab_index().is_none()
@@ -225,36 +226,54 @@ impl EditorApp {
         // The demand wait owns a different token and may be dropped now without cancelling format.
         let cancellation = plugin_runtime::RequestCancellation::default();
         self.language_edits.format_pending = Some(cancellation.clone());
-        let lease = server.open_document(uri);
+        let lease = server.open_document_for_language(uri, &reservation.language);
         let request = reservation.request;
-        let language = reservation.language.clone();
         let save = reservation.save;
         let document = source.document;
         let source = source.text;
         let active = server.clone();
         let snapshot = source.clone();
+        let context = match self.capture_language_context(&server, &document, &source, cx) {
+            Ok(context) => context.map(|context| context.with_cancellation(cancellation.clone())),
+            Err(error) => {
+                self.language_edits.format_pending.take();
+                self.status = error.to_string();
+                cx.notify();
+                return;
+            }
+        };
+        let response_context = context.clone();
         cx.spawn_in(window, async move |this, cx| {
             let result = cx
                 .background_executor()
                 .scheduler_executor()
-                .spawn_dedicated(
-                    move |_| async move { server.format_for(lease, snapshot, 4, true) },
-                )
+                .spawn_dedicated(move |_| async move {
+                    let operation = || server.format_for(lease, snapshot, 4, true);
+                    match &context {
+                        Some(context) => server.with_context_snapshot(context, operation),
+                        None => operation(),
+                    }
+                })
                 .await;
             let _ = this.update_in(cx, |app, window, cx| {
                 if cancellation.is_cancelled()
                     || app.language_edits.request != request
                     || !app.format_reservation_is_current(&reservation, cx)
+                    || response_context
+                        .as_ref()
+                        .is_some_and(|context| !app.language_context_is_current(context, cx))
                 {
+                    if app.language_edits.request == request {
+                        app.language_edits.format_pending.take();
+                    }
                     return;
                 }
                 app.language_edits.format_pending.take();
-                if !app
-                    .language_edits
-                    .formatters
-                    .get(&language)
-                    .is_some_and(|current| Arc::ptr_eq(current, &active))
-                {
+                if !app.language_formatter_is_current(
+                    &app.workspace.root().join(&document.path),
+                    &active,
+                    cx,
+                ) {
                     return;
                 }
                 match result.and_then(|edits| {
@@ -309,16 +328,10 @@ impl EditorApp {
             "{}",
             t!("editor.editing_stale")
         );
-        let language = self.language_for_path(self.tabs[index].path());
         anyhow::ensure!(
-            self.language_servers
-                .get(&language)
+            self.language_server_for_path(self.tabs[index].path())
                 .is_some_and(|current| Arc::ptr_eq(current, server))
-                || self
-                    .language_edits
-                    .formatters
-                    .get(&language)
-                    .is_some_and(|current| Arc::ptr_eq(current, server)),
+                || self.language_formatter_is_current(self.tabs[index].path(), server, cx),
             "{}",
             t!("editor.editing_stale")
         );

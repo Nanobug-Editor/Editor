@@ -47,6 +47,7 @@ impl Reference {
             });
         }
         Self {
+            collection: None,
             provider,
             contract,
             dependency,

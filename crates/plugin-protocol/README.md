@@ -16,5 +16,9 @@ HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 
 
 独立 SDK 只导出本 crate 的源码、Cargo 清单、WIT 与 JSON 协议资源，不内嵌或导出 Markdown。
 
+按文档发现和共享项目上下文使用 [language.lsp 1.5](src/language.rs)；[language.control 1.0](src/language_control.rs) 在同一受管连接上传输有界控制消息，并以宿主封印的原生文档身份及 revision 关联普通源同步。受管原生适配闭包使用 `language.modules 1.0` 与独立 `native.modules` 授权，模块不加载进宿主，也不具有 WASM 级别的相互隔离。只读项目成员分页形状见 [language_context](src/language_context.rs)；显式多提供者集合及其撤销语义见 [plugin.services 1.2](src/service.rs)。
+
+关联快照同时要求提供者和原始调用链具有 `workspace.read`，方法的较弱权限声明不能代替该授权。原生控制失败只有在匹配 JSON-RPC 响应携带严格的 `error.data={"version":1,"imports":"released"}` 回执时，才释放本次新增模块使用；已有成功使用及其他进行中的使用仍有效。回执表示没有仍存活的受管 worker 保留本次新增导入，不承诺代码从未执行或外部副作用已经回滚。普通错误、取消和超时无法证明释放，宿主继续保守保留可能已加载代码的授权。
+
 - [SDK 源码与使用注释](src/lib.rs)
 - [组件接口](wit/plugin.wit)

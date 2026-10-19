@@ -235,8 +235,9 @@ fn declarative_language_plan_needs_no_empty_wasm_and_retires_original_authority(
     assert!(authority.is_live());
     assert_eq!(
         original.capability("language.lsp").unwrap().to_string(),
-        "1.4.0"
+        "1.5.0"
     );
+    exercise_native_snapshot_guard(&mut manager, &original);
     let requests = exercise_native_request_ownership(&mut manager, &original);
     manager.disable("resource-language").unwrap();
     assert_eq!(manager.resource_count(), 0);
@@ -313,6 +314,57 @@ fn declarative_language_plan_needs_no_empty_wasm_and_retires_original_authority(
     assert!(published.status().is_terminal());
     assert!(!published.begin());
     assert!(!batch.is_live());
+    assert_eq!(manager.resource_count(), 0);
+}
+
+/// A graph/configuration result guard can revoke queued effects without retiring its healthy server.
+/// The same public native request and recovery resource must both observe the narrowed lifetime.
+fn exercise_native_snapshot_guard(
+    manager: &mut Manager,
+    service: &std::sync::Arc<plugin_runtime::LanguageService>,
+) {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let guard = Arc::new(AtomicBool::new(true));
+    let origin = LanguageFixOrigin::GuardedLsp {
+        service: service.clone(),
+        guard: guard.clone(),
+    };
+    let (document, fix) = native_proposal();
+    manager
+        .submit_language_fix(&origin, document.clone(), fix.clone())
+        .unwrap();
+    let request = manager.take_editor_requests().pop().unwrap().1;
+    let recovery = request
+        .workspace_request()
+        .unwrap()
+        .batch()
+        .unwrap()
+        .clone();
+    guard.store(false, Ordering::Release);
+    assert!(!origin.is_live());
+    assert!(request.status().is_terminal());
+    assert!(
+        !request.begin(),
+        "a stale snapshot cannot begin a queued effect"
+    );
+    assert!(!recovery.is_live());
+    assert_eq!(
+        manager
+            .submit_language_fix(&origin, document, fix)
+            .unwrap_err()
+            .code,
+        api::ErrorCode::InvalidHandle
+    );
+    assert!(
+        service.is_active(),
+        "result retirement preserves its native analyzer"
+    );
+    drop(recovery);
+    drop(request);
+    manager.poll();
     assert_eq!(manager.resource_count(), 0);
 }
 

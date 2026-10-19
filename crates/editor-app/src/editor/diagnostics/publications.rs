@@ -75,6 +75,7 @@ impl DocumentDiagnostics {
 impl EditorApp {
     /// Revoke native presentation after close, edits, instance replacement, release or trust change.
     pub(crate) fn prune_direct_diagnostics(&mut self, cx: &mut Context<Self>) {
+        self.prune_related_semantic_diagnostics(cx);
         let trusted = self.session_state.workspace_trusted;
         let mut changed = Vec::new();
         for index in 0..self.tabs.len() {

@@ -6,6 +6,7 @@ use std::sync::{
     mpsc,
 };
 mod background;
+mod deferred;
 mod driver;
 mod language_preparation;
 mod lease;
@@ -23,6 +24,8 @@ pub(super) struct State {
     next: u64,
     records: BTreeMap<(String, String), Record>,
     flights: BTreeMap<Availability, Flight>,
+    /// Renewed purposes wait outside the abandoned worker's shared authority and original budget.
+    deferred: BTreeMap<Availability, Vec<Waiter>>,
     completed: mpsc::Receiver<PreparedDemand>,
     sender: mpsc::Sender<PreparedDemand>,
     /// Continuous purposes are ordinary bounded waiters; the Manager retains their cancellation owners.
@@ -60,6 +63,7 @@ impl Default for State {
             next: 1,
             records: BTreeMap::new(),
             flights: BTreeMap::new(),
+            deferred: BTreeMap::new(),
             completed,
             sender,
             background: BTreeMap::new(),

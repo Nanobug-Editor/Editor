@@ -144,6 +144,7 @@ impl Manager {
     pub fn target_providers(&self) -> Vec<String> {
         let contract = targets::declaration();
         let dependency = Dependency {
+            collection: false,
             version: ">=1.0,<2".parse().unwrap(),
             optional: false,
             methods: contract.methods,
@@ -194,6 +195,7 @@ impl Manager {
     pub fn configuration_providers(&self) -> Vec<String> {
         let contract = plugin_protocol::configurations::declaration();
         let dependency = Dependency {
+            collection: false,
             version: ">=1.0,<2".parse().unwrap(),
             optional: false,
             methods: contract.methods,
@@ -252,6 +254,7 @@ impl Manager {
             "Unknown configuration method"
         );
         let dependency = Dependency {
+            collection: false,
             version: ">=1.0,<2".parse().unwrap(),
             optional: false,
             methods: contract.methods,

@@ -1,8 +1,8 @@
 //! Create an owned stdio transport and perform the standard LSP initialization handshake.
 use super::*;
 use plugin_runtime::plugin_protocol::language::{
-    SEMANTIC_LINKED_EDITING_CAPABILITY, SEMANTIC_LINKED_EDITING_VERSION,
-    SemanticLinkedEditingCapabilities,
+    CONTROL_CAPABILITY, CONTROL_VERSION, ControlCapabilities, SEMANTIC_LINKED_EDITING_CAPABILITY,
+    SEMANTIC_LINKED_EDITING_VERSION, SemanticLinkedEditingCapabilities,
 };
 impl LanguageServerConnection {
     /// Starts the plugin's server and completes the LSP handshake.
@@ -66,6 +66,14 @@ impl LanguageServerConnection {
         // from the negotiated runtime grant, never a plugin-supplied initialization override.
         let mut experimental = self.service.provider.client_experimental.clone();
         experimental.remove(SEMANTIC_LINKED_EDITING_CAPABILITY);
+        experimental.remove(CONTROL_CAPABILITY);
+        let control_authorized = self
+            .service
+            .capability("language.control")
+            .is_some_and(|version| version.major == 1);
+        if control_authorized {
+            experimental.insert(CONTROL_CAPABILITY.into(), json!(CONTROL_VERSION));
+        }
         let semantic_linked_authorized = self.service.provider.editing
             && self
                 .service
@@ -141,6 +149,29 @@ impl LanguageServerConnection {
             }
         }
         let initialized = self.request("initialize", parameters)?;
+        if !self.service.provider.control_methods.is_empty() {
+            // An advertised client version is only an offer. A provider relying on control must
+            // receive a strict server ACK covering every declared method before native sync/calls.
+            let marker = initialized["capabilities"]["experimental"][CONTROL_CAPABILITY].clone();
+            let supported = serde_json::from_value::<ControlCapabilities>(marker)
+                .ok()
+                .filter(|marker| marker.valid());
+            if !control_authorized
+                || supported.as_ref().is_none_or(|supported| {
+                    self.service
+                        .provider
+                        .control_methods
+                        .keys()
+                        .any(|method| !supported.methods.contains(method))
+                })
+            {
+                return Err(plugin_runtime::plugin_protocol::api::Failure::new(
+                    plugin_runtime::plugin_protocol::api::ErrorCode::CapabilityUnavailable,
+                    "Language server did not acknowledge the native control version and declared methods",
+                )
+                .into());
+            }
+        }
         // Only send optional save notifications when the server requests them.
         self.pull_diagnostics = initialized["capabilities"]["diagnosticProvider"].is_object()
             || initialized["capabilities"]["diagnosticProvider"] == Value::Bool(true);

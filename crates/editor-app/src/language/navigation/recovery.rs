@@ -127,7 +127,16 @@ impl LanguageServer {
                 "initialize/readiness",
                 || self.prepare_ready_once(),
             );
-            if result.is_ok() || !self.is_active() {
+            if result.is_ok()
+                || !self.is_active()
+                || result.as_ref().is_err_and(|error| {
+                    error
+                        .downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
+                        .is_some()
+                })
+            {
+                // Protocol/capability refusals are explicit outcomes. Reconnecting immediately
+                // cannot negotiate missing methods and must not consume three startup attempts.
                 return result;
             }
             let retry_at = {
@@ -155,14 +164,7 @@ impl LanguageServer {
             // tabs. Actual transport faults alone consume this connection's finite retry budget.
             if error
                 .downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
-                .is_some_and(|failure| {
-                    matches!(
-                        failure.code,
-                        plugin_runtime::plugin_protocol::api::ErrorCode::Cancelled
-                            | plugin_runtime::plugin_protocol::api::ErrorCode::StaleRevision
-                            | plugin_runtime::plugin_protocol::api::ErrorCode::UnsupportedOperation
-                    )
-                })
+                .is_some()
             {
                 return;
             }

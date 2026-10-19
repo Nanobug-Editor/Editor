@@ -63,17 +63,19 @@ impl Providers {
         for (owner, providers) in services {
             for provider in providers {
                 let key = format!("{owner}/{}", provider.id);
-                if provider.primary {
-                    next.language_servers
-                        .entry(provider.language.clone())
-                        .or_default()
-                        .push(key.clone());
-                }
-                if provider.formatting {
-                    next.formatters
-                        .entry(provider.language)
-                        .or_default()
-                        .push(key);
+                for language in std::iter::once(&provider.language).chain(&provider.languages) {
+                    if provider.primary {
+                        next.language_servers
+                            .entry(language.clone())
+                            .or_default()
+                            .push(key.clone());
+                    }
+                    if provider.formatting {
+                        next.formatters
+                            .entry(language.clone())
+                            .or_default()
+                            .push(key.clone());
+                    }
                 }
             }
         }

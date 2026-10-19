@@ -43,10 +43,23 @@ impl NativeDocumentRequests {
         plan: plugin_protocol::workspace::Plan,
         capabilities: &BTreeMap<String, semver::Version>,
         permissions: &BTreeSet<String>,
+        guard: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> Result<api::Value, Failure> {
         self.poll();
         self.check_plan(&plan, capabilities, permissions)?;
-        self.issue(plan)
+        // A native snapshot may retire after rendering but before this original request is issued.
+        // Bind its monotonic guard into the normal request/batch authority, without widening IO.
+        let authority = guard.map_or_else(
+            || self.authority.clone(),
+            |guard| self.authority.with_guard(guard),
+        );
+        if !authority.is_live() {
+            return Err(Failure::new(
+                ErrorCode::StaleRevision,
+                "Language analysis snapshot changed",
+            ));
+        }
+        self.issue(plan, authority)
     }
 
     /// Shared document admission precedes native-only scope and shape restrictions; none of
@@ -112,7 +125,11 @@ impl NativeDocumentRequests {
 
     /// Allocate both handles only after the complete proposal is admitted and capacity preflight
     /// guarantees the pair. The returned ordinary request owns preview and native group recovery.
-    fn issue(&mut self, plan: plugin_protocol::workspace::Plan) -> Result<api::Value, Failure> {
+    fn issue(
+        &mut self,
+        plan: plugin_protocol::workspace::Plan,
+        authority: EditorAuthority,
+    ) -> Result<api::Value, Failure> {
         if self.pending.len() >= 32 || self.batches.len() >= 8 || self.roots.len() >= 127 {
             return Err(Failure::new(
                 ErrorCode::LimitExceeded,
@@ -124,7 +141,7 @@ impl NativeDocumentRequests {
         };
         let batch = Arc::new(WorkspaceBatch::new(
             batch_handle.clone(),
-            self.authority.clone(),
+            authority.clone(),
             None,
             BTreeSet::from(["editor.read".into(), "editor.write".into()]),
         ));
@@ -139,7 +156,7 @@ impl NativeDocumentRequests {
             self.workspace.clone(),
             self.data.clone(),
             120_000,
-            self.authority.clone(),
+            authority,
         )
         .with_workspace_request(WorkspaceRequest {
             batch: Some(batch.clone()),

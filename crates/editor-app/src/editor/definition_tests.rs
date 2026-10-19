@@ -111,7 +111,14 @@ fn exercise_definition_click(
     cx.update(|_, cx| {
         view.update(cx, |app, cx| {
             let editor = app.editor.clone();
-            editor::attach_language_server(&editor, &path, server, cx.entity().downgrade(), cx);
+            editor::attach_language_server(
+                &editor,
+                &path,
+                "fixture",
+                server,
+                cx.entity().downgrade(),
+                cx,
+            );
             editor.update(cx, |state, _| {
                 state.lsp_mut().definition_provider = Some(Rc::new(ReadyDefinition {
                     location: LocationLink {

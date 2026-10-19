@@ -52,7 +52,7 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                     .api
                     .as_ref()
                     .is_some_and(|api| api.required.contains_key("language.lsp")
-                        && api.required.contains_key("process"))
+                        && (provider.delegate.is_some() || api.required.contains_key("process")))
                 && provider.valid()
                 && ids.insert(&provider.id),
             "Invalid LSP provider declaration"
@@ -61,6 +61,51 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
             !provider.hook || manifest.component.is_some(),
             "LSP hooks require WASM"
         );
+        if !provider.languages.is_empty()
+            || provider.delegate.is_some()
+            || provider.related_documents.is_some()
+        {
+            anyhow::ensure!(
+                manifest
+                    .api
+                    .as_ref()
+                    .and_then(|api| api.required.get("language.lsp"))
+                    .is_some_and(
+                        |requirement| requirement.matches(&semver::Version::new(1, 5, 0))
+                            && !requirement.matches(&semver::Version::new(1, 4, 0))
+                    ),
+                "Document contexts, aliases and delegation require language.lsp >=1.5"
+            );
+        }
+        if !provider.control_methods.is_empty() {
+            anyhow::ensure!(
+                manifest
+                    .api
+                    .as_ref()
+                    .is_some_and(|api| api.required.contains_key("language.control")),
+                "Native control declarations require language.control"
+            );
+        }
+        if let Some(delegate) = &provider.delegate {
+            let method = manifest
+                .plugin_services
+                .provides
+                .get(&delegate.contract)
+                .and_then(|contract| contract.methods.get(&delegate.method));
+            anyhow::ensure!(
+                manifest.component.is_some()
+                    && method == Some(&plugin_protocol::language_control::binding_prepare_method()),
+                "Delegated language providers require the canonical public prepare method"
+            );
+            anyhow::ensure!(
+                !provider.hook
+                    && provider.alternatives.is_empty()
+                    && provider.executable_setting.is_none()
+                    && provider.control_methods.is_empty()
+                    && !provider.optional_installation,
+                "A delegated language provider cannot invent a native startup plan"
+            );
+        }
         // Independent roles negotiate before installation, so an older host cannot silently
         // treat a formatting-only contribution as the document's primary analysis service.
         for (enabled, capability) in [
@@ -104,7 +149,7 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                     .as_ref()
                     .and_then(|api| api.required.get("language.lsp"))
                     .is_some_and(|requirement| {
-                        requirement.matches(&semver::Version::new(1, 3, 0))
+                        requirement.matches(&semver::Version::new(1, 5, 0))
                             && !requirement.matches(&semver::Version::new(1, 2, 0))
                     }),
                 "Immutable diagnostic snapshots require language.lsp >=1.3"
@@ -121,6 +166,9 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
             "Snapshot completion requires WASM, language.completion and editor.read"
         );
         for service in std::iter::once(&provider.service).chain(&provider.alternatives) {
+            if provider.delegate.is_some() {
+                continue;
+            }
             anyhow::ensure!(
                 manifest.services.contains_key(service)
                     && manifest
@@ -243,6 +291,7 @@ impl Package {
         semver::Version::parse(&manifest.version)?;
         super::capabilities::require_current(&manifest)?;
         validate_language_services(&manifest)?;
+        crate::native_modules::validate_exports(&manifest, &files)?;
         crate::structure::validate_manifest(&manifest)?;
         crate::direct::validate_manifest(&manifest)?;
         manifest
@@ -478,7 +527,9 @@ impl Package {
             );
         }
         anyhow::ensure!(
-            manifest.component.is_some() || manifest.contributions.is_some(),
+            manifest.component.is_some()
+                || manifest.contributions.is_some()
+                || !manifest.module_exports.is_empty(),
             "Package declares neither a component nor contributions"
         );
         if let Some(path) = &manifest.component {
@@ -498,6 +549,9 @@ impl Package {
                 manifest.panels.is_empty()
                     && manifest.commands.is_empty()
                     && manifest.permissions.iter().all(|permission| {
+                        if permission == "native.modules" && !manifest.module_exports.is_empty() {
+                            return true;
+                        }
                         if matches!(
                             permission.as_str(),
                             "dependencies.prepare" | "dependencies.install"
@@ -577,6 +631,7 @@ impl Package {
                     "files.select",
                     "commands.call",
                     "services.call",
+                    "native.modules",
                     "process.exec",
                     "dependencies.prepare",
                     "dependencies.install"

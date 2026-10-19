@@ -1,0 +1,8 @@
+{
+  "id":"project-context-fixture","name":"Project context fixture","version":"0.1.1","protocol":7,
+  "api":{"base":"^1","required":{"language.lsp":"^1.5","process":"^1"}},
+  "component":"plugin.wasm","contributions":"plugin.toml","storage_limit":1024,
+  "permissions":["process.service.first","process.service.second"],
+  "services":{"first":{"program":"project-context-server","args":["first"]},"second":{"program":"project-context-server","args":["second"]}},
+  "language_servers":[{"id":"analysis","language":"unfamiliar-project-language","service":"first","alternatives":["second"],"hook":true}]
+}

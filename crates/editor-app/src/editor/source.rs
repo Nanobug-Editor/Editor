@@ -117,8 +117,9 @@ impl EditorApp {
         let can_format = editable && self.language_edits.formatters.contains_key(&language);
         let can_rename = editable
             && self
-                .language_servers
-                .get(&language)
+                .active_path
+                .as_deref()
+                .and_then(|path| self.language_server_for_path(path))
                 .is_some_and(|server| server.provides_editing());
         let custom_popovers = {
             let state = self.editor.read(cx);

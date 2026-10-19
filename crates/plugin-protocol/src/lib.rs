@@ -66,6 +66,10 @@ pub mod http;
 /// Native host dialogs and instance-bound user-selected file authority.
 pub mod interaction;
 pub mod language;
+/// Explicit native project membership and bounded metadata queries for shared source snapshots.
+pub mod language_context;
+/// Provider-owned native control over the existing language connection, with bounded inert values.
+pub mod language_control;
 pub mod process;
 /// System-protected credentials isolated by host profile and plugin identity.
 pub mod secrets;
@@ -128,6 +132,9 @@ pub struct Manifest {
     /// Fixed native service definitions; each key requires its own installation grant.
     #[serde(default)]
     pub services: std::collections::BTreeMap<String, process::Service>,
+    /// Sealed package resources for separately managed native analysis workers; never host modules.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub module_exports: std::collections::BTreeMap<String, language_control::ModuleExport>,
     /// Plugin namespace only; these declarations cannot alter host trust, grants or editor preferences.
     #[serde(default)]
     pub settings: std::collections::BTreeMap<String, settings::Definition>,

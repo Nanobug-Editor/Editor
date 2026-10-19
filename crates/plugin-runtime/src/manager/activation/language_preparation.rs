@@ -10,19 +10,53 @@ pub(super) struct ComponentCode<'a> {
     pub(super) engine: &'a wasmtime::Engine,
     pub(super) bytes: &'a [u8],
     pub(super) assets: &'a Path,
+    pub(super) compiled: &'a crate::instance::CompiledCode,
+}
+
+/// Validate a source intent against canonical workspace containment without granting file access.
+/// New unsaved paths require a real contained parent; links outside the workspace are rejected.
+pub(super) fn validate_document(
+    workspace: &str,
+    document: &plugin_protocol::language::DocumentContext,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(document.valid(), "Invalid language document path");
+    let workspace = Path::new(workspace).canonicalize()?;
+    let path = workspace.join(&document.path);
+    let physical = if path.exists() {
+        path.canonicalize()?
+    } else {
+        path.parent()
+            .ok_or_else(|| anyhow::anyhow!("Document has no parent"))?
+            .canonicalize()?
+            .join(path.file_name().unwrap())
+    };
+    anyhow::ensure!(
+        physical.starts_with(&workspace),
+        "Language document escaped workspace"
+    );
+    Ok(())
 }
 
 impl DemandPreparation {
     /// The guest may select an approved plan; paths and executable overrides remain host-validated.
     pub(super) fn prepare_language_service(
         &self,
+        assets: &Path,
         code: Option<ComponentCode<'_>>,
         mut owner: Option<&mut Instance>,
         authority: Option<crate::EditorAuthority>,
         entry: &Installed,
         mut provider: plugin_protocol::language::Provider,
         settings: plugin_protocol::settings::Effective,
-    ) -> anyhow::Result<LanguageService> {
+        document: Option<&plugin_protocol::language::DocumentContext>,
+    ) -> anyhow::Result<(
+        LanguageService,
+        Option<plugin_protocol::language::ProjectContext>,
+    )> {
+        let workspace = Path::new(&self.environment.workspace).canonicalize()?;
+        if let Some(document) = document {
+            validate_document(&self.environment.workspace, document)?;
+        }
         let candidates = std::iter::once(&provider.service)
             .chain(&provider.alternatives)
             .map(|id| {
@@ -48,6 +82,7 @@ impl DemandPreparation {
                 .prepare_language(plugin_protocol::language::Context {
                     provider: provider.id.clone(),
                     workspace: self.environment.workspace.clone(),
+                    document: document.cloned(),
                     // Demand uses an already approved dependency plan; discovery retains its separate flag.
                     preparing_dependencies: false,
                     package_root: String::new(),
@@ -107,7 +142,25 @@ impl DemandPreparation {
                 );
             }
         }
-        let workspace = Path::new(&self.environment.workspace).canonicalize()?;
+        let context = if document.is_some() {
+            let context = proposal
+                .context
+                .unwrap_or(plugin_protocol::language::ProjectContext {
+                    key: "workspace".into(),
+                    generation: 0,
+                });
+            anyhow::ensure!(
+                context.valid(),
+                "LSP hook returned an invalid project identity"
+            );
+            Some(context)
+        } else {
+            anyhow::ensure!(
+                proposal.context.is_none(),
+                "Project identity requires document-scoped discovery"
+            );
+            None
+        };
         let root = if let Some(relative) = proposal.project_root {
             crate::package::validate_relative(&relative)?;
             workspace.join(relative).canonicalize()?
@@ -131,7 +184,13 @@ impl DemandPreparation {
         let prepared = service
             .installation
             .as_ref()
-            .map(|plan| crate::dependencies::cached(&self.root, plan))
+            .map(|plan| {
+                if service.on_demand {
+                    self.prepare_language_dependency(assets, plan, &provider.id, document)
+                } else {
+                    crate::dependencies::cached(&self.root, plan)
+                }
+            })
             .transpose()?;
         let program = if let Some(prepared) = &prepared {
             prepared.program.clone()
@@ -176,7 +235,75 @@ impl DemandPreparation {
             });
         }
         language_service.dependencies = prepared.map(|prepared| prepared.locks).unwrap_or_default();
-        Ok(language_service)
+        Ok((language_service, context))
+    }
+
+    /// Prepare only this version's selected immutable plan, observing its original source waits and
+    /// scope lifetime at every I/O barrier. Cache hits work offline and are pinned through publication;
+    /// installers still require their separate explicit installation workflow and cannot run here.
+    fn prepare_language_dependency(
+        &self,
+        assets: &Path,
+        plan: &plugin_protocol::dependencies::Plan,
+        provider: &str,
+        document: Option<&plugin_protocol::language::DocumentContext>,
+    ) -> anyhow::Result<crate::dependencies::Prepared> {
+        anyhow::ensure!(
+            self.entry.grants.contains("dependencies.prepare"),
+            "Dependency preparation permission required"
+        );
+        let cached = crate::dependencies::cached(&self.root, plan).ok();
+        anyhow::ensure!(
+            cached.is_some()
+                || plan
+                    .artifacts
+                    .iter()
+                    .all(|artifact| artifact.installer.is_none()),
+            "Prepare native installer dependencies through plugin installation"
+        );
+        let provider = format!("{}/{}", self.entry.manifest.id, provider);
+        let target = document.cloned();
+        let progress_provider = provider.clone();
+        let progress_target = target.clone();
+        let progress_waiters = self.waiters.clone();
+        let waiters = self.waiters.clone();
+        let alive = self.alive.clone();
+        let host_alive = self.host_alive.clone();
+        let control = crate::InstallControl::new(move |stage| {
+            for waiter in progress_waiters.lock().unwrap().iter().filter(|waiter| {
+                waiting_for_language(waiter, &progress_provider, progress_target.as_ref())
+            }) {
+                waiter
+                    .completion
+                    .progress(format!("Preparing language dependency: {stage:?}"));
+            }
+        })
+        .with_guard(move || {
+            alive.load(Ordering::Acquire)
+                && host_alive.load(Ordering::Acquire)
+                && waiters
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|waiter| waiting_for_language(waiter, &provider, target.as_ref()))
+        });
+        let _lock = crate::dependencies::lock(&self.root, &control)?;
+        let prepared = match cached {
+            Some(prepared) => prepared,
+            None => crate::dependencies::prepare(&self.root, assets, plan, &control)?,
+        };
+        // Separate receipts retain other contexts' backend versions after their transports exit.
+        // Only the package's immutable declared/proposed plan is persisted, never source paths/text.
+        control.check()?;
+        let retained = BTreeMap::from([("language".to_string(), plan)]);
+        let identity = format!("{:x}", Sha256::digest(serde_json::to_vec(&retained)?));
+        let receipt = self
+            .root
+            .join("dependency-receipts")
+            .join(&self.entry.manifest.id)
+            .join(format!("{}-language-{identity}.json", self.entry.digest));
+        atomic_write(&receipt, &serde_json::to_vec(&retained)?)?;
+        Ok(prepared)
     }
     /// A selected direct callback inherits only the exact admitted owner and compiles on this worker.
     pub(super) fn prepare_direct(
@@ -239,6 +366,34 @@ impl DemandPreparation {
             self.data.clone(),
             code.assets.to_owned(),
             self.host_resources.clone(),
+            code.compiled,
         )
     }
+}
+
+/// A different document or a cancelled source cannot keep this backend's download alive by itself.
+fn waiting_for_language(
+    waiter: &Waiter,
+    provider: &str,
+    document: Option<&plugin_protocol::language::DocumentContext>,
+) -> bool {
+    !waiter.completion.status().is_terminal()
+        && match (&waiter.reason, document) {
+            (
+                DemandReason::Language {
+                    provider: candidate,
+                    role: LanguageRole::Lsp | LanguageRole::Formatter,
+                },
+                None,
+            ) => candidate == provider,
+            (
+                DemandReason::LanguageDocument {
+                    provider: candidate,
+                    document: target,
+                    ..
+                },
+                Some(document),
+            ) => candidate == provider && target == document,
+            _ => false,
+        }
 }

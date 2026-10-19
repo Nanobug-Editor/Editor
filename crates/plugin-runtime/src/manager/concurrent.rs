@@ -21,6 +21,14 @@ pub(super) struct ProjectResources {
 }
 
 impl ProjectResources {
+    /// Parked native language calls retain their original place in the actor's global waiter pool.
+    pub(super) fn language_waiter_count(&self) -> usize {
+        self.language_services
+            .values()
+            .filter_map(|role| role.delegation.as_ref())
+            .map(|pending| pending.waiter_count())
+            .sum()
+    }
     /// Application diagnostics include every live project's native roots and bounded role requests.
     pub(super) fn resource_count(&self) -> usize {
         self.images.len()
@@ -28,6 +36,7 @@ impl ProjectResources {
             + self
                 .language_services
                 .values()
+                .filter(|role| role.owns_service)
                 .filter_map(|role| role.service.as_ref().ok())
                 .map(|service| service.process_count() + service.request_resource_count())
                 .sum::<usize>()

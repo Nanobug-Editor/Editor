@@ -11,7 +11,8 @@ use plugin_runtime::{
 mod demand;
 use demand::Choice;
 
-/// No source text is retained here. Replacing or dropping a request cancels its readonly wait.
+/// Immutable native snapshots may be retained for one related-source request; this state never owns
+/// editable text. Replacing or dropping a request cancels its readonly wait.
 #[derive(Default)]
 pub(crate) struct State {
     sequence: u64,
@@ -29,6 +30,7 @@ struct Active {
     target: Target,
     cancellation: RequestCancellation,
     view: Entity<LanguageFeatures>,
+    context: Option<navigation::ContextCapture>,
     _subscription: Subscription,
 }
 
@@ -74,13 +76,20 @@ impl Target {
         feature: direct::Feature,
         cancellation: &RequestCancellation,
         workspace: &Path,
+        context: Option<&navigation::ContextCapture>,
     ) -> anyhow::Result<direct::Result> {
         match self {
             Self::Direct { provider, .. } => {
                 provider.request(feature, source, cursor, cancellation)
             }
             Self::Lsp { server, lease } => {
-                server.feature_for(lease, source, cursor, feature, cancellation, workspace)
+                let request =
+                    || server.feature_for(lease, source, cursor, feature, cancellation, workspace);
+                if let Some(context) = context {
+                    server.with_context_snapshot(context, request)
+                } else {
+                    request()
+                }
             }
         }
     }
@@ -165,6 +174,9 @@ impl EditorApp {
                 .as_ref()
                 != Some(active.view.read(cx).document())
             || !active.target.origin().is_live()
+            || active.context.as_ref().is_some_and(|context| {
+                context.documents().is_some() && !self.language_context_is_current(context, cx)
+            })
         {
             return false;
         }
@@ -205,8 +217,9 @@ impl EditorApp {
                 !self.providers.has_language_feature(language, feature)
                     && lease.is_active()
                     && self
-                        .language_servers
-                        .get(language)
+                        .active_path
+                        .as_deref()
+                        .and_then(|path| self.language_server_for_path(path))
                         .is_some_and(|current| Arc::ptr_eq(current, server))
             }
         }
@@ -347,7 +360,9 @@ impl EditorApp {
                 .clone();
             Some(Target::Direct { key, provider })
         } else {
-            let server = self.language_servers.get(language)?.clone();
+            let server = self
+                .language_server_for_path(self.active_path.as_deref()?)?
+                .clone();
             if !server.supports_language_features() {
                 return None;
             }
@@ -404,6 +419,21 @@ impl EditorApp {
     ) {
         self.language_features.pending.take();
         let cancellation = RequestCancellation::default();
+        let context = match &target {
+            Target::Lsp { server, .. } => {
+                match self.capture_language_context(server, &source.document, &source.text, cx) {
+                    Ok(context) => {
+                        context.map(|context| context.with_cancellation(cancellation.clone()))
+                    }
+                    Err(error) => {
+                        self.status = error.to_string();
+                        cx.notify();
+                        return;
+                    }
+                }
+            }
+            Target::Direct { .. } => None,
+        };
         let sequence = intent.sequence;
         let feature = intent.feature;
         let document = source.document.clone();
@@ -429,19 +459,34 @@ impl EditorApp {
             view,
             _subscription: subscription,
             cancellation: cancellation.clone(),
+            context: context.clone(),
         });
         let workspace = self.workspace.root().to_path_buf();
         cx.spawn_in(window, async move |this, cx| {
             let worker_cancel = cancellation.clone();
+            let worker_context = context.clone();
             let result = cx
                 .background_executor()
                 .scheduler_executor()
                 .spawn_dedicated(move |_| async move {
-                    target.request(source, cursor, feature, &worker_cancel, &workspace)
+                    target.request(
+                        source,
+                        cursor,
+                        feature,
+                        &worker_cancel,
+                        &workspace,
+                        worker_context.as_ref(),
+                    )
                 })
                 .await;
             let _ = this.update_in(cx, |app, window, cx| {
-                if cancellation.is_cancelled() || !app.language_feature_is_current(sequence, cx) {
+                if cancellation.is_cancelled()
+                    || !app.language_feature_is_current(sequence, cx)
+                    || (result.is_ok()
+                        && context
+                            .as_ref()
+                            .is_some_and(|context| !app.language_context_is_current(context, cx)))
+                {
                     if app
                         .language_features
                         .active
@@ -490,7 +535,10 @@ impl EditorApp {
             return;
         }
         let active = self.language_features.active.as_ref().unwrap();
-        let origin = active.target.origin();
+        let origin = match (&active.target, &active.context) {
+            (Target::Lsp { server, .. }, Some(context)) => context.fix_origin(server),
+            _ => active.target.origin(),
+        };
         let document = active.view.read(cx).document().clone();
         let result = match event {
             LanguageFeatureEvent::Navigate(location) => {

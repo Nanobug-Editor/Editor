@@ -1,0 +1,3 @@
+{
+  "version":1,"manifest":"manifest.json","output":"dist","wasm":{"manifest":"Cargo.toml"},"assets":[]
+}
