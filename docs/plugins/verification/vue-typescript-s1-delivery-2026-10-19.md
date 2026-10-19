@@ -2,7 +2,7 @@
 
 日期：2026-10-19（Asia/Shanghai）。范围仅 [#121 / S1](../tickets/vue-typescript/scenarios/01-real-projects.md)；#122–#126 继续暂停，旧 #108–#118 与父 #107 不变，不创建 Release。
 
-当前状态：S1 在正式基线上的门禁、真实包联验、相关原生交互及双轴审查均通过；两个独立插件已普通提交，宿主正在提交和推送，#121 尚待远程交付后关闭。此前行为测试、失败历史、候选身份及完整命令见[恢复记录](vue-typescript-s1-resume-2026-10-19.md)。
+当前状态：S1 在正式基线上的门禁、真实包联验、相关原生交互及双轴审查均通过；三个仓库均已完成普通提交和推送，远端 main SHA 已核对。#121 通过默认分支交付记录提交的关闭关键字处理，关闭状态尚待实际读回。此前行为测试、失败历史、候选身份及完整命令见[恢复记录](vue-typescript-s1-resume-2026-10-19.md)。
 
 ## 正式提交边界
 
@@ -59,10 +59,12 @@ S1 的协议、runtime、语言控制与测试源码均与先前已通过的 ove
 
 | 仓库 | 已核对的普通提交 / 树 | 推送状态 |
 | --- | --- | --- |
-| Editor | 本记录所在 S1 实现提交；父提交固定为 `b59f5ac` | 待推送与读回 |
-| [TypeScript](https://github.com/Nanobug-Editor/TypeScript) | `873e8c3d3ebe3a86a8bb1e028a3c4bcd1c557b94`；tree `3e98d127e5c17268fffcac3c2c53766f07eff75c`，77 files | 待推送与读回 |
-| [Vue](https://github.com/Nanobug-Editor/Vue) | `f8e5880bf89161f16723ae7be1c76458d50a676c`；tree `b3b7d5f9a5262cedcaff9307765ef33286b2afc5`，137 files | 待推送与读回 |
+| [Editor](https://github.com/Nanobug-Editor/Editor/commit/8e3104a2b62470d2d02f9b7d3d2343a844e8f2f8) | 实现提交 `8e3104a2b62470d2d02f9b7d3d2343a844e8f2f8`；父提交固定为 `b59f5ac`；tree `81cb06652b964fdebc5ed4406c55e40522f3b40f` | 已普通推送 main，`ls-remote` 精确读回 |
+| [TypeScript](https://github.com/Nanobug-Editor/TypeScript/commit/873e8c3d3ebe3a86a8bb1e028a3c4bcd1c557b94) | `873e8c3d3ebe3a86a8bb1e028a3c4bcd1c557b94`；tree `3e98d127e5c17268fffcac3c2c53766f07eff75c`，77 files | 已普通推送 main，`ls-remote` 精确读回；GitHub main 清单与提交一致 |
+| [Vue](https://github.com/Nanobug-Editor/Vue/commit/f8e5880bf89161f16723ae7be1c76458d50a676c) | `f8e5880bf89161f16723ae7be1c76458d50a676c`；tree `b3b7d5f9a5262cedcaff9307765ef33286b2afc5`，137 files | 已普通推送 main，`ls-remote` 精确读回；GitHub main 清单与提交一致 |
 
 两个插件的临时 index checkout 与暂存源码逐文件 SHA 相同；TypeScript 的 15 个服务文件和 3 个 grammar、Vue 的 11 项模块闭包与原候选逐字节一致。Vue 新增带注释的 Git 属性以保留资源和 CRLF 夹具原字节，仅对四个精确封印资源路径保留上游空白；另忽略单个构建日志、删除非包输入 legacy slots 源末尾一个多余 LF。普通 cached whitespace 检查均通过，没有全局豁免或修改已封印负载。
 
-只有本轮验收、审查、普通提交及三个仓库推送核对全部完成后，才关闭 #121 并读回其状态。
+三个仓库的验收、审查、普通提交与源码推送核对均已完成，用户原有关闭授权继续有效。GitHub 连接器的 issue PATCH 实际返回 403（`Resource not accessible by integration`）；后续读取 Git 凭据以调用 REST 的命令被自动审批拒绝，仅返回 `blocked by policy`，命令没有执行、没有取得或输出凭据。浏览器界面操作又因工具无法可靠确定当前 URL 而停止，已停止所有界面输入。
+
+改用 GitHub 正式支持的提交关闭关键字：本轮仅文档交付提交引用 `Closes #121`，普通推送默认 main 后读回结果。该机制见[GitHub 官方说明](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)；不新增凭据、权限或 PR，不将推送尝试当作关闭成功。远端 issue 正文的勾选未成功写入；已验收八项 AC 的本地工单与本记录保留准确结果。

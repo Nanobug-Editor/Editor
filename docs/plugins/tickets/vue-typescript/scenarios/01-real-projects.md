@@ -1,6 +1,6 @@
 # Vue/TS S1：安装真实插件并打开混合项目
 
-状态：行为验收、正式基线门禁与双轴审查已通过，普通提交与三仓推送交付中；[#121](https://github.com/Nanobug-Editor/Editor/issues/121) 待远程核对后关闭。实际结果见[交付记录](../../../verification/vue-typescript-s1-delivery-2026-10-19.md)。
+状态：行为验收、正式基线门禁与双轴审查已通过，普通提交、三仓推送及远端 SHA 核对已完成；[#121](https://github.com/Nanobug-Editor/Editor/issues/121) 的关闭状态待读回。实际结果见[交付记录](../../../verification/vue-typescript-s1-delivery-2026-10-19.md)。
 
 <!-- nanobug-vue-typescript-scenes-2026-10-15:S1 -->
 

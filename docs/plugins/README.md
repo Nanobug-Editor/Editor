@@ -1,6 +1,6 @@
 # 插件系统文档目录
 
-- [Vue/TypeScript S1 正式基线复验](verification/vue-typescript-s1-delivery-2026-10-19.md)：2026-10-19 仅执行新工单 #121；正式基线上的门禁、真实插件与相关原生交互复验均通过，正在完成提交推送。此前过程见[恢复记录](verification/vue-typescript-s1-resume-2026-10-19.md)；#122–#126 暂停，旧 #108–#118 只作历史。
+- [Vue/TypeScript S1 正式基线复验](verification/vue-typescript-s1-delivery-2026-10-19.md)：2026-10-19 仅执行新工单 #121；正式基线上的门禁、真实插件与相关原生交互复验均通过，三仓源码已推送并核对，工单关闭状态待读回。此前过程见[恢复记录](verification/vue-typescript-s1-resume-2026-10-19.md)；#122–#126 暂停，旧 #108–#118 只作历史。
 
 - [Git 面板间距与文件图标](verification/git-panel-polish-2026-10-19.md)：独立 0.1.16 调整外层留白及预览内边距，配套宿主复用资源管理器文件图标并隐藏空菜单按钮；实际包原生回归、产物身份及既有格式检查例外见记录。
 
