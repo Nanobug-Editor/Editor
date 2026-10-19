@@ -1,6 +1,8 @@
 //! Verify shutdown with an actual clipboard-created receipt and its owned private backup.
 use super::*;
-use gpui_kit::{TestAppContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::gpui;
 use std::cell::RefCell;
 
 #[gpui::test]

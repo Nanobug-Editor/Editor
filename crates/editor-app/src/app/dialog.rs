@@ -1,13 +1,18 @@
 //! Reusable native modal window with a caller-owned title and content region.
 
+use crate::ui::controls::overlay::WindowExt as _;
+use crate::ui::controls::window::TitleBar;
+use crate::ui::theme::ActiveTheme;
+use gpui_base::{Root, StyledExt};
+use gpui_base::{h_flex, v_flex};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Bounds, Context, Entity, FocusHandle, InteractiveElement,
     IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
     ParentElement, Render, SharedString, Styled, Window, WindowBounds, WindowControlArea,
     WindowHandle, WindowKind,
-    component::{ActiveTheme, IconName, Root, StyledExt, TitleBar, WindowExt as _, h_flex, v_flex},
-    div, px, size,
 };
+use gpui_kit::{div, px, size};
 use std::rc::Rc;
 
 use crate::{
@@ -125,7 +130,7 @@ impl Render for AppDialog {
                 .id("app-dialog-window")
                 .debug_selector(|| "dialog-0".into())
                 .size_full()
-                .bg(cx.theme().tokens.background)
+                .bg(cx.theme().background)
                 .track_focus(&self.focus)
                 .capture_key_down(cx.listener(Self::close_on_escape))
                 .child(

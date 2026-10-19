@@ -1,9 +1,10 @@
 //! Immutable plugin snapshots use Base selection and scrolling, with no editable document session.
 use super::*;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::input::{
     EditorState, RangeDecoration, RangeDecorationCollection, RangeDecorationStyle,
 };
-use gpui_kit::{AnyElement, IntoElement as _, SharedString, component::ActiveTheme as _};
+use gpui_kit::{AnyElement, IntoElement as _, SharedString};
 
 pub(super) struct Snapshot {
     pub(super) editor: Entity<EditorState>,

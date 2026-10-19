@@ -1,7 +1,9 @@
 //! Local notification cards own their appearance, dismissal and lifetime without modal focus.
 
 use super::{Button, Icon};
-use gpui_kit::component::{ActiveTheme as _, IconName, StyledExt as _, v_flex};
+use crate::ui::theme::ActiveTheme as _;
+use gpui_base::{StyledExt as _, v_flex};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement, Render,
     SharedString, StatefulInteractiveElement as _, Styled, Window, div, px,

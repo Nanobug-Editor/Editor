@@ -1,11 +1,66 @@
 //! Local native caption controls; each window supplies its own title-bar composition.
 
 use super::Icon;
-use gpui_kit::component::{ActiveTheme as _, IconName, h_flex};
+use crate::ui::theme::ActiveTheme as _;
+use gpui_base::h_flex;
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     App, Div, InteractiveElement, ParentElement, Stateful, StatefulInteractiveElement, Styled,
     Window, WindowControlArea, div, prelude::FluentBuilder as _, px,
 };
+
+/// Native window creation policy shared by editor windows and local dialogs.
+pub(crate) struct TitleBar;
+
+impl TitleBar {
+    /// Reserve the native caption while the local title bar owns dragging and controls.
+    pub(crate) fn window_options() -> gpui_kit::WindowOptions {
+        gpui_kit::WindowOptions {
+            titlebar: Some(gpui_kit::TitlebarOptions {
+                appears_transparent: true,
+                traffic_light_position: Some(gpui_kit::point(px(9.), px(9.))),
+                ..Default::default()
+            }),
+            app_owns_titlebar_drag: true,
+            ..Default::default()
+        }
+    }
+}
+
+/// Restore the selected project's client size and center a normal Windows editor on its monitor.
+/// `size` is in logical pixels; native placement includes the frame and respects display scaling.
+/// `cx` synchronizes GPUI's viewport after the synchronous native placement has finished.
+pub(crate) fn restore_editor_geometry(
+    window: &mut Window,
+    size: gpui_kit::Size<gpui_kit::Pixels>,
+    cx: &mut App,
+) {
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(handle) = HasWindowHandle::window_handle(window)
+            && let RawWindowHandle::Win32(native) = handle.as_raw()
+        {
+            let scale = window.scale_factor();
+            match platform_windows::window::restore_centered_window(
+                native.hwnd.get(),
+                (size.width / px(1.) * scale).round() as i32,
+                (size.height / px(1.) * scale).round() as i32,
+            ) {
+                Ok(()) => {
+                    // SetWindowPos emits WM_SIZE while this GPUI window is already borrowed;
+                    // its normal callback cannot re-enter the same window. Read the updated
+                    // platform bounds here so layout, clipping and input share the new viewport.
+                    window.bounds_changed(cx);
+                    return;
+                }
+                Err(error) => tracing::warn!(%error, "could not restore centered editor window"),
+            }
+        }
+    }
+    // Headless tests and other platforms retain GPUI's size restoration path.
+    window.resize(size);
+}
 
 /// The same editor caption appearance is used before and after a workspace is selected.
 pub(crate) fn editor_title_bar(cx: &App) -> Stateful<Div> {

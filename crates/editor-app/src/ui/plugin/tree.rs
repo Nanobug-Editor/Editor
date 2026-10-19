@@ -3,12 +3,12 @@
 use super::action_gestures::ActionGesture;
 use super::*;
 use crate::ui::controls::{
-    Icon, TreeRowAppearance,
+    Icon, TreeRowAppearance, TreeRowIcon,
     menu::{MenuStyle, PopupMenu},
     tree_row,
 };
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{Tree, TreeEvent, TreeItem, TreeState};
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
     InteractiveElement as _, MouseButton, ParentElement as _, StatefulInteractiveElement as _,
     StyleRefinement, Styled as _, div,
@@ -17,6 +17,7 @@ use plugin_runtime::{TreeResource, TreeSnapshot, plugin_protocol::tree as api};
 use rust_i18n::t;
 use std::sync::Arc;
 
+mod projection;
 #[cfg(test)]
 mod refresh_tests;
 
@@ -258,16 +259,21 @@ impl TreeView {
         if snapshot.revision == self.snapshot.revision {
             return;
         }
+        let items_changed = projection::items_changed(&self.snapshot, &snapshot);
         self.snapshot = snapshot;
-        self.sentinels.clear();
-        let roots = self.items(None);
-        let selected = self.selected.clone();
-        self.tree.update(cx, |tree, cx| {
-            tree.set_items(roots, cx);
-            if let Some(selected) = selected {
-                tree.set_selected_index(tree.index_of(&selected.into()), cx);
-            }
-        });
+        if items_changed {
+            self.sentinels.clear();
+            let roots = self.items(None);
+            let selected = self.selected.clone();
+            self.tree.update(cx, |tree, cx| {
+                tree.set_items(roots, cx);
+                if let Some(selected) = selected {
+                    tree.set_selected_index(tree.index_of(&selected.into()), cx);
+                }
+            });
+        }
+        // Menus, descriptions and icons read the new snapshot during row rendering; none of
+        // them requires replacing Base's item collection, selection or viewport anchor.
         cx.notify();
     }
     /// A host-reserved row keeps an unloaded branch expandable through Base's public folder contract.
@@ -341,7 +347,11 @@ impl TreeView {
             .cloned()
             .filter(|node| !node.disabled)
         {
-            if node.activation.is_some() {
+            if node
+                .activation
+                .as_ref()
+                .is_some_and(|command| !command.disabled)
+            {
                 self.invoke(id, api::NodeAction::Activation, cx);
             } else if node.branch {
                 self.toggle(id, window, cx);
@@ -383,8 +393,8 @@ impl TreeView {
                 // Distinct slots keep separate native row identities even for the same typed command.
                 id: format!("tree-menu-{index}"),
                 label: command.label.for_locale(&self.environment.locale).into(),
-                disabled: false,
-                separator_before: false,
+                disabled: command.disabled,
+                separator_before: command.separator_before,
             })
             .collect::<Vec<_>>();
         let owner = cx.entity().downgrade();
@@ -448,6 +458,9 @@ impl Render for TreeView {
         let snapshot = self.snapshot.clone();
         let rows_owner = owner.clone();
         let gesture = self.action_gesture;
+        let workspace = std::path::Path::new(&self.environment.workspace).to_path_buf();
+        let providers = crate::language::providers::Providers::for_workspace(&workspace);
+        let icon_theme = crate::ui::theme::active_theme(cx.theme().is_dark());
         div()
             .id(action_gestures::native_id(
                 format!("plugin-tree-{}", self.node),
@@ -497,7 +510,7 @@ impl Render for TreeView {
             .child(
                 Tree::new(&self.tree)
                     .size_full()
-                    .p_1()
+                    .px_1()
                     .list_style(StyleRefinement::default().flex_grow_1().size_full())
                     .item(move |index, entry, state, _, cx| {
                         let id = entry.item().id.to_string();
@@ -505,9 +518,23 @@ impl Render for TreeView {
                         let icon = data
                             .and_then(|node| node.icon.as_ref())
                             .and_then(|icon| snapshot.icons.get(icon.path(cx.theme().is_dark())))
-                            .map(|bytes| Icon::default().data(bytes))
+                            .map(|bytes| TreeRowIcon::artwork(bytes))
                             .unwrap_or_else(|| {
-                                Icon::default().path("icons/outline-definition.svg")
+                                if let Some(node) = data {
+                                    // Provider labels grant no path access. Use only a basename under
+                                    // the host workspace for Explorer's icon/marker matching rules.
+                                    let name = std::path::Path::new(&node.label)
+                                        .file_name()
+                                        .unwrap_or_default();
+                                    TreeRowIcon::File(crate::ui::icons::tree_icon(
+                                        providers.as_ref(),
+                                        &workspace.join(name),
+                                        node.branch,
+                                        &icon_theme,
+                                    ))
+                                } else {
+                                    Icon::default().path("icons/outline-definition.svg").into()
+                                }
                             });
                         let toggle_owner = rows_owner.clone();
                         let toggle_id = id.clone();

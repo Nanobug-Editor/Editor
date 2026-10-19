@@ -12,6 +12,9 @@ mod tree_projection;
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
     eprintln!("native {}: activate", h.case.name);
     h.dpi(h.main, cx).await?;
+    if exclusive::requested() {
+        return exclusive::exercise(h, cx).await;
+    }
     if sidebar::requested() {
         return sidebar::exercise(h, cx).await;
     }

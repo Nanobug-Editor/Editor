@@ -65,7 +65,7 @@ fn dynamic_selection_survives_primary_load_and_primary_returns_after_removal(
     .unwrap();
     cx.update(|_, cx| app.update(cx, |app, cx| app.sync_dynamic_languages(cx)));
     cx.run_until_parked();
-    let registry = gpui_kit::component::highlighter::LanguageRegistry::singleton();
+    let registry = crate::language::highlighter::LanguageRegistry::singleton();
     assert_eq!(
         cx.update(|_, cx| app
             .read(cx)
@@ -197,11 +197,11 @@ fn unknown_declarative_language_highlights_open_document_without_restart(cx: &mu
         "novel"
     );
     // A language label alone is insufficient: the plugin query and WASM parser must be usable.
-    let config = gpui_kit::component::highlighter::LanguageRegistry::singleton()
+    let config = crate::language::highlighter::LanguageRegistry::singleton()
         .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
         .unwrap();
     assert!(config.language.is_none() && !config.highlights.is_empty());
-    let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new(
+    let mut parser = crate::language::highlighter::SyntaxHighlighter::new(
         &cx.update(|_, cx| app.read(cx).providers.parser_key("novel")),
     );
     parser.update(None, &gpui_base::input::Rope::from("answer = 42\n"), None);
@@ -236,7 +236,7 @@ fn unknown_declarative_language_highlights_open_document_without_restart(cx: &mu
         "novel"
     );
     assert!(
-        !gpui_kit::component::highlighter::LanguageRegistry::singleton()
+        !crate::language::highlighter::LanguageRegistry::singleton()
             .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))
             .unwrap()
             .highlights
@@ -518,7 +518,7 @@ tree_sitter_abi = 15
         }
         assert_eq!(app.plugin_count(PluginPopupKind::Error, cx), 1);
     });
-    let registry = gpui_kit::component::highlighter::LanguageRegistry::singleton();
+    let registry = crate::language::highlighter::LanguageRegistry::singleton();
     assert!(
         !registry
             .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel")))

@@ -24,13 +24,23 @@ impl ExtensionPanel {
         }
     }
 
-    /// Release native focus/IME targets with the hidden surface, while the guest keeps its own view state.
+    /// Suspend hidden controls without dropping keyed native state. Source/instance retirement still
+    /// uses `retire_native_inputs`; visibility alone must not discard tree selection or scrolling.
     pub(super) fn hide(&mut self, cx: &mut App) {
         self.source_viewport.withdraw();
         self.viewport_sync_enabled = false;
         self.visible.set(false);
         self.view_demand.borrow_mut().cancel();
-        self.retire_native_inputs(cx);
+        self.main_code_source = None;
+        if let Some(view) = &self.native_ui {
+            view.update(cx, |view, cx| {
+                // The scene gate revokes input and pending pages before a later show can rebind
+                // authority. Preserve Base entities, never replay an old native press or request.
+                view.set_scene_current(false, cx);
+                view.retire_code_panes(cx);
+            });
+        }
+        self.retire_native_toolbar(cx);
         self.command_popup = None;
     }
     pub(super) fn command_popup(
@@ -60,6 +70,12 @@ impl ExtensionPanel {
                 separator_before: false,
             })
             .collect();
+        if items.is_empty() {
+            // Metadata updates may withdraw the final command while its header popup is open.
+            self.commands_open = false;
+            self.command_popup = None;
+            return None;
+        }
         let style = MenuStyle::current(cx);
         if let Some(popup) = &self.command_popup {
             popup.update(cx, |popup, cx| {

@@ -1,13 +1,14 @@
 //! Native plugin prompts share Base input, button and dialog behavior with editor-owned styling.
 use super::{Button, Input};
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::StyledExt as _;
 use gpui_base::input::{InputEvent, InputState, MoveDown, MoveEnd, MoveHome, MoveUp};
 use gpui_kit::{
     App, AppContext as _, Context, Entity, EntityInputHandler as _, FocusHandle, Focusable as _,
     InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement, Render, ScrollHandle,
     SharedString, StatefulInteractiveElement as _, Styled, Subscription, Window,
-    component::ActiveTheme as _, div, prelude::FluentBuilder as _, px,
 };
+use gpui_kit::{div, prelude::FluentBuilder as _, px};
 use plugin_runtime::{
     EditorRequest,
     plugin_protocol::{

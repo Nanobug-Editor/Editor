@@ -25,8 +25,8 @@ fn load(
         .unwrap();
 }
 
-/// Real timers must leave expanded pages usable across two quiet intervals without suppressing
-/// observation itself. Both visible trees participate, as they share one Git refresh round.
+/// Periodic observations wait at least thirty seconds and leave both native trees usable;
+/// a real later timer still observes external changes and yields to current user input.
 #[test]
 #[ignore = "build independent Git candidate; set NANOBUG_GIT_CANDIDATE; real quiet timer and expanded native trees"]
 fn git_package_unchanged_timer_preserves_loaded_staging_and_branch_pages() {
@@ -89,10 +89,13 @@ fn git_package_unchanged_timer_preserves_loaded_staging_and_branch_pages() {
     let started = Instant::now();
     let scenes =
         ["staging", "history"].map(|panel| (panel, manager.live["git"].views[panel].revision));
-    let mut observed_query = false;
-    while started.elapsed() < Duration::from_secs(8) {
+    while started.elapsed() < Duration::from_secs(28) {
         manager.poll();
-        observed_query |= manager.live["git"].process_count() > 0;
+        assert_eq!(
+            manager.live["git"].process_count(),
+            0,
+            "automatic Git reads restarted before thirty seconds of quiet review"
+        );
         for (_, request) in manager.take_editor_requests() {
             match request.operation().clone() {
                 api::EditorOperation::ListDocuments => {
@@ -133,33 +136,35 @@ fn git_package_unchanged_timer_preserves_loaded_staging_and_branch_pages() {
         }
         std::thread::sleep(Duration::from_millis(10));
     }
-    assert!(
-        observed_query,
-        "the real visible timer must still observe local Git state"
-    );
     // Interrupt the next real read with one admitted action. A busy guard must not silently
     // swallow this click; the read-only child yields before the repository dialog is opened.
-    let deadline = Instant::now() + Duration::from_secs(15);
+    let deadline = Instant::now() + Duration::from_secs(75);
     while manager.live["git"].process_count() == 0 {
         manager.poll();
+        for (panel, revision) in scenes {
+            assert_eq!(manager.live["git"].views[panel].revision, revision);
+        }
         assert!(
             Instant::now() < deadline,
             "next local observation did not start"
         );
         std::thread::sleep(Duration::from_millis(10));
     }
-    let revision = manager.live["git"].views["history"].revision;
-    manager
-        .event(
-            "git",
-            Some("history".into()),
-            api::Notification::Ui(ui::UiEvent {
-                revision,
-                node: "repo-info".into(),
-                action: ui::Action::Click,
-            }),
-        )
-        .expect("one current click can interrupt optional read-only observation");
+    branch_menu::context_press(&mut manager, "repo-info", None);
+    // Tree menu invocation is a typed command receipt, unlike the removed synchronous button.
+    // Poll only until that actual command opens its dialog; do not wait for optional Git reads.
+    let receipt_deadline = Instant::now() + Duration::from_secs(5);
+    while manager.live["git"].views["history"].dialog.is_none() {
+        manager.poll();
+        assert!(
+            Instant::now() < receipt_deadline,
+            "repository menu receipt did not arrive: result={:?}, instance={:?}, processes={}",
+            manager.live["git"].views["commit-details"].active_node("window-status"),
+            manager.live["git"].error,
+            manager.live["git"].process_count()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
     assert!(
         manager.live["git"].views["history"].dialog.is_some(),
         "background Git reads swallowed the repository dialog action"
@@ -174,16 +179,36 @@ fn git_package_unchanged_timer_preserves_loaded_staging_and_branch_pages() {
         manager.live["git"].views["history"].dialog.is_some(),
         "late cancelled process output must not replace current user intent"
     );
+    // A modal intentionally owns the history scene. Close it through its real action before
+    // checking whether later background reads disable otherwise available workbench controls.
+    click(&mut manager, "history", "repo-close");
+    assert!(
+        manager.live["git"].views["history"]
+            .active_node("branches")
+            .is_some()
+    );
     // This is observation, not a disabled timer: independently changed status and ref membership
     // must still retire their old provider pages without requiring save, focus or manual refresh.
     fs::write(root.join("src/external.txt"), "external file\n").unwrap();
     git(root, &["branch", "feature/external"]);
-    let deadline = Instant::now() + Duration::from_secs(15);
+    let deadline = Instant::now() + Duration::from_secs(75);
     while trees
         .iter()
         .any(|(_, _, resource, before)| resource.snapshot().epoch == before.epoch)
     {
-        idle(&mut manager);
+        manager.poll();
+        // Genuine source changes may replace their own pages, but read-only observation must
+        // not withdraw unrelated native controls while the remaining Git queries finish.
+        for (panel, node) in [
+            ("staging", "commit-message"),
+            ("staging", "staging"),
+            ("history", "branches"),
+        ] {
+            assert!(
+                manager.live["git"].views[panel].active_node(node).is_some(),
+                "changed background data disabled {panel}/{node}"
+            );
+        }
         assert!(
             Instant::now() < deadline,
             "real external status/ref changes did not invalidate their tree pages"

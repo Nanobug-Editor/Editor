@@ -1,7 +1,9 @@
 //! The complete source frame preserves native edits and its local completion popup inside alignment.
 use super::*;
 use crate::ui::controls::{aligned_editor::AlignmentPane, aligned_pointer};
-use gpui_kit::{TestAppContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::gpui;
 
 /// A native test surface with one source frame, one snapshot and the same production group.
 struct AlignedSourceHost {
@@ -21,8 +23,8 @@ impl Render for AlignedSourceHost {
             app.render_native_editor_aligned(group, 1, window, cx)
         });
         let anchor = self.menu_anchor.clone();
-        // TestWindow has no HWND for TrackPopupMenuEx. Observe the exact production display
-        // boundary after native right-click selection and projected anchor resolution instead.
+        // Observe the production local-menu boundary after Base right-click selection and
+        // projected anchor resolution, without replacing the source input or its state.
         let menu = projected_context_menu(
             self.app.read(cx).editor.clone(),
             Rc::new(|menu, _, _| menu),

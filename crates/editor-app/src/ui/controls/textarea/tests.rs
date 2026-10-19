@@ -1,10 +1,9 @@
 //! The local multiline control exposes its painted input while Base owns the only editing state.
 use super::*;
+use gpui_base::Root;
 use gpui_base::test_support::{ElementSnapshot, snapshots};
-use gpui_kit::{
-    AppContext as _, Context, Render, Role, TestAppContext, component::Root, gpui,
-    test::TestWindowExt as _,
-};
+use gpui_kit::{AppContext as _, Context, Render, Role, TestAppContext};
+use gpui_kit::{gpui, test::TestWindowExt as _};
 
 /// A normal form host supplies bounded space but no synthetic input role or focus behavior.
 struct Form {

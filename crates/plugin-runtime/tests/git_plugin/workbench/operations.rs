@@ -24,27 +24,7 @@ fn observe(root: &Path, paths: &[&str]) -> Observation {
 
 /// The action is selected from its current native menu, never injected as an undeclared command.
 fn review(manager: &mut Manager, action: &str, target: &str) -> String {
-    send(
-        manager,
-        "history",
-        "argument",
-        ui::Action::Change(target.into()),
-    );
-    let scene = &manager.live["git"].views["history"];
-    assert!(!scene.active_node("advanced-open").unwrap().disabled);
-    click(manager, "history", "advanced-open");
-    let menu = manager.live["git"].views["history"].menu.as_ref().unwrap();
-    assert!(
-        menu.items
-            .iter()
-            .any(|item| item.id == action && !item.disabled)
-    );
-    send(
-        manager,
-        "history",
-        "advanced-menu",
-        ui::Action::Select(action.into()),
-    );
+    branch_menu::context_action(manager, action, Some(target));
     let scene = &manager.live["git"].views["history"];
     assert!(
         !scene

@@ -6,6 +6,9 @@
 
 mod content;
 mod geometry;
+mod gutter;
+#[cfg(test)]
+mod gutter_tests;
 mod input;
 mod notifications;
 mod pane;
@@ -250,6 +253,25 @@ impl AlignmentGroup {
         })
     }
 
+    /// Project a native mouse anchor, whose gutter segment has a different x translation than text.
+    pub(crate) fn project_pointer_bounds(
+        &self,
+        index: usize,
+        native: Bounds<Pixels>,
+        cx: &App,
+    ) -> Option<Bounds<Pixels>> {
+        self.state.read(cx).project_pointer(index, native)
+    }
+
+    /// Weak source-menu callback; it cannot retain a closed source through its own native state.
+    pub(crate) fn pointer_projector(
+        &self,
+        index: usize,
+    ) -> Rc<dyn Fn(Bounds<Pixels>, &App) -> Option<Bounds<Pixels>>> {
+        let state = self.state.downgrade();
+        Rc::new(move |native, cx| state.upgrade()?.read(cx).project_pointer(index, native))
+    }
+
     /// The actual physical pane rectangle from its most recent completed native paint.
     pub(crate) fn viewport(&self, index: usize, cx: &App) -> Option<Bounds<Pixels>> {
         self.state.read(cx).viewports.get(index)?.as_ref().copied()
@@ -264,6 +286,17 @@ impl AlignmentGroup {
     pub(crate) fn set_enabled(&self, enabled: bool, cx: &mut App) {
         self.state
             .update(cx, |state, cx| state.set_enabled(enabled, cx));
+    }
+
+    /// Place the first source's native gutter on its trailing edge beside the next source.
+    /// This changes presentation only, including when vertical synchronization is paused.
+    pub(crate) fn set_inner_gutters(&self, enabled: bool, cx: &mut App) {
+        self.state.update(cx, |state, cx| {
+            if !state.retired && state.inner_gutters != enabled {
+                state.inner_gutters = enabled;
+                cx.notify();
+            }
+        });
     }
 
     /// Native search/code-action panels live in the original atomic control. Pause every pane
@@ -307,7 +340,11 @@ impl AlignmentGroup {
         } else {
             *group.viewports.get(index)?.as_ref()?
         };
-        viewport.intersects(&projected).then_some(projected)
+        // A moved line-start caret sits exactly on the pane's left edge. Strict rectangle
+        // intersection rejects its zero width; use a subpixel visibility probe, not a text offset.
+        let mut visibility = projected;
+        visibility.size.width = visibility.size.width.max(px(0.5));
+        viewport.intersects(&visibility).then_some(projected)
     }
 
     /// Shared positive vertical viewport position; Base's original source ScrollHandle stays native.

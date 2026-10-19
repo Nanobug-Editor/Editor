@@ -36,9 +36,14 @@ fn installed_injection_queries_cannot_borrow_undeclared_native_grammars(cx: &mut
     cx.simulate_resize(size(px(1200.), px(800.)));
     cx.update(|window, cx| app.update(cx, |app, cx| app.open_file(path, window, cx)));
     cx.run_until_parked();
-    let registry = gpui_kit::component::highlighter::LanguageRegistry::singleton();
-    // JSON has an upstream native grammar; rejecting publication must precede any injection lookup.
-    assert!(registry.language("json").unwrap().language.is_some());
+    let registry = crate::language::highlighter::LanguageRegistry::singleton();
+    // Base-only builds have no bundled JSON grammar. Query admission must still reject an
+    // undeclared target before looking it up, whether that target is absent or plugin-provided.
+    assert!(
+        registry
+            .language("json")
+            .is_none_or(|config| config.language.is_none())
+    );
     for (index, (id, query, allowed_languages, expected_error)) in [
         (
             "novel-static-injection",
@@ -103,7 +108,7 @@ fn installed_injection_queries_cannot_borrow_undeclared_native_grammars(cx: &mut
             .language(&cx.update(|_, cx| app.read(cx).providers.parser_key("novel-injection")))
             .unwrap();
         assert!(config.highlights.is_empty() && config.injections.is_empty());
-        let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new(
+        let mut parser = crate::language::highlighter::SyntaxHighlighter::new(
             &cx.update(|_, cx| app.read(cx).providers.parser_key("novel-injection")),
         );
         parser.update(None, &gpui_base::input::Rope::from(source), None);

@@ -1,8 +1,10 @@
 //! Native Base frames and keyboard events verify the shared direct/LSP presentation contract.
 use super::*;
+use gpui_base::Root;
+use gpui_kit::gpui;
 use gpui_kit::{
     AppContext as _, ElementId, Entity, KeyDownEvent, KeyUpEvent, Keystroke, ParentElement as _,
-    Subscription, TestAppContext, component::Root, gpui,
+    Subscription, TestAppContext,
 };
 use plugin_runtime::plugin_protocol::api::{ResourceIdentity, TextPosition};
 use std::{cell::RefCell, rc::Rc};

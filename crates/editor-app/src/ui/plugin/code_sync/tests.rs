@@ -1,8 +1,8 @@
 //! Group membership is derived from the active tree; hidden branches cannot become a scroll driver.
 use super::*;
-use gpui_kit::{
-    Focusable as _, TestAppContext, VisualTestContext, component::Root, gpui, point, px, size,
-};
+use gpui_base::Root;
+use gpui_kit::{Focusable as _, TestAppContext, VisualTestContext};
+use gpui_kit::{gpui, point, px, size};
 use std::cell::RefCell;
 
 /// Source order is arbitrary; only the selected tab and enabled parents contribute pane identities.

@@ -4,6 +4,9 @@ use crate::editor_requests::{EditorRequest, PendingRequest};
 use api::{EditorOperation, ErrorCode, Failure, Notification, Value};
 use resource_roots::RootKind;
 
+#[cfg(test)]
+mod comparison_tests;
+
 /// Return the target's required grant for direct and delegated navigation alike.
 /// Callers also require editor.read; sharing this mapping prevents stronger provider grants leaking.
 pub(super) fn navigation_permission(target: &api::NavigationTarget) -> &'static str {
@@ -33,16 +36,10 @@ impl State {
                 "Deadline must be between 1 and 300000 ms",
             ));
         }
-        for (needed, capability) in [
-            (
-                matches!(&operation, EditorOperation::OpenVirtualSource { .. }),
-                "editor.virtual",
-            ),
-            (
-                matches!(&operation, EditorOperation::OpenDocumentComparison { .. }),
-                "editor.diff",
-            ),
-        ] {
+        for (needed, capability) in [(
+            matches!(&operation, EditorOperation::OpenVirtualSource { .. }),
+            "editor.virtual",
+        )] {
             if needed
                 && self
                     .api
@@ -56,19 +53,8 @@ impl State {
                 ));
             }
         }
-        if let EditorOperation::OpenDocumentComparison { key, title, .. } = &operation {
-            if key.is_empty()
-                || key.len() > 128
-                || key.chars().any(char::is_control)
-                || title.is_empty()
-                || title.len() > 256
-                || title.chars().any(char::is_control)
-            {
-                return Err(Failure::new(
-                    ErrorCode::InvalidRequest,
-                    "Invalid comparison key or title",
-                ));
-            }
+        validate_comparison_request(&operation, &self.api)?;
+        if matches!(&operation, EditorOperation::OpenDocumentComparison { .. }) {
             if self.plugin_services.context.is_some() {
                 return Err(Failure::new(
                     ErrorCode::PermissionDenied,
@@ -517,15 +503,79 @@ impl State {
             | EditorOperation::ReadDocumentSelection { document }
             | EditorOperation::ReplaceDocumentRange { document, .. }
             | EditorOperation::ApplyEdits { document, .. } => check(document),
-            EditorOperation::CompareDocuments { left, right }
-            | EditorOperation::OpenDocumentComparison { left, right, .. } => {
+            EditorOperation::CompareDocuments { left, right } => {
                 check(left)?;
                 check(right)?;
+                Ok(None)
+            }
+            EditorOperation::OpenDocumentComparison {
+                left, right, third, ..
+            } => {
+                check(left)?;
+                check(right)?;
+                // The added source has exactly the same instance ownership and revision
+                // boundary as both existing panes; it must not borrow a foreign virtual.
+                if let Some(third) = third {
+                    check(third)?;
+                }
                 Ok(None)
             }
             _ => Ok(None),
         }
     }
+}
+
+/// Validate additive comparison shape before allocating a native request or borrowing sources.
+/// Two-pane requests retain their 1.1 admission; an explicit third source requires 1.2.
+fn validate_comparison_request(
+    operation: &EditorOperation,
+    negotiated: &api::Negotiated,
+) -> Result<(), Failure> {
+    let EditorOperation::OpenDocumentComparison {
+        key,
+        title,
+        left,
+        right,
+        third,
+        ..
+    } = operation
+    else {
+        return Ok(());
+    };
+    let minimum = semver::Version::new(1, if third.is_some() { 2 } else { 1 }, 0);
+    if negotiated
+        .capabilities
+        .get("editor.diff")
+        .is_none_or(|version| version < &minimum)
+    {
+        return Err(Failure::new(
+            ErrorCode::CapabilityUnavailable,
+            format!("Operation requires editor.diff {minimum}"),
+        ));
+    }
+    if key.is_empty()
+        || key.len() > 128
+        || key.chars().any(char::is_control)
+        || title.is_empty()
+        || title.len() > 256
+        || title.chars().any(char::is_control)
+    {
+        return Err(Failure::new(
+            ErrorCode::InvalidRequest,
+            "Invalid comparison key or title",
+        ));
+    }
+    if left.id == right.id
+        || third
+            .as_ref()
+            .is_some_and(|third| third.id == left.id || third.id == right.id)
+    {
+        return Err(Failure::new(
+            ErrorCode::InvalidRequest,
+            "Comparison sources must be distinct document sessions",
+        ));
+    }
+    Ok(())
 }
 
 /// Check bounded request shape; only the host can check the target revision and UTF-8 boundaries.

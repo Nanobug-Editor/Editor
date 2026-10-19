@@ -2,8 +2,10 @@
 
 use super::*;
 use editor_core::Workspace;
+use gpui_base::Root;
 use gpui_base::input::{CompletionProvider, Rope};
-use gpui_kit::{TestAppContext, VisualTestContext, component::Root, gpui};
+use gpui_kit::gpui;
+use gpui_kit::{TestAppContext, VisualTestContext};
 use lsp_types::{CompletionContext, CompletionItem, CompletionResponse};
 use std::cell::RefCell;
 

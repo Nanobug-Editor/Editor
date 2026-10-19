@@ -1,7 +1,9 @@
 //! Generic native presentation tests observe glyph geometry and user overrides without a Markdown ID.
 
 use super::*;
-use gpui_kit::{TestAppContext, component::Root, gpui, px};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, px};
 use plugin_runtime::plugin_protocol::{FontStyle, ui};
 
 /// A guest-supplied body/heading/code scale reaches Base glyphs in both themes; user role fonts win.

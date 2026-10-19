@@ -1,7 +1,7 @@
 //! Checkbox appearance stays local while gpui-base handles toggle and focus.
 
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{Checkbox as BaseCheckbox, CheckboxState};
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
     App, ClickEvent, ElementId, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
     Window, div, prelude::FluentBuilder as _, px,

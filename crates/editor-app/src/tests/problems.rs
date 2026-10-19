@@ -150,6 +150,7 @@ fn native_problems_drag_resize_and_saved_layout(cx: &mut TestAppContext) {
         visual.simulate_mouse_move(destination, MouseButton::Left, Default::default());
         visual.update(|window, cx| window.draw(cx).clear(cx));
         assert!(visual.debug_bounds("local-dock-drop-indicator").is_some());
+        assert!(visual.debug_bounds("local-dock-floating-preview").is_some());
         visual.simulate_mouse_up(destination, MouseButton::Left, Default::default());
         draw(visual);
         let moved = visual.debug_bounds("native-problems-panel").unwrap();

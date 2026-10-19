@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 项目基线 | [需求整理](project/需求整理.md)、[开发计划](project/开发计划.md)、[全分支整合记录](project/branch-integration-2026-10-12.md) | 已确认的历史产品基线；具体实施进度以对应主题的验收记录为准 |
 | 产品品牌 | [Nanobug 名称、图标与兼容标识](project/branding.md) | 当前品牌入口与保留旧数据、开发和仓库标识的依据 |
-| 开发构建 | [构建缓存隔离与恢复](project/verification/build-cache-2026-10-18.md) | 源码接口存在却报缺失的实际复现、按包缓存恢复及工作区隔离约定 |
+| 开发构建 | [构建缓存隔离与恢复](project/verification/build-cache-2026-10-18.md)、[Release 启动复查](project/verification/build-cache-release-2026-10-18.md) | 源码接口存在却报缺失的实际复现、按 profile 清理缓存及工作区隔离约定 |
 | 主分支整合 | [2026-10-18 整合记录](project/verification/main-integration-2026-10-18.md) | 当前工作区、Git 工作台分支和远端主分支的保留、冲突处理与验证 |
 | 安装与分发 | [安装包目录](distribution/README.md) | 第一期 Windows 安装器与验收；macOS/Linux 兼容打包入口不验收 |
 | 插件系统 | [插件文档目录](plugins/README.md) | 方案、工单与验收；原平台 20 张工单已完成，社区基础能力七单的状态见对应验收入口 |

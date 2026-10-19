@@ -23,13 +23,21 @@ mod ui;
 // Compile translations from the app's locale files and retain English as fallback.
 rust_i18n::i18n!("locales", fallback = "en");
 
+use crate::ui::controls::dock::panel::Panel as DockPanel;
+use crate::ui::controls::source_editor::Editor;
+use crate::ui::controls::window::TitleBar;
+use crate::ui::theme::ActiveTheme;
 use editor::file_watch::{FileWatch, Reconciliation};
 use editor_core::{DocumentSession, Workspace, WorkspaceSnapshot};
 use futures::StreamExt;
 use gpui_base::dock::{DockArea, DockEvent, DockLayout, PanelEvent};
+use gpui_base::h_flex;
 use gpui_base::input::RopeExt as _;
 use gpui_base::input::{EditorState, InputEvent, TabSize, TextDecoration};
+use gpui_base::v_flex;
+use gpui_base::{Root, StyledExt};
 use gpui_base::{TreeEvent, TreeItem, TreeState};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     App, AppContext as _, Bounds, ClickEvent, Context, Entity, EventEmitter, FocusHandle,
     Focusable, HighlightStyle, InteractiveElement as _, IntoElement, KeyBinding, Modifiers,
@@ -37,17 +45,8 @@ use gpui_kit::{
     ScrollHandle, ScrollStrategy, ScrollWheelEvent, StatefulInteractiveElement, StyleRefinement,
     Styled, Subscription, WeakEntity, Window, WindowBounds, WindowControlArea, WindowHandle,
     actions,
-    component::{
-        ActiveTheme, IconName, Root, StyledExt, TitleBar,
-        dock::{self as dock, Panel as DockPanel},
-        h_flex,
-        input::Editor,
-        v_flex,
-    },
-    div, point,
-    prelude::FluentBuilder,
-    px, size,
 };
+use gpui_kit::{div, point, prelude::FluentBuilder, px, size};
 use platform_windows::{LocalHistory, NativeFileStore};
 use plugin_schema::ThemeComponent;
 use rust_i18n::t;
@@ -60,6 +59,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use ui::controls::dock::panel as dock;
 
 #[cfg(target_os = "windows")]
 use app::WindowsTimerResolution;
@@ -108,6 +108,8 @@ actions!(
 );
 
 struct EditorApp {
+    /// Auxiliary settings controls must perform native dock edits in this editor's owning window.
+    owner_window: gpui_kit::AnyWindowHandle,
     /// Normal GUI windows coordinate close/return-home separately from the project editor.
     project_window: Option<WeakEntity<app::projects::ProjectWindow>>,
     workspace: Workspace,
@@ -152,7 +154,11 @@ struct EditorApp {
     /// The active document's readonly structure and native tree interaction state.
     outline: outline::OutlineState,
     outline_panel: Entity<outline::OutlinePanel>,
+    /// Local paint measurements prepare flexible editor rows; DockArea owns all persistent layout state.
+    dock_ui: LocalDock,
     dock_area: Entity<DockArea>,
+    /// Regional display selection keeps Base's layout and each panel's visibility intent intact.
+    dock_presentation: local_dock::PanelPresentation,
     /// Host panels keep their original identity when Base reloads a saved split tree.
     explorer_panel: Entity<EditorDockPanel>,
     /// Host-owned message history is independent from plugin resources and runtime logs.
@@ -405,6 +411,7 @@ impl EditorApp {
         };
         let mut session_state =
             prepared_session.unwrap_or_else(|| SessionState::load(workspace.root()));
+        Self::prepare_sidebar_visibility(&mut session_state);
         // Capture before layout/document persistence during setup; only first-open uses a fallback file.
         let restore_empty_documents =
             session_state.document_session_loaded && session_state.open_tabs.is_empty();
@@ -459,6 +466,9 @@ impl EditorApp {
         );
         let outline = outline::OutlineState::new(cx);
         let outline_panel = cx.new(|cx| outline::OutlinePanel::new(parent.clone(), cx));
+        outline_panel.update(cx, |panel, _| {
+            panel.set_visible(session_state.outline_visible)
+        });
         let explorer_visibility = Rc::new(Cell::new(session_state.explorer_visible));
         let extension_visibility = Rc::new(Cell::new(false));
         let explorer_panel = cx.new(|cx| {
@@ -482,14 +492,12 @@ impl EditorApp {
         let editor_observer = cx.observe(&editor, move |_, _, cx| {
             let _ = popover_panel.update(cx, |_, cx| cx.notify());
         });
-        let dock_area = LocalDock::new(PANEL_HEADER_HEIGHT).create_area(
-            "me-editor-layout",
-            Some(1),
-            window,
-            cx,
-        );
+        let dock_presentation = local_dock::PanelPresentation::default();
+        let dock_ui = LocalDock::new(PANEL_HEADER_HEIGHT)
+            .with_elastic_panel(gpui_base::dock::PanelId::from(editor_panel.entity_id()));
+        let dock_area = dock_ui.create_area("me-editor-layout", Some(1), window, cx);
         let providers = language::providers::Providers::new(&provider_root, workspace.root());
-        let theme_observer = cx.observe_global::<gpui_kit::component::Theme>(|app, cx| {
+        let theme_observer = cx.observe_global::<crate::ui::theme::Theme>(|app, cx| {
             app.dark_theme = cx.theme().is_dark();
             app.refresh_dialog(cx);
             cx.notify();
@@ -525,34 +533,38 @@ impl EditorApp {
             panel.restore_visible(session_state.native_terminal_visible, cx)
         });
         dock_area.update(cx, |area, cx| {
-            // Explorer and the editor share the center; plugin management has its own window.
+            // Fixed side docks keep their widths when the opposite side opens; only Editor flexes.
             area.set_center(
-                DockLayout::h_split()
+                DockLayout::tabs()
+                    .panel_view(dock_presentation.panel_handle(editor_panel.clone()), cx),
+                window,
+                cx,
+            );
+            area.set_dock(
+                gpui_base::dock::DockPlacement::Left,
+                DockLayout::v_split()
                     .child(
-                        // Peer panels on the left start equally stacked within the same native DockArea.
-                        DockLayout::v_split()
-                            .child(
-                                DockLayout::tabs()
-                                    .panel_view(dock::panel_handle(explorer_panel.clone()), cx),
-                                None,
-                            )
-                            .child(
-                                DockLayout::tabs()
-                                    .panel_view(dock::panel_handle(outline_panel.clone()), cx),
-                                None,
-                            ),
-                        Some(px(session_state.explorer_width)),
+                        DockLayout::tabs()
+                            .panel_view(dock_presentation.panel_handle(explorer_panel.clone()), cx),
+                        None,
                     )
                     .child(
-                        DockLayout::tabs().panel_view(dock::panel_handle(editor_panel.clone()), cx),
+                        DockLayout::tabs()
+                            .panel_view(dock_presentation.panel_handle(outline_panel.clone()), cx),
                         None,
                     ),
                 window,
                 cx,
             );
+            area.set_dock_size(
+                gpui_base::dock::DockPlacement::Left,
+                px(session_state.explorer_width),
+                window,
+                cx,
+            );
             local_dock::add_panel_view(
                 area,
-                dock::panel_handle(messages.clone()),
+                dock_presentation.panel_handle(messages.clone()),
                 gpui_base::dock::DockPlacement::Right,
                 Some(px(session_state
                     .plugin_dock_sizes
@@ -584,6 +596,7 @@ impl EditorApp {
             }
         });
         let mut this = Self {
+            owner_window: window.window_handle(),
             project_window: None,
             workspace,
             file_watch,
@@ -611,7 +624,9 @@ impl EditorApp {
             tree_state,
             outline,
             outline_panel,
+            dock_ui,
             dock_area,
+            dock_presentation,
             explorer_panel,
             messages,
             _messages_subscription: messages_subscription,
@@ -790,10 +805,20 @@ impl EditorApp {
         }
     }
 
-    fn toggle_explorer(&mut self, cx: &mut Context<Self>) {
-        self.explorer_visible = !self.explorer_visible;
+    /// Toggle this host leaf and reopen its retained side dock when becoming visible.
+    fn toggle_explorer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let id = gpui_base::dock::PanelId::from(self.explorer_panel.entity_id());
+        self.explorer_visible = !self.explorer_visible || self.dock_presentation.is_suppressed(id);
+        if self.explorer_visible {
+            self.dock_presentation.activate(id);
+        }
         self.explorer_visibility.set(self.explorer_visible);
-        self.dock_area.update(cx, |_, cx| cx.notify());
+        self.dock_area.update(cx, |area, cx| {
+            if self.explorer_visible {
+                local_dock::reveal_panel(area, id, window, cx);
+            }
+            cx.notify();
+        });
         self.persist_session();
         self.refresh_dialog(cx);
         cx.notify();

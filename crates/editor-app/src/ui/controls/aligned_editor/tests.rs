@@ -360,6 +360,7 @@ fn aligned_editor_preserves_gap_click_host_input_preedit_undo_and_shared_scroll(
             delegate,
             editor,
             projection: Some(frame),
+            horizontal: None,
             suppress_geometry: false,
         };
         handler.replace_and_mark_text_in_range(None, "拼😀", Some(1..3), window, cx);
@@ -380,6 +381,7 @@ fn aligned_editor_preserves_gap_click_host_input_preedit_undo_and_shared_scroll(
             delegate,
             editor,
             projection: Some(frame),
+            horizontal: None,
             suppress_geometry: false,
         };
         let mark = handler.marked_text_range(window, cx).unwrap();

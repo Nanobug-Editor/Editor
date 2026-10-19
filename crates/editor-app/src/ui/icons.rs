@@ -29,6 +29,26 @@ pub fn file_icon(
         .flex_shrink_0()
 }
 
+/// Resolve a provider tree's presentation name with Explorer's icon rules. `path` is a host-built
+/// display path, not a provider file handle; missing workspace providers use the same system fallback.
+pub(crate) fn tree_icon(
+    providers: Option<&crate::language::providers::Providers>,
+    path: &Path,
+    is_folder: bool,
+    theme: &ThemeDefinition,
+) -> Img {
+    if let Some(providers) = providers {
+        file_icon(providers, path, is_folder, theme)
+    } else {
+        img(system_icon_path(
+            classify_system_icon(path, is_folder),
+            theme.mode == FileThemeMode::Dark,
+        ))
+        .size_4()
+        .flex_shrink_0()
+    }
+}
+
 fn project_icon_path(
     providers: &crate::language::providers::Providers,
     path: &Path,

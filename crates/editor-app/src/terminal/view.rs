@@ -336,6 +336,11 @@ impl Render for TerminalPanel {
 }
 
 impl DockPanel for TerminalPanel {
+    /// A title-only drag card leaves the PTY view mounted in its existing allocation.
+    fn drag_title(&self, _: &App) -> Option<gpui_kit::SharedString> {
+        Some(t!("terminal.title").to_string().into())
+    }
+
     fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .w_full()

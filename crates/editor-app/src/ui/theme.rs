@@ -8,11 +8,10 @@ use std::{
 mod window;
 pub use window::window_background;
 
-use gpui_kit::{
-    App, Global, Hsla,
-    component::{Theme, ThemeMode},
-    px, rgb, rgba,
-};
+use gpui_kit::{App, Global, Hsla};
+mod palette;
+use gpui_kit::{px, rgb, rgba};
+pub(crate) use palette::{ActiveTheme, Theme, ThemeMode};
 use plugin_schema::{
     ComponentStyles, PluginTextStyle, StyleProperties, ThemeComponent, ThemeDefinition, ThemeFile,
     ThemeMode as FileThemeMode, ThemeTypography, ThemeWindow,
@@ -146,7 +145,6 @@ pub fn apply_theme(theme: &ThemeDefinition, cx: &mut App) {
         theme.muted = surface;
         theme.muted_foreground = muted_foreground;
         theme.input = border;
-        theme.colors.list = surface;
         theme.list_hover = row_hover;
         theme.list_active = row_selected;
         theme.list_active_border = row_selected_border;
@@ -161,6 +159,12 @@ pub fn apply_theme(theme: &ThemeDefinition, cx: &mut App) {
         theme.button_hover = hover;
         theme.button_active = border;
         theme.button_foreground = foreground;
+        theme.secondary = surface;
+        theme.secondary_hover = hover;
+        theme.secondary_active = border;
+        theme.secondary_foreground = foreground;
+        theme.tab_bar_segmented = surface;
+        theme.danger_active = theme.danger.opacity(0.85);
         theme.button_primary = accent;
         theme.button_primary_hover = accent_hover;
         theme.button_primary_active = accent_active;
@@ -186,12 +190,10 @@ pub fn apply_theme(theme: &ThemeDefinition, cx: &mut App) {
         if let Some(family) = &theme_typography.mono.family {
             theme.mono_font_family = family.clone().into();
         }
-        if editor_background.a < 1. {
-            // Editor gutters and ghost-text erasure must not restore an opaque fill.
-            let highlight = Arc::make_mut(&mut theme.highlight_theme);
-            highlight.style.editor_background = Some(editor_background);
-            highlight.style.editor_gutter_background = Some(editor_background);
-        }
+        // Every application resets gutter opacity, including a switch back from a transparent theme.
+        let highlight = Arc::make_mut(&mut theme.highlight_theme);
+        highlight.style.editor_background = Some(editor_background);
+        highlight.style.editor_gutter_background = Some(editor_background);
     });
     apply_font_sizes(cx, theme_typography);
     Theme::sync_base(cx);
@@ -278,7 +280,7 @@ fn color(value: &str) -> Hsla {
     }
 }
 
-/// Publishes the shared typography size to GPUI Kit's global theme.
+/// Publishes the shared typography size to the local palette and Base Root presentation.
 pub fn sync_font_sizes(cx: &mut App) {
     let typography = cx
         .has_global::<RuntimeStyles>()
@@ -352,7 +354,7 @@ mod tests {
             apply_theme(&theme, cx);
             let expected = 128. / 255.;
             assert!((Theme::global(cx).background.a - expected).abs() < 0.00001);
-            assert!((Theme::global(cx).tokens.background.color.a - expected).abs() < 0.00001);
+            assert!((Theme::global(cx).tokens.colors.background.a - expected).abs() < 0.00001);
             assert!(
                 (gpui_base::Theme::global(cx).tokens.colors.background.a - expected).abs()
                     < 0.00001
@@ -380,7 +382,7 @@ mod tests {
             );
             // Returning to an old RGB theme must remove the previous alpha settings.
             apply_theme(builtin_theme(false), cx);
-            assert_eq!(Theme::global(cx).tokens.background.color.a, 1.);
+            assert_eq!(Theme::global(cx).tokens.colors.background.a, 1.);
             assert_eq!(
                 Theme::global(cx)
                     .highlight_theme

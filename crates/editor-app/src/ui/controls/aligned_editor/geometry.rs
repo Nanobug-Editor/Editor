@@ -179,19 +179,40 @@ impl Measurement {
 }
 
 impl GroupState {
+    /// Mouse anchors may lie inside the original leading gutter rather than in the text body.
+    pub(super) fn project_pointer(
+        &self,
+        index: usize,
+        native: Bounds<Pixels>,
+    ) -> Option<Bounds<Pixels>> {
+        let mut projected = self.project(index, native)?;
+        if let Some(gutter) = self.gutters.get(index).copied().flatten() {
+            projected.origin.x = gutter.physical_point(native.origin).x;
+        }
+        Some(projected)
+    }
+
     pub(super) fn project(&self, index: usize, native: Bounds<Pixels>) -> Option<Bounds<Pixels>> {
         if self.retired {
             return None;
         }
-        if matches!(
+        let projected = if matches!(
             self.effective_status(),
             AlignmentStatus::Unavailable(_)
                 | AlignmentStatus::Disabled
                 | AlignmentStatus::NativeOverlays
         ) {
-            return self.sources.get(index).map(|_| native);
-        }
-        self.frames.get(index)?.as_ref()?.project(native)
+            self.sources.get(index).map(|_| native)
+        } else {
+            self.frames.get(index)?.as_ref()?.project(native)
+        }?;
+        Some(
+            self.gutters
+                .get(index)
+                .copied()
+                .flatten()
+                .map_or(projected, |gutter| gutter.text_bounds(projected)),
+        )
     }
 
     pub(super) fn native_point(

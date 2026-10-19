@@ -137,7 +137,7 @@ impl EditorApp {
                     .manifest
                     .panels
                     .iter()
-                    .filter(|panel| panel.position != "editor")
+                    .filter(|panel| panel.position != "editor" && panel.show_in_window_controls)
                     .map(|panel| {
                         (
                             panel.status_order.unwrap_or(1000),
@@ -153,7 +153,12 @@ impl EditorApp {
             label: label.clone(),
             tooltip: label,
             icon: Some(explorer),
-            selected: self.explorer_visible,
+            selected: self.explorer_visible
+                && !self
+                    .dock_presentation
+                    .is_suppressed(gpui_base::dock::PanelId::from(
+                        self.explorer_panel.entity_id(),
+                    )),
             disabled: false,
             action: Action::Explorer,
         }];
@@ -177,7 +182,12 @@ impl EditorApp {
             })
             .to_string(),
             icon: Some(Icon::default().path("icons/outline-panel.svg")),
-            selected: self.session_state.outline_visible,
+            selected: self.session_state.outline_visible
+                && !self
+                    .dock_presentation
+                    .is_suppressed(gpui_base::dock::PanelId::from(
+                        self.outline_panel.entity_id(),
+                    )),
             disabled: false,
             action: Action::Outline,
         });
@@ -191,7 +201,7 @@ impl EditorApp {
                 label: panel.panel_title.clone(),
                 tooltip: panel.panel_title.clone(),
                 icon: panel.panel_icon(cx.theme().is_dark()),
-                selected: panel.visible.get(),
+                selected: panel.displayed_in_dock(),
                 disabled: false,
                 action: Action::Window {
                     key,
@@ -278,7 +288,7 @@ impl EditorApp {
             return;
         }
         match &entry.action {
-            Action::Explorer => self.toggle_explorer(cx),
+            Action::Explorer => self.toggle_explorer(window, cx),
             Action::Terminal => self.toggle_terminal(window, cx),
             Action::Outline => self.toggle_outline(&ToggleOutline, window, cx),
             Action::Window { key, epoch } => {
@@ -289,7 +299,7 @@ impl EditorApp {
                     return;
                 }
                 panel.update(cx, |panel, cx| {
-                    if panel.visible.get() {
+                    if panel.displayed_in_dock() {
                         panel.hide(cx);
                     } else {
                         panel.show(window, cx);
@@ -305,7 +315,17 @@ impl EditorApp {
                     .plugin_panel_visibility
                     .insert(key.clone(), visible);
                 self.persist_session();
-                self.dock_area.update(cx, |_, cx| cx.notify());
+                self.dock_area.update(cx, |area, cx| {
+                    if visible {
+                        local_dock::reveal_panel(
+                            area,
+                            gpui_base::dock::PanelId::from(panel.entity_id()),
+                            window,
+                            cx,
+                        );
+                    }
+                    cx.notify();
+                });
             }
             Action::Function { key, epoch, event } => {
                 let expected = match &event.target {

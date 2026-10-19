@@ -4,6 +4,7 @@ use crate::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use std::cell::RefCell;
 
+mod button;
 mod policy;
 
 /// Keep the temporary workspace alive while a scenario exercises the actual shell and document routes.

@@ -32,7 +32,8 @@ fn result_document() -> api::DocumentInfo {
 /// Retain exactly the public native read while completing ordinary metadata/visibility receipts.
 /// No private guest state, fabricated process events or native window is involved.
 fn next_read(manager: &mut Manager, info: &api::DocumentInfo) -> plugin_runtime::EditorRequest {
-    let deadline = Instant::now() + Duration::from_secs(20);
+    // A retry owned by the background sampler may wait for the production thirty-second cadence.
+    let deadline = Instant::now() + Duration::from_secs(75);
     loop {
         manager.poll();
         for (_, request) in manager.take_editor_requests() {

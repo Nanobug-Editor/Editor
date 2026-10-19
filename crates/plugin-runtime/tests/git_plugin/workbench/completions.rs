@@ -231,7 +231,7 @@ fn git_package_successful_stash_pop_and_drop_remove_only_the_confirmed_entries()
     let entries = stash_oids(root);
     assert_eq!(entries.len(), 2);
     let (_profile, mut manager) = activate(&candidate(), root);
-    click(&mut manager, "history", "repo-stashes");
+    click(&mut manager, "history", "stash-list");
     click(&mut manager, "history", "repo-stash-pop");
     assert_eq!(
         stash_oids(root),
@@ -247,7 +247,7 @@ fn git_package_successful_stash_pop_and_drop_remove_only_the_confirmed_entries()
     assert_eq!(git(root, &["ls-files", "--stage"]), index);
 
     click(&mut manager, "history", "repo-close");
-    click(&mut manager, "history", "repo-stashes");
+    click(&mut manager, "history", "stash-list");
     click(&mut manager, "history", "repo-stash-drop");
     assert_eq!(
         stash_oids(root),
@@ -291,18 +291,10 @@ fn git_package_reopened_cherry_pick_skips_only_its_conflicted_first_commit() {
     let original = commit_file(root, "merge.txt", "retained local\n", "local target");
     let original_index = git(root, &["ls-files", "--stage"]);
     let (profile, mut manager) = activate(&candidate(), root);
-    send(
+    branch_menu::context_action(
         &mut manager,
-        "history",
-        "argument",
-        ui::Action::Change(format!("{first} {second}")),
-    );
-    click(&mut manager, "history", "advanced-open");
-    send(
-        &mut manager,
-        "history",
-        "advanced-menu",
-        ui::Action::Select("cherry-pick".into()),
+        "cherry-pick",
+        Some(&format!("{first} {second}")),
     );
     assert!(
         manager.live["git"].views["history"]
@@ -396,10 +388,11 @@ fn git_package_creates_a_branch_switches_explicitly_and_confirms_only_the_select
     let (_profile, mut manager) = activate(&candidate(), root);
     let branch = "topic/from-plugin";
     let reference = format!("refs/heads/{branch}");
+    branch_menu::context_action(&mut manager, "branch", None);
     send(
         &mut manager,
         "history",
-        "argument",
+        "branch-name",
         ui::Action::Change(branch.into()),
     );
     assert!(
@@ -414,7 +407,7 @@ fn git_package_creates_a_branch_switches_explicitly_and_confirms_only_the_select
         original,
         "entering a name cannot create or switch refs"
     );
-    click(&mut manager, "history", "branch");
+    click(&mut manager, "history", "branch-create");
     assert_eq!(oid(root, &reference), original);
     assert_eq!(oid(root, "main"), original);
     assert_eq!(git(root, &["symbolic-ref", "HEAD"]), "refs/heads/main\n");
@@ -423,7 +416,7 @@ fn git_package_creates_a_branch_switches_explicitly_and_confirms_only_the_select
         fs::read(root.join("tracked.txt")).unwrap(),
         b"reviewed base\n"
     );
-    click(&mut manager, "history", "switch");
+    branch_menu::context_action(&mut manager, "switch", Some(branch));
     assert!(
         manager.live["git"].views["history"]
             .active_node("confirm-command")

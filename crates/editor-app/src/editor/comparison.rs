@@ -8,6 +8,7 @@ use gpui_kit::Hsla;
 use plugin_runtime::plugin_protocol::api;
 mod presentation;
 mod sessions;
+mod third;
 pub(crate) use sessions::ComparisonView;
 
 /// Share only bounded immutable byte intervals with native comparison consumers. Editor ownership,
@@ -37,6 +38,8 @@ pub(crate) struct DocumentComparison {
     right_title: String,
     left_marks: RangeDecorationCollection,
     right_marks: RangeDecorationCollection,
+    /// An optional readonly third source and its independently owned result/parent decorations.
+    third: Option<third::ThirdComparison>,
     inline_marks: [RangeDecorationCollection; 2],
     // Immutable byte ranges are sufficient to recolor live comparisons; text stays in EditorState.
     hunks: Vec<diff::Hunk>,
@@ -51,7 +54,7 @@ pub(crate) struct DocumentComparison {
     alignment: AlignmentGroup,
     synchronized: Cell<bool>,
     /// Independent-mode navigation uses measured native viewports and never changes selection.
-    navigation: Rc<std::cell::RefCell<[Option<crate::editor::viewport::Locator>; 2]>>,
+    navigation: Rc<std::cell::RefCell<[Option<crate::editor::viewport::Locator>; 3]>>,
 }
 
 /// Resolve deletion, insertion and modification colors from the current local theme.
@@ -68,27 +71,34 @@ fn configure_alignment(comparison: &mut DocumentComparison, window: &Window, cx:
     let Some(router) = crate::ui::controls::aligned_pointer::for_window(window, cx) else {
         return;
     };
-    let _ = comparison.alignment.configure(
-        vec![
-            AlignmentPane {
-                editor: comparison.left_editor.clone(),
-                revision: comparison.left.revision,
-                label: comparison.left_title.clone(),
-                input_factory: None,
-                // PaneView supplies local appearance and the sole physical readonly a11y node.
-                native_authority_factory: None,
-            },
-            AlignmentPane {
-                editor: comparison.right_editor.clone(),
-                revision: comparison.right.revision,
-                label: comparison.right_title.clone(),
-                input_factory: None,
-                native_authority_factory: None,
-            },
-        ],
-        &router,
-        cx,
-    );
+    let mut panes = vec![
+        AlignmentPane {
+            editor: comparison.left_editor.clone(),
+            revision: comparison.left.revision,
+            label: comparison.left_title.clone(),
+            input_factory: None,
+            // PaneView supplies local appearance and the sole physical readonly a11y node.
+            native_authority_factory: None,
+        },
+        AlignmentPane {
+            editor: comparison.right_editor.clone(),
+            revision: comparison.right.revision,
+            label: comparison.right_title.clone(),
+            input_factory: None,
+            native_authority_factory: None,
+        },
+    ];
+    if let Some(third) = &comparison.third {
+        panes.push(AlignmentPane {
+            editor: third.editor.clone(),
+            revision: third.version.revision,
+            label: third.title.clone(),
+            input_factory: None,
+            native_authority_factory: None,
+        });
+    }
+    let _ = comparison.alignment.configure(panes, &router, cx);
+    comparison.alignment.set_inner_gutters(true, cx);
     comparison
         .alignment
         .set_enabled(comparison.synchronized.get(), cx);
@@ -130,6 +140,7 @@ impl EditorApp {
         self.install_document_comparison(
             left,
             right,
+            None,
             request.authority().clone(),
             Some(request),
             window,
@@ -142,6 +153,7 @@ impl EditorApp {
         &mut self,
         left: &api::DocumentVersion,
         right: &api::DocumentVersion,
+        third: Option<&api::DocumentVersion>,
         authority: plugin_runtime::EditorAuthority,
         request: Option<&plugin_runtime::EditorRequest>,
         window: &mut Window,
@@ -165,6 +177,10 @@ impl EditorApp {
                 "Comparison right document changed or closed",
             )
         })?;
+        // Validate every extra source and both pairwise budgets before replacing a live view.
+        let third_source = third
+            .map(|target| self.prepare_third_comparison(target, left, right, cx))
+            .transpose()?;
         if li == ri {
             return Err(api::Failure::new(
                 api::ErrorCode::InvalidRequest,
@@ -244,7 +260,9 @@ impl EditorApp {
         self.activate_tab(ri, window, cx);
         // Activating a tab can settle linked input. Never attach a pre-activation diff
         // if that settlement advanced either source's capability revision.
-        if self.plugin_document_version(li)? != *left || self.plugin_document_version(ri)? != *right
+        if self.plugin_document_version(li)? != *left
+            || self.plugin_document_version(ri)? != *right
+            || third.is_some_and(|target| !self.comparison_source_is_exact(target))
         {
             return Err(api::Failure::new(
                 api::ErrorCode::StaleRevision,
@@ -263,6 +281,7 @@ impl EditorApp {
         });
         let inline_marks =
             presentation::create_inline_marks(&left_editor, &right_editor, &hunks, cx);
+        let third = third_source.map(|source| source.mount(&right_editor, cx));
         let mut comparison = DocumentComparison {
             authority,
             left: left.clone(),
@@ -274,6 +293,7 @@ impl EditorApp {
             right_title: self.tabs[ri].title(),
             left_marks,
             right_marks,
+            third,
             inline_marks,
             hunks,
             colors,
@@ -283,7 +303,7 @@ impl EditorApp {
             unified_hunks: Vec::new(),
             alignment: AlignmentGroup::new(cx),
             synchronized: Cell::new(true),
-            navigation: Rc::new(std::cell::RefCell::new([None, None])),
+            navigation: Rc::new(std::cell::RefCell::new([None, None, None])),
         };
         configure_alignment(&mut comparison, window, cx);
         self.document_comparison = Some(comparison);
@@ -309,6 +329,7 @@ impl EditorApp {
             let restore_focus = self.document_comparison.as_ref().is_some_and(|comparison| {
                 [&comparison.left_editor, &comparison.right_editor]
                     .into_iter()
+                    .chain(comparison.third.as_ref().map(|third| &third.editor))
                     .any(|editor| {
                         editor != &self.editor
                             && editor
@@ -337,6 +358,9 @@ impl EditorApp {
                 .set(comparison_marks(&comparison.hunks, colors, false), cx);
             comparison.colors = colors;
             presentation::refresh_inline_marks(comparison, cx);
+            if let Some(third) = &mut comparison.third {
+                third.refresh_marks(&comparison.right_editor, colors, cx);
+            }
             self.prepare_unified_comparison(window, cx);
         }
     }
@@ -361,6 +385,9 @@ impl EditorApp {
             && !self.plugin_window_mounts.contains_key(&comparison.right.id)
             && live(&comparison.left)
             && live(&comparison.right)
+            && comparison.third.as_ref().is_none_or(|third| {
+                !self.plugin_window_mounts.contains_key(&third.version.id) && live(&third.version)
+            })
             && self.active_tab_index().is_some_and(|index| {
                 self.plugin_document_version(index)
                     .is_ok_and(|version| version == comparison.right)
@@ -392,6 +419,9 @@ impl EditorApp {
             comparison.alignment.retire(cx);
             comparison.left_marks.dispose(cx);
             comparison.right_marks.dispose(cx);
+            if let Some(third) = comparison.third {
+                third.unmount(&comparison.right_editor, cx);
+            }
             for marks in comparison.inline_marks {
                 marks.dispose(cx);
             }
@@ -412,6 +442,7 @@ impl EditorApp {
             [&comparison.left_editor, &comparison.right_editor]
                 .into_iter()
                 .chain(comparison.unified_editor.as_ref())
+                .chain(comparison.third.as_ref().map(|third| &third.editor))
                 .any(|editor| {
                     !editor.read(cx).presentation().is_editable()
                         && editor
@@ -433,6 +464,9 @@ impl EditorApp {
             return None;
         }
         let comparison = self.document_comparison.as_ref()?;
+        if comparison.third.is_some() {
+            return self.render_three_document_comparison(window, cx);
+        }
         comparison
             .alignment
             .set_enabled(comparison.synchronized.get(), cx);
@@ -487,7 +521,7 @@ impl EditorApp {
         let left_focus = left.clone();
         let left_projection = comparison.alignment.clone();
         let navigation = comparison.navigation.clone();
-        let sources = [
+        let sources = vec![
             comparison.left_editor.clone(),
             comparison.right_editor.clone(),
         ];
@@ -523,7 +557,7 @@ impl EditorApp {
                                             this.open_plugin_document_menu(
                                                 menu_target.clone(),
                                                 left_projection
-                                                    .project_bounds(
+                                                    .project_pointer_bounds(
                                                         0,
                                                         Bounds::new(
                                                             event.position,

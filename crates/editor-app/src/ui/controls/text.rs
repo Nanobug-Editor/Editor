@@ -1,7 +1,7 @@
 //! Rich text colors and spacing are resolved from the active editor theme.
 
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{TextView, TextViewStyle};
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
     App, HighlightStyle, Hsla, ImageSource, Pixels, SharedString, StyleRefinement, Styled, rems,
 };

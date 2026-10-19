@@ -41,6 +41,7 @@ impl EditorApp {
         let id = gpui_base::dock::PanelId::from(self.messages.entity_id());
         let area = self.dock_area.read(cx);
         self.messages.read(cx).is_visible()
+            && !self.dock_presentation.is_suppressed(id)
             && ![
                 gpui_base::dock::DockPlacement::Left,
                 gpui_base::dock::DockPlacement::Right,
@@ -57,6 +58,10 @@ impl EditorApp {
     /// Toggle only this host panel; other panels sharing a dock retain their own visibility.
     pub(crate) fn toggle_messages(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let visible = !self.messages_visible(cx);
+        if visible {
+            self.dock_presentation
+                .activate(gpui_base::dock::PanelId::from(self.messages.entity_id()));
+        }
         self.messages.update(cx, |panel, cx| {
             // Acknowledge before reopening, so a later receipt survives every deferred layout notification.
             if visible {

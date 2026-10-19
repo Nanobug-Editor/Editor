@@ -1,6 +1,6 @@
 //! Project-owned dialogs use Base modal behavior and the editor's local surface tokens.
 
-use gpui_kit::component::ActiveTheme as _;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_kit::{AnyElement, App, FocusHandle, IntoElement, ParentElement, Styled, Window, px};
 
 /// Clone inputs use a Base focus trap, occluding backdrop and explicit button activation.

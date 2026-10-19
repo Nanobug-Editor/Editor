@@ -6,8 +6,8 @@ use std::cell::RefCell;
 /// Executes only explicit independent-pane navigation using current native shaped geometry.
 /// Shared aligned scrolling is owned by AlignmentGroup and never competes with this fallback.
 pub(super) fn navigate_native_viewports(
-    pending: &RefCell<[Option<crate::editor::viewport::Locator>; 2]>,
-    editors: &[Entity<EditorState>; 2],
+    pending: &RefCell<[Option<crate::editor::viewport::Locator>; 3]>,
+    editors: &[Entity<EditorState>],
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -112,6 +112,11 @@ impl EditorApp {
     /// Shared controls remain native local buttons and operate only on the mounted comparison.
     pub(super) fn comparison_toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
         let comparison = self.document_comparison.as_ref().unwrap();
+        let no_changes = comparison.hunks.is_empty()
+            && comparison
+                .third
+                .as_ref()
+                .is_none_or(|third| third.hunks.is_empty());
         let unified = self.active_comparison.as_ref().is_some_and(|id| {
             self.comparison_views
                 .iter()
@@ -126,7 +131,7 @@ impl EditorApp {
             .child(
                 Button::new("diff-previous")
                     .label(t!("editor.diff_previous").to_string())
-                    .disabled(comparison.hunks.is_empty())
+                    .disabled(no_changes)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.navigate_comparison_hunk(false, window, cx)
                     })),
@@ -135,7 +140,7 @@ impl EditorApp {
                 Button::new("diff-next")
                     .debug_selector(|| "diff-next".into())
                     .label(t!("editor.diff_next").to_string())
-                    .disabled(comparison.hunks.is_empty())
+                    .disabled(no_changes)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.navigate_comparison_hunk(true, window, cx)
                     })),
@@ -148,7 +153,7 @@ impl EditorApp {
                     } else {
                         t!("editor.diff_unified").to_string()
                     })
-                    .disabled(self.active_comparison.is_none())
+                    .disabled(self.active_comparison.is_none() || comparison.third.is_some())
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(id) = &this.active_comparison
                             && let Some(view) =
@@ -229,7 +234,8 @@ impl EditorApp {
         let Some(comparison) = &self.document_comparison else {
             return;
         };
-        let count = comparison.hunks.len();
+        let targets = third::navigation_targets(comparison);
+        let count = targets.len();
         if count == 0 {
             return;
         }
@@ -244,7 +250,7 @@ impl EditorApp {
             };
             view.hunk = index;
         }
-        let hunk = &comparison.hunks[index];
+        let target = targets[index];
         if self.active_comparison.as_ref().is_some_and(|id| {
             self.comparison_views
                 .iter()
@@ -262,11 +268,9 @@ impl EditorApp {
             cx.notify();
             return;
         }
-        if !comparison.alignment.reveal_offset(1, hunk.right.start, cx) {
-            *comparison.navigation.borrow_mut() = [
-                Some(crate::editor::viewport::Locator::new(hunk.left.start, 0.0)),
-                Some(crate::editor::viewport::Locator::new(hunk.right.start, 0.0)),
-            ];
+        if !comparison.alignment.reveal_offset(1, target[1], cx) {
+            *comparison.navigation.borrow_mut() =
+                target.map(|offset| Some(crate::editor::viewport::Locator::new(offset, 0.0)));
         }
         cx.notify();
     }
@@ -279,6 +283,10 @@ impl EditorApp {
         let Some(comparison) = &mut self.document_comparison else {
             return;
         };
+        // A unified two-source patch cannot represent both parents of a three-source view.
+        if comparison.third.is_some() {
+            return;
+        }
         let left = comparison.left_editor.read(cx).value().to_string();
         let right = comparison.right_editor.read(cx).value().to_string();
         let mut text = String::new();

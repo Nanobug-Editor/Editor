@@ -13,11 +13,13 @@ impl Render for ResizeDock {
 }
 
 /// Track moves across the whole window, as a pointer can leave the narrow handle.
+/// `regions` records the dock's actual window-space allocation for release-time placement.
 pub(super) fn render(
     dock: &DockContext,
     content: AnyElement,
     resizing: Rc<Cell<Option<DockPlacement>>>,
     area: WeakEntity<DockArea>,
+    regions: Rc<RefCell<HashMap<DockPlacement, Bounds<Pixels>>>>,
     _: &mut Window,
     _: &mut App,
 ) -> AnyElement {
@@ -81,6 +83,9 @@ pub(super) fn render(
         .flex()
         .size_full()
         .relative()
+        .on_prepaint(move |bounds, _, _| {
+            regions.borrow_mut().insert(placement, bounds);
+        })
         .child(content)
         .child(handle)
         .child(tracker)

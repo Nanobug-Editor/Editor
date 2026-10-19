@@ -101,9 +101,9 @@ pub(super) fn record_default(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         let app = h.app.read(cx);
         ensure!(app.explorer_visible && !app.session_state.outline_visible, "sidebar must start from the ordinary host visibility default");
         let area = app.dock_area.read(cx);
-        let tree = area.layout(DockPlacement::Center).context("center layout missing")?;
-        let explorer_node = tree.find_panel_node(PanelId::from(app.explorer_panel.entity_id())).context("Explorer is outside Center")?;
-        let staging_node = tree.find_panel_node(PanelId::from(app.plugin_panels["git/staging"].entity_id())).context("staging is outside Center")?;
+        let tree = area.layout(DockPlacement::Left).context("left layout missing")?;
+        let explorer_node = tree.find_panel_node(PanelId::from(app.explorer_panel.entity_id())).context("Explorer is outside Left")?;
+        let staging_node = tree.find_panel_node(PanelId::from(app.plugin_panels["git/staging"].entity_id())).context("staging is outside Left")?;
         ensure!(explorer_node != staging_node, "default peers merged into tabs");
         let staging = frame(window, &input::field(window, "commit-message")?)?;
         let explorer = frame(window, &toolbar_button(window, "explorer-hide")?)?;
@@ -120,8 +120,8 @@ pub(super) fn sample(h: &Harness, window: &Window, cx: &App) -> anyhow::Result<G
     let app = h.app.read(cx);
     let area = app.dock_area.read(cx);
     let tree = area
-        .layout(DockPlacement::Center)
-        .context("center layout missing")?;
+        .layout(DockPlacement::Left)
+        .context("left layout missing")?;
     let ids = [
         PanelId::from(app.explorer_panel.entity_id()),
         PanelId::from(app.outline_panel.entity_id()),
@@ -129,7 +129,7 @@ pub(super) fn sample(h: &Harness, window: &Window, cx: &App) -> anyhow::Result<G
     ];
     let nodes = ids.map(|id| {
         tree.find_panel_node(id)
-            .context("shared peer is outside Center")
+            .context("shared peer is outside Left")
     });
     let [explorer_node, outline_node, staging_node] = nodes;
     let (explorer_node, outline_node, staging_node) =
@@ -141,8 +141,9 @@ pub(super) fn sample(h: &Harness, window: &Window, cx: &App) -> anyhow::Result<G
         "sidebar peers merged into tabs"
     );
     ensure!(
-        tree.find_panel_node(PanelId::from(app.editor_panel.entity_id()))
-            .is_some(),
+        area.layout(DockPlacement::Center).is_some_and(|tree| tree
+            .find_panel_node(PanelId::from(app.editor_panel.entity_id()))
+            .is_some()),
         "editor left Center"
     );
     let staging = frame(window, &input::field(window, "commit-message")?)?;

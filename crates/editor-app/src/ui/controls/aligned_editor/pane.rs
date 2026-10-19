@@ -1,6 +1,7 @@
 //! Native slice composition, one authority paint and shared viewport actions.
 use super::super::editor::synchronize_editor_appearance;
 use super::*;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{
     InputBase, ScrollbarAxis,
     input::{Editor, MoveDown, MovePageDown, MovePageUp, MoveUp},
@@ -9,8 +10,8 @@ use gpui_kit::{
     AccessibleAction, Context, DispatchPhase, Focusable as _, HitboxBehavior,
     InteractiveElement as _, ParentElement as _, Point, Render, Role, ScrollWheelEvent,
     SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, canvas,
-    component::ActiveTheme as _, div, point, prelude::FluentBuilder as _,
 };
+use gpui_kit::{div, point, prelude::FluentBuilder as _};
 
 pub(super) struct PaneView {
     group: Entity<GroupState>,
@@ -18,6 +19,8 @@ pub(super) struct PaneView {
     region: PointerRegion,
     scroll: scroll::Handle,
     authority_fence: notifications::AuthorityFence,
+    /// Exact native metrics for the next visual frame; input always describes the painted frame.
+    gutter_metrics: Rc<Cell<gutter::Metrics>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -48,6 +51,7 @@ impl PaneView {
             region,
             scroll,
             authority_fence,
+            gutter_metrics: Rc::new(Cell::new(gutter::Metrics::default())),
             _subscriptions: subscriptions,
         }
     }
@@ -156,6 +160,13 @@ impl Render for PaneView {
                 .map(|m| display.pane(m))
         });
         let native_scroll = group.native_scroll(self.index);
+        let inner_gutter = group.inner_gutters && self.index == 0;
+        let painted_gutter = if inner_gutter {
+            self.gutter_metrics.get()
+        } else {
+            gutter::Metrics::default()
+        };
+        let gutter_metrics = self.gutter_metrics.clone();
         let scroll = group.scroll.get();
         let unavailable = matches!(
             group.effective_status(),
@@ -247,7 +258,33 @@ impl Render for PaneView {
                 || Editor::new(&editor).into_any_element(),
                 |factory| factory(&editor, window, cx),
             );
-            body = body.child(native);
+            if inner_gutter && painted_gutter.width > px(0.) {
+                body = body
+                    .child(gutter::pixels(
+                        &editor,
+                        painted_gutter,
+                        px(0.),
+                        painted_gutter.height,
+                        true,
+                        || {
+                            source.native_authority_factory.as_ref().map_or_else(
+                                || Editor::new(&editor).into_any_element(),
+                                |factory| factory(&editor, window, cx),
+                            )
+                        },
+                    ))
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .size_full()
+                            .opacity(0.)
+                            .child(native),
+                    );
+            } else {
+                body = body.child(native);
+            }
         } else {
             if let (Some(layout), Some(view)) = (pane_layout, pane_viewport) {
                 let mut visible = div()
@@ -273,15 +310,16 @@ impl Render for PaneView {
                             .h(height)
                             .overflow_hidden()
                             .child(
-                                div()
-                                    .absolute()
-                                    // Every clip starts at a source glyph, not its editor's own
-                                    // padding. One physical group origin supplies the outer inset.
-                                    .top(px(-slice.source.start) - view.native_inset_y)
-                                    .left_0()
-                                    .w_full()
-                                    .h(px(full_height))
-                                    .child(Editor::new(&editor)),
+                                // Reorder pixels within each measured source interval; zero-byte
+                                // alignment gaps remain outside both text and native line numbers.
+                                gutter::pixels(
+                                    &editor,
+                                    painted_gutter,
+                                    px(-slice.source.start) - view.native_inset_y,
+                                    px(full_height),
+                                    false,
+                                    || Editor::new(&editor).into_any_element(),
+                                ),
                             ),
                     );
                 }
@@ -306,14 +344,40 @@ impl Render for PaneView {
         }
         body = body.child(
             canvas(
-                |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
+                move |bounds, window, _| {
+                    let code = gutter::Projection::new(bounds, painted_gutter, unavailable)
+                        .map_or(bounds, |gutter| gutter.code_bounds());
+                    window.insert_hitbox(code, HitboxBehavior::Normal)
+                },
                 move |viewport, hitbox, window, cx| {
                     if measure_group.read(cx).epoch != epoch {
                         return;
                     }
                     measure_group.update(cx, |group, _| group.viewports[index] = Some(viewport));
+                    let horizontal = gutter::Projection::new(viewport, painted_gutter, unavailable);
+                    if measure_group.read(cx).gutters[index] != horizontal {
+                        // A resize/changed font can move the seam beneath a captured mouse-down.
+                        // Release that old native gesture before publishing a different partition.
+                        region.request_cancel();
+                    }
+                    measure_group.update(cx, |group, _| group.gutters[index] = horizontal);
                     let native = finish_editor.read(cx);
+                    if inner_gutter {
+                        let metrics = gutter::Metrics::read(
+                            native,
+                            viewport,
+                            if unavailable { px(0.) } else { -native_scroll },
+                            gutter_metrics.get(),
+                        );
+                        if metrics != gutter_metrics.replace(metrics) {
+                            let changed = measure_group.entity_id();
+                            window.on_next_frame(move |_, cx| cx.notify(changed));
+                        }
+                    }
                     if unavailable {
+                        // Horizontal copies also notify while vertical alignment is paused.
+                        // Fence their completed authority paint to avoid an idle repaint loop.
+                        authority_fence.completed(notifications::PaintedNative::read(native), cx);
                         let retry = measure_group.update(cx, |group, cx| {
                             group.retry_disjoint_viewport(index, viewport, cx)
                         });
@@ -323,7 +387,9 @@ impl Render for PaneView {
                         }
                         // This frame already painted the independent native control. Preserve
                         // its identity input delegate until the next complete geometry frame.
-                        region.publish(hitbox, viewport, |point| point);
+                        region.publish_drag(hitbox, viewport, move |point, anchor| {
+                            horizontal.map_or(point, |gutter| gutter.native_point(point, anchor))
+                        });
                         input::install(
                             &measure_group,
                             index,
@@ -427,7 +493,9 @@ impl Render for PaneView {
                     // Capture is constrained to the physical pane even though native source bounds
                     // are full-height and can begin above it after a distant projected scroll.
                     let safe = actual_native_bounds.intersect(&viewport);
-                    region.publish(hitbox, safe, move |point| {
+                    region.publish_drag(hitbox, safe, move |point, anchor| {
+                        let point =
+                            horizontal.map_or(point, |gutter| gutter.native_point(point, anchor));
                         let native = mapped.native_point(point).unwrap_or(point);
                         // A gap can straddle the viewport top. Never send an ordinary click
                         // to the preceding, physically clipped source row above another control.

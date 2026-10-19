@@ -45,6 +45,10 @@ struct State {
     plugin_services: plugin_services::Services,
     /// Every instance has one negotiated capability transport; there is no legacy fallback.
     api: api::Negotiated,
+    /// Extended menu metadata requires an explicitly declared floor, not only a newer host inventory.
+    tree_menu_1_1: bool,
+    /// Cached metadata updates must opt in to 1.2 without silently widening older tree contracts.
+    tree_update_1_2: bool,
     /// Immutable metadata never becomes a preopened directory or guest-controlled file root.
     host_resources: crate::HostResources,
     native_diagnostics: crate::faults::NativeDiagnostics,
@@ -380,6 +384,15 @@ impl Instance {
             virtual_documents: Default::default(),
             diagnostic_collections: Default::default(),
             trees: Default::default(),
+            tree_menu_1_1: manifest
+                .api
+                .as_ref()
+                .and_then(|requirements| requirements.required.get("ui.tree"))
+                .is_some_and(|range| {
+                    range.matches(&semver::Version::new(1, 2, 0))
+                        && !range.matches(&semver::Version::new(1, 0, 0))
+                }),
+            tree_update_1_2: trees::requires_cached_update_floor(manifest.api.as_ref()),
             decorations: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest

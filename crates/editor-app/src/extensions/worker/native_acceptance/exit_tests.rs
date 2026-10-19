@@ -209,7 +209,7 @@ fn open_window(
     let mut options = if slice == Slice::Empty {
         WindowOptions::default()
     } else {
-        gpui_kit::component::TitleBar::window_options()
+        crate::ui::controls::window::TitleBar::window_options()
     };
     options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
         None,

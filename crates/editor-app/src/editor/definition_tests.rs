@@ -2,8 +2,10 @@
 
 use crate::*;
 use editor_core::Workspace;
+use gpui_base::Root;
 use gpui_base::input::DefinitionProvider;
-use gpui_kit::{TestAppContext, component::Root, gpui, size};
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, size};
 use lsp_types::{LocationLink, Position};
 use std::{cell::RefCell, ops::Range, rc::Rc, str::FromStr as _};
 

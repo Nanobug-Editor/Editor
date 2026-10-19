@@ -69,6 +69,8 @@ impl Catalog {
                             tree::Node::new(format!("user-{id}"), format!("User {id:03}"), false);
                         let command = tree::Command {
                             command: "inspect-object".into(),
+                            disabled: false,
+                            separator_before: false,
                             label: ui::LocalizedText::new("Inspect object", "查看对象"),
                             arguments: serde_json::json!(format!("user-{id}")),
                         };
@@ -110,6 +112,8 @@ impl Catalog {
                 // Activation and each menu item retain their own arguments and translated labels.
                 node.activation = Some(tree::Command {
                     command: "inspect-object".into(),
+                    disabled: false,
+                    separator_before: false,
                     label: ui::LocalizedText::new("Inspect summary", "查看摘要"),
                     arguments: serde_json::json!("recovered:summary"),
                 });
@@ -120,6 +124,8 @@ impl Catalog {
                 .into_iter()
                 .map(|(en, zh_cn, object)| tree::Command {
                     command: "inspect-object".into(),
+                    disabled: false,
+                    separator_before: false,
                     label: ui::LocalizedText::new(en, zh_cn),
                     arguments: serde_json::json!(object),
                 })

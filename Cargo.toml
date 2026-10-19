@@ -39,8 +39,8 @@ license = "MIT"
 [workspace.dependencies]
 anyhow = "1.0"
 dirs = "6.0"
-# Keep the facade and directly used Base APIs on the same stable release.
-gpui-kit = { version = "0.7.0", features = ["tree-sitter-languages"] }
+# UI behavior comes from Base; styled components and bundled native grammars stay disabled.
+gpui-kit = { version = "0.7.0", default-features = false, features = ["assets"] }
 ignore = "0.4"
 # Native ReadDirectoryChangesW, FSEvents, and inotify backends watch the workspace.
 notify = "8.2"

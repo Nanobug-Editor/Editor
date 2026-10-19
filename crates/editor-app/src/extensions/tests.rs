@@ -1,6 +1,6 @@
 //! Exercise dynamic native panels, declarative input commits and shortcut isolation.
 use super::*;
-use gpui_kit::component::WindowExt as _;
+use crate::ui::controls::overlay::WindowExt as _;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
 /// Installed theme definitions use the generic plugin environment API.

@@ -1,6 +1,8 @@
 //! Native popup navigation must skip disabled commands and dismiss once.
 use super::*;
-use gpui_kit::{AppContext as _, TestAppContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::gpui;
+use gpui_kit::{AppContext as _, TestAppContext};
 use std::cell::RefCell;
 
 /// A title dropdown uses its measured trigger, and follows later dock relocation.

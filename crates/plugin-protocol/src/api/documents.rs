@@ -72,6 +72,17 @@
 //! Closing a source or retiring its owner revokes every referencing descriptor. Superseded hidden
 //! snapshots are reclaimed when no descriptor references them. Neither closing a comparison nor
 //! retiring its plugin discards a user's local document, edits or native Undo history.
+//!
+//! # Three-source comparisons (`editor.diff` 1.2)
+//!
+//! `OpenDocumentComparison.third` adds a third exact source to the same file-bound tab. The
+//! native order is `left`, `right`, `third`: callers can present an input, its result and a
+//! second input without changing the original two-source field meanings. All three sessions
+//! must be distinct and readable; instance ownership, revision checks, bounded comparison
+//! work and source-close retirement apply to every source. The three-pane presentation is
+//! readonly, including when one source is a local document; it never changes that document's
+//! editing behavior outside this tab. Omitting `third` retains the 1.1 two-pane behavior and
+//! serialization. A caller supplying `third` must negotiate `editor.diff >=1.2,<2`.
 use super::{DocumentVersion, ErrorCode, Failure, ResourceHandle, TextRange};
 use serde::{Deserialize, Serialize};
 
@@ -352,6 +363,46 @@ pub struct DocumentSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Missing third sources retain the old wire shape; explicit sources survive SDK transport.
+    #[test]
+    fn comparison_third_source_is_optional_and_preserves_exact_identity() {
+        let version = |id: &str| DocumentVersion {
+            id: id.into(),
+            path: format!("{id}.txt"),
+            revision: 7,
+        };
+        let mut operation = super::super::EditorOperation::OpenDocumentComparison {
+            key: "comparison".into(),
+            title: "Comparison".into(),
+            left: version("left"),
+            right: version("result"),
+            third: None,
+            preview: true,
+        };
+        let encoded = serde_json::to_value(&operation).unwrap();
+        assert!(encoded.get("third").is_none());
+        let decoded: super::super::EditorOperation =
+            serde_json::from_value(encoded.clone()).unwrap();
+        assert!(matches!(
+            decoded,
+            super::super::EditorOperation::OpenDocumentComparison { third: None, .. }
+        ));
+        if let super::super::EditorOperation::OpenDocumentComparison { third, .. } = &mut operation
+        {
+            *third = Some(version("third"));
+        }
+        let encoded = serde_json::to_value(&operation).unwrap();
+        assert_eq!(encoded["third"]["revision"], 7);
+        let decoded: super::super::EditorOperation = serde_json::from_value(encoded).unwrap();
+        let super::super::EditorOperation::OpenDocumentComparison {
+            third: Some(third), ..
+        } = decoded
+        else {
+            panic!("third source must survive serialization")
+        };
+        assert_eq!(third, version("third"));
+    }
 
     /// Plain filenames retain literal URL punctuation while unsafe platform paths are rejected.
     #[test]

@@ -1,11 +1,12 @@
 //! Shared explorer-style menu appearance and a native popup with keyboard navigation.
+use crate::ui::theme::ActiveTheme as _;
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     App, Context, Div, ElementId, FocusHandle, Focusable, FontWeight, Hsla, InteractiveElement,
     IntoElement, KeyDownEvent, MouseButton, ParentElement, Pixels, Point, Render, Role,
     ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, anchored, deferred,
     div, point, px,
 };
-use gpui_kit::{component::ActiveTheme as _, prelude::FluentBuilder as _};
 use plugin_runtime::plugin_protocol::ui::{Action, MenuItem};
 use std::collections::BTreeMap;
 use std::rc::Rc;

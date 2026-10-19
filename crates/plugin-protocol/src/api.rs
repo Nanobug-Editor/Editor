@@ -681,11 +681,15 @@ pub enum EditorOperation {
     /// decorations; tab switches retain the comparison. At most 32 views may remain open.
     /// `preview` permits replacing another unpinned preview from this owner; double-click pins it.
     /// Returns DocumentsCompared. Sources must be distinct readable sessions; virtuals stay owned.
+    /// editor.diff 1.2: `third` adds a readonly right pane, displaying `left`, `right`, `third`
+    /// from left to right. All three panes are readonly when the third version is present.
     OpenDocumentComparison {
         key: String,
         title: String,
         left: DocumentVersion,
         right: DocumentVersion,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        third: Option<DocumentVersion>,
         #[serde(default)]
         preview: bool,
     },

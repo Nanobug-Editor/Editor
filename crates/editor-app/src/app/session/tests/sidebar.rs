@@ -26,10 +26,10 @@ fn legacy_session_without_saved_dock_starts_with_current_sidebar_layout() {
     assert!(loaded.dock_layout.is_none());
     assert_eq!(
         serde_json::to_value(loaded).unwrap()[SIDEBAR_VERSION].as_u64(),
-        Some(1),
+        Some(2),
         "a legacy session without a saved dock must use the current default before any new user move"
     );
-    legacy[SIDEBAR_VERSION] = serde_json::json!(2);
+    legacy[SIDEBAR_VERSION] = serde_json::json!(3);
     fs::write(
         SessionState::file_in_profile(&workspace, &profile),
         serde_json::to_vec_pretty(&legacy).unwrap(),
@@ -38,7 +38,7 @@ fn legacy_session_without_saved_dock_starts_with_current_sidebar_layout() {
     let future = SessionState::load_in_profile(&workspace, &profile);
     assert_eq!(
         serde_json::to_value(future).unwrap()[SIDEBAR_VERSION].as_u64(),
-        Some(2),
+        Some(3),
         "loading the default layout must not lower a future marker"
     );
 }
@@ -119,7 +119,7 @@ fn legacy_left_plugin_session_migrates_into_shared_sidebar_after_startup(cx: &mu
         let default = PanelId::from(app.plugin_panels[DEFAULT_PANEL].entity_id());
         let customized = PanelId::from(app.plugin_panels[CUSTOM_PANEL].entity_id());
         assert!(
-            area.layout(DockPlacement::Center)
+            area.layout(DockPlacement::Left)
                 .unwrap()
                 .find_panel_node(default)
                 .is_some(),
@@ -133,7 +133,7 @@ fn legacy_left_plugin_session_migrates_into_shared_sidebar_after_startup(cx: &mu
             "a manifest left hint must not undo the user's saved right placement"
         );
         assert!(
-            area.layout(DockPlacement::Left)
+            area.layout(DockPlacement::Center)
                 .is_none_or(|tree| tree.find_panel_node(default).is_none())
         );
         assert_eq!(
@@ -155,7 +155,7 @@ fn legacy_left_plugin_session_migrates_into_shared_sidebar_after_startup(cx: &mu
             );
         }
         let actual = area.dump(cx);
-        assert_center_split_preference(&actual, &previous);
+        assert_independent_sidebar_preference(&actual, &previous);
         let old_right = previous.right_dock.as_ref().unwrap();
         let new_right = actual.right_dock.as_ref().unwrap();
         assert!((new_right.size() - old_right.size()).abs() < px(2.));
@@ -163,7 +163,7 @@ fn legacy_left_plugin_session_migrates_into_shared_sidebar_after_startup(cx: &mu
         let current = serde_json::to_value(&app.session_state).unwrap();
         assert_eq!(
             current[SIDEBAR_VERSION].as_u64(),
-            Some(1),
+            Some(2),
             "only a completed native layout migration may consume the once-only marker"
         );
         let saved: serde_json::Value =
@@ -171,7 +171,7 @@ fn legacy_left_plugin_session_migrates_into_shared_sidebar_after_startup(cx: &mu
                 .unwrap();
         assert_eq!(
             saved[SIDEBAR_VERSION].as_u64(),
-            Some(1),
+            Some(2),
             "completed migration must be persisted"
         );
     });
@@ -303,22 +303,14 @@ fn assert_shared_sidebar_geometry(app: &Entity<EditorApp>, visual: &mut VisualTe
     );
 }
 
-/// Removing the outer dock changes available pixels; Base retains its native center split preferences.
-fn assert_center_split_preference(actual: &DockAreaState, previous: &DockAreaState) {
+/// The sidebar now retains pixels independently of the center and right dock's allocation.
+fn assert_independent_sidebar_preference(actual: &DockAreaState, previous: &DockAreaState) {
     assert_eq!(previous.center.info.axis(), Some(Axis::Horizontal));
-    assert_eq!(actual.center.info.axis(), previous.center.info.axis());
-    let previous = previous.center.info.sizes().unwrap();
-    let actual = actual.center.info.sizes().unwrap();
-    assert_eq!(previous.len(), 2);
-    assert_eq!(actual.len(), previous.len());
-    let fraction = |sizes: &[Pixels]| {
-        let total = sizes.iter().copied().map(f32::from).sum::<f32>();
-        assert!(total > 0.);
-        f32::from(sizes[0]) / total
-    };
+    let expected = previous.center.info.sizes().unwrap()[0];
+    let actual = actual.left_dock.as_ref().unwrap().size();
     assert!(
-        (fraction(actual) - fraction(previous)).abs() < 0.01,
-        "migration must preserve Base's center split preference, not two incompatible pixel widths: {previous:?} -> {actual:?}"
+        (actual - expected).abs() < px(2.),
+        "migration must retain the measured sidebar pixels: {expected:?} -> {actual:?}"
     );
 }
 
@@ -331,19 +323,22 @@ fn save_current_left_customization(
         app.update(cx, |app, cx| {
             assert_eq!(
                 serde_json::to_value(&app.session_state).unwrap()[SIDEBAR_VERSION].as_u64(),
-                Some(1)
+                Some(2)
             );
             let panel = PanelId::from(app.plugin_panels[DEFAULT_PANEL].entity_id());
             app.dock_area.update(cx, |area, cx| {
-                // Seed only an empty outer region; the real public move transfers the existing
-                // view out of Center, with Base owning detachment, normalization and identity.
-                area.set_dock(DockPlacement::Left, DockLayout::tabs(), window, cx);
-                let node = area.layout(DockPlacement::Left).unwrap().root().id();
+                // Reorder within the now-independent sidebar without replacing its host peers.
+                let explorer = PanelId::from(app.explorer_panel.entity_id());
+                let node = area
+                    .layout(DockPlacement::Left)
+                    .unwrap()
+                    .find_panel_node(explorer)
+                    .unwrap();
                 area.move_panel(
                     panel,
                     InsertTarget::Split {
                         node,
-                        placement: Placement::Bottom,
+                        placement: Placement::Top,
                         size: None,
                     },
                     window,
@@ -394,7 +389,7 @@ fn assert_current_layout_survives_restart(
         assert!(!app.pending_dock_restore);
         assert_eq!(
             serde_json::to_value(&app.session_state).unwrap()[SIDEBAR_VERSION].as_u64(),
-            Some(1)
+            Some(2)
         );
         let area = app.dock_area.read(cx);
         let panel = PanelId::from(app.plugin_panels[DEFAULT_PANEL].entity_id());

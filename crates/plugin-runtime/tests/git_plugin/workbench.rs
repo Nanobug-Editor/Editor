@@ -2,6 +2,10 @@
 use super::*;
 use std::fs;
 
+#[path = "workbench/branch_menu.rs"]
+pub(crate) mod branch_menu;
+#[path = "workbench/branch_retention.rs"]
+mod branch_retention;
 #[path = "workbench/completions.rs"]
 mod completions;
 #[path = "workbench/history.rs"]

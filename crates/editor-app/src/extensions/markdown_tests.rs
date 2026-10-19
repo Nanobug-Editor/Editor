@@ -491,14 +491,14 @@ fn markdown_language_package_restores_open_document_and_retires_highlighting(
     let source = "# title\n\n**bold** *italic* `code` ~~gone~~ [link](next.md)\n";
     let parser_owner = cx.update(|_, cx| app.read(cx).providers.clone());
     let highlight = |language: &str| {
-        let mut parser = gpui_kit::component::highlighter::SyntaxHighlighter::new(
+        let mut parser = crate::language::highlighter::SyntaxHighlighter::new(
             &parser_owner.parser_key(language),
         );
         parser.update(None, &gpui_base::input::Rope::from(source), None);
         parser
             .styles(
                 &(0..source.len()),
-                gpui_kit::component::highlighter::HighlightTheme::default_dark().as_ref(),
+                crate::language::highlighter::HighlightTheme::default_dark().as_ref(),
             )
             .into_iter()
             .filter(|(_, style)| *style != gpui_kit::HighlightStyle::default())

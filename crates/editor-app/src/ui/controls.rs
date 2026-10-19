@@ -5,6 +5,7 @@ pub(crate) mod aligned_pointer;
 pub(crate) mod aligned_rows;
 mod button;
 mod checkbox;
+pub(crate) mod context_menu;
 mod definition_popup;
 mod diagnostic_popup;
 pub(crate) mod dialog;
@@ -19,13 +20,16 @@ mod input;
 pub(crate) mod interaction;
 pub(crate) mod menu;
 mod notification;
+pub(crate) mod overlay;
 mod popover;
 pub(crate) mod problems;
 pub(crate) mod project_dialog;
+pub(crate) mod scroll;
 mod scrollbar;
 mod segmented_tabs;
 mod shortcut_panel;
 pub(crate) mod side_tabs;
+pub(crate) mod source_editor;
 mod spinner;
 mod split;
 mod status_bar;
@@ -40,6 +44,7 @@ pub(crate) mod window;
 /// Install local window presentation after upstream registration and before creating native roots.
 /// The final decorator projects aligned-editor input before any root/overlay capture listener.
 pub(crate) fn init(cx: &mut gpui_kit::App) {
+    overlay::init(cx);
     aligned_pointer::init(cx);
 }
 
@@ -50,8 +55,8 @@ pub(crate) use diagnostic_popup::diagnostic_popup;
 pub(crate) use dialog::DialogContent;
 pub(crate) use disclosure::disclosure;
 pub(crate) use editor::{
-    readonly_editor, readonly_editor_body, synchronize_editor_appearance, window_editor,
-    window_editor_body,
+    gutter_separator, readonly_editor, readonly_editor_body, synchronize_editor_appearance,
+    window_editor, window_editor_body,
 };
 pub(crate) use editor_actions::{
     EditorActionElements, EditorActionProjection, with_projected_editor_actions,
@@ -77,4 +82,4 @@ pub(crate) use tabs::{comparison_tab, file_tab, preview_tab_badge, tab_strip};
 pub(crate) use text::{RichTextColors, markdown_view, rich_text_view, untrusted_markdown_view};
 pub(crate) use textarea::Textarea;
 pub(crate) use tooltip::Tooltip;
-pub(crate) use tree::{TreeRowAppearance, tree_row};
+pub(crate) use tree::{TreeRowAppearance, TreeRowIcon, tree_row};

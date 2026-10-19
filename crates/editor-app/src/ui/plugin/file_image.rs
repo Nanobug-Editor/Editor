@@ -1,6 +1,6 @@
 //! Draw file-authorized pixels using the sizing policy supplied by the guest.
 use super::*;
-use gpui_kit::component::ActiveTheme;
+use crate::ui::theme::ActiveTheme;
 use gpui_kit::{
     AnyElement, Bounds, InteractiveElement, ParentElement, Styled, div, point, px, size,
 };
@@ -380,7 +380,8 @@ mod tests {
     /// Native input publishes geometry and wheel deltas; only a guest declaration changes the scale.
     #[gpui_kit::gpui::test]
     fn file_image_viewport_forwards_versioned_wheel_and_resize(cx: &mut gpui_kit::TestAppContext) {
-        use gpui_kit::{AppContext as _, component::Root};
+        use gpui_base::Root;
+        use gpui_kit::AppContext as _;
         use plugin_runtime::plugin_protocol::{
             api::FileVersion,
             ui::{Document, Kind, Node},

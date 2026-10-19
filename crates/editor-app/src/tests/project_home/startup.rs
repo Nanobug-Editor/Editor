@@ -173,7 +173,7 @@ fn empty_startup_can_configure_theme_and_manage_plugins(cx: &mut TestAppContext)
         assert!(settings.debug_bounds("settings-workspace-trust").is_none());
         assert!(settings.debug_bounds("settings-nav-languages").is_none());
         click(&mut settings, "settings-theme-dark");
-        assert!(settings.update(|_, cx| gpui_kit::component::ActiveTheme::theme(cx).is_dark()));
+        assert!(settings.update(|_, cx| crate::ui::theme::ActiveTheme::theme(cx).is_dark()));
         click(&mut settings, "settings-nav-editor");
         let before = settings.update(|_, cx| typography::font_size(cx));
         click(&mut settings, "font-size-increase");

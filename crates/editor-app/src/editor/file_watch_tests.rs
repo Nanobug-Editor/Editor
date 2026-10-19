@@ -2,7 +2,9 @@
 
 use crate::*;
 use editor_core::Workspace;
-use gpui_kit::{TestAppContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::gpui;
 use std::{cell::RefCell, rc::Rc};
 
 #[gpui::test]

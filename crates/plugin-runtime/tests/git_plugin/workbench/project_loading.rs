@@ -41,7 +41,7 @@ fn assert_responsive(manager: &Manager) {
     assert!(instance.error.is_none(), "{:?}", instance.error);
     assert!(manager.installed["git"].error.is_none());
     assert_eq!(instance.process_count(), 0);
-    assert!(instance.views["history"].active_node("refresh").is_some());
+    assert!(instance.views["history"].active_node("branches").is_some());
     for (panel, document) in &instance.views {
         document.root.visit(&mut |node| {
             if let ui::Kind::Text { text } = &node.kind {
@@ -201,13 +201,7 @@ fn git_package_project_loading_distinguishes_non_git_roots_from_ready_workbenche
     let (_empty_profile, mut empty_manager) = activate(&package, empty.path());
     make_visible(&mut empty_manager);
     assert_responsive(&empty_manager);
-    let ui::Kind::Text { text } = &empty_manager.live["git"].views["history"]
-        .active_node("status")
-        .expect("visible non-repository diagnostic")
-        .kind
-    else {
-        panic!("non-repository diagnostic must be native text");
-    };
+    let text = branch_menu::repository_text(&mut empty_manager, "status");
     assert!(
         text.contains("not a Git worktree") && text.contains("refresh"),
         "non-Git startup must explain which root to open: {text}"
@@ -232,7 +226,13 @@ fn git_package_project_loading_distinguishes_non_git_roots_from_ready_workbenche
         ("commit-details", "files"),
     ] {
         let snapshot = page(&mut empty_manager, panel, node, None);
-        assert!(snapshot.nodes.is_empty(), "an empty root has no Git rows");
+        assert!(
+            snapshot
+                .nodes
+                .values()
+                .all(|node| panel == "history" && node.branch),
+            "an empty root has no Git leaves; branch directories retain repository actions"
+        );
     }
     empty_manager.disable("git").unwrap();
     assert_eq!(empty_manager.resource_count(), 0);

@@ -32,3 +32,24 @@ language_features.parameter:
 language_features.failed:
   en: "Language request failed: %{error}"
   zh-CN: "语言请求失败：%{error}"
+source.find:
+  zh-CN: 查找
+  en: Find
+source.replace:
+  zh-CN: 替换
+  en: Replace
+source.replace_all:
+  zh-CN: 全部替换
+  en: Replace all
+source.previous:
+  zh-CN: 上一个匹配
+  en: Previous match
+source.next:
+  zh-CN: 下一个匹配
+  en: Next match
+source.close:
+  zh-CN: 关闭查找
+  en: Close find
+source.match_case:
+  zh-CN: 区分大小写
+  en: Match case

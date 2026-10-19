@@ -1,5 +1,5 @@
 //! Adjustable native panes keep Base capture/state while the local UI supplies divider appearance.
-use gpui_kit::component::ActiveTheme;
+use crate::ui::theme::ActiveTheme;
 use gpui_kit::{
     AnyElement, App, InteractiveElement, IntoElement, ParentElement, SharedString, Styled, div,
     prelude::FluentBuilder as _, px,

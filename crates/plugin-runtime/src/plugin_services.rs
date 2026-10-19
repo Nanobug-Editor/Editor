@@ -73,12 +73,11 @@ pub(crate) struct Context {
     pub permissions: BTreeSet<String>,
 }
 impl Context {
-    /// A directly invoked provider may use its own picker permission, never through another hop.
-    pub(crate) fn direct_host_selection(&self, instance: &str) -> bool {
+    /// A native command acts on its exact provider incarnation; nested calls cannot inherit this identity.
+    pub(crate) fn direct_host_command(&self, instance: &str) -> bool {
         matches!(&self.origin, InvocationOrigin::HostCommand { target } if target == instance)
             && self.ancestry.len() == 1
             && self.ancestry[0] == instance
-            && self.permissions.contains("files.select")
             && self
                 .lifetimes
                 .iter()
@@ -89,6 +88,11 @@ impl Context {
                     plugin_protocol::api::RequestUpdate::Cancelled { .. }
                 )
             })
+    }
+
+    /// Picker access additionally requires the provider's own grant, never a delegated sibling's.
+    pub(crate) fn direct_host_selection(&self, instance: &str) -> bool {
+        self.direct_host_command(instance) && self.permissions.contains("files.select")
     }
 
     /// Each hop keeps the original owner, shrinks authority and adds the target's revocation boundary.

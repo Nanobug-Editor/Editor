@@ -11,6 +11,8 @@ pub(super) struct AlignedInputHandler {
     pub delegate: Box<dyn InputHandler>,
     pub editor: Entity<EditorState>,
     pub projection: Option<geometry::Projection>,
+    /// Horizontal gutter placement remains active while vertical alignment is paused.
+    pub horizontal: Option<gutter::Projection>,
     pub suppress_geometry: bool,
 }
 
@@ -78,9 +80,14 @@ impl InputHandler for AlignedInputHandler {
             return None;
         }
         let native = self.delegate.bounds_for_range(range, window, cx)?;
-        self.projection
+        let projected = self
+            .projection
             .as_ref()
-            .map_or(Some(native), |projection| projection.project(native))
+            .map_or(Some(native), |projection| projection.project(native))?;
+        Some(
+            self.horizontal
+                .map_or(projected, |gutter| gutter.text_bounds(projected)),
+        )
     }
 
     fn character_index_for_point(
@@ -92,6 +99,9 @@ impl InputHandler for AlignedInputHandler {
         if self.suppress_geometry {
             return None;
         }
+        let physical = self
+            .horizontal
+            .map_or(physical, |gutter| gutter.native_point(physical, None));
         let Some(projection) = self.projection.as_ref() else {
             return self
                 .delegate
@@ -145,6 +155,7 @@ impl InputHandler for AlignedInputHandler {
         self.projection
             .as_ref()
             .map(|projection| projection.viewport)
+            .or_else(|| self.horizontal.map(|gutter| gutter.viewport))
             .or_else(|| self.delegate.element_bounds(window, cx))
     }
 
@@ -200,6 +211,7 @@ pub(super) fn install(
         return;
     }
     let factory = source.input_factory.clone();
+    let horizontal = group.read(cx).gutters.get(index).copied().flatten();
     let native = editor.read(cx);
     let bounds = native.text_bounds().unwrap_or(native.input_bounds());
     let delegate = factory.map_or_else(
@@ -212,6 +224,7 @@ pub(super) fn install(
             delegate,
             editor,
             projection,
+            horizontal,
             suppress_geometry,
         },
         cx,

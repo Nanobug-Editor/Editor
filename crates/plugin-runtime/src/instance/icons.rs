@@ -12,25 +12,10 @@ impl State {
         icon: &ui::ToolIcon,
         icons: &mut BTreeMap<String, Arc<[u8]>>,
     ) -> Result<(), Failure> {
-        if !self.permissions.contains("assets.read") {
-            return Err(Failure::new(
-                ErrorCode::PermissionDenied,
-                "Native icons require assets.read",
-            ));
-        }
-        if !self.api.capabilities.contains_key("ui.icons") {
-            return Err(Failure::new(
-                ErrorCode::CapabilityUnavailable,
-                "Native icons require ui.icons",
-            ));
-        }
-        for path in [&icon.light, &icon.dark] {
-            if icons.contains_key(path) {
+        for (path, resolved) in self.owned_icon_paths(icon)? {
+            if icons.contains_key(&path) {
                 continue;
             }
-            let resolved = safe_path(&self.assets, path, true).map_err(|_| {
-                Failure::new(ErrorCode::InvalidPath, "Icon is not an owned package asset")
-            })?;
             let file = std::fs::File::open(resolved)
                 .map_err(|_| Failure::new(ErrorCode::NotFound, "Icon asset unavailable"))?;
             if !file
@@ -56,8 +41,36 @@ impl State {
             }
             crate::package::icons::svg(&bytes)
                 .map_err(|error| Failure::new(ErrorCode::InvalidRequest, error.to_string()))?;
-            icons.insert(path.clone(), Arc::<[u8]>::from(bytes));
+            icons.insert(path, Arc::<[u8]>::from(bytes));
         }
         Ok(())
+    }
+
+    /// Validate icon grants and both owned paths without reading artwork for an uncached tree node.
+    /// Returned paths remain subject to the same canonical boundary and file validation before use.
+    pub(super) fn owned_icon_paths(
+        &self,
+        icon: &ui::ToolIcon,
+    ) -> Result<[(String, PathBuf); 2], Failure> {
+        if !self.permissions.contains("assets.read") {
+            return Err(Failure::new(
+                ErrorCode::PermissionDenied,
+                "Native icons require assets.read",
+            ));
+        }
+        if !self.api.capabilities.contains_key("ui.icons") {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Native icons require ui.icons",
+            ));
+        }
+        let resolve = |path: &String| {
+            safe_path(&self.assets, path, true)
+                .map(|resolved| (path.clone(), resolved))
+                .map_err(|_| {
+                    Failure::new(ErrorCode::InvalidPath, "Icon is not an owned package asset")
+                })
+        };
+        Ok([resolve(&icon.light)?, resolve(&icon.dark)?])
     }
 }

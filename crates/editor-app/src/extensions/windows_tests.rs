@@ -4,8 +4,10 @@ use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use plugin_runtime::Manager;
 use serde_json::json;
+mod branch_retention;
 mod close_error;
 mod comparisons;
+mod history_preview;
 mod merge;
 mod shutdown;
 
@@ -36,6 +38,9 @@ fn flush(manager: &mut Manager, app: &Entity<EditorApp>, visual: &mut VisualTest
         composable_tests::pump(manager, app, visual);
         manager.poll();
         composable_tests::publish(manager, &mut images, app, visual);
+        // TestWindow has no wall-clock UI pulse. Advance Base/native tree reconciliation so
+        // a completed lazy page is actually painted before a physical row press is asserted.
+        visual.executor().advance_clock(Duration::from_millis(160));
         visual.run_until_parked();
         visual.update(|window, cx| {
             window.draw(cx).clear(cx);
@@ -105,7 +110,7 @@ fn flush(manager: &mut Manager, app: &Entity<EditorApp>, visual: &mut VisualTest
             instance
                 .views
                 .get("history")
-                .is_some_and(|view| view.active_node("refresh").is_some())
+                .is_some_and(|view| view.active_node("log").is_some())
         });
         settled_frames = if !native_changes
             && guest_ready
@@ -120,9 +125,9 @@ fn flush(manager: &mut Manager, app: &Entity<EditorApp>, visual: &mut VisualTest
             0
         };
         previous_scenes = scenes;
-        // The guest's public Refresh control stays disabled while its serial work or native editor
+        // The guest's public history canvas stays disabled while its serial work or native editor
         // acknowledgements are pending. Require two further stable bridge turns, including native
-        // ingress after drawing. Eight arbitrary full UI frames can span its next three-second
+        // ingress after drawing. Eight arbitrary full UI frames can span its next automatic
         // refresh even though the user already has an idle, current and actionable scene.
         if settled_frames >= 2 {
             break;

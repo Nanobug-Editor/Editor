@@ -3,15 +3,14 @@
 use super::*;
 use crate::{EditorApp, typography};
 use editor_core::Workspace;
+use gpui_base::Root;
 use gpui_base::dock::{DockAreaState, DockLayout, PanelInfo, PanelState};
 use gpui_base::{
     Placement,
     dock::{DockPlacement, InsertTarget, PanelId},
 };
-use gpui_kit::{
-    AppContext as _, Axis, Entity, TestAppContext, VisualTestContext, component::Root, gpui, px,
-    size,
-};
+use gpui_kit::{AppContext as _, Axis, Entity, TestAppContext, VisualTestContext};
+use gpui_kit::{gpui, px, size};
 use plugin_runtime::{Installed, plugin_protocol::Manifest};
 use std::{cell::RefCell, rc::Rc};
 
@@ -138,7 +137,7 @@ fn assert_layout_eq(actual: DockAreaState, expected: DockAreaState) {
     );
 }
 
-/// This legacy fixture gains only an equal-height Outline beside Explorer; every previously saved field stays exact.
+/// The legacy Explorer gains Outline and moves as a whole into a fixed-width sidebar.
 fn expected_legacy_outline_migration(mut layout: DockAreaState) -> DockAreaState {
     let explorer = layout.center.children[0].clone();
     assert_eq!(explorer.children[0].panel_name, "Explorer");
@@ -152,7 +151,7 @@ fn expected_legacy_outline_migration(mut layout: DockAreaState) -> DockAreaState
         .copied()
         .fold(px(0.), |total, extent| total + extent);
     assert!(height > px(0.));
-    layout.center.children[0] = PanelState {
+    let sidebar = PanelState {
         panel_name: "StackPanel".into(),
         children: vec![
             explorer,
@@ -164,6 +163,14 @@ fn expected_legacy_outline_migration(mut layout: DockAreaState) -> DockAreaState
         ],
         info: PanelInfo::stack(vec![height / 2.; 2], Axis::Vertical),
     };
+    let width = layout.center.info.sizes().unwrap()[0];
+    layout.center = layout.center.children.remove(1);
+    layout.left_dock = Some(gpui_base::dock::DockState::new(
+        sidebar,
+        DockPlacement::Left,
+        width,
+        true,
+    ));
     layout
 }
 
@@ -207,9 +214,9 @@ fn dock_layout_survives_editor_restart(cx: &mut TestAppContext) {
     visual.update(|window, cx| {
         first.update(cx, |app, cx| {
             let editor = PanelId::from(app.editor_panel.entity_id());
+            let explorer = PanelId::from(app.explorer_panel.entity_id());
             app.dock_area.update(cx, |area, cx| {
                 let center = area.layout(DockPlacement::Center).unwrap();
-                let explorer = center.panels().find(|id| *id != editor).unwrap();
                 let node = center.find_panel_node(editor).unwrap();
                 area.move_panel(
                     explorer,
@@ -317,6 +324,9 @@ fn plugin_dock_layout_survives_delayed_startup(cx: &mut TestAppContext) {
                 crate::dock::panel_handle(app.plugin_panels["panel-contract/tasks"].clone());
             app.dock_area.update(cx, |area, cx| {
                 area.remove_dock(DockPlacement::Bottom, window, cx);
+                // Reproduce the old default before Left existed for host peers; never duplicate
+                // the same live Explorer/Outline IDs in both the fixture's center and left dock.
+                area.remove_dock(DockPlacement::Left, window, cx);
                 area.set_center(
                     DockLayout::h_split()
                         .child(DockLayout::tabs().panel_view(explorer, cx), Some(px(240.)))
@@ -359,6 +369,8 @@ fn plugin_dock_layout_survives_delayed_startup(cx: &mut TestAppContext) {
         .replace("panel-contract/terminal", "me.panel-contract/terminal")
         .replace("panel-contract/tasks", "me.panel-contract/tasks");
     let mut legacy_session: SessionState = serde_json::from_str(&serialized).unwrap();
+    // This fixture uses the old center-side tree and must exercise its one-time migration.
+    legacy_session.plugin_sidebar_layout_version = 1;
     // This equal-split migration fixture explicitly restores a visible Outline rather than relying on its default.
     legacy_session.outline_visible = true;
     legacy_session.disabled_plugins = vec!["me.uninstalled-test".into()];

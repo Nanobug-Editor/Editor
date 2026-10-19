@@ -1,6 +1,8 @@
 //! Real independently packaged providers exercise native keyboard, focus and retry behavior.
 use super::*;
-use gpui_kit::{TestAppContext, VisualTestContext, component::Root, gpui, px, size};
+use gpui_base::Root;
+use gpui_kit::{TestAppContext, VisualTestContext};
+use gpui_kit::{gpui, px, size};
 use plugin_runtime::Manager;
 use std::cell::RefCell;
 

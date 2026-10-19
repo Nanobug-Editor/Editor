@@ -258,7 +258,7 @@ fn git_package_staging_tree_distinguishes_a_deleted_file_from_its_replacement_di
     assert_eq!(manager.resource_count(), 0);
 }
 
-/// The same real replacement commit must expose both root rows and the deleted file's real detail.
+/// The inline preview exposes both root rows, and file selection requests the exact deleted source.
 #[test]
 #[ignore = "build independent Git candidate; set NANOBUG_GIT_CANDIDATE; history file-to-directory identity"]
 fn git_package_history_tree_distinguishes_a_deleted_file_from_its_replacement_directory() {
@@ -302,18 +302,28 @@ fn git_package_history_tree_distinguishes_a_deleted_file_from_its_replacement_di
             shift: false,
         }),
     );
-    let resource = resource(&manager, "commit-details", "files");
-    let tree_snapshot = page(&mut manager, "commit-details", "files", &resource, None);
+    let resource = resource(&manager, "history", "files");
+    let tree_snapshot = page(&mut manager, "history", "files", &resource, None);
     let (directory, file) = collision_nodes(&tree_snapshot, None);
-    assert_directory_only(
-        &mut manager,
-        "commit-details",
-        "files",
-        &resource,
-        &directory,
-    );
-    select(&mut manager, "commit-details", "files", &resource, &file);
-    idle(&mut manager);
+    assert_directory_only(&mut manager, "history", "files", &resource, &directory);
+    select(&mut manager, "history", "files", &resource, &file);
+    // Observe the actual immutable base request before rejecting native rendering explicitly.
+    // The native history-tab test verifies the resulting panes; this runtime fixture owns no editor.
+    let (title, text) = deleted_diff(&mut manager);
+    assert!(title.contains("foo"));
+    assert_eq!(text, "deleted foo contents\n");
+    assert!(matches!(
+        &manager.live["git"].views["history"].active_node("history-oid").unwrap().kind,
+        ui::Kind::Text { text } if text == &replacement_commit
+    ));
+    assert!(matches!(
+        &manager.live["git"].views["history"].active_node("history-parents").unwrap().kind,
+        ui::Kind::Text { text } if text == &format!("Parents: {old_commit}")
+    ));
+    assert!(matches!(
+        &manager.live["git"].views["history"].active_node("history-error").unwrap().kind,
+        ui::Kind::Text { text } if text.contains("No native comparison window in this tree-identity fixture")
+    ));
     assert!(matches!(
         &manager.live["git"].views["commit-details"].active_node("details-path").unwrap().kind,
         ui::Kind::Text { text } if text == "foo"

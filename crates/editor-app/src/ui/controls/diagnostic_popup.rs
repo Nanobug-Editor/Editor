@@ -1,7 +1,8 @@
 //! Theme-aware diagnostic cards over Base's selectable text and the measured popup frame.
 
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::input::{DiagnosticEntry, DiagnosticSeverity};
-use gpui_kit::component::{ActiveTheme as _, v_flex};
+use gpui_base::v_flex;
 use gpui_kit::{
     App, Bounds, FocusHandle, InteractiveElement, IntoElement, ParentElement, Pixels,
     StatefulInteractiveElement, Styled, div, px,

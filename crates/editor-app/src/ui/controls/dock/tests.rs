@@ -43,7 +43,7 @@ fn panels_stay_in_independent_slots(cx: &mut TestAppContext) {
     let (_, cx) = cx.add_window_view(move |window, cx| {
         let area = LocalDock::new(28.).create_area("independent-panels", None, window, cx);
         *capture.borrow_mut() = Some(area.clone());
-        gpui_kit::component::Root::new(area, window, cx)
+        gpui_base::Root::new(area, window, cx)
     });
     let area = slot.borrow_mut().take().unwrap();
     cx.update(|window, cx| {
@@ -87,7 +87,12 @@ fn panels_stay_in_independent_slots(cx: &mut TestAppContext) {
     });
 }
 /// Real mouse events must move panels across docks without allowing central merges.
-fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, immediate: bool) {
+fn exercise_native_split_drag(
+    cx: &mut TestAppContext,
+    placement: Placement,
+    immediate: bool,
+    target_region: DockPlacement,
+) {
     use gpui_kit::{MouseButton, point, size};
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -99,7 +104,7 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
     let (_, cx) = cx.add_window_view(move |window, cx| {
         let area = LocalDock::new(28.).create_area("drag-panels", None, window, cx);
         *capture.borrow_mut() = Some(area.clone());
-        gpui_kit::component::Root::new(area, window, cx)
+        gpui_base::Root::new(area, window, cx)
     });
     let area = slot.borrow_mut().take().unwrap();
     cx.simulate_resize(size(px(1000.), px(700.)));
@@ -120,7 +125,7 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
             add_panel_view(
                 area,
                 Arc::new(target),
-                DockPlacement::Right,
+                target_region,
                 Some(px(240.)),
                 window,
                 cx,
@@ -132,7 +137,7 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
                     .unwrap()
                     .find_panel_node(source_id)
                     .unwrap(),
-                area.layout(DockPlacement::Right)
+                area.layout(target_region)
                     .unwrap()
                     .find_panel_node(target_id)
                     .unwrap(),
@@ -156,6 +161,12 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
         Placement::Top => point(target.center().x, target.top() + px(10.)),
         Placement::Bottom => point(target.center().x, target.bottom() - px(10.)),
     };
+    let allowed = target_region == DockPlacement::Center
+        || if target_region == DockPlacement::Bottom {
+            matches!(placement, Placement::Left | Placement::Right)
+        } else {
+            matches!(placement, Placement::Top | Placement::Bottom)
+        };
     for destination in [target.center(), edge] {
         // Start a new drag for each attempt; the center attempt must leave the source intact.
         cx.simulate_mouse_down(title.center(), MouseButton::Left, Default::default());
@@ -172,11 +183,28 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
                 target.center()
             };
             cx.simulate_mouse_move(previous, MouseButton::Left, Default::default());
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            // An immediate release still resolves the real target's invalid middle zone.
+            let release = if destination == target.center() {
+                let node = cx.update(|_, cx| {
+                    area.read(cx)
+                        .layout(target_region)
+                        .unwrap()
+                        .find_panel_node(target_id)
+                        .unwrap()
+                });
+                cx.debug_bounds(Box::leak(
+                    format!("local-dock-content-{}", node.as_u64()).into_boxed_str(),
+                ))
+                .unwrap()
+                .center()
+            } else {
+                destination
+            };
             cx.update(|window, cx| {
-                window.draw(cx).clear(cx);
                 window.dispatch_event(
                     gpui_kit::PlatformInput::MouseMove(gpui_kit::MouseMoveEvent {
-                        position: destination,
+                        position: release,
                         pressed_button: Some(MouseButton::Left),
                         modifiers: Default::default(),
                     }),
@@ -184,7 +212,7 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
                 );
                 window.dispatch_event(
                     gpui_kit::PlatformInput::MouseUp(gpui_kit::MouseUpEvent {
-                        position: destination,
+                        position: release,
                         button: MouseButton::Left,
                         modifiers: Default::default(),
                         click_count: 1,
@@ -196,13 +224,12 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
             cx.simulate_mouse_move(destination, MouseButton::Left, Default::default());
             cx.update(|window, cx| window.draw(cx).clear(cx));
             if destination != target.center() {
-                // Native split dragging previews the half-pane before committing the drop.
-                let indicator = cx
-                    .debug_bounds("local-dock-drop-indicator")
-                    .expect("edge drops must retain DockArea's split preview");
-                // Right-side panels always stack vertically, even when the pointer arrives at a side edge.
-                let expected = size(target.size.width, target.size.height / 2.);
-                assert_eq!(indicator.size, expected);
+                // Preview markers do not change Base's real allocation before release.
+                assert_eq!(
+                    cx.debug_bounds("local-dock-drop-indicator").is_some(),
+                    allowed
+                );
+                assert!(cx.debug_bounds("local-dock-floating-preview").is_some());
             }
             cx.simulate_mouse_up(destination, MouseButton::Left, Default::default());
         }
@@ -210,8 +237,8 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
         cx.update(|window, cx| window.draw(cx).clear(cx));
         cx.update(|_, cx| {
             let area = area.read(cx);
-            let tree = area.layout(DockPlacement::Right).unwrap();
-            if destination == target.center() {
+            let tree = area.layout(target_region).unwrap();
+            if destination == target.center() || !allowed {
                 assert_eq!(tree.panels().collect::<Vec<_>>(), vec![target_id]);
                 assert_eq!(
                     area.layout(DockPlacement::Left)
@@ -221,19 +248,23 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
                     vec![source_id]
                 );
             } else {
-                let effective = match placement {
-                    Placement::Left | Placement::Right => Placement::Top,
-                    placement => placement,
-                };
-                let expected = match effective {
+                let expected = match placement {
                     Placement::Left | Placement::Top => vec![source_id, target_id],
                     Placement::Right | Placement::Bottom => vec![target_id, source_id],
                 };
                 assert_eq!(tree.panels().collect::<Vec<_>>(), expected);
-                let PaneRef::Split { axis, .. } = tree.root().kind() else {
+                // Center may retain its initial one-child framing split; inspect the actual fork.
+                let mut fork = tree.root();
+                while let PaneRef::Split { children, .. } = fork.kind() {
+                    if children.len() != 1 {
+                        break;
+                    }
+                    fork = &children[0];
+                }
+                let PaneRef::Split { axis, .. } = fork.kind() else {
                     panic!("edge drops must produce a split, not a tab group");
                 };
-                assert_eq!(axis, gpui_kit::Axis::Vertical);
+                assert_eq!(axis, placement.axis());
                 assert!(
                     area.layout(DockPlacement::Left)
                         .unwrap()
@@ -250,25 +281,38 @@ fn exercise_native_split_drag(cx: &mut TestAppContext, placement: Placement, imm
         });
     }
 }
-/// Both horizontal drop directions use Base's split geometry and layout edits.
+/// Side regions reject both horizontal directions as well as the central merge zone.
 #[gpui::test]
-fn native_horizontal_splits_reject_tab_merges(cx: &mut TestAppContext) {
-    exercise_native_split_drag(cx, Placement::Left, false);
-    exercise_native_split_drag(cx, Placement::Right, false);
+fn native_side_dock_rejects_horizontal_splits_and_tab_merges(cx: &mut TestAppContext) {
+    exercise_native_split_drag(cx, Placement::Left, false, DockPlacement::Right);
+    exercise_native_split_drag(cx, Placement::Right, false, DockPlacement::Right);
 }
 
 /// Both vertical drop directions use Base's split geometry and layout edits.
 #[gpui::test]
 fn native_vertical_splits_reject_tab_merges(cx: &mut TestAppContext) {
-    exercise_native_split_drag(cx, Placement::Top, false);
-    exercise_native_split_drag(cx, Placement::Bottom, false);
+    exercise_native_split_drag(cx, Placement::Top, false, DockPlacement::Right);
+    exercise_native_split_drag(cx, Placement::Bottom, false, DockPlacement::Right);
 }
 /// Drag/drop decisions must use live native hit state even before the next frame.
 #[gpui::test]
 fn immediate_release_preserves_splits_and_rejects_merges(cx: &mut TestAppContext) {
-    exercise_native_split_drag(cx, Placement::Right, true);
-    exercise_native_split_drag(cx, Placement::Bottom, true);
+    exercise_native_split_drag(cx, Placement::Right, true, DockPlacement::Right);
+    exercise_native_split_drag(cx, Placement::Bottom, true, DockPlacement::Right);
 }
+/// A reusable center with no configured editor anchor still permits all four split directions.
+#[gpui::test]
+fn native_center_without_anchor_accepts_all_edges(cx: &mut TestAppContext) {
+    for edge in [
+        Placement::Left,
+        Placement::Right,
+        Placement::Top,
+        Placement::Bottom,
+    ] {
+        exercise_native_split_drag(cx, edge, false, DockPlacement::Center);
+    }
+}
+
 /// Explicit horizontal and vertical split composition remains native.
 #[gpui::test]
 fn nested_split_layouts_keep_their_axes(cx: &mut TestAppContext) {
@@ -308,6 +352,6 @@ fn nested_split_layouts_keep_their_axes(cx: &mut TestAppContext) {
             assert_eq!(axis, Axis::Vertical);
             assert_eq!(tree.panels().count(), 3);
         });
-        gpui_kit::component::Root::new(area, window, cx)
+        gpui_base::Root::new(area, window, cx)
     });
 }

@@ -26,9 +26,10 @@ mod settings_dialog_tests {
     use crate::theme::{apply_theme, builtin_theme};
     use crate::{EditorApp, PANEL_HEADER_HEIGHT, typography};
     use editor_core::Workspace;
-    use gpui_kit::{
-        AppContext as _, TestAppContext, VisualTestContext, component::Root, gpui, px, size,
-    };
+    use gpui_base::Root;
+    use gpui_kit::AppContext as _;
+    use gpui_kit::{TestAppContext, VisualTestContext};
+    use gpui_kit::{gpui, px, size};
     use std::{cell::RefCell, rc::Rc};
 
     /// Settings must use a separate modal window and close with Escape.
@@ -208,7 +209,10 @@ mod file_highlight_tests {
         typography,
     };
     use editor_core::Workspace;
-    use gpui_kit::{AppContext as _, TestAppContext, component::Root, gpui};
+    use gpui_base::Root;
+    use gpui_kit::AppContext as _;
+    use gpui_kit::TestAppContext;
+    use gpui_kit::gpui;
     use std::{cell::RefCell, rc::Rc};
 
     /// File contents must be visible before language highlighting begins after the first frame.
@@ -275,7 +279,10 @@ mod explorer_selection_tests {
         typography,
     };
     use editor_core::Workspace;
-    use gpui_kit::{AppContext as _, TestAppContext, component::Root, gpui};
+    use gpui_base::Root;
+    use gpui_kit::AppContext as _;
+    use gpui_kit::TestAppContext;
+    use gpui_kit::gpui;
     use std::{cell::RefCell, rc::Rc};
 
     /// Selection uses the tree already displayed, even if the disk changes before refresh.

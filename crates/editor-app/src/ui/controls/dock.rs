@@ -1,8 +1,7 @@
 //! Project-owned presentation for the GPUI Base dock layout engine.
 //!
-//! The layout tree, split resizing, panel identity, drag/drop and persistence
-//! remain in `gpui-base`; this module disables regrouping and owns the panel title
-//! strip, including its configurable height. Each panel occupies its own split slot.
+//! GPUI Base owns the lasting tree, constraints and native panel identities. This module owns
+//! local appearance and release-only placement; each panel retains its independent split slot.
 
 use std::{
     cell::{Cell, RefCell},
@@ -12,43 +11,67 @@ use std::{
 };
 
 use crate::theme::component_styles;
+use crate::ui::controls::dock::panel::DragPanel;
+use crate::ui::controls::dock::panel::DropIndicator;
+use crate::ui::controls::dock::panel::PanelHandle;
+use crate::ui::controls::dock::panel::TabGroupContext;
+use crate::ui::controls::dock::panel::TabGroupRenderer;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::dock::{
-    DockArea, DockAreaRenderer, DockContext, DockEvent, DockPlacement, DropPlaceholderBounds,
-    InsertTarget, NodeId, PanelView,
+    DockArea, DockAreaRenderer, DockContext, DockEvent, DockPlacement, InsertTarget, NodeId,
+    PanelView,
 };
-use gpui_base::{ElementExt as _, HandleEdge, Placement, resize_handle};
-use gpui_kit::prelude::FluentBuilder as _;
+use gpui_base::h_flex;
+use gpui_base::{ElementExt as _, HandleEdge, Placement, TestSupportExt as _, resize_handle};
 use gpui_kit::{
     AnyElement, AnyView, App, AppContext as _, Bounds, Context, Div, Empty, Entity,
     InteractiveElement as _, IntoElement, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels,
     Render, Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled as _, WeakEntity,
-    Window, canvas,
-    component::{
-        ActiveTheme as _,
-        dock::{DragPanel, DropIndicator, PanelHandle, TabGroupContext, TabGroupRenderer},
-        h_flex,
-    },
-    div, px, size,
+    Window, canvas, div, prelude::FluentBuilder as _, px, size,
 };
 use plugin_schema::ThemeComponent;
 
-/// Transient native paint geometry only; Base retains the sole persistent layout and size preferences.
-type PaintedFrames = Rc<RefCell<HashMap<NodeId, Bounds<Pixels>>>>;
+/// Transient paint allocations only; Base retains the sole persistent layout and size preferences.
+#[derive(Clone, Default)]
+struct PaintedFrames {
+    /// Tab slots supply source dimensions and pointer hit targets.
+    panels: Rc<RefCell<HashMap<NodeId, Bounds<Pixels>>>>,
+    /// Four native regions bound post-removal projection even when a child overflows its slot.
+    regions: Rc<RefCell<HashMap<DockPlacement, Bounds<Pixels>>>>,
+}
 
 /// A local Dock appearance with independent panels and a shared title height.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct LocalDock {
     title_height: f32,
+    /// Shared paint geometry lets the root prepare editor-local widths before Base lays out a new frame.
+    frames: PaintedFrames,
+    /// All users of this surface share one reversible drag transaction, including plugin panels.
+    dragging: dragging::LiveDrag,
 }
 
 impl LocalDock {
+    /// Create one surface's state and chrome with a shared logical-pixel title height.
     pub fn new(title_height: f32) -> Self {
-        Self { title_height }
+        Self {
+            title_height,
+            frames: Default::default(),
+            dragging: Default::default(),
+        }
+    }
+
+    /// Mark `panel` as the elastic center, with at most one visible region on each of its sides.
+    /// A first-level title may carry its whole combination to relocate that occupied side.
+    /// Other free edges and concrete tool targets move one panel; nested children never promote peers.
+    /// The anchor absorbs width changes. Surfaces without an anchor keep ordinary edge placement.
+    pub fn with_elastic_panel(self, panel: gpui_base::dock::PanelId) -> Self {
+        self.dragging.set_anchor(panel);
+        self
     }
 
     /// Creates a behavior-backed dock area using this project's own renderer.
     pub fn create_area(
-        self,
+        &self,
         id: impl Into<gpui_kit::SharedString>,
         version: Option<usize>,
         window: &mut Window,
@@ -59,10 +82,29 @@ impl LocalDock {
                 title_height: self.title_height,
                 resizing: Rc::new(Cell::new(None)),
                 area: cx.entity().downgrade(),
-                frames: Rc::default(),
+                frames: self.frames.clone(),
+                dragging: self.dragging.clone(),
             });
             DockArea::new(id, version, window, cx).with_renderer(renderer)
         })
+    }
+
+    /// Persistence and regional reconciliation resume after the gesture's final placement.
+    pub(crate) fn is_dragging(&self) -> bool {
+        self.dragging.active()
+    }
+
+    /// Prepare this root area's `width` from its current paint measurements, leaving Editor elastic.
+    /// The host calls this after visibility reconciliation and before rendering the Base entity.
+    pub(crate) fn prepare_frame(
+        &self,
+        area: &mut DockArea,
+        width: Pixels,
+        window: &mut Window,
+        cx: &mut Context<DockArea>,
+    ) {
+        let frames = self.frames.panels.borrow().clone();
+        columns::prepare(area, &frames, width, self.dragging.anchor(), window, cx);
     }
 }
 
@@ -72,9 +114,28 @@ struct LocalDockRenderer {
     resizing: Rc<Cell<Option<DockPlacement>>>,
     area: WeakEntity<DockArea>,
     frames: PaintedFrames,
+    dragging: dragging::LiveDrag,
 }
 
 impl DockAreaRenderer for LocalDockRenderer {
+    /// Record Base's actual center column; capture subtracts the separately painted bottom dock.
+    fn center_frame(&self, _: &mut Window, _: &mut App) -> Stateful<Div> {
+        let regions = self.frames.regions.clone();
+        div()
+            .id("dock-area-center")
+            .on_prepaint(move |bounds, _, _| {
+                regions.borrow_mut().insert(DockPlacement::Center, bounds);
+            })
+    }
+    /// Window-level capture keeps moves and cancellation working across changing dock hit rectangles.
+    fn frame(&self, _: &mut Window, cx: &mut App) -> Stateful<Div> {
+        let frame = div().id("local-dock-area").child(
+            self.dragging
+                .surface(self.area.clone(), self.frames.clone()),
+        );
+        let frame = frame.child(gpui_kit::deferred(self.dragging.markers(cx)).with_priority(10));
+        self.dragging.capture_escape(frame, self.area.clone())
+    }
     /// Compose project-owned dock chrome over Base's public resize behavior.
     fn render_dock(
         &self,
@@ -88,6 +149,7 @@ impl DockAreaRenderer for LocalDockRenderer {
             content,
             self.resizing.clone(),
             self.area.clone(),
+            self.frames.regions.clone(),
             window,
             cx,
         )
@@ -100,6 +162,7 @@ impl DockAreaRenderer for LocalDockRenderer {
             node: Cell::new(None),
             bounds: Rc::new(Cell::new(Bounds::default())),
             frames: self.frames.clone(),
+            dragging: self.dragging.clone(),
         })
     }
 }
@@ -111,86 +174,21 @@ struct LocalTabGroupRenderer {
     node: Cell<Option<NodeId>>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     frames: PaintedFrames,
+    dragging: dragging::LiveDrag,
 }
 
 impl Drop for LocalTabGroupRenderer {
     fn drop(&mut self) {
         // Removed native groups must not leave stale hit/size geometry behind.
         if let Some(node) = self.node.get() {
-            self.frames.borrow_mut().remove(&node);
+            self.frames.panels.borrow_mut().remove(&node);
         }
     }
 }
 
 impl LocalTabGroupRenderer {
-    /// A separate hit child consumes a panel drop once; registering another drop on Base's same Div would consume it twice.
-    fn split_target(&self, group: &TabGroupContext, cx: &App) -> Option<Stateful<Div>> {
-        if !cx.has_active_drag() || !group.is_droppable() {
-            return None;
-        }
-        let node = group.node();
-        let area = self.area.clone();
-        let hit_bounds = self.bounds.clone();
-        let release_bounds = hit_bounds.clone();
-        let frames = self.frames.clone();
-        Some(
-            div()
-                .id("local-dock-split-target")
-                .absolute()
-                .inset_0()
-                .can_drop(move |value, window, _| {
-                    value.is::<DragPanel>()
-                        && placement::edge_at(hit_bounds.get(), window.mouse_position()).is_some()
-                })
-                .on_drop(move |drag: &DragPanel, window, cx| {
-                    cx.stop_propagation();
-                    if drag.source() == node {
-                        return;
-                    }
-                    let rect = release_bounds.get();
-                    let Some(requested) = placement::edge_at(rect, window.mouse_position()) else {
-                        return;
-                    };
-                    let _ = area.update(cx, |area, cx| {
-                        // Preserve Base's lock authority at release, even if it changed since the preview.
-                        if area.is_locked() {
-                            return;
-                        }
-                        let placement = placement::resolve(
-                            area,
-                            node,
-                            requested,
-                            rect,
-                            window.mouse_position(),
-                            cx,
-                        );
-                        // Reordering uses the source's painted size as its initial preference.
-                        // Base still constrains peers; a fresh split may halve its neighbour.
-                        let size = placement::reorder_size(
-                            area,
-                            drag.source(),
-                            node,
-                            placement.axis(),
-                            &frames.borrow(),
-                            cx,
-                        );
-                        area.move_panel(
-                            drag.panel(),
-                            InsertTarget::Split {
-                                node,
-                                placement,
-                                size,
-                            },
-                            window,
-                            cx,
-                        );
-                    });
-                }),
-        )
-    }
-
     fn panel_title(
-        panel: &Arc<dyn gpui_kit::component::dock::BasePanelView>,
+        panel: &Arc<dyn crate::ui::controls::dock::panel::BasePanelView>,
         window: &mut Window,
         cx: &mut App,
     ) -> AnyElement {
@@ -215,7 +213,7 @@ impl TabGroupRenderer for LocalTabGroupRenderer {
         self.node.set(Some(node));
         let frames = self.frames.clone();
         div().id("tab-group").on_prepaint(move |bounds, _, _| {
-            frames.borrow_mut().insert(node, bounds);
+            frames.panels.borrow_mut().insert(node, bounds);
         })
     }
 
@@ -277,19 +275,23 @@ impl TabGroupRenderer for LocalTabGroupRenderer {
             .bg(style.background.unwrap_or(cx.theme().tab_bar))
             .text_color(style.foreground.unwrap_or(cx.theme().foreground))
             .child(Self::panel_title(&panel, window, cx))
-            .when_some(drag.filter(|_| !group.is_locked()), |bar, drag| {
-                // The project permits moving a region's sole panel into another region; Base's local "last panel" guard
-                // would pin that leaf even when Editor and other docks remain visible. Preserve its lock/zoom authority.
-                // Base still owns the public payload, normalized split edits, and activation.
-                bar.on_drag(drag, move |drag, offset, _, cx| {
-                    drag.set_drag_offset(offset);
-                    drag.set_preview_size(size(px(120.), px(28.)));
-                    cx.stop_propagation();
-                    cx.new(|_| LocalDragPreview {
-                        panel: panel.clone(),
-                    })
-                })
-            })
+            .when_some(
+                drag.filter(|_| {
+                    !group.is_locked() && Some(panel.panel_id(cx)) != self.dragging.anchor()
+                }),
+                |bar, drag| {
+                    // The project permits moving a region's sole panel into another region; Base's local "last panel" guard
+                    // would pin that leaf even when Editor and other docks remain visible. Preserve its lock/zoom authority.
+                    // Base still owns the public payload, normalized split edits, and activation.
+                    self.dragging.attach(
+                        bar,
+                        drag,
+                        self.area.clone(),
+                        self.frames.clone(),
+                        self.title_height,
+                    )
+                },
+            )
             .into_any_element()
     }
     fn render_active_panel(
@@ -297,7 +299,7 @@ impl TabGroupRenderer for LocalTabGroupRenderer {
         panel: AnyView,
         group: &TabGroupContext,
         _: &mut Window,
-        cx: &mut App,
+        _: &mut App,
     ) -> AnyElement {
         if group.is_collapsed() {
             return Empty.into_any_element();
@@ -309,63 +311,16 @@ impl TabGroupRenderer for LocalTabGroupRenderer {
             .overflow_x_hidden()
             .flex_1()
             .child(panel.cached(StyleRefinement::default().absolute().size_full()))
-            // The temporary hit surface exists only during a drag and never owns persistent layout or panel state.
-            .children(self.split_target(group, cx))
             .into_any_element()
     }
-    /// Project the same regional split policy used by drop handling, including a native top band.
+    /// The local marker layer owns exact-size previews; Base's default half-zone hint stays hidden.
     fn render_drop_indicator(
         &self,
-        indicator: DropIndicator,
-        window: &mut Window,
-        cx: &mut App,
+        _: DropIndicator,
+        _: &mut Window,
+        _: &mut App,
     ) -> Option<AnyElement> {
-        let requested = indicator.placement()?;
-        let node = self.node.get()?;
-        let area = self.area.upgrade()?;
-        let resolved = placement::resolve(
-            area.read(cx),
-            node,
-            requested,
-            indicator.bounds(),
-            window.mouse_position(),
-            cx,
-        );
-        let target = DropPlaceholderBounds::for_placement(indicator.bounds(), Some(resolved));
-        Some(
-            div()
-                .debug_selector(|| "local-dock-drop-indicator".into())
-                .absolute()
-                .left(target.origin().x)
-                .top(target.origin().y)
-                .w(target.size().width)
-                .h(target.size().height)
-                .bg(cx.theme().tokens.drop_target)
-                .into_any_element(),
-        )
-    }
-}
-
-/// The title follows the pointer while the original panel retains its identity.
-struct LocalDragPreview {
-    panel: Arc<dyn gpui_kit::component::dock::BasePanelView>,
-}
-
-impl Render for LocalDragPreview {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let style = component_styles(cx, ThemeComponent::DockDragPreview).base;
-        h_flex()
-            .w(px(120.))
-            .h(px(28.))
-            .px(px(style.padding_x_px.unwrap_or(8.)))
-            .bg(style.background.unwrap_or(cx.theme().tab_bar))
-            .text_color(style.foreground.unwrap_or(cx.theme().foreground))
-            .border_1()
-            .border_color(style.border.unwrap_or(cx.theme().border))
-            .rounded(px(style.radius_px.unwrap_or(3.)))
-            .text_size(px(style.font_size_px.unwrap_or(14.)))
-            .overflow_hidden()
-            .child(LocalTabGroupRenderer::panel_title(&self.panel, window, cx))
+        None
     }
 }
 
@@ -382,11 +337,18 @@ pub(crate) fn add_panel_view(
     if area.panel(id).is_some() {
         return;
     }
+    // A newly revealed exclusive leaf can still carry the previous frame's suppression.
+    // Admission uses its raw intent; the next presentation pass selects the displayed combination.
+    let visible =
+        PanelHandle::of(&panel).map_or_else(|| panel.visible(cx), |handle| handle.visible(cx));
     // A declared left panel joins the existing sidebar instead of reserving another
     // outer column. Register first, then let Base split the retained sidebar band.
     if placement == DockPlacement::Left && placement::left_sidebar_target(area, cx).is_some() {
         area.add_panel_view(panel, DockPlacement::Center, None, window, cx);
         move_to_left_sidebar(area, id, window, cx);
+        if visible {
+            reveal_panel(area, id, window, cx);
+        }
         return;
     }
     let neighbor = area.layout(placement).and_then(|tree| {
@@ -412,6 +374,33 @@ pub(crate) fn add_panel_view(
             cx,
         );
     }
+    if visible {
+        reveal_panel(area, id, window, cx);
+    }
+}
+
+/// Reveal a registered leaf in its current region without moving it or changing peers' visibility.
+/// Hidden host sidebars retain their tree while closed, so explicit reveals must reopen the region.
+pub(crate) fn reveal_panel(
+    area: &mut DockArea,
+    panel: gpui_base::dock::PanelId,
+    window: &mut Window,
+    cx: &mut Context<DockArea>,
+) {
+    for placement in [
+        DockPlacement::Left,
+        DockPlacement::Right,
+        DockPlacement::Bottom,
+    ] {
+        if area
+            .layout(placement)
+            .is_some_and(|tree| tree.find_panel_node(panel).is_some())
+            && !area.is_dock_open(placement)
+        {
+            area.toggle_dock(placement, window, cx);
+        }
+    }
+    area.select_panel(panel, window, cx);
 }
 
 /// Move a registered panel into the existing left band without replacing its view or layout tree.
@@ -445,9 +434,15 @@ pub(crate) fn move_to_left_sidebar(
     true
 }
 
+mod columns;
+mod dragging;
+pub(crate) mod panel;
 mod placement;
+mod presentation;
 mod resize;
 pub(crate) use placement::stack_axis;
+pub(crate) use presentation::PanelPresentation;
+pub(crate) use presentation::has_visible_region;
 
 #[cfg(test)]
 mod tests;

@@ -203,7 +203,7 @@ fn toolbar_button(window: &Window, id: &str) -> anyhow::Result<ElementSnapshot> 
 }
 
 /// Wait for a painted host button and emit exactly one client click, never replaying a dispatched toggle.
-async fn toggle(h: &Harness, id: &str, cx: &mut AsyncApp) -> anyhow::Result<()> {
+pub(super) async fn toggle(h: &Harness, id: &str, cx: &mut AsyncApp) -> anyhow::Result<()> {
     h.until(
         h.main,
         id,

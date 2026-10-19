@@ -2,9 +2,11 @@
 
 use super::*;
 use crate::ui::controls::Button;
+use crate::ui::theme::ActiveTheme as _;
+use gpui_kit::div;
 use gpui_kit::{
     AnyElement, InteractiveElement as _, IntoElement as _, ParentElement as _,
-    StatefulInteractiveElement as _, Styled as _, component::ActiveTheme as _, div,
+    StatefulInteractiveElement as _, Styled as _,
 };
 
 impl EditorApp {

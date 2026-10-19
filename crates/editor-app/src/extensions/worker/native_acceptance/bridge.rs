@@ -30,7 +30,9 @@ impl Harness {
             last_frame_log: Cell::new(None),
             evidence: RefCell::new(serde_json::json!({
                 "case": case.name,
-                "workflow": if sidebar::requested() {
+                "workflow": if exclusive::requested() {
+                    "exclusive-dock-only"
+                } else if sidebar::requested() {
                     "shared-sidebar-only"
                 } else if caption_controls::requested() {
                     "caption-controls-loaded-commit"

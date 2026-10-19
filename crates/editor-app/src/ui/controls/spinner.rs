@@ -8,7 +8,7 @@ use gpui_kit::{
 };
 
 use super::Icon;
-use gpui_kit::component::IconName;
+use gpui_kit::assets::IconName;
 
 #[derive(IntoElement)]
 pub(crate) struct Spinner {

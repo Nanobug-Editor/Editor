@@ -1,6 +1,6 @@
 # 主工程启动构建缓存修复
 
-日期：2026-10-18。状态：主工程 Debug 构建、workspace 编译检查与非 UI 测试已通过；实际 EXE 的 SDK CLI 已通过。格式检查仍有两处本轮开始前已有的差异。
+日期：2026-10-18。首轮状态：主工程 Debug 构建、workspace 编译检查与非 UI 测试已通过；实际 Debug EXE 的 SDK CLI 已通过。当时格式检查仍有两处已有差异，后续主分支整合已修正。首轮没有覆盖 IDE 使用的 Release，纠正与恢复见 [Release 启动复查](build-cache-release-2026-10-18.md)。
 
 ## 症状与反馈循环
 
@@ -27,7 +27,7 @@ cargo clean --target-dir C:/Projects/RustProjects/Editor/target -p editor-core -
 cargo build -p editor-app --bin editor-app
 ```
 
-日志 `target/startup-cache-clean.log` 记录删除 33,206 个编译产物文件／99.3GiB；本命令按 Cargo 包清理 debug、release 及测试编译缓存，不删除源文件或独立交付 ZIP。重建日志 `target/startup-root-build.log`：71 秒、exit0。既有 unused 与 Wasmtime／Tree-sitter LNK4217 警告仍按实际输出保留。
+日志 `target/startup-cache-clean.log` 记录删除 33,206 个编译产物文件／99.3GiB；不删除源文件或独立交付 ZIP。此前将本命令误记为同时清理 debug、release 和测试缓存，后续独立 CLI 复查证明按包清理未显式加 `--release` 时会留下 Release 产物，因此该清理范围的旧说明有误。此轮实际恢复的是 Debug：重建日志 `target/startup-root-build.log` 为 71 秒、exit0。既有 unused 与 Wasmtime／Tree-sitter LNK4217 警告仍按实际输出保留。
 
 主工程 `target/debug/editor-app.exe` 已生成，SHA-256 `718992670be5f0e93177850f0e97e083cbf687f95feeb7fed5963b3ced568369`。实际调用此 EXE 的 `--export-plugin-sdk target/startup-root-sdk-smoke-2026-10-18` exit0、51 文件，说明当前主工程的可执行文件可以正常执行 CLI 启动；不将 CLI 验证表述成 GUI 全流程验收。当前主工程包含此前其他工作区修改，SDK 文件数与先前冻结快照不同。
 

@@ -96,6 +96,17 @@ impl TreeResource {
         expire(&mut state);
         state.snapshot.clone()
     }
+    /// Capture cached IDs for metadata admission without expiring or otherwise changing pending pages.
+    pub(crate) fn cached_ids(&self) -> BTreeSet<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .snapshot
+            .nodes
+            .keys()
+            .cloned()
+            .collect()
+    }
     /// Root loading, first expansion, continuation and retry all use this same bounded request.
     pub fn request(
         &self,
@@ -218,6 +229,74 @@ impl TreeResource {
         state.pending.clear();
         Ok(())
     }
+    /// Replace only cached display metadata from `nodes` and their already-admitted package `icons`.
+    /// Every node is validated before mutation; unknown IDs are ignored and changed structure or
+    /// command intent is `Conflict`. Pending pages, epoch and disclosure state remain untouched.
+    pub(crate) fn update(
+        &self,
+        nodes: Vec<tree::Node>,
+        icons: BTreeMap<String, Arc<[u8]>>,
+    ) -> Result<(), Failure> {
+        self.live()?;
+        let mut state = self.state.lock().unwrap();
+        if nodes.len() > tree::MAX_PAGE
+            || serde_json::to_vec(&nodes).map_or(true, |bytes| bytes.len() > 512 * 1024)
+        {
+            return Err(Failure::new(
+                ErrorCode::LimitExceeded,
+                "Tree update quota exceeded",
+            ));
+        }
+        let mut seen = BTreeSet::new();
+        let mut changed = false;
+        for node in &nodes {
+            node.validate()?;
+            if !seen.insert(&node.id) {
+                return Err(Failure::new(
+                    ErrorCode::Conflict,
+                    "Duplicate tree update ID",
+                ));
+            }
+            if let Some(previous) = state.snapshot.nodes.get(&node.id) {
+                validate_update_intent(previous, node)?;
+                changed |= previous != node;
+            }
+        }
+        if !changed {
+            return Ok(());
+        }
+        // Build a bounded candidate before publishing. Unknown provider IDs never become native
+        // rows, and unused incoming artwork cannot consume the resource's retained icon budget.
+        let mut candidate = state.snapshot.nodes.clone();
+        for node in nodes {
+            if let Some(previous) = candidate.get_mut(&node.id) {
+                *previous = node;
+            }
+        }
+        let paths = candidate
+            .values()
+            .filter_map(|node| node.icon.as_ref())
+            .flat_map(|icon| [&icon.light, &icon.dark])
+            .collect::<BTreeSet<_>>();
+        let mut artwork = state.snapshot.icons.clone();
+        artwork.extend(icons.into_iter().filter(|(path, _)| paths.contains(path)));
+        artwork.retain(|path, _| paths.contains(path));
+        let metadata_bytes = candidate
+            .values()
+            .map(|node| serde_json::to_vec(node).map_or(usize::MAX, |bytes| bytes.len()))
+            .fold(0usize, usize::saturating_add);
+        let artwork_bytes = artwork.values().map(|bytes| bytes.len()).sum::<usize>();
+        if metadata_bytes > 2 * 1024 * 1024 || artwork_bytes > 2 * 1024 * 1024 {
+            return Err(Failure::new(
+                ErrorCode::LimitExceeded,
+                "Tree retained metadata or icon budget exceeded",
+            ));
+        }
+        state.snapshot.nodes = candidate;
+        state.snapshot.icons = artwork;
+        state.snapshot.revision = state.snapshot.revision.saturating_add(1);
+        Ok(())
+    }
     /// Resolve complete typed arguments from the current owned node's exact activation or menu slot.
     /// Refresh, removed/disabled nodes and missing actions reject captured callbacks as stale.
     pub fn command(
@@ -244,6 +323,7 @@ impl TreeResource {
                 .ok()
                 .and_then(|index| node.menu.get(index)),
         }
+        .filter(|command| !command.disabled)
         .cloned()
         .ok_or_else(stale)
     }
@@ -385,6 +465,33 @@ fn subtree(snapshot: &TreeSnapshot, node: &str) -> BTreeSet<String> {
 fn stale() -> Failure {
     Failure::new(ErrorCode::StaleRevision, "Tree request or node is obsolete")
 }
+/// Cosmetic replacement cannot retarget callbacks captured in the current tree epoch.
+fn validate_update_intent(previous: &tree::Node, next: &tree::Node) -> Result<(), Failure> {
+    let same_command = |before: &tree::Command, after: &tree::Command| {
+        before.command == after.command
+            && before.arguments == after.arguments
+            && before.separator_before == after.separator_before
+    };
+    if previous.branch != next.branch
+        || match (&previous.activation, &next.activation) {
+            (Some(before), Some(after)) => !same_command(before, after),
+            (None, None) => false,
+            _ => true,
+        }
+        || previous.menu.len() != next.menu.len()
+        || !previous
+            .menu
+            .iter()
+            .zip(&next.menu)
+            .all(|(before, after)| same_command(before, after))
+    {
+        return Err(Failure::new(
+            ErrorCode::Conflict,
+            "Tree update cannot change structure or command intent",
+        ));
+    }
+    Ok(())
+}
 fn expire(state: &mut State) {
     let now = Instant::now();
     let expired = state
@@ -509,3 +616,7 @@ mod tests {
         assert!(resource.snapshot().nodes.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "trees/update_tests.rs"]
+mod update_tests;

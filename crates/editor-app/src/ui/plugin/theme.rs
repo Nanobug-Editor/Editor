@@ -1,6 +1,8 @@
 //! User theme tokens override bounded plugin content defaults and generic native chrome.
 use super::*;
-use gpui_kit::{FontWeight, Hsla, Styled, component::ActiveTheme as _, px, rgb};
+use crate::ui::theme::ActiveTheme as _;
+use gpui_kit::{FontWeight, Hsla, Styled};
+use gpui_kit::{px, rgb};
 
 pub(super) struct Colors {
     pub background: Hsla,

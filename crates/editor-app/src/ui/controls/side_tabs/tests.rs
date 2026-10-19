@@ -1,6 +1,8 @@
 //! Exercise native pointer capture and keyed rename through the public control lifecycle.
 use super::*;
-use gpui_kit::{TestAppContext, component::Root, gpui, point};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, point};
 use plugin_runtime::plugin_protocol::ui::SideTab;
 use std::cell::RefCell;
 

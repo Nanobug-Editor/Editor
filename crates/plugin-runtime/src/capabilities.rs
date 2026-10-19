@@ -22,6 +22,40 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
         );
     }
     anyhow::ensure!(manifest.activation.valid(), "Invalid background purpose");
+    if manifest.panels.iter().any(|panel| panel.exclusive) {
+        anyhow::ensure!(
+            manifest
+                .api
+                .as_ref()
+                .and_then(|requirements| requirements.required.get("ui.panels"))
+                .is_some_and(|range| range.matches(&Version::new(1, 2, 0))
+                    && !range.matches(&Version::new(1, 1, 0))
+                    && !range.matches(&Version::new(1, 0, 0))),
+            "Exclusive dock panels require ui.panels >=1.2"
+        );
+        anyhow::ensure!(
+            manifest.panels.iter().all(|panel| !panel.exclusive
+                || matches!(panel.position.as_str(), "left" | "right" | "bottom")),
+            "Exclusive panels require a side or bottom dock position"
+        );
+    }
+    // Hiding an entry must be explicit on hosts that understand it; accepting ^1 alone would
+    // let an older toolbar expose a contextual window the author deliberately omitted.
+    if manifest
+        .panels
+        .iter()
+        .any(|panel| !panel.show_in_window_controls)
+    {
+        anyhow::ensure!(
+            manifest
+                .api
+                .as_ref()
+                .and_then(|requirements| requirements.required.get("ui.panels"))
+                .is_some_and(|range| range.matches(&Version::new(1, 2, 0))
+                    && !range.matches(&Version::new(1, 0, 0))),
+            "Hidden window controls require ui.panels >=1.1"
+        );
+    }
     if manifest.activation.background.is_some() {
         anyhow::ensure!(
             manifest.component.is_some()
@@ -123,7 +157,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("editor.files".into(), Version::new(1, 0, 0)),
         ("ui.canvas".into(), Version::new(1, 1, 0)),
         ("ui.collections".into(), Version::new(1, 0, 0)),
-        ("ui.tree".into(), Version::new(1, 0, 0)),
+        ("ui.tree".into(), Version::new(1, 2, 0)),
         ("ui.grid".into(), Version::new(1, 0, 0)),
         ("plugin.services".into(), Version::new(1, 1, 0)),
         ("workspace.files".into(), Version::new(1, 3, 0)),
@@ -133,7 +167,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("storage.migration".into(), Version::new(1, 0, 0)),
         ("editor.documents".into(), Version::new(1, 1, 0)),
         ("editor.virtual".into(), Version::new(1, 1, 0)),
-        ("editor.diff".into(), Version::new(1, 1, 0)),
+        ("editor.diff".into(), Version::new(1, 2, 0)),
         ("editor.decorations".into(), Version::new(1, 0, 0)),
         ("editor.layout".into(), Version::new(1, 0, 0)),
         ("editor.viewport".into(), Version::new(1, 0, 0)),
@@ -144,7 +178,8 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("editor.images".into(), Version::new(1, 0, 0)),
         // 1.1 adds explicitly declared hot changes and namespace-only secret references.
         ("configuration".into(), Version::new(1, 1, 0)),
-        ("ui.panels".into(), Version::new(1, 0, 0)),
+        // 1.1 lets packages hide contextual panel entries without changing window visibility.
+        ("ui.panels".into(), Version::new(1, 2, 0)),
         ("ui.clipboard".into(), Version::new(1, 0, 0)),
         // 1.7 presents an already-owned PTY; negotiation still grants no execution or UI authority.
         ("process".into(), Version::new(1, 8, 0)),
@@ -193,6 +228,91 @@ mod terminal_tests {
 #[cfg(test)]
 mod visibility_tests {
     use super::*;
+
+    /// Contextual window entries use an explicit minor floor; older declarations keep their entries.
+    #[test]
+    fn hidden_window_controls_require_explicit_panel_capability_floor() {
+        for id in ["first.contextual", "second.contextual"] {
+            let mut manifest: Manifest = serde_json::from_value(serde_json::json!({
+                "id":id,"name":id,"version":"1.0.0","protocol":7,
+                "permissions":["ui.panels"],"storage_limit":1024,
+                "api":{"base":"^1","required":{"ui.panels":"^1"}},
+                "panels":[{"id":"details","title":"Details","position":"window"}]
+            }))
+            .unwrap();
+            assert!(manifest.panels[0].show_in_window_controls);
+            assert!(
+                serde_json::to_value(&manifest).unwrap()["panels"][0]
+                    .get("show_in_window_controls")
+                    .is_none()
+            );
+            require_current(&manifest).unwrap();
+            manifest.panels[0].show_in_window_controls = false;
+            assert!(require_current(&manifest).is_err());
+            manifest
+                .api
+                .as_mut()
+                .unwrap()
+                .required
+                .insert("ui.panels".into(), ">=1.1,<2".parse().unwrap());
+            require_current(&manifest).unwrap();
+            assert_eq!(
+                negotiate(&manifest).unwrap().capabilities["ui.panels"],
+                Version::new(1, 2, 0)
+            );
+        }
+    }
+
+    #[test]
+    fn exclusive_dock_panels_require_explicit_version_and_valid_region() {
+        let mut manifest: Manifest = serde_json::from_value(serde_json::json!({
+            "id":"independent.exclusive","name":"Exclusive","version":"1.0.0","protocol":7,
+            "permissions":["ui.panels"],"storage_limit":1024,
+            "api":{"base":"^1","required":{"ui.panels":"^1"}},
+            "panels":[{"id":"review","title":"Review","position":"left"}]
+        }))
+        .unwrap();
+        assert!(!manifest.panels[0].exclusive);
+        assert!(
+            serde_json::to_value(&manifest).unwrap()["panels"][0]
+                .get("exclusive")
+                .is_none()
+        );
+        require_current(&manifest).unwrap();
+        manifest.panels[0].exclusive = true;
+        assert!(require_current(&manifest).is_err());
+        for range in ["^1", ">=1.1,<2", "^1.1", "^2"] {
+            manifest
+                .api
+                .as_mut()
+                .unwrap()
+                .required
+                .insert("ui.panels".into(), range.parse().unwrap());
+            assert!(
+                require_current(&manifest).is_err(),
+                "{range} must not silently accept exclusivity"
+            );
+        }
+        manifest
+            .api
+            .as_mut()
+            .unwrap()
+            .required
+            .insert("ui.panels".into(), ">=1.2,<2".parse().unwrap());
+        manifest.panels[0].show_in_window_controls = false;
+        for position in ["left", "right", "bottom"] {
+            manifest.panels[0].position = position.into();
+            require_current(&manifest).unwrap();
+            assert_eq!(
+                negotiate(&manifest).unwrap().capabilities["ui.panels"],
+                Version::new(1, 2, 0)
+            );
+        }
+        for position in ["editor", "window"] {
+            manifest.panels[0].position = position.into();
+            assert!(require_current(&manifest).is_err());
+        }
+    }
 
     #[test]
     fn panel_visibility_is_opt_in_and_independent_of_plugin_identity() {

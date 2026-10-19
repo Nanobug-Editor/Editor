@@ -94,6 +94,8 @@ impl PluginView {
                     self.code_sync.alignment_budget.clone(),
                     cx,
                 );
+                // Comparison scenes share the same native inner-gutter presentation as tabs.
+                group.set_inner_gutters(true, cx);
                 group.refresh_native_overlays(cx);
             } else if let Some(group) = alignment.take() {
                 group.retire(cx);

@@ -2,7 +2,9 @@
 
 use crate::*;
 use editor_core::Workspace;
-use gpui_kit::{TestAppContext, component::Root, gpui, size};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, size};
 use lsp_types::{Hover, HoverContents, MarkedString};
 use std::{cell::Cell, cell::RefCell, rc::Rc};
 

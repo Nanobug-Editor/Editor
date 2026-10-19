@@ -1,8 +1,10 @@
 //! Plugin management and the native document surface share the editor's controls and theme.
 use super::*;
 use crate::ui::controls::ButtonCustomVariant;
-use gpui_kit::component::WindowExt as _;
-use gpui_kit::component::dialog::{DialogAction, DialogClose, DialogFooter};
+use crate::ui::controls::dialog::DialogAction;
+use crate::ui::controls::dialog::DialogFooter;
+use crate::ui::controls::overlay::WindowExt as _;
+use gpui_base::DialogClose;
 use gpui_kit::rgb;
 impl ExtensionPanel {
     /// A store recovery failure has no plugin log owner and remains a separate manager diagnostic.
@@ -593,10 +595,11 @@ impl ExtensionPanel {
                             div()
                                 .id("plugin-remove-cancel")
                                 .debug_selector(|| "plugin-remove-cancel".into())
-                                .child(
-                                    DialogClose::new()
-                                        .trigger(|button| button.label(t!("plugins.cancel"))),
-                                ),
+                                .child(DialogClose::new().trigger(|base| {
+                                    Button::new("plugin-remove-cancel-action")
+                                        .with_base(base)
+                                        .label(t!("plugins.cancel"))
+                                })),
                         )
                         .child(
                             div()

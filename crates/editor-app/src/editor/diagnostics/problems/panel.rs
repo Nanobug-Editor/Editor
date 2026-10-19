@@ -58,6 +58,15 @@ impl dock::BasePanel for ProblemsPanel {
 }
 
 impl DockPanel for ProblemsPanel {
+    /// Reuse the heading's actual diagnostic count without rendering its interactive controls.
+    fn drag_title(&self, cx: &App) -> Option<gpui_kit::SharedString> {
+        let count = self
+            .parent
+            .upgrade()
+            .map_or(0, |app| app.read(cx).problem_rows(cx).len());
+        Some(t!("problems.title", count = count).to_string().into())
+    }
+
     fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let count = self
             .parent

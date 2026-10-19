@@ -71,7 +71,9 @@ impl ProblemsState {
 impl EditorApp {
     /// Add the default bottom leaf only when absent, including migration of older saved layouts.
     pub(crate) fn ensure_problems_dock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let panel = dock::panel_handle(self.problems.panel.clone());
+        let panel = self
+            .dock_presentation
+            .panel_handle(self.problems.panel.clone());
         let id = gpui_base::dock::PanelId::from(self.problems.panel.entity_id());
         let height = px(self
             .session_state
@@ -95,6 +97,10 @@ impl EditorApp {
 
     /// Reveal the workspace list in its current dock position and preserve the previous focus target.
     pub(crate) fn show_problems(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.dock_presentation
+            .activate(gpui_base::dock::PanelId::from(
+                self.problems.panel.entity_id(),
+            ));
         self.prune_direct_diagnostics(cx);
         if !self.problems.owns_focus(window, cx) {
             self.problems.previous = window.focused(cx);

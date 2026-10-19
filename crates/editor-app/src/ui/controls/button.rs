@@ -1,9 +1,9 @@
 //! Product button appearance; gpui-base owns activation, focus, and semantics.
 
 use super::{Icon, Tooltip};
-use gpui_base::Button as BaseButton;
-use gpui_base::StyledExt as _;
-use gpui_kit::component::{ActiveTheme as _, IconName};
+use crate::ui::theme::ActiveTheme as _;
+use gpui_base::{Button as BaseButton, StyledExt as _};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     AnyElement, App, ClickEvent, ElementId, FocusHandle, Global, Hsla, InteractiveElement,
     IntoElement, KeyBinding, NoAction, ParentElement, RenderOnce, SharedString,
@@ -71,6 +71,8 @@ pub(crate) struct Button {
     style: StyleRefinement,
     variant: Variant,
     label: Option<SharedString>,
+    /// Explicit accessible names take precedence over visible labels and icon-only tooltips.
+    accessibility_label: Option<SharedString>,
     icon: Option<Icon>,
     children: Vec<AnyElement>,
     tooltip: Option<SharedString>,
@@ -79,6 +81,8 @@ pub(crate) struct Button {
     outline: bool,
     loading: bool,
     disabled: bool,
+    /// Owner-selected buttons project both their accessible state and local active wash.
+    selected: bool,
     content_full_width: bool,
     reveal_group: Option<SharedString>,
 }
@@ -100,6 +104,7 @@ impl Button {
             style: StyleRefinement::default(),
             variant: Variant::Default,
             label: None,
+            accessibility_label: None,
             icon: None,
             children: Vec::new(),
             tooltip: None,
@@ -108,6 +113,7 @@ impl Button {
             outline: false,
             loading: false,
             disabled: false,
+            selected: false,
             content_full_width: false,
             reveal_group: None,
         }
@@ -126,7 +132,14 @@ impl Button {
     }
 
     pub(crate) fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
-        self.base = self.base.accessibility_label(label);
+        self.accessibility_label = Some(label.into());
+        self
+    }
+
+    /// Keep controlled selection visible and expose it through Base button semantics.
+    pub(crate) fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self.base = self.base.selected(selected).aria_selected(selected);
         self
     }
 
@@ -309,7 +322,14 @@ impl RenderOnce for Button {
             .when_some(icon, |this, icon| this.child(icon.small()))
             .when_some(self.label.clone(), |this, label| this.child(label))
             .children(self.children);
+        let semantic_label = self
+            .accessibility_label
+            .or_else(|| self.label.clone())
+            .or_else(|| self.tooltip.clone());
         self.base
+            .when_some(semantic_label, |button, label| {
+                button.accessibility_label(label)
+            })
             .key_context("EditorActivate")
             .disabled(self.disabled || self.loading)
             .h(px(height))
@@ -319,7 +339,11 @@ impl RenderOnce for Button {
             .when(self.outline, |button| {
                 button.border_1().border_color(outline_color.opacity(0.65))
             })
-            .bg(background)
+            .bg(if self.selected {
+                palette.list_active
+            } else {
+                background
+            })
             .text_color(foreground)
             .text_size(px(if self.small { 12. } else { 13. }))
             .cursor_pointer()

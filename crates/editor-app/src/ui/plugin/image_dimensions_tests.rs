@@ -1,7 +1,9 @@
 //! Declared image geometry and alternative-text semantics are observed on native pixel elements.
 
 use super::*;
-use gpui_kit::{TestAppContext, component::Root, gpui, px, size};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, px, size};
 use plugin_runtime::{ImageResource, ImageState, plugin_protocol::api};
 use std::sync::Arc;
 

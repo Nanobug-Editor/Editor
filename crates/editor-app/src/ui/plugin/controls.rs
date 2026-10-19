@@ -4,7 +4,7 @@ use crate::ui::controls::{
     menu::{MenuStyle, PopupMenu},
     side_tabs::{SideTabBar, SideTabsStyle},
 };
-use gpui_kit::component::ActiveTheme as _;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_kit::*;
 use plugin_runtime::plugin_protocol::{
     Environment,
@@ -288,7 +288,10 @@ impl Render for CollectionView {
 #[cfg(test)]
 mod tests {
     use super::{CollectionModel, CollectionView};
-    use gpui_kit::{AppContext as _, TestAppContext, component::Root, gpui, point, px, rgb, size};
+    use gpui_base::Root;
+    use gpui_kit::AppContext as _;
+    use gpui_kit::TestAppContext;
+    use gpui_kit::{gpui, point, px, rgb, size};
     use plugin_runtime::plugin_protocol::{
         Environment, FontStyle,
         ui::{SideTabs, SideTabsPosition},

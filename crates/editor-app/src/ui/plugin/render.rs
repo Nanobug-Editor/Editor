@@ -117,8 +117,10 @@ impl PluginView {
             let content = self.node(&dialog.content, false, window, cx);
             let colors = self.colors("dialog", cx);
             let id = dialog.id.clone();
+            let gesture = self.action_gesture(&id);
             let close = self.font(
-                Button::new("plugin-dialog-close")
+                Button::new(action_gestures::native_id("plugin-dialog-close", gesture))
+                    .debug_selector(|| "plugin-dialog-close".into())
                     .label("×")
                     .accessibility_label("关闭")
                     .custom(
@@ -128,9 +130,11 @@ impl PluginView {
                             .hover(colors.hover)
                             .active(colors.active),
                     )
-                    .on_click(
-                        cx.listener(move |this, _, _, cx| this.emit(&id, Action::Dismiss, cx)),
-                    ),
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if this.action_gesture_current(&id, gesture) {
+                            this.emit(&id, Action::Dismiss, cx);
+                        }
+                    })),
                 "dialog",
             );
             let popup = self.font(

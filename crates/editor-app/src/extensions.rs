@@ -31,6 +31,8 @@ use crate::ui::plugin::images;
 #[cfg(test)]
 mod dock_tests;
 #[cfg(test)]
+mod exclusive_tests;
+#[cfg(test)]
 mod file_view_tests;
 #[cfg(test)]
 mod git_fixture_environment;
@@ -73,6 +75,8 @@ mod package_ui_test_support;
 /// Cross-feature native fixtures consume the same public, bounded demand path as plugin UI tests.
 #[cfg(test)]
 pub(crate) use package_ui_test_support::demand as demand_plugin_fixture;
+#[cfg(test)]
+mod branch_menu_tests;
 mod preview;
 #[cfg(test)]
 mod preview_tests;
@@ -181,6 +185,10 @@ pub struct ExtensionPanel {
     log_generation: u64,
     parent: WeakEntity<EditorApp>,
     visible: Rc<Cell<bool>>,
+    /// Shared regional presentation changes display without rewriting this panel's visibility intent.
+    dock_presentation: local_dock::PanelPresentation,
+    /// Manager windows have no dock identity; ordinary viewers retain their native entity ID.
+    dock_panel_id: Option<gpui_base::dock::PanelId>,
     /// Actual native surface sampling is independent from the user's persisted visibility choice.
     panel_visibility: visibility::PanelVisibility,
     workspace: PathBuf,
@@ -534,6 +542,8 @@ impl ExtensionPanel {
         Self {
             parent,
             visible,
+            dock_presentation: Default::default(),
+            dock_panel_id: None,
             workspace,
             root,
             panel_visibility: Default::default(),
@@ -645,6 +655,8 @@ impl ExtensionPanel {
         Self {
             parent,
             visible: Rc::new(Cell::new(initially_visible)),
+            dock_presentation: Default::default(),
+            dock_panel_id: Some(gpui_base::dock::PanelId::from(cx.entity_id())),
             panel_visibility: Default::default(),
             providers: Some(
                 crate::language::providers::Providers::for_workspace(&workspace)
@@ -1074,8 +1086,25 @@ impl ExtensionPanel {
     /// Plugins decide whether opening an empty view requires new state or process resources.
     pub(crate) fn show(&self, window: &mut Window, cx: &mut App) {
         self.visible.set(true);
+        self.activate_dock();
         self.demand_view();
         self.focus(window, cx);
+    }
+    /// Select this dock surface on explicit reveals; detached windows and file previews are unaffected.
+    fn activate_dock(&self) {
+        if let Some(id) = self
+            .dock_panel_id
+            .filter(|_| !self.editor_preview && !self.work_window)
+        {
+            self.dock_presentation.activate(id);
+        }
+    }
+    /// Whether this surface is shown after regional replacement, independently of saved intent.
+    pub(super) fn displayed_in_dock(&self) -> bool {
+        self.visible.get()
+            && self
+                .dock_panel_id
+                .is_none_or(|id| !self.dock_presentation.is_suppressed(id))
     }
     /// Preview publication state for native tests: the revision sent and the one the guest echoed.
     #[cfg(test)]
@@ -1262,6 +1291,10 @@ impl dock::BasePanel for ExtensionPanel {
     }
 }
 impl DockPanel for ExtensionPanel {
+    /// Compact host drag cards use the manifest display title for every contribution.
+    fn drag_title(&self, _: &App) -> Option<SharedString> {
+        Some(self.panel_title.clone().into())
+    }
     /// Native window chrome remains generic; domain functions are drawn from the plugin's live tools.
     fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use gpui_base::ElementExt as _;
@@ -1269,6 +1302,12 @@ impl DockPanel for ExtensionPanel {
         let icon = self.panel_icon(cx.theme().is_dark());
         let controls = h_flex().items_center();
         let command_owner = cx.entity().downgrade();
+        // A declaration without menu commands must not expose an empty native popup trigger.
+        let has_commands = self.entries.iter().any(|entry| {
+            entry.enabled
+                && Some(&entry.manifest.id) == self.active.as_ref()
+                && entry.manifest.commands.iter().any(|command| command.menu)
+        });
         h_flex()
             .w_full()
             .justify_between()
@@ -1281,30 +1320,34 @@ impl DockPanel for ExtensionPanel {
             )
             .child(
                 controls
-                    .child(
-                        div()
-                            .id("plugin-command-menu-anchor")
-                            .on_prepaint(move |bounds, _, cx| {
-                                let _ = command_owner.update(cx, |this, cx| {
-                                    this.bounds = bounds;
-                                    if let Some(popup) = &this.command_popup {
-                                        popup.update(cx, |popup, cx| popup.anchor_to(bounds, cx));
-                                    }
-                                });
-                            })
-                            .child(
-                                Button::new("plugin-command-menu")
-                                    .icon(Icon::default().path("icons/menu.svg"))
-                                    .tooltip(t!("plugins.command_menu").to_string())
-                                    .small()
-                                    .compact()
-                                    .ghost()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.commands_open = !this.commands_open;
-                                        cx.notify();
-                                    })),
-                            ),
-                    )
+                    .when(has_commands, |controls| {
+                        controls.child(
+                            div()
+                                .id("plugin-command-menu-anchor")
+                                .on_prepaint(move |bounds, _, cx| {
+                                    let _ = command_owner.update(cx, |this, cx| {
+                                        this.bounds = bounds;
+                                        if let Some(popup) = &this.command_popup {
+                                            popup.update(cx, |popup, cx| {
+                                                popup.anchor_to(bounds, cx)
+                                            });
+                                        }
+                                    });
+                                })
+                                .child(
+                                    Button::new("plugin-command-menu")
+                                        .icon(Icon::default().path("icons/menu.svg"))
+                                        .tooltip(t!("plugins.command_menu").to_string())
+                                        .small()
+                                        .compact()
+                                        .ghost()
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.commands_open = !this.commands_open;
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                    })
                     .child(
                         Button::new("plugin-hide")
                             .icon(Icon::default().path("icons/window-minimize.svg"))
@@ -1703,6 +1746,14 @@ impl EditorApp {
         }
         for (key, panel) in panels {
             panel.update(cx, |panel, cx| panel.show(window, cx));
+            self.dock_area.update(cx, |area, cx| {
+                local_dock::reveal_panel(
+                    area,
+                    gpui_base::dock::PanelId::from(panel.entity_id()),
+                    window,
+                    cx,
+                );
+            });
             self.session_state.plugin_panel_visibility.insert(key, true);
         }
         self.persist_session();
@@ -1712,6 +1763,9 @@ impl EditorApp {
 
     /// Register and remove native panels directly from installed manifest contributions.
     pub(crate) fn sync_plugin_panels(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.outline_panel.update(cx, |panel, _| {
+            panel.set_visible(self.session_state.outline_visible)
+        });
         self.finish_preference_imports(cx);
         // Explicit manager publication and normal rendering share the same live shortcut path.
         self.sync_shortcut_plugins(cx);
@@ -1745,10 +1799,13 @@ impl EditorApp {
                 windows::remove_work_window_after_release(handle, cx);
             }
             if let Some(panel) = self.plugin_panels.remove(&key) {
+                self.dock_presentation
+                    .forget(gpui_base::dock::PanelId::from(panel.entity_id()));
                 self.dock_area
                     .update(cx, |area, cx| area.remove_panel(panel, window, cx));
             }
         }
+        let mut exclusive_docks = Vec::new();
         for (key, id, descriptor) in contributions {
             let owner = self.extensions.clone();
             // A saved choice wins; first installation follows the manifest default.
@@ -1770,7 +1827,14 @@ impl EditorApp {
                 "right" => gpui_base::dock::DockPlacement::Right,
                 _ => gpui_base::dock::DockPlacement::Bottom,
             };
+            if descriptor.exclusive {
+                exclusive_docks.push((key.clone(), placement, dock_size));
+            }
             if let Some(panel) = self.plugin_panels.get(&key) {
+                self.dock_presentation.set_exclusive(
+                    gpui_base::dock::PanelId::from(panel.entity_id()),
+                    descriptor.exclusive,
+                );
                 // Editor-local contributions are rendered inside the current document's panel.
                 if matches!(descriptor.position.as_str(), "editor" | "window") {
                     panel.update(cx, |panel, _| panel.editor_auxiliary = descriptor.auxiliary);
@@ -1783,7 +1847,7 @@ impl EditorApp {
                     self.dock_area.update(cx, |area, cx| {
                         crate::local_dock::add_panel_view(
                             area,
-                            dock::panel_handle(panel.clone()),
+                            self.dock_presentation.panel_handle(panel.clone()),
                             placement,
                             Some(px(dock_size)),
                             window,
@@ -1793,6 +1857,7 @@ impl EditorApp {
                 }
                 continue;
             }
+            let exclusive = descriptor.exclusive;
             let panel = cx.new(|cx| {
                 let owner = owner.read(cx);
                 let parent = owner.parent.clone();
@@ -1814,11 +1879,25 @@ impl EditorApp {
                     cx,
                 )
             });
-            if initially_visible && !panel.read(cx).editor_preview && !panel.read(cx).work_window {
+            panel.update(cx, |panel, _| {
+                panel.dock_presentation = self.dock_presentation.clone()
+            });
+            let panel_id = gpui_base::dock::PanelId::from(panel.entity_id());
+            self.dock_presentation.set_exclusive(panel_id, exclusive);
+            if initially_visible && exclusive {
+                self.dock_presentation.activate(panel_id);
+            }
+            // Register exclusive leaves before a reveal can replace peers. Base can then retain
+            // ordinary split preferences instead of adopting the exclusive panel's full-band size
+            // while inserting a second exclusive surface later.
+            if (initially_visible || exclusive)
+                && !panel.read(cx).editor_preview
+                && !panel.read(cx).work_window
+            {
                 self.dock_area.update(cx, |area, cx| {
                     crate::local_dock::add_panel_view(
                         area,
-                        dock::panel_handle(panel.clone()),
+                        self.dock_presentation.panel_handle(panel.clone()),
                         placement,
                         Some(px(dock_size)),
                         window,
@@ -1832,6 +1911,39 @@ impl EditorApp {
         self.sync_plugin_windows(cx);
         self.sync_editor_previews(cx);
         self.restore_dock_layout(window, cx);
+        // An older saved layout can omit newly declared hidden exclusive leaves. Register them
+        // before the first exclusive frame so later reveals do not reshape the ordinary combination.
+        for (key, placement, dock_size) in exclusive_docks {
+            let panel = &self.plugin_panels[&key];
+            let area = self.dock_area.read(cx);
+            if area
+                .panel(gpui_base::dock::PanelId::from(panel.entity_id()))
+                .is_none()
+                && local_dock::has_visible_region(area, placement, cx)
+            {
+                self.dock_area.update(cx, |area, cx| {
+                    local_dock::add_panel_view(
+                        area,
+                        self.dock_presentation.panel_handle(panel.clone()),
+                        placement,
+                        Some(px(dock_size)),
+                        window,
+                        cx,
+                    );
+                });
+            }
+        }
+        if self
+            .dock_presentation
+            .synchronize(self.dock_area.read(cx), cx)
+            .1
+        {
+            self.dock_area.update(cx, |_, cx| cx.notify());
+        }
+        // Keep regional cleanup outside a gesture so its source measurements and pointer targets stay stable.
+        if self.dock_ui.is_dragging() {
+            return;
+        }
         // Upstream retains empty dock regions. Remove their layout boxes at the app boundary,
         // while plugin entities and saved sizes remain available for reopening.
         for placement in [
@@ -1843,12 +1955,20 @@ impl EditorApp {
                 && self.dock_area.read(cx).is_empty(placement, cx)
             {
                 let message_id = gpui_base::dock::PanelId::from(self.messages.entity_id());
+                let sidebar_ids = [
+                    gpui_base::dock::PanelId::from(self.explorer_panel.entity_id()),
+                    gpui_base::dock::PanelId::from(self.outline_panel.entity_id()),
+                ];
                 self.dock_area.update(cx, |area, cx| {
-                    if area
-                        .layout(placement)
-                        .is_some_and(|tree| tree.panels().any(|panel| panel == message_id))
-                    {
-                        // The host message panel retains its saved split and peers while hidden.
+                    if area.layout(placement).is_some_and(|tree| {
+                        tree.panels().any(|panel| {
+                            panel == message_id
+                                || (placement != gpui_base::dock::DockPlacement::Bottom
+                                    && sidebar_ids.contains(&panel))
+                        })
+                    }) {
+                        // Hidden side hosts retain their saved split and peers. In particular,
+                        // moving Explorer must not erase a hidden Outline's position.
                         // Closing the region releases its width without removing the panel identity.
                         area.set_dock_collapsible(placement, true, window, cx);
                         if area.is_dock_open(placement) {

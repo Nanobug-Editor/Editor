@@ -10,6 +10,7 @@ use std::{cell::RefCell, fs};
 
 mod bridge;
 mod caption_controls;
+mod exclusive;
 mod exit_tests;
 mod fixture;
 mod idle_retention;
@@ -93,6 +94,10 @@ pub(super) fn probe_key_result(
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_workbench_smoke() {
     assert!(
+        !exclusive::requested(),
+        "complete acceptance refuses exclusive-only workflow"
+    );
+    assert!(
         !sidebar::requested(),
         "complete acceptance refuses sidebar-only workflow"
     );
@@ -132,6 +137,10 @@ fn git_native_history_keyboard_phase_probe() {
 #[test]
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_visual_matrix() {
+    assert!(
+        !exclusive::requested(),
+        "complete acceptance refuses exclusive-only workflow"
+    );
     assert!(
         !sidebar::requested(),
         "complete acceptance refuses sidebar-only workflow"
@@ -196,7 +205,8 @@ fn open(case: Case, fixture: Rc<Fixture>, cx: &mut App) -> anyhow::Result<Harnes
     session.workspace_trusted = true;
     session.messages_visible = false;
     // Only the sidebar workflow starts from the ordinary new-user host visibility default.
-    session.explorer_visible = sidebar::requested();
+    session.explorer_visible = sidebar::requested() || exclusive::requested();
+    session.outline_visible = exclusive::requested();
     session
         .plugin_panel_visibility
         .insert("git/staging".into(), true);
@@ -209,7 +219,7 @@ fn open(case: Case, fixture: Rc<Fixture>, cx: &mut App) -> anyhow::Result<Harnes
         extensions::environment(&fixture.workspace, cx),
         true,
     ));
-    let mut options = gpui_kit::component::TitleBar::window_options();
+    let mut options = crate::ui::controls::window::TitleBar::window_options();
     options.window_background = theme::window_background(cx);
     options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
         None,

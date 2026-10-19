@@ -1,8 +1,10 @@
 //! Exercises diagnostic publication, keyboard navigation, and local hover presentation.
 
 use super::*;
+use gpui_base::Root;
 use gpui_base::input::{DiagnosticSeverity, Position};
-use gpui_kit::{TestAppContext, component::Root, gpui, size};
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, size};
 use std::{cell::RefCell, rc::Rc};
 
 mod problems;

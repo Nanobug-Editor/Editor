@@ -38,6 +38,8 @@ mod viewport;
 #[cfg(test)]
 mod viewport_tests;
 mod virtual_blocks;
+#[cfg(test)]
+mod visibility_gesture_tests;
 mod widgets;
 
 use gpui_base::input::{InputEvent, InputState};
@@ -148,7 +150,10 @@ impl PluginView {
     /// Suspend guest input and pending locations while retaining paint and the native text entity.
     pub(crate) fn set_scene_current(&mut self, current: bool, cx: &mut Context<Self>) {
         if self.scene_current.get() && !current {
+            // Ordinary controls now survive hiding; their old pending Base presses must not.
+            self.action_gestures.retained_visibility = true;
             self.invalidate_action_gestures(cx);
+            self.suspend_popup(cx);
             for tree in self.trees.values() {
                 tree.read(cx).resource.suspend();
             }

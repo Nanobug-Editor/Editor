@@ -11,6 +11,9 @@ use std::{
 #[cfg(test)]
 mod tests;
 
+/// Version 2 distinguishes editor-local columns from historical center-tree sidebar bands.
+pub(crate) const DOCK_LAYOUT_VERSION: u32 = 2;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "provider", rename_all = "snake_case")]
 pub(crate) enum FileProviderChoice {
@@ -75,7 +78,7 @@ pub struct SessionState {
     #[serde(default)]
     pub plugin_panel_visibility: std::collections::BTreeMap<String, bool>,
     /// Legacy records default to zero; successful sidebar restoration acknowledges this migration once.
-    /// New layouts start current so later user moves to an outer dock remain authoritative.
+    /// Version 2 also preserves editor-local columns above the bottom dock instead of promoting them.
     #[serde(default)]
     pub(crate) plugin_sidebar_layout_version: u32,
     /// Import-only records preserve historical data until the authorized private write is acknowledged.
@@ -103,6 +106,9 @@ pub struct SessionState {
     /// Base serializes the complete split tree, dock extents and open state.
     #[serde(default)]
     pub dock_layout: Option<gpui_base::dock::DockAreaState>,
+    /// Stable selected panel names restore exclusive/shared regional presentation without a second layout.
+    #[serde(default)]
+    pub dock_active_panels: Vec<String>,
     pub open_tabs: Vec<String>,
     pub active_file: Option<String>,
     pub expanded_directories: Vec<String>,
@@ -166,11 +172,12 @@ impl SessionState {
             native_terminal_visible: false,
             plugin_dock_sizes: Default::default(),
             plugin_panel_visibility: Default::default(),
-            plugin_sidebar_layout_version: 1,
+            plugin_sidebar_layout_version: DOCK_LAYOUT_VERSION,
             legacy_preview_modes: Default::default(),
             legacy_preview_sync: Default::default(),
             legacy_preview_toolbar: Default::default(),
             dock_layout: None,
+            dock_active_panels: Vec::new(),
             open_tabs: Vec::new(),
             active_file: None,
             expanded_directories: Vec::new(),
@@ -238,8 +245,10 @@ impl SessionState {
                         state.extension_height = state.extension_height.clamp(140., 1200.);
                         // No legacy tree means the current default will be constructed. Mark it
                         // before a new user move is saved, without lowering future layout versions.
-                        if state.dock_layout.is_none() && state.plugin_sidebar_layout_version < 1 {
-                            state.plugin_sidebar_layout_version = 1;
+                        if state.dock_layout.is_none()
+                            && state.plugin_sidebar_layout_version < DOCK_LAYOUT_VERSION
+                        {
+                            state.plugin_sidebar_layout_version = DOCK_LAYOUT_VERSION;
                         }
                     } else {
                         state.block_persistence();

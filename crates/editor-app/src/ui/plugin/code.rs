@@ -1,7 +1,7 @@
 //! Readonly code requests retain only capture ranges; native text and theme remain the renderer's owners.
 use super::*;
 use crate::language::code_highlighting::{self as language, Selection, Token};
-use gpui_kit::component::ActiveTheme as _;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_kit::{
     AnyElement, InteractiveElement as _, ParentElement as _, Styled as _, StyledText, div,
 };

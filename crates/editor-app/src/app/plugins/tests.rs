@@ -2,7 +2,9 @@
 
 use super::*;
 use crate::app::language_servers::ServiceLoadState;
-use gpui_kit::{TestAppContext, component::Root, gpui, px, size};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, px, size};
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 /// Recognition and parsers require installed declarations, even for extensions GPUI knows internally.

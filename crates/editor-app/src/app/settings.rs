@@ -3,7 +3,8 @@
 use crate::ui::controls::{Checkbox, DialogContent};
 use crate::*;
 mod owner;
-use gpui_kit::{AnyElement, App, Entity, component::scroll::ScrollableElement};
+use crate::ui::controls::scroll::ScrollableElement;
+use gpui_kit::{AnyElement, App, Entity};
 use owner::SettingsOwner;
 
 /// Top-level settings categories shown in the navigation sidebar.
@@ -262,7 +263,14 @@ fn render_workspace_appearance(view: &Entity<EditorApp>, cx: &mut App) -> AnyEle
                                     t!("settings.hidden").to_string()
                                 })
                                 .on_click(move |_, _, cx| {
-                                    explorer_view.update(cx, |this, cx| this.toggle_explorer(cx));
+                                    // This control lives in the settings HWND; dock reconciliation
+                                    // and focus continue in the original editor window.
+                                    let owner = explorer_view.read(cx).owner_window;
+                                    let _ = owner.update(cx, |_, window, cx| {
+                                        explorer_view.update(cx, |this, cx| {
+                                            this.toggle_explorer(window, cx)
+                                        });
+                                    });
                                 }),
                         ),
                 )

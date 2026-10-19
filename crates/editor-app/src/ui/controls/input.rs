@@ -1,11 +1,12 @@
 //! Single-line input appearance around gpui-base's shared editing state.
 
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::StyledExt as _;
 use gpui_base::input::{Input as BaseInput, InputState};
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
-    AnyElement, App, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    SharedString, StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _, px,
+    AnyElement, App, Entity, Focusable as _, InteractiveElement, IntoElement, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled, Window,
+    div, prelude::FluentBuilder as _, px,
 };
 
 #[derive(IntoElement)]
@@ -70,6 +71,7 @@ impl Styled for Input {
 impl RenderOnce for Input {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = cx.theme();
+        let accessible_state = self.state.clone();
         div()
             .w_full()
             // Base's single-line engine fills its frame. A minimum height alone leaves its
@@ -97,6 +99,12 @@ impl RenderOnce for Input {
             })
             .child(
                 gpui_base::input::InputBase::new(("local-input", self.state.entity_id()))
+                    // Bind the visible field to its existing input owner for native focus/value access.
+                    .track_focus(&self.state.read(cx).focus_handle(cx))
+                    .aria_value(self.state.read(cx).value())
+                    .on_a11y_action(gpui_kit::AccessibleAction::Focus, move |_, window, cx| {
+                        accessible_state.update(cx, |state, cx| state.focus(window, cx));
+                    })
                     .flex_1()
                     .min_w(px(0.))
                     .h_full()

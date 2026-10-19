@@ -316,7 +316,11 @@ impl ProjectWindow {
                 return;
             }
             let root = workspace.root().to_owned();
-            window.resize(size(px(session.window_width), px(session.window_height)));
+            crate::ui::controls::window::restore_editor_geometry(
+                window,
+                size(px(session.window_width), px(session.window_height)),
+                cx,
+            );
             let editor = cx
                 .new(|cx| EditorApp::new_with_session(workspace, file, Some(session), window, cx));
             let owner = cx.entity().downgrade();

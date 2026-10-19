@@ -245,11 +245,20 @@ impl EditorApp {
         if let Some(panel) = panel {
             panel.update(cx, |panel, cx| {
                 panel.visible.set(true);
+                panel.activate_dock();
                 panel.demand_view_at(availability);
                 panel.focus(window, cx);
                 cx.notify();
             });
-            self.dock_area.update(cx, |_, cx| cx.notify());
+            self.dock_area.update(cx, |area, cx| {
+                local_dock::reveal_panel(
+                    area,
+                    gpui_base::dock::PanelId::from(panel.entity_id()),
+                    window,
+                    cx,
+                );
+                cx.notify();
+            });
         }
         cx.notify();
     }

@@ -258,7 +258,7 @@ pub(super) fn render(
                     .map(px)
                     .unwrap_or(cx.theme().mono_font_size),
             )
-            // Match gpui-component Editor's 1.5 text line height during the renderer switch.
+            // Keep the local source frame's 1.5 text line height during the renderer switch.
             .line_height(relative(1.5))
             .when(completion.open, |view| {
                 // Observe deletion before the engine clears its menu, then let it edit normally.
@@ -692,7 +692,9 @@ fn hover_markdown(contents: &HoverContents) -> String {
 mod tests {
     use super::*;
     use editor_core::Workspace;
-    use gpui_kit::{TestAppContext, component::Root, gpui, size};
+    use gpui_base::Root;
+    use gpui_kit::TestAppContext;
+    use gpui_kit::{gpui, size};
     use lsp_types::{CompletionItem, Hover};
     use std::{cell::RefCell, rc::Rc};
 

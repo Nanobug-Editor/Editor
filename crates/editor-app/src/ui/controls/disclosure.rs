@@ -1,7 +1,8 @@
 //! Controlled disclosure appearance; gpui-base owns visibility, keyboard activation and semantics.
 use super::Button;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::Collapsible;
-use gpui_kit::component::{ActiveTheme as _, IconName};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     AnyElement, App, FocusHandle, IntoElement, ParentElement, SharedString, Styled, Window, div, px,
 };

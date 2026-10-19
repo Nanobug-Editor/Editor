@@ -1,7 +1,9 @@
 //! Real native form input survives a scene handover without replaying business activations.
 use super::*;
+use gpui_base::Root;
 use gpui_base::test_support::{ElementSnapshot, snapshots};
-use gpui_kit::{Role, TestAppContext, component::Root, gpui, test::TestWindowExt as _};
+use gpui_kit::{Role, TestAppContext};
+use gpui_kit::{gpui, test::TestWindowExt as _};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 

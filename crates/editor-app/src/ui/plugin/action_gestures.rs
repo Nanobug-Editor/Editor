@@ -1,20 +1,30 @@
-//! Source actions keep short-lived Base gesture identities apart from persistent native focus.
+//! Source and retained-scene actions separate short-lived Base presses from persistent native focus.
 use super::*;
 use gpui_kit::SharedString;
 use plugin_runtime::plugin_protocol::ui::Node;
 
-/// A native source token change or withdrawal cannot reauthorize a callback from an older frame.
-/// The full source token is owned by CodeSync; its changes advance this view-local incarnation.
+/// Source changes and visibility withdrawal cannot reauthorize an earlier frame's press.
+/// Both kinds share one view-local nonce; their distinct variants never imply document authority.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) struct ActionGesture {
-    incarnation: u64,
-    revision: u64,
+pub(super) enum ActionGesture {
+    /// Editor edge actions also capture the UI revision supplying their document-source binding.
+    Source { incarnation: u64, revision: u64 },
+    /// Ordinary controls retained after hiding capture only their native scene lifetime.
+    Visibility { incarnation: u64 },
 }
 
 impl ActionGesture {
     /// Native collection adapters use only the incarnation to revoke their local pointer state.
     pub(super) fn incarnation(self) -> u64 {
-        self.incarnation
+        match self {
+            Self::Source { incarnation, .. } | Self::Visibility { incarnation } => incarnation,
+        }
+    }
+
+    /// Diagnostic classification does not mistake a visibility ticket for document-source input.
+    #[cfg(test)]
+    pub(super) fn is_source(self) -> bool {
+        matches!(self, Self::Source { .. })
     }
 }
 
@@ -36,13 +46,15 @@ pub(super) struct VisualPress {
 #[derive(Default)]
 pub(super) struct ActionGestures {
     incarnation: u64,
+    /// After first withdrawal, ordinary frames need credentials too because their entities survive.
+    pub(super) retained_visibility: bool,
     pub(super) focus: BTreeMap<FocusTarget, FocusHandle>,
     /// A deferred outside release may clear only the exact source-image Down it observed.
     visual_press_sequence: u64,
     visual_presses: BTreeMap<(String, u8), VisualPress>,
 }
 
-/// Base stores a pending press by element ID. Only source actions need a new ID after revocation;
+/// Base stores a pending press by element ID. Retained actions need a new ID after revocation;
 /// the surrounding containers, native inputs and scroll state keep their existing identities.
 pub(super) fn native_id(
     id: impl Into<SharedString>,
@@ -50,7 +62,12 @@ pub(super) fn native_id(
 ) -> SharedString {
     let id = id.into();
     match gesture {
-        Some(gesture) => format!("{id}-action-{}", gesture.incarnation).into(),
+        Some(ActionGesture::Source { incarnation, .. }) => {
+            format!("{id}-action-{incarnation}").into()
+        }
+        Some(ActionGesture::Visibility { incarnation }) => {
+            format!("{id}-action-visibility-{incarnation}").into()
+        }
         None => id,
     }
 }
@@ -177,15 +194,21 @@ impl PluginView {
         self.sync_tree_action_gestures(cx);
     }
 
-    /// Ordinary controls retain their existing IDs and event semantics. A source control captures
-    /// both its UI revision and the incarnation shared by source-token changes and withdrawals.
+    /// Source controls capture their UI revision. Once retained across hiding, ordinary controls
+    /// also capture the shared nonce, with a distinct kind even when a source's revision is zero.
     pub(super) fn action_gesture(&self, id: &str) -> Option<ActionGesture> {
-        self.document
-            .editor_action_source(id)
-            .map(|_| ActionGesture {
+        if self.document.editor_action_source(id).is_some() {
+            Some(ActionGesture::Source {
                 incarnation: self.action_gestures.incarnation,
                 revision: self.document.revision,
             })
+        } else if self.action_gestures.retained_visibility {
+            Some(ActionGesture::Visibility {
+                incarnation: self.action_gestures.incarnation,
+            })
+        } else {
+            None
+        }
     }
 
     /// Check before forwarding through the existing IME, native identity and exact owner gates.
@@ -194,14 +217,11 @@ impl PluginView {
         self.action_gesture(id) == gesture
     }
 
-    /// Retain only focus resources for currently declared source controls. Base still owns their
-    /// activation and traversal; tabs have no native focus state in the upstream primitive.
+    /// Keep button/choice focus independent of revocable native press IDs, including ordinary
+    /// controls before their first hide. Base still owns activation and traversal.
     pub(super) fn sync_action_focus(&mut self, nodes: &[Node], cx: &mut Context<Self>) {
         let mut targets = BTreeSet::new();
         for node in nodes {
-            if self.document.editor_action_source(&node.id).is_none() {
-                continue;
-            }
             match &node.kind {
                 Kind::Button { .. } => {
                     targets.insert(FocusTarget::Button(node.id.clone()));

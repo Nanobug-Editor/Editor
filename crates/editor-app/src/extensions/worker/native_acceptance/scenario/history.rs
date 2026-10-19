@@ -22,15 +22,13 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
                 .max_by_key(|node| node.path().len())
                 .context("history tree has no painted dock content ancestor")?
                 .bounds();
-            // The default dock must show the header and at least three complete 28px commit rows.
-            // Measuring the shared native body also catches footer controls consuming its height.
+            // Headerless history keeps at least three complete 28px commit rows in the default dock.
             ensure!(
-                branches.size.height >= px(4. * 28.),
+                branches.size.height >= px(3. * 28.),
                 "history body cannot display three complete rows: {branches:?}"
             );
-            // The footer can wrap or move controls to the left. Its button edges cannot identify
-            // the canvas. Use the branch tree's actual dock-content ancestor for the right edge;
-            // both history children occupy the same bounded horizontal body above that footer.
+            // Both history children occupy the same bounded horizontal body. The dock-content
+            // ancestor identifies its right edge without relying on removed footer controls.
             ensure!(
                 content.right() - branches.right() > px(64.),
                 "history canvas has no usable native width: {branches:?}, {content:?}"

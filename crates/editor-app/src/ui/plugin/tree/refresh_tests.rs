@@ -2,8 +2,10 @@
 //! Only a new metadata read may recover; native selection and command gestures are never replayed.
 use super::*;
 use crate::ui::controls;
+use gpui_base::Root;
 use gpui_base::input::EditorState;
-use gpui_kit::{TestAppContext, VisualTestContext, component::Root, gpui, px, size};
+use gpui_kit::{TestAppContext, VisualTestContext};
+use gpui_kit::{gpui, px, size};
 use plugin_runtime::{
     Manager,
     plugin_protocol::api::{self as protocol, DocumentVersion},

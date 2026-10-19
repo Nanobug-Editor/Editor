@@ -1,6 +1,8 @@
 //! The shared native input keeps composition separate from a confirmed plugin result.
 use super::*;
-use gpui_kit::{TestAppContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::gpui;
 use plugin_runtime::{
     Manager,
     plugin_protocol::{Environment, api},

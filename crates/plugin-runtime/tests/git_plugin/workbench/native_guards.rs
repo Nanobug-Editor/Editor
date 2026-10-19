@@ -95,19 +95,7 @@ fn preview(manager: &Manager) -> String {
 }
 
 fn reset_review(manager: &mut Manager, target: &str) {
-    send(
-        manager,
-        "history",
-        "argument",
-        ui::Action::Change(target.into()),
-    );
-    click(manager, "history", "advanced-open");
-    send(
-        manager,
-        "history",
-        "advanced-menu",
-        ui::Action::Select("reset-hard".into()),
-    );
+    branch_menu::context_action(manager, "reset-hard", Some(target));
     assert!(
         manager.live["git"].views["history"]
             .active_node("confirm-command")

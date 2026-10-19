@@ -521,7 +521,7 @@ pub(crate) fn icon(cx: &App) -> Icon {
 impl EditorApp {
     /// Restore the leaf after loading an older dock tree, keeping unrelated peers and their sizes.
     pub(crate) fn ensure_terminal_dock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let panel = dock::panel_handle(self.terminal.clone());
+        let panel = self.dock_presentation.panel_handle(self.terminal.clone());
         let id = gpui_base::dock::PanelId::from(self.terminal.entity_id());
         let height = px(self
             .session_state
@@ -546,6 +546,9 @@ impl EditorApp {
     /// Dock-level hiding also affects the footer, without changing whether Shell resources are alive.
     pub(crate) fn terminal_visible(&self, cx: &App) -> bool {
         self.terminal.read(cx).visible()
+            && !self
+                .dock_presentation
+                .is_suppressed(gpui_base::dock::PanelId::from(self.terminal.entity_id()))
             && self
                 .dock_area
                 .read(cx)
@@ -555,6 +558,10 @@ impl EditorApp {
     /// Reveal the native dock leaf; opening it never depends on installed package contributions.
     pub(crate) fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let visible = !self.terminal_visible(cx);
+        if visible {
+            self.dock_presentation
+                .activate(gpui_base::dock::PanelId::from(self.terminal.entity_id()));
+        }
         let trusted = self.extensions.read(cx).workspace_trusted();
         self.terminal.update(cx, |panel, cx| {
             panel.set_trusted(trusted, cx);

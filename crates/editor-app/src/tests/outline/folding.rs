@@ -62,8 +62,7 @@ pub(super) fn fold_at(
                     .iter()
                     .map(|(provider, state)| (provider.declaration.language.clone(), state.clone()))
                     .collect::<Vec<_>>();
-                let mut syntax =
-                    gpui_kit::component::highlighter::SyntaxHighlighter::new(&language);
+                let mut syntax = crate::language::highlighter::SyntaxHighlighter::new(&language);
                 let complete = syntax.update(None, editor.text(), None);
                 (
                     language,

@@ -1,8 +1,9 @@
 //! Native marketplace uses inert catalog snapshots; consent never constructs a fake Package.
 use super::*;
+use crate::ui::controls::dialog::DialogAction;
+use crate::ui::controls::dialog::DialogFooter;
+use crate::ui::controls::overlay::WindowExt as _;
 use gpui_base::DialogClose;
-use gpui_kit::component::WindowExt as _;
-use gpui_kit::component::dialog::{DialogAction, DialogFooter};
 use plugin_runtime::marketplace::{CATALOG_URL, CompatibilityIssue, Release, Sort};
 mod details;
 mod filters;

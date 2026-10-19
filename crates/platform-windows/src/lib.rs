@@ -19,6 +19,9 @@ pub mod credentials;
 /// File-system identity for native project routing, separate from persistent display paths.
 pub mod directory_identity;
 pub mod file_picker;
+/// Native window placement uses physical outer bounds and the current monitor's work area.
+#[cfg(windows)]
+pub mod window;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NativeFileStore;

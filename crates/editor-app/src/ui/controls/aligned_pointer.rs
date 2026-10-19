@@ -63,7 +63,7 @@ impl gpui_base::RootPlugin for PointerPresentation {
 struct Projection {
     hitbox: Hitbox,
     native_bounds: Bounds<Pixels>,
-    map: Rc<dyn Fn(Point<Pixels>) -> Point<Pixels>>,
+    map: Rc<dyn Fn(Point<Pixels>, Option<Point<Pixels>>) -> Point<Pixels>>,
 }
 
 /// Owned independently of the router so closing a component releases its captured resources.
@@ -99,6 +99,16 @@ impl PointerRegion {
         hitbox: Hitbox,
         native_bounds: Bounds<Pixels>,
         map: impl Fn(Point<Pixels>) -> Point<Pixels> + 'static,
+    ) {
+        self.publish_drag(hitbox, native_bounds, move |point, _| map(point));
+    }
+
+    /// Supplies the physical mouse-down origin during a captured drag, for discontinuous layouts.
+    pub(crate) fn publish_drag(
+        &self,
+        hitbox: Hitbox,
+        native_bounds: Bounds<Pixels>,
+        map: impl Fn(Point<Pixels>, Option<Point<Pixels>>) -> Point<Pixels> + 'static,
     ) {
         *self.0.projection.borrow_mut() = Some(Projection {
             hitbox,
@@ -155,6 +165,8 @@ struct Drag {
     epoch: u64,
     button: MouseButton,
     position: Point<Pixels>,
+    /// Physical mouse-down origin identifies the native segment of discontinuous presentations.
+    origin: Point<Pixels>,
     modifiers: Modifiers,
     cancel_requested: bool,
 }
@@ -435,7 +447,10 @@ impl AlignedPointerRouter {
                 cx.stop_propagation();
                 return;
             };
-            let mapped = (projection.map)(original);
+            let anchor = dragging
+                .then(|| self.0.drag.borrow().as_ref().map(|drag| drag.origin))
+                .flatten();
+            let mapped = (projection.map)(original, anchor);
             if dragging {
                 clamp_to_input(mapped, projection.native_bounds)
             } else {
@@ -455,6 +470,7 @@ impl AlignedPointerRouter {
                 epoch,
                 button: event.button,
                 position: mapped,
+                origin: original,
                 modifiers,
                 cancel_requested: false,
             });

@@ -1,8 +1,10 @@
 //! Scrollbar paint states from the editor theme over gpui-base scrolling.
 
+use crate::ui::theme::ActiveTheme as _;
+use crate::ui::theme::Theme;
 use gpui_base::{Scrollbar, ScrollbarHandle, ScrollbarStyles};
-use gpui_kit::component::ActiveTheme as _;
-use gpui_kit::{App, Global, Hsla, Pixels, Subscription, component::Theme, px};
+use gpui_kit::px;
+use gpui_kit::{App, Global, Hsla, Pixels, Subscription};
 use plugin_schema::ThemeComponent;
 use std::time::Duration;
 
@@ -46,7 +48,7 @@ fn scrollbar_styles(normal: Hsla, hover: Hsla, active: Hsla, inset: Pixels) -> S
         })
 }
 
-/// Hold one observer so component-theme synchronization cannot reset the embedded editor's skin.
+/// Hold one observer so local palette synchronization cannot reset the embedded editor's skin.
 struct ScrollbarProjection {
     _subscription: Subscription,
 }

@@ -1,7 +1,9 @@
 //! Verify empty-panel geometry and the document-to-canvas lifecycle through GPUI.
 
 use crate::*;
-use gpui_kit::{TestAppContext, VisualTestContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::gpui;
+use gpui_kit::{TestAppContext, VisualTestContext};
 use std::cell::RefCell;
 
 /// Start with either a real document or an empty workspace, using the full dock layout.

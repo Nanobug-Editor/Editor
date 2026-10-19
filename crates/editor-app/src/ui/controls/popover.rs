@@ -1,7 +1,7 @@
 //! Local popover appearance; Base owns open state, positioning, dismissal and focus restoration.
 use super::Button;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::PopoverState;
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
     AnyElement, App, Focusable, InteractiveElement, IntoElement, ParentElement, RenderOnce, Role,
     StatefulInteractiveElement, Styled, Window, div, px,

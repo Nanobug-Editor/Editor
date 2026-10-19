@@ -10,9 +10,19 @@ pub(crate) struct ComparisonView {
     authority: plugin_runtime::EditorAuthority,
     left: api::DocumentVersion,
     right: api::DocumentVersion,
+    /// The optional third readonly source participates in the same retained-view lifetime.
+    third: Option<api::DocumentVersion>,
     pub(crate) preview: bool,
     pub(crate) unified: bool,
     pub(crate) hunk: usize,
+}
+impl ComparisonView {
+    /// Enumerate borrowed source identities so revocation and reclamation cover every pane.
+    fn sources(&self) -> impl Iterator<Item = &api::DocumentVersion> {
+        [&self.left, &self.right]
+            .into_iter()
+            .chain(self.third.as_ref())
+    }
 }
 impl EditorApp {
     /// Resolve the same incarnation at its current revision. No path can substitute a reopened ID.
@@ -38,6 +48,7 @@ impl EditorApp {
         title: &str,
         left: &api::DocumentVersion,
         right: &api::DocumentVersion,
+        third: Option<&api::DocumentVersion>,
         preview: bool,
         request: &plugin_runtime::EditorRequest,
         window: &mut Window,
@@ -57,6 +68,7 @@ impl EditorApp {
         let result = self.install_document_comparison(
             left,
             right,
+            third,
             request.authority().clone(),
             Some(request),
             window,
@@ -66,7 +78,7 @@ impl EditorApp {
             self.comparison_views
                 .iter()
                 .filter(|view| view.id == id || (preview && view.owner == owner && view.preview))
-                .flat_map(|view| [view.left.clone(), view.right.clone()])
+                .flat_map(|view| view.sources().cloned())
                 .collect::<Vec<_>>()
         };
         if preview {
@@ -76,6 +88,10 @@ impl EditorApp {
         if let Some(view) = self.comparison_views.iter_mut().find(|view| view.id == id) {
             view.left = left.clone();
             view.right = right.clone();
+            view.third = third.cloned();
+            if third.is_some() {
+                view.unified = false;
+            }
             view.title = title.into();
             if !preview {
                 view.preview = false;
@@ -88,6 +104,7 @@ impl EditorApp {
                 authority: request.authority().clone(),
                 left: left.clone(),
                 right: right.clone(),
+                third: third.cloned(),
                 preview,
                 unified: false,
                 hunk: 0,
@@ -142,9 +159,22 @@ impl EditorApp {
             let right = self.current_comparison_source(&view.right).ok_or_else(|| {
                 api::Failure::new(api::ErrorCode::StaleRevision, "Comparison source closed")
             })?;
+            let third = view
+                .third
+                .as_ref()
+                .map(|source| {
+                    self.current_comparison_source(source).ok_or_else(|| {
+                        api::Failure::new(
+                            api::ErrorCode::StaleRevision,
+                            "Third comparison source closed",
+                        )
+                    })
+                })
+                .transpose()?;
             self.install_document_comparison(
                 &left,
                 &right,
+                third.as_ref(),
                 view.authority.clone(),
                 None,
                 window,
@@ -158,6 +188,7 @@ impl EditorApp {
             if let Some(view) = self.comparison_views.iter_mut().find(|view| view.id == id) {
                 view.left = left;
                 view.right = right;
+                view.third = third;
                 if pin {
                     view.preview = false;
                 }
@@ -180,7 +211,7 @@ impl EditorApp {
             .comparison_views
             .iter()
             .filter(|view| view.id == id)
-            .flat_map(|view| [view.left.clone(), view.right.clone()])
+            .flat_map(|view| view.sources().cloned())
             .collect();
         self.comparison_views.retain(|view| view.id != id);
         if self.active_comparison.as_deref() == Some(id) {
@@ -211,11 +242,15 @@ impl EditorApp {
             if self
                 .comparison_views
                 .iter()
-                .any(|view| view.left.id == source.id || view.right.id == source.id)
-                || self
-                    .document_comparison
-                    .as_ref()
-                    .is_some_and(|view| view.left.id == source.id || view.right.id == source.id)
+                .any(|view| view.sources().any(|held| held.id == source.id))
+                || self.document_comparison.as_ref().is_some_and(|view| {
+                    view.left.id == source.id
+                        || view.right.id == source.id
+                        || view
+                            .third
+                            .as_ref()
+                            .is_some_and(|third| third.version.id == source.id)
+                })
                 || self.plugin_window_mounts.contains_key(&source.id)
             {
                 continue;
@@ -240,8 +275,9 @@ impl EditorApp {
             .iter()
             .filter(|view| {
                 view.authority.is_live()
-                    && self.current_comparison_source(&view.left).is_some()
-                    && self.current_comparison_source(&view.right).is_some()
+                    && view
+                        .sources()
+                        .all(|source| self.current_comparison_source(source).is_some())
             })
             .map(|view| view.id.clone())
             .collect::<Vec<_>>();
@@ -249,7 +285,7 @@ impl EditorApp {
             .comparison_views
             .iter()
             .filter(|view| !keep.contains(&view.id))
-            .flat_map(|view| [view.left.clone(), view.right.clone()])
+            .flat_map(|view| view.sources().cloned())
             .collect();
         self.comparison_views.retain(|view| keep.contains(&view.id));
         if self
@@ -280,9 +316,20 @@ impl EditorApp {
         ) else {
             return;
         };
-        if comparison.left == left && comparison.right == right {
+        let third = comparison
+            .third
+            .as_ref()
+            .and_then(|third| self.current_comparison_source(&third.version));
+        if comparison.left == left
+            && comparison.right == right
+            && comparison.third.as_ref().map(|third| &third.version) == third.as_ref()
+        {
             return;
         }
+        let third_source = third
+            .as_ref()
+            .map(|third| self.prepare_third_comparison(third, &left, &right, cx))
+            .transpose();
         let oversized = comparison.left_editor.read(cx).text().len() > 1024 * 1024
             || comparison.right_editor.read(cx).text().len() > 1024 * 1024;
         let hunks = if oversized {
@@ -293,7 +340,7 @@ impl EditorApp {
                 &comparison.right_editor.read(cx).value().to_string(),
             )
         };
-        let Ok(hunks) = hunks else {
+        let (Ok(hunks), Ok(third_source)) = (hunks, third_source) else {
             self.active_comparison = None;
             self.close_document_comparison(cx);
             self.report_host_message(
@@ -307,6 +354,11 @@ impl EditorApp {
         comparison.left = left.clone();
         comparison.right = right.clone();
         comparison.hunks = hunks;
+        if let (Some(current), Some(source)) = (&mut comparison.third, third_source) {
+            current.version = source.version;
+            current.hunks = source.hunks;
+            current.refresh_marks(&comparison.right_editor, comparison.colors, cx);
+        }
         super::presentation::refresh_inline_marks(comparison, cx);
         comparison.left_marks.set(
             comparison_marks(&comparison.hunks, comparison.colors, true),
@@ -316,11 +368,12 @@ impl EditorApp {
             comparison_marks(&comparison.hunks, comparison.colors, false),
             cx,
         );
-        *comparison.navigation.borrow_mut() = [None, None];
+        *comparison.navigation.borrow_mut() = [None, None, None];
         configure_alignment(comparison, window, cx);
         if let Some(view) = self.comparison_views.iter_mut().find(|view| view.id == id) {
             view.left = left;
             view.right = right;
+            view.third = third;
         }
         if self
             .document_comparison

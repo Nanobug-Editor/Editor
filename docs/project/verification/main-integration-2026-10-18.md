@@ -2,6 +2,8 @@
 
 日期：2026-10-18。依据：用户要求切换到主分支并合并所有修改。状态：全部冲突已处理，合并后规定检查、真实 WASM 与定向 UI／原生回归通过，本地 main 整合完成，未推送。
 
+19:41 用户追加 Release 启动失败：本记录的编译检查与测试不包含 `cargo build --release`，不能替代 IDE 的 Release 启动验收。现已复现同样的 111 个错误，按实际 profile 修复缓存并验证原入口；见 [Release 启动复查](build-cache-release-2026-10-18.md)。下列历史命令与结果保留。
+
 ## 范围与保留
 
 原分支 `codex/git-plugin-workbench` 为 `910e23266a7f8a643509de34233c1d85d1bc2f04`，较本地 main 多 8 个提交。当前工作区 249 个已修改／未跟踪文件按明确路径纳入普通提交 `8bec548c28cc8162cb7deeae2bef537b88cac26c`，保存项目入口、预览标签、问题面板、插件管理与 Git 通用界面修复、测试及文档。提交树 `d44cb4b737966ab0ac25a456ff0d21cb0d4a8433` 与提交前 index 树一致；没有将被忽略的 target、用户 profile 或构建产物纳入版本控制。

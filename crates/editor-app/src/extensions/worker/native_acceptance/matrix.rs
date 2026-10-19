@@ -81,6 +81,7 @@ impl Case {
 pub(super) fn run(case: Case) -> anyhow::Result<()> {
     // Each narrow receipt has one scope; inherited diagnostic flags cannot shorten another workflow.
     let narrow = [
+        exclusive::requested(),
         sidebar::requested(),
         caption_controls::requested(),
         std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some(),
@@ -139,11 +140,13 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
         .stderr(log)
         .spawn()?;
     let deadline = Instant::now()
-        + Duration::from_secs(if caption_controls::requested() || sidebar::requested() {
-            180
-        } else {
-            480
-        });
+        + Duration::from_secs(
+            if caption_controls::requested() || sidebar::requested() || exclusive::requested() {
+                180
+            } else {
+                480
+            },
+        );
     let status = loop {
         if let Some(status) = child.try_wait()? {
             break status;
@@ -176,7 +179,21 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
         "receipt belongs to a different case"
     );
     // The separately named keyboard diagnostic has an explicit, narrower evidence contract.
-    let images: &[&str] = if sidebar::requested() {
+    let images: &[&str] = if exclusive::requested() {
+        ensure!(
+            evidence["workflow"] == "exclusive-dock-only",
+            "exclusive receipt has wrong scope"
+        );
+        ensure!(
+            evidence["observations"]["exclusive_complete"] == true,
+            "exclusive workflow incomplete"
+        );
+        &[
+            "exclusive-open.png",
+            "exclusive-shared.png",
+            "exclusive-reopened.png",
+        ]
+    } else if sidebar::requested() {
         ensure!(
             evidence["workflow"] == "shared-sidebar-only",
             "sidebar receipt has wrong scope"

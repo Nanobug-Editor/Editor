@@ -4,6 +4,102 @@ use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use plugin_runtime::Manager;
 
+/// A real package can hide contextual entries without losing its native work windows.
+#[gpui::test]
+#[ignore = "requires frozen tools-example package; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
+fn contextual_panels_omit_window_controls_and_keep_programmatic_visibility(
+    cx: &mut TestAppContext,
+) {
+    let directory = tempfile::tempdir().unwrap();
+    let mut files = Package::read(&crate::test_packages::archive("tools-example"))
+        .unwrap()
+        .files;
+    let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
+    manifest["api"]["required"]["ui.panels"] = ">=1.1,<2".into();
+    manifest["api"]["required"]["ui.windows"] = "^1".into();
+    manifest["permissions"]
+        .as_array_mut()
+        .unwrap()
+        .push("ui.panels".into());
+    // The frozen toolbar fixture originally docks this tool. Declare the ordinary public
+    // work-window position here so the same guest exercises independent open/close ownership.
+    let contextual = manifest["panels"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|panel| panel["id"] == "window-a")
+        .unwrap();
+    contextual["show_in_window_controls"] = false.into();
+    contextual["position"] = "window".into();
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
+    let package = Package::from_files(files).unwrap();
+    let mut manager = Manager::open(
+        directory.path().join(".runtime-plugin-test"),
+        protocol::Environment {
+            workspace: directory.path().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+    // A hidden toolbar entry does not activate a cold guest. Open its real view demand first,
+    // just as the public visibility path requires before mounting an independent window.
+    demand(
+        &mut manager,
+        "tools-example",
+        plugin_runtime::DemandReason::View("window-a".into()),
+    )
+    .unwrap();
+    crate::tests::with_shortcut_editor(cx, false, Vec::new(), |visual, app, _| {
+        draw(&app, &mut manager, visual);
+        assert!(
+            visual
+                .debug_bounds("plugin-window-tools-example/window-b")
+                .is_some()
+        );
+        assert!(
+            visual
+                .debug_bounds("plugin-window-tools-example/window-a")
+                .is_none()
+        );
+        let handle = visual.update(|window, cx| {
+            app.update(cx, |app, cx| {
+                let panel = app.plugin_panels["tools-example/window-a"].clone();
+                panel.read(cx).visible.set(true);
+                app.sync_plugin_windows(cx);
+                app.sync_plugin_panel_visibility(window, cx);
+                assert!(panel.read(cx).panel_visibility.displayed);
+                app.plugin_windows["tools-example/window-a"]
+            })
+        });
+        let mut separate = VisualTestContext::from_window(handle.into(), &visual.cx);
+        assert!(separate.simulate_close());
+        visual.update(|window, cx| {
+            app.update(cx, |app, cx| {
+                app.sync_plugin_panel_visibility(window, cx);
+                assert!(!app.plugin_windows.contains_key("tools-example/window-a"));
+                assert!(
+                    !app.plugin_panels["tools-example/window-a"]
+                        .read(cx)
+                        .visible
+                        .get()
+                );
+            })
+        });
+        draw(&app, &mut manager, visual);
+        assert!(
+            visual
+                .debug_bounds("plugin-window-tools-example/window-a")
+                .is_none()
+        );
+    });
+}
+
 /// Perform real pointer activation at the recorded native bounds, then settle public runtime views.
 fn click(
     id: &'static str,

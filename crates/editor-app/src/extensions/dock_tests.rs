@@ -3,6 +3,11 @@ use super::*;
 use gpui_base::dock::{DockPlacement, PanelId};
 use gpui_kit::{TestAppContext, gpui};
 
+#[cfg(test)]
+mod drag;
+#[cfg(test)]
+mod right_width;
+
 /// A manifest's left hint joins the same visible sidebar as host peers instead of claiming another editor column.
 #[gpui::test]
 fn left_native_panels_share_explorer_outline_sidebar_without_extra_column(cx: &mut TestAppContext) {
@@ -145,7 +150,7 @@ fn left_native_panels_share_explorer_outline_sidebar_without_extra_column(cx: &m
 }
 
 /// Measure the current normalized Base leaf through the production LocalDock frame after painting.
-fn native_panel_bounds(
+pub(super) fn native_panel_bounds(
     app: &Entity<EditorApp>,
     panel: PanelId,
     visual: &mut gpui_kit::VisualTestContext,

@@ -1,7 +1,8 @@
-//! Explorer commands built with GPUI Kit's PopupMenu, menu items and native submenus.
+//! Explorer commands use local context-menu rows, submenus and Base button behavior.
 
+use crate::ui::controls::context_menu::PopupMenu as KitPopupMenu;
+use crate::ui::controls::context_menu::PopupMenuItem;
 use crate::*;
-use gpui_kit::component::menu::{PopupMenu as KitPopupMenu, PopupMenuItem};
 use gpui_kit::{ClipboardItem, DismissEvent, anchored};
 
 const MENU_WIDTH: f32 = 212.;
@@ -283,7 +284,7 @@ impl EditorApp {
         cx.notify();
     }
 
-    /// The host only positions the component and consumes outside presses; Kit draws both menu levels.
+    /// The host only positions the component and consumes outside presses; the local UI layer draws both menu levels.
     pub(crate) fn render_explorer_menu(
         &self,
         _window: &Window,

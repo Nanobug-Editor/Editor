@@ -16,6 +16,15 @@
 //! and the `assets.read` grant; each SVG is at most 64 KiB.
 //! Activation and menu slots are separate action identities, even when command names repeat.
 //! The host resolves each slot's complete typed arguments from the current owned node and epoch.
+//! `ui.tree >=1.1,<2` adds disabled/separated items and raises the per-node menu from 8 to 32.
+//! Declare that explicit minimum when publishing these features; disabled commands reject invocation.
+//! `ui.tree >=1.2,<2` adds `update` for cached presentation/action availability changes without
+//! reloading pages. Declare a required range excluding 1.0/1.1; host inventory alone is not opt-in.
+//! An update admits at most 128 nodes/512 KiB atomically. Uncached IDs are ignored after validation.
+//! Existing IDs retain branch/leaf identity, activation/menu command names, typed arguments, menu
+//! order and separators. Labels, descriptions, icons and node/command disabled states may change.
+//! Updates preserve epoch, expansion, loaded pages, continuations and outstanding request identities;
+//! identical metadata leaves the native revision unchanged. Structural changes still use `refresh`.
 //! Cursor length is 1..=128 bytes. IDs are unique throughout a refresh epoch and stable for the
 //! same business node across refresh. Provider cursors/IDs are not paths or access grants.
 //! Collapse, refresh, scene removal and owner retirement cancel pending page admission; cancellation
@@ -43,6 +52,17 @@ pub struct Command {
     pub label: crate::ui::LocalizedText,
     #[serde(default)]
     pub arguments: serde_json::Value,
+    /// Unavailable actions remain visible but cannot activate; requires an explicit ui.tree 1.1 floor.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub disabled: bool,
+    /// Draw a separator before this item; requires an explicit ui.tree 1.1 floor.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub separator_before: bool,
+}
+
+/// Omit additive metadata so ordinary 1.0 commands retain their original wire shape.
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// A stable provider node. Branches may initially have no children; the host asks on expansion.
@@ -87,7 +107,7 @@ impl Node {
             || self.label.is_empty()
             || self.label.len() > 1024
             || self.description.len() > 4096
-            || self.menu.len() > 8
+            || self.menu.len() > 32
         {
             return Err(Failure::new(
                 ErrorCode::LimitExceeded,
@@ -145,7 +165,7 @@ pub struct Request {
 pub enum NodeAction {
     /// Enter or double click selects the node's optional activation command.
     Activation,
-    /// Zero-based position in `Node.menu` (at most eight items). A missing slot is `StaleRevision`.
+    /// Zero-based position in `Node.menu` (8 items in 1.0, 32 in 1.1). Missing/disabled slots are stale.
     Menu { index: u32 },
 }
 
@@ -191,6 +211,14 @@ pub enum Operation {
     Refresh {
         tree: ResourceHandle,
     },
+    /// Atomically change cached node presentation and availability; requires explicit ui.tree 1.2.
+    /// Unknown IDs are validated then ignored. Structure and command intent must remain unchanged.
+    Update {
+        /// Current instance-owned tree; this conveys no authority over another provider's tree.
+        tree: ResourceHandle,
+        /// At most 128 complete nodes/512 KiB, matched against cached IDs without loading pages.
+        nodes: Vec<Node>,
+    },
 }
 
 /// IDs exclude host-reserved sentinels and controls; cursors are separately bounded opaque strings.
@@ -227,6 +255,16 @@ pub fn reply(request: Request, result: Result<Page, Failure>) -> Result<(), Fail
 pub fn refresh(tree: ResourceHandle) -> Result<(), Failure> {
     crate::api::guest::request(crate::api::Operation::Tree {
         operation: Operation::Refresh { tree },
+    })
+    .map(|_| ())
+}
+#[cfg(feature = "guest")]
+/// Update `tree`'s cached `nodes` without reloading provider pages; requires explicit ui.tree 1.2.
+/// Full node metadata is validated atomically, including uncached IDs which are then ignored.
+/// Returns ownership/capability/grant, metadata/budget, or `Conflict` for changed structure/commands.
+pub fn update(tree: ResourceHandle, nodes: Vec<Node>) -> Result<(), Failure> {
+    crate::api::guest::request(crate::api::Operation::Tree {
+        operation: Operation::Update { tree, nodes },
     })
     .map(|_| ())
 }

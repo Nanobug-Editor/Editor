@@ -42,10 +42,10 @@
 - `EditorState` 是唯一内存文本、IME、选择、布局与会话 Undo/Redo 真相来源。不得维护第二份可变 Rope 或撤销栈，不得绕过 `DocumentSession` 写入文本。
 - 异步语言结果、格式化、搜索替换计划和插件文档请求必须校验目标及 revision；过期、取消或目标已关闭的结果不得应用到当前文档。
 - 所有语法高亮通过插件提供的 Tree-sitter WASM grammar 与查询规则动态加载，不重新引入宿主内建 grammar。
-- **所有可见 UI 控件以 `gpui-base` 的行为、状态和交互能力为基座，参考 `gpui-component` 对应实现，在 `crates/editor-app/src/ui/` 中实现本地外观。** 项目决定颜色、尺寸、间距、圆角、边框、阴影、图标和状态样式，不直接交付上游成品控件外观。
+- **所有 UI 组件仅使用 `gpui-kit` 的 GPUI 原语和 `gpui-base` 行为、状态与交互能力，在 `crates/editor-app/src/ui/` 中实现本地控件。** `gpui-component` 仅可作为实现参考标准；禁止直接依赖、通过 `gpui_kit::component` 间接调用或以重导出、包装层引入其组件、主题及运行时。图标等静态资源可使用独立的 Kit assets。
 - 修改按钮、输入框、菜单、标签、列表、树、弹窗等控件，先核对上游公开行为接口和项目主题契约，再提供小而稳定的本地接口。调用方不得散落复制绘制逻辑。
 - 编辑器和停靠布局保留上游状态与交互接缝，外观在本地 UI 层组合。缺失行为先查上游接口，不复制整套上游源码，不 fork GPUI Kit。
-- 新增调用不得扩大对上游成品控件外观的依赖；迁移需通过代码检索和交互验证，不能仅凭主题覆盖或重导出宣称完成。
+- Kit 依赖必须关闭默认功能，显式选择不引入 `gpui-component` 的功能；主题、菜单、弹窗、停靠外观及高亮接入同样遵守此边界。迁移后检索全部源码（含测试）并检查 Cargo 依赖树，确认无 `gpui-component` 调用及依赖，再验证受影响交互；主题覆盖或重导出不算迁移。
 - 用户可见文本使用现有 i18n 资源，保留中英文；检查深浅主题、焦点、键盘、中文 IME、滚动和缩放中与改动相关的行为。
 
 ## 插件平台边界
@@ -84,6 +84,7 @@
 ## 验证与交付
 
 - 构建内容不同的源码快照或其他工作区时，为每份源码使用独立 Cargo 输出目录；构建副本前用 `cargo metadata --no-deps --format-version 1` 核对 `workspace_root` 和 `target_directory`。源码中接口存在但编译报缺失时，先按[缓存诊断记录](docs/project/verification/build-cache-2026-10-18.md)核对产物来源。
+- 构建或启动报错先核对 IDE 的实际命令和 profile，修复后重复同一入口；按包清理默认 profile 不覆盖 Release，需显式加 `--release`，见 [Release 复查](docs/project/verification/build-cache-release-2026-10-18.md)。
 - 代码变更先运行受影响模块的针对性测试；编辑、插件、工具链、搜索、历史或 Git 缺陷补充可观察行为的回归测试。优先从插件包进入公开管理器和宿主集成验证，不为特定插件新增测试专用宿主 API。
 - 每个实现阶段交付前至少执行以下检查；这些命令不包含 `editor-app` 的 UI 测试，也不会执行 ignored 测试：
 

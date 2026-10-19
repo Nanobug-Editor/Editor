@@ -915,6 +915,8 @@ mod icon_tests {
                     title: "Main".into(),
                     position: "bottom".into(),
                     default_visible: true,
+                    exclusive: false,
+                    show_in_window_controls: true,
                     status_order: None,
                     icon_light: Some("icons/light.svg".into()),
                     icon_dark: Some("icons/dark.svg".into()),

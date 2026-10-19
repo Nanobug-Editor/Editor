@@ -191,7 +191,7 @@ impl Render for PopupMenu {
                     .child(
                         crate::ui::controls::Button::new(SharedString::from(action.id.clone()))
                             .debug_selector(move || debug.clone())
-                            .icon(gpui_kit::component::IconName::Close)
+                            .icon(gpui_kit::assets::IconName::Close)
                             .small()
                             .compact()
                             .ghost()

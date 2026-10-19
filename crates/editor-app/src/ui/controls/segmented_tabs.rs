@@ -3,8 +3,8 @@
 
 use std::rc::Rc;
 
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{Tab, Tabs};
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
     App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     Styled, Window, prelude::FluentBuilder as _, px,

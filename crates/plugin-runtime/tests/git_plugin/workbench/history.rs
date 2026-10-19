@@ -1,4 +1,4 @@
-//! Actual paged Git history must survive local observations without blanking an older detail view.
+//! Actual paged Git history retains its complete inline commit preview across local observations.
 use super::*;
 use plugin_runtime::plugin_protocol::tree;
 use std::{io::Write as _, process::Stdio};
@@ -9,7 +9,9 @@ fn import_history(root: &Path, count: usize) {
     let mut input = Vec::new();
     for index in 0..count {
         let text = format!("history {index}\n");
-        let title = format!("history-{index:03}");
+        let message = format!(
+            "history-{index:03}\n\nComplete history body {index} 中文😀\n\nReviewed-by: Workbench\n"
+        );
         writeln!(input, "blob\nmark :{}\ndata {}", index * 2 + 1, text.len()).unwrap();
         input.extend_from_slice(text.as_bytes());
         writeln!(input).unwrap();
@@ -18,8 +20,8 @@ fn import_history(root: &Path, count: usize) {
             "commit refs/heads/main\nmark :{}\ncommitter Workbench <workbench@example.invalid> {} +0000\ndata {}\n{}\nM 100644 :{} tracked.txt\n",
             index * 2 + 2,
             1_700_000_000 + index,
-            title.len(),
-            title,
+            message.len(),
+            message,
             index * 2 + 1,
         )
         .unwrap();
@@ -59,16 +61,17 @@ fn log_range(manager: &Manager) -> ui::ScrollRange {
     canvas.scroll.clone().expect("history declares its range")
 }
 
-/// Request and select the current files-tree row through its owned opaque resource and epoch.
-fn select_file(manager: &mut Manager, path: &str) {
-    let scene = manager.live["git"].views["commit-details"].clone();
-    let mut declared = None;
-    scene.root.visit(&mut |node| {
-        if let ui::Kind::Tree { handle } = &node.kind {
-            declared = Some((node.id.clone(), handle.clone()));
-        }
-    });
-    let (node, handle) = declared.expect("history files tree");
+/// Load the preview's public file page without opening a comparison in this runtime-only fixture.
+fn preview_files(manager: &mut Manager) -> Vec<String> {
+    let scene = &manager.live["git"].views["history"];
+    let ui::Kind::Tree { handle } = &scene
+        .active_node("files")
+        .expect("inline history files")
+        .kind
+    else {
+        panic!("history preview must declare its owned tree");
+    };
+    let handle = handle.clone();
     let resource = manager.live["git"]
         .tree_resources()
         .into_iter()
@@ -77,53 +80,122 @@ fn select_file(manager: &mut Manager, path: &str) {
     if let Some(request) = resource.request(None, false).unwrap() {
         send(
             manager,
-            "commit-details",
-            &node,
+            "history",
+            "files",
             ui::Action::Tree(tree::Event::Request(request)),
         );
     }
     let snapshot = resource.snapshot();
-    let file = snapshot
-        .nodes
-        .values()
-        .find(|node| node.label == path)
-        .expect("selected commit has its actual changed file");
-    send(
-        manager,
-        "commit-details",
-        &node,
-        ui::Action::Tree(tree::Event::Selected {
-            tree: handle,
-            epoch: snapshot.epoch,
-            node: file.id.clone(),
-        }),
-    );
+    let root = &snapshot.branches[&None];
+    assert!(root.loaded && !root.loading && root.error.is_none());
+    let mut files = root
+        .children
+        .iter()
+        .map(|id| {
+            let file = &snapshot.nodes[id];
+            assert!(
+                !file.branch,
+                "these bounded fixtures contain only root files"
+            );
+            file.label.clone()
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    files
 }
 
-/// A timer is driven by the live package's real subscription, rather than a forged timer handle.
-fn next_timer_refresh(manager: &mut Manager) {
-    let previous = manager.live["git"].views["history"].revision;
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        manager.poll();
-        if manager.live["git"].views["history"].revision != previous {
-            idle(manager);
-            return;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "live local refresh timer did not tick"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
+/// Read exact native preview metadata, including all bounded chunks of the full commit message.
+fn preview_text(manager: &Manager, id: &str) -> String {
+    let ui::Kind::Text { text } = &manager.live["git"].views["history"]
+        .active_node(id)
+        .unwrap_or_else(|| panic!("missing inline metadata {id}"))
+        .kind
+    else {
+        panic!("inline metadata must be native text");
+    };
+    text.clone()
+}
+
+/// Capture the whole selected message and metadata so refresh cannot pass by retaining only its OID.
+fn preview_contents(manager: &Manager) -> Vec<(String, String)> {
+    let mut contents = Vec::new();
+    manager.live["git"].views["history"]
+        .active_node("history-preview")
+        .unwrap()
+        .visit(&mut |node| {
+            if let ui::Kind::Text { text } = &node.kind {
+                contents.push((node.id.clone(), text.clone()));
+            }
+        });
+    contents
+}
+
+/// Compare published files, subject, author, timestamp, parents and complete body with actual Git OIDs.
+fn assert_preview(manager: &mut Manager, root: &Path, oid: &str, files: &[&str]) {
+    assert_eq!(preview_text(manager, "history-oid"), oid);
+    assert_eq!(
+        preview_text(manager, "history-subject"),
+        git(root, &["show", "-s", "--format=%s", oid]).trim_end()
+    );
+    assert_eq!(
+        preview_text(manager, "history-author"),
+        format!(
+            "Author: {}",
+            git(root, &["show", "-s", "--format=%an", oid]).trim_end()
+        )
+    );
+    assert_eq!(
+        preview_text(manager, "history-time"),
+        format!(
+            "Commit time: {}",
+            git(root, &["show", "-s", "--format=%aI", oid]).trim_end()
+        )
+    );
+    let parents = git(root, &["show", "-s", "--format=%P", oid])
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        preview_text(manager, "history-parents"),
+        format!(
+            "Parents: {}",
+            if parents.is_empty() {
+                "Empty tree".into()
+            } else {
+                parents.join("\n")
+            }
+        )
+    );
+    let message = preview_contents(manager)
+        .into_iter()
+        .filter(|(id, _)| id.starts_with("history-message-"))
+        .map(|(_, text)| text)
+        .collect::<String>();
+    let complete = git(root, &["show", "-s", "--format=%B", oid]);
+    let heading = format!("{}\n", preview_text(manager, "history-subject"));
+    assert_eq!(
+        message,
+        complete.strip_prefix(&heading).unwrap_or(&complete)
+    );
+    assert_eq!(preview_files(manager), files);
+    assert!(
+        manager.live["git"].views["history"]
+            .active_node("history-loading")
+            .is_none()
+    );
+    assert!(
+        manager.live["git"].views["history"]
+            .active_node("history-error")
+            .is_none()
+    );
 }
 
 #[test]
 #[ignore = "build independent Git candidate; set NANOBUG_GIT_CANDIDATE; real 385-commit repository"]
-fn git_package_loaded_history_keeps_its_older_detail_across_timer_focus_save_and_new_commits() {
+fn git_package_paged_history_keeps_complete_inline_preview_across_focus_save_and_new_commits() {
     // Keep factory and Manager/native Git children in one private configuration process.
     if !run_isolated_test(
-        "workbench::history::git_package_loaded_history_keeps_its_older_detail_across_timer_focus_save_and_new_commits",
+        "workbench::history::git_package_paged_history_keeps_complete_inline_preview_across_focus_save_and_new_commits",
     ) {
         return;
     }
@@ -194,19 +266,20 @@ fn git_package_loaded_history_keeps_its_older_detail_across_timer_focus_save_and
             shift: false,
         }),
     );
-    select_file(&mut manager, "tracked.txt");
-    assert_eq!(snapshot(&manager, 1), "history 124\n");
+    let selected = git(root, &["rev-list", "--skip=260", "--max-count=1", "HEAD"])
+        .trim()
+        .to_owned();
+    assert_preview(&mut manager, root, &selected, &["tracked.txt"]);
+    let preview = preview_contents(&manager);
     let offset = log_range(&manager).offset;
-    next_timer_refresh(&mut manager);
-    assert_eq!(log_range(&manager).content, 384. * 28.);
-    assert_eq!(log_range(&manager).offset, offset);
-    assert_eq!(snapshot(&manager, 1), "history 124\n");
+    // The real 30-second quiet timer is covered by refresh_stability. Unchanged observations
+    // preserve their scene, so scene-revision changes cannot be used as proof of a timer tick.
     manager
         .event("git", None, api::Notification::Focus(true))
         .unwrap();
     idle(&mut manager);
     assert_eq!(log_range(&manager).content, 384. * 28.);
-    assert_eq!(snapshot(&manager, 1), "history 124\n");
+    assert_eq!(preview_contents(&manager), preview);
     manager.document_event(api::DocumentEvent {
         sequence: 1,
         resource: Some(api::ResourceIdentity::Local {
@@ -223,15 +296,17 @@ fn git_package_loaded_history_keeps_its_older_detail_across_timer_focus_save_and
     });
     idle(&mut manager);
     assert_eq!(log_range(&manager).content, 384. * 28.);
-    assert_eq!(snapshot(&manager, 1), "history 124\n");
+    assert_eq!(preview_contents(&manager), preview);
     git(root, &["commit", "--allow-empty", "-m", "fresh-top"]);
     click(&mut manager, "history", "refresh");
     assert_eq!(log_range(&manager).offset, offset);
-    assert_eq!(snapshot(&manager, 1), "history 124\n");
+    assert_eq!(preview_contents(&manager), preview);
     click(&mut manager, "history", "more");
     assert_eq!(log_range(&manager).content, 386. * 28.);
-    assert_eq!(snapshot(&manager, 1), "history 124\n");
+    assert_eq!(preview_contents(&manager), preview);
+    assert_preview(&mut manager, root, &selected, &["tracked.txt"]);
     manager.disable("git").unwrap();
+    assert_eq!(manager.resource_count(), 0);
 }
 
 /// Open the first visible topology row through the same canvas pointer event as the native table.
@@ -251,30 +326,45 @@ fn first_commit(manager: &mut Manager) {
     );
 }
 
-fn title(manager: &Manager, column: usize) -> String {
-    let id = format!("pane-title-{column}");
-    match &manager.live["git"].views["commit-details"]
+/// Inspect selected parent IDs and disabled peers from the inline native Choice control.
+fn parent_choice(manager: &Manager, side: usize) -> (String, Vec<(String, bool)>) {
+    let id = format!("history-parent-{side}");
+    match &manager.live["git"].views["history"]
         .active_node(&id)
         .unwrap()
         .kind
     {
-        ui::Kind::Text { text } => text.clone(),
-        _ => panic!("visible source title required"),
+        ui::Kind::Choice { options, selected } => (
+            selected.clone().unwrap(),
+            options
+                .iter()
+                .map(|option| (option.id.clone(), option.disabled))
+                .collect(),
+        ),
+        _ => panic!("inline parent choice required"),
     }
 }
 
+/// Create a real multiline commit body so preview assertions cover more than the subject.
 fn commit_file(root: &Path, file: &str, text: &str) {
     std::fs::write(root.join(file), text).unwrap();
     git(root, &["add", "--", file]);
-    git(root, &["commit", "-m", file]);
+    git(
+        root,
+        &[
+            "commit",
+            "-m",
+            &format!("{file}\n\n完整提交说明😀\n\nReviewed-by: Workbench"),
+        ],
+    );
 }
 
 #[test]
 #[ignore = "build independent Git candidate; set NANOBUG_GIT_CANDIDATE; real root/ordinary/octopus history"]
-fn git_package_root_ordinary_and_octopus_history_keep_readonly_sources_and_distinct_parents() {
+fn git_package_inline_root_ordinary_and_octopus_history_keep_metadata_files_and_distinct_parents() {
     // Keep factory and Manager/native Git children in one private configuration process.
     if !run_isolated_test(
-        "workbench::history::git_package_root_ordinary_and_octopus_history_keep_readonly_sources_and_distinct_parents",
+        "workbench::history::git_package_inline_root_ordinary_and_octopus_history_keep_metadata_files_and_distinct_parents",
     ) {
         return;
     }
@@ -283,20 +373,22 @@ fn git_package_root_ordinary_and_octopus_history_keep_readonly_sources_and_disti
     commit_file(root, "tracked.txt", "root version\n");
     let (_profile, mut manager) = activate(&candidate(), root);
     first_commit(&mut manager);
-    select_file(&mut manager, "tracked.txt");
-    assert_eq!(snapshot(&manager, 0), "");
-    assert_eq!(snapshot(&manager, 1), "root version\n");
-    assert_eq!(title(&manager, 0), "Empty tree · Read only");
+    let root_commit = git(root, &["rev-parse", "HEAD"]).trim().to_owned();
+    assert_preview(&mut manager, root, &root_commit, &["tracked.txt"]);
+    assert!(
+        manager.live["git"].views["history"]
+            .active_node("history-parent-0")
+            .is_none()
+    );
 
     commit_file(root, "tracked.txt", "ordinary version\n");
     click(&mut manager, "history", "refresh");
     first_commit(&mut manager);
-    select_file(&mut manager, "tracked.txt");
-    assert_eq!(snapshot(&manager, 0), "root version\n");
-    assert_eq!(snapshot(&manager, 1), "ordinary version\n");
+    let ordinary = git(root, &["rev-parse", "HEAD"]).trim().to_owned();
+    assert_preview(&mut manager, root, &ordinary, &["tracked.txt"]);
     assert!(
-        manager.live["git"].views["commit-details"]
-            .active_node("snapshot-2")
+        manager.live["git"].views["history"]
+            .active_node("history-parent-0")
             .is_none()
     );
 
@@ -323,26 +415,43 @@ fn git_package_root_ordinary_and_octopus_history_keep_readonly_sources_and_disti
     assert_eq!(parents.len(), 3);
     click(&mut manager, "history", "refresh");
     first_commit(&mut manager);
-    select_file(&mut manager, "first.txt");
-    for column in 0..3 {
-        let _ = snapshot(&manager, column);
-    }
-    assert_eq!(snapshot(&manager, 1), "first branch\n");
-    let original_left = title(&manager, 0);
+    let merge = git(root, &["rev-parse", "HEAD"]).trim().to_owned();
+    assert_preview(&mut manager, root, &merge, &["first.txt", "second.txt"]);
+    assert_eq!(
+        parent_choice(&manager, 0),
+        (
+            "0".into(),
+            vec![("0".into(), false), ("1".into(), true), ("2".into(), false)]
+        )
+    );
+    assert_eq!(parent_choice(&manager, 1).0, "1");
     send(
         &mut manager,
-        "commit-details",
+        "history",
         "history-parent-0",
         ui::Action::Select("2".into()),
     );
-    assert_ne!(title(&manager, 0), original_left);
-    assert_ne!(title(&manager, 0), title(&manager, 2));
-    assert!(title(&manager, 0).contains(&parents[2]));
-    let left = title(&manager, 0);
-    let right = title(&manager, 2);
+    assert_eq!(parent_choice(&manager, 0).0, "2");
+    assert_eq!(
+        parent_choice(&manager, 1),
+        (
+            "1".into(),
+            vec![("0".into(), false), ("1".into(), false), ("2".into(), true)]
+        )
+    );
+    send(
+        &mut manager,
+        "history",
+        "history-parent-1",
+        ui::Action::Select("0".into()),
+    );
+    let left = parent_choice(&manager, 0);
+    let right = parent_choice(&manager, 1);
+    assert_eq!((&left.0, &right.0), (&"2".to_owned(), &"0".to_owned()));
     click(&mut manager, "history", "refresh");
-    assert_eq!(title(&manager, 0), left);
-    assert_eq!(title(&manager, 2), right);
-    assert_eq!(snapshot(&manager, 1), "first branch\n");
+    assert_eq!(parent_choice(&manager, 0), left);
+    assert_eq!(parent_choice(&manager, 1), right);
+    assert_preview(&mut manager, root, &merge, &["first.txt", "second.txt"]);
     manager.disable("git").unwrap();
+    assert_eq!(manager.resource_count(), 0);
 }

@@ -97,6 +97,8 @@ impl Todos {
                     let mut node = tree::Node::new(&id, format!("{}: {label}", line + 1), false);
                     let command = tree::Command {
                         command: "locate-todo".into(),
+                        disabled: false,
+                        separator_before: false,
                         label: ui::LocalizedText::new("Locate Todo", "定位待办"),
                         arguments: serde_json::json!(id),
                     };

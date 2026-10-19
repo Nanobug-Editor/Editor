@@ -7,6 +7,10 @@ pub(super) struct GroupState {
     pub rows: Option<AlignedRows>,
     pub measurements: Vec<Option<Measurement>>,
     pub frames: Vec<Option<geometry::Projection>>,
+    /// Horizontal placement describes painted pixels even during native/independent scrolling.
+    pub gutters: Vec<Option<gutter::Projection>>,
+    /// Comparison-only policy: the first source's native gutter faces its next source.
+    pub inner_gutters: bool,
     pub viewports: Vec<Option<Bounds<Pixels>>>,
     pub regions: Vec<PointerRegion>,
     pub layout: Option<AlignedLayout>,
@@ -56,6 +60,8 @@ impl Default for GroupState {
             rows: None,
             measurements: Vec::new(),
             frames: Vec::new(),
+            gutters: Vec::new(),
+            inner_gutters: false,
             viewports: Vec::new(),
             regions: Vec::new(),
             layout: None,
@@ -103,6 +109,7 @@ impl GroupState {
         if !self.same_members(&sources) {
             self.observed_cursors = vec![None; sources.len()];
             self.viewports = vec![None; sources.len()];
+            self.gutters = vec![None; sources.len()];
             self.pending_reveal = None;
         }
         self.sources = sources;
@@ -239,6 +246,7 @@ impl GroupState {
         self.layout = None;
         self.display_viewport = None;
         self.frames.fill(None);
+        self.gutters.fill(None);
         self.reservation.take();
         self.contents.clear();
         self.pending_location = None;

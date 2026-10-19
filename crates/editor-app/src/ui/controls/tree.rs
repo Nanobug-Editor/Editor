@@ -1,11 +1,14 @@
 //! Local tree-row appearance; gpui-base owns selection, keyboard navigation and virtualization.
 use super::Icon;
+mod icon;
+use crate::ui::theme::ActiveTheme as _;
 use crate::ui::{theme::component_styles, typography};
 use gpui_kit::StatefulInteractiveElement as _;
-use gpui_kit::component::{ActiveTheme as _, IconName};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     App, Div, InteractiveElement, IntoElement, ParentElement, Stateful, Styled, div, px,
 };
+pub(crate) use icon::TreeRowIcon;
 use plugin_schema::ThemeComponent;
 
 /// Select the compact Explorer theme contract without changing configuration-tree presentation.
@@ -58,7 +61,7 @@ pub(crate) fn tree_row(
     id: String,
     label: String,
     depth: usize,
-    icon: Icon,
+    icon: impl Into<TreeRowIcon>,
     folder: bool,
     expanded: bool,
     selected: bool,
@@ -127,6 +130,6 @@ pub(crate) fn tree_row(
                     }
                 }),
         )
-        .child(icon.size(px(16.)).flex_shrink_0())
+        .child(icon.into().element())
         .child(div().min_w_0().flex_1().truncate().child(label))
 }

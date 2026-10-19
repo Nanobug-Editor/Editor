@@ -94,19 +94,16 @@ fn tracking_repository(remote_url: &str) -> tempfile::TempDir {
     repository
 }
 
-fn text(manager: &Manager, id: &str) -> String {
-    let ui::Kind::Text { text } = &manager.live["git"].views["history"]
-        .active_node(id)
-        .unwrap_or_else(|| panic!("missing visible network status {id}"))
-        .kind
-    else {
-        panic!("network status is not native text")
-    };
-    text.clone()
+fn text(manager: &mut Manager, id: &str) -> String {
+    branch_menu::repository_text(manager, id)
 }
 
 /// The socket may intentionally outlive a UI callback, so this action must not call idle first.
 fn press(manager: &mut Manager, node: &str) {
+    if matches!(node, "fetch" | "pull" | "push" | "cancel-process") {
+        branch_menu::context_press(manager, node, None);
+        return;
+    }
     let scene = &manager.live["git"].views["history"];
     assert!(
         !scene
@@ -198,7 +195,7 @@ fn git_package_http_authentication_failure_never_integrates_or_reports_a_success
     let index = git(root, &["ls-files", "--stage"]);
     assert_ne!(head, upstream);
     let (_profile, mut manager) = activate(&candidate(), root);
-    let sampled = text(&manager, "repo-fetch-time");
+    let sampled = text(&mut manager, "repo-fetch-time");
     assert!(sampled.contains("Not fetched yet"));
 
     for action in ["fetch", "pull"] {
@@ -209,8 +206,8 @@ fn git_package_http_authentication_failure_never_integrates_or_reports_a_success
             "{action} never reached the loopback peer"
         );
         unchanged(root, &head, &upstream, &index);
-        assert_eq!(text(&manager, "repo-fetch-time"), sampled);
-        let diagnostic = text(&manager, "status").to_ascii_lowercase();
+        assert_eq!(text(&mut manager, "repo-fetch-time"), sampled);
+        let diagnostic = text(&mut manager, "status").to_ascii_lowercase();
         assert!(
             diagnostic.contains("401")
                 || diagnostic.contains("authentication")
@@ -228,7 +225,7 @@ fn git_package_http_authentication_failure_never_integrates_or_reports_a_success
             failed_requests,
             "local refresh cannot retry authentication"
         );
-        assert_eq!(text(&manager, "repo-fetch-time"), sampled);
+        assert_eq!(text(&mut manager, "repo-fetch-time"), sampled);
     }
     assert!(server.captured.lock().unwrap().iter().all(|capture| {
         capture
@@ -301,7 +298,7 @@ fn git_package_cancelling_stalled_fetch_and_pull_closes_the_socket_and_releases_
     let upstream = git(root, &["rev-parse", "@{upstream}"]);
     let index = git(root, &["ls-files", "--stage"]);
     let (_profile, mut manager) = activate(&candidate(), root);
-    let sampled = text(&manager, "repo-fetch-time");
+    let sampled = text(&mut manager, "repo-fetch-time");
 
     for action in ["fetch", "pull"] {
         let previous = started.load(Ordering::Acquire);
@@ -317,7 +314,7 @@ fn git_package_cancelling_stalled_fetch_and_pull_closes_the_socket_and_releases_
         });
         idle(&mut manager);
         unchanged(root, &head, &upstream, &index);
-        assert_eq!(text(&manager, "repo-fetch-time"), sampled);
+        assert_eq!(text(&mut manager, "repo-fetch-time"), sampled);
         let requests = server.count();
         manager.invoke_command("git", "refresh", json!({})).unwrap();
         idle(&mut manager);

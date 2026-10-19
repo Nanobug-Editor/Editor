@@ -2,12 +2,13 @@
 
 use super::shortcuts::{click, draw, second_editor_window, with_editor};
 use crate::{EditorApp, ui::controls::Input};
+use gpui_base::Root;
 use gpui_base::input::{InputEvent, InputState};
 use gpui_kit::{
     AppContext as _, ClipboardItem, Context, Entity, Focusable, IntoElement, ParentElement, Render,
-    Styled, Subscription, TestAppContext, VisualTestContext, Window, component::Root, div, gpui,
-    px, size,
+    Styled, Subscription, TestAppContext, VisualTestContext, Window,
 };
+use gpui_kit::{div, gpui, px, size};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 type EnterEvents = Rc<RefCell<Vec<(bool, bool)>>>;

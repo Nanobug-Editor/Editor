@@ -1,6 +1,6 @@
 //! Native user gestures offer bounded immutable image resources to one authorized editor surface.
 use super::*;
-use gpui_kit::component::WindowExt as _;
+use crate::ui::controls::overlay::WindowExt as _;
 use gpui_kit::{ClipboardEntry, DragMoveEvent, ExternalPaths, PromptLevel};
 use plugin_runtime::{HostImageInput, HostImageOrigin};
 use protocol::api::{DocumentVersion, ErrorCode, Failure, TextRange};
@@ -258,7 +258,6 @@ impl EditorApp {
             || self.explorer_edit.is_some()
             || self.explorer_delete.is_some()
             || window.has_active_dialog(cx)
-            || window.has_active_sheet(cx)
         {
             return Ok(None);
         }

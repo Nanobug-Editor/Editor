@@ -1,6 +1,8 @@
 //! Native Base scroll and real layout prove semantic events, receipt ownership and scene withdrawal.
 use super::*;
-use gpui_kit::{TestAppContext, VisualTestContext, component::Root, gpui, point, px, size};
+use gpui_base::Root;
+use gpui_kit::{TestAppContext, VisualTestContext};
+use gpui_kit::{gpui, point, px, size};
 use plugin_runtime::plugin_protocol::{
     api,
     ui::{Dialog, Node, Tab},

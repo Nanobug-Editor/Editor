@@ -1,11 +1,13 @@
 //! Local themed language content uses Base modal, focus-trap and button behavior.
 use super::*;
 use crate::ui::controls::Button;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{StyledExt as _, TestSupportExt as _};
 use gpui_kit::{
     InteractiveElement as _, ParentElement as _, SharedString, StatefulInteractiveElement as _,
-    Styled as _, component::ActiveTheme as _, prelude::FluentBuilder as _, px,
+    Styled as _,
 };
+use gpui_kit::{prelude::FluentBuilder as _, px};
 
 impl LanguageFeatures {
     /// Only the bounded results scroll; source attribution and native actions remain reachable.

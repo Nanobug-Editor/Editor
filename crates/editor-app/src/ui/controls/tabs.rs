@@ -3,9 +3,9 @@
 use super::StatusIcon;
 use std::rc::Rc;
 
+use crate::ui::controls::Tooltip;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{Tab, Tabs};
-use gpui_kit::component::ActiveTheme as _;
-use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::{
     App, ElementId, FocusHandle, InteractiveElement, IntoElement, ParentElement, SharedString,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
@@ -67,7 +67,7 @@ pub(crate) fn comparison_tab(
         .child(
             super::Button::new(format!("close-{id}"))
                 .compact()
-                .icon(super::Icon::new(gpui_kit::component::IconName::Close))
+                .icon(super::Icon::new(gpui_kit::assets::IconName::Close))
                 .accessibility_label(rust_i18n::t!("editor.close_diff").to_string())
                 .on_click(move |_, window, cx| {
                     cx.stop_propagation();

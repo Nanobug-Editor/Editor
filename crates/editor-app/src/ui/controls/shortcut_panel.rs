@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use gpui_kit::component::ActiveTheme as _;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_kit::{
     AnyElement, App, Div, ElementId, FocusHandle, InteractiveElement, IntoElement, ParentElement,
     ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, div,

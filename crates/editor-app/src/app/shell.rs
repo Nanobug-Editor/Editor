@@ -149,6 +149,14 @@ impl dock::BasePanel for EditorDockPanel {
 }
 
 impl DockPanel for EditorDockPanel {
+    /// Compact drag cards retain the same localized name as the native dock heading.
+    fn drag_title(&self, _: &App) -> Option<gpui_kit::SharedString> {
+        Some(match self.kind {
+            EditorDockPanelKind::Explorer => t!("panel.explorer").to_string().into(),
+            EditorDockPanelKind::Editor => t!("panel.editor").to_string().into(),
+        })
+    }
+
     fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match self.kind {
             // Order explorer actions as locate, collapse all, expand all, then minimize.
@@ -237,12 +245,12 @@ impl DockPanel for EditorDockPanel {
                         .small()
                         .compact()
                         .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| {
+                        .on_click(cx.listener(|this, _, window, cx| {
                             cx.stop_propagation();
                             let _ = this.parent.update(cx, |app, cx| {
                                 // Use the existing visibility path to persist hiding and update the bottom toggle.
                                 if app.explorer_visible {
-                                    app.toggle_explorer(cx);
+                                    app.toggle_explorer(window, cx);
                                 }
                             });
                         })),
@@ -287,11 +295,13 @@ impl Render for EditorApp {
         }
         if self._bounds_subscription.is_none() {
             self._bounds_subscription =
-                Some(cx.observe_window_bounds(window, |this, window, _cx| {
+                Some(cx.observe_window_bounds(window, |this, window, cx| {
                     let bounds = window.bounds();
                     this.session_state.window_width = bounds.size.width / px(1.);
                     this.session_state.window_height = bounds.size.height / px(1.);
                     this.session_state.save();
+                    // Prepare editor-local column pixels before Base rescales the new viewport.
+                    cx.notify();
                 }));
         }
         // Open plugin-owned settings through the normal editor document path.
@@ -308,6 +318,10 @@ impl Render for EditorApp {
         self.sync_document_comparison(window, cx);
         self.sync_outline(window, cx);
         self.prune_direct_diagnostics(cx);
+        self.dock_area.update(cx, |area, cx| {
+            self.dock_ui
+                .prepare_frame(area, window.viewport_size().width, window, cx)
+        });
         if let Some(path) = self.pending_plugin_file.take() {
             self.open_file(path, window, cx);
         }

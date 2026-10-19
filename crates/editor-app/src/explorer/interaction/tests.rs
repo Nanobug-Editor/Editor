@@ -5,8 +5,10 @@ mod history;
 mod transfer;
 
 use super::*;
-use gpui_kit::component::WindowExt as _;
-use gpui_kit::{TestAppContext, VisualTestContext, component::Root, gpui};
+use crate::ui::controls::overlay::WindowExt as _;
+use gpui_base::Root;
+use gpui_kit::gpui;
+use gpui_kit::{TestAppContext, VisualTestContext};
 use std::cell::RefCell;
 
 /// Mount the editor, optionally requesting an initial file instead of the normal session restore.

@@ -148,6 +148,11 @@ impl dock::BasePanel for MessagePanel {
     }
 }
 impl DockPanel for MessagePanel {
+    /// The drag card names this panel without duplicating its toolbar or list.
+    fn drag_title(&self, _: &App) -> Option<gpui_kit::SharedString> {
+        Some(t!("messages.title").to_string().into())
+    }
+
     fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .w_full()
@@ -315,6 +320,8 @@ impl Render for MessagePanel {
 impl EditorApp {
     /// The window toolbar owns this Base-backed button; its reminder remains visible during plugin overflow.
     pub(crate) fn render_messages_button(&self, cx: &Context<Self>) -> impl IntoElement {
+        let visible = self.messages_visible(cx);
+        let selected_style = component_styles(cx, ThemeComponent::PanelToggle).selected;
         let pending = self.messages.read(cx).has_pending_alert();
         let label = if pending {
             t!("messages.unread")
@@ -351,7 +358,13 @@ impl EditorApp {
                     .small()
                     .compact()
                     .ghost()
-                    .expanded(self.messages_visible(cx))
+                    .expanded(visible)
+                    // Disclosure metadata alone does not paint Base buttons; match the other window controls.
+                    .when(visible, |button| {
+                        button
+                            .bg(selected_style.background.unwrap_or(cx.theme().list_active))
+                            .text_color(selected_style.foreground.unwrap_or(cx.theme().foreground))
+                    })
                     .tooltip(label.clone())
                     .accessibility_label(label)
                     .on_click(cx.listener(|this, _, window, cx| {

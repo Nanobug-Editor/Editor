@@ -7,3 +7,6 @@ pub(crate) mod messages;
 pub(crate) mod plugin;
 pub(crate) mod theme;
 pub(crate) mod typography;
+
+#[cfg(test)]
+mod tests;

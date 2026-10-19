@@ -67,10 +67,19 @@ impl EditorApp {
             | Op::SaveDocument { document }
             | Op::ReadDocumentSelection { document }
             | Op::ReplaceDocumentRange { document, .. } => check(document),
-            Op::CompareDocuments { left, right }
-            | Op::OpenDocumentComparison { left, right, .. } => {
+            Op::CompareDocuments { left, right } => {
                 check(left)?;
                 check(right)
+            }
+            Op::OpenDocumentComparison {
+                left, right, third, ..
+            } => {
+                check(left)?;
+                check(right)?;
+                if let Some(third) = third {
+                    check(third)?;
+                }
+                Ok(())
             }
             _ => Ok(()),
         }

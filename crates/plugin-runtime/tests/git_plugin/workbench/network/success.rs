@@ -105,26 +105,10 @@ fn review(manager: &Manager) -> String {
     result
 }
 
-fn advanced(manager: &mut Manager, action: &str) {
-    click(manager, "history", "advanced-open");
-    send(
-        manager,
-        "history",
-        "advanced-menu",
-        ui::Action::Select(action.into()),
-    );
-}
-
 /// Preparing a remote update is an independent manual action, with exact old/new OIDs visible.
 /// The caller verifies the remote before and after the later confirmation, never inside this helper.
 fn lease_review(manager: &mut Manager, local: &str, expected: &str) {
-    send(
-        manager,
-        "history",
-        "argument",
-        ui::Action::Change(format!("{REMOTE} {BRANCH}")),
-    );
-    advanced(manager, "push-lease");
+    branch_menu::context_action(manager, "push-lease", Some(&format!("{REMOTE} {BRANCH}")));
     let preview = review(manager);
     assert!(preview.contains(&format!("--force-with-lease={BRANCH}:{expected}")));
     assert!(preview.contains(&format!("{local}:{BRANCH}")));
@@ -149,7 +133,7 @@ fn git_package_remote_success_and_published_rewrites_require_separate_exact_leas
     assert_eq!(oid(&local, "@{upstream}"), base);
     assert_eq!(git(&local, &["remote"]), format!("{REMOTE}\n"));
     let (_profile, mut manager) = activate(&candidate(), &local);
-    assert!(text(&manager, "repo-fetch-time").contains("Not fetched yet"));
+    assert!(text(&mut manager, "repo-fetch-time").contains("Not fetched yet"));
 
     // Fetch observes the remote ref without merging, changing the local index or writing its files.
     click(&mut manager, "history", "fetch");
@@ -158,18 +142,23 @@ fn git_package_remote_success_and_published_rewrites_require_separate_exact_leas
     assert_eq!(oid(&remote, BRANCH), incoming);
     assert_eq!(git(&local, &["ls-files", "--stage"]), initial_index);
     assert!(!local.join("incoming.txt").exists());
-    assert!(text(&manager, "repo-fetch-time").contains("UTC"));
+    assert!(text(&mut manager, "repo-fetch-time").contains("UTC"));
 
     // Pull integrates only after its own manual action, even though Fetch already saw the commit.
     click(&mut manager, "history", "pull");
-    assert_eq!(oid(&local, "HEAD"), incoming);
+    assert_eq!(
+        oid(&local, "HEAD"),
+        incoming,
+        "Pull diagnostic: {}",
+        text(&mut manager, "status")
+    );
     assert_eq!(oid(&remote, BRANCH), incoming);
     assert_eq!(
         std::fs::read_to_string(local.join("incoming.txt")).unwrap(),
         "writer update\n"
     );
     assert!(git(&local, &["status", "--porcelain"]).is_empty());
-    let sampled = text(&manager, "repo-fetch-time");
+    let sampled = text(&mut manager, "repo-fetch-time");
 
     write_commit(
         &local,
@@ -200,7 +189,7 @@ fn git_package_remote_success_and_published_rewrites_require_separate_exact_leas
         "published local bytes\n"
     );
     assert_eq!(
-        text(&manager, "repo-fetch-time"),
+        text(&mut manager, "repo-fetch-time"),
         sampled,
         "push is not a fetch sample"
     );
@@ -266,13 +255,7 @@ fn git_package_remote_success_and_published_rewrites_require_separate_exact_leas
     // A soft reset is a second published-history rewrite. Its local confirmation changes only
     // HEAD, preserving the current index/worktree; removing the remote commit needs another lease.
     let retained_index = git(&local, &["ls-files", "--stage"]);
-    send(
-        &mut manager,
-        "history",
-        "argument",
-        ui::Action::Change(incoming.clone()),
-    );
-    advanced(&mut manager, "reset-soft");
+    branch_menu::context_action(&mut manager, "reset-soft", Some(&incoming));
     let reset = review(&manager);
     assert!(reset.contains(&rewritten));
     assert!(reset.contains("refs/remotes/upstream-name/main"));
@@ -302,7 +285,7 @@ fn git_package_remote_success_and_published_rewrites_require_separate_exact_leas
         git(&remote, &["ls-tree", "--name-only", "main"]),
         "incoming.txt\ntracked.txt\n"
     );
-    assert_eq!(text(&manager, "repo-fetch-time"), sampled);
+    assert_eq!(text(&mut manager, "repo-fetch-time"), sampled);
     assert_eq!(manager.live["git"].process_count(), 0);
     manager.disable("git").unwrap();
     assert!(!manager.live.contains_key("git"));

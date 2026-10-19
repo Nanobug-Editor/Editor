@@ -1,7 +1,9 @@
 //! Dispatch real pointer events to verify selection preservation, atomic moves and cancellation.
 
 use super::*;
-use gpui_kit::{TestAppContext, VisualTestContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::gpui;
+use gpui_kit::{TestAppContext, VisualTestContext};
 use std::cell::RefCell;
 
 /// Open a plain-text document with deterministic wrapping and no language-server dependency.

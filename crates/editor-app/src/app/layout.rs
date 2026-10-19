@@ -6,11 +6,19 @@ use gpui_base::dock::{
 };
 use std::collections::HashSet;
 
+mod sidebar;
+
 /// Registry factories borrow the current editor's views; loading must not recreate their state.
-fn bind_panel<P: DockPanel>(name: &str, panel: &Entity<P>, cx: &mut App) {
+fn bind_panel<P: DockPanel>(
+    name: &str,
+    panel: &Entity<P>,
+    presentation: &local_dock::PanelPresentation,
+    cx: &mut App,
+) {
     let panel = panel.downgrade();
+    let presentation = presentation.clone();
     register_panel(cx, name, move |_, _, _| {
-        dock::panel_handle(
+        presentation.panel_handle(
             panel
                 .upgrade()
                 .expect("bound panels live throughout layout restoration"),
@@ -19,12 +27,41 @@ fn bind_panel<P: DockPanel>(name: &str, panel: &Entity<P>, cx: &mut App) {
 }
 
 impl EditorApp {
+    /// Before creating views, preserve a legacy closed outer dock as individually hidden leaves.
+    /// Combining it with an open center sidebar must neither reveal its panels nor reserve its width.
+    pub(crate) fn prepare_sidebar_visibility(session: &mut SessionState) {
+        if session.plugin_sidebar_layout_version >= session_state::DOCK_LAYOUT_VERSION {
+            return;
+        }
+        let Some(layout) = &session.dock_layout else {
+            return;
+        };
+        for name in sidebar::closed_left_panels(layout) {
+            match name.as_str() {
+                "Explorer" => session.explorer_visible = false,
+                "Outline" => session.outline_visible = false,
+                "HostMessages" => session.messages_visible = false,
+                "NativeTerminal" => session.native_terminal_visible = false,
+                "Problems" => session.problems_visible = false,
+                _ => {
+                    if let Some(key) = name.strip_prefix("plugin:") {
+                        session.plugin_panel_visibility.insert(key.into(), false);
+                    }
+                }
+            }
+        }
+    }
+
     /// Snapshot live measurements at exit as well as on completed native layout edits.
     pub(crate) fn capture_dock_layout(&mut self, cx: &App) {
         // Startup must not overwrite a saved plugin layout with the temporary default center.
-        if self.pending_dock_restore {
+        if self.pending_dock_restore || self.dock_ui.is_dragging() {
             return;
         }
+        self.session_state.dock_active_panels = self
+            .dock_presentation
+            .synchronize(self.dock_area.read(cx), cx)
+            .0;
         let layout = self.dock_area.read(cx).dump(cx);
         for (name, dock) in [
             ("left", &layout.left_dock),
@@ -87,23 +124,42 @@ impl EditorApp {
             "Problems".to_owned(),
         ]);
         // Explorer can have moved outside the center, so retain its entity independently.
-        bind_panel("Explorer", &self.explorer_panel, cx);
-        bind_panel("Editor", &self.editor_panel, cx);
-        bind_panel("Outline", &self.outline_panel, cx);
-        bind_panel("HostMessages", &self.messages, cx);
-        bind_panel("NativeTerminal", &self.terminal, cx);
-        bind_panel("Problems", &self.problems.panel, cx);
+        bind_panel(
+            "Explorer",
+            &self.explorer_panel,
+            &self.dock_presentation,
+            cx,
+        );
+        bind_panel("Editor", &self.editor_panel, &self.dock_presentation, cx);
+        bind_panel("Outline", &self.outline_panel, &self.dock_presentation, cx);
+        bind_panel("HostMessages", &self.messages, &self.dock_presentation, cx);
+        bind_panel(
+            "NativeTerminal",
+            &self.terminal,
+            &self.dock_presentation,
+            cx,
+        );
+        bind_panel(
+            "Problems",
+            &self.problems.panel,
+            &self.dock_presentation,
+            cx,
+        );
         for (key, panel) in &self.plugin_panels {
             // File-scoped previews belong to the editor's inner split, never to the outer layout.
             if panel.read(cx).is_editor_preview() {
                 continue;
             }
             let name = format!("plugin:{key}");
-            bind_panel(&name, panel, cx);
+            bind_panel(&name, panel, &self.dock_presentation, cx);
             names.insert(name);
         }
         // Disabled or uninstalled contributions must not create blank placeholder panels.
         prune_unavailable(&mut layout, &names);
+        let selection = self.session_state.dock_active_panels.clone();
+        if self.session_state.plugin_sidebar_layout_version == 1 {
+            sidebar::separate_left(&mut layout, px(self.session_state.explorer_width));
+        }
         self.pending_dock_restore = false;
         let restored = self
             .dock_area
@@ -111,9 +167,25 @@ impl EditorApp {
         let loaded = restored.is_ok();
         if let Err(error) = restored {
             tracing::warn!(%error, "saved dock layout could not be restored");
-        } else if !has_messages {
+        }
+        if loaded && self.session_state.plugin_sidebar_layout_version < 1 {
+            self.migrate_plugin_sidebar_layout(window, cx);
+            // Old default plugin columns must join their shared band before the whole band
+            // becomes independent. Do this before adding missing leaves: dumping a newly
+            // inserted, unpainted split would freeze its temporary measurements as preferences.
+            let mut independent = self.dock_area.read(cx).dump(cx);
+            if sidebar::separate_left(&mut independent, px(self.session_state.explorer_width)) {
+                if let Err(error) = self
+                    .dock_area
+                    .update(cx, |area, cx| area.load(independent, window, cx))
+                {
+                    tracing::warn!(%error, "independent sidebar layout could not be restored");
+                }
+            }
+        }
+        if loaded && !has_messages {
             // Extend an older saved tree after loading it; replacing the right dock would lose its peers.
-            let panel = dock::panel_handle(self.messages.clone());
+            let panel = self.dock_presentation.panel_handle(self.messages.clone());
             let width = px(self
                 .session_state
                 .plugin_dock_sizes
@@ -135,9 +207,12 @@ impl EditorApp {
         self.ensure_problems_dock(window, cx);
         // An older saved layout has no outline. Add one beside its surviving Explorer without
         // replacing the user's other split sizes or keeping a second persisted layout tree.
-        let outline = dock::panel_handle(self.outline_panel.clone());
+        let outline = self
+            .dock_presentation
+            .panel_handle(self.outline_panel.clone());
         let outline_id = gpui_base::dock::PanelId::from(self.outline_panel.entity_id());
         let explorer_id = gpui_base::dock::PanelId::from(self.explorer_panel.entity_id());
+        let editor_id = gpui_base::dock::PanelId::from(self.editor_panel.entity_id());
         self.dock_area.update(cx, |area, cx| {
             if area.panel(outline_id).is_some() {
                 return;
@@ -155,7 +230,7 @@ impl EditorApp {
                     .map(|node| (placement, node))
             });
             if let Some((placement, node)) = neighbor {
-                let stacking = crate::ui::controls::dock::stack_axis(area, node, cx);
+                let stacking = crate::ui::controls::dock::stack_axis(area, node, Some(editor_id));
                 area.add_panel_view(outline, placement, None, window, cx);
                 area.move_panel(
                     outline_id,
@@ -183,7 +258,18 @@ impl EditorApp {
             }
         });
         if loaded {
-            self.migrate_plugin_sidebar_layout(window, cx);
+            // A restored current layout owns its row/column nesting. Never migrate newly
+            // dragged center columns into a full-height peripheral sidebar on the next startup.
+            if self.session_state.plugin_sidebar_layout_version >= 1 {
+                self.session_state.plugin_sidebar_layout_version = self
+                    .session_state
+                    .plugin_sidebar_layout_version
+                    .max(session_state::DOCK_LAYOUT_VERSION);
+            }
+            self.dock_presentation
+                .restore(self.dock_area.read(cx), &selection, cx);
+            self.capture_dock_layout(cx);
+            self.persist_session();
         }
     }
 

@@ -1,6 +1,7 @@
 //! Shared warning/error artwork uses the active palette in tabs, logs and status summaries.
 use super::Icon;
-use gpui_kit::{App, Hsla, Styled, component::ActiveTheme as _};
+use crate::ui::theme::ActiveTheme as _;
+use gpui_kit::{App, Hsla, Styled};
 
 /// Informational records have no alert icon; both anomaly levels retain their own color after viewing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

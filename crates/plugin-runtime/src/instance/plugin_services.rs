@@ -7,6 +7,9 @@ use api::{ErrorCode, Failure, Value};
 use plugin_protocol::service::{self, Caller};
 use resource_roots::RootKind;
 use std::collections::BTreeMap;
+#[cfg(test)]
+#[path = "plugin_services/cleanup_tests.rs"]
+mod cleanup_tests;
 
 pub(super) struct Services {
     pub alive: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -52,6 +55,23 @@ impl Default for Services {
     }
 }
 impl Services {
+    /// Scoped sources may clean their allocations; genuine host commands may also stop their
+    /// instance's earlier ambient work. This grants no read/write access to those resources.
+    /// ResourceRoots rejects foreign, released and retired incarnation handles in both cases.
+    fn permits_cleanup(
+        &self,
+        roots: &ResourceRoots,
+        context: &CallContext,
+        handle: &api::ResourceHandle,
+    ) -> bool {
+        roots.resolve(handle).is_ok()
+            && (self
+                .resources
+                .get(&handle.resource)
+                .is_some_and(|(_, owner)| owner.caller.instance == context.caller.instance)
+                || context.direct_host_command(&self.principal.instance))
+    }
+
     /// Retirement seals clones already queued in the broker before releasing native root slots.
     pub fn clear(&mut self) {
         self.alive
@@ -244,7 +264,8 @@ impl State {
                     .is_some_and(|(_, owner)| owner.caller.instance == context.caller.instance)
         };
         if matches!(operation, api::Operation::CloseResource { handle }
-            | api::Operation::CancelRequest { handle, .. } if owned(handle))
+            | api::Operation::CancelRequest { handle, .. }
+            if self.plugin_services.permits_cleanup(&self.roots, context, handle))
         {
             return Ok(());
         }
@@ -304,6 +325,14 @@ impl State {
             ));
         }
         let permission = match operation {
+            // A genuine native command may persist its own scoped intent under its declared
+            // storage grant. Delegated calls still cannot read or write provider preferences.
+            api::Operation::ReadPreference { watch: false, .. }
+            | api::Operation::WritePreference { .. }
+                if context.direct_host_command(&self.plugin_services.principal.instance) =>
+            {
+                "storage"
+            }
             api::Operation::Http {
                 operation: plugin_protocol::http::Operation::Start { .. },
             } => "network.http",
@@ -325,11 +354,14 @@ impl State {
             api::Operation::Tree { operation } => {
                 let handle = match operation {
                     plugin_protocol::tree::Operation::Create => None,
-                    plugin_protocol::tree::Operation::Refresh { tree } => Some(tree),
+                    plugin_protocol::tree::Operation::Refresh { tree }
+                    | plugin_protocol::tree::Operation::Update { tree, .. } => Some(tree),
                     plugin_protocol::tree::Operation::Reply { request, .. } => Some(&request.tree),
                 };
                 if handle.is_some_and(|handle| !owned(handle))
-                    && !context.direct_host_selection(&self.plugin_services.principal.instance)
+                    // Updating one's own tree from a genuine native command requires ui.panels,
+                    // not the unrelated file-picker grant. Delegated callers still cannot borrow it.
+                    && !context.direct_host_command(&self.plugin_services.principal.instance)
                 {
                     return Err(Failure::new(
                         ErrorCode::PermissionDenied,

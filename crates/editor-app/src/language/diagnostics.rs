@@ -1,7 +1,8 @@
 //! Derives syntax errors from the same plugin WASM grammars used for highlighting.
 
+use crate::language::highlighter::LanguageRegistry;
+use crate::language::highlighter::SyntaxHighlighter;
 use gpui_base::input::{Diagnostic, DiagnosticSeverity, Rope, RopeExt as _};
-use gpui_kit::component::highlighter::{LanguageRegistry, SyntaxHighlighter};
 use rust_i18n::t;
 use std::ops::Range;
 

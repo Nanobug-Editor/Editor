@@ -1,7 +1,8 @@
 //! Native interaction tests cover event routing, focus-preserving reconciliation and modality.
 use super::*;
-use gpui_kit::Styled as _;
-use gpui_kit::{Focusable as _, TestAppContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::gpui;
+use gpui_kit::{Focusable as _, Styled as _, TestAppContext};
 use plugin_runtime::plugin_protocol::ui::{Dialog, Input, Node};
 use std::cell::RefCell;
 

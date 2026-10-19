@@ -94,11 +94,11 @@ fn git_package_history_activity_defers_automatic_refresh_until_quiet() {
     assert_eq!(manager.live["git"].process_count(), 0);
     assert!(manager.take_editor_requests().is_empty());
 
-    // Visibility enables the package's actual three-second timer. Seven seconds of direct
-    // key/poll pairs cross two deadlines; the ordinary send helper would insert idle gaps.
+    // Direct key/poll pairs cross two thirty-second timer deadlines without idle gaps.
+    // The ordinary send helper would settle the queue and could mask input interruption.
     let active = Instant::now();
     let mut inputs = 0;
-    while active.elapsed() < Duration::from_secs(7) {
+    while active.elapsed() < Duration::from_secs(65) {
         let name = if inputs % 2 == 0 { "home" } else { "end" };
         let event = key(&manager, name);
         manager.event("git", Some("history".into()), event).unwrap();
@@ -133,7 +133,7 @@ fn git_package_history_activity_defers_automatic_refresh_until_quiet() {
     assert!(!painted(&manager, fresh_title));
     commit_file(root, "tracked.txt", "external\n", fresh_title);
     let quiet = Instant::now();
-    let deadline = quiet + Duration::from_secs(15);
+    let deadline = quiet + Duration::from_secs(75);
     loop {
         let had_requests = poll_native_receipts(&mut manager);
         if !had_requests
@@ -144,7 +144,7 @@ fn git_package_history_activity_defers_automatic_refresh_until_quiet() {
         }
         assert!(
             Instant::now() < deadline,
-            "visible automatic refresh did not paint the external commit within 15 seconds"
+            "visible automatic refresh did not paint the external commit within 75 seconds"
         );
         std::thread::sleep(Duration::from_millis(10));
     }

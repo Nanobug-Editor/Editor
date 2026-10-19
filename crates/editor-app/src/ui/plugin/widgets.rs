@@ -39,7 +39,10 @@ impl PluginView {
             });
         }
         // The ordinary dialog has precedence over a popup; neither borrows another panel's native state.
-        if self.document.dialog.is_none() && self.document.menu.is_some() {
+        if self.scene_current.get()
+            && self.document.dialog.is_none()
+            && self.document.menu.is_some()
+        {
             if self.popup.is_none() {
                 self.popup = Some(self.widget(cx));
             }
@@ -49,8 +52,10 @@ impl PluginView {
                 menu: self.document.menu.clone(),
                 sidebar: None,
             };
+            let gesture = self.action_gesture(&self.document.menu.as_ref().unwrap().id);
             self.popup.as_ref().unwrap().update(cx, |view, cx| {
-                view.update(model, self.environment.clone(), self.origin, window, cx)
+                view.update(model, self.environment.clone(), self.origin, window, cx);
+                view.set_action_gesture(gesture, cx);
             });
         } else if let Some(popup) = self.popup.take() {
             // Let the shared menu adapter return focus before its keyed entity is retired.
@@ -64,6 +69,24 @@ impl PluginView {
                 )
             });
         }
+    }
+
+    /// Close the old native popup before rebinding a retained scene; its callbacks keep the old
+    /// credential. Returning focus uses the owning Window after this PluginView borrow ends.
+    pub(super) fn suspend_popup(&mut self, cx: &mut Context<Self>) {
+        let Some(popup) = self.popup.take() else {
+            return;
+        };
+        let target = self.window;
+        let environment = self.environment.clone();
+        let origin = self.origin;
+        cx.defer(move |cx| {
+            let _ = target.update(cx, |_, window, cx| {
+                popup.update(cx, |view, cx| {
+                    view.update(CollectionModel::default(), environment, origin, window, cx)
+                });
+            });
+        });
     }
 
     /// Every callback carries the widget's published revision through the same document gate.

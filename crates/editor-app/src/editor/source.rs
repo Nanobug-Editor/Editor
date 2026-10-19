@@ -1,12 +1,12 @@
 //! Compose the existing native editor, popovers and input gestures without replacing its session.
 use crate::ui::controls::aligned_editor::{AlignmentGroup, AlignmentNativeFactory};
+use crate::ui::controls::context_menu::NativeMenu;
+use crate::ui::controls::overlay::WindowExt as _;
 use crate::*;
-use gpui_kit::component::WindowExt as _;
-use gpui_kit::component::native_menu::NativeMenu;
 
 /// One menu definition serves ordinary and projected input; only its physical anchor changes.
 type SourceMenuBuilder = Rc<dyn Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu>;
-/// The native OS presentation boundary is replaceable by local interaction tests, not plugin APIs.
+/// Local menu presentation can be observed by interaction tests without adding a plugin API.
 type SourceMenuPresenter = Rc<dyn Fn(NativeMenu, Point<Pixels>, &mut Window, &mut App)>;
 
 #[cfg(test)]
@@ -75,8 +75,7 @@ impl EditorApp {
         // panels can remain below the raised definition details layer.
         let hover_enabled = self.explorer_edit.is_none()
             && self.explorer_delete.is_none()
-            && !window.has_active_dialog(cx)
-            && !window.has_active_sheet(cx);
+            && !window.has_active_dialog(cx);
         // The menu callback runs inside an editor update, so snapshot its state now.
         let (enabled, editable, has_definition, has_code_actions) = {
             let editor = self.editor.read(cx);
@@ -197,7 +196,7 @@ impl EditorApp {
                 .when(aligned_native, |editor| {
                     editor.role(gpui_base::RoleOverride::Presentational)
                 })
-                // Preserve live edit restrictions when the styled component renders.
+                // Preserve live edit restrictions when the local source frame renders.
                 .readonly(!editable)
                 .disabled(!enabled)
                 .context_menu(move |base, window, cx| menu(base, window, cx))
@@ -339,6 +338,10 @@ impl EditorApp {
                         .unwrap_or_else(|| native(&self.editor, window, cx))
                 }),
             )
+            // Ordinary sources retain Base's leading gutter, including during popup renderer switches.
+            .when(!aligned, |source| {
+                source.child(crate::ui::controls::gutter_separator(&self.editor))
+            })
             // Install after the atomic authority: its native handler otherwise opens a menu at
             // the synthetic source coordinate. Base still owns right-click selection semantics.
             // Ordinary SourceFrames replace the weak projected handler too, including while a
@@ -348,7 +351,7 @@ impl EditorApp {
                 menu_builder,
                 alignment.map_or_else(
                     || Rc::new(|bounds, _: &App| Some(bounds)) as _,
-                    |(group, index)| group.bounds_projector(index),
+                    |(group, index)| group.pointer_projector(index),
                 ),
                 Rc::new(|menu, anchor, window, cx| menu.show(anchor, window, cx)),
             ))

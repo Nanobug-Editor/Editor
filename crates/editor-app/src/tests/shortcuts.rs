@@ -1,12 +1,11 @@
 //! Exercises shortcuts through native application input, visible controls and document effects.
 
+use crate::ui::theme::ActiveTheme;
 use crate::{EditorApp, theme, typography};
 use editor_core::Workspace;
-use gpui_kit::{
-    AppContext as _, Entity, Focusable, KeyBinding, TestAppContext, VisualTestContext,
-    component::{ActiveTheme, Root},
-    gpui, px, size,
-};
+use gpui_base::Root;
+use gpui_kit::{AppContext as _, Entity, Focusable, KeyBinding, TestAppContext, VisualTestContext};
+use gpui_kit::{gpui, px, size};
 use std::{path::Path, time::Duration};
 
 /// One application fixture is shared by lookup, binding and real-package scenarios.

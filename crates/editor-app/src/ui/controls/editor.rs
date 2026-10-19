@@ -1,9 +1,10 @@
 //! Native editor appearance is projected onto any existing entity without changing its text or behavior.
 use super::{Button, Icon};
 use crate::theme::component_styles;
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::InputBase;
 use gpui_base::input::{DiagnosticColors, Editor as BaseEditor, EditorState, InputEditorStyle};
-use gpui_kit::component::{ActiveTheme as _, IconName};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     AccessibleAction, AnyElement, App, Entity, Focusable as _, InteractiveElement, IntoElement,
     ParentElement, Role, SharedString, StatefulInteractiveElement, Styled, Window, div,
@@ -11,6 +12,45 @@ use gpui_kit::{
 };
 use plugin_schema::ThemeComponent;
 use std::rc::Rc;
+
+/// Retain a transparent separator at the ordinary source gutter's complete trailing edge.
+/// `editor` remains the sole input owner; this overlay adds no hitbox or text padding.
+pub(crate) fn gutter_separator(editor: &Entity<EditorState>) -> AnyElement {
+    let editor = editor.clone();
+    gpui_kit::canvas(
+        |_, _, _| (),
+        move |clip, _, window, cx| {
+            let state = editor.read(cx);
+            let Some(text) = state.text_bounds() else {
+                return;
+            };
+            let Some(start) = state.range_to_bounds(&(0..0)) else {
+                return;
+            };
+            // Subtract the scrolling text origin to retain Base's exact number/fold width.
+            let width = start.left() - text.left();
+            if width <= px(1.) {
+                return;
+            }
+            let input = state.input_bounds();
+            let line = gpui_kit::Bounds::new(
+                // Keep the complete folding control inside the gutter instead of reclaiming
+                // its trailing space for a visible rule beside the text.
+                gpui_kit::point(input.left() + width - px(1.), input.top()),
+                gpui_kit::size(px(1.), input.size.height),
+            )
+            .intersect(&clip);
+            if line.size.width > px(0.) && line.size.height > px(0.) {
+                window.paint_quad(gpui_kit::fill(line, cx.theme().border.opacity(0.)));
+            }
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+    .into_any_element()
+}
 
 /// Expose a readonly native document's source name, current value and actual editing focus.
 /// The Base editor still owns input and layout. Document is a readonly accessibility role;

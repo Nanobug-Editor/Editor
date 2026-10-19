@@ -6,6 +6,8 @@ use gpui_base::Tree;
 pub(crate) struct OutlinePanel {
     parent: WeakEntity<EditorApp>,
     focus: FocusHandle,
+    /// Read-only projection of the owning session; dock sampling must not reborrow EditorApp.
+    visible: bool,
     /// Base exposes tree.focus, but not its private focus handle; the tracked dock handle forwards activation once.
     focus_subscription: Option<Subscription>,
 }
@@ -15,8 +17,13 @@ impl OutlinePanel {
         Self {
             parent,
             focus: cx.focus_handle(),
+            visible: false,
             focus_subscription: None,
         }
+    }
+    /// Project the owner's `visible` intent before native layout reconciliation.
+    pub(crate) fn set_visible(&mut self, visible: bool) {
+        self.visible = visible;
     }
 }
 impl EventEmitter<PanelEvent> for OutlinePanel {}
@@ -35,13 +42,16 @@ impl dock::BasePanel for OutlinePanel {
     fn zoomable(&self, _: &App) -> bool {
         false
     }
-    fn visible(&self, cx: &App) -> bool {
-        self.parent
-            .upgrade()
-            .is_some_and(|app| app.read(cx).session_state.outline_visible)
+    fn visible(&self, _: &App) -> bool {
+        self.visible
     }
 }
 impl DockPanel for OutlinePanel {
+    /// Plain drag labels omit the native heading's action buttons.
+    fn drag_title(&self, _: &App) -> Option<gpui_kit::SharedString> {
+        Some(t!("panel.outline").to_string().into())
+    }
+
     fn title(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .w_full()

@@ -1,13 +1,14 @@
 //! Local file-operation surfaces over base Dialog, Checkbox and Button behavior.
 
 use super::{Button, Checkbox};
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::StyledExt as _;
+use gpui_base::{h_flex, v_flex};
 use gpui_kit::{
     AnyElement, App, FocusHandle, InteractiveElement as _, IntoElement, MouseButton, ParentElement,
     SharedString, Styled, Window,
-    component::{ActiveTheme as _, h_flex, v_flex},
-    div, px,
 };
+use gpui_kit::{div, px};
 use rust_i18n::t;
 
 /// Intent preview uses the project's local colors, and remains visible for native path offers too.

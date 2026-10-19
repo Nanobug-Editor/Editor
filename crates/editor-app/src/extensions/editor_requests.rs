@@ -271,8 +271,19 @@ impl EditorApp {
                 title,
                 left,
                 right,
+                third,
                 preview,
-            } => self.open_comparison_view(key, title, left, right, *preview, &request, window, cx),
+            } => self.open_comparison_view(
+                key,
+                title,
+                left,
+                right,
+                third.as_ref(),
+                *preview,
+                &request,
+                window,
+                cx,
+            ),
             Op::ReadDocument { document, range } => self.read_plugin_document(document, *range, cx),
             Op::ListDocuments => {
                 let documents = (0..self.tabs.len())

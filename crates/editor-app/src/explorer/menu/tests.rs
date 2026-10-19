@@ -1,7 +1,9 @@
 use super::*;
 use crate::theme::{apply_theme, builtin_theme};
 use editor_core::Workspace;
-use gpui_kit::{AppContext as _, TestAppContext, VisualTestContext, component::Root, gpui};
+use gpui_base::Root;
+use gpui_kit::gpui;
+use gpui_kit::{AppContext as _, TestAppContext, VisualTestContext};
 use std::{cell::RefCell, rc::Rc};
 
 /// Query the component's native accessibility facts instead of maintaining custom menu-row selectors.
@@ -140,7 +142,7 @@ fn builtin_themes_define_explorer_menu_colors(cx: &mut TestAppContext) {
 
 /// Native anchoring and keyboard actions must work without the removed host navigation state.
 #[gpui::test]
-fn component_menu_snaps_to_window_and_navigates_with_keyboard(cx: &mut TestAppContext) {
+fn local_menu_snaps_to_window_and_navigates_with_keyboard(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
         typography::init(cx);

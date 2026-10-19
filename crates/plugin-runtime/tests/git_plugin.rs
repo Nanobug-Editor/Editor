@@ -88,6 +88,23 @@ fn idle(manager: &mut Manager) {
 
 /// Exercise an enabled native node with its currently approved scene revision.
 fn click(manager: &mut Manager, panel: &str, node: &str) {
+    if panel == "history"
+        && matches!(
+            node,
+            "refresh"
+                | "all"
+                | "more"
+                | "repo-info"
+                | "stash-list"
+                | "fetch"
+                | "pull"
+                | "push"
+                | "cancel-process"
+        )
+    {
+        workbench::branch_menu::context_action(manager, node, None);
+        return;
+    }
     let revision = manager.live["git"].views[panel].revision;
     manager
         .event(

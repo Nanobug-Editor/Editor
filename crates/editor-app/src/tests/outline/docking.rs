@@ -21,18 +21,25 @@ fn panel_node(app: &Entity<EditorApp>, id: PanelId, visual: &mut VisualTestConte
     })
 }
 
-/// Bounds come from the project renderer after Base has reconciled and painted its real layout.
+/// Read stable painted bounds after Base has drained deferred split-size adjustment frames.
 fn bounds(visual: &mut VisualTestContext, node: NodeId, title: bool) -> Bounds<Pixels> {
-    visual.run_until_parked();
-    visual.update(|window, cx| window.draw(cx).clear(cx));
     let selector = format!(
         "local-dock-{}-{}",
         if title { "title" } else { "content" },
         node.as_u64()
     );
-    visual
-        .debug_bounds(Box::leak(selector.into_boxed_str()))
-        .unwrap()
+    let selector = Box::leak(selector.into_boxed_str());
+    let mut previous = None;
+    for _ in 0..20 {
+        visual.run_until_parked();
+        visual.update(|window, cx| window.draw(cx).clear(cx));
+        let current = visual.debug_bounds(selector).unwrap();
+        if previous == Some(current) {
+            return current;
+        }
+        previous = Some(current);
+    }
+    panic!("native split did not settle: {selector} {previous:?}");
 }
 
 /// Resolve the current leaf before borrowing the renderer context for its measured bounds.
@@ -46,26 +53,44 @@ fn panel_bounds(
     bounds(visual, node, title)
 }
 
-/// Use native title-bar gestures, live drop preview and mouse release; no layout method substitutes for the drag.
-fn drag(visual: &mut VisualTestContext, source: Bounds<Pixels>, destination: Point<Pixels>) {
+/// Resolve real titles and target bounds, then preview and release without programmatic layout edits.
+fn drag(
+    app: &Entity<EditorApp>,
+    source: PanelId,
+    target: PanelId,
+    edge: Placement,
+    visual: &mut VisualTestContext,
+) {
+    let source = panel_bounds(app, source, visual, true);
     visual.simulate_mouse_down(source.center(), MouseButton::Left, Default::default());
     visual.simulate_mouse_move(
         source.center() + point(px(12.), px(0.)),
         MouseButton::Left,
         Default::default(),
     );
+    let target = panel_bounds(app, target, visual, false);
+    let destination = match edge {
+        Placement::Left => point(target.left() + px(10.), target.center().y),
+        Placement::Right => point(target.right() - px(10.), target.center().y),
+        Placement::Top => point(target.center().x, target.top() + px(10.)),
+        Placement::Bottom => point(target.center().x, target.bottom() - px(10.)),
+    };
     visual.simulate_mouse_move(destination, MouseButton::Left, Default::default());
     visual.update(|window, cx| window.draw(cx).clear(cx));
     assert!(
-        visual.debug_bounds("local-dock-drop-indicator").is_some(),
-        "native drag must preview a split"
+        visual.debug_bounds("local-dock-drop-indicator").is_some()
+            && visual.debug_bounds("local-dock-floating-preview").is_some(),
+        "native drag uses a destination marker and compact floating title cards"
     );
+    assert!(visual.debug_bounds("local-dock-source-1").is_none());
+    assert!(visual.debug_bounds("local-dock-target-1").is_none());
     visual.simulate_mouse_up(destination, MouseButton::Left, Default::default());
     visual.run_until_parked();
     visual.update(|window, cx| window.draw(cx).clear(cx));
 }
 
 /// Coordinate comparisons test the rendered direction and ratio, not only serialized field equality.
+#[track_caller]
 fn close(actual: Pixels, expected: Pixels) {
     assert!(
         (actual - expected).abs() < px(2.),
@@ -73,7 +98,7 @@ fn close(actual: Pixels, expected: Pixels) {
     );
 }
 
-/// All four edge paths are actual Base center-tree splits; their bands enforce the confirmed stacking orientation.
+/// All four edges use Base's native trees; each resulting band enforces the confirmed stacking orientation.
 #[gpui::test]
 #[ignore = "build actual XML ZIP with the current public SDK first"]
 fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppContext) {
@@ -138,15 +163,12 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
         assert!(initial_outline.size.height > px(0.) && initial_explorer.size.height > px(0.));
         close(initial_outline.left(), initial_explorer.left());
         close(initial_outline.size.width, initial_explorer.size.width);
-        let target = panel_bounds(&app, editor, visual, false);
-        let destination = match placement {
-            Placement::Left => point(target.left() + px(10.), target.center().y),
-            Placement::Right => point(target.right() - px(10.), target.center().y),
-            Placement::Top => point(target.center().x, target.top() + px(10.)),
-            Placement::Bottom => point(target.center().x, target.bottom() - px(10.)),
-        };
-        let title = panel_bounds(&app, outline, visual, true);
-        drag(visual, title, destination);
+        if placement == Placement::Left {
+            // Free the source side through a real single-window move before relocating Outline.
+            // A child may not create another left region while Explorer still occupies that side.
+            drag(&app, explorer, editor, Placement::Top, visual);
+        }
+        drag(&app, outline, editor, placement, visual);
         let moved = panel_bounds(&app, outline, visual, false);
         let editor_bounds = panel_bounds(&app, editor, visual, false);
         match placement {
@@ -155,13 +177,26 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
             Placement::Top => assert!(moved.bottom() <= editor_bounds.top() + px(2.)),
             Placement::Bottom => assert!(moved.top() >= editor_bounds.bottom() - px(2.)),
         }
-        // Join Explorer to the new band via a perpendicular pointer edge; its stack must respect the band's axis.
-        let explorer_title = panel_bounds(&app, explorer, visual, true);
-        let join = point(moved.right() - px(10.), moved.bottom() - px(10.));
-        drag(visual, explorer_title, join);
+        // Only Outline moved. Join Explorer through the concrete window's permitted regional edge.
+        let retained_explorer = panel_bounds(&app, explorer, visual, false);
+        let vertical = matches!(placement, Placement::Left | Placement::Right);
+        if placement != Placement::Left {
+            close(retained_explorer.left(), initial_explorer.left());
+            close(retained_explorer.size.width, initial_explorer.size.width);
+        }
+        drag(
+            &app,
+            explorer,
+            outline,
+            if vertical {
+                Placement::Bottom
+            } else {
+                Placement::Right
+            },
+            visual,
+        );
         let outline_bounds = panel_bounds(&app, outline, visual, false);
         let explorer_bounds = panel_bounds(&app, explorer, visual, false);
-        let vertical = matches!(placement, Placement::Left | Placement::Right);
         if vertical {
             close(outline_bounds.left(), explorer_bounds.left());
             close(outline_bounds.size.width, explorer_bounds.size.width);
@@ -183,10 +218,22 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
         } else {
             point(explorer_bounds.left() - px(2.), outline_bounds.center().y)
         };
-        let delta = if vertical {
-            point(px(0.), px(45.))
+        // Actual-size placement can leave Explorer at Base's minimum. Shrink the pane that still
+        // has room instead of asking the divider to reduce a 100px pane below its constraint.
+        let explorer_extent = if vertical {
+            explorer_bounds.size.height + px(PANEL_HEADER_HEIGHT)
         } else {
-            point(px(45.), px(0.))
+            explorer_bounds.size.width
+        };
+        let shift = if explorer_extent >= gpui_base::PANEL_MIN_SIZE + px(45.) {
+            px(45.)
+        } else {
+            px(-45.)
+        };
+        let delta = if vertical {
+            point(px(0.), shift)
+        } else {
+            point(shift, px(0.))
         };
         visual.simulate_mouse_down(boundary, MouseButton::Left, Default::default());
         visual.simulate_mouse_move(
@@ -207,11 +254,15 @@ fn native_outline_four_directions_resize_and_workspace_restore(cx: &mut TestAppC
         };
         assert!(
             (extent(resized_outline) - extent(outline_bounds)).abs() > px(20.),
-            "real divider dragging must change the ratio"
+            "real divider dragging must change the ratio: placement={placement:?}, before=({outline_bounds:?}, {explorer_bounds:?}), after=({resized_outline:?}, {resized_explorer:?}), delta={delta:?}"
         );
-        close(
-            extent(resized_outline) + extent(resized_explorer),
-            extent(outline_bounds) + extent(explorer_bounds),
+        assert!(
+            (extent(resized_outline) + extent(resized_explorer)
+                - extent(outline_bounds)
+                - extent(explorer_bounds))
+            .abs()
+                < px(2.),
+            "divider must preserve its containing allocation: placement={placement:?}, before=({outline_bounds:?}, {explorer_bounds:?}), after=({resized_outline:?}, {resized_explorer:?}), delta={delta:?}"
         );
         visual.update(|window, cx| {
             app.read(cx).editor.clone().update(cx, |editor, cx| {

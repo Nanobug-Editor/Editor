@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use gpui_base::StyledExt as _;
-use gpui_kit::component::{IconName, IconNamed};
+use gpui_kit::assets::IconName;
 use gpui_kit::{
     App, Hsla, IntoElement, RenderOnce, SharedString, StyleRefinement, Styled, Svg, Transformation,
     Window, prelude::FluentBuilder as _, px, svg,

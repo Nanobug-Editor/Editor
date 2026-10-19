@@ -1,14 +1,14 @@
 //! Local Problems chrome composes Base activation, focus and scrolling with the editor's theme.
 use super::{Button, ButtonCustomVariant, Icon, StatusIcon};
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::input::{DiagnosticSeverity, Position};
 use gpui_base::{StyledExt as _, TestSupportExt as _, h_flex};
 use gpui_kit::{
     AnyElement, App, ClickEvent, Div, FocusHandle, InteractiveElement as _, IntoElement,
     ParentElement as _, ScrollHandle, Stateful, StatefulInteractiveElement as _, Styled as _,
     Window,
-    component::{ActiveTheme as _, IconName},
-    div, px,
 };
+use gpui_kit::{assets::IconName, div, px};
 use rust_i18n::t;
 
 /// Publish a named native heading and a Base hide button inside the shared draggable dock title.

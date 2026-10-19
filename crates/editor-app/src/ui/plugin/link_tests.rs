@@ -1,6 +1,8 @@
 //! Native Base link callbacks need a real press from the same portable scene before publication.
 use super::*;
-use gpui_kit::{TestAppContext, component::Root, gpui, point, px};
+use gpui_base::Root;
+use gpui_kit::TestAppContext;
+use gpui_kit::{gpui, point, px};
 use plugin_runtime::plugin_protocol::ui::Node;
 use std::cell::RefCell;
 

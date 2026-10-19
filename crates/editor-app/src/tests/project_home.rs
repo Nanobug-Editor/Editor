@@ -1,8 +1,9 @@
 //! Drive project selection through the same native window used by normal startup.
 
 use crate::{app::projects::ProjectWindow, theme::apply_theme, theme::builtin_theme, typography};
-use gpui_kit::VisualTestContext;
-use gpui_kit::{AppContext as _, Entity, TestAppContext, component::Root, gpui, px, size};
+use gpui_base::Root;
+use gpui_kit::{AppContext as _, Entity, TestAppContext, VisualTestContext};
+use gpui_kit::{gpui, px, size};
 
 #[path = "project_home/failures.rs"]
 mod failures;
@@ -27,6 +28,10 @@ mod concurrent_windows;
 // External requests exercise the same GPUI lifecycle and actual document targets.
 #[path = "project_windows/external.rs"]
 mod external_windows;
+
+#[cfg(windows)]
+#[path = "project_windows/geometry.rs"]
+mod geometry;
 
 /// Use the production window and platform picker in an isolated profile for each behavioral scenario.
 fn with_home(

@@ -1,7 +1,8 @@
 //! Native command contributions share live publication, target checks and deterministic grouping.
 use super::*;
+use crate::ui::controls::context_menu::PopupMenu as NativeMenu;
+use crate::ui::controls::context_menu::PopupMenuItem;
 use crate::ui::controls::menu::MenuStyle;
-use gpui_kit::component::menu::{PopupMenu as NativeMenu, PopupMenuItem};
 use protocol::{
     api::{self, DocumentVersion},
     commands::{Context as MenuContext, Location},
@@ -473,10 +474,10 @@ pub(crate) struct InvokeMenu {
 
 /// The foundational editor menu keeps its native behavior while command actions retain their target.
 pub(crate) fn append_editor(
-    mut menu: gpui_kit::component::native_menu::NativeMenu,
+    mut menu: crate::ui::controls::context_menu::NativeMenu,
     rows: Vec<Contribution>,
     target: Target,
-) -> gpui_kit::component::native_menu::NativeMenu {
+) -> crate::ui::controls::context_menu::NativeMenu {
     let mut group = None;
     for row in rows {
         if group.as_ref() != Some(&row.group) {

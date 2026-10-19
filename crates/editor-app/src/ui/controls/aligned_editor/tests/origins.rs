@@ -95,6 +95,7 @@ fn aligned_editor_common_glyph_origin_preserves_padding_headers_ime_and_last_row
             delegate,
             editor,
             projection: Some(frame),
+            horizontal: None,
             suppress_geometry: false,
         };
         handler.replace_and_mark_text_in_range(None, "拼😀", Some(1..3), window, cx);
@@ -116,6 +117,7 @@ fn aligned_editor_common_glyph_origin_preserves_padding_headers_ime_and_last_row
             delegate,
             editor,
             projection: Some(frame),
+            horizontal: None,
             suppress_geometry: false,
         };
         let marked = handler.marked_text_range(window, cx).unwrap();

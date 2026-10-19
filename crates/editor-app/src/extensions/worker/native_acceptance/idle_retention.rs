@@ -5,6 +5,9 @@ use gpui_kit::Role;
 use plugin_runtime::plugin_protocol::ui::Kind;
 use std::collections::BTreeMap;
 
+/// Two spans cross the slower production timer; a passing run must observe an actual background read.
+const IDLE_SPAN_SECS: u64 = 35;
+
 /// This narrower native workflow has its own receipt and cannot satisfy full workbench acceptance.
 #[test]
 #[ignore = "requires Windows desktop/D3D11, candidate/output and NANOBUG_GIT_NATIVE_IDLE_RETENTION"]
@@ -30,7 +33,7 @@ struct Retained {
     leaf_top: Pixels,
 }
 
-/// Expand both production trees, edit a native draft, then observe two independent eight-second idle spans.
+/// Keep the original native draft and menu through two idle spans crossing the production timer.
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
     h.activate(cx).await?;
     h.expand(h.main, "branches", h.case.label("本地", "Local"), cx)
@@ -43,7 +46,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     let focus = draft_with_selection(h, cx).await?;
     let retained = Retained { focus, leaf_top };
     h.capture(h.main, "idle-state-before.png", cx)?;
-    observe_idle(h, &retained, "draft-kept中文", None, cx).await?;
+    let field_observed = observe_idle(h, &retained, "draft-kept中文", None, cx).await?;
     h.capture(h.main, "idle-state-after.png", cx)?;
 
     // Replacing the originally selected first character proves its range survived idle.
@@ -79,7 +82,12 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         focus: menu_focus,
         leaf_top,
     };
-    observe_idle(h, &menu_retained, "Draft-kept中文", Some(&labels), cx).await?;
+    let menu_observed =
+        observe_idle(h, &menu_retained, "Draft-kept中文", Some(&labels), cx).await?;
+    ensure!(
+        field_observed || menu_observed,
+        "idle validation never crossed a real background Git observation"
+    );
     h.capture(h.main, "idle-menu-after.png", cx)?;
     h.main
         .update(cx, |_, window, cx| input::key(window, "escape", cx))?;
@@ -98,7 +106,8 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     h.record(
         "idle_review_state_complete",
         serde_json::json!({
-            "idle_spans": 2, "minimum_seconds_per_span": 8,
+            "idle_spans": 2, "minimum_seconds_per_span": IDLE_SPAN_SECS,
+            "observed_background_read": field_observed || menu_observed,
             "no_refresh_or_disclosure_replay": true,
             "draft_selection_edit": "Draft-kept中文",
             "menu_dismissed_once": true,
@@ -233,14 +242,14 @@ fn menu_labels(rows: &[ElementSnapshot]) -> Vec<String> {
     labels
 }
 
-/// Native frames and the real Worker run normally for eight seconds; this loop emits no input or refresh.
+/// Run native frames without input; return whether the real Worker ran a background Git process.
 async fn observe_idle(
     h: &Harness,
     retained: &Retained,
     draft: &str,
     menu: Option<&[String]>,
     cx: &mut AsyncApp,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     let expected_revisions = h
         .worker
         .state
@@ -260,8 +269,17 @@ async fn observe_idle(
     );
     let started = Instant::now();
     let mut frames = 0;
-    while started.elapsed() < Duration::from_secs(8) {
+    let mut observed_read = false;
+    while started.elapsed() < Duration::from_secs(IDLE_SPAN_SECS) {
         h.frame(h.main, cx).await?;
+        observed_read |= h
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .processes
+            .get("git")
+            .is_some_and(|count| *count > 0);
         h.main.update(cx, |_, window, cx| {
             assert_native_state(h, retained, draft, menu, &expected_revisions, window, cx)
         })??;
@@ -275,9 +293,11 @@ async fn observe_idle(
         },
         serde_json::json!({
             "elapsed_millis": started.elapsed().as_millis(), "native_frames": frames,
-            "minimum_seconds": 8, "input_or_refresh_during_span": false,
+            "minimum_seconds": IDLE_SPAN_SECS, "input_or_refresh_during_span": false,
+            "observed_background_read": observed_read,
         }),
-    )
+    )?;
+    Ok(observed_read)
 }
 
 /// User-visible continuity is checked on every paint, including temporary disabling during an unchanged check.

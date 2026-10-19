@@ -1,10 +1,10 @@
-//! Loads declarative language plugins into GPUI Kit's Tree-sitter registry.
+//! Loads selected plugin grammars into the local Tree-sitter registry.
 
+use crate::language::highlighter::GrammarConfig;
+use crate::language::highlighter::LanguageParserFactory;
+use crate::language::highlighter::LanguageRegistry;
 use anyhow::{Context as _, ensure};
-use gpui_kit::{
-    SharedString,
-    component::highlighter::{GrammarConfig, LanguageParserFactory, LanguageRegistry},
-};
+use gpui_kit::SharedString;
 use plugin_schema::Highlighter;
 #[cfg(test)]
 use plugin_schema::PluginManifest;
@@ -81,7 +81,7 @@ fn grammar_cache() -> anyhow::Result<Cache> {
 pub fn mask_language(language_id: &str) {
     let registry = LanguageRegistry::singleton();
     registry.register(language_id, &GrammarConfig::plain(language_id.to_owned()));
-    // GPUI Kit has no parser-factory removal API, so an inert factory masks the old WASM parser.
+    // An inert declaration immediately revokes the old plugin parser, including cached consumers.
     registry.register_parser_factory(
         language_id,
         Arc::new(|| Err(anyhow::anyhow!("language plugin is disabled"))),
@@ -262,8 +262,8 @@ fn load_language(
     if !injections.is_empty() {
         let injection_query = tree_sitter::Query::new(&language, &injections)
             .context("compile grammar injections")?;
-        // The upstream registry does not enforce its advertised injection allowlist. Restrict
-        // targets here before publication so queries cannot borrow a built-in native parser.
+        // Validate static targets before publication; the local parser enforces the same allowlist
+        // again when resolving each nested plugin grammar.
         ensure!(
             !injection_query
                 .capture_names()

@@ -4,8 +4,8 @@ use plugin_runtime::marketplace::{Listing, Release};
 mod actions;
 mod details;
 use super::*;
+use crate::ui::controls::scroll::ScrollableElement;
 use crate::ui::controls::{Checkbox, SegmentedTabs, tab_strip, vertical_viewport_scrollbar};
-use gpui_kit::component::scroll::ScrollableElement;
 
 /// Shared detail pages; unavailable data never becomes a stored selection.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -423,7 +423,13 @@ impl ExtensionPanel {
                             )),
                     ),
             )
-            .child(div().flex_1().overflow_y_scrollbar().child(list))
+            .child(
+                div()
+                    .id("plugin-management-scroll")
+                    .flex_1()
+                    .overflow_y_scrollbar()
+                    .child(list),
+            )
             .when(self.manager_market, |sidebar| {
                 sidebar.child(
                     Button::new("market-refresh")

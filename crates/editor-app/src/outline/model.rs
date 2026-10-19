@@ -176,7 +176,10 @@ impl EditorApp {
             .update(cx, |tree, cx| tree.set_items(rows, cx));
         self.outline.cursor = None;
         self.follow_outline_cursor(cx);
-        self.outline_panel.update(cx, |_, cx| cx.notify());
+        self.outline_panel.update(cx, |panel, cx| {
+            panel.set_visible(self.session_state.outline_visible);
+            cx.notify();
+        });
         cx.notify();
     }
 
@@ -255,13 +258,26 @@ impl EditorApp {
     pub(crate) fn toggle_outline(
         &mut self,
         _: &ToggleOutline,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.session_state.outline_visible = !self.session_state.outline_visible;
+        let id = gpui_base::dock::PanelId::from(self.outline_panel.entity_id());
+        self.session_state.outline_visible =
+            !self.session_state.outline_visible || self.dock_presentation.is_suppressed(id);
+        if self.session_state.outline_visible {
+            self.dock_presentation.activate(id);
+        }
         self.session_state.save();
-        self.dock_area.update(cx, |_, cx| cx.notify());
-        self.outline_panel.update(cx, |_, cx| cx.notify());
+        self.outline_panel.update(cx, |panel, cx| {
+            panel.set_visible(self.session_state.outline_visible);
+            cx.notify();
+        });
+        self.dock_area.update(cx, |area, cx| {
+            if self.session_state.outline_visible {
+                local_dock::reveal_panel(area, id, window, cx);
+            }
+            cx.notify();
+        });
         cx.notify();
     }
 }

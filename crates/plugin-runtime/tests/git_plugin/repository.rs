@@ -79,7 +79,11 @@ fn write_commit(root: &Path, name: &str, text: &str, title: &str) {
     git(root, &["commit", "-m", title]);
 }
 
-fn text(manager: &Manager, node: &str) -> String {
+/// Repository metadata is inspected on demand; other text belongs to the caller's open dialog.
+fn text(manager: &mut Manager, node: &str) -> String {
+    if matches!(node, "status" | "repo-fetch-time") {
+        return workbench::branch_menu::repository_text(manager, node);
+    }
     let scene = &manager.live["git"].views["history"];
     let ui::Kind::Text { text } = &scene.active_node(node).unwrap().kind else {
         panic!("expected native text {node}");
@@ -114,8 +118,7 @@ fn reactivate(manager: &mut Manager) {
 
 /// Advanced actions enter through the same declared native menu as an interactive user.
 fn advanced(manager: &mut Manager, action: &str) {
-    click(manager, "history", "advanced-open");
-    ui_action(manager, "advanced-menu", ui::Action::Select(action.into()));
+    workbench::branch_menu::context_action(manager, action, None);
 }
 
 fn stash_oids(root: &Path) -> Vec<String> {
@@ -219,7 +222,7 @@ fn git_package_stash_pop_conflict_retains_the_original_stash_and_real_unmerged_s
     git(root, &["add", "--", "tracked.txt"]);
     git(root, &["commit", "-m", "current side"]);
     let (_profile, mut manager) = activate(&package, root);
-    click(&mut manager, "history", "repo-stashes");
+    click(&mut manager, "history", "stash-list");
     assert!(preview(&manager).contains("stashed side"));
     click(&mut manager, "history", "repo-stash-pop");
     assert!(git(root, &["ls-files", "--unmerged"]).is_empty());
@@ -250,7 +253,7 @@ fn git_package_stash_pop_uses_the_previewed_oid_and_keeps_entries_after_a_select
     git(root, &["stash", "push", "-m", "original"]);
     let original = stash_oids(root)[0].clone();
     let (_profile, mut manager) = activate(&package, root);
-    click(&mut manager, "history", "repo-stashes");
+    click(&mut manager, "history", "stash-list");
     assert!(preview(&manager).contains("approved original"));
     click(&mut manager, "history", "repo-stash-pop");
     std::fs::write(root.join("tracked.txt"), "external newer stash\n").unwrap();
@@ -287,7 +290,7 @@ fn git_package_stash_drop_refuses_a_selector_that_changed_after_confirmation_pre
     std::fs::write(root.join("tracked.txt"), "original stash\n").unwrap();
     git(root, &["stash", "push", "-m", "original"]);
     let (_profile, mut manager) = activate(&package, root);
-    click(&mut manager, "history", "repo-stashes");
+    click(&mut manager, "history", "stash-list");
     click(&mut manager, "history", "repo-stash-drop");
     std::fs::write(root.join("tracked.txt"), "newer stash\n").unwrap();
     git(root, &["stash", "push", "-m", "newer"]);
@@ -317,7 +320,7 @@ fn git_package_pull_fast_forwards_a_non_origin_upstream_and_local_refresh_does_n
     git(&writer, &["push"]);
     let remote_head = git(&writer, &["rev-parse", "HEAD"]);
     let (_profile, mut manager) = activate(&package, &local);
-    assert!(text(&manager, "repo-fetch-time").contains("Not fetched yet"));
+    assert!(text(&mut manager, "repo-fetch-time").contains("Not fetched yet"));
     let before = git(&local, &["rev-parse", "HEAD"]);
     manager.invoke_command("git", "refresh", json!({})).unwrap();
     idle(&mut manager);
@@ -330,7 +333,7 @@ fn git_package_pull_fast_forwards_a_non_origin_upstream_and_local_refresh_does_n
         "remote update\n"
     );
     assert!(manager.live["git"].views["history"].dialog.is_none());
-    let fetched = text(&manager, "repo-fetch-time");
+    let fetched = text(&mut manager, "repo-fetch-time");
     assert!(fetched.contains("UTC") && !fetched.contains("Not fetched yet"));
     write_commit(
         &writer,
@@ -342,7 +345,7 @@ fn git_package_pull_fast_forwards_a_non_origin_upstream_and_local_refresh_does_n
     manager.invoke_command("git", "refresh", json!({})).unwrap();
     idle(&mut manager);
     assert_eq!(git(&local, &["rev-parse", "@{upstream}"]), remote_head);
-    assert_eq!(text(&manager, "repo-fetch-time"), fetched);
+    assert_eq!(text(&mut manager, "repo-fetch-time"), fetched);
     manager.disable("git").unwrap();
 }
 
@@ -371,12 +374,11 @@ fn git_package_force_lease_refuses_remote_advance_after_preview() {
     let local_head = git(&local, &["rev-parse", "HEAD"]).trim().to_owned();
     let local_index = git(&local, &["ls-files", "--stage"]);
     let (_profile, mut manager) = activate(&package, &local);
-    ui_action(
+    workbench::branch_menu::context_action(
         &mut manager,
-        "argument",
-        ui::Action::Change("upstream-name refs/heads/main".into()),
+        "push-lease",
+        Some("upstream-name refs/heads/main"),
     );
-    advanced(&mut manager, "push-lease");
     let scene = &manager.live["git"].views["history"];
     assert!(scene.active_node("confirm-command").is_some());
     let mut review = String::new();
@@ -430,7 +432,7 @@ fn git_package_force_lease_refuses_remote_advance_after_preview() {
         git(&remote, &["show", "refs/heads/main:external.txt"]),
         "external writer owns this\n"
     );
-    let diagnostic = text(&manager, "status").to_lowercase();
+    let diagnostic = text(&mut manager, "status").to_lowercase();
     assert!(
         diagnostic.contains("stale info") || diagnostic.contains("rejected"),
         "real Git rejection must remain visible: {diagnostic}"
@@ -477,9 +479,9 @@ fn git_package_pull_asks_on_divergence_and_recovers_the_remembered_choice_on_rea
     reactivate(&mut manager);
     // Repository details remain reachable without consuming the history's permanent row space.
     click(&mut manager, "history", "repo-info");
-    assert!(text(&manager, "repo-policy").contains("Remembered: merge"));
+    assert!(text(&mut manager, "repo-policy").contains("Remembered: merge"));
     click(&mut manager, "history", "repo-close");
-    assert!(text(&manager, "repo-fetch-time").contains("UTC"));
+    assert!(text(&mut manager, "repo-fetch-time").contains("UTC"));
     write_commit(
         &writer,
         "remote2.txt",
@@ -532,14 +534,14 @@ fn git_package_discovers_linked_worktrees_and_rejects_projects_below_the_reposit
     );
     let (_profile, mut manager) = activate(&package, &linked);
     click(&mut manager, "history", "repo-info");
-    assert!(text(&manager, "repo-identity").contains("linked worktree"));
+    assert!(text(&mut manager, "repo-identity").contains("linked worktree"));
     click(&mut manager, "history", "repo-close");
     manager.disable("git").unwrap();
     let nested = root.join("nested");
     std::fs::create_dir(&nested).unwrap();
     std::fs::write(nested.join("new.txt"), "must stay untracked\n").unwrap();
     let (_profile, mut manager) = activate(&package, &nested);
-    assert!(text(&manager, "status").contains("repository root"));
+    assert!(text(&mut manager, "status").contains("repository root"));
     manager
         .invoke_command("git", "stage", json!({"path":"nested/new.txt"}))
         .unwrap();

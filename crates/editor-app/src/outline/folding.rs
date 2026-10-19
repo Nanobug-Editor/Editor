@@ -1,7 +1,8 @@
 //! One native highlighter adapter arbitrates structure and grammar folds, avoiding asynchronous candidate overwrites.
+use crate::language::highlighter::SyntaxHighlighter;
 use crate::*;
 use gpui_base::input::{FoldRange, HighlightStyleResolver, InputEdit, InputHighlighter, Rope};
-use gpui_kit::{SharedString, component::highlighter::SyntaxHighlighter};
+use gpui_kit::SharedString;
 use std::{cell::RefCell, ops::Range};
 
 /// Some candidates means structure owns folds (including an empty pending result); None restores grammar folds.

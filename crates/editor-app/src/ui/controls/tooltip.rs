@@ -1,7 +1,7 @@
 //! Tooltip surface styled by the editor while gpui-base places it.
 
+use crate::ui::theme::ActiveTheme as _;
 use gpui_base::Tooltip as BaseTooltip;
-use gpui_kit::component::ActiveTheme as _;
 use gpui_kit::{
     AnyView, App, AppContext as _, Context, IntoElement, ParentElement, Render, SharedString,
     Styled, Window, div, px,

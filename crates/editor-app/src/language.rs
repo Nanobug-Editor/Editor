@@ -4,6 +4,7 @@ pub(crate) mod code_highlighting;
 pub(crate) mod completion;
 pub(crate) mod diagnostics;
 pub(crate) mod features;
+pub(crate) mod highlighter;
 pub(crate) mod hover;
 pub(crate) mod navigation;
 pub mod plugins;

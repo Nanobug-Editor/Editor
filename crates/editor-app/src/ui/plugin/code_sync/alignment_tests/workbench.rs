@@ -368,7 +368,7 @@ fn native_code_alignment_independent_workbench_stops_painting_with_a_main_sessio
     let view = mounted.view.clone();
     let paint_count = paints.clone();
     let handle = main.update(|_, cx| {
-        let mut options = gpui_kit::component::TitleBar::window_options();
+        let mut options = crate::ui::controls::window::TitleBar::window_options();
         options.window_background = crate::theme::window_background(cx);
         options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
             None,

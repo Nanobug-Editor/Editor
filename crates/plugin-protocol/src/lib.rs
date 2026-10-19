@@ -204,6 +204,19 @@ pub struct Panel {
     /// Used only when this panel has no saved visibility preference yet.
     #[serde(default = "panel_visible_by_default")]
     pub default_visible: bool,
+    /// Occupy the entire current side/bottom region when revealed, temporarily replacing peers.
+    /// Closing restores their saved layout and visibility. Defaults to false; requires
+    /// `ui.panels >=1.2, <2` and position `left`, `right` or `bottom`, never `editor`/`window`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exclusive: bool,
+    /// Whether a non-editor panel has an entry in the native window-control group (default true).
+    /// False requires `ui.panels >=1.1` and only hides the entry; SetPanelVisibility and saved
+    /// visibility remain independent, so a plugin can open contextual work windows itself.
+    #[serde(
+        default = "panel_visible_by_default",
+        skip_serializing_if = "panel_control_is_default"
+    )]
+    pub show_in_window_controls: bool,
     /// Optional status-bar position among plugin panels; lower values appear first.
     #[serde(default)]
     pub status_order: Option<i32>,
@@ -215,9 +228,13 @@ pub struct Panel {
     pub icon_dark: Option<String>,
 }
 
-/// Existing manifests continue to open their panels unless they opt out.
+/// Omitted visibility and window-control choices retain existing manifest behavior.
 fn panel_visible_by_default() -> bool {
     true
+}
+/// Omit the unchanged default so rebuilding an existing package does not add a newer schema field.
+fn panel_control_is_default(value: &bool) -> bool {
+    *value
 }
 /// Menu and shortcut invocations remain commands; domain footer buttons use `ui::Document::tools`.
 #[derive(Clone, Debug, Serialize, Deserialize)]

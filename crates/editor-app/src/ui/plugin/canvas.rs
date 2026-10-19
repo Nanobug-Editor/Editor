@@ -64,7 +64,7 @@ impl PluginView {
             "canvas_focus": format!("{:?}", canvas.focus),
             "composition_empty": canvas.composition.is_empty(),
             "gesture_current": self.action_gesture_current(id, canvas.action_gesture),
-            "source_gesture": canvas.action_gesture.is_some(),
+            "source_gesture": canvas.action_gesture.is_some_and(action_gestures::ActionGesture::is_source),
             "bounds": format!("{:?}", canvas.bounds),
             "scroll_offset": canvas.drawing.scroll.as_ref().map(|scroll| scroll.offset),
         }))
