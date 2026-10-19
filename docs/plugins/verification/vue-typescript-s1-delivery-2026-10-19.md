@@ -2,7 +2,7 @@
 
 日期：2026-10-19（Asia/Shanghai）。范围仅 [#121 / S1](../tickets/vue-typescript/scenarios/01-real-projects.md)；#122–#126 继续暂停，旧 #108–#118 与父 #107 不变，不创建 Release。
 
-当前状态：S1 在正式基线上的门禁、真实包联验、相关原生交互及双轴审查均通过；三个仓库均已完成普通提交和推送，远端 main SHA 已核对。#121 通过默认分支交付记录提交的关闭关键字处理，关闭状态尚待实际读回。此前行为测试、失败历史、候选身份及完整命令见[恢复记录](vue-typescript-s1-resume-2026-10-19.md)。
+当前状态：**#121 已完成并关闭。** S1 在正式基线上的门禁、真实包联验、相关原生交互及双轴审查均通过；三个仓库均已普通提交、推送并核对远端 main。GitHub 实际读回 `closed / completed`，关闭时间为 `2026-10-19T13:07:07Z`（本机 21:07:07）。此前行为测试、失败历史、候选身份及完整命令见[恢复记录](vue-typescript-s1-resume-2026-10-19.md)。
 
 ## 正式提交边界
 
@@ -67,4 +67,6 @@ S1 的协议、runtime、语言控制与测试源码均与先前已通过的 ove
 
 三个仓库的验收、审查、普通提交与源码推送核对均已完成，用户原有关闭授权继续有效。GitHub 连接器的 issue PATCH 实际返回 403（`Resource not accessible by integration`）；后续读取 Git 凭据以调用 REST 的命令被自动审批拒绝，仅返回 `blocked by policy`，命令没有执行、没有取得或输出凭据。浏览器界面操作又因工具无法可靠确定当前 URL 而停止，已停止所有界面输入。
 
-改用 GitHub 正式支持的提交关闭关键字：本轮仅文档交付提交引用 `Closes #121`，普通推送默认 main 后读回结果。该机制见[GitHub 官方说明](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)；不新增凭据、权限或 PR，不将推送尝试当作关闭成功。远端 issue 正文的勾选未成功写入；已验收八项 AC 的本地工单与本记录保留准确结果。
+改用 GitHub 正式支持的提交关闭关键字：文档交付提交 [9e6ed7c](https://github.com/Nanobug-Editor/Editor/commit/9e6ed7c8e2135c0feeaa664669536c80dfc02bdb) 引用 `Closes #121`，普通推送默认 main，先核对远端 SHA，再经连接器实际读回本单 `closed / completed` 与上述关闭时间。该机制见[GitHub 官方说明](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)；没有新增凭据、权限或 PR。远端 issue 正文的勾选未成功写入；已验收八项 AC 的本地工单与本记录保留准确结果。
+
+本次完成只包括 #121。#122–#126 继续暂停，旧工单和父设计议题没有推进或关闭；没有创建 Release。主工作区既有 Excalidraw 改动保持原摘要，旧 worktree、冻结包与失败证据继续保留。最后的关闭回执和索引更新仅修改文档，不改变已验收实现；检查本地链接、JSON 与差异空白，不重复无关 Rust 构建。

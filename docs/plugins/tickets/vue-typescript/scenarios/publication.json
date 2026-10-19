@@ -24,11 +24,14 @@
         111,
         112
       ],
-      "state": "open",
+      "state": "closed",
       "number": 121,
       "id": 5866281003,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/121",
-      "blocked_by": []
+      "blocked_by": [],
+      "closed_at": "2026-10-19T13:07:07Z",
+      "implementation_commit": "8e3104a2b62470d2d02f9b7d3d2343a844e8f2f8",
+      "delivery_commit": "9e6ed7c8e2135c0feeaa664669536c80dfc02bdb"
     },
     {
       "local": 2,

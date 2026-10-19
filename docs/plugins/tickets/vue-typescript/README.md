@@ -1,8 +1,8 @@
 # Vue 与 TypeScript 实施工单
 
-> **2026-10-19 当前执行范围：仅恢复新工单 [#121 / S1](scenarios/01-real-projects.md)。#122–#126 继续暂停；旧 #108–#118 只作历史记录，不执行、不改写、不关闭。** 本轮状态、基线与未验证项见[恢复记录](../../verification/vue-typescript-s1-resume-2026-10-19.md)。
+> **2026-10-19 当前状态：新工单 [#121 / S1](scenarios/01-real-projects.md) 已验收、完成三仓推送并读回关闭。#122–#126 继续暂停；旧 #108–#118 只作历史记录，不执行、不改写、不关闭。** 本轮状态与完整证据见[交付记录](../../verification/vue-typescript-s1-delivery-2026-10-19.md)及[恢复过程](../../verification/vue-typescript-s1-resume-2026-10-19.md)。
 >
-> 下方保留 2026-10-15 原索引及进度；其“连续实施”“可准备独立实现”和暂停阶段均是当时状态，不能覆盖上述本轮范围。六场景正文及 publication 映射原样保留，验收要求没有删减。
+> 下方保留 2026-10-15 原索引及进度；其“连续实施”“可准备独立实现”和暂停阶段均是当时状态，不能覆盖上述本轮范围。仅 S1 的场景状态、验收勾选和 publication 映射按实际交付更新；其他场景保持暂停，验收要求没有删减。
 
 ## 2026-10-15 保存的历史索引
 
@@ -14,7 +14,7 @@
 
 | 场景 | 正式工单 | 必要阻塞 | 当前状态 |
 | --- | --- | --- | --- |
-| S1 | [安装真实插件并打开混合项目](scenarios/01-real-projects.md)（[#121](https://github.com/Nanobug-Editor/Editor/issues/121)） | 无 | 暂停；定向验证未完成 |
+| S1 | [安装真实插件并打开混合项目](scenarios/01-real-projects.md)（[#121](https://github.com/Nanobug-Editor/Editor/issues/121)） | 无 | 已完成；三仓推送及关闭已核对，见[记录](../../verification/vue-typescript-s1-delivery-2026-10-19.md) |
 | S2 | [在混合项目中编辑、补全和跨文件重构](scenarios/02-edit-and-refactor.md)（[#122](https://github.com/Nanobug-Editor/Editor/issues/122)） | #121 | 暂停；定向验证与依赖验收未完成 |
 | S3 | [使用首批 Vue 写法、SFC 高亮和块格式化](scenarios/03-sfc-language.md)（[#123](https://github.com/Nanobug-Editor/Editor/issues/123)） | #121 | 暂停；定向验证与依赖验收未完成 |
 | S4 | [安装专门生态插件参与 Vue 分析](scenarios/04-ecosystem.md)（[#124](https://github.com/Nanobug-Editor/Editor/issues/124)） | #121 | 暂停；实际包联验未完成 |
