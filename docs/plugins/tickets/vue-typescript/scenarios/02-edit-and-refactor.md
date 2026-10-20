@@ -1,6 +1,6 @@
 # Vue/TS S2：在混合项目中编辑、补全和跨文件重构
 
-状态：技术验收完成；[#122](https://github.com/Nanobug-Editor/Editor/issues/122) 的提交、推送和关闭以[交付回执](../../../verification/vue-typescript-remaining-delivery-2026-10-20.md)为准，当前尚未关闭。
+状态：已完成；[#122](https://github.com/Nanobug-Editor/Editor/issues/122) 已于 2026-10-20 读回 completed。三仓普通提交／main 推送均已核对，见[交付回执](../../../verification/vue-typescript-remaining-delivery-2026-10-20.md)。
 
 逐条实际证据见[覆盖映射](../../../verification/vue-typescript-remaining-coverage-2026-10-19.md)；旧工单及父议题保持原状。
 

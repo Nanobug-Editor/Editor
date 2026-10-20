@@ -1,6 +1,6 @@
 # Vue / TypeScript 剩余场景交付
 
-日期：2026-10-20，Asia/Shanghai。新 #122–#126 的实现、实际包、Windows 交互与技术验收已完成；普通提交、推送及 issue 状态读回尚待本页末尾的实际回执。#121 既有交付保留，旧 #108–#118 和父 #107 不执行、不改写、不关闭；不创建 Release。
+日期：2026-10-20，Asia/Shanghai。**新 #122–#126 已完成实现、验收、普通提交、推送与 completed 关闭读回；连同既有 #121，六场景 6/6 交付完成。** 旧 #108–#118 和父 #107 不执行、不改写、不关闭；未创建 Release。实际回执见本页末节。
 
 完整过程和旧失败分别保存在[实施记录](vue-typescript-remaining-2026-10-19.md)、[暂停检查点](vue-typescript-paused-2026-10-20-0508.md)及[恢复记录](vue-typescript-resumed-2026-10-20.md)。逐条对应关系见[覆盖映射](vue-typescript-remaining-coverage-2026-10-19.md)，独立结论见[双轴审查](vue-typescript-remaining-review-2026-10-20.md)，实际输入和可见结果见[普通桌面记录](vue-typescript-desktop-2026-10-20.md)。历史时点的 pending、失败和暂停描述不覆盖本页最终证据。
 
@@ -77,14 +77,24 @@ Standards 与 Spec 对实现、发现修复、缓存／颜色／键盘增量以�
 
 固定比较点：Editor `fc9dc531ef991315d73e21c8a092f12a0f1ff78b`、TypeScript `873e8c3d3ebe3a86a8bb1e028a3c4bcd1c557b94`、Vue `f8e5880bf89161f16723ae7be1c76458d50a676c`。普通提交只纳入本任务变更；用户主工作区没有用于暂存或提交。
 
-19:02 两个独立插件普通提交后，已依次实际 `git push origin HEAD:main` 成功，并用 `git ls-remote --heads origin main` 核对下表完整 SHA；两仓工作区均干净。宿主和 issue 回执仍待实际完成，不提前勾选 S6-AC7。
+19:02 两个独立插件、19:06 宿主分别普通提交后，已依次实际 `git push origin HEAD:main` 成功，并用 `git ls-remote --heads origin main` 核对下表完整 SHA。三个实现工作树均干净；之后仅追加本轮真实交付文档，不改实现与验收产物。用户主工作区仍保留原改动，不作 checkout、合并或暂存。
 
 | 仓库 | 普通提交 | 已读回 origin/main |
 | --- | --- | --- |
 | TypeScript | `2bc5be0301fc485d3b684641104e4dd596d3456e` | 同一 SHA，已核对 |
 | Vue | `173c265e4c19298ca2fdb86b849ae90b6e3e4043` | 同一 SHA，已核对 |
-| Editor | 待本轮普通提交 | 待推送核对 |
+| Editor | `d80c5708d7ce5e016e5e1a30e40c4b5c0b77b813` | 同一 SHA，已核对；后续仅文档回执提交不改变实现 |
 
-最终提交范围 Standards 及交付文档 Spec / Standards 均 **0 项未解决发现**；原索引状态 P2、两处模块注释项保留发现并记录修复。报告分别为 `target/s6-final-git-scope-standards-review.md`（SHA `4b4143cee8981fe763e0ac1d9edfb1360049f1b293ba6eefdbCDD67f285880f6`）、`s6-final-delivery-docs-spec-review.md`（`2a6a33835dfccb62385671295af3062784fa0ce185c8461db85215c347e37253`）、`s6-final-delivery-docs-standards-review.md`（`2d1a81ef08f985197fbb2dfab98be334327ccacef1ce4f335f6e31eb57c4045c`）。注释独立补录 JSON SHA `6c00b0e26da950a03afd97373858d1cf4353e30d1ebcc7901c6ac1cbb0cae5f5`。此后只追加真实 Git 状态，不用审查预先认证未来推送。
+最终提交范围 Standards 及交付文档 Spec / Standards 均 **0 项未解决发现**；原索引状态 P2、两处模块注释项保留发现并记录修复。报告分别为 `target/s6-final-git-scope-standards-review.md`（SHA `4b4143cee8981fe763e0ac1d9edfb1360049f1b293ba6eefdbcdd67f285880f6`）、`s6-final-delivery-docs-spec-review.md`（`2a6a33835dfccb62385671295af3062784fa0ce185c8461db85215c347e37253`）、`s6-final-delivery-docs-standards-review.md`（`2d1a81ef08f985197fbb2dfab98be334327ccacef1ce4f335f6e31eb57c4045c`）。注释独立补录 JSON SHA `6c00b0e26da950a03afd97373858d1cf4353e30d1ebcc7901c6ac1cbb0cae5f5`。此后只追加真实 Git 状态，不用审查预先认证未来推送。
 
-推送前已实际读回 #122–#126 为 open、#121 为此前 closed；旧 #108–#118 和父 #107 均为 open，正文与状态保存为对照。后续先核对宿主远程 SHA，再读回新工单；#121 沿用其[已交付证据](vue-typescript-s1-delivery-2026-10-19.md)，旧工单与父议题保持原状。
+推送前已实际读回 #122–#126 为 open、#121 为此前 closed；旧 #108–#118 和父 #107 均为 open，正文与状态保存为对照。宿主实现提交只包含 `Closes #122` 至 `Closes #126`；远端 SHA 核对后，再通过 GitHub 连接器实际读回以下 completed 终态：
+
+| 新工单 | 场景／实现关系 | 实际 closed_at（UTC） |
+| --- | --- | --- |
+| [#122](https://github.com/Nanobug-Editor/Editor/issues/122) | S2，三仓上述实现提交与覆盖映射 | 2026-10-20 11:06:53 |
+| [#123](https://github.com/Nanobug-Editor/Editor/issues/123) | S3，同上 | 2026-10-20 11:06:56 |
+| [#124](https://github.com/Nanobug-Editor/Editor/issues/124) | S4，同上 | 2026-10-20 11:06:58 |
+| [#125](https://github.com/Nanobug-Editor/Editor/issues/125) | S5，同上 | 2026-10-20 11:06:59 |
+| [#126](https://github.com/Nanobug-Editor/Editor/issues/126) | S6，同上；本次实际交付闭合 S6-AC7 | 2026-10-20 11:07:01 |
+
+实际收据 `target/s6-final-git-delivery-receipt.json` 于 **11:08:04 UTC** 保存。新五工单正文没有改写；#121、父 #107 与旧 #108–#118 共 13 项对照的 **state、updated_at 和 body 完全不变**。#121 沿用其[已交付证据](vue-typescript-s1-delivery-2026-10-19.md)；没有以关闭父设计议题推进任务，没有创建 Release、强推、重写历史或清空用户数据。

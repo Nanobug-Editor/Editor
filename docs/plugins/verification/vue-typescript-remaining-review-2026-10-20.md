@@ -156,3 +156,9 @@ Worker 普通错误归属回归仍等待旧英文文案；相同来源在取消�
 最后提交范围审查补充两处注释门禁项：H `editor/language_edits/completion.rs`、T `src/selection.rs` 新增的内联测试模块缺模块说明。现仅各加 `//!` 与空行；H fmt、T selection rustfmt 及 diff 检查通过，不改逻辑或重跑语义。最终归档与 checkout 全等结论限定打包核验时点；T 当前 selection.rs 比冻结源多这一测试说明，原冻结源与包未变，见 `target/s6-final-comment-only-postlude.{json,md}`。范围和最终文档审查将发现及解决分别保存在 `target/s6-final-git-scope-standards-review.md`、`target/s6-final-delivery-docs-spec-review.md`，不隐去修复前发现。
 
 最后独立读回结论：范围 Standards **0 未解决项**；交付文档 Spec / Standards **各 0 未解决项**。索引过期状态 P2 已修，35 条 AC 原正文不变、34 条技术要求勾选而 S6-AC7 仍待实际 Git 回执。报告及 SHA 分别为 `s6-final-git-scope-standards-review.md` / `4b4143cee8981fe763e0ac1d9edfb1360049f1b293ba6eefdbcdd67f285880f6`，`s6-final-delivery-docs-spec-review.md` / `2a6a33835dfccb62385671295af3062784fa0ce185c8461db85215c347e37253`，`s6-final-delivery-docs-standards-review.md` / `2d1a81ef08f985197fbb2dfab98be334327ccacef1ce4f335f6e31eb57c4045c`，均在 H/target。两位分别核对 266 / 326 个相对本地链接有效，计数按各自审查范围保留，不相加。此后的真实 Git 回执独立追加，不冒称已被静态审查预先认证。
+
+## 实际 Git 交付读回（19:08）
+
+上述“34 条／S6-AC7 待回执”为提交前审查时点。此后 TypeScript `2bc5be0301fc485d3b684641104e4dd596d3456e`、Vue `173c265e4c19298ca2fdb86b849ae90b6e3e4043`、Editor `d80c5708d7ce5e016e5e1a30e40c4b5c0b77b813` 均普通提交并依次 push main 成功，逐仓 ls-remote 完整 SHA 相同。再通过 GitHub 实际读回新 #122–#126 均 closed/completed，关闭时点 11:06:53–11:07:01 UTC，S6-AC7 据此闭合，现 35/35；没有提前勾选未来状态。
+
+父 #107、旧 #108–#118 以及 #121 共 13 项对照的正文、状态和 updated_at 完全不变。收据 `target/s6-final-git-delivery-receipt.json` 记录于 11:08:04 UTC，详见[交付记录](vue-typescript-remaining-delivery-2026-10-20.md)。本次随后只提交文档回执；没有改变实现、冻结源码、ZIP 或声明其他平台／未来版本已经支持。未发布 Release。

@@ -1,21 +1,21 @@
 # Vue / TypeScript 剩余场景覆盖映射
 
-> **2026-10-20恢复更新：** 用户已恢复新#122–#126，详见[恢复记录](vue-typescript-resumed-2026-10-20.md)及[普通桌面记录](vue-typescript-desktop-2026-10-20.md)。S4整项280.28s、S5 outer164.27s、普通七项操作/独立整组Undo/真实OS中文IME/滚动字号/TS自动导入/B选择、配色及同符号Escape→Ctrl+I均已实证。最终normal与三门禁/SDK通过，T4/V5精确范围supported功能元数据完成独立双轴0项发现。E78–E82进一步闭合最终精确双包静态资源、实际mixed pair 1/0/0（97.62s）、public policy 1/0/0（179.74s）、版本策略5/0/0；当前行为和技术门禁收口，尚待三仓commit/push/远端与新issue回执，不提前称全部工单交付。旧RED/partial及既有AccessKit窗口退役abort限制保留，不声称普通退出exit0。
+> **2026-10-20最终交付已读回：** 新#122–#126实现、技术验收、三仓普通提交/推送及GitHub completed关闭均完成，实际回执记录于11:08:04 UTC，见E84及[交付记录](vue-typescript-remaining-delivery-2026-10-20.md)。实现源固定H `d80c5708d7ce5e016e5e1a30e40c4b5c0b77b813`、T `2bc5be0301fc485d3b684641104e4dd596d3456e`、V `173c265e4c19298ca2fdb86b849ae90b6e3e4043`；后续H仅文档回执提交另按实际记账，不预测其SHA。E78–E82最终包/运行/策略和独立审查、E83后置测试注释边界均已收口；#121、父#107及旧#108–#118共13控制项前后不变，无Release。范围仍限精确三版本/平台/依赖组合，旧RED/partial、历史/未来待适配及既有AccessKit退出abort限制保留，不声称普通退出exit0。
 
 > **05:08 历史暂停保留：** [暂停检查点](vue-typescript-paused-2026-10-20-0508.md)保存了当时附加 ignored 入口仍 FAIL 129.11s、尚未打包及尚未交付的状态。恢复后的结果追加记证，不删除旧失败，也不将旧输入、静态审查或文件名 green 改称行为通过。
 
-**最新读回：2026-10-20恢复批次（Asia/Shanghai，终态截至E82）。** E01–E77证据行及旧FAIL逐行保留；新增E78–E82与末尾35AC/V表及剩余清单为当前盘点。普通桌面结果来自根代理实际操作和记录，维护者只读文件/日志/收据、本轮只改本文，不运行Cargo/Node/UI。B1/B2/B4及B3最终归档/策略、B5独立审查等技术门槛均已闭合；首轮旧待验按历史保留，以末表为准。新#122–#126的Git交付及issue回执仍待实际完成，旧#108–#118和父#107不变，不创建Release。
+**最新读回：2026-10-20最终交付批次（Asia/Shanghai，终态截至E84）。** E01–E82证据行和旧FAIL逐字保留，E83/E84后置补充注释/审查及实际Git/issue终态；35AC/V表与收口清单反映当前交付。普通桌面结果来自根代理实际操作，Git/issue来自已落盘真实回执；维护者本轮只读这些文件、只改本文，不运行Cargo/Node/UI、不提交或推送。B1–B5及S6-AC7均已按实际证据闭合；首轮旧待验仍是历史，新#122–#126已交付，#121、旧#108–#118和父#107保持原状，不创建Release。
 
-日期：2026-10-19，Asia/Shanghai。**本表是只读源码、已落盘日志及包输入的覆盖盘点，不是验收完成声明。** 主体观察截止到本机 23:40；23:45 另读回新增 E20。后续编译和运行中的任务不得由本表推定结果。盘点者没有运行 Cargo、Node 或原生窗口；没有修改既有验收记录。
+首轮历史说明（2026-10-19，Asia/Shanghai）：**当时本表是只读源码、已落盘日志及包输入的覆盖盘点，不是验收完成声明。** 首轮主体观察截止本机23:40，23:45另读回E20；当时后续编译和运行不得由首轮盘点推定。此历史说明不覆盖上述E84实际交付终态，盘点者始终未运行Cargo、Node或原生窗口。
 
 依据为 [S2](../tickets/vue-typescript/scenarios/02-edit-and-refactor.md)、[S3](../tickets/vue-typescript/scenarios/03-sfc-language.md)、[S4](../tickets/vue-typescript/scenarios/04-ecosystem.md)、[S5](../tickets/vue-typescript/scenarios/05-recovery.md)、[S6](../tickets/vue-typescript/scenarios/06-joint-delivery.md)，以及[规格第 7–13 节及 V01–V14](../specs/vue-multi-backend.md)。当前实施另见[剩余场景记录](vue-typescript-remaining-2026-10-19.md)。#121 已交付；只推进新 #122–#126，旧 #108–#118 和父 #107 不变，不创建 Release。
 
 ## 固定身份和记法
 
-本节P0/P1/P2保留10-19首轮输入身份；后续P3/P4和E53–E82各按实际包/程序记证。37fd普通语言/编辑、7ce52d卡片测试、43c1inline测试、a45普通深浅配色、beed键盘/最终pair和1cae普通键盘复验分别记录；E60候选与E79最终pair恰同97.62s但归档、程序和日志独立，不互相套用身份。
+本节P0/P1/P2保留10-19首轮输入身份；后续P3/P4和E53–E84各按实际包/程序/提交记证。37fd普通语言/编辑、7ce52d卡片测试、43c1inline测试、a45普通深浅配色、beed键盘/最终pair和1cae普通键盘复验分别记录；E60候选与E79最终pair恰同97.62s但归档、程序和日志独立。最终实现提交为E84三仓SHA；E83明确最后测试注释不在此前冻结产物中，不把后续文档提交当实现源。
 
-- 宿主根为 `C:/Users/Tmiracle/.codex/worktrees/vue-typescript-s1/Editor`，分支 `codex/vue-typescript-remaining`，HEAD `fc9dc531ef991315d73e21c8a092f12a0f1ff78b` 加本轮未提交源码；不是该 HEAD 本身的已提交实现。下文 `target/...` 均相对这个根。
-- `TS/` 为 `C:/Projects/RustProjects/TypeScript-for-Nanobug`，HEAD `873e8c3d3ebe3a86a8bb1e028a3c4bcd1c557b94` 加未提交候选；`Vue/` 为 `C:/Projects/RustProjects/Vue-for-Nanobug`，HEAD `f8e5880bf89161f16723ae7be1c76458d50a676c` 加未提交候选。
+- 宿主根为 `C:/Users/Tmiracle/.codex/worktrees/vue-typescript-s1/Editor`，分支 `codex/vue-typescript-remaining`；首轮HEAD为 `fc9dc531ef991315d73e21c8a092f12a0f1ff78b` 加当时未提交源码，该固定比较点不冒充本轮实现。下文 `target/...` 均相对这个根；最终实现提交见E84。
+- `TS/` 为 `C:/Projects/RustProjects/TypeScript-for-Nanobug`，首轮HEAD `873e8c3d3ebe3a86a8bb1e028a3c4bcd1c557b94` 加当时未提交候选；`Vue/` 为 `C:/Projects/RustProjects/Vue-for-Nanobug`，首轮HEAD `f8e5880bf89161f16723ae7be1c76458d50a676c` 加当时未提交候选。最终提交及推送核对见E84，不改旧比较点。
 - **P0**：已发布 S1 的实际 TypeScript `.10` / Vue `.10` 包；SHA-256 分别为 `fbc363cb36e67f5583449628b428ed77f2dbcb0fe9afe759ae0c18b15743cff5` / `59cc1e3ae71c5e0897df096eeec88269ff8f5a6433af0e1448c931dcc8f39ee4`。本轮已有宿主回归仍使用这些包；不能把新宿主的通过写成 `.11` 包通过。
 - **P1**：两个独立仓当前 `.11` 源码。TS 曾封印 16 个 native 文件到服务 ZIP `1d89ed0c86f7e9b98b0bca55441e1b80db5c0b8b8029200da46a1620796770ad`；后续恢复修复必须重新比较并封印。Vue 当前模块 legacy `f021e8dd903fc37d956451c6faf7392847eba45a57a49529436b0ea44bc10c1e`、modern `a468cf03e3da4b77f326884661e847d63a0ff16f59491dffa0e7342ad738644b`。截止时没有找到最终 `.11` ZIP；工具层通过不等于 WASM/Package/宿主通过。
 - **P2**：独立 ecosystem `.1` / 同 ID without-style `.2` 夹具，由公开 CLI、旧 SDK `9187f5a734591977dc2f6bce15402d3bae6a99a26d63eebd41dcc2d1ba4a38b1` 构建；详情在 `target/s4-ecosystem-packages-9187.json`。combined `.1` SHA `ecf9fd0db42295a19532dc1c441c34516ea18227fd41836e35a8e1e134106499`。修正重复贡献 ID 后的 bad-mapping 包另在 `target/s4-ecosystem-invalid-mapping-unique/`，SHA `a023e4f9c91c4ce72eb9004e2f02cb6d95a943a5532e941bb1a7a84f7c123e08`；不能误用账本中先前重复 ID 的包冒充不可逆映射测试。历史 `.0` ZIP 保留，SHA `72c4a403c662f58e28d11a0fb148ef081e73327c41b8b9dd9a7151c1cc5bc429`。
@@ -289,9 +289,18 @@ E01–E70原证据行、失败与当时待验不改写。以下新增终态解�
 | E81 | Vue版本策略 **5 PASS/0 FAIL/0 skipped，1345.2615ms**，Node24.19.0；`target/s6-final-vue-versions.log` SHA `d30b258cf88a5735377643582607512c99731a70e2e0881c97e7f1a7c63a68ee` | 实际公开native endpoint覆盖精确版本/冲突override、lock/broad声明证据、未知/不完整/alias/越界、帧限额及声明方法。records[].status保持candidate，独立support为supported；不外推未知未来或整个semver，不把5项当102语义套件重跑 |
 | E82 | 最终九项支持元数据独立Spec/Standards **各0项可行动发现**；`target/s6-final-metadata-spec-review.md` SHA `8296c0486bfba61d9732e4efbb5675a4c3d1633c210774a4eb352e2c21e357ff`、`target/s6-final-metadata-standards-review.md` SHA `2bddd75c84d4d59f27b5fc7e29d0710ffafd4501c58b956841fa64266440fa1f` | 九项当前摘要匹配E77账本；历史candidateVerification/retainedArtifacts原文6824 UTF-8字节及SHA18cd6d…def6全等，准确区分固定版本/依赖/26写法、继承证据、协议candidate和独立supported功能标签，三份grammar provenance不扩手动观察范围。既有AccessKit窗口退役abort限制明确保留。独立静态归档审核另见E78，运行/策略另见E79–E81；技术审查不代替三仓commit/push/远端和新issue回执 |
 
-### 35 项 AC 最新映射（恢复批次，终态截至 E82）
+### 最后注释边界与Git交付终态（E83–E84）
 
-此表保留E01–E77全部原始证据及旧FAIL，以E78–E82闭合精确最终归档、实际pair、public policy、版本策略与最终元数据独立审查。当前适用行为和技术要求均有证据收口；S6-AC5的提交范围/Git收据及S6-AC7的实际交付尚待执行，不提前关闭完整工单。未知版本/平台/动态语义与E76已知AccessKit退役限制保留。
+以下是E01–E82之后的真实补录，不重写原冻结输入、失败或“当时尚待”的证据。
+
+| 代号 | 真实结果与身份 | 证明边界 |
+| --- | --- | --- |
+| E83 | 最后仅注释门禁补充：H `editor/language_edits/completion.rs` / T `src/selection.rs` 的cfg(test)模块各加一行`//!`及空行，无行为变化。独立postlude `target/s6-final-comment-only-postlude.{json,md}` SHA分别 `6c00b0e26da950a03afd97373858d1cf4353e30d1ebcc7901c6ac1cbb0cae5f5` / `c94501780d83d101788d0df1034cdfbf83cfb68fbb73da30536fab903f1ad42d`；H fmt、T rustfmt及diff实际通过，未重跑完整构建或语义矩阵。最终范围Standards、交付文档Spec/Standards均0项未解决，`target/s6-final-git-scope-standards-review.md`、`s6-final-delivery-docs-{spec,standards}-review.md` | T29冻结源不变、checkout仅selection.rs多94 UTF-8字节说明，内存移除后精确恢复冻结SHA975b5621…ebf8；V44仍全等。H去83字节说明恢复既有review SHAad01c353…0832，缺完整最终已测文本前像的限制保留。E78“checkout全等”限定打包核验时点，不冒称新注释已编入旧ZIP；原归档/静态账本不改写。索引状态文档P2已修复并独立读回闭合；最终文档Spec报告SHA `2a6a33835dfccb62385671295af3062784fa0ce185c8461db85215c347e37253` |
+| E84 | 实际三仓普通commit、`push HEAD:main`成功后ls-remote读回精确相同：H实现提交 `d80c5708d7ce5e016e5e1a30e40c4b5c0b77b813`（204 paths）、T `2bc5be0301fc485d3b684641104e4dd596d3456e`（43 paths）、V `173c265e4c19298ca2fdb86b849ae90b6e3e4043`（32 paths）。GitHub新#122–#126均closed/completed，closed_at UTC依次2026-10-20 **11:06:53、11:06:56、11:06:58、11:06:59、11:07:01**。compact实际回执 `target/s6-final-git-delivery-receipt.json`，记录11:08:04 UTC，SHA `1e4acba9661a979a1c5da64a9af397a49dabf1ec52d2d1a00587ce89471128a1` | 先核推送再读issue，不用技术验收代填Git。#121、父#107及旧#108–#118共13控制项state/body/updated_at前后全同，18项issue body均未改；新工单关闭没有扩展至旧工单或父议题，无Release/强推/历史改写。实现源固定d80/T2bc/V173；后续H仅文档回执提交可推进main，但不改变实现或包，不在本文预测未知SHA。E76既有AccessKit退出abort和未验版本/平台限制继续保留 |
+
+### 35 项 AC 最新映射（已交付，终态截至 E84）
+
+此表保留E01–E82全部原始证据及旧FAIL；E78–E82闭合最终技术要求，E83披露最后测试注释与独立复核，E84补齐三仓提交/推送/远端及新issue关闭。35条AC在当前适用范围内均已按实际证据收口，新#122–#126已交付；未知版本/平台/动态语义与E76既有AccessKit退役限制保留，不扩为全部版本或平台。
 
 | AC | 截至本时点已证 | 技术结论、限制与交付边界 |
 | --- | --- | --- |
@@ -302,7 +311,7 @@ E01–E70原证据行、失败与当时待验不改写。以下新增终态解�
 | S2-AC5 | E01 TS、E25未知语言、E41八行SFC选中resolve+import/single Undo及失效拒绝PASS；E68普通TS desktopTotal自动导入与一次Undo已观察 | 实际resolve/import/单次Undo与全拒绝已证，最终包E78/E79闭合；SFC依据E41，桌面TS一例不替代SFC，nextTick未出现候选不记PASS |
 | S2-AC6 | E01/E07/E41–E43完整原生事务PASS；E66普通App/Child预览/取消/2项应用，独立“撤销整组操作”同时恢复2文件已观察 | 完整事务行为已证，E76输入保护及E78/E79最终身份收口；各文件Undo与独立组Undo分开，不重跑已证矩阵 |
 | S2-AC7 | E05非法尾部、E08授权阶段、E25源/辅助/owner全拒绝；E43替换/卸载后旧preview撤销、Enter无旧编辑；E53不可逆必要映射拒绝/恢复PASS | 非法/只读/越界/旧map与授权拒绝已证，E78/E79最终身份闭合；预先invalid-map不替代E43实际旧preview撤销 |
-| S2-AC8 | E01/E07/E25/E26/E41–E43沿唯一EditorState/DocumentSession；E66/E67/E68普通编辑、组Undo、IME和自动导入Undo已观察；无第二可写模型 | 唯一EditorState/DocumentSession及Undo路径已证，最终增量E82无新发现；提交范围/最终Git回执另待 |
+| S2-AC8 | E01/E07/E25/E26/E41–E43沿唯一EditorState/DocumentSession；E66/E67/E68普通编辑、组Undo、IME和导入Undo；E83最后注释核对、E84提交范围及三仓交付已收口 | 唯一文本/Undo行为与最终增量已证；E84实际提交/推送及issue回执完成，无第二可写模型 |
 | S3-AC1 | E09/E22声明组合及七项适用能力、E28三版本、E41/E42事务、E58闭包、E60暖缓存PASS；E66普通Vue3七项、E75主题/键盘已观察 | 适用能力与支持标签已收口：E78/E79精确最终包、E80/E81策略、E82审查；限三个精确版本/26适用组合，2.6 script setup仍拒绝 |
 | S3-AC2 | E09 class2/JSX3/TSX3自身script/render、props/slots等工具；E41八行全部原生预览/取消/应用/Undo及自动导入PASS | 八行历史安全应用门槛已证，E78不变封印及E79最终包收口；保留固定依赖/合法写法边界，不另增全集 |
 | S3-AC3 | E09 literal/const/有界wrapper、归属隔离/普通模块负例；E21闭包；E42 Vue26/TS与Vue3/JS实包脏源/导航/事务、主TS/磁盘/清理PASS；E58闭合 | 静态合法外部src行为已证，E78/E79闭合；动态工厂/继承等未声明语义不外推为支持 |
@@ -323,15 +332,15 @@ E01–E70原证据行、失败与当时待验不改写。以下新增终态解�
 | S5-AC5 | E28信任/进程/ACK/HWND、E31回滚、E32/E33原caller/多跳、E34 Snapshot、E43扩展撤销、E51候选/故障后清理、E53/E55 checked shutdown均PASS | 生命周期/信任/旧资源与清理已证，E78/E79最终包、E82审查闭合；不把快照恢复逻辑状态说成进程内存恢复 |
 | S5-AC6 | E24 scoped绑定/F12/重开、E16 connection、E35再准备；E43更换/移除、E50准入/取消/真实发布Err、E51 epochs、E53完整集合恢复、E55 authority交接PASS | 配置/选择/连接代次、重开与失败发布隔离已证，E78/E79最终身份闭合；E47旧seam/前置失败原样保留 |
 | S5-AC7 | E29中英queued/失败/恢复、E40 SDK结构化拒绝、E55 typed stale有实证；E69普通日志显示B根、analysis/engine、准备完成和进程启动，未重复权限弹窗 | 中英状态/版本证据/恢复入口及正常授权路径已有专项与普通证据，E82确认元数据准确；页头插件版本不冒充引擎版本 |
-| S6-AC1 | 35AC/14V；E41历史、E42 external、E43 mapped、E50 provenance、E51更新/故障、E53冲突、E55 Worker、E60/E63缓存、E66–E76普通交互/受影响回归/门禁；E78–E82最终包/策略/审查终态 | 历史重构、mapped事务、更新/撤销旧结果拒绝三项联合已证；E78–E82最终技术收口，Git交付另待，不重跑已完成专项 |
-| S6-AC2 | E73 hover7/0/cards6/0/text2/0/Escape9通过1ignored；E74 normal42.94s、fmt/nonUI319/0/327/check2.82s、SDK54/0/0差异；E78两guest公开构建、E79 pair1/0/0、E80 policy1/0/0、E81 versions5/0/0 | E73/E74宿主门禁、E78公开构建及E79–E81最终精确运行策略通过；327及Escape1 ignored不计PASS，零匹配不计覆盖，旧工具结果按原身份继承 |
+| S6-AC1 | 35AC/14V；E41历史、E42 external、E43 mapped、E50 provenance、E51更新/故障、E53冲突、E55 Worker、E60/E63缓存、E66–E76普通交互/受影响回归/门禁；E78–E84最终包/策略/审查/交付终态 | 三项联合行为及最终技术要求已证，E84实际Git/issue交付闭合；不重复已完成专项，不抹去旧FAIL |
+| S6-AC2 | E73 hover7/0/cards6/0/text2/0/Escape9通过1ignored；E74 normal42.94s、fmt/nonUI319/0/327/check2.82s、SDK54/0/0差异；E78公开构建及E79–E81精确运行策略；E83后置注释fmt/rustfmt/diff通过 | 规定技术门禁已过；E83仅测试说明未重跑完整构建或语义，冻结产物身份不改写。ignored/零匹配不计PASS，原工具结果按各自身份继承 |
 | S6-AC3 | E24–E26/E28/E41–E43/E51原生专项；E66七项普通操作/独立组Undo、E67真实OS IME/滚动字号、E68导入、E69 chooser/日志、E75浅/深正文/inline/片段与同符号Escape→Ctrl+I均已观察 | B4语言/编辑/主题/IME普通可见功能已闭合，E76输入保护有记录；既有UIA退役限制单独保留，不冒称正常退出 |
-| S6-AC4 | E74最终normal公开SDK全等4af；E77精确supported功能标签；E78最终T15/V12归档与T29/V44源码/47资源/11模块闭合；E79真实最终pair、E80受控public policy、E81版本策略通过 | E78源码/SDK/锁/许可/47资源/11模块、manifest深层语义及E79–E81精确最终包通过；归档摘要/终态在外部host收据，不循环改插件包 |
-| S6-AC5 | 此前生产资源/生命周期/provenance/缓存/配色/键盘独立增量审查已处理；E82最终九文件Spec/Standards各0项，E78静态归档独立0unexpected，E79–E81最终运行策略通过 | 最终生产增量及E82元数据独立双轴0项发现，E78归档独立核验通过；提交范围/文档检查及实际三仓Git收据仍待交付阶段完成 |
-| S6-AC6 | 旧包/FAIL/数据保留，E30/E31离线/回滚、E51实际拒绝保持PASS；E77 supported功能范围严格精确三版本/固定依赖并保留历史字节、早期/未来/其它平台限制及E76退出限制 | 正式/基础/待验/限制、历史后端及数据保留准确，E78/E82闭合；未知未来与其它平台不自动支持，E76既有退出限制未修 |
-| S6-AC7 | #121交付基线保留；本轮技术门禁与独立审查终态齐全，但尚未读回三仓完整commit/push及新issue关闭收据 | 尚未完成：根代理须实际普通提交三仓、push并核远端SHA，再读回新#122–#126；旧#108–#118与父#107不动，无Release |
+| S6-AC4 | E74 SDK全等4af；E77精确supported标签；E78最终T15/V12及T29/V44/47资源/11模块；E79实际pair/E80受控policy/E81 versions通过，E83补充打包后测试注释边界 | 源码/归档相等限定E78打包核验时点；E83披露当前T仅一处测试说明差异，原包/SDK/锁/许可不变。精确摘要/终态外部记账，未循环改包 |
+| S6-AC5 | 此前实现与生产增量独立审查已处理；E82九元数据双轴0项、E78静态闭包0unexpected；E83最终范围/文档审查与索引P2闭合；E84三仓提交/推送及issue回执完成 | 独立审查、源/产物范围和实际交付已闭合。原工作区保护及未取得完整字节前像的边界保留，不把作者自审替代独立结论 |
+| S6-AC6 | 旧包/FAIL/数据保留，E30/E31离线/回滚、E51实际拒绝保持PASS；E77/E82精确支持与限制、E83注释postlude及E84控制项不变有实际证明 | 文档及交付已收口；历史后端长期保留，未知未来/其它平台不自动支持，E76既有AccessKit退出限制未修 |
+| S6-AC7 | #121既有交付保留；E84实际H d80/T2bc/V173普通提交、push HEAD:main及ls-remote一致；#122–#126依次closed/completed，13个控制项前后不变 | 已交付：三仓实际实现提交及新工单回执均完成，后续H仅文档回执SHA另按实际记录；旧#108–#118和父#107不动，无Release |
 
-### V01–V14 最新映射（恢复批次，终态截至 E82）
+### V01–V14 最新映射（已交付，终态截至 E84）
 
 | 规格项 | 当前证据与真正剩余 |
 | --- | --- |
@@ -348,14 +357,14 @@ E01–E70原证据行、失败与当时待验不改写。以下新增终态解�
 | V11 | E30下载/离线/取消/摘要/lease/收据、E55准备取消/更新及E69普通就绪日志已证；E78封闭负载收口，不把B根就绪当网络失败全阶段复验 |
 | V12 | E28/E31/E46/E43/E50/E51/E53/E55故障/回滚/撤销/更新/恢复已证，E78/E79最终包闭合；E76既有普通UIA退窗abort单列限制，不混称正常退出 |
 | V13 | E40 SDK/缺TS、E29中英状态、E69普通B根/阶段已证；E78/E80/E81最终包/策略与E82精确supported标签闭合，插件页头不冒充引擎/后端版本 |
-| V14 | E25未知语言resolve/原子失败、E34注册、E32/E33委托、E43角色、E50发布provenance、E53冲突及E74公开SDK已证；E78–E82最终归档/运行/独立审查闭合，无专属API或白名单 |
+| V14 | E25未知语言resolve/原子失败、E34注册、E32/E33委托、E43角色、E50发布provenance、E53冲突及E74公开SDK已证；E78–E82最终归档/运行/独立审查、E83注释边界及E84交付闭合，无专属API或白名单 |
 
-### 当前最小剩余执行顺序（恢复批次）
+### 当前最小剩余执行顺序（已交付，无剩余实施项）
 
-B1完整生态冲突、B2最终Native S5全链及B4受影响普通可见功能均已解除；E74最新host门禁/SDK、E75实际桌面及E76输入保护/已知退出限制分别保留。E78–E81闭合B3最终精确归档、实际pair、public policy和versions；E82闭合B5最终元数据独立双轴技术审查。当前行为及技术门槛不再列待跑，不因纯元数据打包重复历史八行/external/四角色/故障矩阵。尚未称新#122–#126全部交付，剩余仅Git和工单回执。
+B1完整生态冲突、B2最终Native S5全链、B4普通可见功能、B3精确最终包/策略以及B5范围/元数据/文档独立审查均已闭合；E83补充打包后测试说明的准确边界。E84进一步记录三仓实现普通提交/推送及GitHub新#122–#126 completed关闭，S6-AC7完成，新工单已交付。当前无剩余实现、测试、审查或工单阻塞，不再把旧待验或已通过矩阵列为待跑。
 
-1. **B5交付部分：三仓普通提交与推送。** 根代理核对最终提交范围、文档和最终源/归档身份后，只提交本任务确认变更，保留原工作区其它内容；按既有授权完成普通commit及push origin，并实际读回三仓本地/远端SHA。当前未有本轮完整Git收据，不能以技术通过代填。
-2. **S6-AC7：工单与最终收据。** 推送核对成功后，记录新#122–#126的实际验收/提交/归档关联并读回issue状态。只有实际交付完成才标记整项完成；旧#108–#118和父#107保持不变，不创建Release。外部宿主交付收据保留最终ZIP/测试身份及E76既有AccessKit退役abort限制，不再次改插件包写入测试结果。
+- **实际实现与交付身份：** H `d80c5708d7ce5e016e5e1a30e40c4b5c0b77b813`、T `2bc5be0301fc485d3b684641104e4dd596d3456e`、V `173c265e4c19298ca2fdb86b849ae90b6e3e4043`；推送先核对，再读回新issue。#121与父/旧issue共13控制项保持原状，无Release。精确最终包仍为E78两ZIP，不因提交或回执补录改变。
+- **后续仅文档记账：** 根代理可另提交/推送这次实际回执的H文档更新；其SHA须生成后按实际记录，本表不自嵌或预测未知提交。该记账不改变固定实现源d80、已验产物、精确支持范围及E76已知AccessKit退出限制，也不新增行为验收工作。
 
 执行始终由根代理统一调度 native Cargo / 实际 WASM / Windows 资源，本文维护者没有运行下列命令。历史八行、external、四项formatting、outer/inner恢复、正反向更新及完整四冲突已有实际PASS；以下仅是相关源码将来再变化时的历史复放索引，不是当前待跑清单。代码块固定指向当时已验TypeScript `.14` / Vue `.11`；E57候选及E78支持标签后的最终 `.15` / `.12` 分别保留，后者已通过E79精确pair、E80 public policy与E81 versions。实际新快照、程序、路径、SDK和归档摘要由对应inputs及外部交付收据记录，不把旧包exact结果套给新元数据。若日后复放，对选定测试exe保留双包环境变量及 `NANOBUG_VUE_FIXTURES`，先列匹配项确认数量；不得直接运行private child：
 
