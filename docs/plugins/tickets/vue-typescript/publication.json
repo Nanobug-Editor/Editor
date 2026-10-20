@@ -15,8 +15,16 @@
       "number": 108,
       "id": 5863453182,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/108",
-      "state": "open",
-      "blocked_by": []
+      "state": "closed",
+      "blocked_by": [],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:46:55Z",
+      "delivered_by": [
+        121,
+        122,
+        123
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 2,
@@ -25,10 +33,18 @@
       "number": 109,
       "id": 5863453630,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/109",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         108
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:46:57Z",
+      "delivered_by": [
+        121,
+        122,
+        125
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 3,
@@ -37,10 +53,17 @@
       "number": 110,
       "id": 5863455739,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/110",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         108
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:46:57Z",
+      "delivered_by": [
+        121,
+        125
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 4,
@@ -49,11 +72,20 @@
       "number": 111,
       "id": 5863457379,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/111",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         109,
         110
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:46:58Z",
+      "delivered_by": [
+        121,
+        122,
+        123,
+        125
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 5,
@@ -62,10 +94,17 @@
       "number": 112,
       "id": 5863458638,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/112",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         111
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:46:58Z",
+      "delivered_by": [
+        121,
+        122
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 6,
@@ -74,10 +113,16 @@
       "number": 113,
       "id": 5863460448,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/113",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         112
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:46:59Z",
+      "delivered_by": [
+        122
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 7,
@@ -86,10 +131,18 @@
       "number": 114,
       "id": 5863463643,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/114",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         113
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:47:00Z",
+      "delivered_by": [
+        123,
+        125,
+        126
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 8,
@@ -98,10 +151,17 @@
       "number": 115,
       "id": 5863464387,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/115",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         111
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:47:00Z",
+      "delivered_by": [
+        122,
+        123
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 9,
@@ -110,11 +170,17 @@
       "number": 116,
       "id": 5863465157,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/116",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         110,
         112
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:47:01Z",
+      "delivered_by": [
+        124
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 10,
@@ -123,12 +189,18 @@
       "number": 117,
       "id": 5863466321,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/117",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         109,
         110,
         112
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:47:02Z",
+      "delivered_by": [
+        125
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     },
     {
       "local": 11,
@@ -137,14 +209,22 @@
       "number": 118,
       "id": 5863468828,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/118",
-      "state": "open",
+      "state": "closed",
       "blocked_by": [
         113,
         114,
         115,
         116,
         117
-      ]
+      ],
+      "state_reason": "completed",
+      "closed_at": "2026-10-20T15:47:02Z",
+      "delivered_by": [
+        126
+      ],
+      "closure_commit": "ab549c26b86c9c1b41f05e686c87eabf1ccb53b7"
     }
-  ]
+  ],
+  "last_verified_at": "2026-10-20 15:48:18 UTC",
+  "closure_verification": "../../verification/vue-typescript-legacy-closure-2026-10-20.md"
 }

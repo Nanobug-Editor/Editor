@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [Vue/TypeScript 旧工单功能核对与关闭](verification/vue-typescript-legacy-closure-2026-10-20.md)：用户补充授权后，64 项旧要求逐项核对完成；#108–#118 已读回 completed，原正文和失败历史保留，父 #107 继续开放。
+
 - [Vue/TypeScript 剩余场景交付](verification/vue-typescript-remaining-delivery-2026-10-20.md)：新 #122–#126 已验收、三仓推送并读回 completed，连同 #121 六场景 6/6 完成；最终 .15/.12 双包、普通桌面和门禁有据。旧工单与父议题不变，固定支持范围和 AccessKit 退出限制保留，未创建 Release。
 
 - [Vue/TypeScript 15:00 恢复记录](verification/vue-typescript-resumed-2026-10-20.md)：按用户继续指令恢复新 #122–#126；暂停字节基线已核对，先定位 Worker 回归，再完成双包、普通桌面及交付。
