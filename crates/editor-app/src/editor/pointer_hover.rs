@@ -203,6 +203,11 @@ impl EditorApp {
                     .read(cx)
                     .hover_popover()
                     .map(|hover| hover.symbol_range.clone())
+            })
+            .or_else(|| {
+                // Shell capture may already dismiss a pending request before the
+                // visible card's bubbling Escape handler; preserve that dismissal.
+                self.pointer_hover_suppressed.clone()
             });
         self.pointer_hover_generation = self.pointer_hover_generation.wrapping_add(1);
         self.pointer_hover_symbol = None;

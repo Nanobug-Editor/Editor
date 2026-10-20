@@ -175,6 +175,11 @@ impl Declarations {
                 }
                 method.parameters.validate(0)?;
                 method.result.validate(0)?;
+                // Only the fixed native interactive preparation profile can declare preferences.
+                // Runtime still requires its direct host origin; a transitive service caller cannot
+                // borrow this provider's private namespace merely by matching a method signature.
+                let native_preferences =
+                    method == &crate::language_control::binding_prepare_method_for(true);
                 // Delegated authority has explicit v1 support; private provider handles cannot be borrowed.
                 if method.permissions.iter().any(|p| {
                     !matches!(
@@ -188,8 +193,9 @@ impl Declarations {
                             | "process.exec"
                             | "native.modules"
                             | "network.http"
-                    ) && !(p.starts_with("network.http:http://")
-                        || p.starts_with("network.http:https://"))
+                    ) && !(p == "storage" && native_preferences)
+                        && !(p.starts_with("network.http:http://")
+                            || p.starts_with("network.http:https://"))
                 }) {
                     return Err("Unsupported delegated service permission".into());
                 }

@@ -156,6 +156,17 @@ fn cold_service_publication_respects_platform_and_original_project_settings() {
     manager.shutdown();
 }
 
+/// Workspace-scoped packages require an actual open project. Keep it beside the private plugin
+/// directory, and reuse the same path on reopen so the real scoped provider preference survives.
+fn project_environment(root: &std::path::Path) -> Environment {
+    let workspace = root.join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    Environment {
+        workspace: workspace.display().to_string(),
+        ..Default::default()
+    }
+}
+
 fn install(manager: &mut Manager, package: Package) {
     manager
         .install(&package, package.manifest.permissions.clone())
@@ -222,7 +233,11 @@ fn call(manager: &mut Manager, method: &str, value: Value, timeout: u32) -> Stri
 #[ignore = "build capability-example through the current public SDK first"]
 fn a_provider_can_reply_after_its_initial_wasm_callback_returns() {
     let temp = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     install(
         &mut manager,
         package("deferred-provider", true, false, "1.0.0"),
@@ -281,7 +296,11 @@ fn a_provider_can_reply_after_its_initial_wasm_callback_returns() {
 #[ignore = "build capability-example through the current public SDK first"]
 fn a_pure_provider_can_complete_its_deferred_reply_without_consumer_authority() {
     let temp = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     install(
         &mut manager,
         service_packages::pure_provider("pure-provider"),
@@ -316,7 +335,11 @@ fn a_pure_provider_can_complete_its_deferred_reply_without_consumer_authority() 
 #[ignore = "build capability-example through the current public SDK first"]
 fn a_deferred_reply_cannot_borrow_another_sources_invocation() {
     let temp = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     for (id, provider) in [
         ("deferred-provider", true),
         ("service-consumer", false),
@@ -371,7 +394,11 @@ fn a_deferred_reply_cannot_borrow_another_sources_invocation() {
 fn deferred_replies_release_their_slots_on_cancel_timeout_and_source_retirement() {
     use plugin_runtime::plugin_protocol::api::RequestUpdate;
     let temp = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     install(
         &mut manager,
         package("deferred-provider", true, false, "1.0.0"),
@@ -505,7 +532,11 @@ fn deferred_replies_release_their_slots_on_cancel_timeout_and_source_retirement(
 #[ignore = "build capability-example through the public SDK first"]
 fn unique_and_selected_providers_are_interchangeable_and_old_references_expire() {
     let temp = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     install(&mut manager, package("z-provider-a", true, false, "1.0.0"));
     install(
         &mut manager,
@@ -587,7 +618,11 @@ fn unique_and_selected_providers_are_interchangeable_and_old_references_expire()
         Some("z-provider-b")
     );
     drop(manager);
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     assert!(
         manager
             .published_entries()
@@ -610,7 +645,11 @@ fn unique_and_selected_providers_are_interchangeable_and_old_references_expire()
 #[ignore = "build capability-example through the public SDK first"]
 fn missing_and_incompatible_services_do_not_activate_required_consumers() {
     let temp = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     let required = package("required-consumer", false, false, "^1");
     manager
         .install(&required, required.manifest.permissions.clone())
@@ -652,7 +691,11 @@ fn missing_and_incompatible_services_do_not_activate_required_consumers() {
 #[ignore = "build capability-example through the public SDK first"]
 fn service_calls_preserve_source_and_cannot_borrow_provider_authority_or_reenter() {
     let temp = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(temp.path().join("plugins"), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        temp.path().join("plugins"),
+        project_environment(temp.path()),
+    )
+    .unwrap();
     install(&mut manager, package("provider-a", true, false, "1.0.0"));
     install(
         &mut manager,

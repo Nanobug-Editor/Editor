@@ -1,9 +1,11 @@
 //! Owned editor operations use the common completion gate across worker and native UI threads.
 use crate::request_state::Completion;
+mod preparation;
 use plugin_protocol::api::{
     CancelMode, CancellationEffect, EditorOperation, EditorValue, ErrorCode, Failure,
     RequestUpdate, ResourceHandle,
 };
+pub(crate) use preparation::PreparationConditions;
 use std::{
     sync::{
         Arc,
@@ -104,11 +106,19 @@ pub struct EditorRequest {
     workspace_request: Option<crate::WorkspaceRequest>,
     /// Checked provider, original caller and immutable imports never come from guest identity strings.
     language_control: Option<LanguageControlMetadata>,
+    /// Only the registered-context gate can issue this native refresh proof.
+    language_refresh: Option<(
+        crate::LanguageContexts,
+        crate::language_contexts::RegisteredContext,
+    )>,
 }
 
 /// Runtime-sealed metadata for the existing native language connection, unavailable to guest JSON.
 #[derive(Clone)]
 pub struct LanguageControlMetadata {
+    /// An explicitly registered context narrows this request and its eventual native binding.
+    pub(crate) selected_context: Option<crate::language_contexts::RegisteredContext>,
+    pub(crate) contexts: crate::LanguageContexts,
     /// Host-owned collection epochs narrow pending results and bindings, including empty discovery.
     pub(crate) collection_guards: Vec<Arc<AtomicBool>>,
     /// Globally scoped provider (`package/local-provider`), owned by this exact issuing instance.
@@ -191,6 +201,7 @@ impl EditorRequest {
             progress: Default::default(),
             workspace_request: None,
             language_control: None,
+            language_refresh: None,
         }
     }
     pub fn handle(&self) -> &ResourceHandle {
@@ -208,7 +219,45 @@ impl EditorRequest {
     pub fn language_control_metadata(&self) -> Option<&LanguageControlMetadata> {
         self.language_control.as_ref()
     }
+    pub(crate) fn with_language_refresh(
+        mut self,
+        contexts: crate::LanguageContexts,
+        context: crate::language_contexts::RegisteredContext,
+    ) -> Self {
+        self.authority = self.authority.with_guard(context.guard());
+        self.completion.lifetimes.push(context.guard());
+        self.language_refresh = Some((contexts, context));
+        self
+    }
+
+    /// Commit a runtime-issued context selection only after the native document revision is checked.
+    /// Raw `EditorOperation` JSON has no proof and cannot select or refresh a provider by name.
+    pub fn commit_language_refresh(&self) -> Result<(), Failure> {
+        let EditorOperation::RefreshLanguageContext { document, .. } = &self.operation else {
+            return Err(Failure::new(
+                ErrorCode::InvalidRequest,
+                "Request is not a context refresh",
+            ));
+        };
+        let (registry, context) = self.language_refresh.as_ref().ok_or_else(|| {
+            Failure::new(
+                ErrorCode::PermissionDenied,
+                "Context refresh has no registered authority",
+            )
+        })?;
+        if !self.authority.is_live() {
+            return Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Context refresh retired",
+            ));
+        }
+        registry.select_registered(context, &document.path)
+    }
     pub(crate) fn with_language_control(mut self, metadata: LanguageControlMetadata) -> Self {
+        if let Some(context) = &metadata.selected_context {
+            self.authority = self.authority.with_guard(context.guard());
+            self.completion.lifetimes.push(context.guard());
+        }
         for guard in &metadata.collection_guards {
             self.authority = self.authority.with_guard(guard.clone());
             self.completion.lifetimes.push(guard.clone());
@@ -233,6 +282,12 @@ impl EditorRequest {
     }
     pub(crate) fn with_workspace_request(mut self, request: crate::WorkspaceRequest) -> Self {
         self.workspace_request = Some(request);
+        self
+    }
+    /// Analysis conditions govern pending admission, while successful native effects retain the
+    /// original owner/caller authority. The request and its receipt share the same monotonic phase.
+    pub(crate) fn with_preparation(mut self, conditions: Arc<PreparationConditions>) -> Self {
+        self.completion.bind_condition(move || conditions.is_live());
         self
     }
     /// Native virtual opens require runtime-issued owned authority.
@@ -443,6 +498,7 @@ impl EditorRequest {
                 ));
             }
             metadata.response.accepts(&value)?;
+            service.adopt_registered_context(&metadata.contexts, &metadata.owner, &metadata.scope);
             if serde_json::to_vec(&value).map_or(true, |bytes| {
                 bytes.len() > plugin_protocol::language_control::MAX_CONTROL_BYTES
             }) {

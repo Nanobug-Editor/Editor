@@ -1,16 +1,20 @@
-//! Native formatting and rename share versioned document transactions and independent provider selection.
+//! Native completion, formatting and rename share versioned document transactions and provider selection.
 use crate::language::navigation;
 use crate::*;
 use gpui_base::input::InputState;
 use lsp_types::{PrepareRenameResponse, TextEdit};
 use plugin_runtime::plugin_protocol::api::DocumentVersion;
+mod completion;
 mod formatting;
 mod rename;
+mod workspace_edits;
 use formatting::Reservation as FormatReservation;
 
 /// Only metadata and UI state live here; native EditorState continues to own every mutable text byte.
 #[derive(Default)]
 pub(crate) struct State {
+    /// A selected language completion retains its immutable origin until resolve or rejection.
+    completion: Option<completion::Origin>,
     pub(crate) formatters: HashMap<String, Arc<navigation::LanguageServer>>,
     pub(crate) formatter_errors: HashMap<String, String>,
     pub(crate) bridge: Option<Entity<super::linked_input::Bridge>>,
@@ -135,7 +139,20 @@ impl EditorApp {
         if self.reject_readonly_document_action(window, cx) {
             return;
         }
-        self.request_format(false, window, cx);
+        self.request_format(false, formatting::Scope::Document, window, cx);
+    }
+
+    /// Format one native selection with the independently selected provider and existing guards.
+    pub(crate) fn format_selection_action(
+        &mut self,
+        _: &FormatSelection,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.reject_readonly_document_action(window, cx) {
+            return;
+        }
+        self.request_format(false, formatting::Scope::Selection, window, cx);
     }
 
     /// Default Save never formats. Opt-in saves wait for one selected formatter and then the Change effects.
@@ -153,7 +170,7 @@ impl EditorApp {
         if self.session_state.workspace_trusted
             && self.providers.editing_preferences(&language).format_on_save
         {
-            self.request_format(true, window, cx);
+            self.request_format(true, formatting::Scope::Document, window, cx);
         } else {
             if !self.wait_for_native_input(DocumentAction::Save, window, cx) {
                 self.save_current(cx);
@@ -219,6 +236,7 @@ impl EditorApp {
         source: plugin_runtime::plugin_protocol::language::SourceSnapshot,
         cursor: usize,
         uri: lsp_types::Uri,
+        range: Option<lsp_types::Range>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -248,7 +266,7 @@ impl EditorApp {
                 .background_executor()
                 .scheduler_executor()
                 .spawn_dedicated(move |_| async move {
-                    let operation = || server.format_for(lease, snapshot, 4, true);
+                    let operation = || server.format_for(lease, snapshot, range, 4, true);
                     match &context {
                         Some(context) => server.with_context_snapshot(context, operation),
                         None => operation(),
@@ -277,12 +295,18 @@ impl EditorApp {
                     return;
                 }
                 match result.and_then(|edits| {
+                    let has_edits = !edits.is_empty();
                     app.apply_language_edits(
                         &document, &source, &active, &edits, cursor, window, cx,
-                    )
+                    )?;
+                    Ok(has_edits)
                 }) {
-                    Ok(()) => {
-                        app.status = t!("editor.formatted").to_string();
+                    Ok(has_edits) => {
+                        app.status = if has_edits {
+                            t!("editor.formatted").to_string()
+                        } else {
+                            t!("editor.format_no_changes").to_string()
+                        };
                         if save {
                             let target = app.editor.clone();
                             let owner = cx.entity().downgrade();

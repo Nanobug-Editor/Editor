@@ -2,6 +2,7 @@
 
 use crate::{
     EditorAuthority,
+    editor_requests::PreparationConditions,
     native_path::{CheckedPath, pin_path},
 };
 use plugin_protocol::{
@@ -40,6 +41,10 @@ pub(crate) fn validate_plan_documents(
     require("workspace.files", 2)?;
     if plan.origin.is_some() {
         require("workspace.files", 3)?;
+        permission("editor.read")?;
+    }
+    if !plan.conditions.is_empty() {
+        require("workspace.files", 4)?;
         permission("editor.read")?;
     }
     plan.validate()?;
@@ -177,6 +182,8 @@ impl AuthorizedFile {
 pub struct WorkspaceBatch {
     handle: ResourceHandle,
     authority: EditorAuthority,
+    /// Native analysis seals apply before effects; guest batches retain their existing authority.
+    preparation: Option<Arc<PreparationConditions>>,
     released: AtomicBool,
     caller: Option<String>,
     required: std::collections::BTreeSet<String>,
@@ -203,6 +210,7 @@ impl WorkspaceBatch {
         Self {
             handle,
             authority,
+            preparation: None,
             released: AtomicBool::new(false),
             caller,
             required,
@@ -213,9 +221,19 @@ impl WorkspaceBatch {
     pub fn handle(&self) -> &ResourceHandle {
         &self.handle
     }
+    /// Only the native issuer supplies analysis seals after its ordinary plan and grant admission.
+    pub(crate) fn with_preparation(mut self, conditions: Arc<PreparationConditions>) -> Self {
+        self.preparation = Some(conditions);
+        self
+    }
     /// Recovery cannot outlive its original instance, delegated source or explicitly released slot.
     pub fn is_live(&self) -> bool {
-        self.authority.is_live() && !self.released.load(Ordering::Acquire)
+        self.authority.is_live()
+            && !self.released.load(Ordering::Acquire)
+            && self
+                .preparation
+                .as_ref()
+                .is_none_or(|conditions| conditions.is_live())
     }
     pub(crate) fn caller(&self) -> Option<&str> {
         self.caller.as_deref()
@@ -230,6 +248,14 @@ impl WorkspaceBatch {
     /// A native coordinator reports actual effects even when the original wait already stopped.
     pub fn publish(&self, receipt: Receipt) {
         *self.receipt.lock().unwrap() = receipt;
+    }
+    /// A native coordinator calls this immediately after an actual mutation, before yielding for
+    /// its causal receipt. Noop edits and entering execution do not consume preparation conditions.
+    /// This never changes the original owner/caller chain, explicit release or retirement checks.
+    pub fn record_effect(&self) {
+        if let Some(conditions) = &self.preparation {
+            conditions.record_effect();
+        }
     }
     pub(crate) fn revoke(&self) {
         self.released.store(true, Ordering::Release);

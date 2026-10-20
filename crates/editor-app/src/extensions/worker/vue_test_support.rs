@@ -4,11 +4,17 @@ use crate::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use std::cell::RefCell;
 
+/// Shared receipt interaction is confined to these real-package worker scenarios.
+#[cfg(windows)]
+pub(super) mod receipts;
+
 /// Keep the profile alive until the production actor and its managed tools have shut down.
 pub(super) struct Fixture {
     pub app: Entity<EditorApp>,
     pub actor: Arc<Worker>,
     pub workspace: PathBuf,
+    /// Host-owned test store permits public registry/private-data inspection without a guest handle.
+    pub store: PathBuf,
     _profile: tempfile::TempDir,
 }
 
@@ -70,7 +76,7 @@ pub(super) fn setup_for_workspace<'a>(
         Root::new(app, window, cx)
     });
     let app = slot.borrow_mut().take().unwrap();
-    let actor = Arc::new(Worker::start_background(root, environment, true));
+    let actor = Arc::new(Worker::start_background(root.clone(), environment, true));
     visual.update(|_, cx| {
         app.read(cx)
             .extensions
@@ -83,6 +89,7 @@ pub(super) fn setup_for_workspace<'a>(
             app,
             actor,
             workspace,
+            store: root,
             _profile: profile,
         },
         visual,

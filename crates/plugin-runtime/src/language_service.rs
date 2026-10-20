@@ -2,6 +2,7 @@
 use crate::process::{Spawned, spawn_piped};
 mod completion;
 mod consumers;
+mod contexts;
 mod modules;
 pub(crate) use completion::CompletionHook;
 use plugin_protocol::language::Provider;
@@ -54,6 +55,13 @@ pub struct LanguageService {
         Mutex<std::collections::BTreeSet<plugin_protocol::language::DocumentContext>>,
     /// Original consumers retain native context references independently of shared adapter code.
     consumers: Mutex<consumers::Consumers>,
+    /// Opaque business context provenance never owns source text or an additional native process.
+    registered_context: Mutex<
+        Option<(
+            crate::LanguageContexts,
+            crate::language_contexts::RegisteredContext,
+        )>,
+    >,
 }
 #[derive(Default)]
 struct Lease {
@@ -195,6 +203,7 @@ impl LanguageService {
             modules: Default::default(),
             document_contexts: Default::default(),
             consumers: Default::default(),
+            registered_context: Default::default(),
         }
     }
     /// Return a negotiated public capability version for this plan, or `None` when unavailable.
@@ -217,7 +226,7 @@ impl LanguageService {
         &self,
         document: plugin_protocol::api::DocumentVersion,
         fix: plugin_protocol::diagnostics::Fix,
-        guard: Option<Arc<std::sync::atomic::AtomicBool>>,
+        mut guards: Vec<Arc<std::sync::atomic::AtomicBool>>,
     ) -> Result<plugin_protocol::api::Value, plugin_protocol::api::Failure> {
         let state = self.state.lock().unwrap();
         if state.retired || !self.authority.is_live() {
@@ -227,11 +236,14 @@ impl LanguageService {
             ));
         }
         let plan = crate::workspace_resources::language_plan(document, fix.plan)?;
+        // Registered configuration has the same pre-effect phase as native source/connection seals;
+        // neither can permanently narrow recovery of an already committed native document edit.
+        guards.extend(self.analysis_conditions());
         self.native_requests.lock().unwrap().submit(
             plan,
             &self.policy.capabilities,
             &self.policy.permissions,
-            guard,
+            guards,
         )
     }
     /// Transfer calls through the public Manager and its existing serialized native dispatcher.

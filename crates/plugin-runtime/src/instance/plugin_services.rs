@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 #[path = "plugin_services/cleanup_tests.rs"]
 mod cleanup_tests;
 mod collections;
+mod compatibility;
 
 pub(super) struct Services {
     pub alive: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -338,11 +339,15 @@ impl State {
             ));
         }
         let permission = match operation {
+            // Project metadata belongs to this provider; no private preference namespace transfers.
+            api::Operation::LanguageContexts { .. } => "workspace.read",
             // A genuine native command may persist its own scoped intent under its declared
             // storage grant. Delegated calls still cannot read or write provider preferences.
             api::Operation::ReadPreference { watch: false, .. }
             | api::Operation::WritePreference { .. }
-                if context.direct_host_command(&self.plugin_services.principal.instance) =>
+                if context.direct_host_command(&self.plugin_services.principal.instance)
+                    || context
+                        .direct_language_preparation(&self.plugin_services.principal.instance) =>
             {
                 "storage"
             }
@@ -643,46 +648,12 @@ impl Instance {
     pub(crate) fn service_provider(&self) -> Option<Provider> {
         (!self.store.data().roots.retired && self.store.data().active).then(|| {
             let state = self.store.data();
-            // Service gates remain effective after first birth; commands have their own public contracts.
-            let mut contracts = state
-                .plugin_services
-                .declarations
-                .provides
-                .iter()
-                .filter(|(_, contract)| {
-                    (contract.platforms.is_empty()
-                        || contract.platforms.contains(&crate::development::platform()))
-                        && contract.enabled_setting.as_ref().is_none_or(|key| {
-                            self.configuration
-                                .get(key)
-                                .is_some_and(|value| value.value == serde_json::Value::Bool(true))
-                        })
-                })
-                .map(|(id, contract)| (id.clone(), contract.clone()))
-                .collect::<BTreeMap<_, _>>();
-            for (id, signature) in &state.plugin_services.commands {
-                contracts.insert(
-                    plugin_protocol::commands::contract(
-                        &state.plugin_services.principal.plugin,
-                        id,
-                    ),
-                    service::Contract {
-                        collection: false,
-                        // Package commands need no provider-owned dependency or contribution gate.
-                        preparation: BTreeMap::new(),
-                        enabled_setting: None,
-                        platforms: Vec::new(),
-                        version: semver::Version::new(1, 0, 0),
-                        methods: BTreeMap::from([("invoke".into(), signature.clone())]),
-                    },
-                );
-            }
             Provider {
                 availability: None,
                 owner_alive: Some(self.store.data().plugin_services.alive.clone()),
                 alive: self.store.data().plugin_services.alive.clone(),
                 caller: self.store.data().plugin_services.principal.clone(),
-                contracts,
+                contracts: state.plugin_services.contracts(&self.configuration),
             }
         })
     }
@@ -721,15 +692,23 @@ impl Instance {
     }
     /// Required dependencies fail before activation; optional dependencies remain discoverable fallbacks.
     pub(crate) fn connect_services(&mut self, broker: broker::Shared) -> anyhow::Result<()> {
-        let services = &mut self.store.data_mut().plugin_services;
-        services.broker = broker;
+        self.validate_service_dependencies(&broker)?;
+        self.store.data_mut().plugin_services.broker = broker;
+        Ok(())
+    }
+
+    /// Check this candidate's required contracts against current scoped publications and choices.
+    /// This issues no resource, publishes no candidate export and never activates another guest.
+    /// Cutover calls the same check again when connecting, so preflight grants no lasting authority.
+    pub(crate) fn validate_service_dependencies(
+        &self,
+        broker: &broker::Shared,
+    ) -> anyhow::Result<()> {
+        let services = &self.store.data().plugin_services;
+        let broker = broker.lock().unwrap();
         for (id, dependency) in &services.declarations.requires {
             if !dependency.optional {
-                services
-                    .broker
-                    .lock()
-                    .unwrap()
-                    .resolve(&services.principal, id, dependency)?;
+                broker.resolve(&services.principal, id, dependency)?;
             }
         }
         Ok(())

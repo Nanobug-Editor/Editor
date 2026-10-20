@@ -1,6 +1,10 @@
 //! Host-only demand identities retain metadata intent independently of a guest's first birth.
 use crate::Completion;
 use plugin_protocol::{api, direct};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 /// Opaque static availability captured before queueing an original command, source or view.
 /// It grants no guest permission and cannot be created or deserialized by a plugin.
@@ -93,8 +97,20 @@ impl ActivationReceipt {
 /// Dropping it withdraws only that wait; the last withdrawn waiter abandons unpublished work.
 pub struct DemandRequest {
     pub(super) completion: Completion<ActivationReceipt>,
+    /// Historical evidence belongs to the exact original document reservation, not its cache key.
+    /// Non-document purposes and admission/cancellation errors have no such publication authority.
+    pub(super) failure_publication: Option<Arc<AtomicBool>>,
 }
 impl DemandRequest {
+    /// Whether this request's original document reservation actually published a terminal language
+    /// preparation error. This host-only observation survives its cache withdrawal; it grants no
+    /// guest authority and is false for cancellation, timeout or an unreserved admission failure.
+    pub fn has_published_language_error(&self) -> bool {
+        self.failure_publication
+            .as_ref()
+            .is_some_and(|publication| publication.load(Ordering::Acquire))
+    }
+
     /// Return current typed progress/result; this also expires this waiter's original deadline.
     pub fn status(&self) -> api::RequestUpdate<ActivationReceipt> {
         self.completion.status()

@@ -230,6 +230,7 @@ fn preview(
                 operation: workspace::Operation::ApplyPlan {
                     plan: workspace::Plan {
                         origin: None,
+                        conditions: Vec::new(),
                         title: "Transaction boundary / 事务边界".into(),
                         changes,
                     },
@@ -328,6 +329,7 @@ pub(super) fn undo(
     receipt
 }
 
+mod analysis_guard;
 mod conflicts;
 mod converter;
 mod limits;

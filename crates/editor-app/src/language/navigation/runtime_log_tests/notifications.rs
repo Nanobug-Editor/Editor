@@ -129,6 +129,86 @@ fn native_lsp_document_queue_overflow_preserves_idle_logs_and_control_messages()
         .any(|message| message["id"] == "server-after-overflow" && message["result"].is_array()));
 }
 
+/// Losing the final push must invalidate the old watermark and request a complete live snapshot.
+/// The server only publishes on source synchronization; unchanged text therefore proves recovery.
+#[test]
+#[ignore = "build plugin-runtime --example lsp_fixture in the same Cargo target first"]
+fn notification_overflow_resynchronizes_unchanged_live_sources_before_diagnostics() {
+    let directory = tempfile::tempdir().unwrap();
+    let (_manager, server) = installed_fixture(directory.path(), None);
+    let uri = file_uri(&directory.path().join("live.novel")).unwrap();
+    let source = "unsaved 中文😀e\u{301}\r\n";
+    let lease = server.open_document(uri.clone());
+    server
+        .definitions(uri.clone(), source.into(), Position::new(0, 0))
+        .unwrap();
+    let initial = server
+        .diagnostics_for(lease.clone(), source)
+        .unwrap()
+        .unwrap();
+    assert_eq!(initial[0].message, format!("unsaved:{source}"));
+
+    let mut notifications = closed_document_notifications(directory.path());
+    notifications.push(
+        json!({"jsonrpc":"2.0", "method":"textDocument/publishDiagnostics",
+        "params":{"uri":uri,"version":1,"diagnostics":[]}}),
+    );
+    notifications.push(json!({"jsonrpc":"2.0", "method":"window/logMessage",
+        "params":{"type":3,"message":"after-lost-live-publication"}}));
+    notify_fixture(&server, notifications);
+    wait_for_log(
+        &server.service.runtime_logs(),
+        "after-lost-live-publication",
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if server
+            .diagnostics_for(lease.clone(), source)
+            .unwrap()
+            .is_some_and(|items| {
+                items
+                    .iter()
+                    .any(|item| item.message == format!("unsaved:{source}"))
+            })
+        {
+            let frames = std::fs::read_to_string(directory.path().join("wire.jsonl")).unwrap();
+            let synchronized = frames
+                .lines()
+                .map(|line| serde_json::from_str::<Value>(line).unwrap())
+                .filter(|frame| {
+                    matches!(
+                        frame["method"].as_str(),
+                        Some("textDocument/didOpen" | "textDocument/didChange")
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert!(
+                synchronized.len() >= 2,
+                "a lost publication must not leave the prior source watermark marked complete"
+            );
+            assert!(
+                synchronized.last().unwrap()["params"]["textDocument"]["version"]
+                    .as_i64()
+                    .unwrap()
+                    > synchronized[0]["params"]["textDocument"]["version"]
+                        .as_i64()
+                        .unwrap()
+            );
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "live diagnostics must recover without another user edit"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        !directory.path().join("live.novel").exists(),
+        "synchronization must never save the source"
+    );
+}
+
 /// Readiness declared on a standard log message remains observable after that message bypasses the queue.
 #[test]
 #[ignore = "build cargo build -p plugin-runtime --example lsp_fixture first"]

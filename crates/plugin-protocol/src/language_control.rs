@@ -71,6 +71,12 @@ pub struct SourceMetadata {
 /// A WASM provider may perform asynchronous public collaboration and return a host-issued token;
 /// neither source text nor an arbitrary program/path is accepted as the returned binding.
 pub fn binding_prepare_method() -> crate::service::Method {
+    binding_prepare_method_for(false)
+}
+
+/// An explicit interactive profile permits native choice and host-origin private preference CAS.
+/// Every transitive call still shrinks permissions and loses the direct preparation origin.
+pub fn binding_prepare_method_for(interactive: bool) -> crate::service::Method {
     use crate::service::Schema;
     use std::collections::BTreeMap;
     let record = |fields: BTreeMap<String, Schema>| Schema::Record {
@@ -87,16 +93,25 @@ pub fn binding_prepare_method() -> crate::service::Method {
             },
         ),
     ]));
+    let mut parameters = record(BTreeMap::from([("document".into(), document)]));
+    if interactive && let Schema::Record { fields, optional } = &mut parameters {
+        fields.insert("source_context".into(), Schema::String { max_bytes: 128 });
+        optional.insert("source_context".into());
+    }
+    let mut permissions = ["editor.read", "workspace.read", "native.modules"]
+        .into_iter()
+        .map(String::from)
+        .collect::<std::collections::BTreeSet<_>>();
+    if interactive {
+        permissions.extend(["ui.interaction".into(), "storage".into()]);
+    }
     crate::service::Method {
-        parameters: record(BTreeMap::from([("document".into(), document)])),
+        parameters,
         result: record(BTreeMap::from([(
             "binding".into(),
             Schema::String { max_bytes: 128 },
         )])),
-        permissions: ["editor.read", "workspace.read", "native.modules"]
-            .into_iter()
-            .map(String::from)
-            .collect(),
+        permissions,
     }
 }
 

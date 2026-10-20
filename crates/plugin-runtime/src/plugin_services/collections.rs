@@ -10,6 +10,16 @@ pub(super) struct CollectionState {
     members: Vec<Member>,
 }
 
+/// Readonly preparation inputs use the same scoped member semantics as OpenSet, including empty
+/// sets and explicit preferences. This metadata grants no references and never starts a provider.
+/// The Broker owns its bounded epoch table; dropping a snapshot releases only these readonly bits.
+#[derive(Clone)]
+pub(crate) struct CollectionPublication {
+    scope: String,
+    /// Retaining an epoch bit owns metadata only; a false bit cannot be revived by table recreation.
+    inputs: Vec<(String, u64, Arc<AtomicBool>)>,
+}
+
 /// Logical publications survive first birth; once observed, a concrete owner cannot be replaced
 /// inside a captured collection. Contract/configuration changes also invalidate its preparation.
 struct Member {
@@ -56,6 +66,88 @@ impl Member {
 }
 
 impl Broker {
+    /// Return only already published service participants in one original scope. The Manager uses
+    /// their admitted declarations to observe indirect collection inputs without executing a guest
+    /// or granting access to any participant; host participants need no installed declaration.
+    pub(crate) fn scoped_provider_plugins(&self, scope: &str) -> BTreeSet<String> {
+        self.providers
+            .values()
+            .filter(|provider| {
+                provider.caller.scope == scope && provider.alive.load(Ordering::Acquire)
+            })
+            .map(|provider| provider.caller.plugin.clone())
+            .collect()
+    }
+
+    /// Capture only this manifest's declared collection dependencies before preparing a language
+    /// purpose. Optional empty sets use the same bounded metadata registry as OpenSet, without
+    /// creating references. The original monotonic revisions also reject a preference/member ABA.
+    /// Returns LimitExceeded before preparation if the shared collection registry is full.
+    pub(crate) fn capture_collection_publication(
+        &mut self,
+        scope: &str,
+        dependencies: &BTreeMap<String, Dependency>,
+    ) -> Result<CollectionPublication, Failure> {
+        self.refresh_collections();
+        let mut inputs = Vec::new();
+        for (contract, _) in dependencies
+            .iter()
+            .filter(|(_, dependency)| dependency.collection)
+        {
+            self.ensure_collection(scope, contract)?;
+            let state = &self.collections[&(scope.to_owned(), contract.clone())];
+            inputs.push((contract.clone(), state.revision, state.alive.clone()));
+        }
+        Ok(CollectionPublication {
+            scope: scope.into(),
+            inputs,
+        })
+    }
+
+    /// Compare an original preparation snapshot without resampling it after failure. First birth
+    /// keeps its logical publication; changed membership, configuration, owner or preference does
+    /// not. Callers use this only to withdraw terminal failures, never to retire healthy plans.
+    pub(crate) fn collection_publication_is_current(
+        &self,
+        original: &CollectionPublication,
+    ) -> bool {
+        original.inputs.iter().all(|(contract, revision, epoch)| {
+            self.collections
+                .get(&(original.scope.clone(), contract.clone()))
+                .is_some_and(|state| {
+                    state.revision == *revision
+                        && epoch.load(Ordering::Acquire)
+                        && Arc::ptr_eq(epoch, &state.alive)
+                        && state.alive.load(Ordering::Acquire)
+                        && state.members.iter().all(Member::live)
+                })
+        })
+    }
+
+    /// Preparation reservations and OpenSet observe one bounded epoch table. This creates metadata
+    /// only; compatibility checks and caller-owned reference issuance remain in resolve_set.
+    fn ensure_collection(&mut self, scope: &str, contract: &str) -> Result<(), Failure> {
+        let key = (scope.to_owned(), contract.to_owned());
+        if !self.collections.contains_key(&key) {
+            if self.collections.len() >= 1024 {
+                return Err(Failure::new(
+                    ErrorCode::LimitExceeded,
+                    "Service collection registry is full",
+                ));
+            }
+            self.collections.insert(
+                key,
+                CollectionState {
+                    revision: 1,
+                    alive: Arc::new(AtomicBool::new(true)),
+                    preference: self.preference(scope, contract).cloned(),
+                    members: self.collection_members(scope, contract),
+                },
+            );
+        }
+        Ok(())
+    }
+
     /// Metadata capture alone never starts a guest. An explicit preference restricts a collection
     /// to that provider, including an unavailable preference which must not fall back to others.
     fn collection_members(&self, scope: &str, contract: &str) -> Vec<Member> {
@@ -77,7 +169,7 @@ impl Broker {
             .collect()
     }
 
-    /// Reconcile only previously opened collections; unrelated installation cannot consume an
+    /// Reconcile only previously observed collections; unrelated installation cannot consume an
     /// unbounded registry. First activation records its owner without cancelling the activating call.
     pub(super) fn refresh_collections(&mut self) {
         let keys = self.collections.keys().cloned().collect::<Vec<_>>();
@@ -155,23 +247,7 @@ impl Broker {
             ));
         }
         let key = (caller.scope.clone(), contract.to_owned());
-        if !self.collections.contains_key(&key) {
-            if self.collections.len() >= 1024 {
-                return Err(Failure::new(
-                    ErrorCode::LimitExceeded,
-                    "Service collection registry is full",
-                ));
-            }
-            self.collections.insert(
-                key.clone(),
-                CollectionState {
-                    revision: 1,
-                    alive: Arc::new(AtomicBool::new(true)),
-                    preference: self.preference(&caller.scope, contract).cloned(),
-                    members: self.collection_members(&caller.scope, contract),
-                },
-            );
-        }
+        self.ensure_collection(&caller.scope, contract)?;
         let state = &self.collections[&key];
         let references = candidates
             .into_iter()

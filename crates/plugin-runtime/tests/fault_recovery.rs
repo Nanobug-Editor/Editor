@@ -1,9 +1,11 @@
 //! Real SDK guests exercise bounded faults and manual recovery through the public package manager.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
 use plugin_runtime::{
-    Manager, Package,
+    DemandReason, Manager, Package,
     plugin_protocol::{Environment, ui::Kind},
 };
 use serde_json::json;
@@ -12,10 +14,10 @@ mod service_packages;
 
 /// Recover one faulting instance without restarting the manager or disturbing a healthy installed peer.
 #[test]
-#[ignore = "build the SDK capability-example first"]
+#[ignore = "requires the frozen capability-example-0.19.0.zip input and its ledger hash"]
 fn wasm_fault_is_scoped_visible_and_independently_restartable() {
     let directory = tempfile::tempdir().unwrap();
-    let package = Package::read(&test_packages::archive("capability-example")).unwrap();
+    let package = Package::read(&test_packages::archive("capability-example-0.19.0")).unwrap();
     let workspace = directory.path().join("workspace");
     std::fs::create_dir(&workspace).unwrap();
     std::fs::write(workspace.join("source.txt"), "workspace").unwrap();
@@ -31,6 +33,12 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // Installation publishes cold metadata; the original command, not enablement, owns first birth.
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("scope-write".into()),
+    );
     manager
         .invoke_command(
             "capability-example",
@@ -41,6 +49,14 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
     let peer = service_packages::package("healthy-peer", true, true, "1.0.0");
     manager
         .install(&peer, peer.manifest.permissions.clone())
+        .unwrap();
+    demand_support::ready(
+        &mut manager,
+        "healthy-peer",
+        DemandReason::Command("echo".into()),
+    );
+    manager
+        .invoke_command("healthy-peer", "echo", json!("healthy peer"))
         .unwrap();
     let healthy_view = manager.live["healthy-peer"].views["welcome"].clone();
     manager
@@ -76,6 +92,11 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
     ));
     assert_eq!(manager.live["capability-example"].resource_count(), 0);
     manager.restart_plugin("capability-example").unwrap();
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("fault-memory".into()),
+    );
     assert!(
         manager
             .invoke_command("capability-example", "fault-memory", json!(null))
@@ -88,6 +109,11 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
             .any(|report| report.operation.contains("fault-memory"))
     );
     manager.restart_plugin("capability-example").unwrap();
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("active-directory".into()),
+    );
     manager
         .invoke_command("capability-example", "active-directory", json!(null))
         .unwrap();
@@ -101,7 +127,8 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
         panic!("native text expected")
     };
     assert!(text.contains("Accepted"));
-    // A missing component is a real restart failure, never a reason to discard the committed data.
+    // Explicit restart resets the cold owner. Actual first use validates executable assets; a
+    // missing component fails that original demand without discarding the committed private data.
     let component = root
         .join("packages")
         .join("capability-example")
@@ -109,13 +136,20 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
         .join("capability-example.wasm");
     let bytes = std::fs::read(&component).unwrap();
     std::fs::remove_file(&component).unwrap();
-    assert!(manager.restart_plugin("capability-example").is_err());
+    manager.restart_plugin("capability-example").unwrap();
+    assert!(manager.instance_id("capability-example").is_none());
+    let missing = demand_support::try_ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("scope-read".into()),
+    )
+    .unwrap_err();
     assert!(
         manager.installed["capability-example"]
             .error
             .as_ref()
             .unwrap()
-            .contains("Restart failed")
+            .contains(&missing.to_string())
     );
     assert_eq!(
         std::fs::read_to_string(
@@ -128,6 +162,11 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
     );
     std::fs::write(&component, bytes).unwrap();
     manager.restart_plugin("capability-example").unwrap();
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("scope-read".into()),
+    );
     manager
         .invoke_command("capability-example", "scope-read", json!(null))
         .unwrap();
@@ -143,4 +182,18 @@ fn wasm_fault_is_scoped_visible_and_independently_restartable() {
         panic!("recovered text expected")
     };
     assert_eq!(text, "workspace|recoverable");
+    assert!(
+        std::sync::Arc::ptr_eq(
+            &healthy_view,
+            manager.live["healthy-peer"].views.get("welcome").unwrap()
+        ),
+        "peer Store and view survive every unrelated fault and recovery"
+    );
+    manager
+        .invoke_command(
+            "healthy-peer",
+            "echo",
+            json!("still healthy after recovery"),
+        )
+        .unwrap();
 }

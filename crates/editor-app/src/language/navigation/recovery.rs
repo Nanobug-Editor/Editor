@@ -11,6 +11,8 @@ pub(crate) enum RecoveryState {
 }
 #[derive(Default)]
 pub(super) struct Recovery {
+    /// Observed transport failures never rewind when a healthy interval replenishes the budget.
+    generation: u64,
     failures: usize,
     retry_at: Duration,
     healthy_since: Option<Duration>,
@@ -21,16 +23,21 @@ impl Recovery {
     fn check(&self, now: Duration) -> anyhow::Result<()> {
         ensure!(
             self.failures < MAX_FAILURES,
-            "语言服务已暂停，请手动重启插件"
+            "{}",
+            rust_i18n::t!("plugins.logs.lsp_paused")
         );
         ensure!(
             now >= self.retry_at,
-            "语言服务等待重试（{} ms）",
-            self.retry_at.saturating_sub(now).as_millis()
+            "{}",
+            rust_i18n::t!(
+                "plugins.logs.lsp_backoff",
+                milliseconds = self.retry_at.saturating_sub(now).as_millis()
+            )
         );
         Ok(())
     }
     fn failed(&mut self, operation: &str, error: &anyhow::Error, now: Duration) {
+        self.generation = self.generation.saturating_add(1);
         self.failures += 1;
         self.healthy_since = None;
         self.running = false;
@@ -53,7 +60,10 @@ impl Recovery {
             .healthy_since
             .is_some_and(|start| now.saturating_sub(start) >= Duration::from_secs(60))
         {
-            *self = Self::default();
+            *self = Self {
+                generation: self.generation,
+                ..Default::default()
+            };
             self.running = true;
             self.healthy_since = Some(now);
         }
@@ -187,6 +197,11 @@ impl LanguageServer {
                 .healthy(self.started.elapsed());
         }
     }
+    /// Source delegates compare this monotonic failure generation even if UI publication misses
+    /// the transient retry state. It does not grant another retry or replace connection identity.
+    pub(crate) fn recovery_generation(&self) -> u64 {
+        self.recovery.lock().unwrap().generation
+    }
     /// Expose one semantic state alongside the existing readable recovery details.
     pub(crate) fn recovery_state(&self) -> Option<RecoveryState> {
         let recovery = self.recovery.lock().unwrap();
@@ -199,18 +214,19 @@ impl LanguageServer {
             RecoveryState::WaitingRetry
         })
     }
+    /// Native status rows retain the current UI locale and the actual affected owner/project.
     pub(crate) fn recovery_status(&self) -> Option<String> {
         let recovery = self.recovery.lock().unwrap();
         let message = recovery.message.as_ref()?;
         let state = if recovery.failures >= MAX_FAILURES {
-            "已暂停，重启插件可恢复"
+            rust_i18n::t!("plugins.logs.lsp_paused")
         } else if recovery.running {
-            "已恢复"
+            rust_i18n::t!("plugins.logs.lsp_recovered")
         } else {
-            "等待有限重试"
+            rust_i18n::t!("plugins.logs.lsp_retry")
         };
         Some(format!(
-            "{} [{}] {state}（{}/{}）：{message}",
+            "{} [{}] {state} ({}/{}): {message}",
             self.service.owner.as_str(),
             editor_core::display_path(&self.root),
             recovery.failures,

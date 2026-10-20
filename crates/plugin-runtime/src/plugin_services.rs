@@ -16,6 +16,7 @@ use std::{
 mod availability;
 mod collections;
 mod registry;
+pub(crate) use collections::CollectionPublication;
 
 pub(crate) type Shared = Arc<Mutex<Broker>>;
 
@@ -29,6 +30,15 @@ pub(crate) struct Provider {
     pub caller: Caller,
     pub contracts: BTreeMap<String, Contract>,
 }
+
+/// Pure proposed publication metadata, separate from a running provider or any call authority.
+/// A resource-only package has no executable contracts; preparing one never needs an empty Store.
+pub(crate) struct ServiceReplacement {
+    pub plugin: String,
+    pub scope: String,
+    pub contracts: BTreeMap<String, Contract>,
+}
+
 #[derive(Clone)]
 pub(crate) struct Reference {
     /// Collection references share a complete membership epoch, separate from single selection.
@@ -58,7 +68,13 @@ struct Selection {
 #[derive(Clone)]
 pub(crate) enum InvocationOrigin {
     Delegated,
-    HostCommand { target: String },
+    HostCommand {
+        target: String,
+    },
+    /// Issued only for the selected provider's explicit interactive preparation profile.
+    LanguagePreparation {
+        target: String,
+    },
 }
 
 /// The original source and shrinking authority survive nested calls; ancestry bounds asynchronous cycles.
@@ -76,6 +92,22 @@ pub(crate) struct Context {
     pub permissions: BTreeSet<String>,
 }
 impl Context {
+    /// Only the first exact provider can use its own preference namespace; no nested hop inherits it.
+    pub(crate) fn direct_language_preparation(&self, instance: &str) -> bool {
+        matches!(&self.origin, InvocationOrigin::LanguagePreparation { target } if target == instance)
+            && self.ancestry.len() == 1
+            && self.ancestry[0] == instance
+            && self
+                .lifetimes
+                .iter()
+                .all(|alive| alive.load(Ordering::Acquire))
+            && self.native_waits.iter().all(|wait| {
+                !matches!(
+                    wait.status(),
+                    plugin_protocol::api::RequestUpdate::Cancelled { .. }
+                )
+            })
+    }
     /// A native command acts on its exact provider incarnation; nested calls cannot inherit this identity.
     pub(crate) fn direct_host_command(&self, instance: &str) -> bool {
         matches!(&self.origin, InvocationOrigin::HostCommand { target } if target == instance)

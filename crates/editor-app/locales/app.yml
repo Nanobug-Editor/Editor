@@ -254,6 +254,66 @@ plugins.market_downloading:
 plugins.market_preparing:
   en: "Preparing installation: %{stage}"
   zh-CN: "正在准备安装：%{stage}"
+plugins.install_progress.queued:
+  en: "Preparing installation…"
+  zh-CN: "准备安装…"
+plugins.install_progress.preparing:
+  en: "Preparing dependencies…"
+  zh-CN: "正在准备依赖…"
+plugins.install_progress.downloading:
+  en: "Downloading / reading dependency: %{id}"
+  zh-CN: "正在下载 / 读取依赖：%{id}"
+plugins.install_progress.verifying:
+  en: "Verifying SHA-256: %{id}"
+  zh-CN: "正在验证 SHA-256：%{id}"
+plugins.install_progress.extracting:
+  en: "Extracting dependency: %{id}"
+  zh-CN: "正在解包依赖：%{id}"
+plugins.install_progress.authorization:
+  en: "Native installation step %{id} is waiting for additional authorization."
+  zh-CN: "原生安装步骤 %{id} 正在等待额外授权。"
+plugins.install_progress.installing:
+  en: "Running installation step: %{purpose}"
+  zh-CN: "正在执行安装步骤：%{purpose}"
+plugins.install_progress.prepared:
+  en: "Dependencies are ready; installing the plugin…"
+  zh-CN: "依赖已准备，正在安装插件…"
+plugins.install_progress.migrating:
+  en: "Migrating plugin data in an isolated copy…"
+  zh-CN: "正在隔离副本中迁移插件数据…"
+plugins.install_progress.committing:
+  en: "Committing the plugin version and data…"
+  zh-CN: "正在提交插件版本和数据…"
+plugins.install_progress.committed:
+  en: "The plugin version and data have been committed."
+  zh-CN: "插件版本和数据已提交。"
+plugins.install_progress.failed:
+  en: "Installation failed: %{error}\nClose this window and select Install to retry."
+  zh-CN: "安装失败：%{error}\n可关闭此窗口后重新点击安装重试。"
+plugins.install_progress.waiting_language:
+  en: "Plugin installed; waiting for language service selection and startup…"
+  zh-CN: "插件已安装；等待语言服务选择与启动…"
+plugins.install_progress.complete:
+  en: "Plugin installation completed."
+  zh-CN: "插件安装完成。"
+plugins.install_progress.preparation_failed:
+  en: "%{provider}: preparation failed: %{error}"
+  zh-CN: "%{provider}：准备失败：%{error}"
+plugins.install_progress.checkpoint_failed:
+  en: "Could not save plugin state: %{error}"
+  zh-CN: "保存插件状态失败：%{error}"
+plugins.install_progress.operation_failed:
+  en: "%{action} failed: %{error}"
+  zh-CN: "%{action}失败：%{error}"
+plugins.install_progress.inspect:
+  en: "Inspect package"
+  zh-CN: "检查插件包"
+plugins.install_progress.install_update:
+  en: "Install / update"
+  zh-CN: "安装 / 更新"
+plugins.install_progress.enable:
+  en: "Enable"
+  zh-CN: "启用"
 terminal.title:
   en: "Terminal"
   zh-CN: "终端"
@@ -791,6 +851,9 @@ plugins.logs.lsp_output_failed:
 plugins.logs.lsp_retry:
   en: "Waiting for a limited retry."
   zh-CN: "等待有限重试。"
+plugins.logs.lsp_backoff:
+  en: "The language service will retry in %{milliseconds} ms."
+  zh-CN: "语言服务将在 %{milliseconds} 毫秒后重试。"
 plugins.logs.lsp_paused:
   en: "Automatic retries paused; restart the plugin to recover."
   zh-CN: "自动重试已暂停，请重启插件恢复。"
@@ -836,6 +899,15 @@ outline.show:
 editor.format_document:
   en: "Format document"
   zh-CN: "格式化文档"
+editor.format_selection:
+  en: "Format selection"
+  zh-CN: "格式化选中内容"
+editor.format_selection_empty:
+  en: "Select a range to format"
+  zh-CN: "请选择要格式化的内容"
+editor.format_no_changes:
+  en: "No formatting changes are available"
+  zh-CN: "没有可应用的格式化改动"
 editor.rename_symbol:
   en: "Rename symbol"
   zh-CN: "重命名符号"
@@ -848,6 +920,9 @@ editor.rename_cancel:
 editor.rename_unavailable:
   en: "No rename is available at this position"
   zh-CN: "此位置没有可重命名的符号"
+editor.rename_opened_targets:
+  en: "Opened rename targets; analyzing their current document sessions"
+  zh-CN: "已打开重命名目标，正在按当前文档会话重新分析"
 editor.format_unavailable:
   en: "No formatter is available for this document"
   zh-CN: "此文档没有可用的格式化程序"

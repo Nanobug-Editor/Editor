@@ -220,11 +220,12 @@ fn old_registry_reports_update_requirement_before_accessing_component() {
     )
     .unwrap();
     let mut manager = Manager::open(root.path().into(), Environment::default()).unwrap();
+    // Runtime protocol diagnostics identify the required SDK baseline independently of UI locale.
+    let diagnostic = manager.installed["legacy"].error.as_ref().unwrap();
     assert!(
-        manager.installed["legacy"]
-            .error
-            .as_ref()
-            .is_some_and(|error| error.contains("不兼容"))
+        diagnostic.contains("Incompatible plugin protocol 6")
+            && diagnostic.contains("protocol 7 required"),
+        "the protocol refusal must precede missing component IO: {diagnostic}"
     );
     assert!(manager.installed["legacy"].enabled);
     assert!(manager.live.is_empty());
@@ -234,7 +235,7 @@ fn old_registry_reports_update_requirement_before_accessing_component() {
             .enable("legacy")
             .unwrap_err()
             .to_string()
-            .contains("不兼容")
+            .contains("protocol 7 required")
     );
     let saved = Manager::read_registry(root.path()).unwrap();
     assert!(

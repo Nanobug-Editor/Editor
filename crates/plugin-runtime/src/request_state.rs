@@ -132,6 +132,11 @@ impl<T: Clone> Completion<T> {
             )
         }));
     }
+    /// Native preparation may consume its conditions after real effects. Reuse this completion's
+    /// existing expiry gate instead of adding another request, deadline or cancellation state.
+    pub(crate) fn bind_condition(&mut self, is_live: impl Fn() -> bool + Send + Sync + 'static) {
+        self.wait_sources.push(Arc::new(is_live));
+    }
     /// Forwarded activation keeps the original absolute deadline; ceil avoids rounding a live wait to zero.
     pub(crate) fn remaining_timeout_ms(&self) -> u32 {
         let remaining = self.deadline.saturating_duration_since(Instant::now());

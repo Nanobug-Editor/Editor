@@ -210,3 +210,151 @@ fn related_native_sources_are_explicit_and_auxiliary_changes_revoke_results() {
     );
     manager.disable("related-sources").unwrap();
 }
+
+/// More than the former enumeration limit and RPC-sized sources still arrive as one complete graph.
+/// Metadata is paged; source bytes travel on normal document frames, never in a guest RPC envelope.
+#[test]
+#[ignore = "build native lsp_fixture before running the large paged source regression"]
+fn paged_related_graph_synchronizes_every_large_native_source_without_truncation() {
+    let workspace = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let executable = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/debug/examples/lsp_fixture.exe")
+        .canonicalize()
+        .unwrap();
+    let log = workspace.path().join("wire.jsonl");
+    let method = "fixture/context/all-documents";
+    let manifest = json!({
+        "id":"paged-sources","name":"Paged sources","version":"0.1.0","protocol":7,"contributions":"plugin.toml","storage_limit":1024,
+        "api":{"base":"^1","required":{"language.lsp":"^1.5","language.control":"^1","process":"^1"}},
+        "permissions":["process.service.analysis","editor.read","workspace.read"],
+        "services":{"analysis":{"program":executable,"args":[log]}},
+        "language_servers":[{"id":"analysis","language":"unfamiliar","service":"analysis","related_documents":method,
+            "control_methods":{method:protocol::language_context::related_documents_method()}}]
+    });
+    let package = Package::from_files(BTreeMap::from([
+        ("manifest.json".into(),serde_json::to_vec(&manifest).unwrap()),
+        ("plugin.toml".into(),b"[plugin]\nid='paged-sources'\nname='Paged sources'\nversion='0.1.0'\nhost_version='^0.1'\n".to_vec()),
+    ])).unwrap();
+    let mut manager = Manager::open(
+        profile.path().into(),
+        protocol::Environment {
+            workspace: workspace.path().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+    let availability = manager.availability("paged-sources").unwrap();
+    let document = DocumentContext {
+        path: "source-000.novel".into(),
+        generation: availability.configuration_generation(),
+    };
+    let request = manager
+        .begin_demand(
+            &availability,
+            DemandReason::LanguageDocument {
+                provider: "paged-sources/analysis".into(),
+                role: LanguageRole::Lsp,
+                document: document.clone(),
+            },
+            10_000,
+        )
+        .unwrap();
+    let prepared = manager.take_demand_preparation().unwrap().run();
+    manager.commit_demand(prepared).unwrap();
+    assert!(matches!(
+        request.status(),
+        protocol::api::RequestUpdate::Completed { result: Ok(_) }
+    ));
+    let plan = manager
+        .language_document_service("paged-sources/analysis", &document)
+        .unwrap()
+        .unwrap();
+    let server = Arc::new(LanguageServer::from_service(plan).unwrap());
+    let sources = (0..260)
+        .map(|index| {
+            let id = format!("source-{index:03}");
+            let path = format!("{id}.novel");
+            ContextSource {
+                document: protocol::api::DocumentVersion {
+                    id: id.clone(),
+                    path: path.clone(),
+                    revision: index + 1,
+                },
+                uri: file_uri(&workspace.path().join(path)).unwrap(),
+                language: "unfamiliar".into(),
+                text: Rope::from(format!(
+                    "{}\r\n// unsaved 中文😀 tail-{index}",
+                    "large source\n".repeat(6000)
+                )),
+            }
+        })
+        .collect::<Vec<_>>();
+    let capture = ContextCapture::new(
+        workspace.path().into(),
+        1,
+        sources[0].document.id.clone(),
+        sources.clone(),
+    );
+    server
+        .with_context_snapshot(&capture, || {
+            server.definitions(
+                sources[0].uri.clone(),
+                sources[0].text.to_string(),
+                Position::new(0, 0),
+            )
+        })
+        .unwrap();
+    assert_eq!(capture.documents().unwrap().len(), 260);
+    assert_eq!(capture.wire_sources().unwrap().len(), 260);
+    let frames = std::fs::read_to_string(log)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let opens = frames
+        .iter()
+        .filter(|frame| frame["method"] == "textDocument/didOpen")
+        .collect::<Vec<_>>();
+    assert_eq!(opens.len(), sources.len());
+    for source in &sources {
+        let opened = opens
+            .iter()
+            .find(|frame| {
+                frame["params"]["textDocument"]["uri"].as_str() == Some(source.uri.as_str())
+            })
+            .unwrap();
+        assert_eq!(
+            opened["params"]["textDocument"]["text"].as_str(),
+            Some(source.text.to_string().as_str())
+        );
+    }
+    let pages = frames
+        .iter()
+        .filter(|frame| frame["method"] == method)
+        .collect::<Vec<_>>();
+    assert!(
+        pages.len() >= 3,
+        "the complete graph must use multiple bounded metadata pages"
+    );
+    for page in pages {
+        assert!(
+            serde_json::to_vec(&page["params"]["arguments"])
+                .unwrap()
+                .len()
+                <= protocol::language_control::MAX_CONTROL_BYTES
+        );
+        assert!(
+            page["params"]["arguments"]["candidates"]
+                .as_array()
+                .unwrap()
+                .len()
+                <= protocol::language_context::MAX_CANDIDATES
+        );
+        assert!(!page.to_string().contains("large source"));
+    }
+    manager.disable("paged-sources").unwrap();
+}

@@ -362,7 +362,8 @@ impl State {
             | api::Operation::ReadPreference { .. }
             | api::Operation::WritePreference { .. }
             | api::Operation::Editor { .. }
-            | api::Operation::CancelRequest { .. } => {
+            | api::Operation::CancelRequest { .. }
+            | api::Operation::LanguageContexts { .. } => {
                 unreachable!("assets are handled before resource dispatch")
             }
         }

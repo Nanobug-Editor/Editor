@@ -218,6 +218,10 @@ pub struct SdkDescriptor {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
+    /// language.lsp 1.6: owned, scope-sealed project references and explicit source routing.
+    LanguageContexts {
+        operation: crate::language_context::Operation,
+    },
     /// Stable diagnostic collection creation; publication uses versioned native editor requests.
     Diagnostics {
         operation: crate::diagnostics::Operation,
@@ -315,6 +319,8 @@ pub struct Request {
 /// Result variants carry structured values, never JSON hidden inside a string result.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Value {
+    /// Bounded registered contexts; descriptive roots and keys confer no authority by themselves.
+    LanguageContexts(Vec<crate::language_context::Reference>),
     /// plugin.services 1.2: bounded explicitly composable, caller-owned service references.
     ServiceSet(crate::service::ServiceSet),
     /// A plan's wait can stop independently from its current-session recovery resource.
@@ -349,6 +355,9 @@ impl std::fmt::Debug for Value {
     /// Credential bytes must not become an automatic debug field on a correlated transport response.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::LanguageContexts(value) => {
+                f.debug_tuple("LanguageContexts").field(value).finish()
+            }
             Self::ServiceSet(value) => f.debug_tuple("ServiceSet").field(value).finish(),
             Self::Secret(_) => f.write_str("Secret(<redacted>)"),
             Self::Http(value) => f.debug_tuple("Http").field(value).finish(),
@@ -632,6 +641,11 @@ pub struct DocumentChange {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditorOperation {
+    /// language.lsp 1.6: reprepare this exact source's already selected owned primary provider.
+    RefreshLanguageContext {
+        provider: String,
+        document: DocumentVersion,
+    },
     /// language.control 1.0: bounded provider-owned control over its existing native LSP connection.
     /// It grants no arbitrary JSON-RPC, process or source-document write authority.
     LanguageRequest {

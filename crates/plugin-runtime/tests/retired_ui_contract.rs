@@ -49,7 +49,8 @@ fn retired_presentation_and_host_artwork_are_rejected_before_installation() {
             "missing incompatible field: {message}"
         );
         assert!(
-            message.contains("更新插件"),
+            // Package admission returns a technical SDK diagnostic independently of UI locale.
+            message.contains("update the plugin"),
             "missing update guidance: {message}"
         );
     }

@@ -195,11 +195,7 @@ impl Worker {
         let control = plugin_runtime::InstallControl::new(move |stage| {
             if let Some(output) = report_output.upgrade() {
                 if let Some(report) = &mut output.lock().unwrap().installation {
-                    use plugin_runtime::InstallStage::*;
-                    report.cancellable =
-                        !matches!(stage, Prepared | Migrating | Committing | Committed);
-                    report.message =
-                        t!("plugins.market_preparing", stage = format!("{stage:?}")).to_string();
+                    report.advance(stage);
                 }
             }
         })

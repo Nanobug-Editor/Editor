@@ -94,109 +94,117 @@ impl HoverProvider for LanguageHoverProvider {
             position_at_byte(&source, text.char_to_byte_idx(symbol_start)),
             position_at_byte(&source, text.char_to_byte_idx(symbol_end)),
         );
-        let (shared_result, generation, start_request) = {
-            let mut cache = self.cache.lock().expect("hover cache lock poisoned");
-            if let Some(current) = &cache.current
-                && current.source == source
-                && current.symbol_start == symbol_start
-                && current.symbol_end == symbol_end
-                && current
-                    .result
-                    .lock()
-                    .expect("hover result lock poisoned")
-                    .as_ref()
-                    .is_none_or(|(_, context)| hover_context_current(&self.owner, context, cx))
-            {
-                (current.result.clone(), cache.generation, false)
-            } else {
-                // Replacing the symbol invalidates work that has not started yet.
-                cache.generation = cache.generation.wrapping_add(1);
-                let result = Arc::new(Mutex::new(None));
-                cache.current = Some(CachedHover {
-                    source: source.clone(),
-                    symbol_start,
-                    symbol_end,
-                    result: result.clone(),
-                });
-                (result, cache.generation, true)
-            }
-        };
-
-        if start_request {
-            let server = self.server.clone();
-            let document = self.document.clone();
-            let cache = self.cache.clone();
-            let result_for_worker = shared_result.clone();
-            let owner = self.owner.clone();
-            // This task outlives individual mouse-move waiters, which GPUI replaces on movement.
-            cx.spawn(async move |cx| {
-                let is_current =
-                    cache.lock().expect("hover cache lock poisoned").generation == generation;
-                let context = if let Some((app, editor)) = &owner {
-                    cx.update(|cx| {
-                        app.upgrade()
-                            .ok_or_else(|| anyhow::anyhow!("Hover window closed"))?
-                            .read(cx)
-                            .capture_editor_language_context(&server, *editor, &source, cx)
-                    })
-                } else {
-                    Ok(None)
-                };
-                let response_context = context.as_ref().ok().cloned().flatten();
-                let mut result = if is_current {
-                    match context {
-                        Ok(context) => {
-                            cx.background_executor()
-                                .scheduler_executor()
-                                .spawn_dedicated(move |_| async move {
-                                    let operation = || {
-                                        fetch_hover(
-                                            server.clone(),
-                                            document,
-                                            source,
-                                            position,
-                                            symbol_range,
-                                        )
-                                    };
-                                    match &context {
-                                        Some(context) => {
-                                            server.with_context_snapshot(context, operation)
-                                        }
-                                        None => operation(),
-                                    }
-                                })
-                                .await
-                        }
-                        Err(error) => Err(error),
-                    }
-                } else {
-                    Ok(None)
-                };
-                if result.is_ok()
-                    && !cx.update(|cx| hover_context_current(&owner, &response_context, cx))
-                {
-                    result = Err(anyhow::anyhow!("Hover project context changed"));
-                }
-                let result = result.map_err(|error| error.to_string());
-                let retry_on_next_hover = !matches!(result, Ok(Some(_)));
-                *result_for_worker
-                    .lock()
-                    .expect("hover result lock poisoned") = Some((result, response_context));
-                if retry_on_next_hover {
-                    // Empty or failed responses must not be cached while the server is starting.
-                    let mut cache = cache.lock().expect("hover cache lock poisoned");
-                    if cache.generation == generation {
-                        cache.current = None;
-                    }
-                }
-            })
-            .detach();
-        }
-
-        let document = self.document.clone();
         let server = self.server.clone();
+        let document = self.document.clone();
+        let cache = self.cache.clone();
         let owner = self.owner.clone();
         cx.spawn(async move |cx| {
+            // Keyboard and pointer callers may still hold the parent EditorApp update lease.
+            // Even a cache hit reads related-source context, so defer selection as well as I/O.
+            let shared_result = cx.update(|cx| {
+                let (shared_result, generation, start_request) = {
+                    let mut cache = cache.lock().expect("hover cache lock poisoned");
+                    if let Some(current) = &cache.current
+                        && current.source == source
+                        && current.symbol_start == symbol_start
+                        && current.symbol_end == symbol_end
+                        && current
+                            .result
+                            .lock()
+                            .expect("hover result lock poisoned")
+                            .as_ref()
+                            .is_none_or(|(_, context)| hover_context_current(&owner, context, cx))
+                    {
+                        (current.result.clone(), cache.generation, false)
+                    } else {
+                        // Replacing the symbol invalidates work that has not started yet.
+                        cache.generation = cache.generation.wrapping_add(1);
+                        let result = Arc::new(Mutex::new(None));
+                        cache.current = Some(CachedHover {
+                            source: source.clone(),
+                            symbol_start,
+                            symbol_end,
+                            result: result.clone(),
+                        });
+                        (result, cache.generation, true)
+                    }
+                };
+
+                if start_request {
+                    let server = server.clone();
+                    let document = document.clone();
+                    let cache = cache.clone();
+                    let result_for_worker = shared_result.clone();
+                    let owner = owner.clone();
+                    // This task outlives individual mouse-move waiters, which GPUI replaces on movement.
+                    cx.spawn(async move |cx| {
+                        let is_current =
+                            cache.lock().expect("hover cache lock poisoned").generation
+                                == generation;
+                        let context = if let Some((app, editor)) = &owner {
+                            cx.update(|cx| {
+                                app.upgrade()
+                                    .ok_or_else(|| anyhow::anyhow!("Hover window closed"))?
+                                    .read(cx)
+                                    .capture_editor_language_context(&server, *editor, &source, cx)
+                            })
+                        } else {
+                            Ok(None)
+                        };
+                        let response_context = context.as_ref().ok().cloned().flatten();
+                        let mut result = if is_current {
+                            match context {
+                                Ok(context) => {
+                                    cx.background_executor()
+                                        .scheduler_executor()
+                                        .spawn_dedicated(move |_| async move {
+                                            let operation = || {
+                                                fetch_hover(
+                                                    server.clone(),
+                                                    document,
+                                                    source,
+                                                    position,
+                                                    symbol_range,
+                                                )
+                                            };
+                                            match &context {
+                                                Some(context) => {
+                                                    server.with_context_snapshot(context, operation)
+                                                }
+                                                None => operation(),
+                                            }
+                                        })
+                                        .await
+                                }
+                                Err(error) => Err(error),
+                            }
+                        } else {
+                            Ok(None)
+                        };
+                        if result.is_ok()
+                            && !cx.update(|cx| hover_context_current(&owner, &response_context, cx))
+                        {
+                            result = Err(anyhow::anyhow!("Hover project context changed"));
+                        }
+                        let result = result.map_err(|error| error.to_string());
+                        let retry_on_next_hover = !matches!(result, Ok(Some(_)));
+                        *result_for_worker
+                            .lock()
+                            .expect("hover result lock poisoned") =
+                            Some((result, response_context));
+                        if retry_on_next_hover {
+                            // Empty or failed responses must not be cached while the server is starting.
+                            let mut cache = cache.lock().expect("hover cache lock poisoned");
+                            if cache.generation == generation {
+                                cache.current = None;
+                            }
+                        }
+                    })
+                    .detach();
+                }
+
+                shared_result
+            });
             // Presentation timing belongs to the pointer caller; keyboard requests
             // can consume cached or completed documentation without a hover delay.
             loop {

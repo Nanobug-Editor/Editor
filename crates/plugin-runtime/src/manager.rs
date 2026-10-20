@@ -22,6 +22,7 @@ mod dependencies;
 mod host_services;
 mod image_input;
 mod images;
+mod installation;
 mod language;
 mod native_execution;
 mod service_preparation;
@@ -344,42 +345,13 @@ impl Manager {
         grants: BTreeSet<String>,
         control: &crate::InstallControl,
     ) -> anyhow::Result<()> {
-        control.check()?;
-        crate::capabilities::require_current(&package.manifest)?;
+        self.validate_installation(package, &grants, control)?;
         if self.is_application_management()
             && package.manifest.scope == api::InstanceScope::Workspace
         {
             return self.install_dormant_workspace(package, grants, control);
         }
-        anyhow::ensure!(
-            self.trusted && (self.workspace_open || self.is_application_management()),
-            "Workspace is restricted or closed"
-        );
-        anyhow::ensure!(
-            self.parked
-                .values()
-                .all(|scope| !scope.live.contains_key(&package.manifest.id)),
-            "Close other workspace instances before replacing this package"
-        );
-        let id = package.manifest.id.clone();
-        // Changing ownership needs an explicit data migration, not an implicit update cutover.
-        anyhow::ensure!(
-            self.installed
-                .get(&id)
-                .is_none_or(|old| old.manifest.scope == package.manifest.scope),
-            "Changing instance scope requires reinstalling the package"
-        );
-        anyhow::ensure!(
-            package.manifest.permissions.is_subset(&grants),
-            "Permission confirmation required"
-        );
         if package.manifest.component.is_none() {
-            anyhow::ensure!(
-                self.installed
-                    .get(&id)
-                    .is_none_or(|old| old.manifest.data_format.is_none()),
-                "Removing a data format requires an explicit migration"
-            );
             return self.install_declarative(package, grants, control);
         }
         let prepared = self.prepare_installation(package, grants, control)?;

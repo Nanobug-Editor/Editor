@@ -1,6 +1,8 @@
 # Vue/TS S3：使用首批 Vue 写法、SFC 高亮和块格式化
 
-状态：ready-for-agent；已发布 [#123](https://github.com/Nanobug-Editor/Editor/issues/123)，原生阻塞关系与父子关联已读回核对。等待依赖验收，可准备独立实现，不提前关闭。
+状态：技术验收完成；[#123](https://github.com/Nanobug-Editor/Editor/issues/123) 的提交、推送和关闭以[交付回执](../../../verification/vue-typescript-remaining-delivery-2026-10-20.md)为准，当前尚未关闭。
+
+逐条实际证据见[覆盖映射](../../../verification/vue-typescript-remaining-coverage-2026-10-19.md)；旧工单及父议题保持原状。
 
 <!-- nanobug-vue-typescript-scenes-2026-10-15:S3 -->
 
@@ -22,13 +24,13 @@
 
 ## Acceptance criteria
 
-- [ ] S3-AC1：Options/Composition、script setup、JS/TS 及 Vue 2 Composition API 扩展的每个声明组合均按目标版本合法范围覆盖七项适用语言能力；非法语法正确诊断，合法样例无误报。每项固定依赖组合及适用/不适用原因。
-- [ ] S3-AC2：类组件、装饰器、JSX/TSX 各自覆盖七项语言能力、props/slots 推断、自动导入及跨文件引用/重命名。既有 props 样例作为回归，不外推成全部能力已验收；S3 验证工具/受管包的语义与编辑提案，历史组合的安全应用、预览/取消/Undo 和正式支持标记须等待 S2+S3 在 S6 联合通过。
-- [ ] S3-AC3：外部 JS/TS src、不同合法导出形式与路径解析不依赖开发目录；对不支持的动态语义给出准确限制或完成补充实现，不把有限静态样例泛称全覆盖。密封受管 loader 与真实包均有证据。
-- [ ] S3-AC4：宿主实际 Tree-sitter loader 加载插件 WASM grammar 和查询；Vue、JS/TS/JSX/TSX、CSS/SCSS/Sass/Less 的注入及可见高亮正确，停用后撤销。缺少块 grammar 时不冒充其他语言。
-- [ ] S3-AC5：整文件与适用块范围格式化保留 SFC 结构、属性及外部 src；CSS/SCSS/Sass/Less 的已承诺块能力通过。独立格式化选择与配置生效，安装 Vue 不覆盖有效提供者；测试脏文本、CRLF/Unicode 和过期结果全拒绝。
-- [ ] S3-AC6：缺失块语言或专门插件时准确显示能力不足，其他能力继续；深浅主题、焦点、键盘、中文 IME、滚动及缩放按改动范围原生验收。
-- [ ] S3-AC7：兼容修复属于插件或通用公开契约，不写宿主白名单；受管闭包不命中开发依赖，来源、许可、传递依赖、摘要、生成缓存与真实包对应。工具或插件升级后的保留回归由 S5/S6 验证。
+- [x] S3-AC1：Options/Composition、script setup、JS/TS 及 Vue 2 Composition API 扩展的每个声明组合均按目标版本合法范围覆盖七项适用语言能力；非法语法正确诊断，合法样例无误报。每项固定依赖组合及适用/不适用原因。
+- [x] S3-AC2：类组件、装饰器、JSX/TSX 各自覆盖七项语言能力、props/slots 推断、自动导入及跨文件引用/重命名。既有 props 样例作为回归，不外推成全部能力已验收；S3 验证工具/受管包的语义与编辑提案，历史组合的安全应用、预览/取消/Undo 和正式支持标记须等待 S2+S3 在 S6 联合通过。
+- [x] S3-AC3：外部 JS/TS src、不同合法导出形式与路径解析不依赖开发目录；对不支持的动态语义给出准确限制或完成补充实现，不把有限静态样例泛称全覆盖。密封受管 loader 与真实包均有证据。
+- [x] S3-AC4：宿主实际 Tree-sitter loader 加载插件 WASM grammar 和查询；Vue、JS/TS/JSX/TSX、CSS/SCSS/Sass/Less 的注入及可见高亮正确，停用后撤销。缺少块 grammar 时不冒充其他语言。
+- [x] S3-AC5：整文件与适用块范围格式化保留 SFC 结构、属性及外部 src；CSS/SCSS/Sass/Less 的已承诺块能力通过。独立格式化选择与配置生效，安装 Vue 不覆盖有效提供者；测试脏文本、CRLF/Unicode 和过期结果全拒绝。
+- [x] S3-AC6：缺失块语言或专门插件时准确显示能力不足，其他能力继续；深浅主题、焦点、键盘、中文 IME、滚动及缩放按改动范围原生验收。
+- [x] S3-AC7：兼容修复属于插件或通用公开契约，不写宿主白名单；受管闭包不命中开发依赖，来源、许可、传递依赖、摘要、生成缓存与真实包对应。工具或插件升级后的保留回归由 S5/S6 验证。
 
 ## Verification
 

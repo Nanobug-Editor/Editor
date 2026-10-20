@@ -32,6 +32,9 @@ fn main() {
         .find(|pair| pair[0] == "--related-source")
         .map(|pair| PathBuf::from(&pair[1]).canonicalize().unwrap());
     let mut related_overlay = None::<String>;
+    // Explicit initialization data supplies whole standard replies for editing-contract tests.
+    // This test backend performs no rename inference and never writes the requested source files.
+    let mut rename_replies = Value::Null;
     // Startup arguments are observable independently of initialization JSON.
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -91,7 +94,14 @@ fn main() {
         }
         let result = match method {
             "initialize" => {
+                rename_replies = params["initializationOptions"]
+                    .get("fixtureRenameReplies")
+                    .cloned()
+                    .unwrap_or(Value::Null);
                 let mut result = json!({"capabilities":{"completionProvider":{},"definitionProvider":true,"referencesProvider":true,"signatureHelpProvider":{},"codeActionProvider":true,"textDocumentSync":{"openClose":true,"change":1,"save":true}}});
+                if rename_replies.is_object() {
+                    result["capabilities"]["renameProvider"] = json!(true);
+                }
                 if related_source.is_some() {
                     result["capabilities"]["hoverProvider"] = json!(true);
                 }
@@ -167,6 +177,10 @@ fn main() {
                 json!({"contents":{"kind":"plaintext","value":source}})
             }
             "textDocument/completion" => json!([{"label":"fixture-completion"}]),
+            "textDocument/rename" if rename_replies.is_object() => rename_replies
+                .get(params["newName"].as_str().unwrap_or(""))
+                .cloned()
+                .unwrap_or(Value::Null),
             // This mode has no declaration model; Base must display only its source-state hover.
             "textDocument/definition" if related_source.is_some() => json!([]),
             "textDocument/definition" => {

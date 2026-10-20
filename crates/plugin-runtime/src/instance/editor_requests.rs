@@ -24,6 +24,16 @@ impl State {
         operation: EditorOperation,
         timeout_ms: u32,
     ) -> Result<Value, Failure> {
+        self.editor_request_with_context(operation, timeout_ms, None)
+    }
+
+    /// A selected context follows normal schema/permission admission before it changes source routing.
+    pub(super) fn editor_request_with_context(
+        &mut self,
+        operation: EditorOperation,
+        timeout_ms: u32,
+        selected: Option<crate::language_contexts::RegisteredContext>,
+    ) -> Result<Value, Failure> {
         if !self.active || self.roots.retired || self.roots.application {
             return Err(Failure::new(
                 ErrorCode::PermissionDenied,
@@ -94,6 +104,22 @@ impl State {
             ));
         }
         let (capability, permission) = match &operation {
+            EditorOperation::RefreshLanguageContext { provider, .. } => {
+                if self
+                    .api
+                    .capabilities
+                    .get("language.lsp")
+                    .is_none_or(|version| *version < semver::Version::new(1, 6, 0))
+                    || selected.is_none()
+                    || !self.language_providers.contains_key(provider)
+                {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Context refresh requires an owned language.lsp 1.6 provider",
+                    ));
+                }
+                ("language.lsp", "editor.read")
+            }
             EditorOperation::LanguageRequest { request } => {
                 let _ = request; // Detailed schema/import admission follows shared permission checks.
                 ("language.control", "editor.read")
@@ -321,11 +347,30 @@ impl State {
                 "Editor request queue is full",
             ));
         }
-        let language_control = if let EditorOperation::LanguageRequest { request } = &operation {
+        let mut language_control = if let EditorOperation::LanguageRequest { request } = &operation
+        {
             Some(self.prepare_language_control(request)?)
         } else {
             None
         };
+        if let (Some(selected), EditorOperation::LanguageRequest { request }) =
+            (&selected, &operation)
+        {
+            let metadata = language_control.as_mut().unwrap();
+            if selected.reference.descriptor.provider != request.provider {
+                return Err(Failure::new(
+                    ErrorCode::PermissionDenied,
+                    "Context belongs to another provider",
+                ));
+            }
+            let principal = &self.plugin_services.principal;
+            metadata.selected_context = Some(self.host_resources.contexts.select(
+                &selected.reference.token,
+                &principal.instance,
+                &principal.scope,
+                &request.document.path,
+            )?);
+        }
         let workspace_request = if let EditorOperation::Workspace { operation } = &operation {
             Some(self.prepare_workspace_request(operation)?)
         } else {
@@ -351,6 +396,14 @@ impl State {
             self.plugin_services.alive.clone(),
             self.plugin_services.context.as_ref(),
         );
+        if let Some(selected) = selected
+            && matches!(
+                call.operation(),
+                EditorOperation::RefreshLanguageContext { .. }
+            )
+        {
+            call = call.with_language_refresh(self.host_resources.contexts.clone(), selected);
+        }
         if let Some(input) = image_input {
             self.mark_image_input_pending(&input.input.handle, handle.clone());
             call = call.with_image_input(input);

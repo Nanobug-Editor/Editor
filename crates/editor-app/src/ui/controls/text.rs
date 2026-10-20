@@ -174,6 +174,13 @@ fn rich_text_style(font_size: Pixels, cx: &App) -> TextViewStyle {
         // so an opaque theme selection color cannot hide the selected text.
         .with_selection(palette.selection.alpha(palette.selection.a.min(0.25)))
         .with_code_background(palette.background)
+        // Inline spans have a separate Base accent fallback from fenced blocks;
+        // resolve both glyphs and fill so hover paths remain readable in dark themes.
+        .with_inline_code(HighlightStyle {
+            color: Some(palette.foreground),
+            background_color: Some(palette.background),
+            ..Default::default()
+        })
         .with_border(palette.border)
         .with_paragraph_gap(rems(0.5))
         // Base 0.7 accepts a heading style; preserve the existing size hierarchy.
@@ -245,6 +252,31 @@ mod tests {
                 assert_eq!(custom.link(), color);
                 assert_eq!(custom.border(), color);
                 assert_eq!(custom.inline_code().background_color, Some(color));
+            }
+        });
+    }
+
+    /// Hover inline glyphs and fill must avoid Base's default light-accent fallback.
+    /// Inspect the span style itself; the painted-card test only observes its surrounding surface.
+    #[gpui::test]
+    fn hover_rich_text_preserves_inline_code_colors_in_both_themes(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::ui::typography::init(cx);
+            for dark in [true, false] {
+                crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(dark), cx);
+                let palette = cx.theme();
+                let style = rich_text_style(px(14.), cx);
+                assert_eq!(
+                    style.inline_code().color,
+                    Some(palette.foreground),
+                    "hover inline code must use the live foreground in dark={dark}"
+                );
+                assert_eq!(
+                    style.inline_code().background_color,
+                    Some(palette.background),
+                    "hover inline code must use the live background in dark={dark}"
+                );
             }
         });
     }

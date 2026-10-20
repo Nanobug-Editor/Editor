@@ -46,6 +46,7 @@ impl State {
                 "open_workspace",
                 "find_files",
                 "describe_sdk",
+                "language_contexts",
                 "open_data",
                 "read_preference",
                 "write_preference",
@@ -149,6 +150,9 @@ impl State {
             }
             self.check_service_authority(&request.operation)?;
             let result = match request.operation {
+                api::Operation::LanguageContexts { operation } => {
+                    self.language_context_request(operation)
+                }
                 api::Operation::Diagnostics { operation } => self.create_diagnostics(operation),
                 api::Operation::Http { operation } => self.http_request(operation),
                 api::Operation::Secrets { operation } => self.secret_request(operation),

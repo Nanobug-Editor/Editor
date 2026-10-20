@@ -3,6 +3,8 @@
 mod completion_hooks;
 mod context;
 #[cfg(test)]
+mod context_recovery_tests;
+#[cfg(test)]
 mod context_tests;
 mod control;
 #[cfg(test)]
@@ -15,6 +17,7 @@ pub(crate) mod editing;
 mod features;
 pub(crate) use documents::DocumentLease;
 mod recovery;
+mod registered_context;
 pub(crate) use recovery::RecoveryState;
 mod service;
 mod snapshots;
@@ -311,6 +314,8 @@ impl DefinitionProvider for LanguageDefinitionProvider {
 
 /// Owns the language-server process and its framed JSON-RPC streams.
 struct LanguageServerConnection {
+    /// One native pipe incarnation. A surviving service plan or adapter cannot revive its results.
+    incarnation_alive: Arc<std::sync::atomic::AtomicBool>,
     documents: HashMap<String, DocumentLease>,
     child: plugin_runtime::ServiceProcess,
     service: Arc<plugin_runtime::LanguageService>,
@@ -329,7 +334,11 @@ struct LanguageServerConnection {
     /// Standard navigation capabilities remain independent of the concrete language or server.
     definition_provider: bool,
     type_definition_provider: bool,
+    /// Resolve selected completion details only when the standard server capability permits it.
+    completion_resolve_provider: bool,
     formatting_provider: bool,
+    /// Standard range support is negotiated independently from whole-document formatting.
+    range_formatting_provider: bool,
     rename_provider: bool,
     prepare_rename_provider: bool,
     linked_editing_provider: bool,
@@ -499,6 +508,9 @@ impl LanguageServerConnection {
 
 impl Drop for LanguageServerConnection {
     fn drop(&mut self) {
+        // Revoke result seals before process teardown or a replacement connection can be observed.
+        self.incarnation_alive
+            .store(false, std::sync::atomic::Ordering::Release);
         // Stop reader alerts before terminating the pipe; deliberate cleanup must not look like a crash.
         self.output.stop_logging();
         if self.failed {

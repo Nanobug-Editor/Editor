@@ -93,6 +93,7 @@ actions!(
     [
         SaveDocument,
         FormatDocument,
+        FormatSelection,
         RenameSymbol,
         RefreshWorkspace,
         ToggleTheme,
@@ -888,20 +889,35 @@ impl EditorApp {
         let Some((offset, symbol_range, task)) = request else {
             return;
         };
+        // Explicit keyboard requests supersede Escape's automatic-pointer suppression.
+        // Share one generation and cache so same-symbol mouse motion preserves the card,
+        // while Escape, edits, or later pointer requests can still reject a late reply.
+        self.pointer_hover_generation = self.pointer_hover_generation.wrapping_add(1);
+        let generation = self.pointer_hover_generation;
+        self.pointer_hover_context = Some((source_path.clone(), source_revision));
+        self.pointer_hover_symbol = Some(symbol_range.clone());
+        self.pointer_hover_pending = true;
+        self.pointer_hover_cached = None;
+        self.pointer_hover_suppressed = None;
         cx.spawn_in(window, async move |this, cx| {
             let result = task.await;
             let _ = this.update_in(cx, |app, _, cx| {
                 // A tab switch, edit, or cursor move invalidates the requested symbol.
-                if app.active_path != source_path
+                if app.pointer_hover_generation != generation
+                    || app.active_path != source_path
                     || app.active_text_revision() != source_revision
                     || app.editor.read(cx).cursor() != offset
                 {
                     return;
                 }
+                app.pointer_hover_pending = false;
                 match result {
-                    Ok(Some(hover)) => app.editor.update(cx, |editor, cx| {
-                        editor.present_hover(symbol_range, hover, cx);
-                    }),
+                    Ok(Some(hover)) => {
+                        app.pointer_hover_cached = Some(hover.clone());
+                        app.editor.update(cx, |editor, cx| {
+                            editor.present_hover(symbol_range, hover, cx);
+                        });
+                    }
                     Ok(None) => {}
                     Err(error) => tracing::warn!(%error, "definition details request failed"),
                 }
@@ -927,6 +943,12 @@ impl EditorApp {
         }
         let source_path = self.active_path.clone();
         let source_revision = self.active_text_revision();
+        // Preserve the actual source plan across the asynchronous native definition request.
+        // Looking up the target's plan after opening would reuse its saved display context.
+        let source_service = source_path
+            .as_deref()
+            .and_then(|path| self.language_server_for_path(path))
+            .and_then(|server| server.navigation_context_service());
         let task = self.editor.update(cx, |editor, cx| {
             let provider = editor.lsp_mut().definition_provider.clone()?;
             Some(provider.definitions(editor.text(), editor.cursor(), window, cx))
@@ -947,6 +969,13 @@ impl EditorApp {
                 if app.definition_request_id != request_id
                     || app.active_path != source_path
                     || app.active_text_revision() != source_revision
+                    || source_service.as_ref().is_some_and(|source| {
+                        !source.is_active()
+                            || !source_path
+                                .as_deref()
+                                .and_then(|path| app.language_server_for_path(path))
+                                .is_some_and(|server| server.uses_service(source))
+                    })
                 {
                     return;
                 }
@@ -954,7 +983,8 @@ impl EditorApp {
                     .ok()
                     .and_then(|locations| locations.into_iter().next())
                     .is_some_and(|location| {
-                        app.open_definition_uri(
+                        app.open_definition_with_source(
+                            source_service.as_ref(),
                             &location.target_uri,
                             Some(location.target_selection_range),
                             window,

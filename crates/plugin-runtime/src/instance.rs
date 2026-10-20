@@ -23,6 +23,7 @@ mod editor_requests;
 pub(crate) mod file_discovery;
 mod icons;
 mod image_inputs;
+mod language_contexts;
 mod language_control;
 mod plugin_services;
 mod preferences;
@@ -748,6 +749,12 @@ impl Instance {
     }
     /// Seal published work at retirement, after any final snapshot has used its still-live owned resources.
     pub(crate) fn quiesce(&mut self) {
+        // Revoke registered configuration metadata before another callback can select its old plan.
+        self.store
+            .data()
+            .host_resources
+            .contexts
+            .revoke_owner(&self.store.data().plugin_services.principal.instance);
         // Stop borrowed native workers before revoking source metadata or allowing package cleanup.
         self.store
             .data()

@@ -16,6 +16,38 @@ pub(super) fn provider_key(key: &str) -> &str {
 }
 
 impl Manager {
+    /// Clone only the publication evidence owned by this exact provider/document reservation in
+    /// the current project. A new reservation gets a new Arc even if its document identity repeats.
+    pub(in crate::manager) fn language_failure_publication(
+        &self,
+        reason: &DemandReason,
+    ) -> Option<Arc<AtomicBool>> {
+        let DemandReason::LanguageDocument {
+            provider, document, ..
+        } = reason
+        else {
+            return None;
+        };
+        self.document_failure_publication(provider, document)
+    }
+
+    /// Cache keys may change after discovery; exact bound intent, rather than key spelling or a
+    /// selected UI context, identifies the reservation retained by the original request.
+    fn document_failure_publication(
+        &self,
+        provider: &str,
+        document: &DocumentContext,
+    ) -> Option<Arc<AtomicBool>> {
+        self.language_services.iter().find_map(|(key, prepared)| {
+            (provider_key(key) == provider
+                && prepared
+                    .context
+                    .as_ref()
+                    .is_some_and(|binding| binding.documents.contains(document)))
+            .then(|| prepared.failure_publication.clone())
+        })
+    }
+
     /// Snapshot exact admitted document-to-plan bindings for native actor publication. Only opaque
     /// keys and immutable intent metadata leave this cache; enumeration performs no discovery or IO.
     pub fn language_document_bindings(&mut self) -> BTreeMap<(String, DocumentContext), String> {
@@ -45,6 +77,11 @@ impl Manager {
             .keys()
             .find(|key| {
                 provider_key(key) == provider
+                    && self.selected_context_matches(
+                        provider,
+                        document,
+                        &self.language_services[*key],
+                    )
                     && self.language_services[*key]
                         .context
                         .as_ref()
@@ -202,6 +239,7 @@ impl Manager {
         if self.language_services.iter().any(|(key, prepared)| {
             provider_key(key) == provider
                 && prepared.fingerprint == fingerprint
+                && self.selected_context_matches(provider, document, prepared)
                 && prepared
                     .context
                     .as_ref()
@@ -209,6 +247,9 @@ impl Manager {
         }) {
             return Ok(());
         }
+        // Observe declared collection epochs before withdrawing any old binding. A metadata quota
+        // failure cannot tear down an otherwise healthy original context.
+        let failure_inputs = Some(self.language_failure_inputs(provider)?);
         // Remove only superseded document bindings, preserving unrelated contexts and unchanged plans
         // awaiting hot revalidation. Those hidden resources cannot publish their old configuration.
         for (key, prepared) in &mut self.language_services {
@@ -221,7 +262,7 @@ impl Manager {
                 && let Some(binding) = &mut prepared.context
             {
                 binding.documents.retain(|old| {
-                    old.path != document.path || old.generation >= document.generation
+                    old.path != document.path || old.generation > document.generation
                 });
             }
         }
@@ -238,6 +279,8 @@ impl Manager {
                 pending: true,
                 owns_service: true,
                 delegation: None,
+                failure_inputs,
+                failure_publication: Arc::new(AtomicBool::new(false)),
             },
         );
         self.reconcile_language_context_authority();
@@ -257,9 +300,16 @@ impl Manager {
         {
             return Some(Err("Language document configuration was superseded".into()));
         }
+        let broker = self.plugin_services.lock().unwrap();
         self.language_services.iter().find_map(|(key, prepared)| {
             (provider_key(key) == provider
                 && !prepared.pending
+                && (prepared.service.is_ok()
+                    || prepared
+                        .failure_inputs
+                        .as_ref()
+                        .is_none_or(|original| broker.collection_publication_is_current(original)))
+                && self.selected_context_matches(provider, document, prepared)
                 && prepared
                     .service
                     .as_ref()
@@ -306,6 +356,21 @@ impl Manager {
         if self.document_intent_generation(&provider, &document.path) != Some(document.generation) {
             return;
         }
+        let failed = service.is_err();
+        let failure_publication = self
+            .document_failure_publication(&provider, &document)
+            .expect("a published document plan retains its admitted reservation");
+        let intent = format!("{provider}!{}", serde_json::to_string(&document).unwrap());
+        // Failure publication must keep the reservation's original inputs. Sampling them now could
+        // permanently cache a late error against the newer set that already repaired its cause.
+        let failure_inputs = service
+            .is_err()
+            .then(|| {
+                self.language_services
+                    .get(&intent)
+                    .and_then(|prepared| prepared.failure_inputs.clone())
+            })
+            .flatten();
         let key = match (&project, &service) {
             (Some(project), Ok(service)) => format!(
                 "{provider}?{}",
@@ -360,8 +425,15 @@ impl Manager {
                     pending: false,
                     owns_service,
                     delegation: None,
+                    failure_inputs,
+                    failure_publication: failure_publication.clone(),
                 },
             );
+        }
+        if failed {
+            // Publish before recording this monotonic evidence. Removed/recreated cache entries
+            // never grant it to older requests; those retain only their original reservation Arc.
+            failure_publication.store(true, Ordering::Release);
         }
         self.collect_unused_language_contexts();
     }

@@ -4,7 +4,10 @@ use plugin_runtime::{
     plugin_protocol::{Environment, api, settings::Scope},
 };
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    io::{BufRead, Read, Write},
+};
 #[path = "support/demand.rs"]
 mod demand;
 
@@ -43,6 +46,8 @@ fn request(manager: &mut Manager, owner: &str, operation: Value) -> Value {
             plugin_runtime::DemandReason::Command("probe".into()),
         );
     }
+    let started = std::time::Instant::now();
+    eprintln!("public collection probe {owner}: {operation}");
     let pending = manager
         .invoke_typed_command(owner, "probe", json!(operation.to_string()), 30_000)
         .unwrap();
@@ -51,12 +56,26 @@ fn request(manager: &mut Manager, owner: &str, operation: Value) -> Value {
         manager.poll();
         match pending.status() {
             api::RequestUpdate::Completed { result } => {
+                eprintln!(
+                    "public collection probe {owner} completed after {:?}",
+                    started.elapsed()
+                );
                 return serde_json::from_str(result.unwrap().as_str().unwrap()).unwrap();
             }
-            api::RequestUpdate::Cancelled { reason, .. } => panic!("Probe cancelled: {reason:?}"),
+            api::RequestUpdate::Cancelled { reason, .. } => panic!(
+                "Probe cancelled: {reason:?}; owner={owner}; operation={operation}; elapsed={:?}; live={:?}; diagnostics={:?}",
+                started.elapsed(),
+                manager.live.keys().collect::<Vec<_>>(),
+                manager
+                    .installed
+                    .keys()
+                    .map(|id| (id, manager.diagnostics(id)))
+                    .collect::<Vec<_>>()
+            ),
             _ => assert!(
                 std::time::Instant::now() < deadline,
-                "Public SDK probe timed out"
+                "Public SDK probe timed out; owner={owner}; operation={operation}; elapsed={:?}",
+                started.elapsed()
             ),
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
@@ -269,7 +288,9 @@ fn native_collection_case(member_count: usize, borrow_member: bool) {
                 .as_array_mut()
                 .unwrap()
                 .push(json!("process.service.analysis"));
-            manifest["services"] = json!({"analysis":{"program":native,"args":[]}});
+            // The real fixture needs its own log path. Spawning it without argv would let an
+            // already exited process masquerade as a live module consumer in count-only checks.
+            manifest["services"] = json!({"analysis":{"program":native,"args":[profile.path().join("collection-wire.jsonl")]}});
             manifest["language_servers"] = json!([{"id":"analysis","language":"unfamiliar","service":"analysis",
                 "control_methods":{"novel/attach":{"parameters":{"type":"null"},"result":{"type":"null"},
                     "permissions":["native.modules","editor.read","workspace.read"]}}}]);
@@ -360,7 +381,8 @@ fn native_collection_case(member_count: usize, borrow_member: bool) {
     assert!(control.begin());
     let lease = control.language_control_metadata().unwrap().imports[0].clone();
     lease.attach(&server).unwrap();
-    let child = server.spawn().unwrap();
+    let (child, mut input, mut output) = server.spawn().unwrap();
+    initialize(&mut input, &mut output);
     assert_eq!(server.process_count(), 1);
     control.finish(Ok(api::EditorValue::Language(Value::Null)));
     let pending_metadata = if !borrow_member {
@@ -432,6 +454,43 @@ fn native_collection_case(member_count: usize, borrow_member: bool) {
         "loaded code must retire with its composition"
     );
     assert_eq!(server.process_count(), 0, "retirement reaps the process");
+    assert_eq!(
+        output.read(&mut [0]).unwrap(),
+        0,
+        "the originally responsive worker must physically close its stdout"
+    );
     drop(child);
     manager.shutdown();
+}
+
+/// A real framed round trip proves the original child was alive before its collection retired.
+/// This test backend does not execute CJS; module execution remains a separate TS/Vue acceptance.
+fn initialize(input: &mut impl Write, output: &mut impl Read) {
+    let request = serde_json::to_vec(&json!({
+        "jsonrpc":"2.0", "id":1, "method":"initialize", "params":{}
+    }))
+    .unwrap();
+    write!(input, "Content-Length: {}\r\n\r\n", request.len()).unwrap();
+    input.write_all(&request).unwrap();
+    input.flush().unwrap();
+    let mut output = std::io::BufReader::new(output);
+    let mut length = None;
+    loop {
+        let mut line = String::new();
+        assert!(
+            output.read_line(&mut line).unwrap() > 0,
+            "collection fixture exited before initialize"
+        );
+        if line == "\r\n" {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("Content-Length:") {
+            length = Some(value.trim().parse::<usize>().unwrap());
+        }
+    }
+    let mut payload = vec![0; length.expect("framed initialize response")];
+    output.read_exact(&mut payload).unwrap();
+    let response: Value = serde_json::from_slice(&payload).unwrap();
+    assert_eq!(response["id"], 1);
+    assert!(response["result"]["capabilities"].is_object());
 }

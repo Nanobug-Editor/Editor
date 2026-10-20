@@ -6,7 +6,7 @@
 
 ## 安装与热生效
 
-官方插件源码由 `Nanobug-Editor` 组织中的七个独立仓库维护。全新安装仅含纯文本编辑、内置终端和默认主题，不扫描同级插件目录、不主动推荐；首次离线且无目录缓存时显示市场获取失败。既有安装、身份、配置与私有数据仍由原管理器读取，删除仓库示例源码不自动卸载用户实例。审核、版本和 ZIP SHA-256 规则见[市场规格](https://github.com/Nanobug-Editor/Plugin-Marketplace/blob/main/docs/specs/plugin-marketplace.md)。
+官方插件源码由 `Nanobug-Editor` 组织中的独立仓库维护。全新安装仅含纯文本编辑、内置终端和默认主题，不扫描同级插件目录、不主动推荐；首次离线且无目录缓存时显示市场获取失败。既有安装、身份、配置与私有数据仍由原管理器读取，删除仓库示例源码不自动卸载用户实例。审核、版本和 ZIP SHA-256 规则见[市场规格](https://github.com/Nanobug-Editor/Plugin-Marketplace/blob/main/docs/specs/plugin-marketplace.md)。
 
 标题栏“插件管理”提供已安装列表、审核后的在线市场、README、本地 ZIP 导入、安装、更新和卸载。确认来源、权限及所需原生安装步骤后，成功安装即可启用，无需重启编辑器；全局禁用时可明确在当前项目启用。LSP 依赖未就绪时单独显示原因，不把安装成功当作服务就绪。
 
@@ -39,6 +39,10 @@ WIT 世界 `editor:plugin/plugin@0.1.0` 提供 host.request 导入与 dispatch �
 公开接口的现行说明见源码注释：[SDK](../../crates/plugin-protocol/src/lib.rs)、[UI](../../crates/plugin-protocol/src/ui.rs)、[语言](../../crates/plugin-protocol/src/language.rs)、[进程](../../crates/plugin-protocol/src/process.rs)、[服务](../../crates/plugin-protocol/src/service.rs)。宿主只导出 SDK 源码、Cargo 清单、WIT 和 JSON 协议资源；仓库 Markdown 不内嵌或随 SDK 导出。
 
 文件预览可以通过公开 `editor.presentation` 声明源码／分栏／预览三态，通过 `editor.toolbar` 提供源码顶部操作；版本化范围编辑、图片输入、导航及视口请求分别核对文档身份、revision 和来源权限。Markdown 使用这些通用接口提供实时原生预览、任务框写回、同级图片导入和双向内容块滚动；SVG 使用同一底栏三态入口。详见[Markdown 使用说明](https://github.com/Nanobug-Editor/Markdown)、[导航](../../crates/plugin-protocol/NAVIGATION.md)、[视口](../../crates/plugin-protocol/VIEWPORT.md)和[代码块高亮](../../crates/plugin-protocol/CODE_HIGHLIGHTING.md)。新增插件仍只使用公开契约，不需要宿主按插件名称分支。
+
+`language.lsp 1.6` 增加面向所有插件的受管项目上下文引用、交互准备及原生来源继承。候选项目与本机偏好由提供者管理，宿主封印 owner、作用域、配置和文档身份；选择上下文不覆盖文档的主语言提供者。内部分析提供者仅不进入用户候选列表，权限、受管进程和清理规则相同。引用不能代替路径授权，也不能保存后复用；见[上下文契约](../../crates/plugin-protocol/src/language_context/registry.rs)。
+
+`workspace.files 1.4` 的只读文档条件与全部编辑目标一起校验，辅助来源变化会拒绝整份未提交计划。纯文本多文档提案统一预览、取消及分组撤销，经各自原生 DocumentSession 应用并保持未保存；不会建立第二份可变文本或撤销栈。选择补全时的 resolve 与导入编辑使用同一来源校验，非法尾部不应用合法前缀。见[工作区事务契约](../../crates/plugin-protocol/src/workspace.rs)。
 
 ## 权限与原生执行
 

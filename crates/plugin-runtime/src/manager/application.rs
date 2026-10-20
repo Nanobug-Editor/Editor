@@ -53,18 +53,16 @@ impl Manager {
             .select_scope("application".into());
     }
 
-    /// Admit an immutable workspace package and its enabled preference without creating private project data.
-    /// Data migration and workspace-dependent preparation occur only when a real project is opened.
-    /// Live instances and package consolidation still require the established project cutover path.
-    pub(super) fn install_dormant_workspace(
-        &mut self,
+    /// Pure profile-management admission preserves the same dormant update and owner restrictions.
+    /// The host may use this before revoking UI epochs; no workspace or guest is created here.
+    pub(super) fn validate_dormant_workspace(
+        &self,
         package: &Package,
-        grants: BTreeSet<String>,
-        control: &crate::InstallControl,
+        grants: &BTreeSet<String>,
     ) -> anyhow::Result<()> {
         crate::capabilities::require_current(&package.manifest)?;
         anyhow::ensure!(
-            package.manifest.permissions.is_subset(&grants),
+            package.manifest.permissions.is_subset(grants),
             "Permission confirmation required"
         );
         let id = &package.manifest.id;
@@ -102,6 +100,20 @@ impl Manager {
                     .is_none_or(|old| old.manifest.data_format.is_none()),
             "Removing a data format requires an explicit migration"
         );
+        Ok(())
+    }
+
+    /// Admit an immutable workspace package and its enabled preference without creating private project data.
+    /// Data migration and workspace-dependent preparation occur only when a real project is opened.
+    /// Live instances and package consolidation still require the established project cutover path.
+    pub(super) fn install_dormant_workspace(
+        &mut self,
+        package: &Package,
+        grants: BTreeSet<String>,
+        control: &crate::InstallControl,
+    ) -> anyhow::Result<()> {
+        self.validate_dormant_workspace(package, &grants)?;
+        let id = &package.manifest.id;
         control.stage(crate::InstallStage::Preparing)?;
         if let Some(component) = package.component() {
             if self.engine.is_none() {

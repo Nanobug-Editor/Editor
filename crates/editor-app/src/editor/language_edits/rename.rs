@@ -1,6 +1,7 @@
 //! Conventional rename input and cancellable proposals share the native document transaction gate.
 use super::*;
 use crate::language::navigation::editing::byte_at_position;
+use anyhow::Context as _;
 use gpui_kit::EntityInputHandler as _;
 
 impl EditorApp {
@@ -131,7 +132,7 @@ impl EditorApp {
         .detach();
     }
 
-    /// The name input is separate native UI; the full paired rename is a single document transaction.
+    /// Confirm the independent native name field; cross-document changes enter a complete preview.
     fn confirm_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(form) = self.language_edits.rename.as_ref() else {
             return;
@@ -141,6 +142,18 @@ impl EditorApp {
             return;
         }
         let form = self.language_edits.rename.take().unwrap();
+        self.dispatch_rename(form, new_name, false, window, cx);
+    }
+
+    /// At most one discovery round opens unknown targets, then recomputes against real snapshots.
+    fn dispatch_rename(
+        &mut self,
+        form: RenameForm,
+        new_name: String,
+        discovered: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(index) = self.active_text_tab_index() else {
             return;
         };
@@ -155,8 +168,8 @@ impl EditorApp {
         let lease = form.lease.clone();
         let active = form.server.clone();
         let snapshot = form.source.clone();
-        // Confirmation takes a fresh immutable round; waiting in the name input does not retain
-        // permission to apply results computed from an earlier project graph.
+        // Confirmation and discovery each take a fresh round; neither the prompt nor opening a
+        // missing target may retain authority over an earlier project graph or dirty source vector.
         let context = match self.capture_language_context(&active, &form.document, &form.source, cx)
         {
             Ok(context) => context,
@@ -167,6 +180,25 @@ impl EditorApp {
             }
         };
         let response_context = context.clone();
+        let snapshots = match if context.is_some() {
+            Ok(Vec::new())
+        } else {
+            self.rename_snapshots(&active, cx)
+        } {
+            Ok(snapshots) => snapshots,
+            Err(error) => {
+                self.status = t!("editor.editing_failed", error = format!("{error:#}")).to_string();
+                cx.notify();
+                return;
+            }
+        };
+        let related = snapshots
+            .iter()
+            .filter(|_| context.is_none())
+            .map(|source| (source.lease.clone(), source.text.clone()))
+            .collect();
+        let name = new_name.clone();
+        let position = form.position;
         let server = form.server.clone();
         self.language_edits.rename_request = self.language_edits.rename_request.wrapping_add(1);
         self.language_edits.rename_pending = true;
@@ -178,11 +210,8 @@ impl EditorApp {
                 .background_executor()
                 .scheduler_executor()
                 .spawn_dedicated(move |_| async move {
-                    let operation = || server.rename_for(lease, snapshot, form.position, new_name);
-                    match &context {
-                        Some(context) => server.with_context_snapshot(context, operation),
-                        None => operation(),
-                    }
+                    let operation = || server.rename_for(lease, snapshot, position, name, related);
+                    match &context { Some(context) => server.with_context_snapshot(context, operation), None => operation() }
                 })
                 .await;
             let _ = this.update_in(cx, |app, window, cx| {
@@ -193,25 +222,48 @@ impl EditorApp {
                 if !app
                     .language_server_for_path(&app.workspace.root().join(&form.document.path))
                     .is_some_and(|current| Arc::ptr_eq(current, &active))
-                    || response_context
-                        .as_ref()
-                        .is_some_and(|context| !app.language_context_is_current(context, cx))
                 {
                     return;
                 }
-                let cursor = app.editor.read(cx).cursor();
-                match result.and_then(|edits| {
-                    app.apply_language_edits(
-                        &form.document,
-                        &form.source,
-                        &active,
-                        &edits,
-                        cursor,
-                        window,
-                        cx,
-                    )
-                }) {
-                    Ok(()) => app.status = t!("editor.renamed").to_string(),
+                let result = result.and_then(|edits| {
+                    anyhow::ensure!(response_context.as_ref().is_none_or(|context| app.language_context_is_current(context, cx)), "Rename project context changed");
+                    let snapshots = if let Some(context) = &response_context {
+                        context.selected_sources().context("Rename context is unfinished")?.into_iter().map(|source| {
+                            Ok(super::workspace_edits::Snapshot { document: source.document.clone(), text: source.text.to_string(), lease: active.document(&source.uri).context("Rename member lease was closed")? })
+                        }).collect::<anyhow::Result<Vec<_>>>()?
+                    } else { snapshots };
+                    app.check_rename_snapshots(&snapshots, cx)?;
+                    if edits.is_empty() { return Ok(None); }
+                    // Preserve the established single-document editing contract and local Undo.
+                    // Multi-document changes use the stronger workspace preview capability below.
+                    if edits.len() == 1 && edits[0].uri == form.lease.uri {
+                        let cursor = app.editor.read(cx).cursor();
+                        app.apply_language_edits(&form.document, &form.source, &active, &edits[0].edits, cursor, window, cx)?;
+                        app.status = t!("editor.renamed").to_string();
+                        return Ok(None);
+                    }
+                    // Detect a new target before opening anything on a second discovery reply.
+                    if discovered {
+                        anyhow::ensure!(edits.iter().all(|edit| snapshots.iter().any(|source| source.lease.uri == edit.uri)), "Rename discovered another uncaptured target; retry with its documents open");
+                    }
+                    if app.discover_rename_targets(&active, &snapshots, &edits, window, cx)? { return Ok(Some(None)); }
+                    let conditions = response_context.as_ref().and_then(|context| context.documents()).map(|documents| documents.to_vec()).unwrap_or_else(|| snapshots.iter().map(|snapshot| snapshot.document.clone()).collect());
+                    let fix = app.rename_plan(&form.document, t!("editor.rename_confirm").to_string(), conditions, &snapshots, edits)?;
+                    Ok(Some(Some(fix)))
+                });
+                match result {
+                    Ok(Some(None)) => {
+                        app.status = t!("editor.rename_opened_targets").to_string();
+                        app.dispatch_rename(form, new_name, true, window, cx);
+                        return;
+                    }
+                    Ok(Some(Some(fix))) => {
+                        let origin = response_context.as_ref().map_or_else(|| active.fix_origin(), |context| context.fix_origin(&active));
+                        if let Err(error) = app.submit_native_language_fix(origin, form.document.clone(), fix, cx) {
+                            app.status = t!("editor.editing_failed", error = error.message).to_string();
+                        }
+                    }
+                    Ok(None) => {},
                     Err(error) => {
                         app.status =
                             t!("editor.editing_failed", error = format!("{error:#}")).to_string()

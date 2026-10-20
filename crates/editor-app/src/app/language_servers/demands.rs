@@ -48,7 +48,12 @@ pub(super) struct ContextRecord {
     pub(super) availability: Availability,
     pub(super) pending: Option<DemandWait>,
     pub(super) error: Option<String>,
+    /// Only an observed Err or the original reservation's published-Err evidence permits re-entry
+    /// after withdrawal. Accepted, cancelled and timed-out waits alone never authorize retries.
+    pub(super) published_failure: bool,
     pub(super) server: Option<Arc<language_navigation::LanguageServer>>,
+    /// Alias preparation seals the original pipe-failure generation, independently of source text.
+    pub(super) recovery_generation: u64,
 }
 
 struct Record {

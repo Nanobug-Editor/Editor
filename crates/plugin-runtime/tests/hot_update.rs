@@ -1,7 +1,7 @@
 //! Real SDK guests combine private data, native views, service calls and an owned LSP across cutover.
 use plugin_runtime::{
-    InstallControl, Manager, Package,
-    plugin_protocol::{Environment, ui::Kind},
+    DemandReason, InstallControl, LanguageRole, Manager, Package,
+    plugin_protocol::{Environment, api, ui::Kind},
 };
 use serde_json::{Value, json};
 use std::{
@@ -10,6 +10,8 @@ use std::{
     sync::Arc,
 };
 
+#[path = "support/demand.rs"]
+mod demand_support;
 #[path = "support/service_packages.rs"]
 mod service_packages;
 
@@ -54,8 +56,22 @@ fn text(manager: &Manager, id: &str) -> String {
 }
 
 fn command(manager: &mut Manager, id: &str, name: &str, args: Value) -> String {
+    // Commands consume their original cold publication; installation and enablement do no business work.
+    demand_support::ready(manager, id, DemandReason::Command(name.into()));
     manager.invoke_command(id, name, args).unwrap();
     text(manager, id)
+}
+
+/// Native resources are independently demanded after initial activation and rollback replaces them.
+fn analysis(manager: &mut Manager) {
+    demand_support::ready(
+        manager,
+        "mixed-provider",
+        DemandReason::Language {
+            provider: "mixed-provider/analysis".into(),
+            role: LanguageRole::Lsp,
+        },
+    );
 }
 
 /// A real stdio handshake proves the approved lease launches a functioning transport, not just a handle.
@@ -88,7 +104,7 @@ fn handshake(input: &mut impl Write, output: &mut impl Read) {
 
 /// Failed activation restores data and contributions, but never revives old native/request ownership.
 #[test]
-#[ignore = "build the independent capability-example SDK guest and lsp_fixture first"]
+#[ignore = "requires frozen capability-example-0.19.0.zip and cargo build -p plugin-runtime --example lsp_fixture"]
 fn mixed_update_rollback_replaces_all_owners_and_preserves_latest_data() {
     let root = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
@@ -123,6 +139,13 @@ fn mixed_update_rollback_replaces_all_owners_and_preserves_latest_data() {
         ),
         "Service opened"
     );
+    command(
+        &mut manager,
+        "mixed-provider",
+        "scope-write",
+        json!({"text":"before"}),
+    );
+    analysis(&mut manager);
     let old_identity = manager.instance_id("mixed-provider").unwrap().to_owned();
     let old_lease = manager.language_services()["mixed-provider/analysis"]
         .as_ref()
@@ -130,12 +153,43 @@ fn mixed_update_rollback_replaces_all_owners_and_preserves_latest_data() {
         .clone();
     let (_old_process, mut input, mut output) = old_lease.spawn().unwrap();
     handshake(&mut input, &mut output);
-    command(
-        &mut manager,
-        "mixed-provider",
-        "scope-write",
-        json!({"text":"before"}),
+
+    // A valid component with an incompatible mandatory dependency must fail before even the
+    // old owner is snapshotted or retired. The candidate's isolated migration is not publication.
+    let mut incompatible = mixed_package(&executable, &log, 2, "ok").files;
+    let mut manifest: Value = serde_json::from_slice(&incompatible["manifest.json"]).unwrap();
+    manifest["plugin_services"]["requires"]["example.echo"]["version"] = json!("^99");
+    manifest["plugin_services"]["requires"]["example.echo"]["optional"] = json!(false);
+    incompatible.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
     );
+    let incompatible = Package::from_files(incompatible).unwrap();
+    let control = InstallControl::default();
+    let prepared = manager
+        .prepare_installation(
+            &incompatible,
+            incompatible.manifest.permissions.clone(),
+            &control,
+        )
+        .unwrap();
+    let rejected = manager.commit_installation(prepared, &control).unwrap_err();
+    let failure = rejected.downcast_ref::<api::Failure>().unwrap();
+    assert_eq!(failure.code, api::ErrorCode::CapabilityUnavailable);
+    assert!(failure.message.contains("example.echo"), "{rejected:#}");
+    assert_eq!(
+        manager.instance_id("mixed-provider"),
+        Some(old_identity.as_str()),
+        "incompatible service metadata must not retire the working predecessor"
+    );
+    assert!(old_lease.is_active());
+    assert_eq!(old_lease.process_count(), 1);
+    assert!(Arc::ptr_eq(
+        &old_lease,
+        manager.language_services()["mixed-provider/analysis"]
+            .as_ref()
+            .unwrap()
+    ));
 
     let candidate = mixed_package(&executable, &log, 2, "activate-fail");
     let control = InstallControl::default();
@@ -185,6 +239,16 @@ fn mixed_update_rollback_replaces_all_owners_and_preserves_latest_data() {
     assert!(
         !old_lease.is_active(),
         "rollback must retire the pre-cutover native lease"
+    );
+    let recovered_owner = manager
+        .instance_id("mixed-provider")
+        .expect("rollback must publish a fresh activated business owner")
+        .to_owned();
+    analysis(&mut manager);
+    assert_eq!(
+        manager.instance_id("mixed-provider"),
+        Some(recovered_owner.as_str()),
+        "a later role must reuse the business incarnation restored by rollback"
     );
     let restored = manager.language_services()["mixed-provider/analysis"]
         .as_ref()

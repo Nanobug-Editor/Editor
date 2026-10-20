@@ -200,6 +200,11 @@ impl Manager {
             self.activation.next += 1;
         }
         record.owner = owner;
+        // Cutover can publish a cold record before rollback inserts an already activated owner.
+        // Adopt that live business incarnation before preparing a later role; activating it again
+        // would replace the owner that signs the new plan. Declaration-only success stays intact.
+        // demand_owner only returns Instance::instance_id after Activate, never an isolated worker.
+        record.materialized |= record.owner.is_some();
         Ok(record.token.clone())
     }
     /// Recheck the original static token and exact admitted owner before executing original arguments.

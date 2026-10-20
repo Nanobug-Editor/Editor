@@ -45,7 +45,7 @@ function handle(message) {
     versions.delete(params.textDocument.uri);
   }
   if (id === undefined) return;
-  if (method === 'initialize') return reply(id, { capabilities: { textDocumentSync: 1, completionProvider: {}, hoverProvider: true, definitionProvider: true, documentFormattingProvider: true, renameProvider: { prepareProvider: true }, linkedEditingRangeProvider: true } });
+  if (method === 'initialize') return reply(id, { capabilities: { textDocumentSync: 1, completionProvider: {}, hoverProvider: true, definitionProvider: true, documentFormattingProvider: true, documentRangeFormattingProvider: mode === 'range', renameProvider: { prepareProvider: true }, linkedEditingRangeProvider: true } });
   if (method === 'shutdown') return reply(id, null);
   const source = documents.get(params?.textDocument?.uri) || '';
   let result = null;
@@ -67,6 +67,12 @@ function handle(message) {
     result = [{ range, newText: `/* ${mode} */\n${source}` }];
     // A valid first edit cannot be applied when a later proposal overlaps it.
     if (mode === 'invalid') result.push({ range, newText: 'invalid partial result' });
+  }
+  if (method === 'textDocument/rangeFormatting' && mode === 'range') {
+    // Only the supplied standard UTF-16 range is echoed. The host must retain its original native
+    // selection, validate the reply and use one Undo; the fixture never guesses a block or language.
+    const at = point => source.split('\n').slice(0, point.line).reduce((sum, line) => sum + line.length + 1, 0) + point.character;
+    result = [{ range: params.range, newText: `/* range */ ${source.slice(at(params.range.start), at(params.range.end))}` }];
   }
   setTimeout(() => reply(id, result), Number(delay));
 }

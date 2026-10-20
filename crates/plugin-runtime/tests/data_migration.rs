@@ -1,9 +1,11 @@
 //! Private-data migrations are verified through independently built packages and the public manager.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
 use plugin_runtime::{
-    Manager, Package,
+    DemandReason, Manager, Package,
     plugin_protocol::{Environment, ui::Kind},
 };
 use serde_json::json;
@@ -11,7 +13,8 @@ use std::io::{Cursor, Write};
 
 /// Every version uses the same SDK fixture; only the package's declaration and migration policy differ.
 fn package(version: u32, behavior: &str) -> Package {
-    let source = test_packages::archive("capability-example");
+    // Migration behavior is supplied by the fixed SDK guest; the bare-ID input predates these commands.
+    let source = test_packages::archive("capability-example-0.19.0");
     let mut files = Package::read(&source).unwrap().files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["version"] = json!(format!("{version}.0.0"));
@@ -33,7 +36,7 @@ fn package(version: u32, behavior: &str) -> Package {
 
 /// The hook converts opaque private content while retaining the workspace's original source file.
 #[test]
-#[ignore = "build the independent capability-example SDK guest first"]
+#[ignore = "requires the frozen capability-example-0.19.0.zip input and its ledger hash"]
 fn upgrades_private_data_on_an_isolated_copy() {
     let root = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
@@ -59,6 +62,11 @@ fn upgrades_private_data_on_an_isolated_copy() {
     manager
         .install(&old, old.manifest.permissions.clone())
         .unwrap();
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("scope-write".into()),
+    );
     manager
         .invoke_command(
             "capability-example",
@@ -80,21 +88,7 @@ fn upgrades_private_data_on_an_isolated_copy() {
         "Metadata readers cannot bypass an active data transaction"
     );
     manager.commit_installation(prepared, &control).unwrap();
-    manager
-        .invoke_command("capability-example", "scope-read", json!(null))
-        .unwrap();
-    let Kind::Text { text } = &manager.live["capability-example"]
-        .views
-        .values()
-        .next()
-        .unwrap()
-        .as_ref()
-        .root
-        .kind
-    else {
-        panic!("text expected")
-    };
-    assert_eq!(text, "workspace|v2:later");
+    assert_eq!(private_text(&mut manager), "workspace|v2:later");
     assert_eq!(
         std::fs::read_to_string(workspace.path().join("source.txt")).unwrap(),
         "workspace"
@@ -115,6 +109,12 @@ fn upgrades_private_data_on_an_isolated_copy() {
 
 /// Observe data through the guest's public command rather than depending on migration directory layout.
 fn private_text(manager: &mut Manager) -> String {
+    // A committed version and reopened manager remain cold until an original command needs the guest.
+    demand_support::ready(
+        manager,
+        "capability-example",
+        DemandReason::Command("scope-read".into()),
+    );
     manager
         .invoke_command("capability-example", "scope-read", json!(null))
         .unwrap();
@@ -134,7 +134,7 @@ fn private_text(manager: &mut Manager) -> String {
 
 /// Hook, activation and registry failures all retain the old package and make its original data usable again.
 #[test]
-#[ignore = "build the independent capability-example SDK guest first"]
+#[ignore = "requires the frozen capability-example-0.19.0.zip input and its ledger hash"]
 fn failed_migration_activation_and_commit_preserve_old_data() {
     let root = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
@@ -147,18 +147,35 @@ fn failed_migration_activation_and_commit_preserve_old_data() {
         },
     )
     .unwrap();
-    // A first activation failure must not publish an installed record or live instance.
+    // A cold install publishes metadata only. Failure belongs to the first original command;
+    // no live business owner may escape that failed activation, while the installed choice remains.
     let failed = package(1, "activate-fail");
+    manager
+        .install(&failed, failed.manifest.permissions.clone())
+        .unwrap();
+    assert!(manager.live.is_empty());
     assert!(
-        manager
-            .install(&failed, failed.manifest.permissions.clone())
-            .is_err()
+        demand_support::try_ready(
+            &mut manager,
+            "capability-example",
+            DemandReason::Command("scope-write".into()),
+        )
+        .is_err()
     );
-    assert!(manager.installed.is_empty() && manager.live.is_empty());
+    assert!(manager.live.is_empty());
+    assert_eq!(
+        manager.installed["capability-example"].digest,
+        failed.digest
+    );
     let old = package(1, "ok");
     manager
         .install(&old, old.manifest.permissions.clone())
         .unwrap();
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("scope-write".into()),
+    );
     manager
         .invoke_command(
             "capability-example",
@@ -260,7 +277,7 @@ fn crash_child() {
 
 /// Startup either rolls back an uncommitted scope or finishes committed cleanup; recovery failures retain evidence.
 #[test]
-#[ignore = "build the independent capability-example SDK guest first"]
+#[ignore = "requires the frozen capability-example-0.19.0.zip input and its ledger hash"]
 fn interrupted_commits_recover_before_any_guest_is_activated() {
     for phase in ["pending", "committed"] {
         let root = tempfile::tempdir().unwrap();
@@ -275,6 +292,12 @@ fn interrupted_commits_recover_before_any_guest_is_activated() {
         manager
             .install(&old, old.manifest.permissions.clone())
             .unwrap();
+        // The crash scenario begins with real private writes, so consume the original command first.
+        demand_support::ready(
+            &mut manager,
+            "capability-example",
+            DemandReason::Command("scope-write".into()),
+        );
         manager
             .invoke_command(
                 "capability-example",
@@ -341,7 +364,7 @@ fn interrupted_commits_recover_before_any_guest_is_activated() {
 
 /// A globally disabled plugin still migrates and runs when explicitly enabled in an older workspace scope.
 #[test]
-#[ignore = "build the independent capability-example SDK guest first"]
+#[ignore = "requires the frozen capability-example-0.19.0.zip input and its ledger hash"]
 fn enabling_a_dormant_workspace_migrates_and_activates_its_own_data() {
     let root = tempfile::tempdir().unwrap();
     let a = tempfile::tempdir().unwrap();
@@ -358,6 +381,11 @@ fn enabling_a_dormant_workspace_migrates_and_activates_its_own_data() {
     manager
         .install(&old, old.manifest.permissions.clone())
         .unwrap();
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("scope-write".into()),
+    );
     manager
         .invoke_command(
             "capability-example",
@@ -371,6 +399,12 @@ fn enabling_a_dormant_workspace_migrates_and_activates_its_own_data() {
     manager
         .switch_workspace(environment(a.path()), true)
         .unwrap();
+    // Switching scopes retires the previous owner; the new workspace gets its own first demand.
+    demand_support::ready(
+        &mut manager,
+        "capability-example",
+        DemandReason::Command("scope-write".into()),
+    );
     manager
         .invoke_command(
             "capability-example",

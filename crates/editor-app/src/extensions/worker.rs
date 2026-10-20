@@ -1,5 +1,6 @@
 //! Project actors route a shared plugin-store owner; the UI thread never compiles or executes WASM.
 use plugin_runtime::{Installed, Manager, Package, plugin_protocol::*};
+use rust_i18n::t;
 mod admission;
 #[cfg(test)]
 mod bundled_tests;
@@ -7,6 +8,7 @@ mod command_epochs;
 pub(super) mod configurations;
 pub(crate) mod demands;
 mod form_delivery;
+mod installation_progress;
 mod marketplace;
 #[cfg(all(test, windows))]
 mod native_acceptance;
@@ -14,6 +16,10 @@ mod native_acceptance;
 mod native_close_tests;
 #[cfg(all(test, windows))]
 mod native_language_control_tests;
+#[cfg(all(test, windows))]
+mod native_selection_formatting_tests;
+#[cfg(all(test, windows))]
+mod native_vue_recovery_tests;
 mod preparation;
 #[cfg(test)]
 // The cross-feature native regression retains private actor seams without widening production APIs.
@@ -26,12 +32,20 @@ mod resize;
 mod resize_tests;
 mod runner;
 #[cfg(test)]
+mod shared_context_tests;
+#[cfg(test)]
 mod shutdown_tests;
 pub(super) mod targets;
 #[cfg(test)]
 mod typescript_package_tests;
 #[cfg(test)]
 mod viewport_tests;
+#[cfg(test)]
+mod vue_ecosystem_tests;
+#[cfg(test)]
+mod vue_editing_tests;
+#[cfg(test)]
+mod vue_formatting_tests;
 #[cfg(test)]
 mod vue_test_support;
 #[cfg(test)]
@@ -270,6 +284,8 @@ pub enum Work {
         reason: plugin_runtime::DemandReason,
         guard: Option<super::command_intents::CommandGuard>,
         cancellation: plugin_runtime::RequestCancellation,
+        /// Exact reservation evidence distinguishes a published preparation Err from other failures.
+        published_failure: Arc<std::sync::atomic::AtomicBool>,
         reply: futures::channel::oneshot::Sender<
             Result<plugin_runtime::ActivationReceipt, api::Failure>,
         >,
@@ -756,7 +772,7 @@ impl Worker {
         if let Some(package) = installation {
             state.installation = Some(InstallationProgress {
                 id: package.manifest.id.clone(),
-                message: "准备安装…".into(),
+                message: t!("plugins.install_progress.queued").to_string(),
                 cancellable: true,
                 installed: false,
             });
@@ -766,23 +782,7 @@ impl Worker {
                     if let Some(output) = output.upgrade() {
                         let mut state = output.lock().unwrap();
                         if let Some(report) = &mut state.installation {
-                            use plugin_runtime::InstallStage::*;
-                            report.cancellable =
-                                !matches!(stage, Prepared | Migrating | Committing | Committed);
-                            report.message = match stage {
-                                Migrating => "正在隔离副本中迁移插件数据…".into(),
-                                Committing => "正在提交插件版本和数据…".into(),
-                                Committed => "插件版本和数据已提交。".into(),
-                                Preparing => "正在准备依赖…".into(),
-                                Downloading(id) => format!("正在下载 / 读取依赖：{id}"),
-                                Verifying(id) => format!("正在验证 SHA-256：{id}"),
-                                Extracting(id) => format!("正在解包依赖：{id}"),
-                                AwaitingAuthorization(id) => {
-                                    format!("原生安装步骤 {id} 正在等待额外授权。")
-                                }
-                                Installing(purpose) => format!("正在执行安装步骤：{purpose}"),
-                                Prepared => "依赖已准备，正在安装插件…".into(),
-                            };
+                            report.advance(stage);
                         }
                     }
                 })
@@ -797,7 +797,7 @@ impl Worker {
             state.progress = None;
             state.status = Some(OperationStatus {
                 plugin: None,
-                message: "插件后台服务不可用".into(),
+                message: t!("plugins.worker_unavailable").to_string(),
             });
             return false;
         }
@@ -848,15 +848,16 @@ impl Worker {
 }
 impl LifecycleAction {
     /// Keep error labels aligned with the action shown by the loading button.
-    fn label(self) -> &'static str {
+    fn label(self) -> String {
         match self {
-            Self::Restart => "重启插件",
-            Self::Inspect => "检查插件包",
-            Self::Install => "安装 / 更新",
-            Self::Enable => "启用",
-            Self::Disable => "禁用",
-            Self::Uninstall => "卸载",
+            Self::Restart => t!("plugins.restart"),
+            Self::Inspect => t!("plugins.install_progress.inspect"),
+            Self::Install => t!("plugins.install_progress.install_update"),
+            Self::Enable => t!("plugins.install_progress.enable"),
+            Self::Disable => t!("plugins.disable"),
+            Self::Uninstall => t!("plugins.uninstall"),
         }
+        .to_string()
     }
 }
 impl Drop for Worker {

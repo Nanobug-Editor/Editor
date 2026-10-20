@@ -409,6 +409,7 @@ impl Render for EditorApp {
             .on_action(cx.listener(Self::on_navigate_to_definition))
             .on_action(cx.listener(Self::on_show_definition_details))
             .on_action(cx.listener(Self::format_document_action))
+            .on_action(cx.listener(Self::format_selection_action))
             .on_action(cx.listener(Self::rename_symbol_action))
             .on_action(cx.listener(Self::toggle_outline))
             .on_action(

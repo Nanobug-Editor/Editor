@@ -5,11 +5,21 @@ use plugin_runtime::{
 };
 use std::time::Instant;
 
+/// A range action preserves its original native byte selection; Save always formats the document.
+#[derive(Clone, Copy)]
+pub(super) enum Scope {
+    Document,
+    Selection,
+}
+
 /// A format action is one original native round; same-ID provider/document ABA cannot revive it.
 pub(super) struct Reservation {
     pub request: u64,
     pub language: String,
     pub save: bool,
+    scope: Scope,
+    /// Selection actions cannot follow a later cursor gesture while earlier native input drains.
+    selection: std::ops::Range<usize>,
     editor: Entity<EditorState>,
     document: DocumentVersion,
     key: String,
@@ -23,6 +33,7 @@ impl EditorApp {
     pub(super) fn request_format(
         &mut self,
         save: bool,
+        scope: Scope,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -72,6 +83,8 @@ impl EditorApp {
             request: self.language_edits.request,
             language,
             save,
+            scope,
+            selection: self.editor.read(cx).selected_range(),
             editor: self.editor.clone(),
             document,
             key,
@@ -143,6 +156,8 @@ impl EditorApp {
                 .is_some_and(|document| {
                     document.id == reservation.document.id
                         && document.path == reservation.document.path
+                        && (matches!(reservation.scope, Scope::Document)
+                            || document == reservation.document)
                 })
     }
 
@@ -168,13 +183,37 @@ impl EditorApp {
             text: self.editor.read(cx).text().to_string(),
         };
         let cursor = self.editor.read(cx).cursor();
+        // Freeze source coordinates before preparation. Selection movement does not turn this
+        // action into a request for another range, and an empty range never falls back to Save.
+        let range = match reservation.scope {
+            Scope::Document => None,
+            Scope::Selection => {
+                let selection = reservation.selection.clone();
+                if selection.is_empty() {
+                    self.language_edits.format_pending.take();
+                    self.status = t!("editor.format_selection_empty").to_string();
+                    cx.notify();
+                    return;
+                }
+                if self.editor.read(cx).selected_range() != selection
+                    || source.text.get(selection.clone()).is_none()
+                {
+                    self.language_edits.format_pending.take();
+                    return;
+                }
+                Some(lsp_types::Range::new(
+                    navigation::position_at_byte(&source.text, selection.start),
+                    navigation::position_at_byte(&source.text, selection.end),
+                ))
+            }
+        };
         if let Some(server) = self
             .language_edits
             .formatters
             .get(&reservation.language)
             .cloned()
         {
-            self.dispatch_format(reservation, server, source, cursor, uri, window, cx);
+            self.dispatch_format(reservation, server, source, cursor, uri, range, window, cx);
             return;
         }
         let guard = match self.capture_current_command_guard(cx) {
@@ -271,6 +310,7 @@ impl EditorApp {
                                     source,
                                     cursor,
                                     uri,
+                                    range,
                                     window,
                                     cx,
                                 );

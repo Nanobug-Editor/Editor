@@ -603,6 +603,39 @@ impl EditorApp {
         true
     }
 
+    /// Lend an already validated source plan to one local jump without changing saved preferences.
+    /// F12 and the editor's show-document hook share this provenance path; list navigation validates
+    /// its sealed source separately before calling the same context inheritance mechanism.
+    pub(crate) fn open_definition_with_source(
+        &mut self,
+        source: Option<&Arc<plugin_runtime::LanguageService>>,
+        uri: &lsp_types::Uri,
+        selection: Option<lsp_types::Range>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if let Some(source) = source {
+            if !source.is_active() {
+                return false;
+            }
+            let Some(target) = url::Url::parse(uri.as_str())
+                .ok()
+                .and_then(|url| url.to_file_path().ok())
+                .and_then(|path| path.canonicalize().ok())
+                .filter(|path| path.is_file())
+            else {
+                return false;
+            };
+            if self
+                .inherit_source_language_context(source, &target, cx)
+                .is_err()
+            {
+                return false;
+            }
+        }
+        self.open_definition_uri(uri, selection, window, cx)
+    }
+
     /// Opens local LSP targets, including sources in the Cargo registry and sysroot.
     pub(crate) fn open_definition_uri(
         &mut self,
@@ -1211,6 +1244,7 @@ pub(crate) fn attach_language_server(
     }
     let completion_owner = app.clone();
     let navigation_owner = app.clone();
+    let navigation_server = server.clone();
     let editor_id = editor.entity_id();
     editor.update(cx, |editor, _| {
         let Some(provider) = language_navigation::LanguageDefinitionProvider::for_editor(
@@ -1235,11 +1269,18 @@ pub(crate) fn attach_language_server(
                 }
                 let app = app.clone();
                 let params = params.clone();
+                let source = navigation_server.navigation_context_service();
                 // Ctrl-click and native definition actions call this while the source editor
                 // is being updated. Release that entity before opening or moving its caret.
                 window.defer(cx, move |window, cx| {
                     let _ = app.update(cx, |app, cx| {
-                        app.open_definition_uri(&params.uri, params.selection, window, cx);
+                        app.open_definition_with_source(
+                            source.as_ref(),
+                            &params.uri,
+                            params.selection,
+                            window,
+                            cx,
+                        );
                     });
                 });
                 true

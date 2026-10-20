@@ -14,12 +14,15 @@ use std::sync::{
 pub(super) struct SnapshotEpoch {
     guard: Arc<AtomicBool>,
     configuration: Option<u64>,
+    /// Source epochs contain only lifetime bits; no editor text or second document model is stored.
+    sources: std::sync::Mutex<std::collections::BTreeMap<String, Arc<AtomicBool>>>,
 }
 impl Default for SnapshotEpoch {
     fn default() -> Self {
         Self {
             guard: Arc::new(AtomicBool::new(true)),
             configuration: None,
+            sources: Default::default(),
         }
     }
 }
@@ -27,6 +30,28 @@ impl SnapshotEpoch {
     fn revoke(&mut self) {
         self.guard.store(false, Ordering::Release);
         self.guard = Arc::new(AtomicBool::new(true));
+        for (_, guard) in std::mem::take(self.sources.get_mut().unwrap()) {
+            guard.store(false, Ordering::Release);
+        }
+    }
+    fn source_guard(&self, path: &str) -> Result<Arc<AtomicBool>, Failure> {
+        let mut sources = self.sources.lock().unwrap();
+        if !sources.contains_key(path) && sources.len() >= 1024 {
+            return Err(Failure::new(
+                ErrorCode::LimitExceeded,
+                "Source context epoch quota exceeded",
+            ));
+        }
+        Ok(sources
+            .entry(path.into())
+            .or_insert_with(|| Arc::new(AtomicBool::new(true)))
+            .clone())
+    }
+    /// Reopening the same path gets a new bit; restoring its former context cannot revive results.
+    pub(super) fn revoke_source(&self, path: &str) {
+        if let Some(guard) = self.sources.lock().unwrap().remove(path) {
+            guard.store(false, Ordering::Release);
+        }
     }
 }
 
@@ -35,6 +60,14 @@ impl EditorApp {
     /// outstanding result guards expire; open contexts and native process leases remain intact.
     pub(crate) fn invalidate_language_context_snapshots(&mut self) {
         self.language_server_demands.snapshot_epoch.revoke();
+    }
+    /// Context choice and native close revoke one source without invalidating another graph's work.
+    pub(crate) fn invalidate_source_language_context(&self, path: &Path) {
+        if let Ok(relative) = path.strip_prefix(self.workspace.root()) {
+            self.language_server_demands
+                .snapshot_epoch
+                .revoke_source(&relative.to_string_lossy().replace('\\', "/"));
+        }
     }
     /// Provider/configuration publication must revoke preview authority before a new native round.
     pub(super) fn sync_language_snapshot_configuration(&mut self) {
@@ -136,7 +169,12 @@ impl EditorApp {
                 target.id.clone(),
                 sources,
             )
-            .with_guard(self.language_server_demands.snapshot_epoch.guard.clone()),
+            .with_guard(self.language_server_demands.snapshot_epoch.guard.clone())
+            .with_source_guard(
+                self.language_server_demands
+                    .snapshot_epoch
+                    .source_guard(&target.path)?,
+            ),
         ))
     }
 

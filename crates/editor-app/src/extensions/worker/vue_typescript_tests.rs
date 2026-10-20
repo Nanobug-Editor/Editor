@@ -7,6 +7,8 @@ use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
+mod cached_hover;
+
 /// Load the candidate's actual grammar and queries through the production WasmStore and parser.
 /// Keeping this independent of guest activation distinguishes parser startup from control routing.
 #[test]
@@ -360,6 +362,7 @@ fn independent_vue_typescript_packages_analyze_native_mixed_project_tabs(cx: &mu
         );
     }
     drop(results);
+    cached_hover::assert_cached_keyboard_hover(&app, &paths, visual);
     for (path, unknown) in paths.iter().zip(missing) {
         super::vue_test_support::assert_native_references(
             &app, &actor, &workspace, path, "message", visual,
@@ -532,7 +535,7 @@ fn mixed_request_stage(
 }
 
 /// A public language operation's bounded envelope identifies resolve/attach without decoding it.
-fn control_request_summary(request: &plugin_runtime::EditorRequest) -> String {
+pub(super) fn control_request_summary(request: &plugin_runtime::EditorRequest) -> String {
     match request.operation() {
         protocol::api::EditorOperation::LanguageRequest { request } => format!(
             "provider={} method={} document={:?}",

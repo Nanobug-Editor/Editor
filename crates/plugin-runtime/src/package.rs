@@ -70,10 +70,10 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                     .api
                     .as_ref()
                     .and_then(|api| api.required.get("language.lsp"))
-                    .is_some_and(
-                        |requirement| requirement.matches(&semver::Version::new(1, 5, 0))
-                            && !requirement.matches(&semver::Version::new(1, 4, 0))
-                    ),
+                    .is_some_and(|requirement| (requirement
+                        .matches(&semver::Version::new(1, 5, 0))
+                        || requirement.matches(&semver::Version::new(1, 6, 0)))
+                        && !requirement.matches(&semver::Version::new(1, 4, 0))),
                 "Document contexts, aliases and delegation require language.lsp >=1.5"
             );
         }
@@ -94,7 +94,12 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                 .and_then(|contract| contract.methods.get(&delegate.method));
             anyhow::ensure!(
                 manifest.component.is_some()
-                    && method == Some(&plugin_protocol::language_control::binding_prepare_method()),
+                    && method
+                        == Some(
+                            &plugin_protocol::language_control::binding_prepare_method_for(
+                                delegate.interactive
+                            )
+                        ),
                 "Delegated language providers require the canonical public prepare method"
             );
             anyhow::ensure!(
@@ -104,6 +109,22 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                     && provider.control_methods.is_empty()
                     && !provider.optional_installation,
                 "A delegated language provider cannot invent a native startup plan"
+            );
+        }
+        if provider.internal
+            || provider
+                .delegate
+                .as_ref()
+                .is_some_and(|delegate| delegate.interactive)
+        {
+            anyhow::ensure!(
+                manifest
+                    .api
+                    .as_ref()
+                    .and_then(|api| api.required.get("language.lsp"))
+                    .is_some_and(|range| range.matches(&semver::Version::new(1, 6, 0))
+                        && !range.matches(&semver::Version::new(1, 5, 0))),
+                "Internal and interactive providers require language.lsp >=1.6"
             );
         }
         // Independent roles negotiate before installation, so an older host cannot silently
@@ -275,7 +296,8 @@ impl Package {
                 .ok_or_else(|| anyhow::anyhow!("Missing manifest.json"))?,
         )
         .map_err(|error| {
-            anyhow::anyhow!("插件清单不兼容或无效，请使用新版 SDK 更新插件：{error}")
+            // CLI and UI share technical details; the native caller translates its operation label.
+            anyhow::anyhow!("Incompatible or invalid plugin manifest; update the plugin with the current SDK: {error}")
         })?;
         // New archives keep their declared identity; historical aliases belong exclusively to data import.
         anyhow::ensure!(

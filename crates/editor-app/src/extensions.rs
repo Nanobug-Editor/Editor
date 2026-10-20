@@ -431,9 +431,44 @@ impl ExtensionPanel {
             .and_then(|entry| entry.manifest.api.as_ref())
             .and_then(|api| api.required.get("language.lsp"))
             .is_some_and(|requirement| {
-                requirement.matches(&semver::Version::new(1, 5, 0))
+                (requirement.matches(&semver::Version::new(1, 5, 0))
+                    || requirement.matches(&semver::Version::new(1, 6, 0)))
                     && !requirement.matches(&semver::Version::new(1, 4, 0))
             })
+    }
+
+    /// Native context switching is opt-in metadata; internal bootstrap providers never become choices.
+    pub(crate) fn language_provider_is_interactive(&self, provider: &str) -> bool {
+        let Some((plugin, local)) = provider.split_once('/') else {
+            return false;
+        };
+        self.entries
+            .iter()
+            .find(|entry| entry.manifest.id == plugin)
+            .is_some_and(|entry| {
+                entry.manifest.language_servers.iter().any(|declaration| {
+                    declaration.id == local
+                        && declaration.primary
+                        && !declaration.internal
+                        && declaration
+                            .delegate
+                            .as_ref()
+                            .is_some_and(|delegate| delegate.interactive)
+                })
+            })
+    }
+
+    /// Withdraw exactly one alias before a fresh native demand; a shared transport remains owned.
+    pub(crate) fn release_language_document(
+        &self,
+        provider: &str,
+        document: &protocol::language::DocumentContext,
+    ) {
+        let _ = self.worker.tx.send(worker::Work::ReleaseLanguageDocument {
+            workspace: self.workspace.display().to_string(),
+            provider: provider.into(),
+            document: document.clone(),
+        });
     }
 
     /// Read one exact prepared binding from the actor snapshot; this never falls back to another

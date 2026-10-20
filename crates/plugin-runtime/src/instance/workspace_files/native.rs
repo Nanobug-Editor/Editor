@@ -1,7 +1,7 @@
 //! Controlled native language owners issue the same document-plan request and recovery resources
 //! as guests. This bounded arena retains no text, editable document model or separate Undo history.
 use super::*;
-use crate::EditorRequest;
+use crate::{EditorRequest, editor_requests::PreparationConditions};
 use std::collections::BTreeMap;
 
 /// The original service incarnation owns both transient requests and separately retained receipts.
@@ -35,31 +35,28 @@ impl NativeDocumentRequests {
         }
     }
 
-    /// Current-document text plans use original negotiated contracts and consent, including the
-    /// readonly source condition. Resource, foreign-document and application-scope effects fail
+    /// Workspace document plans use original negotiated contracts and consent, including readonly
+    /// input conditions. Resource and application-scope effects fail
     /// before allocation; the native host still validates revision, previews and asks for consent.
     pub(crate) fn submit(
         &mut self,
         plan: plugin_protocol::workspace::Plan,
         capabilities: &BTreeMap<String, semver::Version>,
         permissions: &BTreeSet<String>,
-        guard: Option<Arc<std::sync::atomic::AtomicBool>>,
+        guards: Vec<Arc<std::sync::atomic::AtomicBool>>,
     ) -> Result<api::Value, Failure> {
         self.poll();
         self.check_plan(&plan, capabilities, permissions)?;
-        // A native snapshot may retire after rendering but before this original request is issued.
-        // Bind its monotonic guard into the normal request/batch authority, without widening IO.
-        let authority = guard.map_or_else(
-            || self.authority.clone(),
-            |guard| self.authority.with_guard(guard),
-        );
-        if !authority.is_live() {
+        // A result may expire after rendering. Preparation seals govern pending execution only:
+        // once a real write occurs, recovery must retain the original instance/caller authority.
+        let conditions = Arc::new(PreparationConditions::new(guards));
+        if !conditions.is_live() {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
                 "Language analysis snapshot changed",
             ));
         }
-        self.issue(plan, authority)
+        self.issue(plan, conditions)
     }
 
     /// Shared document admission precedes native-only scope and shape restrictions; none of
@@ -111,14 +108,36 @@ impl NativeDocumentRequests {
             path: document.path.clone(),
         }
         .validate()?;
-        if plan.changes.iter().any(|change| {
-            !matches!(change,
-            Change::EditDocument { document: target, .. } if target == document)
-        }) {
-            return Err(Failure::new(
-                ErrorCode::UnsupportedOperation,
-                "Native language actions support only their current document",
-            ));
+        let root = PathBuf::from(&self.workspace)
+            .canonicalize()
+            .map_err(crate::native_path::io_failure)?;
+        for change in &plan.changes {
+            let Change::EditDocument {
+                document: target, ..
+            } = change
+            else {
+                return Err(Failure::new(
+                    ErrorCode::UnsupportedOperation,
+                    "Native language actions support only document text edits",
+                ));
+            };
+            api::ResourceIdentity::Local {
+                path: target.path.clone(),
+            }
+            .validate()?;
+            if target != document && !permissions.contains("workspace.read") {
+                return Err(Failure::new(
+                    ErrorCode::PermissionDenied,
+                    "Related document edits require workspace.read",
+                ));
+            }
+            let path = normalized_target(&root.join(&target.path))?;
+            if !path.starts_with(&root) {
+                return Err(Failure::new(
+                    ErrorCode::InvalidPath,
+                    "Language edit target escapes workspace",
+                ));
+            }
         }
         Ok(())
     }
@@ -128,7 +147,7 @@ impl NativeDocumentRequests {
     fn issue(
         &mut self,
         plan: plugin_protocol::workspace::Plan,
-        authority: EditorAuthority,
+        conditions: Arc<PreparationConditions>,
     ) -> Result<api::Value, Failure> {
         if self.pending.len() >= 32 || self.batches.len() >= 8 || self.roots.len() >= 127 {
             return Err(Failure::new(
@@ -139,12 +158,15 @@ impl NativeDocumentRequests {
         let api::Value::Resource(batch_handle) = self.roots.open(RootKind::WorkspaceBatch)? else {
             unreachable!()
         };
-        let batch = Arc::new(WorkspaceBatch::new(
-            batch_handle.clone(),
-            authority.clone(),
-            None,
-            BTreeSet::from(["editor.read".into(), "editor.write".into()]),
-        ));
+        let batch = Arc::new(
+            WorkspaceBatch::new(
+                batch_handle.clone(),
+                self.authority.clone(),
+                None,
+                BTreeSet::from(["editor.read".into(), "editor.write".into()]),
+            )
+            .with_preparation(conditions.clone()),
+        );
         let api::Value::Resource(handle) = self.roots.open(RootKind::EditorRequest)? else {
             unreachable!()
         };
@@ -156,8 +178,9 @@ impl NativeDocumentRequests {
             self.workspace.clone(),
             self.data.clone(),
             120_000,
-            authority,
+            self.authority.clone(),
         )
+        .with_preparation(conditions)
         .with_workspace_request(WorkspaceRequest {
             batch: Some(batch.clone()),
             can_edit: true,

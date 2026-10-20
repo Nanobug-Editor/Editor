@@ -5,6 +5,8 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 #[path = "native_modules/consumers.rs"]
 mod consumers;
+#[path = "native_modules/delegation_retirement.rs"]
+mod delegation_retirement;
 
 /// A module declaration grants neither private-directory sharing nor a host-loaded native plugin.
 #[test]

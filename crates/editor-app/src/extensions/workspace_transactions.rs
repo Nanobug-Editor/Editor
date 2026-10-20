@@ -47,9 +47,11 @@ struct Preview {
     title: String,
     source: String,
     details: Vec<String>,
+    /// Source conditions and edit targets expire consent without duplicating editable text.
+    documents: Vec<NativeVersion>,
     focus: FocusHandle,
     previous: Option<FocusHandle>,
-    answer: Option<oneshot::Sender<bool>>,
+    answer: Option<oneshot::Sender<Result<bool, Failure>>>,
 }
 
 /// A native token captures close/reopen and silent edits as well as ordinary user Undo, even if bytes match.
@@ -78,6 +80,8 @@ struct Record {
     source: String,
     /// Readonly language source is a precondition, not a text preimage or recovery target.
     origin: Option<NativeVersion>,
+    /// Auxiliary inputs protect preparation and commit but never become group Undo targets.
+    conditions: Vec<NativeVersion>,
     changes: Vec<Change>,
     native: Vec<NativeTarget>,
     edits: BTreeMap<u16, NativeEdit>,
@@ -95,6 +99,10 @@ impl EditorApp {
         events: Vec<workspace::FileEventKind>,
         cx: &mut Context<Self>,
     ) {
+        // Disk/configuration changes invalidate pending language results before their publication.
+        if !events.is_empty() {
+            self.invalidate_language_context_snapshots();
+        }
         if !self.session_state.workspace_trusted {
             return;
         }

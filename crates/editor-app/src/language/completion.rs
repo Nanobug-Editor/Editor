@@ -82,6 +82,7 @@ impl CompletionProvider for LanguageCompletionProvider {
                 let version = cx.update(|cx| completion_version(&app, editor, &source, cx))?;
                 let request_source = source.clone();
                 let request_version = version.clone();
+                let sealed_server = server.clone();
                 // Capture related native snapshots after the input callback has drained. The
                 // provider selects members; no alternate editable text model is retained here.
                 let context = if let Some(document) = &version.snapshot {
@@ -126,14 +127,26 @@ impl CompletionProvider for LanguageCompletionProvider {
                     current == version,
                     "Completion document revision has changed"
                 );
-                anyhow::ensure!(
-                    cx.update(|cx| response_context.as_ref().is_none_or(|context| {
-                        app.upgrade().is_some_and(|app| {
-                            app.read(cx).language_context_is_current(context, cx)
+                if let Some(document) = version.snapshot {
+                    return cx.update(|cx| {
+                        app.update(cx, |app, cx| {
+                            anyhow::ensure!(
+                                response_context.as_ref().is_none_or(|context| {
+                                    app.language_context_is_current(context, cx)
+                                }),
+                                "Completion project context has changed"
+                            );
+                            Ok(app.seal_completions(
+                                response,
+                                document,
+                                source,
+                                byte_offset,
+                                sealed_server,
+                                response_context,
+                            ))
                         })
-                    })),
-                    "Completion project context has changed"
-                );
+                    })?;
+                }
                 Ok(response)
             });
         }

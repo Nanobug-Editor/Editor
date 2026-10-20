@@ -114,7 +114,14 @@ impl EditorApp {
             .as_deref()
             .map(|path| self.language_for_path(path))
             .unwrap_or_default();
-        let can_format = editable && self.language_edits.formatters.contains_key(&language);
+        // A cold selected formatter is still callable: the action owns its normal demand wait.
+        let can_format = editable
+            && self
+                .providers
+                .formatters()
+                .get(&language)
+                .is_some_and(Option::is_some);
+        let can_format_selection = can_format && !self.editor.read(cx).selected_range().is_empty();
         let can_rename = editable
             && self
                 .active_path
@@ -147,6 +154,11 @@ impl EditorApp {
                     t!("editor.format_document").to_string(),
                     !can_format,
                     Box::new(FormatDocument),
+                )
+                .menu_with_disabled(
+                    t!("editor.format_selection").to_string(),
+                    !can_format_selection,
+                    Box::new(FormatSelection),
                 )
                 .menu_with_disabled(
                     t!("editor.rename_symbol").to_string(),

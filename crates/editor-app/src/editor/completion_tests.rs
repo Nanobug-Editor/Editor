@@ -1,4 +1,4 @@
-//! Exercise completion navigation and deletion through the real editor key bindings.
+//! Exercise native completion actions and the painted documentation surfaces beside the editor.
 
 use super::*;
 use editor_core::Workspace;
@@ -6,7 +6,10 @@ use gpui_base::Root;
 use gpui_base::input::{CompletionProvider, Rope};
 use gpui_kit::gpui;
 use gpui_kit::{TestAppContext, VisualTestContext};
-use lsp_types::{CompletionContext, CompletionItem, CompletionResponse};
+use lsp_types::{
+    CompletionContext, CompletionItem, CompletionResponse, Hover, HoverContents, MarkupContent,
+    MarkupKind,
+};
 use std::cell::RefCell;
 
 /// Open an isolated document so completion tests never depend on installed servers.
@@ -328,4 +331,98 @@ fn completion_fuzzy_candidate_replaces_abbreviation(cx: &mut TestAppContext) {
             "变量.println"
         );
     });
+}
+
+/// Compare opaque foreground/background colors in linear light, independent of card styling.
+fn hover_text_contrast(foreground: Hsla, background: Hsla) -> f32 {
+    let luminance = |color: Hsla| {
+        let color = color.to_rgb();
+        let linear = |channel: f32| {
+            if channel <= 0.04045 {
+                channel / 12.92
+            } else {
+                ((channel + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
+    };
+    let foreground = luminance(foreground);
+    let background = luminance(background);
+    (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05)
+}
+
+/// Plain documentation and both code forms must stay readable when the live theme changes.
+#[gpui::test]
+fn hover_documentation_surface_contrasts_with_text_in_both_themes(cx: &mut TestAppContext) {
+    let (_directory, view, cx) = completion_editor(cx);
+    cx.simulate_input("message");
+    cx.run_until_parked();
+    for dark in [true, false] {
+        cx.update(|_, cx| theme::apply_theme(theme::builtin_theme(dark), cx));
+        for (form, markdown) in [
+            (
+                "prose",
+                "(method) String.toUpperCase(): string\n\nConverts all alphabetic characters to uppercase.",
+            ),
+            (
+                "inline code",
+                "Call `message.toUpperCase()` to convert the value.",
+            ),
+            (
+                "fenced code",
+                "Method signature:\n\n```typescript\ntoUpperCase(): string\n```",
+            ),
+        ] {
+            cx.update(|_, cx| {
+                view.read(cx).editor.clone().update(cx, |state, cx| {
+                    state.present_hover(
+                        0..7,
+                        Hover {
+                            contents: HoverContents::Markup(MarkupContent {
+                                kind: MarkupKind::Markdown,
+                                value: markdown.into(),
+                            }),
+                            range: None,
+                        },
+                        cx,
+                    );
+                });
+            });
+            cx.run_until_parked();
+            cx.update(|window, cx| window.draw(cx).clear(cx));
+            let card = cx.debug_bounds("editor-definition-card").unwrap();
+            let text = cx.debug_bounds("editor-definition-text").unwrap();
+            assert!(text.size.width > px(0.) && text.size.height > px(0.));
+            let (painted, expected_surface, foreground) = cx.update(|window, cx| {
+                let bounds = card.scale(window.scale_factor());
+                let painted = window
+                    .painted_quads()
+                    .into_iter()
+                    // Paint snaps edges to physical pixels; a source/editor quad must not
+                    // masquerade as this card merely because it covers the same center.
+                    .filter(|quad| {
+                        (quad.bounds.left().0 - bounds.left().0).abs() <= 1.
+                            && (quad.bounds.right().0 - bounds.right().0).abs() <= 1.
+                            && (quad.bounds.top().0 - bounds.top().0).abs() <= 1.
+                            && (quad.bounds.bottom().0 - bounds.bottom().0).abs() <= 1.
+                            && quad.content_mask.bounds.contains(&bounds.center())
+                    })
+                    .max_by_key(|quad| quad.order)
+                    .and_then(|quad| quad.background.as_solid())
+                    .expect("the visible hover card must paint its own solid surface");
+                (painted, cx.theme().popover, cx.theme().foreground)
+            });
+            // Local Markdown explicitly uses the theme foreground. Test its required contrast
+            // against the painted surface, rather than a second copy of the card's style logic.
+            let contrast = hover_text_contrast(foreground, painted);
+            assert!(
+                contrast >= 4.5,
+                "{form} hover text is unreadable in dark={dark}: contrast={contrast:.2}, foreground={foreground:?}, painted={painted:?}"
+            );
+            assert_eq!(
+                painted, expected_surface,
+                "{form} hover must follow the live popover surface in dark={dark}"
+            );
+        }
+    }
 }

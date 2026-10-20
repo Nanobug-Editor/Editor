@@ -82,6 +82,7 @@ pub(super) fn decode(
             let plan = Plan {
                 title: action.title.clone(),
                 origin: Some(source.document.clone()),
+                conditions: Vec::new(),
                 changes: vec![Change::EditDocument {
                     document: source.document.clone(),
                     edits,

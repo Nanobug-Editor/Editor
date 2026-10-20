@@ -16,6 +16,8 @@ struct Document {
     source: String,
     /// None means the server has not published for this snapshot yet; Some([]) clears it.
     diagnostics: Option<Vec<Diagnostic>>,
+    /// Lost notifications require a fresh full source even when its bytes have not changed.
+    needs_sync: bool,
 }
 
 impl DiagnosticsStore {
@@ -26,7 +28,7 @@ impl DiagnosticsStore {
     /// Repeated requests for unchanged text must not invalidate diagnostics or restart analysis.
     pub(super) fn next_version(&self, uri: &str, source: &str) -> Option<i32> {
         match self.documents.get(&document_key(uri)) {
-            Some(document) if document.source == source => None,
+            Some(document) if document.source == source && !document.needs_sync => None,
             _ => Some(self.last_version.saturating_add(1)),
         }
     }
@@ -40,11 +42,20 @@ impl DiagnosticsStore {
                 version,
                 source,
                 diagnostics: None,
+                needs_sync: false,
             },
         );
     }
     pub(super) fn is_open(&self, uri: &str) -> bool {
         self.documents.contains_key(&document_key(uri))
+    }
+
+    /// Preserve monotonically increasing identities while invalidating all potentially lost pushes.
+    pub(super) fn invalidate_notification_watermarks(&mut self) {
+        for document in self.documents.values_mut() {
+            document.needs_sync = true;
+            document.diagnostics = None;
+        }
     }
 
     /// Editing replies compare against the actual didOpen/didChange version, not a UI revision.
@@ -121,6 +132,8 @@ impl LanguageServer {
                 .as_mut()
                 .context("language server is unavailable")?;
             let uri = document.uri.clone();
+            // Discover a lossy queue before deciding that unchanged text is already synchronized.
+            connection.drain_messages()?;
             // Idle polling must not copy large unchanged documents every 400 ms.
             let uri_text = if connection
                 .diagnostics
@@ -215,6 +228,11 @@ impl LanguageServerConnection {
                     anyhow::bail!("language server closed its output")
                 }
             }
+        }
+        if self.output.take_notification_loss() {
+            // Discard completeness after consuming old queued publications, so none can restore
+            // an incomplete cache. The next selected source gets a full didChange/new wire version.
+            self.diagnostics.invalidate_notification_watermarks();
         }
         Ok(())
     }

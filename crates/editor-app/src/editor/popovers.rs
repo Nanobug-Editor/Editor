@@ -2,7 +2,7 @@
 
 use crate::*;
 use gpui_base::input::{Backspace, Delete, Enter, Escape, InputOverlayKind, MoveDown, MoveUp};
-use gpui_kit::{AnyElement, BoxShadow, Hsla, StyledText, deferred, relative, rgb};
+use gpui_kit::{AnyElement, BoxShadow, Hsla, StyledText, deferred, relative};
 use lsp_types::{Documentation, HoverContents, MarkedString};
 
 #[cfg(test)]
@@ -296,12 +296,13 @@ pub(super) fn render(
     )
 }
 
-/// Route completion keys to the engine's insertion method and keep selection local.
+/// Route language selections through resolve and native transactions; keep other completions local.
 fn install_completion_actions(
     editor: &Entity<EditorState>,
     popup: &Rc<CompletionPopupState>,
     cx: &mut Context<EditorApp>,
 ) {
+    let host = cx.entity().downgrade();
     let popup = popup.clone();
     let (items, revision) = {
         let state = editor.read(cx);
@@ -331,9 +332,10 @@ fn install_completion_actions(
             } else if Enter::is_primary(&*action) {
                 let selected_revision = popup.selection.get().0;
                 let editor = editor.clone();
+                let host = host.clone();
                 // Defer the mutation until the engine finishes dispatching this key.
                 cx.spawn_in(window, async move |_, cx| {
-                    editor.update_in(cx, |state, window, cx| {
+                    let selected_item = editor.update_in(cx, |state, _window, _cx| {
                         let menu = state.completion_menu_state();
                         // A response may arrive before repaint installs a new action handler.
                         let selected = if menu.revision() == selected_revision {
@@ -342,12 +344,23 @@ fn install_completion_actions(
                             0
                         };
                         let Some(item) = menu.items.get(selected).cloned() else {
-                            return;
+                            return None;
                         };
                         let end = state.cursor();
                         let start = menu.trigger_start_offset.unwrap_or(end);
-                        state.insert_completion(&item, start..end, window, cx);
-                    })
+                        Some((item, start..end))
+                    });
+                    if let Ok(Some((item, range))) = selected_item {
+                        let _ = host.update_in(cx, |app, window, cx| {
+                            // Marked language items are consumed even when stale, so Base cannot
+                            // apply a partial main insertion after resolve or import validation fails.
+                            if !app.accept_language_completion(item.clone(), window, cx) {
+                                editor.update(cx, |state, cx| {
+                                    state.insert_completion(&item, range, window, cx)
+                                });
+                            }
+                        });
+                    }
                 })
                 .detach();
             } else if action.partial_eq(&Escape) {
@@ -419,6 +432,7 @@ fn render_completion(
         let popup = popup.clone();
         let pending_popup = popup.clone();
         let host = host.clone();
+        let click_host = host.clone();
         let deprecated = item.deprecated.unwrap_or(false);
         // Abbreviations highlight their matching letters, including gaps in fuzzy matches.
         let highlights = crate::language::completion::matching_ranges(&query, &item.label)
@@ -475,14 +489,17 @@ fn render_completion(
                     cx.stop_propagation();
                     return;
                 }
-                // All edits still pass through the upstream completion insertion path.
-                editor.update(cx, |state, cx| {
-                    if state.completion_menu_state().revision() != revision {
-                        // Wait for repaint if a refresh has replaced this row's edit data.
-                        return;
+                if editor.read(cx).completion_menu_state().revision() != revision {
+                    // Wait for repaint if a refresh has replaced this row's edit data.
+                    return;
+                }
+                let _ = click_host.update(cx, |app, cx| {
+                    if !app.accept_language_completion(item.clone(), window, cx) {
+                        editor.update(cx, |state, cx| {
+                            state.insert_completion(&item, start..end, window, cx);
+                            state.dismiss_completion_overlay(cx);
+                        });
                     }
-                    state.insert_completion(&item, start..end, window, cx);
-                    state.dismiss_completion_overlay(cx);
                 });
                 cx.stop_propagation();
             })
@@ -495,7 +512,7 @@ fn render_completion(
         Documentation::String(text) => text.clone(),
         Documentation::MarkupContent(markup) => markup.value.clone(),
     });
-    let panel = card(cx, "editor-completion-card", false)
+    let panel = card(cx, "editor-completion-card")
         .p_1()
         .max_w(max_width.max(px(120.)))
         .min_w(px(120.))
@@ -517,7 +534,7 @@ fn render_completion(
             documentation
         };
         layout = layout.child(
-            card(cx, "editor-completion-documentation-card", false)
+            card(cx, "editor-completion-documentation-card")
                 .p_1()
                 .px_2()
                 .w(if vertical_layout { max_width } else { width })
@@ -565,7 +582,7 @@ fn render_hover(
     Some(
         ui::controls::definition_popup(
             bounds,
-            card(cx, "editor-definition-card", true)
+            card(cx, "editor-definition-card")
                 // The card and Markdown share one focus boundary; entering it
                 // restores the presentation cleared by the editor's blur.
                 .track_focus(hover_focus.track(hover))
@@ -612,8 +629,8 @@ fn markdown_view(id: &'static str, markdown: String, cx: &App) -> gpui_base::Tex
     ui::controls::markdown_view(id, markdown, typography::editor_font_size(cx), cx)
 }
 
-/// Share the editor's border and contact shadow between both project popovers.
-fn card(cx: &App, id: &'static str, light: bool) -> gpui_kit::Stateful<gpui_kit::Div> {
+/// Keep editor popovers on the live theme surface used by their Markdown content.
+fn card(cx: &App, id: &'static str) -> gpui_kit::Stateful<gpui_kit::Div> {
     let shadow = vec![
         BoxShadow {
             color: Hsla {
@@ -645,25 +662,12 @@ fn card(cx: &App, id: &'static str, light: bool) -> gpui_kit::Stateful<gpui_kit:
         .debug_selector(move || id.into())
         .flex_none()
         .occlude()
-        // Definition details retain their white card; completion follows the theme.
-        .bg(if light {
-            rgb(0xffffff).into()
-        } else {
-            cx.theme().popover
-        })
-        .text_color(if light {
-            rgb(0x202124).into()
-        } else {
-            cx.theme().popover_foreground
-        })
+        // Markdown supplies its own theme foreground, so a fixed white surface
+        // would make documentation unreadable after switching to a dark theme.
+        .bg(cx.theme().popover)
+        .text_color(cx.theme().popover_foreground)
         .border_1()
-        .border_color(if light && cx.theme().is_dark() {
-            rgb(0x333333).into()
-        } else if light {
-            rgb(0xcccccc).into()
-        } else {
-            cx.theme().border
-        })
+        .border_color(cx.theme().border)
         .shadow(shadow)
 }
 

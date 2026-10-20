@@ -33,6 +33,8 @@ pub(crate) struct ContextCapture {
     cancellation: RequestCancellation,
     /// Native file/configuration events revoke results and previews without retiring the transport.
     guard: Arc<std::sync::atomic::AtomicBool>,
+    /// A display-context reselect revokes only this native target, preserving unrelated projects.
+    source_guard: Option<Arc<std::sync::atomic::AtomicBool>>,
     /// Trusted transport metadata is available only after the complete fixed point is synchronized.
     wire_sources: Arc<OnceLock<Vec<SourceMetadata>>>,
 }
@@ -44,6 +46,8 @@ struct ContextSeal {
     wire_versions: BTreeMap<String, i32>,
     service: std::sync::Weak<plugin_runtime::LanguageService>,
     retired: std::sync::Weak<std::sync::atomic::AtomicBool>,
+    /// Distinguish replacement pipes even when graph generations and wire versions repeat.
+    connection_alive: std::sync::Weak<std::sync::atomic::AtomicBool>,
 }
 impl ContextCapture {
     /// Capture one workspace/selection intent without copying text or admitting foreign paths.
@@ -66,6 +70,7 @@ impl ContextCapture {
             seal: Arc::new(OnceLock::new()),
             cancellation: RequestCancellation::default(),
             guard: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            source_guard: None,
             wire_sources: Arc::new(OnceLock::new()),
         }
     }
@@ -79,11 +84,32 @@ impl ContextCapture {
         self.guard = guard;
         self
     }
+    /// The native source's monotonic display epoch also follows its result and preview authority.
+    pub(crate) fn with_source_guard(mut self, guard: Arc<std::sync::atomic::AtomicBool>) -> Self {
+        self.source_guard = Some(guard);
+        self
+    }
     /// Wrap only the original native LSP authority; no file grant or service identity is replaced.
     pub(crate) fn fix_origin(&self, server: &LanguageServer) -> plugin_runtime::LanguageFixOrigin {
+        let mut guards = vec![self.guard.clone()];
+        guards.extend(self.source_guard.iter().cloned());
+        // A new pipe can repeat graph and wire versions. Only this completed capture's original
+        // connection authorizes pending edits; an unfinished or mismatched capture fails closed.
+        let connection = self
+            .seal
+            .get()
+            .filter(|seal| {
+                seal.service
+                    .upgrade()
+                    .is_some_and(|service| Arc::ptr_eq(&service, &server.service))
+            })
+            .and_then(|seal| seal.connection_alive.upgrade());
+        guards.push(
+            connection.unwrap_or_else(|| Arc::new(std::sync::atomic::AtomicBool::new(false))),
+        );
         plugin_runtime::LanguageFixOrigin::GuardedLsp {
             service: server.service.clone(),
-            guard: self.guard.clone(),
+            guards,
         }
     }
     /// Read only the actual participating vector after native analysis; unfinished captures cannot
@@ -109,6 +135,10 @@ impl ContextCapture {
     /// A native result cannot survive its original transport, native grant, or project owner.
     pub(crate) fn is_live(&self) -> bool {
         self.guard.load(std::sync::atomic::Ordering::Acquire)
+            && self
+                .source_guard
+                .as_ref()
+                .is_none_or(|guard| guard.load(std::sync::atomic::Ordering::Acquire))
             && self.seal.get().is_some_and(|seal| {
                 !seal.graph_generation.is_empty()
                     && seal.wire_versions.len() == seal.documents.len()
@@ -120,6 +150,10 @@ impl ContextCapture {
                         .retired
                         .upgrade()
                         .is_some_and(|retired| !retired.load(std::sync::atomic::Ordering::Acquire))
+                    && seal
+                        .connection_alive
+                        .upgrade()
+                        .is_some_and(|alive| alive.load(std::sync::atomic::Ordering::Acquire))
             })
     }
     /// Opening or closing candidates can introduce or remove dirty dependencies from the graph.
@@ -129,7 +163,12 @@ impl ContextCapture {
     }
     /// File/configuration publication invalidates analysis as a typed stale result, never a fault.
     fn check_epoch(&self) -> anyhow::Result<()> {
-        if self.guard.load(std::sync::atomic::Ordering::Acquire) {
+        if self.guard.load(std::sync::atomic::Ordering::Acquire)
+            && self
+                .source_guard
+                .as_ref()
+                .is_none_or(|guard| guard.load(std::sync::atomic::Ordering::Acquire))
+        {
             Ok(())
         } else {
             Err(Failure::new(
@@ -211,7 +250,7 @@ impl LanguageServer {
         );
         let graph_generation =
             generation.context("Related document graph omitted its generation")?;
-        let (wire_versions, sources) = {
+        let (wire_versions, sources, connection_alive) = {
             let connection = self
                 .connection
                 .lock()
@@ -234,7 +273,7 @@ impl LanguageServer {
                     version,
                 });
             }
-            (versions, sources)
+            (versions, sources, current.incarnation_alive.clone())
         };
         capture
             .wire_sources
@@ -251,6 +290,15 @@ impl LanguageServer {
         let current = connection
             .as_mut()
             .context("Language context is unavailable")?;
+        // Another request can observe EOF and reconnect while this operation is outside the lock.
+        // A repeated graph/version in that replacement is not evidence for the original result.
+        if !Arc::ptr_eq(&connection_alive, &current.incarnation_alive) {
+            return Err(Failure::new(
+                ErrorCode::StaleRevision,
+                "Language connection changed during analysis",
+            )
+            .into());
+        }
         let queried = self.query_related(current, target, capture);
         self.connection_failed("related documents", &queried, &mut connection);
         let (current_generation, _) = queried?;
@@ -279,6 +327,7 @@ impl LanguageServer {
                 wire_versions,
                 service: Arc::downgrade(&self.service),
                 retired: Arc::downgrade(&self.retired),
+                connection_alive: Arc::downgrade(&connection_alive),
             })
             .map_err(|_| anyhow!("Context capture was completed concurrently"))?;
         Ok(value)

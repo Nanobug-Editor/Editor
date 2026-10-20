@@ -8,6 +8,7 @@ use plugin_runtime::{
     ActivationReceipt, Availability, DemandReason, DemandRequest, RequestCancellation,
 };
 use rust_i18n::t;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A command's original static identity is separate from the eventual live callback incarnation.
 #[derive(Clone)]
@@ -20,9 +21,17 @@ pub(in crate::extensions) struct CommandOrigin {
 pub(crate) struct DemandWait {
     receiver: oneshot::Receiver<Result<ActivationReceipt, api::Failure>>,
     cancellation: RequestCancellation,
+    /// Original reservation evidence survives a late result after its cached error was withdrawn.
+    published_failure: Arc<AtomicBool>,
 }
 
 impl DemandWait {
+    /// True only when the exact original reservation published an Err and returned Completed Err.
+    /// Admission, receipt validation, cancellation and timeout cannot authorize an automatic retry.
+    pub(crate) fn preparation_error_was_published(&self) -> bool {
+        self.published_failure.load(Ordering::Acquire)
+    }
+
     /// Use the same token for the surrounding native request's Escape and document cancellation.
     pub(crate) fn cancellation(&self) -> RequestCancellation {
         self.cancellation.clone()
@@ -85,6 +94,7 @@ impl Worker {
         }
         let (reply, receiver) = oneshot::channel();
         let cancellation = RequestCancellation::default();
+        let published_failure = Arc::new(AtomicBool::new(false));
         self.tx
             .send(Work::Demand {
                 plugin: availability.plugin().to_owned(),
@@ -92,12 +102,14 @@ impl Worker {
                 reason,
                 guard,
                 cancellation: cancellation.clone(),
+                published_failure: published_failure.clone(),
                 reply,
             })
             .map_err(|_| unavailable())?;
         Ok(DemandWait {
             receiver,
             cancellation,
+            published_failure,
         })
     }
 }
@@ -118,6 +130,7 @@ enum Operation {
     Reply {
         guard: Option<CommandGuard>,
         cancellation: RequestCancellation,
+        published_failure: Arc<AtomicBool>,
         reply: oneshot::Sender<Result<ActivationReceipt, api::Failure>>,
     },
     Command {
@@ -138,6 +151,7 @@ impl Operation {
                 guard,
                 cancellation,
                 reply,
+                ..
             } => {
                 if cancellation.is_cancelled() || reply.is_canceled() {
                     return Err(cancelled(api::ErrorCode::Cancelled));
@@ -222,6 +236,7 @@ impl Demands {
                 reason,
                 guard,
                 cancellation,
+                published_failure,
                 reply,
                 ..
             } => (
@@ -230,6 +245,7 @@ impl Demands {
                 Operation::Reply {
                     guard,
                     cancellation,
+                    published_failure,
                     reply,
                 },
             ),
@@ -290,11 +306,13 @@ impl Demands {
             manager.begin_demand(&availability, reason, 60_000)
         });
         match admission {
-            Ok(request) => self.pending.push(Pending {
-                availability,
-                request,
-                operation,
-            }),
+            Ok(request) => {
+                self.pending.push(Pending {
+                    availability,
+                    request,
+                    operation,
+                });
+            }
             Err(error) => operation.finish(Err(error), manager, output, trusted),
         }
         None
@@ -317,10 +335,22 @@ impl Demands {
                     )))
                 }
                 Ok(()) => match pending.request.status() {
-                    api::RequestUpdate::Completed { result } => Some(result.and_then(|receipt| {
-                        manager.admit_receipt(&pending.availability, &receipt)?;
-                        Ok(receipt)
-                    })),
+                    api::RequestUpdate::Completed { result } => {
+                        if result.is_err()
+                            && pending.request.has_published_language_error()
+                            && let Operation::Reply {
+                                published_failure, ..
+                            } = &pending.operation
+                        {
+                            // Read the original reservation, not the current cache: its Err may
+                            // already be withdrawn. A new same-key reservation cannot set this bit.
+                            published_failure.store(true, Ordering::Release);
+                        }
+                        Some(result.and_then(|receipt| {
+                            manager.admit_receipt(&pending.availability, &receipt)?;
+                            Ok(receipt)
+                        }))
+                    }
                     api::RequestUpdate::Cancelled { reason, .. } => Some(Err(cancelled(reason))),
                     _ => None,
                 },

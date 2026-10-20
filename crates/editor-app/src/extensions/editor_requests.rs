@@ -7,6 +7,7 @@ use plugin_runtime::{
     },
 };
 
+mod contexts;
 mod decorations;
 mod documents;
 mod edits;
@@ -236,6 +237,10 @@ impl EditorApp {
             self.perform_language_control(request, cx);
             return;
         }
+        if matches!(request.operation(), Op::RefreshLanguageContext { .. }) {
+            self.perform_language_context_refresh(plugin, request, window, cx);
+            return;
+        }
         if matches!(request.operation(), Op::SaveImageInput { .. }) {
             self.save_plugin_image(request, window, cx);
             return;
@@ -452,7 +457,7 @@ impl EditorApp {
             | Op::NavigateDocument { .. }
             | Op::LocateViewport { .. }
             | Op::Diagnostics { .. } => unreachable!(),
-            Op::LanguageRequest { .. } => unreachable!(),
+            Op::LanguageRequest { .. } | Op::RefreshLanguageContext { .. } => unreachable!(),
         })();
         request.finish(result);
     }

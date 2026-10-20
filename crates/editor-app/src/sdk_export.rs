@@ -16,6 +16,11 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/language_context.rs",
         include_bytes!("../../plugin-protocol/src/language_context.rs"),
     ),
+    // Registered context references are part of the same independently buildable public module.
+    (
+        "src/language_context/registry.rs",
+        include_bytes!("../../plugin-protocol/src/language_context/registry.rs"),
+    ),
     // Independent language guests share the same bounded native control contract.
     (
         "src/language_control.rs",
@@ -420,6 +425,8 @@ mod tests {
             "src/lib.rs",
             "src/activation.rs",
             "src/settings.rs",
+            "src/language_context.rs",
+            "src/language_context/registry.rs",
             "wit/plugin.wit",
             "src/http.rs",
             "src/secrets.rs",

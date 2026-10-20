@@ -1,4 +1,5 @@
 //! Host capability inventory; package identity never changes interface availability.
+//! Technical rejection details are English; native UI localizes the operation and recovery context.
 use plugin_protocol::{Manifest, api};
 use semver::Version;
 
@@ -29,7 +30,7 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
     }
     anyhow::ensure!(
         manifest.protocol == 7,
-        "插件不兼容：协议 {} 已停止支持，请使用新版 SDK 更新插件（需要协议 7）。",
+        "Incompatible plugin protocol {}; update the plugin with the current SDK (protocol 7 required).",
         manifest.protocol
     );
     // Registry restoration uses the same release floor as ZIP/development admission. Neither
@@ -41,7 +42,7 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
         let host = Version::parse(env!("CARGO_PKG_VERSION"))?;
         anyhow::ensure!(
             !host.cmp_precedence(&minimum).is_lt(),
-            "插件不兼容：minimum host {minimum}, current host {host}; please update the host."
+            "Incompatible plugin: minimum host {minimum}, current host {host}; please update the host."
         );
     }
     anyhow::ensure!(manifest.activation.valid(), "Invalid background purpose");
@@ -138,7 +139,7 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
     }
     negotiate(manifest)
         .map(|_| ())
-        .map_err(|error| anyhow::anyhow!("插件 API 不兼容，请更新插件：{error:#}"))
+        .map_err(|error| anyhow::anyhow!("Incompatible plugin API; update the plugin: {error:#}"))
 }
 
 /// Validate compatibility both when inspecting a package and before restoring an instance.
@@ -183,7 +184,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.tree".into(), Version::new(1, 2, 0)),
         ("ui.grid".into(), Version::new(1, 0, 0)),
         ("plugin.services".into(), Version::new(1, 2, 0)),
-        ("workspace.files".into(), Version::new(1, 3, 0)),
+        ("workspace.files".into(), Version::new(1, 4, 0)),
         ("host.sdk".into(), Version::new(1, 0, 0)),
         ("storage.private".into(), Version::new(1, 2, 0)),
         ("storage.editor".into(), Version::new(1, 0, 0)),
@@ -208,7 +209,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("process".into(), Version::new(1, 8, 0)),
         // 1.2 owns native roots; 1.3 opts into immutable diagnostic URIs; 1.4 adds shared native
         // references/code actions/signature consumers, gated again by standard server advertisement.
-        ("language.lsp".into(), Version::new(1, 5, 0)),
+        ("language.lsp".into(), Version::new(1, 6, 0)),
         ("language.control".into(), Version::new(1, 0, 0)),
         ("language.modules".into(), Version::new(1, 0, 0)),
         // Pure references/actions/signature help remain explicitly experimental until wider use.

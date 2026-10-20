@@ -7,6 +7,7 @@ use std::{collections::BTreeMap, io::Write};
 
 const OWNER: &str = "observed-lsp";
 const SERVICE: &str = "observed-lsp/analysis";
+mod localization;
 
 /// A resource-only ZIP declares a standard service without borrowing any guest or host source.
 fn fixture_package(root: &Path, crash_marker: Option<&Path>) -> Package {

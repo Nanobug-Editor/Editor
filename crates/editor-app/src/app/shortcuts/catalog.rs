@@ -180,6 +180,7 @@ fn shell_action(name: &str) -> bool {
         name,
         "me_editor::SaveDocument"
             | "me_editor::FormatDocument"
+            | "me_editor::FormatSelection"
             | "me_editor::RenameSymbol"
             | "me_editor::RefreshWorkspace"
             | "me_editor::ToggleTheme"
@@ -208,6 +209,11 @@ fn append_unbound(result: &mut Vec<Operation>, cx: &App) {
         // New language commands remain editable global operations while retaining their native-source boundary.
         (
             "me_editor::FormatDocument",
+            crate::app::shell::DOCUMENT_COMMAND_CONTEXT,
+            Scope::Global,
+        ),
+        (
+            "me_editor::FormatSelection",
             crate::app::shell::DOCUMENT_COMMAND_CONTEXT,
             Scope::Global,
         ),

@@ -4,11 +4,145 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 
+mod language_failures;
+
 // Cross-project ownership observes the same production actor and public native publications.
 #[path = "../../tests/project_windows/runtime.rs"]
 mod concurrent;
 #[path = "../../tests/project_windows/installation.rs"]
 mod concurrent_installation;
+
+/// The native installation panel receives the selected UI language from the actual queue,
+/// including before a package worker has performed any preparation or dependency I/O.
+#[test]
+#[ignore = "process locale is global; run this publication regression with --test-threads=1"]
+fn queued_installation_progress_follows_the_selected_ui_locale() {
+    struct RestoreLocale(String);
+    impl Drop for RestoreLocale {
+        fn drop(&mut self) {
+            rust_i18n::set_locale(&self.0);
+        }
+    }
+    let _restore = RestoreLocale(rust_i18n::locale().to_string());
+    let package = Package::from_files(BTreeMap::from([
+        (
+            "manifest.json".into(),
+            serde_json::to_vec(&json!({
+                "id":"unknown-progress", "name":"Unknown progress fixture", "version":"1.0.0",
+                "protocol":7, "api":{"base":"^1"}, "contributions":"plugin.toml", "storage_limit":1024
+            })).unwrap(),
+        ),
+        (
+            "plugin.toml".into(),
+            b"[plugin]\nid='unknown-progress'\nname='Unknown progress fixture'\nversion='1.0.0'\nhost_version='^0.1'\n".to_vec(),
+        ),
+    ])).unwrap();
+    for (locale, preparing) in [("en", "Preparing installation"), ("zh-CN", "准备安装")] {
+        rust_i18n::set_locale(locale);
+        let directory = tempfile::tempdir().unwrap();
+        let worker = Worker::start(directory.path().into(), Environment::default(), true);
+        assert!(worker.queue_lifecycle(Work::Install(package.clone())));
+        let mut progress = worker
+            .state
+            .lock()
+            .unwrap()
+            .installation
+            .clone()
+            .expect("native publication before dispatch");
+        assert!(
+            progress.message.contains(preparing),
+            "{locale}: {}",
+            progress.message
+        );
+        assert_eq!(progress.id, "unknown-progress");
+        assert!(progress.cancellable && !progress.installed);
+        use plugin_runtime::InstallStage::*;
+        for (stage, english, chinese, cancellable) in [
+            (Preparing, "Preparing dependencies", "正在准备依赖", true),
+            (
+                Downloading("unknown-tool".into()),
+                "Downloading / reading dependency: unknown-tool",
+                "正在下载 / 读取依赖：unknown-tool",
+                true,
+            ),
+            (
+                Verifying("unknown-tool".into()),
+                "Verifying SHA-256: unknown-tool",
+                "正在验证 SHA-256：unknown-tool",
+                true,
+            ),
+            (
+                Extracting("unknown-tool".into()),
+                "Extracting dependency: unknown-tool",
+                "正在解包依赖：unknown-tool",
+                true,
+            ),
+            (
+                AwaitingAuthorization(42),
+                "step 42 is waiting",
+                "步骤 42 正在等待",
+                true,
+            ),
+            (
+                Installing("unknown purpose".into()),
+                "Running installation step: unknown purpose",
+                "正在执行安装步骤：unknown purpose",
+                true,
+            ),
+            (Prepared, "Dependencies are ready", "依赖已准备", false),
+            (Migrating, "Migrating plugin data", "迁移插件数据", false),
+            (
+                Committing,
+                "Committing the plugin version",
+                "正在提交插件版本",
+                false,
+            ),
+            (Committed, "have been committed", "已提交", false),
+        ] {
+            progress.advance(stage);
+            let expected = if locale == "en" { english } else { chinese };
+            assert!(
+                progress.message.contains(expected),
+                "{locale}: {}",
+                progress.message
+            );
+            assert_eq!(progress.cancellable, cancellable);
+            assert!(
+                !progress.installed,
+                "a manager stage never fabricates terminal success"
+            );
+            assert_eq!(progress.id, "unknown-progress");
+        }
+
+        // A real actor's failed inspection publishes the translated action and keeps the concrete
+        // filesystem cause. No native service, network source or project input is used here.
+        let background = Worker::start_background(
+            directory.path().join("background"),
+            Environment::default(),
+            true,
+        );
+        wait_for(&background, |state| state.ready);
+        assert!(background.queue_lifecycle(Work::Inspect(directory.path().join("missing.zip"))));
+        wait_for(&background, |state| state.status.is_some());
+        let failure = background
+            .state
+            .lock()
+            .unwrap()
+            .status
+            .clone()
+            .unwrap()
+            .message;
+        let expected = if locale == "en" {
+            "Inspect package failed"
+        } else {
+            "检查插件包失败"
+        };
+        assert!(failure.contains(expected), "{locale}: {failure}");
+        let (tx, rx) = futures::channel::oneshot::channel();
+        background.tx.send(Work::Shutdown(Some(tx))).unwrap();
+        futures::executor::block_on(rx).unwrap().unwrap();
+    }
+}
 
 /// A program the caller stopped is not the same fact as one nobody can describe.
 ///
@@ -69,13 +203,31 @@ fn image_offer_queue_releases_capacity_on_rejection_and_shutdown() {
 }
 
 /// Native publications are the same seam the editor polls; no second manager services these commands.
+/// Preserve the caller and a bounded publication snapshot on timeout so distinct lifecycle waits
+/// can be diagnosed without changing their predicate, deadline or frozen package input.
+#[track_caller]
 fn wait_for(worker: &Worker, ready: impl Fn(&Published) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         if ready(&worker.state.lock().unwrap()) {
             return;
         }
-        assert!(Instant::now() < deadline, "worker publication timed out");
+        assert!(
+            Instant::now() < deadline,
+            "worker publication timed out: {}",
+            {
+                let state = worker.state.lock().unwrap();
+                format!(
+                    "ready={}, views={:?}, status={:?}, startup={:?}, installation={:?}, editor_requests={}",
+                    state.ready,
+                    state.views.keys().collect::<Vec<_>>(),
+                    state.status.as_ref().map(|status| &status.message),
+                    state.startup,
+                    state.installation,
+                    state.editor_requests.len(),
+                )
+            }
+        );
         std::thread::sleep(Duration::from_millis(10));
     }
 }
@@ -245,7 +397,10 @@ fn operation_errors_retain_plugin_ownership_through_worker_publication() {
     wait_for(&worker, |state| state.status.is_some());
     let status = worker.state.lock().unwrap().status.take().unwrap();
     assert_eq!(status.plugin.as_deref(), Some("missing-plugin"));
-    assert!(status.message.contains("Plugin command owner changed"));
+    // Ownership is a typed stale-intent failure; its explanation follows the active UI catalog.
+    let explanation = rust_i18n::t!("plugins.command_owner_changed").to_string();
+    assert!(status.message.starts_with("StaleRevision: "));
+    assert!(status.message.contains(explanation.as_str()));
     let logs = worker.state.lock().unwrap().logs.clone();
     assert!(logs.records("missing-plugin").iter().any(|record| {
         record.level == plugin_runtime::logs::LogLevel::Error && record.source == "host.operation"
@@ -483,7 +638,15 @@ fn run_preparation(restrict: bool) {
     });
     let old_epoch = worker.state.lock().unwrap().instance_epochs["capability-example"];
     if restrict {
+        // Match Extensions::set_workspace_trusted: native authority changes before its mailbox
+        // notification. Leaving the startup grant here would tell each routed tick to trust again.
+        worker
+            .trusted
+            .store(true, std::sync::atomic::Ordering::Release);
         worker.tx.send(Work::SetTrust(true)).unwrap();
+        worker
+            .trusted
+            .store(false, std::sync::atomic::Ordering::Release);
         worker.tx.send(Work::SetTrust(false)).unwrap();
         // Revocation takes effect while the network is still paused, not after background cleanup.
         wait_for(&worker, |state| state.views.is_empty());
@@ -507,11 +670,12 @@ fn run_preparation(restrict: bool) {
             .send(command_work(&worker, "scope-read", json!(null)))
             .unwrap();
         // This later command is an ordering barrier after any queued grant; it must remain rejected.
+        let explanation = rust_i18n::t!("plugins.command_owner_changed").to_string();
         wait_for(&worker, |state| {
-            state
-                .status
-                .as_ref()
-                .is_some_and(|status| status.message.contains("Plugin command owner changed"))
+            state.status.as_ref().is_some_and(|status| {
+                status.message.starts_with("StaleRevision: ")
+                    && status.message.contains(explanation.as_str())
+            })
         });
         let state = worker.state.lock().unwrap();
         assert!(state.views.is_empty());

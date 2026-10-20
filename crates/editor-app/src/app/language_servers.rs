@@ -2,6 +2,8 @@
 use crate::*;
 mod contexts;
 mod demands;
+mod recovery;
+mod selection;
 mod snapshots;
 pub(crate) use demands::DemandState;
 
@@ -313,6 +315,7 @@ impl EditorApp {
     /// Retire `path` on every transport which may have synchronized it, including related sources
     /// without a primary provider. Shared adapters are visited once; wire cleanup remains asynchronous.
     pub(crate) fn close_language_document(&self, path: &Path, cx: &mut Context<Self>) {
+        self.invalidate_source_language_context(path);
         let mut seen = std::collections::BTreeSet::new();
         for server in self
             .language_servers

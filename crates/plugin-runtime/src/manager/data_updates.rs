@@ -4,6 +4,8 @@ use crate::{
     InstallControl,
     data_transaction::{self, Transaction},
 };
+#[cfg(test)]
+mod compatibility_tests;
 
 /// Opaque, manager-bound preparation token; callers may continue dispatching old-version commands before commit.
 pub struct PreparedInstallation {
@@ -99,14 +101,17 @@ impl Manager {
         })
     }
 
-    /// The actor holds exclusive access across final copy, migration, activation and durable commit.
-    pub fn commit_installation(
-        &mut self,
-        mut prepared: PreparedInstallation,
+    /// Revalidate an opaque candidate before the host retires published callbacks or old owners.
+    /// Checks current scope/version, grants, cancellation, replacement consent and live contracts.
+    /// This performs no guest calls, file I/O, activation or publication. Commit repeats it under
+    /// exclusive access; an earlier successful check grants no enduring cutover authority.
+    pub fn validate_prepared_installation(
+        &self,
+        prepared: &PreparedInstallation,
         control: &InstallControl,
     ) -> anyhow::Result<()> {
         let manifest = &prepared.package.manifest;
-        let id = manifest.id.clone();
+        let id = &manifest.id;
         self.validate_data_update(&prepared.package, &prepared.grants)?;
         self.validate_replacements(manifest, control)?;
         anyhow::ensure!(
@@ -118,10 +123,35 @@ impl Manager {
             prepared.root == self.root
                 && prepared.workspace == self.environment.workspace
                 && prepared.previous_digest
-                    == self.installed.get(&id).map(|entry| entry.digest.clone()),
+                    == self.installed.get(id).map(|entry| entry.digest.clone()),
             "Prepared installation is stale; prepare it again"
         );
         control.check()?;
+        if self.live.contains_key(id) {
+            // Reject incompatible required contracts while the usable predecessor and all its
+            // native plans are still alive. This checks existing publications/selection only;
+            // it neither publishes candidate exports nor executes a provider. Cold admission
+            // remains demand-driven, and connect_services repeats validation during cutover.
+            prepared
+                .next
+                .validate_service_dependencies(&self.plugin_services)?;
+        }
+        self.validate_service_replacement(
+            &prepared.next.service_replacement(),
+            &prepared.replaced_records,
+        )?;
+        Ok(())
+    }
+
+    /// The actor holds exclusive access across final copy, migration, activation and durable commit.
+    pub fn commit_installation(
+        &mut self,
+        mut prepared: PreparedInstallation,
+        control: &InstallControl,
+    ) -> anyhow::Result<()> {
+        self.validate_prepared_installation(&prepared, control)?;
+        let manifest = &prepared.package.manifest;
+        let id = manifest.id.clone();
         // Preserve each retiring owner's latest logical state in its original private scope.
         // No bytes or live process state cross into the replacement plugin's filesystem authority.
         for old_id in prepared.replaced_records.keys() {

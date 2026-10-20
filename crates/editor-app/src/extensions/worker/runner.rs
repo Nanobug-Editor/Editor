@@ -213,6 +213,33 @@ impl Worker {
                     deferred.push_back(work.take().unwrap());
                 }
                 output.lock().unwrap().logs = manager.runtime_logs();
+                // Preparation success is not admission. Reject current metadata/contracts before
+                // withdrawing old UI epochs; commit repeats this check under the same manager.
+                let completed = completed.map(|(id, control, prepared, mutation)| {
+                    let prepared = prepared.and_then(|prepared| {
+                        manager.validate_prepared_installation(&prepared, &control)?;
+                        Ok(prepared)
+                    });
+                    (id, control, prepared, mutation)
+                });
+                // Resource-only packages have no PreparedInstallation token. Their synchronous
+                // route still checks its existing pure admission prefix before UI retirement.
+                let synchronous_admission = match &work {
+                    Some(Work::Install(package)) if package.manifest.component.is_none() => {
+                        let control = output
+                            .lock()
+                            .unwrap()
+                            .install_control
+                            .clone()
+                            .unwrap_or_default();
+                        manager.validate_installation(
+                            package,
+                            &package.manifest.permissions,
+                            &control,
+                        )
+                    }
+                    _ => Ok(()),
+                };
                 let mut lifecycle = completed
                     .as_ref()
                     .map(|(id, _, _, _)| OperationProgress {
@@ -247,7 +274,10 @@ impl Worker {
                             | Work::Uninstall(id, _)
                             | Work::SetProjectEnabled(id, false),
                         ) => vec![id.clone()],
-                        Some(Work::Install(package)) if package.manifest.component.is_none() => {
+                        Some(Work::Install(package))
+                            if package.manifest.component.is_none()
+                                && synchronous_admission.is_ok() =>
+                        {
                             vec![package.manifest.id.clone()]
                         }
                         Some(Work::SetTrust(false) | Work::Shutdown(_)) => {
@@ -271,6 +301,8 @@ impl Worker {
                 let scene_before_work = super::native_acceptance::scene_probe::sample(&manager);
                 let result = if let Some((_, control, prepared, _mutation)) = completed {
                     prepared.and_then(|prepared| manager.commit_installation(prepared, &control))
+                } else if let Err(error) = synchronous_admission {
+                    Err(error)
                 } else {
                     match work.and_then(|work| work.admit(&manager, &output)) {
                         Some(Work::PresentedInput { handle, bytes }) => {
@@ -1078,7 +1110,11 @@ impl Worker {
                     if let Err(e) = manager.checkpoint() {
                         output.lock().unwrap().status = Some(OperationStatus {
                             plugin: None,
-                            message: format!("保存插件状态失败：{e:#}"),
+                            message: t!(
+                                "plugins.install_progress.checkpoint_failed",
+                                error = format!("{e:#}")
+                            )
+                            .to_string(),
                         });
                     }
                     last_save = Instant::now();
@@ -1255,17 +1291,19 @@ impl Worker {
                         report.cancellable = false;
                         report.installed = result.is_ok();
                         report.message = match &result {
-                            Err(error) => {
-                                format!("安装失败：{error:#}\n可关闭此窗口后重新点击安装重试。")
-                            }
+                            Err(error) => t!(
+                                "plugins.install_progress.failed",
+                                error = format!("{error:#}")
+                            )
+                            .to_string(),
                             Ok(())
                                 if manager.installed.get(&report.id).is_some_and(|entry| {
                                     !entry.manifest.language_servers.is_empty()
                                 }) =>
                             {
-                                "插件已安装；等待语言服务选择与启动…".into()
+                                t!("plugins.install_progress.waiting_language").to_string()
                             }
-                            Ok(()) => "插件安装完成。".into(),
+                            Ok(()) => t!("plugins.install_progress.complete").to_string(),
                         };
                     }
                     published.install_control = None;
@@ -1273,10 +1311,14 @@ impl Worker {
                         .language_services
                         .iter()
                         .filter_map(|(key, service)| {
-                            service
-                                .as_ref()
-                                .err()
-                                .map(|error| format!("{key}：准备失败：{error}"))
+                            service.as_ref().err().map(|error| {
+                                t!(
+                                    "plugins.install_progress.preparation_failed",
+                                    provider = key,
+                                    error = error
+                                )
+                                .to_string()
+                            })
                         })
                         .collect::<Vec<_>>();
                     if let Some(report) = &mut published.installation {
@@ -1290,7 +1332,12 @@ impl Worker {
                 }
                 if let Err(e) = &result {
                     let message = if let Some(operation) = &lifecycle {
-                        format!("{}失败：{e:#}", operation.action.label())
+                        t!(
+                            "plugins.install_progress.operation_failed",
+                            action = operation.action.label(),
+                            error = format!("{e:#}")
+                        )
+                        .to_string()
                     } else {
                         format!("{e:#}")
                     };

@@ -1,6 +1,22 @@
 # 插件系统文档目录
 
-- [Vue/TypeScript S1 正式基线复验](verification/vue-typescript-s1-delivery-2026-10-19.md)：2026-10-19 新工单 #121 已验收、三仓推送并读回关闭；正式基线门禁、真实插件与相关原生交互通过。此前过程见[恢复记录](verification/vue-typescript-s1-resume-2026-10-19.md)；#122–#126 暂停，旧 #108–#118 只作历史，未发布版本。
+- [Vue/TypeScript 剩余场景交付](verification/vue-typescript-remaining-delivery-2026-10-20.md)：新 #122–#126 技术验收完成，最终 .15/.12 双包、普通桌面与门禁均有实际证据；三仓 Git 和关闭状态以该页实际回执为准。正式范围只覆盖固定版本组合，AccessKit 退出限制明确保留。
+
+- [Vue/TypeScript 15:00 恢复记录](verification/vue-typescript-resumed-2026-10-20.md)：按用户继续指令恢复新 #122–#126；暂停字节基线已核对，先定位 Worker 回归，再完成双包、普通桌面及交付。
+
+- [Vue/TypeScript 05:08 暂停检查点](verification/vue-typescript-paused-2026-10-20-0508.md)：按最新要求暂停所有工单，保留三仓未提交变更、已通过的 S4／S5 与最终生产门禁；附加 Worker ignored 回归仍失败，最终打包、普通桌面和提交交付未完成。
+
+- [Vue/TypeScript 剩余场景双轴审查](verification/vue-typescript-remaining-review-2026-10-20.md)：内层分析进程退出缺口已有真实 Windows 修复回归，后续增量持续复审；不以局部审查代替联合验收。
+
+- [取消后的独立委托请求](verification/vue-typescript-deferred-control-cancel-2026-10-20.md)：公开 SDK 回归复现并修复新需求串用旧取消结果；记录实际通过及未启动原生进程的证明边界。
+
+- [S3 历史事务与 S4 生态宿主验收](verification/vue-typescript-s3-s4-native-acceptance-2026-10-20.md)：固定真实包及宿主的逐次结果，区分 WindowsPlatform、GPUI 测试调度和工具证据；进行中结果不提前标为通过。
+
+- [Vue/TypeScript 剩余场景实施](verification/vue-typescript-remaining-2026-10-19.md)：用户恢复 #122–#126 连续实施；复用已批准规格、场景工单和公开测试接缝，保留 #121 已完成交付及旧工单历史，不发布版本。
+
+- [TypeScript 共享上下文选择](verification/vue-typescript-context-selection-2026-10-20.md)：公开注册接缝、稳定偏好键真实 RED/GREEN、冻结失败包与当前候选身份；原生选择、F12 和偏好保留以实际交互终态为准。
+
+- [Vue/TypeScript S1 正式基线复验](verification/vue-typescript-s1-delivery-2026-10-19.md)：2026-10-19 新工单 #121 已验收、三仓推送并读回关闭；正式基线门禁、真实插件与相关原生交互通过。此前过程见[恢复记录](verification/vue-typescript-s1-resume-2026-10-19.md)；当次范围止于 S1，后续进度见剩余场景记录，旧 #108–#118 只作历史，未发布版本。
 
 - [Git 面板间距与文件图标](verification/git-panel-polish-2026-10-19.md)：独立 0.1.16 调整外层留白及预览内边距，配套宿主复用资源管理器文件图标并隐藏空菜单按钮；实际包原生回归、产物身份及既有格式检查例外见记录。
 
@@ -36,7 +52,7 @@
 
 - [Git 加载与工作窗口超时回归](verification/git-loading-window-timeout-2026-10-18.md)：2026-10-18 新反馈独立记录；已修复过期树分页残留 loading，Package/Manager、两种无插桩原生恢复、正常仓库完整流程及工作区检查通过，本地修复版已生成。容器目录与实际仓库入口、原工作区两处格式偏差及尚未独立复现的整窗卡死边界见记录。
 
-- [Vue 多版本插件与 TypeScript 协作方案](specs/vue-multi-backend.md)、[已批准的六场景与当前执行范围](tickets/vue-typescript/README.md)、[历史工具层探针](verification/vue-typescript-p0-2026-10-15.md)：正式新工单为 #121–#126；本轮只实施 #121。原 11 张工单和 2026-10-15 暂停、测试记录保留追溯，不继承为当前源码或候选包的通过证据。
+- [Vue 多版本插件与 TypeScript 协作方案](specs/vue-multi-backend.md)、[已批准的六场景与当前执行范围](tickets/vue-typescript/README.md)、[历史工具层探针](verification/vue-typescript-p0-2026-10-15.md)：正式新工单为 #121–#126；#121 已交付，#122–#126 连续实施。原 11 张工单和 2026-10-15 暂停、测试记录保留追溯，不继承为当前源码或候选包的通过证据。
 - [Git 插件范围与原型方案](specs/git-plugin.md)、[实施验证记录](verification/git-plugin-2026-10-15.md)、[历史暂停现场](verification/git-plugin-paused-2026-10-16.md)、[场景工单与最终进度](tickets/git-plugin-remaining/README.md)：#119、#120 均已验收、普通推送并读回 closed／completed，100%。独立 0.1.7／52 项源码，访客 101/101、实际业务 43＋修正夹具 1、五窗口 5/5、正式原生完整流程／八组合、54 图核验及规定宿主检查有据，最终双轴无未解决项。原全量旧夹具失败按真实身份保留。Git 由宿主外独立项目和显式 ZIP 交付，不随宿主内置或自动恢复；系统 IME 候选弹窗仍未验证。
 - [独立插件市场规格与工单](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
 - [插件管理器共用布局](specs/plugin-manager-shared-layout.md)、[2026-10-13 验收记录](verification/plugin-manager-shared-layout-2026-10-13.md)：已安装与市场共用窗口框架，搜索框内置左侧筛选，详情按数据分区；浏览版本与实际安装实例的操作目标分别明确。实现与测试记录不继承市场服务工单的交付状态。

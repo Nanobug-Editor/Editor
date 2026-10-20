@@ -14,6 +14,7 @@ impl LanguageService {
     pub fn is_active(&self) -> bool {
         !self.state.lock().unwrap().retired
             && self.authority.is_live()
+            && self.registered_context_is_live()
             && Self::modules_live(&self.modules.lock().unwrap())
     }
     /// Each distinct loaded code closure needs one live consumer; callers sharing the same closure

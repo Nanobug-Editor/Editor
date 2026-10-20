@@ -17,6 +17,10 @@
 //! operations, other-document edits, annotations and lazy resolution return an explicit unsupported
 //! result rather than executing a valid prefix. Accepted actions use the shared native preview,
 //! permission, conflict and group-Undo workflow, with readonly `workspace.files 1.3` plan origins.
+//! Cross-document rename preserves every source edit for the same preview workflow. Auxiliary
+//! native input conditions require `workspace.files 1.4`; changed inputs reject the whole plan.
+//! Selected completions resolve on their original source lease, and their main/additional text
+//! edits validate together as one local Undo action. Commands and snippets are not executed.
 //! A declarative language package needs no empty WASM component for this workflow: its controlled
 //! service owns an incarnation seal and bounded request/recovery resources under the original
 //! `editor.read`, `editor.write`, `editor.edit 1.1` and `workspace.files 1.3` consent/contracts.
@@ -25,7 +29,8 @@
 //! remain live; retire, scope/trust change, replacement and manager shutdown revoke old proposals
 //! and recovery immediately. Native receipts retain the existing group
 //! Undo; dropping their last native holder releases the service-owned batch. No file-root authority
-//! or foreign-document effect is implied by a language result or its readonly origin condition.
+//! is implied by a language result or readonly condition. Editing another native workspace
+//! document requires its exact version, `workspace.read` and the normal editor write authority.
 //!
 //! Signature labels and documentation are inert plain text. Closing presentation stops that request's
 //! wait, sends `$/cancelRequest` for an outstanding standard request and discards later delivery;
@@ -107,6 +112,10 @@ pub struct Provider {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub languages: Vec<String>,
     pub service: String,
+    /// language.lsp 1.6: callable by its owner/delegates, omitted only from user provider choices.
+    /// Capabilities, permission consent and native resource accounting are unchanged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub internal: bool,
     /// language.lsp 1.5: prepare a borrowed transport through this package's declared async service.
     /// A delegated provider has no executable service; only a host-issued one-use binding is accepted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -174,6 +183,10 @@ pub struct Delegate {
     pub contract: String,
     /// Declared method accepting the fixed document intent and returning a sealed binding token.
     pub method: String,
+    /// language.lsp 1.6: direct host preparation may use native choice and own preference CAS.
+    /// Nested or cross-plugin calls cannot inherit the private preparation origin.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub interactive: bool,
 }
 impl Delegate {
     /// Check bounded service identifiers; this declaration grants no service or process authority.
@@ -190,7 +203,7 @@ impl Delegate {
     /// Require the complete closed prepare contract, including its read/module permission ceiling.
     /// Package inspection rejects broader shapes before activation or native dependency preparation.
     pub fn accepts(&self, method: &crate::service::Method) -> bool {
-        method == &crate::language_control::binding_prepare_method()
+        method == &crate::language_control::binding_prepare_method_for(self.interactive)
     }
 }
 
@@ -219,6 +232,10 @@ pub struct Context {
     /// Absence retains the existing workspace-wide discovery/install behavior. The path grants no IO.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub document: Option<DocumentContext>,
+    /// language.lsp 1.6: descriptor resolved by the host from the caller's live registry reference.
+    /// This remains a readonly hook; the descriptor grants no new filesystem or process authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_context: Option<crate::language_context::Descriptor>,
     /// dependencies 1.2: installation requests dependency plans without starting language analysis.
     /// False denotes ordinary language preparation; discovery without a download plan may be skipped.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

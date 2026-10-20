@@ -21,6 +21,8 @@ pub(super) struct Messages {
     stopped: Arc<AtomicBool>,
     /// Readiness is connection control state, independent of the lossy ordinary notification queue.
     ready: Arc<AtomicBool>,
+    /// A lost ordinary event invalidates diagnostic completeness, independently of queue receipt.
+    notification_loss: Arc<AtomicBool>,
 }
 impl Messages {
     pub(super) fn recv_timeout(
@@ -35,6 +37,10 @@ impl Messages {
     /// The reader observes the plugin's declared condition even when the document queue is full.
     pub(super) fn is_ready(&self) -> bool {
         self.ready.load(Ordering::Acquire)
+    }
+    /// Consume a loss watermark after draining old pushes so the caller can resynchronize live text.
+    pub(super) fn take_notification_loss(&self) -> bool {
+        self.notification_loss.swap(false, Ordering::AcqRel)
     }
     /// Intentional teardown revokes logging before closing the native pipe.
     pub(super) fn stop_logging(&self) {
@@ -102,6 +108,8 @@ pub(super) fn reader(
     let reader_stopped = stopped.clone();
     let ready = Arc::new(AtomicBool::new(false));
     let reader_ready = ready.clone();
+    let notification_loss = Arc::new(AtomicBool::new(false));
+    let reader_notification_loss = notification_loss.clone();
     std::thread::Builder::new()
         .name("language-server-reader".into())
         .spawn(move || {
@@ -155,6 +163,9 @@ pub(super) fn reader(
                     match sender.try_send(message) {
                         Ok(()) => {}
                         Err(mpsc::TrySendError::Full(_)) => {
+                            // The final publication may have been lost. An out-of-band watermark
+                            // survives the full queue and revokes cached completeness on the next poll.
+                            reader_notification_loss.store(true, Ordering::Release);
                             if !overflow_reported && !reader_stopped.load(Ordering::Acquire) {
                                 overflow_reported = true;
                                 service.append_runtime_log(
@@ -179,6 +190,7 @@ pub(super) fn reader(
         receiver,
         stopped,
         ready,
+        notification_loss,
     })
 }
 

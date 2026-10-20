@@ -44,8 +44,10 @@ pub use plugin_protocol::api::RequestUpdate;
 pub use request_state::Completion;
 mod instance;
 mod language_bindings;
+mod language_contexts;
 mod language_service;
 pub use language_bindings::LanguageBindings;
+pub use language_contexts::LanguageContexts;
 pub use language_service::{LanguageService, ServiceProcess};
 /// Shared project builds, validated development directories and atomic ZIP publication.
 pub mod development;
@@ -82,6 +84,8 @@ pub use terminal_presentations::{TerminalOwner, TerminalPresentation, TerminalPr
 /// Host-owned resources travel with every candidate; guests only see negotiated descriptions.
 #[derive(Clone, Debug, Default)]
 pub struct HostResources {
+    /// Opaque project choices retain native scope/owner/configuration seals across source routing.
+    pub contexts: LanguageContexts,
     /// General HTTP producers share a bounded host budget and host-selected proxy/TLS policy.
     pub http: HttpConfiguration,
     /// Trusted host-only profile override; an empty value hashes the canonical manager root.

@@ -181,6 +181,11 @@ impl Instance {
             self.store.data().active && self.store.data().activation_committed,
             "Hot configuration requires a committed active owner"
         );
+        self.store
+            .data()
+            .host_resources
+            .contexts
+            .revoke_owner(self.instance_id().unwrap_or(""));
         let reply = self.call(api::Input::Event {
             panel: None,
             event: api::Notification::Configuration {
@@ -200,6 +205,11 @@ impl Instance {
 
     /// Rollback reinitializes guest memory, so the previous resolved configuration must be delivered again.
     pub(super) fn reapply_settings(&mut self) -> anyhow::Result<()> {
+        self.store
+            .data()
+            .host_resources
+            .contexts
+            .revoke_owner(self.instance_id().unwrap_or(""));
         if !self.configuration.is_empty() {
             self.call(api::Input::Event {
                 panel: None,

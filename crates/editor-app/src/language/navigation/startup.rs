@@ -23,6 +23,7 @@ impl LanguageServerConnection {
         // Unsolicited server messages must reach the same log sink even with no open document.
         let output = transport::reader(stdout, service.clone(), retired.clone())?;
         let mut connection = Self {
+            incarnation_alive: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             documents: Default::default(),
             child,
             service: service.clone(),
@@ -41,7 +42,9 @@ impl LanguageServerConnection {
             pull_diagnostics: false,
             definition_provider: false,
             type_definition_provider: false,
+            completion_resolve_provider: false,
             formatting_provider: false,
+            range_formatting_provider: false,
             rename_provider: false,
             prepare_rename_provider: false,
             linked_editing_provider: false,
@@ -127,10 +130,16 @@ impl LanguageServerConnection {
                             "activeParameterSupport": true }
                     },
                     "formatting": { "dynamicRegistration": false },
+                    "rangeFormatting": { "dynamicRegistration": false },
                     "rename": { "dynamicRegistration": false, "prepareSupport": true },
                     "linkedEditingRange": { "dynamicRegistration": false },
                     "completion": {
-                        "completionItem": { "snippetSupport": false }
+                        "completionItem": {
+                            "snippetSupport": false,
+                            "resolveSupport": {
+                                "properties": ["detail", "documentation", "additionalTextEdits"]
+                            }
+                        }
                     },
                     "hover": { "contentFormat": ["markdown", "plaintext"] }
                 },
@@ -184,7 +193,10 @@ impl LanguageServerConnection {
         let capabilities = &initialized["capabilities"];
         let supported =
             |key: &str| capabilities[key].is_object() || capabilities[key] == Value::Bool(true);
+        self.completion_resolve_provider =
+            capabilities["completionProvider"]["resolveProvider"] == Value::Bool(true);
         self.formatting_provider = supported("documentFormattingProvider");
+        self.range_formatting_provider = supported("documentRangeFormattingProvider");
         self.rename_provider = supported("renameProvider");
         self.prepare_rename_provider =
             capabilities["renameProvider"]["prepareProvider"] == Value::Bool(true);

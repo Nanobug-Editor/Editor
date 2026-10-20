@@ -174,12 +174,18 @@ fn typescript_package_serves_configured_and_inferred_sources_after_vue_disabled(
                     captured.clone(),
                     lsp_types::Position::new(3, 15),
                     "renamed".into(),
+                    Vec::new(),
                 )?;
                 anyhow::ensure!(
-                    rename.len() == 3 && rename.iter().all(|edit| edit.new_text == "renamed"),
+                    rename.len() == 1
+                        && rename[0].edits.len() == 3
+                        && rename[0]
+                            .edits
+                            .iter()
+                            .all(|edit| edit.new_text == "renamed"),
                     "rename must preserve the complete edit set"
                 );
-                let format = server.format_for(document, captured, 2, true)?;
+                let format = server.format_for(document, captured, None, 2, true)?;
                 anyhow::ensure!(
                     !format.is_empty(),
                     "formatting must propose the missing spaces"
@@ -527,13 +533,18 @@ fn unknown_project_consumer_rejects_missing_wrong_and_incompatible_explicit_sdks
             .values()
             .filter_map(|entry| entry.as_ref().ok().cloned())
             .collect::<Vec<_>>();
-        assert_eq!(plans.len(), 1, "{case} must not select another engine plan");
-        assert_eq!(plans[0].owner, "typescript");
-        assert_eq!(
-            plans[0].provider.initialization_options["typescript"],
-            serde_json::json!(sdk),
-            "the actual plan must preserve the explicit choice"
-        );
+        // Context resolution can reject an invalid SDK before publishing any native lease.
+        // If preparation has published a plan already, it must retain that exact explicit SDK;
+        // neither scheduling order may introduce an alternative bundled engine.
+        assert!(plans.len() <= 1, "{case} selected alternative engine plans");
+        for plan in &plans {
+            assert_eq!(plan.owner, "typescript");
+            assert_eq!(
+                plan.provider.initialization_options["typescript"],
+                serde_json::json!(sdk),
+                "the actual plan must preserve the explicit choice"
+            );
+        }
         assert_eq!(std::fs::read_to_string(&path).unwrap(), disk);
         assert_eq!(
             visual.update(|_, cx| app.read(cx).editor.read(cx).text().to_string()),
