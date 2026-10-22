@@ -1,6 +1,6 @@
 # 三个工作区整合与已安装插件更新
 
-日期：2026-10-22，Asia/Shanghai。状态：整合验证进行中，尚未宣称全部交付。
+日期：2026-10-22，Asia/Shanghai。状态：工作区整合、远程推送、已安装插件更新和 Release 启动完成；启动诊断的剩余限制见文末。
 
 ## 范围与保留
 
@@ -15,6 +15,8 @@
 | codex/vue-typescript-remaining | `codex/vue-typescript-remaining` | `7fade327b82167523b261ec50cec64084b4d3aa0` |
 
 本地 main 已通过 `git merge --ff-only origin/main` 同步至 `d498beff`。没有强制推送、重写原提交或删除原工作区；旧 stash 保留。
+
+实际内容整合提交为 `e3fc1e8f9df14dc6df9f35674e359d54ba693268`；随后 `10f7d7abcc25c82a29927c747a0ab6bde7f3e2a8` 记录两个 Vue 工作区快照的合并关系，前后源码树一致。两项均已推送 `origin/main` 并读回远程提交核对。三个快照分支相对 main 的未合入提交数均为 0，`git branch --no-merged main` 与 `git branch -r --no-merged main` 均无结果。
 
 ## 整合依据
 
@@ -38,7 +40,7 @@
 | `cargo test -p editor-app recognition_preserves_the_actual_control_language_and_retires_only_mismatches -- --ignored` | 1 passed，0 failed |
 | `cargo test --workspace --exclude editor-app --jobs 1` | 108 组，516 passed，0 failed，382 ignored |
 | `cargo check --workspace --jobs 1` | 通过 |
-| `cargo build -p editor-app --release` | 待执行；沿用 IDE 的实际 profile |
+| `cargo build -p editor-app --release --jobs 1` | 通过，7 分 49 秒；沿用 IDE 的实际 Release profile |
 
 日志保存在上述仓库外备份目录。普通测试不包含 ignored 测试，不把跳过项报告为通过。
 
@@ -46,6 +48,30 @@
 
 ## 插件与启动
 
-用户已明确选择更新全部已安装插件，不安装市场中未安装的条目。读取真实用户 profile 后确认共 8 项；Git 为 0.1.27、Markdown 为 0.18.2，其余 HTML/JavaScript 0.3.1、Rust/SVG 0.6.1、TOML 0.2.3、XML 0.2.2 已是本轮读取市场的最新版。Git 0.1.29 与 Markdown 0.18.5 的本地包已找到，待最终宿主验证后沿公开 Manager 更新事务安装并读回状态，再启动 Release 编辑器。
+用户已明确选择更新全部已安装插件，不安装市场中未安装的条目。真实用户目录为 `C:/Users/Tmiracle/AppData/Roaming/MeEditor/runtime-plugins`，共 8 项。本轮对照官方市场目录及本地独立插件仓库的新包核对，安装后状态如下；新版宿主的插件管理界面已逐项显示这些版本。
+
+| 插件 ID | 更新前 | 更新后 |
+| --- | --- | --- |
+| git | 0.1.27 | 0.1.29 |
+| markdown | 0.18.2 | 0.18.5 |
+| html | 0.3.1 | 0.3.1 |
+| javascript | 0.3.1 | 0.3.1 |
+| rust | 0.6.1 | 0.6.1 |
+| svg（界面名称 Image） | 0.6.1 | 0.6.1 |
+| toml | 0.2.3 | 0.2.3 |
+| xml | 0.2.2 | 0.2.2 |
+
+市场目录读取于 20:57:44，来源为 [官方 catalog](https://nanobug-editor.github.io/Plugin-Marketplace/catalog.json)。Git 与 Markdown 使用本地独立仓库已生成的较新版本，没有因市场发布滞后而降级已安装包。包来源及 SHA-256：
+
+- `C:/Projects/RustProjects/Git-for-Nanobug/git-0.1.29.zip`：`be6fdc4bcd84a63872c6f05867464d05ab85e30a2f5ec4eaa15d2b5c6f9fe404`。
+- `C:/Projects/RustProjects/Markdown-for-Nanobug/dist/markdown-0.18.5.zip`：`383a0d5be242eac1c47be54bf219f4c0ba9ce314beb94d5ede0924a39f0aafe0`。
+
+两个包都通过新 Release 宿主的 `--plugin-check <ZIP> --format json`。沿现有 `plugin-runtime/examples/update_installed.rs` 的公开 Manager 安装事务依次更新，均返回成功；该入口要求插件已经安装并启用，拒绝新增权限。更新前完整备份 993 个文件（279.22 MiB），并逐文件验证摘要。更新后读回注册表，确认原有授权、启用状态、项目覆盖及实例作用域保留，另 6 个插件记录完全相同，所有既有私有数据文件字节相同。证据为备份目录中的 `plugins-update-audit.json`、`plugins-after.json`、`check-*-package.json` 和 `update-*.log`，原 profile 位于 `plugins-before/`。
+
+21:15:48 启动 `C:/Projects/RustProjects/Editor/target/release/editor-app.exe`，进程 ID 为 72896。原生窗口恢复 Editor 项目和既有标签页，分支显示 main，Git 提交图及插件管理均可见。启动后 Cargo.lock 曾显示元数据变化，但工作文件与 HEAD 的内容哈希完全一致，刷新 index 后无实际 diff，没有进行依赖升级。
+
+## 启动验收限制
+
+原生 UI 启动成功不等于全部交互无缺陷。本轮看到本地历史提示 `history worker is busy; retry after the pending operation`；Rust 分析器另记录一次约 120 ms 的事件循环耗时警告。问题面板最初显示 main.rs 的 4 个语言诊断错误和 3 个相关提示，涉及两个测试支持路径及 `ActiveTheme`、`builtin_theme` 导入。磁盘上的支持文件存在，主题通过 `pub use editor_ui::theme::*` 导出，同一源码的 app 测试编译、workspace check 和 Release 构建均通过。通过插件管理重启 Rust 插件一次后，问题面板恢复为 0，重启按钮恢复可用；没有修改源码或删除缓存。该现象尚不足以确定原诊断的根因，历史繁忙提示与分析器耗时日志仍保留，不宣称原生交互全部通过。
 
 返回[文档总目录](../../README.md)。
