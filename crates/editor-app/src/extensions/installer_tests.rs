@@ -66,7 +66,7 @@ fn installer_dialog_requires_sdk_choice_and_concrete_execution_confirmation(
         let editor_window = editor_cx.update(|window, _| window.window_handle());
         let control = editor_cx.update(|_, cx| {
             app.read(cx).extensions.clone().update(cx, |panel, _| {
-                assert!(panel.queue_lifecycle(Work::Install(package.clone())));
+                assert!(panel.queue_lifecycle(Work::Install(package.clone(), true)));
                 panel
                     .worker
                     .state

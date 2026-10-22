@@ -1,6 +1,118 @@
 //! Observable regressions discovered while reviewing the complete run/debug/build batch.
 use super::*;
 
+/// Delayed inspection answers cannot cross a thread switch, frame selection or subsequent resume.
+#[test]
+fn thread_inspection_rejects_old_thread_frame_and_pause_results() {
+    use inspection::Answer;
+    use plugin_runtime::plugin_protocol::debug::{Thread, Threads, Variable, Variables};
+    let mut controls = RunControls::default();
+    controls.note_debug_capabilities(editor_core::DebugCapabilities {
+        thread_tree: true,
+        inspect: true,
+        ..Default::default()
+    });
+    controls.begin_debug_session("debug");
+    controls.note_debug_provider_session("debug", "debug-1");
+    let mut report=plugin_runtime::DebugSession::from_value(&serde_json::json!({"session":"debug-1","state":"paused","pause":1,"source":"Main.java","line":9})).unwrap();
+    controls.observe_debug_report(&report);
+    let request = controls
+        .begin_debug_request(DebugMethod::Threads, None)
+        .unwrap();
+    controls
+        .apply_tree_answer(
+            request,
+            Answer::Threads(Threads {
+                threads: vec![
+                    Thread {
+                        id: 1,
+                        name: "main".into(),
+                    },
+                    Thread {
+                        id: 2,
+                        name: "worker".into(),
+                    },
+                ],
+                selected: 1,
+            }),
+        )
+        .unwrap();
+    let old = controls
+        .begin_debug_request(DebugMethod::ThreadFrames(1), None)
+        .unwrap();
+    controls.select_debug_thread(2).unwrap();
+    let frame = |id, name: &str| editor_core::StackFrame {
+        id,
+        name: name.into(),
+        source: "Main.java".into(),
+        line: 9,
+    };
+    assert_eq!(
+        controls.apply_tree_answer(old, Answer::Frames(vec![frame(10, "old main")])),
+        Err(editor_core::InspectionError::StalePause)
+    );
+    assert!(controls.debug_frames().is_empty());
+    let request = controls
+        .begin_debug_request(DebugMethod::ThreadFrames(2), None)
+        .unwrap();
+    controls
+        .apply_tree_answer(
+            request,
+            Answer::Frames(vec![frame(10, "worker"), frame(11, "caller")]),
+        )
+        .unwrap();
+    let old = controls
+        .begin_debug_request(
+            DebugMethod::Children {
+                thread: 2,
+                frame: 10,
+                reference: 0,
+                start: 0,
+            },
+            Some(10),
+        )
+        .unwrap();
+    controls.select_debug_frame(11).unwrap();
+    let page = || Variables {
+        variables: vec![Variable {
+            name: "wrong".into(),
+            value: "old frame".into(),
+            reference: 0,
+            named: 0,
+            indexed: 0,
+        }],
+        more: false,
+    };
+    assert_eq!(
+        controls.apply_tree_answer(old, Answer::Variables(page())),
+        Err(editor_core::InspectionError::StalePause)
+    );
+    assert!(controls.debug_panel_rows().variables.is_empty());
+    let old = controls
+        .begin_debug_request(
+            DebugMethod::Children {
+                thread: 2,
+                frame: 11,
+                reference: 0,
+                start: 0,
+            },
+            Some(11),
+        )
+        .unwrap();
+    report.state = plugin_runtime::DebugState::Running;
+    report.pause = Some(2);
+    controls.observe_debug_report(&report);
+    assert!(
+        controls
+            .apply_tree_answer(old, Answer::Variables(page()))
+            .is_err()
+    );
+    assert!(
+        controls.debug_panel_rows().threads.is_empty()
+            && controls.debug_panel_rows().variables.is_empty()
+    );
+}
+
 /// A target preparation settles its own pending start even when no interactive session is created.
 #[test]
 fn provider_preparation_receipts_release_pending_starts() {
@@ -28,12 +140,13 @@ fn provider_preparation_receipts_release_pending_starts() {
         // The real title bar reserves a plan identity, then stages a distinct step request.
         let request = controls.begin("provided");
         controls.note_step_request("provided", 0, request);
+        let artifact = crate::extensions::PreparedTarget::from("artifact.exe");
         assert!(controls.provider_prepared(
             "provided",
             0,
             request,
             if success {
-                Ok("artifact.exe")
+                Ok(&artifact)
             } else {
                 Err("Compiler failed")
             }
@@ -254,6 +367,7 @@ fn live_debug_controls_keep_the_original_provider_capabilities() {
     let mut controls = RunControls::default();
     controls.note_debug_availability(Ok("original".into()));
     controls.note_debug_capabilities(editor_core::DebugCapabilities {
+        thread_tree: false,
         breakpoints: true,
         resume_pause: true,
         step: true,

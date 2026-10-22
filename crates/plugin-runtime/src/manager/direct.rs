@@ -34,11 +34,11 @@ impl Manager {
         | crate::LanguageFixOrigin::GuardedLsp { service, .. } = origin
         {
             self.check_language_origin(service)?;
-            let guard = match origin {
-                crate::LanguageFixOrigin::GuardedLsp { guard, .. } => Some(guard.clone()),
-                _ => None,
+            let guards = match origin {
+                crate::LanguageFixOrigin::GuardedLsp { guards, .. } => guards.clone(),
+                _ => Vec::new(),
             };
-            return service.submit_language_fix(document, fix, guard);
+            return service.submit_language_fix(document, fix, guards);
         }
         let instance = self.live.get_mut(origin.owner()).ok_or_else(|| {
             Failure::new(ErrorCode::InvalidHandle, "Language instance is unavailable")

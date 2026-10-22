@@ -46,7 +46,7 @@ fn marketplace_waits_for_initial_installed_records() {
             state.market.generation(),
         )
     };
-    assert!(!worker.install_market(release, generation, Default::default()));
+    assert!(!worker.install_market(release, generation, Default::default(), true));
     assert_eq!(server.downloads.load(Ordering::Acquire), 0);
     assert!(worker.recorded.lock().unwrap().try_recv().is_err());
 }
@@ -86,7 +86,7 @@ fn marketplace_installs_actual_wasm_through_background_preparation() {
     };
     let id = candidate.manifest.id.clone();
     assert!(candidate.manifest.component.is_some());
-    assert!(worker.install_market(candidate.clone(), generation, Default::default()));
+    assert!(worker.install_market(candidate.clone(), generation, Default::default(), true));
     wait(&worker, |s| s.progress.is_none());
     let state = worker.state.lock().unwrap();
     assert!(
@@ -191,7 +191,7 @@ fn marketplace_failed_downloads_and_restricted_workspaces_preserve_existing_inst
             )
         };
         assert_eq!(
-            worker.install_market(candidate, generation, Default::default()),
+            worker.install_market(candidate, generation, Default::default(), true),
             failure != "restricted"
         );
         if failure == "cancel" {
@@ -240,13 +240,13 @@ fn marketplace_refresh_consent_install_and_offline_gate_use_the_real_actor() {
     server.offline.store(true, Ordering::Release);
     worker.refresh_market(cache.clone(), format!("{}/catalog.json", server.url));
     wait(&worker, |s| s.market.error.is_some());
-    assert!(!worker.install_market(candidate.clone(), generation, Default::default()));
+    assert!(!worker.install_market(candidate.clone(), generation, Default::default(), true));
     assert_eq!(server.downloads.load(Ordering::Acquire), 0);
     server.offline.store(false, Ordering::Release);
     worker.refresh_market(cache, format!("{}/catalog.json", server.url));
     wait(&worker, |s| s.market.fresh());
     let generation = worker.state.lock().unwrap().market.generation();
-    assert!(worker.install_market(candidate, generation, Default::default()));
+    assert!(worker.install_market(candidate, generation, Default::default(), true));
     wait(&worker, |s| s.progress.is_none());
     let state = worker.state.lock().unwrap();
     assert!(
@@ -274,7 +274,7 @@ fn marketplace_refresh_consent_install_and_offline_gate_use_the_real_actor() {
         .versions[0]
         .clone();
     assert!(
-        !worker.install_market(candidate, generation, Default::default()),
+        !worker.install_market(candidate, generation, Default::default(), true),
         "market cannot reinstall an existing ID"
     );
     worker.tx.send(Work::Shutdown(None)).unwrap();
@@ -556,6 +556,15 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         let bounds = form
             .debug_bounds("confirm-market-install")
             .expect("permission confirmation");
+        let option = form.debug_bounds("plugin-install-global-option").unwrap();
+        assert!(option.right() <= bounds.left());
+        let global_enabled = locale == "en";
+        if global_enabled {
+            form.simulate_click(
+                point(option.left() + px(7.), option.center().y),
+                Default::default(),
+            );
+        }
         form.simulate_click(bounds.center(), Default::default());
         wait(&worker, |s| s.progress.is_none());
         form.update(|_, cx| panel.update(cx, |panel, cx| panel.poll(cx)));
@@ -566,6 +575,12 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
                 .iter()
                 .any(|e| e.manifest.id == "test.notes")
         }));
+        let installed = Manager::read_registry(&root).unwrap();
+        assert_eq!(installed["test.notes"].enabled, global_enabled);
+        assert_eq!(
+            installed["test.notes"].project_enabled_in(&home.path().to_string_lossy()),
+            !global_enabled,
+        );
         worker.tx.send(Work::Shutdown(None)).unwrap();
         assert_eq!(external.requests.load(Ordering::Acquire), 0);
     }

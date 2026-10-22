@@ -12,6 +12,12 @@ mod tree_projection;
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
     eprintln!("native {}: activate", h.case.name);
     h.dpi(h.main, cx).await?;
+    if commit_panel::requested() {
+        return commit_panel::exercise(h, cx).await;
+    }
+    if workspace_presentation::requested() {
+        return workspace_presentation::exercise(h, cx).await;
+    }
     if exclusive::requested() {
         return exclusive::exercise(h, cx).await;
     }
@@ -37,6 +43,9 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
             })
             .await?;
         h.activate(cx).await?;
+        if std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_some() {
+            return history::exercise_scroll(h, cx).await;
+        }
         return history::exercise(h, cx).await;
     }
     h.activate(cx).await?;
@@ -53,7 +62,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
 
 /// Tree disclosure/selection and the main split comparison retain the file's sole original native session.
 async fn review(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
-    h.expand(h.main, "staging", h.case.label("未暂存", "Unstaged"), cx)
+    h.expand(h.main, "staging", h.case.label("更改", "Changes"), cx)
         .await?;
     h.expand(h.main, "staging", "src", cx).await?;
     h.select_file(h.main, "staging", "a-review.txt", cx).await?;
@@ -124,13 +133,14 @@ async fn review(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
         ensure!(group.scroll_offset(cx) > px(0.) || original.read(cx).scroll_offset() != before, "real wheel did not scroll the comparison");
         h.record("independent_scroll_and_fixed_form", serde_json::json!({"form_before": format!("{fixed_before:?}"), "form_after": format!("{fixed_after:?}"), "source_scroll": format!("{:?}", group.scroll_offset(cx))}));
         // Return the comparison to its first visible changes using the native keyboard route.
-        input::key(window, "ctrl-home", cx);
+        editor_ui::testing::press_key(window, "ctrl-home", cx);
         Ok::<_, anyhow::Error>(())
     })??;
     // IME/Undo exercises advance the original document's capability revision. Follow the same
     // explicit save-and-refresh workflow as a user before approving a newly sampled index patch.
-    h.main
-        .update(cx, |_, window, cx| input::key(window, "ctrl-s", cx))?;
+    h.main.update(cx, |_, window, cx| {
+        editor_ui::testing::press_key(window, "ctrl-s", cx)
+    })?;
     h.until(
         h.main,
         "reviewed original document saved",
@@ -154,6 +164,7 @@ async fn review(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
 
 /// A visible hunk action creates a partial index, then the actual textarea and Commit button submit index only.
 async fn stage_and_commit(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
+    h.click_button(h.main, "commit-hunks", cx).await?;
     h.click_button(h.main, "hunk-0", cx).await?;
     let reviewed = h.fixture.review.clone();
     h.until_repository(
@@ -168,13 +179,9 @@ async fn stage_and_commit(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> 
     .await?;
     h.until(
         h.main,
-        "partial staged and unstaged tree groups",
+        "partial index remains in the changes tree",
         |window, _| {
-            Ok(
-                input::tree_item(window, "staging", h.case.label("已暂存", "Staged")).is_ok()
-                    && input::tree_item(window, "staging", h.case.label("未暂存", "Unstaged"))
-                        .is_ok(),
-            )
+            Ok(input::tree_item(window, "staging", h.case.label("更改", "Changes")).is_ok())
         },
         cx,
     )
@@ -191,7 +198,7 @@ async fn stage_and_commit(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> 
     h.settle(cx).await?;
     h.main.update(cx, |_, window, cx| {
         input::click(window, &input::field(window, "commit-message")?, cx)?;
-        input::text(window, "Native UI commit 中文", cx);
+        editor_ui::testing::input_text(window, "Native UI commit 中文", cx);
         Ok::<_, anyhow::Error>(())
     })??;
     h.until(h.main, "commit message publication", |_, _| {

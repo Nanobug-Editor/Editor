@@ -4,6 +4,7 @@ use super::*;
 /// What a fully capable provider offers, so a state check is not confused with an ability check.
 fn all_abilities() -> DebugCapabilities {
     DebugCapabilities {
+        thread_tree: true,
         breakpoints: true,
         resume_pause: true,
         step: true,

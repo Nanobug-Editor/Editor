@@ -422,7 +422,7 @@ impl RootPlugin for ShortcutRuntime {
 impl Render for ShortcutRuntime {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(hint) = self.resolver.pending() {
-            return crate::ui::controls::shortcut_pending_hint(
+            return editor_ui::shortcut_pending_hint(
                 t!("shortcuts.pending").to_string(),
                 hint.next
                     .iter()
@@ -432,7 +432,7 @@ impl Render for ShortcutRuntime {
             );
         }
         if !self.conflict.is_empty() {
-            return crate::ui::controls::shortcut_pending_hint(
+            return editor_ui::shortcut_pending_hint(
                 t!("shortcuts.edit.conflict").to_string(),
                 self.conflict
                     .iter()

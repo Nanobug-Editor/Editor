@@ -1,7 +1,7 @@
 //! A source handover may reject an old page intent without changing the provider's metadata.
 //! Only a new metadata read may recover; native selection and command gestures are never replayed.
 use super::*;
-use crate::ui::controls;
+use editor_ui as controls;
 use gpui_base::Root;
 use gpui_base::input::EditorState;
 use gpui_kit::{TestAppContext, VisualTestContext};
@@ -142,7 +142,7 @@ fn mount<'a>(
 ) -> (Mounted, &'a mut VisualTestContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
         cx.set_reduce_motion(true);
     });

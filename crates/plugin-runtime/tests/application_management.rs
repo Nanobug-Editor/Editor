@@ -149,6 +149,7 @@ fn application_management_restores_its_projection_after_project_demand_completio
                 plan: workspace::Plan {
                     title: "Edit".into(),
                     origin: Some(document.clone()),
+                    conditions: Vec::new(),
                     changes: vec![workspace::Change::EditDocument {
                         document: document.clone(),
                         edits: vec![api::TextEdit {

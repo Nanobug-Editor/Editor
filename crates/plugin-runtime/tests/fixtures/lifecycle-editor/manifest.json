@@ -1,0 +1,8 @@
+{
+  "id":"lifecycle-editor", "name":"Editor lifecycle consumer", "version":"0.1.2", "protocol":7,
+  "component":"lifecycle-editor.wasm", "storage_limit":1024,
+  "api":{"base":"^1","required":{"editor.documents":">=1.1,<2","ui.native":"^1"}},
+  "permissions":["editor.read","ui.panels"],
+  "panels":[{"id":"result","title":"Lifecycle / 生命周期","position":"right"}],
+  "commands":[{"id":"query","title":"Inspect documents / 查询文档"},{"id":"close","title":"Close / 关闭"}]
+}

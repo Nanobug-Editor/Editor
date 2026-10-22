@@ -37,7 +37,8 @@ fn rename_rejects_stale_foreign_resource_mixed_and_annotated_plans() {
         json!({"documentChanges":[good.clone(),stale]}),
         json!({"documentChanges":[good.clone(),foreign]}),
         json!({"documentChanges":[good.clone(),{"kind":"delete","uri":uri}]}),
-        json!({"changes":{},"documentChanges":[good.clone()]}),
+        // Both representations carry real effects; an empty companion map is inert server metadata.
+        json!({"changes":{uri.as_str():[{"range":range,"newText":"mixed"}]},"documentChanges":[good.clone()]}),
         json!({"documentChanges":[good,annotated]}),
         json!({"changes":{uri.as_str():[{"range":range,"newText":"renamed","annotationId":"needs-confirmation"}]}}),
     ] {

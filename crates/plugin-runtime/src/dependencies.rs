@@ -18,6 +18,11 @@ mod installer;
 pub(crate) use cache::{Prepared, cached, collect, lock, prepare};
 pub use installer::InstallerPrompt;
 
+/// dependencies 1.3: bound each authenticated archive/file before and during transfer or hashing.
+const SOURCE_BYTE_LIMIT: u64 = 256 * 1024 * 1024;
+/// Extraction has a separate total budget, so compression cannot bypass the bounded private cache.
+const EXTRACTED_BYTE_LIMIT: u64 = 512 * 1024 * 1024;
+
 /// Progress reports preparation honestly; only the protocol client can report language-service readiness.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InstallStage {
@@ -36,6 +41,8 @@ pub enum InstallStage {
 /// Cancellation is owned by the UI and remains callable while the package worker is occupied.
 #[derive(Clone)]
 pub struct InstallControl {
+    /// Initial global preference supplied by the host; updates retain the installed scope choices.
+    pub(crate) default_global_enabled: bool,
     /// Host-confirmed package identities; manifests cannot authorize their own replacement claims.
     replacements: BTreeSet<String>,
     cancelled: Arc<AtomicBool>,
@@ -53,6 +60,7 @@ impl Default for InstallControl {
 impl InstallControl {
     pub fn new(report: impl Fn(InstallStage) + Send + Sync + 'static) -> Self {
         Self {
+            default_global_enabled: true,
             replacements: Default::default(),
             cancelled: Arc::new(AtomicBool::new(false)),
             report: Arc::new(report),
@@ -63,6 +71,15 @@ impl InstallControl {
     }
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Release);
+    }
+    /// Set the global default for a first installation and return the configured control.
+    ///
+    /// When `enabled` is false, workspace plugins remain available only in the current real
+    /// workspace; application plugins and installs without a workspace stay disabled.
+    /// Existing installations retain their global preference and project overrides.
+    pub fn with_default_global_enabled(mut self, enabled: bool) -> Self {
+        self.default_global_enabled = enabled;
+        self
     }
     /// Record the package identities shown in a host replacement confirmation.
     /// This grants no file access and is consumed only by the finite installation transaction.
@@ -278,7 +295,7 @@ fn read_source(
         Source::Local { path } => PathBuf::from(path),
         Source::Url { url } => return download::download(url, output, control),
     };
-    copy(File::open(path)?, output, 128 * 1024 * 1024, control)?;
+    copy(File::open(path)?, output, SOURCE_BYTE_LIMIT, control)?;
     Ok(())
 }
 
@@ -297,7 +314,7 @@ fn extract(
             copy(
                 File::open(archive)?,
                 File::create(target)?,
-                128 * 1024 * 1024,
+                SOURCE_BYTE_LIMIT,
                 control,
             )?;
         }
@@ -315,7 +332,7 @@ fn extract(
                 let target = directory.join(entry.name());
                 std::fs::create_dir_all(target.parent().unwrap())?;
                 let file = File::options().write(true).create_new(true).open(&target)?;
-                total += copy(&mut entry, file, 256 * 1024 * 1024 - total, control)?;
+                total += copy(&mut entry, file, EXTRACTED_BYTE_LIMIT - total, control)?;
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;

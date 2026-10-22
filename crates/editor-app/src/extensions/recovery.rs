@@ -1,6 +1,6 @@
 //! Restart controls and current runtime publication have separate locations in plugin management.
 use super::*;
-use crate::ui::controls::StatusIcon;
+use editor_ui::StatusIcon;
 use plugin_runtime::logs::{LogLevel, LogRecord};
 impl ExtensionPanel {
     /// Enqueue a restart through the existing lifecycle worker; only an enabled instance may restart.

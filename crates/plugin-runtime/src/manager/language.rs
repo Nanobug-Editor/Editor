@@ -1,10 +1,14 @@
 //! Cache bounded LSP preparation results by package/configuration/workspace, preserving unaffected services.
 use super::*;
 use crate::LanguageService;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 mod contexts;
 mod delegation;
 mod fingerprint;
+mod selection;
 pub(super) use fingerprint::Fingerprint;
 
 pub(super) struct Prepared {
@@ -16,6 +20,12 @@ pub(super) struct Prepared {
     /// Borrowed aliases never retire or account for the original provider's native transport.
     pub(super) owns_service: bool,
     pub(super) delegation: Option<delegation::Pending>,
+    /// Original collection metadata can withdraw a terminal failure after its inputs change.
+    /// Pending and healthy plans retain their existing authority and lease retirement rules.
+    pub(super) failure_inputs: Option<crate::plugin_services::CollectionPublication>,
+    /// Original reservation evidence survives cache withdrawal for its already admitted native wait.
+    /// Only an actual terminal Err publication sets it; cancellation or request admission cannot.
+    pub(super) failure_publication: Arc<AtomicBool>,
 }
 impl Drop for Prepared {
     fn drop(&mut self) {
@@ -30,14 +40,30 @@ impl Manager {
     /// Read previously demanded leases only; catalog publication never compiles or runs a guest.
     /// Explicit preparation failures remain visible under their original provider key.
     pub fn language_services(&mut self) -> BTreeMap<String, Result<Arc<LanguageService>, String>> {
+        self.refresh_services();
         let expected = self.role_fingerprints();
+        let stale_failures = {
+            let broker = self.plugin_services.lock().unwrap();
+            self.language_services
+                .iter()
+                .filter(|(_, prepared)| {
+                    !prepared.pending
+                        && prepared.service.is_err()
+                        && prepared.failure_inputs.as_ref().is_some_and(|original| {
+                            !broker.collection_publication_is_current(original)
+                        })
+                })
+                .map(|(key, _)| key.clone())
+                .collect::<BTreeSet<_>>()
+        };
         // Same-owner HotApply hides an unvalidated configuration without killing its original process.
         // Metadata/grant/workspace retirement still revokes the lease immediately.
         self.language_services.retain(|key, prepared| {
-            prepared
-                .service
-                .as_ref()
-                .map_or(true, |service| service.is_active())
+            !stale_failures.contains(key)
+                && prepared
+                    .service
+                    .as_ref()
+                    .map_or(true, |service| service.is_active())
                 && expected
                     .get(contexts::provider_key(key))
                     .is_some_and(|fingerprint| fingerprint.same_source(&prepared.fingerprint))
@@ -68,6 +94,44 @@ impl Manager {
         )
     }
 
+    /// Capture metadata at reservation, including indirect collections declared by already published
+    /// scope participants. Conservatively, any such collection change may retry a failed purpose;
+    /// healthy plans remain untouched. No metadata is sampled again after the failure occurs.
+    /// Returns LimitExceeded if the Broker's existing bounded collection metadata table is full.
+    pub(super) fn language_failure_inputs(
+        &self,
+        provider: &str,
+    ) -> Result<crate::plugin_services::CollectionPublication, api::Failure> {
+        let owner = provider.split('/').next().unwrap();
+        let entry = &self.installed[owner];
+        let scope = if entry.manifest.scope == api::InstanceScope::Application {
+            "application".into()
+        } else {
+            self.host_scope()
+        };
+        let mut dependencies = entry
+            .manifest
+            .plugin_services
+            .requires
+            .iter()
+            .filter(|(_, dependency)| dependency.collection)
+            .map(|(contract, dependency)| (contract.clone(), dependency.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let mut broker = self.plugin_services.lock().unwrap();
+        for plugin in broker.scoped_provider_plugins(&scope) {
+            if let Some(published) = self.installed.get(&plugin) {
+                for (contract, dependency) in &published.manifest.plugin_services.requires {
+                    if dependency.collection {
+                        dependencies
+                            .entry(contract.clone())
+                            .or_insert_with(|| dependency.clone());
+                    }
+                }
+            }
+        }
+        broker.capture_collection_publication(&scope, &dependencies)
+    }
+
     /// The selected role's actual approved plan decides whether HotApply preserves its transport.
     /// Reusing the cache entry retains its exact original native authority and completed resources;
     /// replacing or failing the plan drops that entry and seals every old retained handle.
@@ -94,6 +158,9 @@ impl Manager {
                 pending: false,
                 owns_service: true,
                 delegation: None,
+                // Workspace-only pure preparation has no source reservation or service discovery.
+                failure_inputs: None,
+                failure_publication: Arc::new(AtomicBool::new(false)),
             },
         );
     }
@@ -177,6 +244,9 @@ impl Manager {
                     .map(|request| (service.owner.clone(), request)),
             );
         }
+        // Native virtual tabs and recovery receipts can outlive their final source. Once their
+        // arena has polled terminal/revoked resources, release the now-unused context owner too.
+        self.collect_unused_language_contexts();
         requests
     }
 

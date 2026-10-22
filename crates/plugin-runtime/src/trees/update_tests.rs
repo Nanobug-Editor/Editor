@@ -1,6 +1,79 @@
 //! Metadata replacement must not invalidate native tree pages or captured page identities.
 use super::*;
 
+/// Menu-only artwork survives both display updates and structural patches, then retires with its row.
+#[test]
+fn nested_action_menu_artwork_survives_tree_updates_and_patches() {
+    use plugin_protocol::ui::{ActionMenuItem, ToolIcon};
+    let resource = TreeResource::new(
+        ResourceHandle {
+            instance: "owner".into(),
+            scope: "scope".into(),
+            resource: 1,
+        },
+        EditorAuthority::new(Arc::new(AtomicBool::new(true)), None),
+        tree::Options::default(),
+    );
+    let mut node = tree::Node::new("branch", "Branch", true);
+    let mut action = ActionMenuItem::action(
+        "open",
+        tree::Command {
+            command: "open".into(),
+            label: plugin_protocol::ui::LocalizedText::new("Open", "打开"),
+            arguments: serde_json::Value::Null,
+            disabled: false,
+            separator_before: false,
+        },
+    );
+    action.icon = Some(ToolIcon::new("menu.svg", "menu.svg"));
+    node.action_menu.push(action);
+    let request = resource.request(None, false).unwrap().unwrap();
+    resource
+        .reply(
+            &request,
+            Ok(tree::Page {
+                nodes: vec![node.clone()],
+                next: None,
+            }),
+            BTreeMap::from([(
+                "menu.svg".into(),
+                Arc::<[u8]>::from(b"owned-svg".as_slice()),
+            )]),
+        )
+        .unwrap();
+    node.label = "Renamed".into();
+    resource.update(vec![node], BTreeMap::new()).unwrap();
+    assert!(resource.snapshot().icons.contains_key("menu.svg"));
+    resource
+        .apply_patch(
+            tree::Patch {
+                nodes: Vec::new(),
+                branches: vec![tree::BranchPatch {
+                    parent: None,
+                    children: vec!["branch".into()],
+                    next: Some("next".into()),
+                }],
+            },
+            BTreeMap::new(),
+        )
+        .unwrap();
+    assert!(resource.snapshot().icons.contains_key("menu.svg"));
+    resource
+        .apply_patch(
+            tree::Patch {
+                nodes: Vec::new(),
+                branches: vec![tree::BranchPatch {
+                    parent: None,
+                    children: Vec::new(),
+                    next: None,
+                }],
+            },
+            BTreeMap::new(),
+        )
+        .unwrap();
+    assert!(resource.snapshot().icons.is_empty());
+}
+
 /// The public wire operation is additive and carries ordinary owned node metadata.
 #[test]
 fn cached_metadata_update_has_a_public_wire_operation() {
@@ -24,6 +97,7 @@ fn cached_tree() -> (TreeResource, tree::Node, tree::Request, tree::Request) {
             resource: 1,
         },
         EditorAuthority::new(Arc::new(AtomicBool::new(true)), None),
+        tree::Options::default(),
     );
     let mut node = tree::Node::new("branch", "Branch", true);
     node.activation = Some(tree::Command {

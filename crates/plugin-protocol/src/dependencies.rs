@@ -1,4 +1,16 @@
 //! Private dependency plans; native installation requires separate permission and concrete host consent.
+//!
+//! dependencies 1.3 accepts up to 256 MiB per source artifact and 512 MiB of extracted files
+//! per ZIP (at most 10,000 entries). Streaming, hashing and extraction enforce the actual byte
+//! counts, including cancellation. Older 1.2 hosts limit these to 128 MiB and 256 MiB;
+//! consumers requiring the larger distribution budgets must declare a 1.3 minimum.
+//!
+//! dependencies 1.4 adds `Manifest::service_preparation_hook`. Before an admitted method's
+//! asynchronous acquisition, `Notification::ServicePreparation` receives its immutable service
+//! allowlist and effective settings. Return `Output::service_preparation` containing a unique subset;
+//! undeclared IDs fail before acquisition. The bounded callback permits only granted readonly
+//! observations, including tools.inspect; no downloads, native effects, UI or persisted writes.
+//! Original caller authority, cancellation, exact instance and immutable cache leases remain intact.
 use serde::{Deserialize, Serialize};
 
 /// Artifacts form a bounded DAG. Paths start with an artifact ID, followed by a relative entry.

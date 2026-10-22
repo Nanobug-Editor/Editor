@@ -33,7 +33,7 @@ impl Render for RunConfigModal {
         }
         let cancel = self.owner.clone();
         let save = self.owner.clone();
-        crate::ui::controls::dialog::native_modal(
+        editor_ui::dialog::native_modal(
             self.focus.clone(),
             render_run_config_form(&self.owner, DialogContent::new(), window, cx)
                 .into_any_element(),

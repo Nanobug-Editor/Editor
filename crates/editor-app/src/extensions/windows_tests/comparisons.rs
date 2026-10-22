@@ -1,6 +1,39 @@
 //! Real package comparisons retain native source edits and hide immutable snapshot tabs.
 use super::*;
 
+/// Both native actions remain present and expose their independent availability after tab activation.
+fn assert_fold_action(visual: &mut VisualTestContext, any_hidden: bool) {
+    visual.update(|window, _| {
+        let snapshots = gpui_base::test_support::snapshots(window);
+        for (selector, label, disabled) in [
+            (
+                "diff-collapse-unchanged",
+                t!("editor.diff_collapse_unchanged"),
+                any_hidden,
+            ),
+            (
+                "diff-expand-unchanged",
+                t!("editor.diff_expand_unchanged"),
+                !any_hidden,
+            ),
+        ] {
+            let button = snapshots
+                .iter()
+                .find(|node| {
+                    node.role() == Some(gpui_kit::Role::Button)
+                    && node.path().iter().any(|part| {
+                        matches!(part, gpui_kit::ElementId::Name(name) if name == selector)
+                    })
+                })
+                .unwrap_or_else(|| panic!("missing independent action {selector}"));
+            assert_eq!(button.label(), Some(label.as_ref()));
+            if let Some(actual) = button.disabled() {
+                assert_eq!(actual, disabled);
+            }
+        }
+    });
+}
+
 /// Pointer activation exercises Base tab selection and the local preview-pinning callback.
 fn click_count(visual: &mut VisualTestContext, selector: &str, count: usize) {
     // GPUI debug lookups require static names; these bounded test names live for the test process.
@@ -81,6 +114,13 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
         flush(&mut manager, &app, visual);
         assert!(visual.debug_bounds("document-diff-left").is_some());
         assert!(visual.debug_bounds("document-diff-right").is_some());
+        for dark in [false, true] {
+            visual.update(|_, cx| {
+                crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(dark), cx)
+            });
+            paint_comparison(visual);
+            super::comparison_chrome::assert_comparison_chrome(visual, 2);
+        }
         let (source, index) = visual.update(|_, cx| {
             let app = app.read(cx);
             let index = app
@@ -89,6 +129,66 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
                 .position(|tab| tab.path() == file.canonicalize().unwrap())
                 .unwrap();
             (app.tabs[index].text.as_ref().unwrap().editor.clone(), index)
+        });
+        // The real independent package supplies both SVGs through editor.diff 1.4 admission.
+        // Native controls fold presentation rows, not the source buffer or its line identities.
+        assert!(visual.debug_bounds("diff-toggle-unchanged").is_none());
+        let collapse = visual
+            .debug_bounds("diff-collapse-unchanged")
+            .expect("separate collapse action");
+        let expand = visual
+            .debug_bounds("diff-expand-unchanged")
+            .expect("separate expand action");
+        let down = visual.debug_bounds("diff-next").unwrap();
+        assert!(collapse.left() >= down.right() && expand.left() >= collapse.right());
+        assert_eq!(collapse.top(), down.top());
+        assert_eq!(expand.top(), down.top());
+        assert_fold_action(visual, false);
+        let unchanged = changed.find("line 30\n").unwrap();
+        let original_selection = visual.update(|_, cx| source.read(cx).selected_range());
+        click_count(visual, "diff-collapse-unchanged", 1);
+        paint_comparison(visual);
+        assert_fold_action(visual, true);
+        visual.update(|_, cx| {
+            let group = app.read(cx).comparison_alignment().unwrap();
+            assert!(group.project_range(1, unchanged..unchanged, cx).is_none());
+            assert_eq!(source.read(cx).value().as_ref(), changed);
+            assert_eq!(source.read(cx).selected_range(), original_selection);
+        });
+        // This comparison has one long common interval. Its physical disclosure must update
+        // both toolbar actions, even though no toolbar or document edit caused the action.
+        let disclosure = visual.update(|window, _| {
+            gpui_base::test_support::snapshots(window)
+                .into_iter()
+                .find(|node| {
+                    node.visible()
+                        && node.role() == Some(gpui_kit::Role::Button)
+                        && node.label().is_some_and(|label| {
+                            label.ends_with(" unchanged lines") || label.ends_with("行无差异内容")
+                        })
+                })
+                .expect("visible native unchanged-region disclosure")
+                .bounds()
+                .center()
+        });
+        visual.simulate_click(disclosure, Default::default());
+        paint_comparison(visual);
+        assert_fold_action(visual, false);
+        click_count(visual, "diff-collapse-unchanged", 1);
+        paint_comparison(visual);
+        assert_fold_action(visual, true);
+        click_count(visual, "diff-expand-unchanged", 1);
+        paint_comparison(visual);
+        assert_fold_action(visual, false);
+        visual.update(|_, cx| {
+            let group = app.read(cx).comparison_alignment().unwrap().clone();
+            assert!(group.reveal_offset(1, unchanged, cx));
+        });
+        paint_comparison(visual);
+        visual.update(|_, cx| {
+            let group = app.read(cx).comparison_alignment().unwrap();
+            assert!(group.project_range(1, unchanged..unchanged, cx).is_some());
+            assert_eq!(source.read(cx).selected_range(), original_selection);
         });
         let normal_count = visual.update(|_, cx| {
             app.read(cx)
@@ -103,6 +203,30 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
         });
         let comparison_selector = format!("comparison-tab-{normal_count}");
         click_count(visual, &comparison_selector, 2);
+        paint_comparison(visual);
+        // Pinning and activating an ordinary file cannot reset this view's manual fold choices.
+        click_count(visual, "diff-collapse-unchanged", 1);
+        paint_comparison(visual);
+        click_count(visual, &format!("editor-tab-{index}"), 1);
+        click_count(visual, &comparison_selector, 1);
+        paint_comparison(visual);
+        visual.update(|_, cx| {
+            assert!(
+                app.read(cx)
+                    .comparison_alignment()
+                    .unwrap()
+                    .project_range(1, unchanged..unchanged, cx)
+                    .is_none(),
+                "retained comparison must keep its folded regions"
+            );
+        });
+        assert_fold_action(visual, true);
+        click_count(visual, "diff-expand-unchanged", 1);
+        paint_comparison(visual);
+        visual.update(|_, cx| {
+            let group = app.read(cx).comparison_alignment().unwrap().clone();
+            assert!(group.reveal_offset(1, 0, cx));
+        });
         paint_comparison(visual);
         let source_point = visual.update(|_, cx| {
             let bounds = app
@@ -136,36 +260,48 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
         assert_eq!(visual.update(|_, cx| app.read(cx).editor.clone()), source);
         click_count(visual, &comparison_selector, 1);
         assert!(visual.debug_bounds("document-diff-left").is_some());
-        click_count(visual, "diff-unified", 1);
-        assert!(visual.debug_bounds("unified-diff").is_some());
-        assert!(visual.debug_bounds("document-diff-right").is_none());
-        // A real click and successful Copy establish that typing targets the unified editor,
-        // rather than a toolbar button that would also ignore input without testing readonly.
-        click_count(visual, "unified-diff", 1);
-        visual.simulate_keystrokes("ctrl-a ctrl-c");
-        let unified = clipboard(visual);
-        assert!(unified.contains("-line 1\n+first 中😀\n"));
-        assert!(unified.contains("+native draft 中文😀\n"));
-        visual.simulate_input("must stay readonly");
-        visual.simulate_keystrokes("ctrl-a ctrl-c");
-        assert_eq!(clipboard(visual), unified);
+        assert!(visual.debug_bounds("diff-unified").is_none());
+        assert!(visual.debug_bounds("diff-sync").is_none());
+        // Native arrows reveal differences while the authoritative source keeps text and selection.
+        let source_selection = visual.update(|_, cx| source.read(cx).selected_range());
+        click_count(visual, "diff-next", 1);
+        paint_comparison(visual);
+        let target = draft.find("last change").unwrap();
+        let body = visual.debug_bounds("document-diff-right").unwrap();
+        let projected = visual.update(|_, cx| {
+            app.read(cx)
+                .comparison_alignment()
+                .unwrap()
+                .project_range(1, target..target + 4, cx)
+                .unwrap()
+        });
+        assert!(
+            body.intersects(&projected),
+            "down arrow reveals the second real difference"
+        );
+        click_count(visual, "diff-previous", 1);
+        paint_comparison(visual);
+        let target = draft.find("first 中").unwrap();
+        let projected = visual.update(|_, cx| {
+            app.read(cx)
+                .comparison_alignment()
+                .unwrap()
+                .project_range(1, target..target + 4, cx)
+                .unwrap()
+        });
+        assert!(
+            body.intersects(&projected),
+            "up arrow reveals the first real difference"
+        );
+        assert_eq!(
+            visual.update(|_, cx| source.read(cx).selected_range()),
+            source_selection,
+            "difference navigation must not move the original source caret"
+        );
         assert_eq!(
             visual.update(|_, cx| source.read(cx).value().to_string()),
             draft
         );
-        // The second hunk is far below the first viewport. Keyboard selection after navigation
-        // proves the visible unified control receives the jump, not the unmounted right source.
-        let source_selection = visual.update(|_, cx| source.read(cx).selected_range());
-        visual.simulate_keystrokes("ctrl-home");
-        click_count(visual, "diff-next", 1);
-        visual.simulate_keystrokes("shift-end ctrl-c");
-        assert_eq!(clipboard(visual), "-line 55");
-        assert_eq!(
-            visual.update(|_, cx| source.read(cx).selected_range()),
-            source_selection,
-            "unified navigation must not move the hidden right source caret"
-        );
-        click_count(visual, "diff-unified", 1);
         manager
             .invoke_command("git", "diff", json!({"path":"second.txt"}))
             .unwrap();
@@ -399,13 +535,33 @@ fn git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections(
         paint_comparison(visual);
         let anchor_left = base.find("shared row 035").unwrap();
         let anchor_right = changed.find("shared row 035").unwrap();
-        // Narrow production columns wrap each common source row to 42px. Five rows leave the
-        // anchor below the first 160px wheel movement while keeping it inside the 320px viewport;
-        // ten logical rows would already be below the visible pane before scrolling starts.
-        let reveal_right = changed.find("shared row 030").unwrap();
+        // Measure visible native glyphs: a zero-width caret exactly on the inward gutter's
+        // body edge is not a rectangle intersection, despite the word itself being visible.
+        let left_word = anchor_left..anchor_left + "shared".len();
+        let right_word = anchor_right..anchor_right + "shared".len();
+        // Establish the starting position from the actual viewport, not an assumed 42px wrap
+        // height for five logical rows. Toolbar/column changes can make those rows only 21px.
         visual.update(|_, cx| {
             let group = app.read(cx).comparison_alignment().unwrap().clone();
-            assert!(group.reveal_offset(1, reveal_right, cx));
+            assert!(group.reveal_offset(1, anchor_right, cx));
+        });
+        paint_comparison(visual);
+        let (position, lead_in) = visual.update(|_, cx| {
+            let viewport = app
+                .read(cx)
+                .comparison_alignment()
+                .unwrap()
+                .viewport(1, cx)
+                .unwrap();
+            (
+                viewport.center(),
+                (viewport.size.height * 0.6).min(px(240.)),
+            )
+        });
+        visual.simulate_event(gpui_kit::ScrollWheelEvent {
+            position,
+            delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), lead_in)),
+            ..Default::default()
         });
         paint_comparison(visual);
         visual.update(|_, cx| {
@@ -413,14 +569,13 @@ fn git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections(
             let group = app.comparison_alignment().unwrap();
             let viewport = group.viewport(1, cx).unwrap();
             let anchor = group
-                .project_range(1, anchor_right..anchor_right, cx)
+                .project_range(1, right_word.clone(), cx)
                 .unwrap_or_else(|| {
                     let native = right.read(cx).range_to_bounds(&(anchor_right..anchor_right));
                     panic!(
-                        "shared anchor missing before wheel: status={:?}, left_viewport={:?}, right_viewport={viewport:?}, reveal030={:?}, native035={native:?}, projected035={:?}, native_input={:?}, line_height={:?}",
+                        "shared anchor missing before wheel: status={:?}, left_viewport={:?}, right_viewport={viewport:?}, native035={native:?}, projected035={:?}, native_input={:?}, line_height={:?}",
                         group.status(cx),
                         group.viewport(0, cx),
-                        group.project_range(1, reveal_right..reveal_right, cx),
                         native.and_then(|native| group.project_bounds(1, native, cx)),
                         right.read(cx).input_bounds(),
                         right.read(cx).line_height(),
@@ -438,7 +593,7 @@ fn git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections(
                 (
                     group.viewport(driver, cx).unwrap().center(),
                     group
-                        .project_range(1, anchor_right..anchor_right, cx)
+                        .project_range(1, right_word.clone(), cx)
                         .unwrap()
                         .top(),
                 )
@@ -452,8 +607,8 @@ fn git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections(
             visual.update(|_, cx| {
                 let app = app.read(cx);
                 let group = app.comparison_alignment().unwrap();
-                let a = group.project_range(0, anchor_left..anchor_left, cx).unwrap();
-                let b = group.project_range(1, anchor_right..anchor_right, cx).unwrap();
+                let a = group.project_range(0, left_word.clone(), cx).unwrap();
+                let b = group.project_range(1, right_word.clone(), cx).unwrap();
                 let left_viewport = group.viewport(0, cx).unwrap();
                 let right_viewport = group.viewport(1, cx).unwrap();
                 assert!(left_viewport.intersects(&a) && right_viewport.intersects(&b));

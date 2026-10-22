@@ -43,10 +43,14 @@ pub mod workspace_io;
 pub use plugin_protocol::api::RequestUpdate;
 pub use request_state::Completion;
 mod instance;
+mod presentation;
+pub use presentation::{WorkspacePresentationResource, WorkspacePresentationSnapshot};
 mod language_bindings;
+mod language_contexts;
 mod language_service;
 pub use language_bindings::LanguageBindings;
-pub use language_service::{LanguageService, ServiceProcess};
+pub use language_contexts::LanguageContexts;
+pub use language_service::{LanguageService, LanguageSource, ServiceProcess};
 /// Shared project builds, validated development directories and atomic ZIP publication.
 pub mod development;
 mod structure;
@@ -82,6 +86,10 @@ pub use terminal_presentations::{TerminalOwner, TerminalPresentation, TerminalPr
 /// Host-owned resources travel with every candidate; guests only see negotiated descriptions.
 #[derive(Clone, Debug, Default)]
 pub struct HostResources {
+    /// Bounded host-only observations contain no guest data or additional authority.
+    pub observations: RuntimeObservations,
+    /// Opaque project choices retain native scope/owner/configuration seals across source routing.
+    pub contexts: LanguageContexts,
     /// General HTTP producers share a bounded host budget and host-selected proxy/TLS policy.
     pub http: HttpConfiguration,
     /// Trusted host-only profile override; an empty value hashes the canonical manager root.
@@ -100,8 +108,13 @@ pub struct HostResources {
     /// Delegated language providers redeem only native plans sealed to their original document intent.
     pub bindings: LanguageBindings,
 }
+/// Host-only lifecycle observations and safe diagnostic snapshots.
+pub mod observability;
+pub use observability::RuntimeObservations;
 mod native_modules;
 mod native_path;
+/// Static package verification shares the production admission path and never runs guest code.
+pub mod validation;
 pub use native_modules::{
     NativeModuleAttachment, NativeModuleDescriptor, NativeModuleLease, NativeModules,
 };

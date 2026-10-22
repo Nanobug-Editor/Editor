@@ -2,7 +2,8 @@
 
 use super::*;
 use crate::app::shortcuts::catalog::Target;
-use crate::ui::controls::{Icon, shortcut_keycaps};
+use editor_ui::scroll::ScrollableElement as _;
+use editor_ui::{Icon, shortcut_keycaps};
 
 impl ShortcutPanel {
     /// Align keycaps in one column; management actions are secondary until the row is hovered.
@@ -321,7 +322,7 @@ impl ShortcutPanel {
                 div()
                     .id("shortcuts-conflicts")
                     .max_h(px(110.))
-                    .overflow_y_scroll()
+                    .overflow_y_scrollbar()
                     .children(conflicts.iter().map(|conflict| {
                         div()
                             .flex()

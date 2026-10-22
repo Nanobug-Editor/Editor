@@ -1,10 +1,10 @@
 //! Adapt portable canvas controls to reusable native widgets; no plugin identity is special-cased.
 use super::action_gestures::ActionGesture;
-use crate::ui::controls::{
+use crate::ui::theme::ActiveTheme as _;
+use editor_ui::{
     menu::{MenuStyle, PopupMenu},
     side_tabs::{SideTabBar, SideTabsStyle},
 };
-use crate::ui::theme::ActiveTheme as _;
 use gpui_kit::*;
 use plugin_runtime::plugin_protocol::{
     Environment,
@@ -303,7 +303,7 @@ mod tests {
     fn revision_only_update_preserves_sidebar_preview(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
-            crate::ui::typography::init(cx);
+            editor_ui::typography::init(cx);
             crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
         });
         let slot = Rc::new(RefCell::new(None));
@@ -389,7 +389,7 @@ mod tests {
     fn sidebar_width_stays_fixed_when_window_resizes(cx: &mut TestAppContext) {
         cx.update(|cx| {
             gpui_kit::init(cx);
-            crate::ui::typography::init(cx);
+            editor_ui::typography::init(cx);
             crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
         });
         let slot = Rc::new(RefCell::new(None));
@@ -450,7 +450,7 @@ mod tests {
     ) {
         cx.update(|cx| {
             gpui_kit::init(cx);
-            crate::ui::typography::init(cx);
+            editor_ui::typography::init(cx);
             crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
             let mut view = CollectionView::new("plugin".into(), cx.focus_handle(), |_, _, _, _| {});
             // Defaults are stable across host themes; explicit plugin roles take precedence.

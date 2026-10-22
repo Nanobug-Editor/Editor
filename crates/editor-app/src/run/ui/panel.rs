@@ -1,5 +1,6 @@
 //! Debug inspection belongs to its task tab; snapshots are read-only projections of RunControls.
 use super::*;
+use editor_ui::scroll::ScrollableElement as _;
 use gpui_kit::{FocusHandle, KeyDownEvent, ScrollHandle};
 
 /// Retained focus is shared with the selected native inspection, never with target stdin.
@@ -141,6 +142,8 @@ pub(crate) struct Inspection {
 }
 #[derive(Clone)]
 enum InspectAction {
+    Thread(u32),
+    Variable(crate::run::inspection::VariableAction),
     Control(&'static str),
     Step(editor_core::DebugStep),
     Frame(u32),
@@ -192,6 +195,8 @@ impl InspectionView {
                         || (matches!(
                             action,
                             InspectAction::Step(_)
+                                | InspectAction::Thread(_)
+                                | InspectAction::Variable(_)
                                 | InspectAction::Frame(_)
                                 | InspectAction::Control("resume")
                         ) && app.run_controls.debug_pause_epoch() != snapshot.pause)
@@ -200,7 +205,36 @@ impl InspectionView {
                         cx.notify();
                         return;
                     }
+                    let selected_thread = |rows: &crate::run::DebugPanelRows| {
+                        rows.threads
+                            .iter()
+                            .find(|thread| thread.selected)
+                            .map(|thread| thread.id)
+                    };
+                    if matches!(action, InspectAction::Frame(_) | InspectAction::Variable(_))
+                        && selected_thread(&app.run_controls.debug_panel_rows())
+                            != selected_thread(&snapshot.rows)
+                    {
+                        app.status = t!("run.debug_stale_pause").to_string();
+                        cx.notify();
+                        return;
+                    }
+                    if matches!(action, InspectAction::Variable(_))
+                        && app.run_controls.selected_debug_frame()
+                            != snapshot
+                                .rows
+                                .frames
+                                .iter()
+                                .find(|frame| frame.selected)
+                                .map(|frame| frame.frame)
+                    {
+                        app.status = t!("run.debug_stale_pause").to_string();
+                        cx.notify();
+                        return;
+                    }
                     match action {
+                        InspectAction::Thread(thread) => app.select_inspection_thread(thread, cx),
+                        InspectAction::Variable(action) => app.act_inspection_variable(action, cx),
                         InspectAction::Control("force") => app.force_debug(cx),
                         InspectAction::Control(method) => app.debug_action(method, cx),
                         InspectAction::Step(kind) => app.step_debug(kind, cx),
@@ -292,7 +326,7 @@ impl Render for InspectionView {
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .overflow_y_scroll()
+            .overflow_y_scrollbar()
             .child(div().font_semibold().child(t!("run.debug_breakpoints")));
         for (source, line, verified) in &model.breakpoints {
             let label = match verified {
@@ -317,9 +351,24 @@ impl Render for InspectionView {
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.frames)
+            .overflow_y_scrollbar_with(&self.frames)
             .child(div().font_semibold().child(t!("run.debug_stack")));
+        if !model.rows.threads.is_empty() {
+            frames = frames.child(div().font_semibold().child(t!("run.debug_threads")));
+        }
+        for row in &model.rows.threads {
+            frames = frames.child(
+                self.button(
+                    format!("debug-panel-thread-{}", row.id),
+                    row.label.clone(),
+                    None,
+                    InspectAction::Thread(row.id),
+                    cx,
+                )
+                .content_full_width()
+                .when(row.selected, |button| button.text_color(cx.theme().primary)),
+            );
+        }
         for row in &model.rows.frames {
             frames = frames.child(
                 self.button(
@@ -339,16 +388,31 @@ impl Render for InspectionView {
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .overflow_y_scroll()
-            .track_scroll(&self.variables)
+            .overflow_y_scrollbar_with(&self.variables)
             .child(div().font_semibold().child(t!("run.debug_locals")));
         if model.rows.variables.is_empty() {
             variables = variables.child(t!("run.debug_no_locals"));
         }
         for row in &model.rows.variables {
+            if let Some(action) = &row.action {
+                variables = variables.child(
+                    div().pl(px((row.depth * 12) as f32)).child(
+                        self.button(
+                            row.selector.clone(),
+                            row.label.clone(),
+                            None,
+                            InspectAction::Variable(action.clone()),
+                            cx,
+                        )
+                        .content_full_width(),
+                    ),
+                );
+                continue;
+            }
             let selector = row.selector.clone();
             variables = variables.child(
                 div()
+                    .pl(px((row.depth * 12) as f32))
                     .debug_selector(move || selector.clone())
                     .child(row.label.clone()),
             );
@@ -395,7 +459,13 @@ impl Render for InspectionView {
                         } else {
                             (previous + 1).min(rows.len() - 1)
                         };
-                        view.frames.scroll_to_item(next);
+                        view.frames.scroll_to_item(
+                            next + if view.model.rows.threads.is_empty() {
+                                1
+                            } else {
+                                2 + view.model.rows.threads.len()
+                            },
+                        );
                         InspectAction::Frame(rows[next].frame)
                     }
                     _ => return,
@@ -407,6 +477,8 @@ impl Render for InspectionView {
             .child(
                 div()
                     .debug_selector(|| "debug-panel-state".into())
+                    .flex_shrink_0()
+                    .truncate()
                     .child(model.status.clone()),
             )
             .child(

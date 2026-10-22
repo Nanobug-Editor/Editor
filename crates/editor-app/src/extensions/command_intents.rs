@@ -14,7 +14,7 @@ use std::{
 /// The worker retains this original target while activation runs; returning to an old selection
 /// cannot revive a command cancelled by an intervening native change.
 #[derive(Clone)]
-pub(crate) struct CommandGuard(Arc<GuardState>);
+pub(crate) struct CommandGuard(Arc<GuardState>, Option<plugin_runtime::EditorAuthority>);
 
 struct GuardState {
     document: Option<api::DocumentVersion>,
@@ -27,6 +27,11 @@ struct GuardState {
 }
 
 impl CommandGuard {
+    /// Narrow a native intent to its publishing instance; queued callbacks cannot reach a replacement.
+    pub(crate) fn with_authority(mut self, authority: plugin_runtime::EditorAuthority) -> Self {
+        self.1 = Some(authority);
+        self
+    }
     /// Check cancellation and the captured non-document path immediately before guest invocation.
     /// A descriptive path grants no file capability; the runtime still owns all permission checks.
     pub(crate) fn admit(&self) -> Result<(), api::Failure> {
@@ -36,7 +41,10 @@ impl CommandGuard {
                 .path
                 .as_ref()
                 .is_none_or(|path| path.exists() && path.is_dir() == self.0.directory);
-        if self.0.current.load(Ordering::Acquire) && path_current {
+        if self.0.current.load(Ordering::Acquire)
+            && path_current
+            && self.1.as_ref().is_none_or(|authority| authority.is_live())
+        {
             Ok(())
         } else {
             Err(api::Failure::new(
@@ -153,7 +161,7 @@ impl CommandIntents {
             current: AtomicBool::new(true),
         });
         self.guards.push(Arc::downgrade(&state));
-        Ok(CommandGuard(state))
+        Ok(CommandGuard(state, None))
     }
 
     /// Invalidate before the ordered plugin stream is queued, closing the UI→actor race.

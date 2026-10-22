@@ -2,6 +2,30 @@
 
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
+- [通用平滑滚动](verification/smooth-scroll-2026-10-21.md)：统一接入编辑器、文件树、列表与标签；后续[惯性与原生高刷](verification/inertial-scroll-2026-10-21.md)复用上游物理求解器，跟随显示器刷新节奏，记录真实帧率与性能边界。
+
+- [比较视图的有界原生布局](verification/comparison-viewport-scroll-2026-10-21.md)：进一步限制可见副本与原始输入层的源布局，保留原生编辑、中文 IME 和屏幕外定位；原生测量、回归及剩余完整布局边界见记录。
+
+- [校验慢帧、折叠来源范围与插件平滑滚动](verification/scroll-validation-folds-2026-10-22.md)：合并原生校验与字形准备，限制折叠区的输入包络，插件容器、标签和画布复用通用滚动组件；实际验收状态见记录。
+
+- [比较视图原生换行映射与滚动峰值](verification/comparison-native-map-2026-10-22.md)：复用 Base 0.8 的只读显示行映射；两轮两栏／三栏／收起区域矩阵在本机接近 144 Hz，输入回归通过，首次准备仍有开销。
+
+- [启动恢复上次项目](verification/startup-project-restore-2026-10-21.md)：默认开启的用户级开关、成功退出记录及显式启动目标优先级；验证结果与限制见记录。
+
+- [editor-ui 统一入口与锁文件清理](verification/editor-ui-extraction-2026-10-21.md)：保留 Kit 正式入口，将本地控件集中到独立 crate；测试功能直接接入 Base/GPUI，并从锁文件移除组件运行时。实际验证状态见记录。
+
+- [剩余 14 项宿主测试排查](verification/remaining-tests-2026-10-21.md)：区分过时行为断言、按需激活夹具与 Windows 会话路径问题，记录逐项修复及全量验证。
+
+- [统一滚动条宽度动画](verification/scrollbar-width-2026-10-21.md)：Git 提交图视口轨道、宿主与插件共用的两秒保留／宽度收缩，以及原生输入、拖动和主题验证。
+
+- [长代码差异滚动性能](verification/diff-scroll-performance-2026-10-21.md)：缓存验证后的原生行几何、保留对齐布局、让整行底色复用只读元数据；复现、实际计时、验证和候选状态见记录。
+
+- [比较区单滚动条、等宽换行与顶部背景](verification/comparison-chrome-2026-10-20.md)：最右侧共享垂直轨道、平衡原生行号槽占宽、工具栏与来源标题统一背景，以及移除工具栏关闭按钮；当前验证与候选状态见记录。
+
+- [比较工具栏四个箭头](../plugins/verification/git-comparison-arrows-2026-10-20.md)：左右文件导航、上下差异导航及移除统一／同步开关，实际状态见记录。
+
+- [比较视图整行底色与默认同步](verification/diff-row-backgrounds-2026-10-20.md)：左侧外边距、完整改动行及内侧行号槽底色，移除同步开关；验证和候选交付状态见记录。
+
 - [项目选择后的窗口居中](verification/project-window-centering-2026-10-19.md)：恢复项目尺寸时在当前显示器可用区域居中整个窗口；包含原生边框、缩放换算、初始化后内容区同步及真实 Windows 回归记录。
 
 - [Base 控件边界与本地 UI 迁移](verification/base-only-components-2026-10-19.md)：`gpui-component` 仅作实现参考；依赖边界、控件迁移与本轮验证结果见记录。
@@ -11,7 +35,7 @@
 - [停靠窗口嵌套布局与拖动范围（前一阶段）](verification/dock-nested-layout-2026-10-19.md)：一级方向、内部嵌套与 `>=` 尺寸边界；保留当时的隐式组合拖动及实际验证记录。
 - [停靠区域方向限制（前一阶段）](verification/dock-regional-axis-2026-10-19.md)：保留当时的区域方向实现、组合换向与验证；层级边界按后续嵌套规则执行。
 - [标记预览式窗口拖放](verification/marked-dock-placement-2026-10-19.md)：原布局保持不动，黄色来源、蓝色目标、标题小块与松手提交；采用拖动前实际尺寸，宿主和插件复用同一机制。
-- [窗口实时拖放与通用停靠模块（历史）](verification/live-dock-placement-2026-10-19.md)：保留上一版实时让位的验证记录，交互已由标记预览替代；`editor-ui` 迁移后续进行。
+- [窗口实时拖放与通用停靠模块（历史）](verification/live-dock-placement-2026-10-19.md)：保留上一版实时让位的验证记录，交互已由标记预览替代；`editor-ui` 迁移现状见[统一入口与锁文件清理](verification/editor-ui-extraction-2026-10-21.md)。
 
 - [差异比较内侧行号槽](verification/diff-inner-gutters-2026-10-19.md)：左右来源的行号槽集中到编辑器之间；本地原生像素组合、输入投影与验证范围见记录。
 

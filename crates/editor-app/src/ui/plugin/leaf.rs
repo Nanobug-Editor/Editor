@@ -1,6 +1,7 @@
 //! Native leaf controls draw without retaining the recursive container/editor renderer on the stack.
 use super::*;
-use crate::ui::controls::{Button, ButtonCustomVariant, Input, Tooltip};
+use editor_ui::scroll::ScrollableElement as _;
+use editor_ui::{Button, ButtonCustomVariant, Input, Tooltip};
 use gpui_base::{Checkbox, CheckboxState, Progress, Radio, RadioGroup};
 use gpui_kit::{
     AnyElement, InteractiveElement, ParentElement, SharedString, StatefulInteractiveElement,
@@ -143,14 +144,14 @@ impl PluginView {
                 let owner = cx.entity().downgrade();
                 let revision = self.document.revision;
                 let link_events = self.document.link_events;
-                crate::ui::controls::rich_text_view(
+                editor_ui::rich_text_view(
                     SharedString::from(format!("{native_id}-scene-{revision}")),
                     html.clone(),
                     px(self
                         .content_font(node.theme_role(), false)
                         .size_px
                         .unwrap_or(14.)),
-                    crate::ui::controls::RichTextColors {
+                    editor_ui::RichTextColors {
                         foreground: colors.foreground,
                         muted_foreground: colors.muted_foreground,
                         code_background: colors.code_background,
@@ -198,7 +199,7 @@ impl PluginView {
                 div()
                     .id(native_id.clone())
                     .w_full()
-                    .overflow_x_scroll()
+                    .overflow_x_scrollbar()
                     .bg(colors.code_background)
                     .border(px(preset.map_or(1., |style| style.border)))
                     .border_color(colors.border)
@@ -253,7 +254,7 @@ impl PluginView {
                         .when_some(node.button_icon.as_ref(), |button, svg| {
                             // The negotiated, validated icon retains Base focus and Click behavior.
                             button
-                                .icon(crate::ui::controls::Icon::default().data(svg.as_bytes()))
+                                .icon(editor_ui::Icon::default().data(svg.as_bytes()))
                                 .small()
                                 .compact()
                         })
@@ -290,9 +291,17 @@ impl PluginView {
             // Multiline form fields share the stable state and revision rules of single-line input.
             Kind::Textarea(_) => self
                 .font(
-                    div().w_full().child(crate::ui::controls::Textarea::new(
-                        &self.textareas[&node.id].state,
-                    )),
+                    div()
+                        .w_full()
+                        .when(node.layout.height.is_some(), |view| view.h_full())
+                        .child(
+                            editor_ui::Textarea::new(&self.textareas[&node.id].state).when_some(
+                                node.layout.height,
+                                |view, height| {
+                                    view.height(px((height - node.layout.padding * 2.).max(0.)))
+                                },
+                            ),
+                        ),
                     node.theme_role(),
                 )
                 .into_any_element(),

@@ -83,69 +83,115 @@ impl editor_core::DocumentStore for NewWorkspaceFileStore {
     }
 }
 
-/// Pinned parent handles and a temporary file share one boundary for new documents and attachments.
+/// Sealed sibling bytes whose only remaining side effect is an atomic create-if-absent publication.
+pub struct PreparedNewFile {
+    /// Resolved authority root, rechecked immediately before publication.
+    root: std::path::PathBuf,
+    /// Resolved parent retained by native handles through final publication.
+    parent: std::path::PathBuf,
+    /// Linux uses the pinned directory descriptor; other platforms use its checked native path.
+    directory: std::path::PathBuf,
+    /// Validated single basename, separate from all path authority.
+    name: String,
+    /// These handles prevent ancestor replacement while an asynchronous operation is in flight.
+    _pins: Vec<File>,
+    /// Fully written and synced private staging file; dropping it cancels publication.
+    temporary: tempfile::NamedTempFile,
+}
+
+impl PreparedNewFile {
+    /// Prepare destination under resolved root; write fills only a sibling temporary file off-thread.
+    /// Returns a sealed publication or an I/O error without touching an existing destination.
+    pub fn prepare(
+        root: &Path,
+        destination: &Path,
+        write: impl FnOnce(&mut File) -> io::Result<()>,
+    ) -> io::Result<Self> {
+        let name = destination
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(denied)?;
+        let device = name
+            .split('.')
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches([' ', '.'])
+            .to_ascii_uppercase();
+        if name.is_empty()
+            || name.len() > 255
+            || name.chars().any(char::is_control)
+            || name.contains(['/', '\\', ':', '<', '>', '"', '|', '?', '*'])
+            || name.ends_with(['.', ' '])
+            || matches!(
+                device.as_str(),
+                "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$"
+            )
+            || device
+                .strip_prefix("COM")
+                .or_else(|| device.strip_prefix("LPT"))
+                .is_some_and(|suffix| {
+                    matches!(
+                        suffix,
+                        "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                    )
+                })
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Invalid new file name",
+            ));
+        }
+        let parent = destination.parent().ok_or_else(denied)?;
+        if root.canonicalize()? != root
+            || parent.canonicalize()? != parent
+            || !parent.starts_with(root)
+        {
+            return Err(denied());
+        }
+        // Windows directory handles forbid delete-sharing, preventing a rename/reparse replacement
+        // between containment checks, writing the temporary file and publishing its final name.
+        let pins = pin_directories(parent)?;
+        if parent.canonicalize()? != parent || root.canonicalize()? != root {
+            return Err(denied());
+        }
+        let publication_directory = publication_directory(parent, &pins);
+        let mut temporary = tempfile::NamedTempFile::new_in(&publication_directory)?;
+        if resolved_handle(temporary.as_file())?.parent() != Some(parent) {
+            return Err(denied());
+        }
+        write(temporary.as_file_mut())?;
+        temporary.as_file().sync_all()?;
+        if parent.canonicalize()? != parent || root.canonicalize()? != root {
+            return Err(denied());
+        }
+        Ok(Self {
+            root: root.to_path_buf(),
+            parent: parent.to_path_buf(),
+            directory: publication_directory,
+            name: name.to_owned(),
+            _pins: pins,
+            temporary,
+        })
+    }
+
+    /// Publish already synced bytes once, rechecking pinned authority and refusing an existing target.
+    pub fn commit(self) -> io::Result<()> {
+        if self.parent.canonicalize()? != self.parent
+            || self.root.canonicalize()? != self.root
+            || resolved_handle(self.temporary.as_file())?.parent() != Some(self.parent.as_path())
+        {
+            return Err(denied());
+        }
+        self.temporary
+            .persist_noclobber(self.directory.join(&self.name))
+            .map_err(|error| error.error)?;
+        Ok(())
+    }
+}
+
+/// Existing attachment and new-document callers use the same prepared no-clobber publication.
 fn publish_new(root: &Path, destination: &Path, bytes: &[u8]) -> io::Result<()> {
-    let name = destination
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(denied)?;
-    let device = name
-        .split('.')
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches([' ', '.'])
-        .to_ascii_uppercase();
-    if name.is_empty()
-        || name.len() > 255
-        || name.chars().any(char::is_control)
-        || name.contains(['/', '\\', ':', '<', '>', '"', '|', '?', '*'])
-        || name.ends_with(['.', ' '])
-        || matches!(
-            device.as_str(),
-            "CON" | "PRN" | "AUX" | "NUL" | "CLOCK$" | "CONIN$" | "CONOUT$"
-        )
-        || device
-            .strip_prefix("COM")
-            .or_else(|| device.strip_prefix("LPT"))
-            .is_some_and(|suffix| {
-                matches!(
-                    suffix,
-                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
-                )
-            })
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Invalid new file name",
-        ));
-    }
-    let parent = destination.parent().ok_or_else(denied)?;
-    if root.canonicalize()? != root || parent.canonicalize()? != parent || !parent.starts_with(root)
-    {
-        return Err(denied());
-    }
-    // Windows directory handles forbid delete-sharing, preventing a rename/reparse replacement
-    // between containment checks, writing the temporary file and publishing its final name.
-    let pins = pin_directories(parent)?;
-    if parent.canonicalize()? != parent || root.canonicalize()? != root {
-        return Err(denied());
-    }
-    let publication_directory = publication_directory(parent, &pins);
-    let mut temporary = tempfile::NamedTempFile::new_in(&publication_directory)?;
-    if resolved_handle(temporary.as_file())?.parent() != Some(parent) {
-        return Err(denied());
-    }
-    temporary.write_all(bytes)?;
-    temporary.as_file().sync_all()?;
-    if parent.canonicalize()? != parent || root.canonicalize()? != root {
-        return Err(denied());
-    }
-    // persist_noclobber uses the platform's atomic create-if-absent primitive. The target is
-    // never opened for truncation, including when another importer claims the same name.
-    temporary
-        .persist_noclobber(publication_directory.join(name))
-        .map_err(|error| error.error)?;
-    Ok(())
+    PreparedNewFile::prepare(root, destination, |file| file.write_all(bytes))?.commit()
 }
 
 fn denied() -> io::Error {
@@ -169,7 +215,7 @@ fn publication_directory(parent: &Path, _: &[File]) -> std::path::PathBuf {
 
 /// Hold every ancestor until publication so an otherwise valid pathname cannot be retargeted.
 #[cfg(windows)]
-fn pin_directories(parent: &Path) -> io::Result<Vec<File>> {
+pub(crate) fn pin_directories(parent: &Path) -> io::Result<Vec<File>> {
     use std::os::windows::fs::OpenOptionsExt;
     parent
         .ancestors()
@@ -189,7 +235,7 @@ fn pin_directories(parent: &Path) -> io::Result<Vec<File>> {
 
 /// Windows returns the opened object's path, rather than resolving a possibly replaced pathname.
 #[cfg(windows)]
-fn resolved_handle(file: &File) -> io::Result<std::path::PathBuf> {
+pub(crate) fn resolved_handle(file: &File) -> io::Result<std::path::PathBuf> {
     use std::os::windows::{ffi::OsStringExt, io::AsRawHandle};
     #[link(name = "kernel32")]
     unsafe extern "system" {
@@ -223,19 +269,19 @@ fn resolved_handle(file: &File) -> io::Result<std::path::PathBuf> {
 
 /// Linux keeps a directory descriptor and resolves the live temporary descriptor via procfs.
 #[cfg(target_os = "linux")]
-fn pin_directories(parent: &Path) -> io::Result<Vec<File>> {
+pub(crate) fn pin_directories(parent: &Path) -> io::Result<Vec<File>> {
     parent.ancestors().map(File::open).collect()
 }
 
 #[cfg(target_os = "linux")]
-fn resolved_handle(file: &File) -> io::Result<std::path::PathBuf> {
+pub(crate) fn resolved_handle(file: &File) -> io::Result<std::path::PathBuf> {
     use std::os::fd::AsRawFd;
     std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd()))
 }
 
 /// This adapter refuses file publication on platforms without an opened-object path check.
 #[cfg(not(any(windows, target_os = "linux")))]
-fn pin_directories(_: &Path) -> io::Result<Vec<File>> {
+pub(crate) fn pin_directories(_: &Path) -> io::Result<Vec<File>> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "Attachment directory pinning is unavailable",
@@ -243,7 +289,7 @@ fn pin_directories(_: &Path) -> io::Result<Vec<File>> {
 }
 
 #[cfg(not(any(windows, target_os = "linux")))]
-fn resolved_handle(_: &File) -> io::Result<std::path::PathBuf> {
+pub(crate) fn resolved_handle(_: &File) -> io::Result<std::path::PathBuf> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "Opened-object path resolution is unavailable",

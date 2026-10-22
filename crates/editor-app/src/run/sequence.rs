@@ -82,6 +82,8 @@ pub struct RunSequence {
     /// The requests behind each step, fixed when the sequence began so a later edit cannot change
     /// what a launch already started doing.
     requests: Vec<plugin_runtime::RunRequest>,
+    /// Exact resolved-provider origins follow each command until the actor admits native execution.
+    origins: Vec<Vec<plugin_runtime::TargetOrigin>>,
     /// Each provider build retains its portable binding; the final placeholder clears on resolution.
     preparations: Vec<Option<(String, String)>>,
     /// The launch identity of each step's start request, once it has been requested.
@@ -132,6 +134,7 @@ impl RunSequence {
                 .map(|step| step.preparation.clone())
                 .collect(),
             requested: vec![None; plan.steps.len()],
+            origins: vec![Vec::new(); plan.steps.len()],
             current: 0,
             blocked: None,
             stopping: false,
@@ -154,6 +157,7 @@ impl RunSequence {
             requests: steps.iter().map(|step| step.request.clone()).collect(),
             preparations: steps.iter().map(|step| step.preparation.clone()).collect(),
             requested: vec![None; steps.len()],
+            origins: vec![Vec::new(); steps.len()],
             current: 0,
             blocked: None,
             stopping: false,
@@ -163,6 +167,10 @@ impl RunSequence {
     /// The request for one step, so a caller stages exactly what the plan computed.
     pub fn planned_request(&self, index: usize) -> Option<&plugin_runtime::RunRequest> {
         self.requests.get(index)
+    }
+    /// Transfer only this frozen step's source receipts, independently of later UI selections.
+    pub fn planned_origins(&self, index: usize) -> &[plugin_runtime::TargetOrigin] {
+        self.origins.get(index).map(Vec::as_slice).unwrap_or(&[])
     }
 
     /// A provider build is requested once; a final placeholder can never be executed directly.
@@ -184,7 +192,7 @@ impl RunSequence {
         &mut self,
         index: usize,
         request: u64,
-        result: Result<&str, &str>,
+        result: Result<&crate::extensions::PreparedTarget, &str>,
     ) -> bool {
         if index != self.current
             || self.blocked.is_some()
@@ -200,13 +208,17 @@ impl RunSequence {
         };
         match result {
             Err(error) => self.start_failed(index, error),
-            Ok(program) => {
+            Ok(prepared) => {
                 for next in index + 1..self.steps.len() {
                     if self.steps[next].kind == StepKind::Program
                         && self.preparations[next].as_ref() == Some(&binding)
                     {
-                        self.requests[next].program = program.into();
+                        self.requests[next].program = prepared.program.clone();
+                        self.requests[next]
+                            .args
+                            .splice(0..0, prepared.prefix_args.iter().cloned());
                         self.preparations[next] = None;
+                        self.origins[next].extend(prepared.origin.iter().cloned());
                     }
                 }
                 self.steps[index].state = StepState::Succeeded;

@@ -5,7 +5,7 @@ mod history;
 mod transfer;
 
 use super::*;
-use crate::ui::controls::overlay::WindowExt as _;
+use editor_ui::overlay::WindowExt as _;
 use gpui_base::Root;
 use gpui_kit::gpui;
 use gpui_kit::{TestAppContext, VisualTestContext};

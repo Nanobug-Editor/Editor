@@ -1,0 +1,226 @@
+_version: 2
+history.skipped:
+  en: "History skipped %{path}: %{reason}"
+  zh-CN: "此文件未记录历史：%{path}（%{reason}）"
+history.skip_disabled:
+  en: "recording is disabled"
+  zh-CN: "已关闭历史记录"
+history.skip_excluded:
+  en: "excluded by history policy"
+  zh-CN: "命中历史排除规则"
+history.skip_size:
+  en: "exceeds the user file-size limit"
+  zh-CN: "超过用户设置的单文件上限"
+history.skip_format:
+  en: "unsupported text format"
+  zh-CN: "不支持的文本格式"
+history.failed:
+  en: "Local history could not be updated: %{error}"
+  zh-CN: "本地历史未能更新：%{error}"
+history.delete_unavailable:
+  en: "Deletion stopped because current content could not be protected in local history."
+  zh-CN: "无法将当前内容保护到本地历史，已停止删除。"
+history.saving:
+  en: "This document is being saved; please wait"
+  zh-CN: "此文档正在保存，请稍候"
+history.stale:
+  en: "The document or disk changed. Refresh and try again."
+  zh-CN: "文档或磁盘内容已变化，请刷新后重试。"
+history.title:
+  en: "Local History"
+  zh-CN: "本地历史"
+history.file:
+  en: "Current file"
+  zh-CN: "当前文件"
+history.workspace:
+  en: "Workspace"
+  zh-CN: "工作区"
+history.deleted:
+  en: "Deleted files"
+  zh-CN: "已删除文件"
+history.standalone:
+  en: "Standalone files"
+  zh-CN: "无工作区文件"
+history.legacy:
+  en: "Legacy snapshots"
+  zh-CN: "旧版快照"
+history.all:
+  en: "All projects"
+  zh-CN: "全部项目"
+history.filter:
+  en: "Filter by current or historical path"
+  zh-CN: "按当前或历史路径筛选"
+history.refresh:
+  en: "Refresh"
+  zh-CN: "刷新"
+history.close:
+  en: "Close history"
+  zh-CN: "关闭历史"
+history.loading:
+  en: "Loading history…"
+  zh-CN: "正在读取历史…"
+history.empty:
+  en: "No matching history"
+  zh-CN: "没有匹配的历史"
+history.select_version:
+  en: "Select a version for readonly preview"
+  zh-CN: "选择版本以只读预览"
+history.previous:
+  en: "Previous"
+  zh-CN: "上一页"
+history.next:
+  en: "Next"
+  zh-CN: "下一页"
+history.compare:
+  en: "Compare with current buffer"
+  zh-CN: "与当前缓冲区对比"
+history.restore:
+  en: "Restore to editor"
+  zh-CN: "恢复到编辑器"
+history.export:
+  en: "Export bytes…"
+  zh-CN: "导出原始内容…"
+history.no_content:
+  en: "This structural event has no retained text content."
+  zh-CN: "此结构事件没有保留可恢复的文本内容。"
+history.too_large:
+  en: "Recovery supports at most 32 MiB for each source and target. Export remains available."
+  zh-CN: "恢复的源和目标各支持最多 32 MiB，仍可导出原始内容。"
+history.no_text_target:
+  en: "This target has no editable text session. Export the version to another location."
+  zh-CN: "此目标没有可编辑的文本会话，请将版本导出到其他位置。"
+history.readonly_ime:
+  en: "Finish IME composition and ensure the document is editable before restoring."
+  zh-CN: "请先完成输入法组合，并确保文档可编辑，再进行恢复。"
+history.restored_pending:
+  en: "Historical content restored to the editor; save when ready."
+  zh-CN: "历史内容已恢复到编辑器，确认后可正常保存。"
+history.open_target:
+  en: "Open the current file, then refresh this version to compare its buffer."
+  zh-CN: "请打开当前文件后刷新此版本，再与缓冲区对比。"
+history.diff_unavailable:
+  en: "Comparison exceeds the 1 MiB, 2,000-line or calculation limit. Preview and recovery remain available."
+  zh-CN: "对比超出 1 MiB、2000 行段或计算上限，仍可预览和恢复。"
+history.historical:
+  en: "Historical version"
+  zh-CN: "历史版本"
+history.current:
+  en: "Current buffer"
+  zh-CN: "当前缓冲区"
+history.unknown_time:
+  en: "Unknown original time"
+  zh-CN: "原始时间未知"
+history.choose_destination:
+  en: "Choose a new location for history content"
+  zh-CN: "选择历史内容的新位置"
+history.destination_exists:
+  en: "This location is occupied. Choose another name; the existing file was preserved."
+  zh-CN: "该位置已被占用，请选择其他名称；现有文件已保留。"
+history.destination_unavailable:
+  en: "The destination directory is unavailable. Choose another location."
+  zh-CN: "目标目录不可用，请选择其他位置。"
+history.exported:
+  en: "Historical bytes exported"
+  zh-CN: "历史原始内容已导出"
+history.clear_entry:
+  en: "Clear selected entry"
+  zh-CN: "清理选中条目"
+history.clear_file:
+  en: "Clear this file's history"
+  zh-CN: "清理此文件历史"
+history.clear_workspace:
+  en: "Clear workspace history"
+  zh-CN: "清理工作区历史"
+history.clear_all:
+  en: "Clear all profile history"
+  zh-CN: "清理此用户配置的全部历史"
+history.clear_preview:
+  en: "%{scope}: %{count} entries, approximately %{bytes} content bytes reclaimable. Project files remain intact."
+  zh-CN: "%{scope}：共 %{count} 条，预计可回收 %{bytes} 字节内容空间。项目文件保持不变。"
+history.confirm_clear:
+  en: "Confirm clear"
+  zh-CN: "确认清理"
+history.cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+history.source.saved:
+  en: "Saved"
+  zh-CN: "已保存"
+history.source.created:
+  en: "Created"
+  zh-CN: "已创建"
+history.source.copied:
+  en: "Copied"
+  zh-CN: "已复制"
+history.source.before_overwrite:
+  en: "Before overwrite"
+  zh-CN: "覆盖前磁盘内容"
+history.source.external:
+  en: "Observed disk state"
+  zh-CN: "观察到的磁盘状态"
+history.source.before_restore:
+  en: "Protected before restore"
+  zh-CN: "恢复前保护"
+history.source.before_delete:
+  en: "Protected before deletion"
+  zh-CN: "删除前保护"
+history.source.renamed:
+  en: "Renamed"
+  zh-CN: "已重命名"
+history.source.moved:
+  en: "Moved"
+  zh-CN: "已移动"
+history.source.deleted:
+  en: "Deleted"
+  zh-CN: "已删除"
+history.source.imported:
+  en: "Imported legacy history"
+  zh-CN: "导入的旧版历史"
+history.enabled:
+  en: "Record local history"
+  zh-CN: "记录本地历史"
+history.days:
+  en: "Retain for days"
+  zh-CN: "保留天数"
+history.budget:
+  en: "Shared profile capacity (decimal MB)"
+  zh-CN: "此用户配置共用容量（十进制 MB）"
+history.file_limit:
+  en: "Maximum original file size (MiB, 1–32)"
+  zh-CN: "单文件原始大小上限（MiB，1–32）"
+history.exclude:
+  en: "History exclusion globs (separated by semicolons)"
+  zh-CN: "历史排除 glob（分号分隔）"
+history.apply_settings:
+  en: "Apply history settings"
+  zh-CN: "应用历史设置"
+history.invalid_settings:
+  en: "Enter positive whole numbers; file size may not exceed 32 MiB."
+  zh-CN: "请输入正整数，单文件大小不能超过 32 MiB。"
+history.settings_hint:
+  en: "Shared across all projects and standalone files in this user profile. Pausing recording preserves browsing/export and retention; restore requires recording enabled."
+  zh-CN: "此用户配置下的所有项目与无工作区文件共用。关闭记录后仍可浏览、导出并执行保留策略；恢复前需重新启用记录。"
+history.usage:
+  en: "%{versions} versions / %{objects} objects; database + legacy: %{bytes} bytes; WAL: %{wal}; pending reclaim: %{pending}."
+  zh-CN: "%{versions} 个版本／%{objects} 个对象；数据库及旧快照：%{bytes} 字节；WAL：%{wal}；待回收：%{pending}。"
+history.protecting_delete:
+  en: "Protecting eligible files before deletion…"
+  zh-CN: "正在删除前保护符合条件的文件…"
+history.deleting:
+  en: "Deletion is in progress; wait for the filesystem result."
+  zh-CN: "正在删除，请等待磁盘操作结果。"
+history.delete_without_backup:
+  en: "Delete anyway without this history backup"
+  zh-CN: "仍然删除，不保留此次历史"
+history.delete_protection_failed:
+  en: "Deletion stopped because history protection failed: %{error}"
+  zh-CN: "历史保护失败，已停止删除：%{error}"
+history.unavailable_delete:
+  en: "Local history storage is unavailable"
+  zh-CN: "本地历史存储不可用"
+history.delete_budget:
+  en: "The deletion protection metadata exceeds its memory budget. Delete smaller batches or explicitly proceed without this backup."
+  zh-CN: "删除保护的元数据超出内存预算。请分批删除，或明确选择不保留此次历史仍然删除。"
+history.cancelled:
+  en: "History operation cancelled"
+  zh-CN: "历史操作已取消"

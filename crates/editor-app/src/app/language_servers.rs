@@ -2,6 +2,7 @@
 use crate::*;
 mod contexts;
 mod demands;
+mod selection;
 mod snapshots;
 pub(crate) use demands::DemandState;
 
@@ -289,7 +290,7 @@ impl EditorApp {
             }
             // Recognition can change without replacing any service; revoke old per-document authority first.
             if previous != language {
-                self.close_language_document(path, cx);
+                self.close_language_document(path, Some(&language), cx);
             }
             documents_changed = true;
             editor::detach_language_server(&tab.editor, cx);
@@ -310,9 +311,15 @@ impl EditorApp {
         }
         self.sync_linked_input(cx);
     }
-    /// Retire `path` on every transport which may have synchronized it, including related sources
-    /// without a primary provider. Shared adapters are visited once; wire cleanup remains asynchronous.
-    pub(crate) fn close_language_document(&self, path: &Path, cx: &mut Context<Self>) {
+    /// Retire `path` on every matching transport, including related sources without a primary provider.
+    /// Recognition preserves leases already using `keep_language`; true close/rename pass None.
+    /// Shared adapters are visited once and only the retired wire lifetime is closed asynchronously.
+    pub(crate) fn close_language_document(
+        &self,
+        path: &Path,
+        keep_language: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
         let mut seen = std::collections::BTreeSet::new();
         for server in self
             .language_servers
@@ -321,7 +328,7 @@ impl EditorApp {
             .chain(self.language_server_demands.transports.values())
         {
             if seen.insert(Arc::as_ptr(server) as usize) {
-                Self::close_server_document(server.clone(), path, cx);
+                Self::close_server_document(server.clone(), path, keep_language, cx);
             }
         }
     }
@@ -330,12 +337,17 @@ impl EditorApp {
     fn close_server_document(
         server: Arc<language_navigation::LanguageServer>,
         path: &Path,
+        keep_language: Option<&str>,
         cx: &mut Context<Self>,
     ) {
         let Some(uri) = language_navigation::file_uri(path) else {
             return;
         };
-        let Some(document) = server.retire_document(&uri) else {
+        let document = match keep_language {
+            Some(language) => server.retire_document_if_language_changed(&uri, language),
+            None => server.retire_document(&uri),
+        };
+        let Some(document) = document else {
             return;
         };
         cx.spawn(async move |_, cx| {

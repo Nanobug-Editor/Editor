@@ -33,6 +33,31 @@ fn explorer_transfer_undo_copy_and_redo(cx: &mut TestAppContext) {
     assert_eq!(std::fs::read_to_string(target).unwrap(), "import");
 }
 
+/// Undo-copy's removal has the same required-backup rule as an ordinary explorer deletion.
+#[gpui::test]
+fn history_failed_backup_stops_transfer_undo_deletion(cx: &mut TestAppContext) {
+    let project = tempfile::tempdir().unwrap();
+    let external = tempfile::tempdir().unwrap();
+    let source = external.path().join("import.txt");
+    std::fs::write(&source, "preserve me").unwrap();
+    let (app, ui) = mount(cx, Workspace::open(project.path()).unwrap(), None);
+    transfer::paste(ui, vec![source], 0);
+    let target = project.path().join("import.txt");
+    assert!(target.exists());
+    let broken = tempfile::tempdir().unwrap();
+    std::fs::write(broken.path().join("history"), "not a directory").unwrap();
+    ui.update(|_, cx| {
+        let state = crate::editor::history::State::new(Some(broken.path()), None, cx);
+        app.update(cx, |app, _| app.history.worker = state.worker);
+    });
+    history_key(ui, "ctrl-z");
+    assert!(
+        target.exists(),
+        "a failed mandatory preimage cannot authorize Undo's deletion"
+    );
+    assert_eq!(std::fs::read_to_string(target).unwrap(), "preserve me");
+}
+
 #[gpui::test]
 fn explorer_transfer_undo_move_directory_preserves_dirty_session(cx: &mut TestAppContext) {
     let project = tempfile::tempdir().unwrap();

@@ -23,7 +23,10 @@ pub(crate) fn compatible_contributions(
     let supported = semver::VersionReq::parse(&contributions.plugin.host_version)?;
     anyhow::ensure!(
         supported.matches(&host),
-        "Unsupported host version: requires {supported}, host {host}"
+        crate::validation::Diagnostic::new(
+            crate::validation::Code::HostVersion,
+            Some("/contributions")
+        )
     );
     anyhow::ensure!(
         contributions.plugin.id == manifest.id,
@@ -70,10 +73,9 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                     .api
                     .as_ref()
                     .and_then(|api| api.required.get("language.lsp"))
-                    .is_some_and(
-                        |requirement| requirement.matches(&semver::Version::new(1, 5, 0))
-                            && !requirement.matches(&semver::Version::new(1, 4, 0))
-                    ),
+                    .is_some_and(|requirement| requirement
+                        .matches(&crate::capabilities::LANGUAGE_LSP_VERSION)
+                        && !requirement.matches(&semver::Version::new(1, 4, 0))),
                 "Document contexts, aliases and delegation require language.lsp >=1.5"
             );
         }
@@ -86,6 +88,32 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                 "Native control declarations require language.control"
             );
         }
+        if provider.content.is_some() {
+            anyhow::ensure!(
+                manifest.permissions.contains("editor.read")
+                    && manifest.api.as_ref().is_some_and(|api| {
+                        api.required.contains_key("language.content")
+                            && api
+                                .required
+                                .get("editor.virtual")
+                                .is_some_and(|range| range.matches(&semver::Version::new(1, 1, 0)))
+                    }),
+                "Readonly language content requires language.content, editor.virtual and editor.read"
+            );
+        }
+        if provider.workspace_edits {
+            anyhow::ensure!(
+                manifest
+                    .api
+                    .as_ref()
+                    .and_then(|api| api.required.get("language.editing"))
+                    .is_some_and(|range| range
+                        .matches(&crate::capabilities::LANGUAGE_EDITING_VERSION)
+                        && !range.matches(&semver::Version::new(1, 1, 0))
+                        && !range.matches(&semver::Version::new(1, 0, 0))),
+                "Workspace language refactors require language.editing >=1.2"
+            );
+        }
         if let Some(delegate) = &provider.delegate {
             let method = manifest
                 .plugin_services
@@ -94,7 +122,12 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                 .and_then(|contract| contract.methods.get(&delegate.method));
             anyhow::ensure!(
                 manifest.component.is_some()
-                    && method == Some(&plugin_protocol::language_control::binding_prepare_method()),
+                    && method
+                        == Some(
+                            &plugin_protocol::language_control::binding_prepare_method_for(
+                                delegate.interactive
+                            )
+                        ),
                 "Delegated language providers require the canonical public prepare method"
             );
             anyhow::ensure!(
@@ -104,6 +137,24 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                     && provider.control_methods.is_empty()
                     && !provider.optional_installation,
                 "A delegated language provider cannot invent a native startup plan"
+            );
+        }
+        if provider.internal
+            || provider
+                .delegate
+                .as_ref()
+                .is_some_and(|delegate| delegate.interactive)
+        {
+            anyhow::ensure!(
+                manifest
+                    .api
+                    .as_ref()
+                    .and_then(|api| api.required.get("language.lsp"))
+                    .is_some_and(
+                        |range| range.matches(&crate::capabilities::LANGUAGE_LSP_VERSION)
+                            && !range.matches(&semver::Version::new(1, 5, 0))
+                    ),
+                "Internal and interactive providers require language.lsp >=1.6"
             );
         }
         // Independent roles negotiate before installation, so an older host cannot silently
@@ -149,7 +200,7 @@ fn validate_language_services(manifest: &Manifest) -> anyhow::Result<()> {
                     .as_ref()
                     .and_then(|api| api.required.get("language.lsp"))
                     .is_some_and(|requirement| {
-                        requirement.matches(&semver::Version::new(1, 5, 0))
+                        requirement.matches(&crate::capabilities::LANGUAGE_LSP_VERSION)
                             && !requirement.matches(&semver::Version::new(1, 2, 0))
                     }),
                 "Immutable diagnostic snapshots require language.lsp >=1.3"
@@ -212,71 +263,97 @@ impl Package {
         Ok(package)
     }
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        anyhow::ensure!(bytes.len() <= 64 * 1024 * 1024, "Package too large");
-        let digest = format!("{:x}", Sha256::digest(bytes));
-        let mut zip = zip::ZipArchive::new(Cursor::new(bytes))?;
-        anyhow::ensure!(zip.len() <= 512, "Too many package entries");
-        let mut files = BTreeMap::new();
-        let mut total = 0;
-        let mut actual_total = 0usize;
-        for index in 0..zip.len() {
-            let mut entry = zip.by_index(index)?;
-            if entry.is_dir() {
-                continue;
-            }
-            let name = entry.name().to_owned();
-            validate_relative(&name)?;
-            anyhow::ensure!(!entry.is_symlink(), "Package symlinks are forbidden");
-            total += entry.size();
-            anyhow::ensure!(total <= 128 * 1024 * 1024, "Expanded package exceeds quota");
-            let mut data = Vec::new();
-            let remaining = 128 * 1024 * 1024 - actual_total;
-            entry
-                .by_ref()
-                .take(remaining as u64 + 1)
-                .read_to_end(&mut data)?;
+        // Classify the public admission boundary without duplicating any validator or parsing text.
+        (|| {
+            anyhow::ensure!(bytes.len() <= 64 * 1024 * 1024, "Package too large");
+            let digest = format!("{:x}", Sha256::digest(bytes));
+            let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| {
+                crate::validation::Diagnostic::new(crate::validation::Code::Archive, None)
+            })?;
             anyhow::ensure!(
-                data.len() <= remaining,
-                "Actual expanded package exceeds quota"
+                zip.len() <= 512,
+                crate::validation::Diagnostic::new(crate::validation::Code::Limit, None)
             );
-            actual_total += data.len();
-            anyhow::ensure!(files.insert(name, data).is_none(), "Duplicate package path");
-        }
-        Self::validated_files(files, digest)
+            let mut files = BTreeMap::new();
+            let mut total = 0;
+            let mut actual_total = 0usize;
+            for index in 0..zip.len() {
+                let mut entry = zip.by_index(index)?;
+                if entry.is_dir() {
+                    continue;
+                }
+                let name = entry.name().to_owned();
+                validate_relative(&name)?;
+                anyhow::ensure!(
+                    !entry.is_symlink(),
+                    crate::validation::Diagnostic::new(crate::validation::Code::Path, None)
+                );
+                total += entry.size();
+                anyhow::ensure!(
+                    total <= 128 * 1024 * 1024,
+                    crate::validation::Diagnostic::new(crate::validation::Code::Limit, None)
+                );
+                let mut data = Vec::new();
+                let remaining = 128 * 1024 * 1024 - actual_total;
+                entry
+                    .by_ref()
+                    .take(remaining as u64 + 1)
+                    .read_to_end(&mut data)?;
+                anyhow::ensure!(
+                    data.len() <= remaining,
+                    crate::validation::Diagnostic::new(crate::validation::Code::Limit, None)
+                );
+                actual_total += data.len();
+                anyhow::ensure!(
+                    files.insert(name, data).is_none(),
+                    crate::validation::Diagnostic::new(crate::validation::Code::Path, None)
+                );
+            }
+            Self::validated_files(files, digest)
+        })()
+        .map_err(crate::validation::admission_error)
     }
 
     /// Inspect a development directory's immutable bytes without creating an intermediate ZIP.
     /// Paths, quotas, permissions, protocol and resource references use the installation validator.
     /// Returns a content-addressed package, or an error before any registry/data mutation.
     pub fn from_files(files: BTreeMap<String, Vec<u8>>) -> anyhow::Result<Self> {
-        anyhow::ensure!(files.len() <= 512, "Too many package entries");
-        let mut hash = Sha256::new();
-        let mut total = 0usize;
-        for (name, bytes) in &files {
-            validate_relative(name)?;
-            total = total
-                .checked_add(bytes.len())
-                .ok_or_else(|| anyhow::anyhow!("Package quota overflow"))?;
-            anyhow::ensure!(total <= 128 * 1024 * 1024, "Expanded package exceeds quota");
-            // Length prefixes keep different path/content boundaries from sharing a digest.
-            hash.update((name.len() as u64).to_le_bytes());
-            hash.update(name.as_bytes());
-            hash.update((bytes.len() as u64).to_le_bytes());
-            hash.update(bytes);
-        }
-        Self::validated_files(files, format!("{:x}", hash.finalize()))
+        (|| {
+            anyhow::ensure!(files.len() <= 512, "Too many package entries");
+            let mut hash = Sha256::new();
+            let mut total = 0usize;
+            for (name, bytes) in &files {
+                validate_relative(name)?;
+                total = total
+                    .checked_add(bytes.len())
+                    .ok_or_else(|| anyhow::anyhow!("Package quota overflow"))?;
+                anyhow::ensure!(total <= 128 * 1024 * 1024, "Expanded package exceeds quota");
+                // Length prefixes keep different path/content boundaries from sharing a digest.
+                hash.update((name.len() as u64).to_le_bytes());
+                hash.update(name.as_bytes());
+                hash.update((bytes.len() as u64).to_le_bytes());
+                hash.update(bytes);
+            }
+            Self::validated_files(files, format!("{:x}", hash.finalize()))
+        })()
+        .map_err(crate::validation::admission_error)
     }
 
     /// Archive and development inputs converge here; neither can bypass admission checks.
     fn validated_files(files: BTreeMap<String, Vec<u8>>, digest: String) -> anyhow::Result<Self> {
-        let manifest: Manifest = serde_json::from_slice(
-            files
-                .get("manifest.json")
-                .ok_or_else(|| anyhow::anyhow!("Missing manifest.json"))?,
-        )
-        .map_err(|error| {
-            anyhow::anyhow!("插件清单不兼容或无效，请使用新版 SDK 更新插件：{error}")
-        })?;
+        let manifest: Manifest =
+            serde_json::from_slice(files.get("manifest.json").ok_or_else(|| {
+                crate::validation::Diagnostic::new(crate::validation::Code::Manifest, Some(""))
+            })?)
+            .map_err(|error| {
+                let mut issue =
+                    crate::validation::Diagnostic::new(crate::validation::Code::Manifest, Some(""));
+                issue.location = Some((error.line(), error.column()));
+                // Preserve the existing actionable update guidance; JSON reports select only
+                // the typed context and never copy the manifest's arbitrary error text.
+                let message = format!("插件清单不兼容或无效，请使用新版 SDK 更新插件：{error}");
+                anyhow::Error::new(error).context(issue).context(message)
+            })?;
         // New archives keep their declared identity; historical aliases belong exclusively to data import.
         anyhow::ensure!(
             manifest.id.len() <= 100
@@ -288,7 +365,9 @@ impl Package {
                 && !manifest.id.starts_with('.'),
             "Invalid plugin identity"
         );
-        semver::Version::parse(&manifest.version)?;
+        semver::Version::parse(&manifest.version).map_err(|_| {
+            crate::validation::Diagnostic::new(crate::validation::Code::Manifest, Some("/version"))
+        })?;
         super::capabilities::require_current(&manifest)?;
         validate_language_services(&manifest)?;
         crate::native_modules::validate_exports(&manifest, &files)?;
@@ -644,7 +723,10 @@ impl Package {
                     || permission
                         .strip_prefix("process.service.")
                         .is_some_and(|id| manifest.services.contains_key(id)),
-                "Unsupported capability {permission}"
+                crate::validation::Diagnostic::new(
+                    crate::validation::Code::Permission,
+                    Some("/permissions")
+                )
             );
         }
         anyhow::ensure!(
@@ -818,10 +900,9 @@ fn package_text<'a>(files: &'a BTreeMap<String, Vec<u8>>, path: &str) -> anyhow:
 /// Require all referenced resources to be present inside this ZIP archive.
 fn package_bytes<'a>(files: &'a BTreeMap<String, Vec<u8>>, path: &str) -> anyhow::Result<&'a [u8]> {
     validate_relative(path)?;
-    files
-        .get(path)
-        .map(Vec::as_slice)
-        .ok_or_else(|| anyhow::anyhow!("Missing package asset: {path}"))
+    files.get(path).map(Vec::as_slice).ok_or_else(|| {
+        crate::validation::Diagnostic::new(crate::validation::Code::MissingResource, None).into()
+    })
 }
 
 /// Check both the icon mapping and its referenced SVG files during package inspection.
@@ -851,7 +932,7 @@ pub(crate) fn validate_relative(name: &str) -> anyhow::Result<()> {
             && Path::new(name)
                 .components()
                 .all(|c| matches!(c, std::path::Component::Normal(_))),
-        "Unsafe package path: {name}"
+        crate::validation::Diagnostic::new(crate::validation::Code::Path, None)
     );
     Ok(())
 }

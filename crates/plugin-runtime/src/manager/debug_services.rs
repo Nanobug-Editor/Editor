@@ -314,11 +314,20 @@ pub const DEBUG_REQUIRED_METHODS: [&str; 6] = [
 /// the required and optional methods together. That is why it is compiled only for tests rather than
 /// sitting in the library as a second, divergent account of what a provider may offer.
 #[cfg(test)]
-pub const DEBUG_OPTIONAL_METHODS: [&str; 3] = ["step", "frames", "variables"];
+pub const DEBUG_OPTIONAL_METHODS: [&str; 6] = [
+    "step",
+    "frames",
+    "variables",
+    "threads",
+    "thread_frames",
+    "variable_children",
+];
 
 /// A debug provider's declaration, read as the methods it actually offers.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DebugAbilities {
+    /// Explicit thread selection and bounded lazy variable pages, offered together in 1.2.
+    pub thread_tree: bool,
     /// Whether the provider can set breakpoints.
     pub breakpoints: bool,
     /// Whether it can resume a paused target, and stop a running one.
@@ -360,6 +369,7 @@ pub(super) fn debug_abilities(declaration: &plugin_protocol::service::Contract) 
             && declaration.methods.get(method) == host.methods.get(method)
     };
     DebugAbilities {
+        thread_tree: offers("threads") && offers("thread_frames") && offers("variable_children"),
         breakpoints: offers("set_breakpoints"),
         resume_pause: offers("resume") && offers("pause"),
         step: offers("step"),
@@ -369,7 +379,7 @@ pub(super) fn debug_abilities(declaration: &plugin_protocol::service::Contract) 
 
 /// The host's own debug declaration, as one value.
 fn debug_declaration() -> Value {
-    serde_json::to_value(plugin_protocol::debug::declaration())
+    serde_json::to_value(plugin_protocol::debug::declaration_with_inspection())
         .expect("the published debug.session contract is serializable")
 }
 
@@ -381,9 +391,8 @@ pub(super) fn debug_timeout_ms(method: &str) -> Option<u32> {
     match method {
         "start" => Some(DEBUG_START_TIMEOUT_MS),
         "set_breakpoints" => Some(DEBUG_BREAKPOINT_TIMEOUT_MS),
-        "resume" | "pause" | "step" | "stop" | "status" | "frames" | "variables" => {
-            Some(DEBUG_CONTROL_TIMEOUT_MS)
-        }
+        "resume" | "pause" | "step" | "stop" | "status" | "frames" | "variables" | "threads"
+        | "thread_frames" | "variable_children" => Some(DEBUG_CONTROL_TIMEOUT_MS),
         _ => None,
     }
 }

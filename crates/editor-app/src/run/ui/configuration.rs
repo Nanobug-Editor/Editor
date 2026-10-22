@@ -1,5 +1,6 @@
 //! Provider-owned native configuration entry. Historical fixed-form rendering remains test-only.
 use super::*;
+use editor_ui::scroll::ScrollableElement as _;
 mod actions;
 mod editor;
 mod picker;
@@ -110,8 +111,7 @@ fn render_page(
         .flex_1()
         .min_w_0()
         .min_h_0()
-        .overflow_y_scroll()
-        .track_scroll(&state.page_scroll)
+        .overflow_y_scrollbar_with(&state.page_scroll)
         .gap(px(17.))
         .px(px(28.))
         .py(px(23.))
@@ -138,11 +138,9 @@ pub(super) fn render_field(
 ) -> AnyElement {
     let state = form.read(cx);
     let input = if let Some((_, input)) = state.textareas.iter().find(|(key, _)| *key == field) {
-        crate::ui::controls::Textarea::new(input).into_any_element()
+        editor_ui::Textarea::new(input).into_any_element()
     } else if let Some((_, input)) = state.inputs.iter().find(|(key, _)| *key == field) {
-        crate::ui::controls::Input::new(input)
-            .h(px(35.))
-            .into_any_element()
+        editor_ui::Input::new(input).h(px(35.)).into_any_element()
     } else {
         div().into_any_element()
     };
@@ -220,7 +218,7 @@ fn render_target(
                     .flex_1()
                     .min_w_0()
                     .debug_selector(|| "run-config-program".into())
-                    .child(crate::ui::controls::Input::new(&input).h(px(35.))),
+                    .child(editor_ui::Input::new(&input).h(px(35.))),
             )
             .child(
                 picker_button(app, PickerKind::Target, String::new(), cx)
@@ -308,7 +306,7 @@ fn render_startup(
         t!("run.form_startup_count", count = count).into()
     };
     let owner = app.clone();
-    crate::ui::controls::disclosure(
+    editor_ui::disclosure(
         "run-config-startup",
         t!("run.form_startup"),
         summary,
@@ -401,7 +399,7 @@ fn render_more(
                 .child(t!("run.form_local_settings")),
         )
         .into_any_element();
-    crate::ui::controls::disclosure(
+    editor_ui::disclosure(
         "run-config-more",
         t!("run.form_more"),
         if customized {

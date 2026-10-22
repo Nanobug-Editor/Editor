@@ -181,6 +181,7 @@ fn shell_action(name: &str) -> bool {
         "me_editor::SaveDocument"
             | "me_editor::FormatDocument"
             | "me_editor::RenameSymbol"
+            | "me_editor::ToggleSourceBreakpoint"
             | "me_editor::RefreshWorkspace"
             | "me_editor::ToggleTheme"
             | "me_editor::NavigateToDefinition"
@@ -205,6 +206,11 @@ fn append_unbound(result: &mut Vec<Operation>, cx: &App) {
     // These are verified registrations in EditorShell and InputBaseState/EditorMode.
     // Merely appearing in all_action_names does not make an action available or give it a scope.
     const HANDLERS: &[(&str, &str, Scope)] = &[
+        (
+            "me_editor::ToggleSourceBreakpoint",
+            crate::app::shell::DOCUMENT_COMMAND_CONTEXT,
+            Scope::Global,
+        ),
         // New language commands remain editable global operations while retaining their native-source boundary.
         (
             "me_editor::FormatDocument",

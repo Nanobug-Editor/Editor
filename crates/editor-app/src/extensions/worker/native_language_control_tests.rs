@@ -115,10 +115,10 @@ fn native_language_control_child() {
             apply_theme(builtin_theme(false), cx);
             cx.set_reduce_motion(true);
             extensions::init(cx);
-            crate::ui::controls::init(cx);
+            editor_ui::init(cx);
             crate::app::shortcuts::bootstrap::configure(cx, profile.join("shortcuts.json"))
                 .unwrap();
-            let mut options = crate::ui::controls::window::TitleBar::window_options();
+            let mut options = editor_ui::window::TitleBar::window_options();
             options.show = true;
             options.focus = false;
             options.inactive_frame_interval = None;

@@ -12,6 +12,7 @@ use std::{
     process::Command,
     time::{Duration, Instant},
 };
+mod interaction;
 
 /// Git runs only after the shared private-environment handoff, inside this test's disposable worktree.
 fn git(root: &std::path::Path, args: &[&str]) -> String {
@@ -82,7 +83,7 @@ fn git_headerless_history_native_layout_uses_the_full_body(cx: &mut TestAppConte
     let resources = manager.live["git"].tree_resources();
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
     let (_, visual) = cx.add_window_view(move |window, cx| {
@@ -320,21 +321,29 @@ fn git_branch_menu_native_right_click_disables_unavailable_actions(cx: &mut Test
         .find(|node| node.label == "topic")
         .unwrap()
         .clone();
-    let pull = topic
-        .menu
+    let mut actions = Vec::new();
+    for item in &topic.action_menu {
+        item.visit(&mut |item| {
+            if let ui::ActionMenuKind::Action { command } = &item.kind {
+                actions.push((item.id.clone(), command.clone()));
+            }
+        });
+    }
+    let pull = actions
         .iter()
-        .position(|item| item.arguments["action"] == "pull")
+        .find(|(_, command)| command.arguments["action"] == "pull")
         .unwrap();
-    let switch = topic
-        .menu
+    let switch = actions
         .iter()
-        .position(|item| item.arguments["action"] == "switch")
+        .find(|(_, command)| command.arguments["action"] == "switch")
         .unwrap();
-    assert!(topic.menu[pull].disabled);
-    assert!(!topic.menu[switch].disabled);
+    assert!(pull.1.disabled);
+    assert!(!switch.1.disabled);
+    let pull = pull.0.clone();
+    let switch = switch.0.clone();
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
     let manager = Rc::new(RefCell::new(manager));
@@ -372,22 +381,87 @@ fn git_branch_menu_native_right_click_disables_unavailable_actions(cx: &mut Test
     // GPUI's selector API requires static strings; these three bounded test selectors live to exit.
     let row_selector: &'static str =
         Box::leak(format!("plugin-tree-row-{}", topic.id).into_boxed_str());
-    let pull_selector: &'static str =
-        Box::leak(format!("native-menu-tree-menu-{pull}").into_boxed_str());
-    let switch_selector: &'static str =
-        Box::leak(format!("native-menu-tree-menu-{switch}").into_boxed_str());
+    let pull_selector: &'static str = Box::leak(format!("action-menu-{pull}").into_boxed_str());
+    let switch_selector: &'static str = Box::leak(format!("action-menu-{switch}").into_boxed_str());
+    frame(visual, &view, &manager);
+    // A first press only focuses the branch tree. Filtering and the blue selection require
+    // the native second press, so inspecting another branch never starts a history query.
+    let selected = visual.update(|_, cx| view.read(cx).native_tree_selected_id("branches", cx));
+    let before = events.borrow().len();
+    let row = visual.debug_bounds(row_selector).unwrap().center();
+    visual.simulate_click(row, Default::default());
+    frame(visual, &view, &manager);
+    assert_eq!(
+        visual.update(|_, cx| view.read(cx).native_tree_selected_id("branches", cx)),
+        selected,
+        "single click must retain the selected branch"
+    );
+    assert_eq!(
+        events.borrow().len(),
+        before,
+        "single click must not filter history"
+    );
+    interaction::second_press(visual, row_selector);
+    frame(visual, &view, &manager);
+    assert_eq!(
+        visual.update(|_, cx| view.read(cx).native_tree_selected_id("branches", cx)),
+        Some(Some(topic.id.clone())),
+        "double click must select the target branch"
+    );
+    let selected_events = events.borrow()[before..].iter().filter(|event| {
+        matches!(&event.action, ui::Action::Tree(tree::Event::Selected { node, .. }) if node == &topic.id)
+    }).count();
+    assert_eq!(
+        selected_events, 1,
+        "one double click emits one filter event"
+    );
+    // Return to the initially selected branch before checking gray hover on another menu target.
+    let main_selector: &'static str = Box::leak(
+        format!("plugin-tree-row-{}", selected.clone().unwrap().unwrap()).into_boxed_str(),
+    );
+    let main_position = visual.debug_bounds(main_selector).unwrap().center();
+    visual.simulate_click(main_position, Default::default());
+    interaction::second_press(visual, main_selector);
+    frame(visual, &view, &manager);
     for dark in [false, true] {
         visual.update(|_, cx| {
             crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(dark), cx)
         });
         frame(visual, &view, &manager);
         let row = visual.debug_bounds(row_selector).unwrap().center();
+        let main_color = interaction::background(visual, main_selector);
+        let plain_color = interaction::background(visual, row_selector);
+        let hover_color: gpui_kit::Hsla =
+            gpui_kit::rgb(if dark { 0x393b40 } else { 0xebecf0 }).into();
+        visual.simulate_mouse_move(row, None, Default::default());
+        frame(visual, &view, &manager);
+        assert_eq!(
+            interaction::background(visual, row_selector),
+            hover_color,
+            "native gray hover"
+        );
         visual.simulate_mouse_down(row, gpui_kit::MouseButton::Right, Default::default());
         visual.simulate_mouse_up(row, gpui_kit::MouseButton::Right, Default::default());
         frame(visual, &view, &manager);
-        assert!(visual.debug_bounds("native-popup-menu").is_some());
+        assert!(visual.debug_bounds("action-menu-column-0").is_some());
         let before = events.borrow().len();
         let disabled = visual.debug_bounds(pull_selector).unwrap().center();
+        visual.simulate_mouse_move(disabled, None, Default::default());
+        frame(visual, &view, &manager);
+        assert_eq!(
+            interaction::background(visual, row_selector),
+            hover_color,
+            "menu target retains hover after pointer leaves"
+        );
+        assert_eq!(
+            interaction::background(visual, main_selector),
+            main_color,
+            "context menu preserves the selected branch color"
+        );
+        assert_eq!(
+            visual.update(|_, cx| view.read(cx).native_tree_selected_id("branches", cx)),
+            selected
+        );
         visual.simulate_click(disabled, Default::default());
         frame(visual, &view, &manager);
         assert_eq!(
@@ -399,22 +473,43 @@ fn git_branch_menu_native_right_click_disables_unavailable_actions(cx: &mut Test
         if !dark {
             visual.simulate_keystrokes("escape");
             frame(visual, &view, &manager);
+            assert_eq!(
+                interaction::background(visual, row_selector),
+                plain_color,
+                "closing menu clears retained hover"
+            );
         }
     }
     let enabled = visual.debug_bounds(switch_selector).unwrap().center();
+    let before_switch = events.borrow().len();
     visual.simulate_click(enabled, Default::default());
     visual.run_until_parked();
     settle(&mut manager.borrow_mut());
     frame(visual, &view, &manager);
+    assert!(events.borrow()[before_switch..].iter().any(|event| {
+        matches!(&event.action, ui::Action::Tree(tree::Event::Invoke { action: tree::NodeAction::MenuItem { id }, .. }) if id == &switch)
+    }), "enabled native switch must dispatch its exact menu slot: {:?}", &events.borrow()[before_switch..]);
     assert_eq!(
         git(root, &["branch", "--show-current"]).trim(),
         "main",
         "switch must retain its impact review"
     );
-    let confirm = visual
-        .debug_bounds("plugin-ui-confirm-command")
-        .expect("visible switch confirmation")
-        .center();
+    // Process quiescence alone does not finish an actor's queued typed command after a filter
+    // cancellation. Wait for the real confirmation publication, as a user observes it.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let confirm = loop {
+        if let Some(bounds) = visual.debug_bounds("plugin-ui-confirm-command") {
+            break bounds.center();
+        }
+        assert!(
+            Instant::now() < deadline,
+            "visible switch confirmation; events={:?}; dialog={:?}",
+            &events.borrow()[before_switch..],
+            manager.borrow().live["git"].views["history"].dialog
+        );
+        settle(&mut manager.borrow_mut());
+        frame(visual, &view, &manager);
+    };
     visual.simulate_click(confirm, Default::default());
     visual.run_until_parked();
     settle(&mut manager.borrow_mut());

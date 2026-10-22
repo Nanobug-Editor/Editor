@@ -1,9 +1,13 @@
 //! Owned editor operations use the common completion gate across worker and native UI threads.
 use crate::request_state::Completion;
+#[cfg(test)]
+mod language_delivery_tests;
+mod preparation;
 use plugin_protocol::api::{
     CancelMode, CancellationEffect, EditorOperation, EditorValue, ErrorCode, Failure,
     RequestUpdate, ResourceHandle,
 };
+pub(crate) use preparation::PreparationConditions;
 use std::{
     sync::{
         Arc,
@@ -94,6 +98,8 @@ pub struct EditorRequest {
     /// The native request borrows one admitted marker owner and immutable package artwork.
     decoration: Option<std::sync::Arc<crate::DecorationResource>>,
     decoration_icons: std::collections::BTreeMap<String, Arc<[u8]>>,
+    /// Immutable owned artwork admitted for native comparison controls, never ambient host paths.
+    comparison_icons: std::collections::BTreeMap<String, Arc<[u8]>>,
     /// Source wait cancellation closes pending UI, while successful calls may retain owned work.
     parents: Vec<Completion<serde_json::Value>>,
     /// Native paths never cross the guest transport; the instance issues grants only at delivery.
@@ -104,11 +110,23 @@ pub struct EditorRequest {
     workspace_request: Option<crate::WorkspaceRequest>,
     /// Checked provider, original caller and immutable imports never come from guest identity strings.
     language_control: Option<LanguageControlMetadata>,
+    /// Only the registered-context gate can issue this native refresh proof.
+    language_refresh: Option<(
+        crate::LanguageContexts,
+        crate::language_contexts::RegisteredContext,
+        Option<Arc<AtomicBool>>,
+        Arc<std::sync::Mutex<Option<Arc<AtomicBool>>>>,
+    )>,
 }
 
 /// Runtime-sealed metadata for the existing native language connection, unavailable to guest JSON.
 #[derive(Clone)]
 pub struct LanguageControlMetadata {
+    /// An explicitly registered context narrows this request and its eventual native binding.
+    pub(crate) selected_context: Option<crate::language_contexts::RegisteredContext>,
+    /// Transient source-choice seal; it never narrows the shared process's persistent authority.
+    pub(crate) selection_guard: Option<Arc<AtomicBool>>,
+    pub(crate) contexts: crate::LanguageContexts,
     /// Host-owned collection epochs narrow pending results and bindings, including empty discovery.
     pub(crate) collection_guards: Vec<Arc<AtomicBool>>,
     /// Globally scoped provider (`package/local-provider`), owned by this exact issuing instance.
@@ -131,6 +149,10 @@ pub struct LanguageControlMetadata {
     pub imports: Vec<Arc<crate::NativeModuleLease>>,
 }
 impl EditorRequest {
+    /// Observe this accepted request through its existing completion gate, without copying its payload.
+    pub(crate) fn observe(&self, observation: crate::observability::Observation) {
+        self.completion.observe(observation);
+    }
     /// Controlled native owners retain the common completion policy and their complete sealed
     /// service/instance chain, even when no guest context exists to receive a notification.
     pub(crate) fn from_authority(
@@ -186,11 +208,13 @@ impl EditorRequest {
             diagnostic_collection: None,
             decoration: None,
             decoration_icons: Default::default(),
+            comparison_icons: Default::default(),
             parents,
             selection: Default::default(),
             progress: Default::default(),
             workspace_request: None,
             language_control: None,
+            language_refresh: None,
         }
     }
     pub fn handle(&self) -> &ResourceHandle {
@@ -208,7 +232,59 @@ impl EditorRequest {
     pub fn language_control_metadata(&self) -> Option<&LanguageControlMetadata> {
         self.language_control.as_ref()
     }
+    pub(crate) fn with_language_refresh(
+        mut self,
+        contexts: crate::LanguageContexts,
+        context: crate::language_contexts::RegisteredContext,
+    ) -> Self {
+        self.authority = self.authority.with_guard(context.guard());
+        self.completion.lifetimes.push(context.guard());
+        let expected = match &self.operation {
+            EditorOperation::RefreshLanguageContext { document, .. } => {
+                contexts.refresh_guard(&context, &document.path)
+            }
+            _ => None,
+        };
+        self.language_refresh = Some((contexts, context, expected, Default::default()));
+        self
+    }
+
+    /// Commit a runtime-issued context selection only after the native document revision is checked.
+    /// Raw `EditorOperation` JSON has no proof and cannot select or refresh a provider by name.
+    pub fn commit_language_refresh(&self) -> Result<(), Failure> {
+        let EditorOperation::RefreshLanguageContext { document, .. } = &self.operation else {
+            return Err(Failure::new(
+                ErrorCode::InvalidRequest,
+                "Request is not a context refresh",
+            ));
+        };
+        let (registry, context, expected, committed) =
+            self.language_refresh.as_ref().ok_or_else(|| {
+                Failure::new(
+                    ErrorCode::PermissionDenied,
+                    "Context refresh has no registered authority",
+                )
+            })?;
+        if !self.authority.is_live() {
+            return Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Context refresh retired",
+            ));
+        }
+        let guard = registry.select_registered(context, &document.path, expected.as_ref())?;
+        // Use the post-commit choice for delivery. The prior CAS guard was deliberately revoked
+        // by this successful commit and cannot be reused as a success-notification condition.
+        *committed.lock().unwrap() = Some(guard);
+        Ok(())
+    }
     pub(crate) fn with_language_control(mut self, metadata: LanguageControlMetadata) -> Self {
+        if let Some(guard) = &metadata.selection_guard {
+            self.completion.lifetimes.push(guard.clone());
+        }
+        if let Some(context) = &metadata.selected_context {
+            self.authority = self.authority.with_guard(context.guard());
+            self.completion.lifetimes.push(context.guard());
+        }
         for guard in &metadata.collection_guards {
             self.authority = self.authority.with_guard(guard.clone());
             self.completion.lifetimes.push(guard.clone());
@@ -235,6 +311,12 @@ impl EditorRequest {
         self.workspace_request = Some(request);
         self
     }
+    /// Analysis conditions govern pending admission, while successful native effects retain the
+    /// original owner/caller authority. The request and its receipt share the same monotonic phase.
+    pub(crate) fn with_preparation(mut self, conditions: Arc<PreparationConditions>) -> Self {
+        self.completion.bind_condition(move || conditions.is_live());
+        self
+    }
     /// Native virtual opens require runtime-issued owned authority.
     pub fn virtual_document(&self) -> Option<&std::sync::Arc<crate::VirtualDocumentResource>> {
         self.virtual_document.as_ref()
@@ -245,6 +327,18 @@ impl EditorRequest {
     }
     pub fn decoration_icons(&self) -> &std::collections::BTreeMap<String, Arc<[u8]>> {
         &self.decoration_icons
+    }
+    /// Borrow the bounded SVG bytes checked for this request's publishing instance.
+    pub fn comparison_icons(&self) -> &std::collections::BTreeMap<String, Arc<[u8]>> {
+        &self.comparison_icons
+    }
+    /// Seal admitted comparison artwork before the request crosses into the native UI queue.
+    pub(crate) fn with_comparison_icons(
+        mut self,
+        icons: std::collections::BTreeMap<String, Arc<[u8]>>,
+    ) -> Self {
+        self.comparison_icons = icons;
+        self
     }
     pub(crate) fn with_decorations(
         mut self,
@@ -404,6 +498,10 @@ impl EditorRequest {
                 &control.document,
             )
             || metadata.provider != format!("{}/{}", service.owner, service.provider.id)
+            || metadata
+                .selected_context
+                .as_ref()
+                .is_some_and(|selected| !service.matches_registered_context(selected))
         {
             return Err(Failure::new(
                 ErrorCode::InvalidHandle,
@@ -429,6 +527,10 @@ impl EditorRequest {
                 unreachable!()
             };
             if expected != metadata.provider
+                || metadata
+                    .selected_context
+                    .as_ref()
+                    .is_some_and(|selected| !service.matches_registered_context(selected))
                 || !self.authority.is_live()
                 || self.status().is_terminal()
                 || !service.admits_control(
@@ -443,6 +545,7 @@ impl EditorRequest {
                 ));
             }
             metadata.response.accepts(&value)?;
+            service.adopt_registered_context(&metadata.contexts, &metadata.owner, &metadata.scope);
             if serde_json::to_vec(&value).map_or(true, |bytes| {
                 bytes.len() > plugin_protocol::language_control::MAX_CONTROL_BYTES
             }) {
@@ -489,7 +592,7 @@ impl EditorRequest {
     }
     pub fn status(&self) -> RequestUpdate {
         self.expire_parents();
-        self.completion.status()
+        self.check_language_update(self.completion.status())
     }
     /// Native progress reads the latest bounded state without locking a WASM instance.
     pub fn progress(&self) -> (String, Option<u8>) {
@@ -523,7 +626,40 @@ impl EditorRequest {
     }
     pub(crate) fn update(&self) -> (u64, RequestUpdate) {
         self.expire_parents();
-        self.completion.update()
+        let (version, update) = self.completion.update();
+        (version, self.check_language_update(update))
+    }
+
+    /// A terminal result can wait for guest delivery while its source is reselected. Project only
+    /// that obsolete control success to an explicit error; completed external effects are not undone.
+    pub(crate) fn check_language_update(&self, update: RequestUpdate) -> RequestUpdate {
+        let control_stale = self
+            .language_control
+            .as_ref()
+            .and_then(|metadata| metadata.selection_guard.as_ref())
+            .is_some_and(|guard| !guard.load(Ordering::Acquire));
+        let refresh_stale = self
+            .language_refresh
+            .as_ref()
+            .is_some_and(|(_, _, _, committed)| {
+                committed
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .is_some_and(|guard| !guard.load(Ordering::Acquire))
+            });
+        if matches!(&update, RequestUpdate::Completed { result: Ok(_) })
+            && (control_stale || refresh_stale)
+        {
+            RequestUpdate::Completed {
+                result: Err(Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Source context changed before result delivery",
+                )),
+            }
+        } else {
+            update
+        }
     }
     pub(crate) fn retire(&self) {
         self.completion.retire();

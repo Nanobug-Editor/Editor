@@ -26,7 +26,7 @@ fn restricting_workspace_cancels_queued_dependency_preparation(cx: &mut TestAppC
     let app = slot.borrow_mut().take().unwrap();
     let control = cx.update(|_, cx| {
         app.read(cx).extensions.clone().update(cx, |panel, cx| {
-            assert!(panel.queue_lifecycle(Work::Install(package.clone())));
+            assert!(panel.queue_lifecycle(Work::Install(package.clone(), true)));
             let control = panel
                 .worker
                 .state

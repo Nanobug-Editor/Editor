@@ -90,7 +90,7 @@ fn independent_vue_typescript_packages_analyze_native_mixed_project_tabs(cx: &mu
     eprintln!("S1 phase: construct native project and production actor");
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::controls::init(cx);
+        editor_ui::init(cx);
         crate::bind_editor_shell_keys(cx);
         typography::init(cx);
         apply_theme(builtin_theme(false), cx);
@@ -176,6 +176,27 @@ fn independent_vue_typescript_packages_analyze_native_mixed_project_tabs(cx: &mu
             app.update(cx, |app, cx| app.open_file(path.clone(), window, cx));
             window.draw(cx).clear(cx);
         });
+        // Establish the real binding before editing its source. All three bindings still coexist
+        // below; cold-compilation cancellation is a separate scenario from mixed-project semantics.
+        super::vue_test_support::wait(
+            &app,
+            &actor,
+            visual,
+            "initial native Vue binding",
+            180,
+            |app, cx| {
+                // Another just-edited tab may still publish its cancelled old revision here.
+                // The all-tabs gate below rejects persistent failures before accepting semantics.
+                app.language_server_for_path(path)
+                    .is_some_and(|server| server.is_active())
+                    && app
+                        .tabs
+                        .iter()
+                        .find(|tab| tab.path() == *path)
+                        .and_then(|tab| tab.text.as_ref())
+                        .is_some_and(|tab| tab.editor.read(cx).lsp().definition_provider.is_some())
+            },
+        );
         // A distinct unresolved template expression makes wrong-backend or duplicate semantic
         // publications observable. The valid message binding remains the navigation target.
         let source = original.replacen(

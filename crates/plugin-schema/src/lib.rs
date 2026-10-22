@@ -777,7 +777,7 @@ lsp_command = "unmanaged-server"
     /// Tests supply their own user overrides rather than depend on host-bundled plugin defaults.
     fn theme_with_plugin_overrides() -> ThemeFile {
         let mut wire: serde_json::Value =
-            serde_json::from_str(include_str!("../../editor-app/assets/themes/default.json"))
+            serde_json::from_str(include_str!("../../editor-ui/assets/themes/default.json"))
                 .unwrap();
         wire["themes"][0]["plugins"] = serde_json::json!({"fixture":{
             "ansi":{"yellow":"#795100"},
@@ -831,7 +831,7 @@ lsp_command = "unmanaged-server"
 
     #[test]
     fn legacy_flat_plugin_colors_remain_readable() {
-        let source = include_str!("../../editor-app/assets/themes/default.json");
+        let source = include_str!("../../editor-ui/assets/themes/default.json");
         let mut old_file: serde_json::Value = serde_json::from_str(source).unwrap();
         old_file["themes"][0]
             .as_object_mut()

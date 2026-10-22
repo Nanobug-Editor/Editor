@@ -2,6 +2,10 @@
 use crate::service::{Method, Schema};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+mod registry;
+pub use registry::{Descriptor, Operation, Reference};
+#[cfg(feature = "guest")]
+pub use registry::{control, describe, register};
 
 /// One query page fits the bounded control channel; hosts also enforce its serialized byte budget.
 pub const MAX_CANDIDATES: usize = 128;

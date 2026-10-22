@@ -2,8 +2,8 @@
 use super::*;
 use gpui_base::Root;
 use gpui_base::test_support::{ElementSnapshot, snapshots};
+use gpui_kit::gpui;
 use gpui_kit::{Role, TestAppContext};
-use gpui_kit::{gpui, test::TestWindowExt as _};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
@@ -39,7 +39,7 @@ fn field(window: &Window) -> ElementSnapshot {
 fn native_form_draft_crosses_scene_handover_without_losing_its_change(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
     for multiline in [false, true] {
@@ -94,8 +94,9 @@ fn native_form_draft_crosses_scene_handover_without_losing_its_change(cx: &mut T
                 "pointer input must focus the original Base state; multiline={multiline}"
             );
             view.update(cx, |view, cx| view.set_scene_current(false, cx));
-            window.input("尚未投递的中文草稿", cx);
         });
+        visual
+            .update(|window, cx| editor_ui::testing::input_text(window, "尚未投递的中文草稿", cx));
         visual.run_until_parked();
         assert!(
             events.borrow().is_empty(),
@@ -143,7 +144,7 @@ fn native_form_draft_crosses_scene_handover_without_losing_its_change(cx: &mut T
 fn init(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
 }
@@ -231,12 +232,12 @@ fn native_form_stale_receipt_retries_latest_draft_and_success_stops_echo_loop(
     for multiline in [false, true] {
         let mailbox = Mailbox::default();
         let (view, visual) = reliable_form(cx, multiline, mailbox.clone());
-        visual.update(|window, cx| window.input("草稿", cx));
+        visual.update(|window, cx| editor_ui::testing::input_text(window, "草稿", cx));
         visual.run_until_parked();
         let (first, reply) = mailbox.borrow_mut().pop_front().unwrap();
         assert_eq!(first.revision, 4);
         assert_eq!(first.action, Action::Change("草稿".into()));
-        visual.update(|window, cx| window.input("继续输入", cx));
+        visual.update(|window, cx| editor_ui::testing::input_text(window, "继续输入", cx));
         visual.run_until_parked();
         assert!(
             mailbox.borrow().is_empty(),
@@ -273,7 +274,7 @@ fn native_form_replacement_and_explicit_override_revoke_pending_delivery(cx: &mu
         for replacement in ["reset", "disabled", "removed", "type", "source"] {
             let mailbox = Mailbox::default();
             let (view, visual) = reliable_form(cx, multiline, mailbox.clone());
-            visual.update(|window, cx| window.input("旧草稿", cx));
+            visual.update(|window, cx| editor_ui::testing::input_text(window, "旧草稿", cx));
             visual.run_until_parked();
             let (_, reply) = mailbox.borrow_mut().pop_front().unwrap();
             let mut next = scene(multiline, 5);
@@ -322,7 +323,7 @@ fn native_form_terminal_receipts_do_not_replay_into_later_scenes(cx: &mut TestAp
     for outcome in [FormReceipt::Retired, FormReceipt::Rejected] {
         let mailbox = Mailbox::default();
         let (view, visual) = reliable_form(cx, true, mailbox.clone());
-        visual.update(|window, cx| window.input("不会重投", cx));
+        visual.update(|window, cx| editor_ui::testing::input_text(window, "不会重投", cx));
         visual.run_until_parked();
         let (_, reply) = mailbox.borrow_mut().pop_front().unwrap();
         reply.send(outcome).unwrap();
@@ -392,7 +393,7 @@ fn assert_latest_draft_precedes_activation(
     let events = Rc::new(RefCell::new(Vec::new()));
     let document = action_scene(multiline, 4, false);
     let (view, visual) = reliable_scene(cx, document, mailbox.clone(), events.clone());
-    visual.update(|window, cx| window.input("A", cx));
+    visual.update(|window, cx| editor_ui::testing::input_text(window, "A", cx));
     visual.run_until_parked();
     let (first, reply) = mailbox.borrow_mut().pop_front().unwrap();
     assert_eq!(first.action, Action::Change("A".into()));
@@ -425,8 +426,8 @@ fn assert_latest_draft_precedes_activation(
             state.value().to_string()
         };
         assert_eq!(value, "A");
-        window.input("B", cx);
     });
+    visual.update(|window, cx| editor_ui::testing::input_text(window, "B", cx));
     visual.run_until_parked();
     assert!(
         mailbox.borrow().is_empty(),
@@ -514,7 +515,7 @@ fn native_form_handover_blocks_actions_until_current_change_is_queued_but_keeps_
             mailbox.clone(),
             events.clone(),
         );
-        visual.update(|window, cx| window.input("新场景草稿", cx));
+        visual.update(|window, cx| editor_ui::testing::input_text(window, "新场景草稿", cx));
         visual.run_until_parked();
         let (first, reply) = mailbox.borrow_mut().pop_front().unwrap();
         assert_eq!(first.revision, 4);

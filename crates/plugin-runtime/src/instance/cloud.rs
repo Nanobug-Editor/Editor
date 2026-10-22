@@ -62,8 +62,13 @@ impl State {
                             .collect()
                     })
                     .unwrap_or_else(|| self.permissions.clone());
-                let stream =
-                    crate::http::start(request, permissions, self.host_resources.http.clone())?;
+                let mut configuration = self.host_resources.http.clone();
+                configuration.observation = Some((
+                    self.host_resources.observations.clone(),
+                    self.observation_identity(),
+                    self.observed_parent,
+                ));
+                let stream = crate::http::start(request, permissions, configuration)?;
                 let Value::Resource(handle) = self.roots.open(RootKind::Http)? else {
                     unreachable!()
                 };

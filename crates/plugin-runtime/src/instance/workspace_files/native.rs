@@ -1,8 +1,10 @@
 //! Controlled native language owners issue the same document-plan request and recovery resources
 //! as guests. This bounded arena retains no text, editable document model or separate Undo history.
 use super::*;
-use crate::EditorRequest;
+use crate::{EditorRequest, editor_requests::PreparationConditions};
 use std::collections::BTreeMap;
+mod content;
+mod files;
 
 /// The original service incarnation owns both transient requests and separately retained receipts.
 /// RootKinds remain private to the normal resource issuer; no caller can manufacture file grants.
@@ -13,11 +15,15 @@ pub(crate) struct NativeDocumentRequests {
     authority: EditorAuthority,
     pending: BTreeMap<u64, (EditorRequest, bool)>,
     batches: BTreeMap<u64, Arc<WorkspaceBatch>>,
+    /// Persistent virtual handles contain ownership/navigation metadata, never document text.
+    virtuals: BTreeMap<u64, Arc<crate::VirtualDocumentResource>>,
+    /// Proofs, queued requests and native recovery retain this root; no permanent file grant leaks.
+    file_root: Option<(api::ResourceHandle, Arc<AtomicBool>)>,
 }
 
 impl NativeDocumentRequests {
     /// Create one real service owner, with its immutable workspace and installation data metadata.
-    /// It issues only document handles; zero private-file quota cannot become file-root authority.
+    /// File roots require separate grants; zero private-data quota never grants private-file access.
     pub(crate) fn new(
         workspace: &Path,
         data: PathBuf,
@@ -32,34 +38,34 @@ impl NativeDocumentRequests {
             authority,
             pending: BTreeMap::new(),
             batches: BTreeMap::new(),
+            virtuals: BTreeMap::new(),
+            file_root: None,
         }
     }
 
-    /// Current-document text plans use original negotiated contracts and consent, including the
-    /// readonly source condition. Resource, foreign-document and application-scope effects fail
-    /// before allocation; the native host still validates revision, previews and asks for consent.
+    /// Workspace document plans use original negotiated contracts and consent, including readonly
+    /// input conditions. File effects additionally require the issued root and independent grants;
+    /// application effects fail before allocation. The native host owns revision, preview and consent.
     pub(crate) fn submit(
         &mut self,
         plan: plugin_protocol::workspace::Plan,
         capabilities: &BTreeMap<String, semver::Version>,
         permissions: &BTreeSet<String>,
-        guard: Option<Arc<std::sync::atomic::AtomicBool>>,
+        guards: Vec<Arc<std::sync::atomic::AtomicBool>>,
     ) -> Result<api::Value, Failure> {
         self.poll();
         self.check_plan(&plan, capabilities, permissions)?;
-        // A native snapshot may retire after rendering but before this original request is issued.
-        // Bind its monotonic guard into the normal request/batch authority, without widening IO.
-        let authority = guard.map_or_else(
-            || self.authority.clone(),
-            |guard| self.authority.with_guard(guard),
-        );
-        if !authority.is_live() {
+        let files = self.plan_files(&plan, capabilities, permissions)?;
+        // A result may expire after rendering. Preparation seals govern pending execution only:
+        // once a real write occurs, recovery must retain the original instance/caller authority.
+        let conditions = Arc::new(PreparationConditions::new(guards));
+        if !conditions.is_live() {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
                 "Language analysis snapshot changed",
             ));
         }
-        self.issue(plan, authority)
+        self.issue(plan, conditions, files, capabilities)
     }
 
     /// Shared document admission precedes native-only scope and shape restrictions; none of
@@ -111,14 +117,34 @@ impl NativeDocumentRequests {
             path: document.path.clone(),
         }
         .validate()?;
-        if plan.changes.iter().any(|change| {
-            !matches!(change,
-            Change::EditDocument { document: target, .. } if target == document)
-        }) {
-            return Err(Failure::new(
-                ErrorCode::UnsupportedOperation,
-                "Native language actions support only their current document",
-            ));
+        let root = PathBuf::from(&self.workspace)
+            .canonicalize()
+            .map_err(crate::native_path::io_failure)?;
+        for change in &plan.changes {
+            let Change::EditDocument {
+                document: target, ..
+            } = change
+            else {
+                // File targets are separately checked against this original owner's issued root.
+                continue;
+            };
+            api::ResourceIdentity::Local {
+                path: target.path.clone(),
+            }
+            .validate()?;
+            if target != document && !permissions.contains("workspace.read") {
+                return Err(Failure::new(
+                    ErrorCode::PermissionDenied,
+                    "Related document edits require workspace.read",
+                ));
+            }
+            let path = normalized_target(&root.join(&target.path))?;
+            if !path.starts_with(&root) {
+                return Err(Failure::new(
+                    ErrorCode::InvalidPath,
+                    "Language edit target escapes workspace",
+                ));
+            }
         }
         Ok(())
     }
@@ -128,7 +154,9 @@ impl NativeDocumentRequests {
     fn issue(
         &mut self,
         plan: plugin_protocol::workspace::Plan,
-        authority: EditorAuthority,
+        conditions: Arc<PreparationConditions>,
+        files: Vec<crate::AuthorizedFile>,
+        capabilities: &BTreeMap<String, semver::Version>,
     ) -> Result<api::Value, Failure> {
         if self.pending.len() >= 32 || self.batches.len() >= 8 || self.roots.len() >= 127 {
             return Err(Failure::new(
@@ -139,12 +167,24 @@ impl NativeDocumentRequests {
         let api::Value::Resource(batch_handle) = self.roots.open(RootKind::WorkspaceBatch)? else {
             unreachable!()
         };
-        let batch = Arc::new(WorkspaceBatch::new(
-            batch_handle.clone(),
-            authority.clone(),
-            None,
-            BTreeSet::from(["editor.read".into(), "editor.write".into()]),
-        ));
+        let batch = Arc::new(
+            WorkspaceBatch::new(
+                batch_handle.clone(),
+                self.authority.clone(),
+                None,
+                if files.is_empty() {
+                    BTreeSet::from(["editor.read".into(), "editor.write".into()])
+                } else {
+                    BTreeSet::from([
+                        "editor.read".into(),
+                        "editor.write".into(),
+                        "workspace.read".into(),
+                        "workspace.write".into(),
+                    ])
+                },
+            )
+            .with_preparation(conditions.clone()),
+        );
         let api::Value::Resource(handle) = self.roots.open(RootKind::EditorRequest)? else {
             unreachable!()
         };
@@ -156,14 +196,17 @@ impl NativeDocumentRequests {
             self.workspace.clone(),
             self.data.clone(),
             120_000,
-            authority,
+            self.authority.clone(),
         )
+        .with_preparation(conditions)
         .with_workspace_request(WorkspaceRequest {
             batch: Some(batch.clone()),
             can_edit: true,
-            // The origin permits a version condition, not arbitrary document reads.
-            can_read_documents: false,
-            files: Vec::new(),
+            // File reconciliation can inspect native buffers only with its independent read contract.
+            can_read_documents: capabilities
+                .get("editor.documents")
+                .is_some_and(|version| *version >= semver::Version::new(1, 1, 0)),
+            files,
         });
         self.batches.insert(batch_handle.resource, batch);
         self.pending.insert(handle.resource, (request, false));
@@ -213,6 +256,24 @@ impl NativeDocumentRequests {
                 true
             }
         });
+        self.virtuals.retain(|_, resource| {
+            if !resource.is_live() || Arc::strong_count(resource) == 1 {
+                resource.revoke();
+                self.roots.remove(resource.handle());
+                false
+            } else {
+                true
+            }
+        });
+        if self
+            .file_root
+            .as_ref()
+            .is_some_and(|(_, alive)| Arc::strong_count(alive) == 1)
+        {
+            let (handle, alive) = self.file_root.take().unwrap();
+            alive.store(false, Ordering::Release);
+            self.roots.remove(&handle);
+        }
     }
 
     /// Retirement seals queued work and native group recovery immediately, without requiring a
@@ -224,8 +285,15 @@ impl NativeDocumentRequests {
         for batch in self.batches.values() {
             batch.revoke();
         }
+        for resource in self.virtuals.values() {
+            resource.revoke();
+        }
         self.pending.clear();
         self.batches.clear();
+        self.virtuals.clear();
+        if let Some((_, alive)) = self.file_root.take() {
+            alive.store(false, Ordering::Release);
+        }
         self.roots.retire();
     }
 

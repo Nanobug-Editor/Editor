@@ -247,8 +247,13 @@ fn git_branch_filter_and_dock_toggles_retain_loaded_native_tree_state(cx: &mut T
                 .unwrap()
                 .to_owned()
         });
-        press_row(visual, &local, 2);
-        flush(&mut manager, &app, visual);
+        // Initial location now reveals the checked-out branch's ancestors before user input.
+        if !visual.update(|window, _| {
+            branch_node(window, Role::TreeItem, Some(&local)).expanded() == Some(true)
+        }) {
+            press_row(visual, &local, 2);
+            flush(&mut manager, &app, visual);
+        }
         press_row(visual, "feature", 2);
         flush(&mut manager, &app, visual);
         let resource = branches(&manager);
@@ -259,7 +264,7 @@ fn git_branch_filter_and_dock_toggles_retain_loaded_native_tree_state(cx: &mut T
         );
         let original_focus = visual
             .update(|window, cx| window.focused(cx).expect("expanded native tree owns focus"));
-        press_row(visual, "topic-01", 1);
+        press_row(visual, "topic-01", 2);
         flush(&mut manager, &app, visual);
         assert_loaded(&manager, &resource, &before, "branch selection", true);
         visual.update(|window, cx| {
@@ -343,7 +348,7 @@ fn git_branch_filter_and_dock_toggles_retain_loaded_native_tree_state(cx: &mut T
         // Real filtering after a visibility cycle must retain state under the renewed credential.
         let reopened = resource.snapshot();
         for label in ["topic-02", "topic-01"] {
-            press_row(visual, label, 1);
+            press_row(visual, label, 2);
             flush(&mut manager, &app, visual);
             assert_loaded(
                 &manager,
@@ -360,6 +365,169 @@ fn git_branch_filter_and_dock_toggles_retain_loaded_native_tree_state(cx: &mut T
             &before,
             "completed visibility cycle",
             false,
+        );
+        manager.disable("git").unwrap();
+        flush(&mut manager, &app, visual);
+        assert_eq!(manager.resource_count(), 0);
+    });
+}
+
+/// A real nested branch beyond the first lazy page seeds native selection and the complete first preview.
+#[gpui::test]
+#[ignore = "real independent Git candidate with ui.tree 1.3; set NANOBUG_GIT_CANDIDATE"]
+fn git_initial_selection_reveals_paged_current_branch_and_colored_first_commit(
+    cx: &mut TestAppContext,
+) {
+    if !run_isolated_test(
+        "extensions::windows_tests::branch_retention::git_initial_selection_reveals_paged_current_branch_and_colored_first_commit",
+    ) {
+        return;
+    }
+    crate::tests::with_shortcut_editor(cx, false, Vec::new(), |visual, app, path| {
+        let root = path.parent().unwrap();
+        assert!(git(root, &["init", "-b", "main"]));
+        for (key, value) in [
+            ("core.autocrlf", "false"),
+            ("user.name", "Initial author"),
+            ("user.email", "initial@example.invalid"),
+        ] {
+            assert!(git(root, &["config", key, value]));
+        }
+        std::fs::write(root.join("deleted.txt"), "old\n").unwrap();
+        std::fs::write(root.join("modified.txt"), "old\n").unwrap();
+        assert!(git(root, &["add", "."]));
+        assert!(git(root, &["commit", "-m", "Base"]));
+        for index in 0..140 {
+            assert!(git(root, &["branch", &format!("feature/topic-{index:03}")]));
+        }
+        assert!(git(root, &["switch", "feature/topic-139"]));
+        std::fs::remove_file(root.join("deleted.txt")).unwrap();
+        std::fs::write(root.join("modified.txt"), "changed\n").unwrap();
+        std::fs::write(root.join("added.txt"), "new\n").unwrap();
+        assert!(git(root, &["add", "-A"]));
+        assert!(git(
+            root,
+            &["commit", "-m", "Initial preview", "-m", "完整提交说明 😀"]
+        ));
+        let original_focus = visual.update(|window, cx| window.focused(cx));
+        let package = Package::read(Path::new(
+            &std::env::var_os("NANOBUG_GIT_CANDIDATE").expect("candidate ZIP"),
+        ))
+        .unwrap();
+        let profile = tempfile::tempdir().unwrap();
+        let env = visual.update(|_, cx| environment(root, cx));
+        let mut manager = Manager::open(profile.path().into(), env).unwrap();
+        manager
+            .install(&package, package.manifest.permissions.clone())
+            .unwrap();
+        package_ui_test_support::demand(
+            &mut manager,
+            "git",
+            plugin_runtime::DemandReason::View("history".into()),
+        )
+        .unwrap();
+        flush(&mut manager, &app, visual);
+        let resource = branches(&manager);
+        // Lazy tree replies do not replace the guest scene or start Git processes. Keep advancing
+        // the real native pulse until the paged initial path has completed, not just Git's queue.
+        for _ in 0..12 {
+            if resource.snapshot().initial_selection.is_none() {
+                break;
+            }
+            flush(&mut manager, &app, visual);
+        }
+        let initial = resource.snapshot();
+        assert!(
+            initial.initial_selection.is_none(),
+            "native default path completed"
+        );
+        let prefix = initial
+            .nodes
+            .values()
+            .find(|node| node.label == "feature" && node.branch)
+            .unwrap();
+        assert_eq!(
+            initial.branches[&Some(prefix.id.clone())].children.len(),
+            140
+        );
+        assert!(initial.expanded.contains(&prefix.id));
+        visual.update(|window, cx| {
+            assert_eq!(
+                branch_node(window, Role::TreeItem, Some("topic-139")).selected(),
+                Some(true)
+            );
+            assert_eq!(
+                window.focused(cx),
+                original_focus,
+                "default positioning must not steal focus"
+            );
+            assert!(app.read(cx).comparison_views.is_empty());
+            assert!(
+                app.read(cx)
+                    .plugin_windows
+                    .get("git/commit-details")
+                    .is_none()
+            );
+        });
+        let history = &manager.live["git"].views["history"];
+        assert!(
+            matches!(&history.active_node("history-subject").unwrap().kind, ui::Kind::Text { text } if text == "Initial preview")
+        );
+        assert!(
+            matches!(&history.active_node("history-message-0").unwrap().kind, ui::Kind::Text { text } if text.contains("完整提交说明 😀"))
+        );
+        let ui::Kind::Tree { handle } = &history.active_node("files").unwrap().kind else {
+            panic!("file tree");
+        };
+        let files = manager.live["git"]
+            .tree_resources()
+            .into_iter()
+            .find(|tree| tree.handle() == handle)
+            .unwrap()
+            .snapshot();
+        for (name, tone) in [
+            (
+                "added.txt",
+                plugin_runtime::plugin_protocol::tree::Tone::Positive,
+            ),
+            (
+                "deleted.txt",
+                plugin_runtime::plugin_protocol::tree::Tone::Negative,
+            ),
+            (
+                "modified.txt",
+                plugin_runtime::plugin_protocol::tree::Tone::Informative,
+            ),
+        ] {
+            assert_eq!(
+                files
+                    .nodes
+                    .values()
+                    .find(|node| node.label == name)
+                    .unwrap()
+                    .tone,
+                Some(tone)
+            );
+        }
+        press_row(visual, "topic-138", 2);
+        flush(&mut manager, &app, visual);
+        let retained = resource.snapshot();
+        for panel in ["staging", "history"] {
+            for _ in 0..2 {
+                toggle_panel(visual, panel);
+                flush(&mut manager, &app, visual);
+            }
+        }
+        visual.update(|window, _| {
+            assert_eq!(
+                branch_node(window, Role::TreeItem, Some("topic-138")).selected(),
+                Some(true)
+            )
+        });
+        assert_eq!(resource.snapshot().expanded, retained.expanded);
+        assert_eq!(
+            resource.snapshot().nodes.keys().collect::<Vec<_>>(),
+            retained.nodes.keys().collect::<Vec<_>>()
         );
         manager.disable("git").unwrap();
         flush(&mut manager, &app, visual);

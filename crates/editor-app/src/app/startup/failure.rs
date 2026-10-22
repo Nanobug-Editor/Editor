@@ -8,7 +8,7 @@ pub(crate) fn show(details: String) {
         .run(move |cx| {
             gpui_kit::init(cx);
             typography::init(cx);
-            ui::controls::Button::init_keys(cx);
+            editor_ui::Button::init_keys(cx);
             apply_theme(&theme::active_theme(false), cx);
             let mut options = TitleBar::window_options();
             options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(

@@ -3,14 +3,16 @@
 // sort.rs remains unregistered until its collation rules replace the live tree ordering.
 pub(crate) mod drag;
 mod files;
+/// Destructive explorer operations protect eligible local history before filesystem removal.
+mod history;
 mod interaction;
 pub(crate) mod menu;
 pub(crate) mod transfer;
 pub(crate) mod tree;
 
 use crate::app::messages::MessageLevel;
-use crate::ui::controls::Input;
 use crate::*;
+use editor_ui::Input;
 use gpui_base::input::InputState;
 
 #[derive(Clone, Copy)]
@@ -33,6 +35,16 @@ pub(crate) struct ExplorerDelete {
     directory: bool,
     focus: FocusHandle,
     error: Option<String>,
+    /// One serial protection/deletion job belongs to this exact confirmation instance.
+    busy: bool,
+    /// The removal phase cannot be cancelled after its final native authorization.
+    committing: bool,
+    /// Only a failed required backup exposes the explicit unprotected-delete action.
+    backup_failed: bool,
+    /// Closing/cancelling the preview before authorization prevents all destructive side effects.
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+    /// Shutdown waits for an already authorized removal, including explicit unprotected deletion.
+    completion: Option<futures::future::Shared<gpui_kit::Task<Result<(), String>>>>,
 }
 
 impl EditorApp {
@@ -92,6 +104,15 @@ impl EditorApp {
         };
         match result {
             Ok(()) => {
+                if matches!(kind, ExplorerEditKind::Rename) {
+                    self.record_history_move(path.clone(), path.with_file_name(name.trim()), cx);
+                } else if matches!(kind, ExplorerEditKind::File) {
+                    self.observe_history_path(
+                        path.join(name.trim()),
+                        editor_history::Reason::Created,
+                        cx,
+                    );
+                }
                 self.explorer_edit = None;
                 self.refresh_files(cx);
                 // The updated tree shows routine success; only refusals and failures need a receipt.
@@ -157,40 +178,41 @@ impl EditorApp {
             path,
             focus,
             error: None,
+            busy: false,
+            committing: false,
+            backup_failed: false,
+            cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            completion: None,
         });
         cx.notify();
     }
 
     pub(crate) fn finish_explorer_delete(&mut self, cx: &mut Context<Self>) {
-        let Some(delete) = &self.explorer_delete else {
-            return;
-        };
-        let path = delete.path.clone();
-        // A tab may have opened while the confirmation was visible; preserve its editor buffer.
-        if self.tabs.iter().any(|tab| tab.path().starts_with(&path)) {
-            self.report_host_message(
-                MessageLevel::Warning,
-                t!("explorer.close_before_delete").to_string(),
-                cx,
-            );
-            self.explorer_delete = None;
-            cx.notify();
+        self.begin_history_delete(false, cx);
+    }
+
+    /// Native document opening respects a deletion that has already passed its final authorization.
+    pub(crate) fn history_delete_blocks(&self, path: &Path) -> bool {
+        self.explorer_delete
+            .as_ref()
+            .is_some_and(|delete| delete.busy && path.starts_with(&delete.path))
+    }
+
+    /// Cancel only preparation. Actual recursive removal already authorized on the worker must settle.
+    fn cancel_explorer_delete(&mut self, cx: &mut Context<Self>) {
+        if self
+            .explorer_delete
+            .as_ref()
+            .is_some_and(|delete| delete.committing)
+        {
             return;
         }
-        match files::delete(self.workspace.root(), &path) {
-            Ok(()) => {
-                self.explorer_delete = None;
-                self.refresh_files(cx);
-            }
-            Err(error) => {
-                let message = t!("explorer.delete_failed", error = error).to_string();
-                self.report_host_message(MessageLevel::Error, message.clone(), cx);
-                if let Some(delete) = &mut self.explorer_delete {
-                    delete.error = Some(message);
-                }
-                cx.notify();
-            }
+        if let Some(delete) = self.explorer_delete.take() {
+            delete
+                .cancel
+                .store(true, std::sync::atomic::Ordering::Release);
         }
+        cx.notify();
     }
 
     pub(crate) fn render_explorer_delete(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -222,8 +244,7 @@ impl EditorApp {
                     }
                     "escape" => {
                         cx.stop_propagation();
-                        this.explorer_delete = None;
-                        cx.notify();
+                        this.cancel_explorer_delete(cx);
                     }
                     _ => {}
                 }
@@ -251,6 +272,25 @@ impl EditorApp {
                     .when_some(delete.error.clone(), |this, error| {
                         this.child(div().text_color(cx.theme().danger_foreground).child(error))
                     })
+                    .when(delete.backup_failed, |this| {
+                        this.child(
+                            Button::new("explorer-delete-without-history")
+                                .debug_selector(|| "explorer-delete-without-history".into())
+                                .label(t!("history.delete_without_backup").to_string())
+                                .danger()
+                                .disabled(delete.busy)
+                                .on_click(
+                                    cx.listener(|app, _, _, cx| app.begin_history_delete(true, cx)),
+                                ),
+                        )
+                    })
+                    .when(delete.busy, |this| {
+                        this.child(div().text_sm().child(if delete.committing {
+                            t!("history.deleting").to_string()
+                        } else {
+                            t!("history.protecting_delete").to_string()
+                        }))
+                    })
                     .child(
                         h_flex()
                             .gap_2()
@@ -262,6 +302,7 @@ impl EditorApp {
                                         Button::new("explorer-delete-confirm-button")
                                             .label(t!("explorer.delete").to_string())
                                             .danger()
+                                            .disabled(delete.busy)
                                             .on_click(cx.listener(|this, _, _, cx| {
                                                 this.finish_explorer_delete(cx)
                                             })),
@@ -274,9 +315,9 @@ impl EditorApp {
                                     .child(
                                         Button::new("explorer-delete-cancel-button")
                                             .label(t!("explorer.cancel").to_string())
+                                            .disabled(delete.committing)
                                             .on_click(cx.listener(|this, _, _, cx| {
-                                                this.explorer_delete = None;
-                                                cx.notify();
+                                                this.cancel_explorer_delete(cx);
                                             })),
                                     ),
                             ),

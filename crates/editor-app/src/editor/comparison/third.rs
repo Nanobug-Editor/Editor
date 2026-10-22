@@ -81,9 +81,9 @@ pub(super) struct ThirdComparison {
     /// Difference navigation and decorations for the third input against the middle result.
     pub(super) hunks: Vec<diff::Hunk>,
     /// Owned line decorations on the third input.
-    marks: RangeDecorationCollection,
+    marks: RowBackgroundCollection,
     /// Owned line decorations on the middle result, separate from the left-input comparison.
-    result_marks: RangeDecorationCollection,
+    result_marks: RowBackgroundCollection,
     /// Character decorations belonging only to this input/result pair.
     inline_marks: [RangeDecorationCollection; 2],
 }
@@ -96,14 +96,16 @@ impl ThirdSource {
         let result_readonly = result.read(cx).presentation().is_readonly();
         let marks = self.editor.update(cx, |editor, cx| {
             editor.set_readonly(true, cx);
-            editor.create_range_decorations_collection(
+            RowBackgroundCollection::new(
+                &cx.entity(),
                 comparison_marks(&self.hunks, colors, true),
                 cx,
             )
         });
         let result_marks = result.update(cx, |editor, cx| {
             editor.set_readonly(true, cx);
-            editor.create_range_decorations_collection(
+            RowBackgroundCollection::new(
+                &cx.entity(),
                 comparison_marks(&self.hunks, colors, false),
                 cx,
             )
@@ -282,9 +284,7 @@ impl EditorApp {
     ) -> Option<gpui_kit::AnyElement> {
         let comparison = self.document_comparison.as_ref()?;
         let third = comparison.third.as_ref()?;
-        comparison
-            .alignment
-            .set_enabled(comparison.synchronized.get(), cx);
+        comparison.alignment.set_enabled(true, cx);
         comparison.alignment.refresh_native_overlays(cx);
         let sources = [
             (
@@ -312,13 +312,7 @@ impl EditorApp {
             .map(|(index, (source, editor, title, selector))| {
                 let label = format!("{title} · {}", t!("editor.readonly_label"));
                 let input = comparison.alignment.pane(index).unwrap_or_else(|| {
-                    crate::ui::controls::readonly_editor(
-                        selector,
-                        label.clone(),
-                        editor,
-                        window,
-                        cx,
-                    )
+                    editor_ui::readonly_editor(selector, label.clone(), editor, window, cx)
                 });
                 let target = self.plugin_document_menu_target(source);
                 let editor = editor.clone();
@@ -356,7 +350,11 @@ impl EditorApp {
                     .w_0()
                     .min_h_0()
                     .overflow_hidden()
-                    .child(div().px_2().child(title.clone()))
+                    .child(editor_ui::comparison_source_header(
+                        index,
+                        title.clone(),
+                        cx,
+                    ))
                     .child(div().flex_1().min_h_0().child(input))
                     .into_any_element()
             })

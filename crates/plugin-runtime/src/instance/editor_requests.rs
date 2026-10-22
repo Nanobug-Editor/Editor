@@ -3,6 +3,7 @@ use super::*;
 use crate::editor_requests::{EditorRequest, PendingRequest};
 use api::{EditorOperation, ErrorCode, Failure, Notification, Value};
 use resource_roots::RootKind;
+use std::collections::BTreeMap;
 
 #[cfg(test)]
 mod comparison_tests;
@@ -23,6 +24,16 @@ impl State {
         &mut self,
         operation: EditorOperation,
         timeout_ms: u32,
+    ) -> Result<Value, Failure> {
+        self.editor_request_with_context(operation, timeout_ms, None)
+    }
+
+    /// A selected context follows normal schema/permission admission before it changes source routing.
+    pub(super) fn editor_request_with_context(
+        &mut self,
+        operation: EditorOperation,
+        timeout_ms: u32,
+        selected: Option<crate::language_contexts::RegisteredContext>,
     ) -> Result<Value, Failure> {
         if !self.active || self.roots.retired || self.roots.application {
             return Err(Failure::new(
@@ -54,8 +65,21 @@ impl State {
             }
         }
         validate_comparison_request(&operation, &self.api)?;
+        validate_comparison_navigation(&operation, &self.api, &self.plugin_services.commands)?;
+        let mut comparison_icons = BTreeMap::new();
+        if let EditorOperation::OpenDocumentComparison {
+            folding: Some(folding),
+            ..
+        } = &operation
+        {
+            self.prepare_icon(&folding.collapse, &mut comparison_icons)?;
+            self.prepare_icon(&folding.expand, &mut comparison_icons)?;
+        }
         if matches!(&operation, EditorOperation::OpenDocumentComparison { .. }) {
-            if self.plugin_services.context.is_some() {
+            if !direct_editor_owner(
+                self.plugin_services.context.as_ref(),
+                &self.plugin_services.principal.instance,
+            ) {
                 return Err(Failure::new(
                     ErrorCode::PermissionDenied,
                     "Comparison views require direct ownership",
@@ -94,6 +118,22 @@ impl State {
             ));
         }
         let (capability, permission) = match &operation {
+            EditorOperation::RefreshLanguageContext { provider, .. } => {
+                if self
+                    .api
+                    .capabilities
+                    .get("language.lsp")
+                    .is_none_or(|version| *version < semver::Version::new(1, 6, 0))
+                    || selected.is_none()
+                    || !self.language_providers.contains_key(provider)
+                {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Context refresh requires an owned language.lsp 1.6 provider",
+                    ));
+                }
+                ("language.lsp", "editor.read")
+            }
             EditorOperation::LanguageRequest { request } => {
                 let _ = request; // Detailed schema/import admission follows shared permission checks.
                 ("language.control", "editor.read")
@@ -321,11 +361,34 @@ impl State {
                 "Editor request queue is full",
             ));
         }
-        let language_control = if let EditorOperation::LanguageRequest { request } = &operation {
+        let mut language_control = if let EditorOperation::LanguageRequest { request } = &operation
+        {
             Some(self.prepare_language_control(request)?)
         } else {
             None
         };
+        if let (Some(selected), EditorOperation::LanguageRequest { request }) =
+            (&selected, &operation)
+        {
+            let metadata = language_control.as_mut().unwrap();
+            if selected.reference.descriptor.provider != request.provider {
+                return Err(Failure::new(
+                    ErrorCode::PermissionDenied,
+                    "Context belongs to another provider",
+                ));
+            }
+            let principal = &self.plugin_services.principal;
+            metadata.selected_context = Some(self.host_resources.contexts.select(
+                &selected.reference.token,
+                &principal.instance,
+                &principal.scope,
+                &request.document.path,
+            )?);
+            metadata.selection_guard = Some(self.host_resources.contexts.selection_guard(
+                metadata.selected_context.as_ref().unwrap(),
+                &request.document.path,
+            )?);
+        }
         let workspace_request = if let EditorOperation::Workspace { operation } = &operation {
             Some(self.prepare_workspace_request(operation)?)
         } else {
@@ -350,7 +413,21 @@ impl State {
             timeout_ms,
             self.plugin_services.alive.clone(),
             self.plugin_services.context.as_ref(),
-        );
+        )
+        .with_comparison_icons(comparison_icons);
+        call.observe(self.host_resources.observations.begin(
+            self.observation_identity(),
+            crate::observability::Stage::Request,
+            self.observed_parent,
+        ));
+        if let Some(selected) = selected
+            && matches!(
+                call.operation(),
+                EditorOperation::RefreshLanguageContext { .. }
+            )
+        {
+            call = call.with_language_refresh(self.host_resources.contexts.clone(), selected);
+        }
         if let Some(input) = image_input {
             self.mark_image_input_pending(&input.input.handle, handle.clone());
             call = call.with_image_input(input);
@@ -407,14 +484,14 @@ impl State {
         }
     }
 
-    /// Virtual access is direct, owned and bounded; service providers cannot borrow their caller's document.
+    /// Ambient access and exact native commands own their sources; delegated providers cannot borrow them.
     fn prepare_virtual_document(
         &mut self,
         operation: &EditorOperation,
     ) -> Result<Option<std::sync::Arc<crate::VirtualDocumentResource>>, Failure> {
         let check = |document: &api::DocumentVersion| -> Result<Option<std::sync::Arc<crate::VirtualDocumentResource>>, Failure> {
             if !document.path.starts_with("nanobug-virtual://") { return Ok(None); }
-            if self.plugin_services.context.is_some() {
+            if !direct_editor_owner(self.plugin_services.context.as_ref(), &self.plugin_services.principal.instance) {
                 return Err(Failure::new(ErrorCode::PermissionDenied, "Virtual documents are instance-owned"));
             }
             let resource = self.virtual_documents.values().find(|resource| resource.document().is_some_and(|bound| bound.id == document.id))
@@ -435,7 +512,10 @@ impl State {
                 language,
                 text,
             } => {
-                if self.plugin_services.context.is_some() {
+                if !direct_editor_owner(
+                    self.plugin_services.context.as_ref(),
+                    &self.plugin_services.principal.instance,
+                ) {
                     return Err(Failure::new(
                         ErrorCode::PermissionDenied,
                         "Virtual providers require direct ownership",
@@ -479,7 +559,10 @@ impl State {
             EditorOperation::OpenDocument {
                 resource: api::ResourceIdentity::Virtual { handle },
             } => {
-                if self.plugin_services.context.is_some() {
+                if !direct_editor_owner(
+                    self.plugin_services.context.as_ref(),
+                    &self.plugin_services.principal.instance,
+                ) {
                     return Err(Failure::new(
                         ErrorCode::PermissionDenied,
                         "Virtual providers require direct ownership",
@@ -537,8 +620,49 @@ impl State {
     }
 }
 
+/// Check the original runtime-issued owner before creating or accessing private editor resources.
+/// This grants neither a document handle nor filesystem authority; source checks still follow.
+fn direct_editor_owner(context: Option<&crate::plugin_services::Context>, instance: &str) -> bool {
+    // Host-issued typed callbacks are direct ownership too. Reuse the existing sealed-origin,
+    // single-hop and lifetime check; a nested or foreign provider never gains this exception.
+    context.is_none_or(|context| context.direct_host_command(instance))
+}
+
+/// Adjacent actions can invoke only this instance's declared, schema-checked typed commands.
+/// Admission creates no new permission or cross-plugin invocation authority.
+fn validate_comparison_navigation(
+    operation: &EditorOperation,
+    negotiated: &api::Negotiated,
+    commands: &BTreeMap<String, plugin_protocol::service::Method>,
+) -> Result<(), Failure> {
+    let EditorOperation::OpenDocumentComparison {
+        navigation: Some(navigation),
+        ..
+    } = operation
+    else {
+        return Ok(());
+    };
+    if !negotiated.capabilities.contains_key("plugin.commands") {
+        return Err(Failure::new(
+            ErrorCode::CapabilityUnavailable,
+            "Comparison navigation requires plugin.commands",
+        ));
+    }
+    for action in navigation.previous.iter().chain(&navigation.next) {
+        action.validate()?;
+        let signature = commands.get(&action.command).ok_or_else(|| {
+            Failure::new(
+                ErrorCode::InvalidRequest,
+                "Comparison navigation must name a declared typed command",
+            )
+        })?;
+        signature.parameters.accepts(&action.arguments)?;
+    }
+    Ok(())
+}
+
 /// Validate additive comparison shape before allocating a native request or borrowing sources.
-/// Two-pane requests retain their 1.1 admission; an explicit third source requires 1.2.
+/// Two-pane requests retain 1.1 admission; a third source needs 1.2 and adjacent actions need 1.3.
 fn validate_comparison_request(
     operation: &EditorOperation,
     negotiated: &api::Negotiated,
@@ -549,12 +673,26 @@ fn validate_comparison_request(
         left,
         right,
         third,
+        navigation,
+        folding,
         ..
     } = operation
     else {
         return Ok(());
     };
-    let minimum = semver::Version::new(1, if third.is_some() { 2 } else { 1 }, 0);
+    let minimum = semver::Version::new(
+        1,
+        if folding.is_some() {
+            4
+        } else if navigation.is_some() {
+            3
+        } else if third.is_some() {
+            2
+        } else {
+            1
+        },
+        0,
+    );
     if negotiated
         .capabilities
         .get("editor.diff")
@@ -576,6 +714,9 @@ fn validate_comparison_request(
             ErrorCode::InvalidRequest,
             "Invalid comparison key or title",
         ));
+    }
+    if let Some(folding) = folding {
+        folding.validate()?;
     }
     if left.id == right.id
         || third
@@ -700,6 +841,11 @@ impl Instance {
             if !self.store.data().editor_requests.contains_key(&slot) {
                 continue;
             }
+            // An earlier callback in this batch may reselect this source after collection.
+            // Recheck at the actual guest-delivery boundary, including already completed results.
+            update = self.store.data().editor_requests[&slot]
+                .call
+                .check_language_update(update);
             if update.is_terminal() {
                 if let Some(pending) = self.store.data_mut().editor_requests.remove(&slot) {
                     if matches!(

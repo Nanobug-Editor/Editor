@@ -1,0 +1,1215 @@
+{
+  "cache": "OS cache not flushed; first decode after reopen and warm rereads reported separately",
+  "corpus_sha256": "40faca99afd567342b145f1799be67112a6ecac12defdaa35fc5cc1b466efdbd",
+  "large": [
+    {
+      "after": {
+        "compressed_object_bytes": 54695,
+        "database_bytes": 143360,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 65536,
+        "versions": 10,
+        "wal_bytes": 0
+      },
+      "before": {
+        "compressed_object_bytes": 54695,
+        "database_bytes": 4096,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 65536,
+        "versions": 10,
+        "wal_bytes": 613912
+      },
+      "capture": {
+        "max_ms": 3.8263,
+        "p50_ms": 2.1691000000000003,
+        "p95_ms": 3.8263,
+        "samples": 12
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 3.8263,
+          "p50_ms": 2.3126,
+          "p95_ms": 3.8263,
+          "samples": 8
+        },
+        "shared_object_new_version": {
+          "max_ms": 2.1691000000000003,
+          "p50_ms": 2.1691000000000003,
+          "p95_ms": 2.1691000000000003,
+          "samples": 2
+        },
+        "unchanged": {
+          "max_ms": 0.1032,
+          "p50_ms": 0.1032,
+          "p95_ms": 0.1032,
+          "samples": 2
+        }
+      },
+      "operations": 12,
+      "pattern_samples": [
+        {
+          "capture_ms": 2.2632,
+          "multiline": false,
+          "pattern": "original",
+          "read_ms": 0.0572
+        },
+        {
+          "capture_ms": 2.0757000000000003,
+          "multiline": false,
+          "pattern": "sparse",
+          "read_ms": 0.039
+        },
+        {
+          "capture_ms": 2.0406,
+          "multiline": false,
+          "pattern": "front",
+          "read_ms": 0.0415
+        },
+        {
+          "capture_ms": 2.1446,
+          "multiline": false,
+          "pattern": "rewrite",
+          "read_ms": 0.0435
+        },
+        {
+          "capture_ms": 2.1691000000000003,
+          "multiline": false,
+          "pattern": "return",
+          "read_ms": 0.037
+        },
+        {
+          "capture_ms": 0.095,
+          "multiline": false,
+          "pattern": "duplicate",
+          "read_ms": 0.018000000000000002
+        },
+        {
+          "capture_ms": 2.3126,
+          "multiline": true,
+          "pattern": "original",
+          "read_ms": 0.037
+        },
+        {
+          "capture_ms": 3.2508,
+          "multiline": true,
+          "pattern": "sparse",
+          "read_ms": 0.0354
+        },
+        {
+          "capture_ms": 3.3009,
+          "multiline": true,
+          "pattern": "front",
+          "read_ms": 0.0348
+        },
+        {
+          "capture_ms": 3.8263,
+          "multiline": true,
+          "pattern": "rewrite",
+          "read_ms": 0.0352
+        },
+        {
+          "capture_ms": 1.9604000000000001,
+          "multiline": true,
+          "pattern": "return",
+          "read_ms": 0.0371
+        },
+        {
+          "capture_ms": 0.1032,
+          "multiline": true,
+          "pattern": "duplicate",
+          "read_ms": 0.018199999999999997
+        }
+      ],
+      "patterns": [
+        "single line",
+        "multiline",
+        "sparse",
+        "front",
+        "rewrite",
+        "return",
+        "duplicate"
+      ],
+      "read": {
+        "max_ms": 0.0572,
+        "p50_ms": 0.037,
+        "p95_ms": 0.0572,
+        "samples": 12
+      },
+      "sha256": {
+        "max_ms": 0.0036,
+        "p50_ms": 0.0031,
+        "p95_ms": 0.0036,
+        "samples": 12
+      },
+      "size": 8192,
+      "zstd1": {
+        "max_ms": 0.064,
+        "p50_ms": 0.047,
+        "p95_ms": 0.064,
+        "samples": 12
+      }
+    },
+    {
+      "after": {
+        "compressed_object_bytes": 436131,
+        "database_bytes": 520192,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 524288,
+        "versions": 10,
+        "wal_bytes": 0
+      },
+      "before": {
+        "compressed_object_bytes": 436131,
+        "database_bytes": 4096,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 524288,
+        "versions": 10,
+        "wal_bytes": 992952
+      },
+      "capture": {
+        "max_ms": 3.2514000000000003,
+        "p50_ms": 2.1779,
+        "p95_ms": 3.2514000000000003,
+        "samples": 12
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 3.2514000000000003,
+          "p50_ms": 2.1779,
+          "p95_ms": 3.2514000000000003,
+          "samples": 8
+        },
+        "shared_object_new_version": {
+          "max_ms": 2.3891,
+          "p50_ms": 2.3891,
+          "p95_ms": 2.3891,
+          "samples": 2
+        },
+        "unchanged": {
+          "max_ms": 0.1955,
+          "p50_ms": 0.1955,
+          "p95_ms": 0.1955,
+          "samples": 2
+        }
+      },
+      "operations": 12,
+      "pattern_samples": [
+        {
+          "capture_ms": 3.2514000000000003,
+          "multiline": false,
+          "pattern": "original",
+          "read_ms": 0.14889999999999998
+        },
+        {
+          "capture_ms": 2.112,
+          "multiline": false,
+          "pattern": "sparse",
+          "read_ms": 0.0997
+        },
+        {
+          "capture_ms": 2.2891,
+          "multiline": false,
+          "pattern": "front",
+          "read_ms": 0.11560000000000001
+        },
+        {
+          "capture_ms": 2.1167,
+          "multiline": false,
+          "pattern": "rewrite",
+          "read_ms": 0.0962
+        },
+        {
+          "capture_ms": 2.3891,
+          "multiline": false,
+          "pattern": "return",
+          "read_ms": 0.0955
+        },
+        {
+          "capture_ms": 0.1955,
+          "multiline": false,
+          "pattern": "duplicate",
+          "read_ms": 0.07440000000000001
+        },
+        {
+          "capture_ms": 2.2215,
+          "multiline": true,
+          "pattern": "original",
+          "read_ms": 0.0962
+        },
+        {
+          "capture_ms": 2.1779,
+          "multiline": true,
+          "pattern": "sparse",
+          "read_ms": 0.09280000000000001
+        },
+        {
+          "capture_ms": 2.1071000000000004,
+          "multiline": true,
+          "pattern": "front",
+          "read_ms": 0.104
+        },
+        {
+          "capture_ms": 2.1478,
+          "multiline": true,
+          "pattern": "rewrite",
+          "read_ms": 0.0909
+        },
+        {
+          "capture_ms": 2.1822999999999997,
+          "multiline": true,
+          "pattern": "return",
+          "read_ms": 0.0927
+        },
+        {
+          "capture_ms": 0.1803,
+          "multiline": true,
+          "pattern": "duplicate",
+          "read_ms": 0.1077
+        }
+      ],
+      "patterns": [
+        "single line",
+        "multiline",
+        "sparse",
+        "front",
+        "rewrite",
+        "return",
+        "duplicate"
+      ],
+      "read": {
+        "max_ms": 0.14889999999999998,
+        "p50_ms": 0.0962,
+        "p95_ms": 0.14889999999999998,
+        "samples": 12
+      },
+      "sha256": {
+        "max_ms": 0.025,
+        "p50_ms": 0.0239,
+        "p95_ms": 0.025,
+        "samples": 12
+      },
+      "size": 65536,
+      "zstd1": {
+        "max_ms": 0.14100000000000001,
+        "p50_ms": 0.1177,
+        "p95_ms": 0.14100000000000001,
+        "samples": 12
+      }
+    },
+    {
+      "after": {
+        "compressed_object_bytes": 3488223,
+        "database_bytes": 3575808,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 4194304,
+        "versions": 10,
+        "wal_bytes": 0
+      },
+      "before": {
+        "compressed_object_bytes": 3488223,
+        "database_bytes": 4096,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 4194304,
+        "versions": 10,
+        "wal_bytes": 4066472
+      },
+      "capture": {
+        "max_ms": 5.1539,
+        "p50_ms": 4.5246,
+        "p95_ms": 5.1539,
+        "samples": 12
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 5.1539,
+          "p50_ms": 4.668699999999999,
+          "p95_ms": 5.1539,
+          "samples": 8
+        },
+        "shared_object_new_version": {
+          "max_ms": 3.6071,
+          "p50_ms": 3.6071,
+          "p95_ms": 3.6071,
+          "samples": 2
+        },
+        "unchanged": {
+          "max_ms": 1.075,
+          "p50_ms": 1.075,
+          "p95_ms": 1.075,
+          "samples": 2
+        }
+      },
+      "operations": 12,
+      "pattern_samples": [
+        {
+          "capture_ms": 4.725,
+          "multiline": false,
+          "pattern": "original",
+          "read_ms": 0.6462
+        },
+        {
+          "capture_ms": 5.1539,
+          "multiline": false,
+          "pattern": "sparse",
+          "read_ms": 0.7839
+        },
+        {
+          "capture_ms": 4.668699999999999,
+          "multiline": false,
+          "pattern": "front",
+          "read_ms": 1.0361
+        },
+        {
+          "capture_ms": 4.4959,
+          "multiline": false,
+          "pattern": "rewrite",
+          "read_ms": 0.6468999999999999
+        },
+        {
+          "capture_ms": 3.6066000000000003,
+          "multiline": false,
+          "pattern": "return",
+          "read_ms": 0.8492999999999999
+        },
+        {
+          "capture_ms": 1.0338999999999998,
+          "multiline": false,
+          "pattern": "duplicate",
+          "read_ms": 0.5823999999999999
+        },
+        {
+          "capture_ms": 4.5246,
+          "multiline": true,
+          "pattern": "original",
+          "read_ms": 0.6365999999999999
+        },
+        {
+          "capture_ms": 4.8062000000000005,
+          "multiline": true,
+          "pattern": "sparse",
+          "read_ms": 1.1466
+        },
+        {
+          "capture_ms": 4.585500000000001,
+          "multiline": true,
+          "pattern": "front",
+          "read_ms": 0.616
+        },
+        {
+          "capture_ms": 4.424799999999999,
+          "multiline": true,
+          "pattern": "rewrite",
+          "read_ms": 0.6111
+        },
+        {
+          "capture_ms": 3.6071,
+          "multiline": true,
+          "pattern": "return",
+          "read_ms": 0.9053000000000001
+        },
+        {
+          "capture_ms": 1.075,
+          "multiline": true,
+          "pattern": "duplicate",
+          "read_ms": 0.562
+        }
+      ],
+      "patterns": [
+        "single line",
+        "multiline",
+        "sparse",
+        "front",
+        "rewrite",
+        "return",
+        "duplicate"
+      ],
+      "read": {
+        "max_ms": 1.1466,
+        "p50_ms": 0.6468999999999999,
+        "p95_ms": 1.1466,
+        "samples": 12
+      },
+      "sha256": {
+        "max_ms": 0.2017,
+        "p50_ms": 0.1958,
+        "p95_ms": 0.2017,
+        "samples": 12
+      },
+      "size": 524288,
+      "zstd1": {
+        "max_ms": 0.5663,
+        "p50_ms": 0.48769999999999997,
+        "p95_ms": 0.5663,
+        "samples": 12
+      }
+    },
+    {
+      "after": {
+        "compressed_object_bytes": 6975873,
+        "database_bytes": 7065600,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 8388608,
+        "versions": 10,
+        "wal_bytes": 0
+      },
+      "before": {
+        "compressed_object_bytes": 6975873,
+        "database_bytes": 4444160,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 8388608,
+        "versions": 10,
+        "wal_bytes": 4754512
+      },
+      "capture": {
+        "max_ms": 23.0145,
+        "p50_ms": 6.5115,
+        "p95_ms": 23.0145,
+        "samples": 12
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 23.0145,
+          "p50_ms": 6.6304,
+          "p95_ms": 23.0145,
+          "samples": 8
+        },
+        "shared_object_new_version": {
+          "max_ms": 5.8834,
+          "p50_ms": 5.8834,
+          "p95_ms": 5.8834,
+          "samples": 2
+        },
+        "unchanged": {
+          "max_ms": 2.7548,
+          "p50_ms": 2.7548,
+          "p95_ms": 2.7548,
+          "samples": 2
+        }
+      },
+      "operations": 12,
+      "pattern_samples": [
+        {
+          "capture_ms": 6.7828,
+          "multiline": false,
+          "pattern": "original",
+          "read_ms": 1.3760000000000001
+        },
+        {
+          "capture_ms": 6.6304,
+          "multiline": false,
+          "pattern": "sparse",
+          "read_ms": 1.395
+        },
+        {
+          "capture_ms": 6.585,
+          "multiline": false,
+          "pattern": "front",
+          "read_ms": 1.6811
+        },
+        {
+          "capture_ms": 6.5115,
+          "multiline": false,
+          "pattern": "rewrite",
+          "read_ms": 1.4607
+        },
+        {
+          "capture_ms": 5.066400000000001,
+          "multiline": false,
+          "pattern": "return",
+          "read_ms": 1.2681
+        },
+        {
+          "capture_ms": 2.0096,
+          "multiline": false,
+          "pattern": "duplicate",
+          "read_ms": 1.2407
+        },
+        {
+          "capture_ms": 23.0145,
+          "multiline": true,
+          "pattern": "original",
+          "read_ms": 2.332
+        },
+        {
+          "capture_ms": 8.7116,
+          "multiline": true,
+          "pattern": "sparse",
+          "read_ms": 1.3774
+        },
+        {
+          "capture_ms": 6.3071,
+          "multiline": true,
+          "pattern": "front",
+          "read_ms": 1.3085
+        },
+        {
+          "capture_ms": 5.8392,
+          "multiline": true,
+          "pattern": "rewrite",
+          "read_ms": 1.2978
+        },
+        {
+          "capture_ms": 5.8834,
+          "multiline": true,
+          "pattern": "return",
+          "read_ms": 2.0812999999999997
+        },
+        {
+          "capture_ms": 2.7548,
+          "multiline": true,
+          "pattern": "duplicate",
+          "read_ms": 2.0573
+        }
+      ],
+      "patterns": [
+        "single line",
+        "multiline",
+        "sparse",
+        "front",
+        "rewrite",
+        "return",
+        "duplicate"
+      ],
+      "read": {
+        "max_ms": 2.332,
+        "p50_ms": 1.395,
+        "p95_ms": 2.332,
+        "samples": 12
+      },
+      "sha256": {
+        "max_ms": 0.4016,
+        "p50_ms": 0.39740000000000003,
+        "p95_ms": 0.4016,
+        "samples": 12
+      },
+      "size": 1048576,
+      "zstd1": {
+        "max_ms": 1.0897999999999999,
+        "p50_ms": 0.9319000000000001,
+        "p95_ms": 1.0897999999999999,
+        "samples": 12
+      }
+    },
+    {
+      "after": {
+        "compressed_object_bytes": 55806917,
+        "database_bytes": 55947264,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 67108864,
+        "versions": 10,
+        "wal_bytes": 0
+      },
+      "before": {
+        "compressed_object_bytes": 55806917,
+        "database_bytes": 55947264,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 67108864,
+        "versions": 10,
+        "wal_bytes": 7139992
+      },
+      "capture": {
+        "max_ms": 61.0374,
+        "p50_ms": 46.8553,
+        "p95_ms": 61.0374,
+        "samples": 12
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 61.0374,
+          "p50_ms": 48.8486,
+          "p95_ms": 61.0374,
+          "samples": 8
+        },
+        "shared_object_new_version": {
+          "max_ms": 27.6613,
+          "p50_ms": 27.6613,
+          "p95_ms": 27.6613,
+          "samples": 2
+        },
+        "unchanged": {
+          "max_ms": 23.6864,
+          "p50_ms": 23.6864,
+          "p95_ms": 23.6864,
+          "samples": 2
+        }
+      },
+      "operations": 12,
+      "pattern_samples": [
+        {
+          "capture_ms": 61.0374,
+          "multiline": false,
+          "pattern": "original",
+          "read_ms": 18.6894
+        },
+        {
+          "capture_ms": 46.3333,
+          "multiline": false,
+          "pattern": "sparse",
+          "read_ms": 18.6652
+        },
+        {
+          "capture_ms": 44.9273,
+          "multiline": false,
+          "pattern": "front",
+          "read_ms": 19.4293
+        },
+        {
+          "capture_ms": 46.8553,
+          "multiline": false,
+          "pattern": "rewrite",
+          "read_ms": 19.8384
+        },
+        {
+          "capture_ms": 27.6613,
+          "multiline": false,
+          "pattern": "return",
+          "read_ms": 19.8815
+        },
+        {
+          "capture_ms": 23.6864,
+          "multiline": false,
+          "pattern": "duplicate",
+          "read_ms": 19.3872
+        },
+        {
+          "capture_ms": 55.8219,
+          "multiline": true,
+          "pattern": "original",
+          "read_ms": 19.4507
+        },
+        {
+          "capture_ms": 48.8486,
+          "multiline": true,
+          "pattern": "sparse",
+          "read_ms": 19.396
+        },
+        {
+          "capture_ms": 50.1909,
+          "multiline": true,
+          "pattern": "front",
+          "read_ms": 17.9663
+        },
+        {
+          "capture_ms": 47.113,
+          "multiline": true,
+          "pattern": "rewrite",
+          "read_ms": 18.841299999999997
+        },
+        {
+          "capture_ms": 26.776600000000002,
+          "multiline": true,
+          "pattern": "return",
+          "read_ms": 18.4589
+        },
+        {
+          "capture_ms": 22.7061,
+          "multiline": true,
+          "pattern": "duplicate",
+          "read_ms": 18.0702
+        }
+      ],
+      "patterns": [
+        "single line",
+        "multiline",
+        "sparse",
+        "front",
+        "rewrite",
+        "return",
+        "duplicate"
+      ],
+      "read": {
+        "max_ms": 19.8815,
+        "p50_ms": 19.3872,
+        "p95_ms": 19.8815,
+        "samples": 12
+      },
+      "sha256": {
+        "max_ms": 3.2468000000000004,
+        "p50_ms": 3.1906,
+        "p95_ms": 3.2468000000000004,
+        "samples": 12
+      },
+      "size": 8388608,
+      "zstd1": {
+        "max_ms": 7.5333,
+        "p50_ms": 6.8819,
+        "p95_ms": 7.5333,
+        "samples": 12
+      }
+    },
+    {
+      "after": {
+        "compressed_object_bytes": 223227444,
+        "database_bytes": 223531008,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 268435456,
+        "versions": 10,
+        "wal_bytes": 0
+      },
+      "before": {
+        "compressed_object_bytes": 223227444,
+        "database_bytes": 223531008,
+        "legacy_bytes": 0,
+        "objects": 8,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 268435456,
+        "versions": 10,
+        "wal_bytes": 28213792
+      },
+      "capture": {
+        "max_ms": 207.1109,
+        "p50_ms": 155.7115,
+        "p95_ms": 207.1109,
+        "samples": 12
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 207.1109,
+          "p50_ms": 160.031,
+          "p95_ms": 207.1109,
+          "samples": 8
+        },
+        "shared_object_new_version": {
+          "max_ms": 95.1406,
+          "p50_ms": 95.1406,
+          "p95_ms": 95.1406,
+          "samples": 2
+        },
+        "unchanged": {
+          "max_ms": 90.88889999999999,
+          "p50_ms": 90.88889999999999,
+          "p95_ms": 90.88889999999999,
+          "samples": 2
+        }
+      },
+      "operations": 12,
+      "pattern_samples": [
+        {
+          "capture_ms": 207.1109,
+          "multiline": false,
+          "pattern": "original",
+          "read_ms": 74.9856
+        },
+        {
+          "capture_ms": 155.25459999999998,
+          "multiline": false,
+          "pattern": "sparse",
+          "read_ms": 72.5787
+        },
+        {
+          "capture_ms": 160.7915,
+          "multiline": false,
+          "pattern": "front",
+          "read_ms": 76.8509
+        },
+        {
+          "capture_ms": 152.4345,
+          "multiline": false,
+          "pattern": "rewrite",
+          "read_ms": 72.49990000000001
+        },
+        {
+          "capture_ms": 95.1406,
+          "multiline": false,
+          "pattern": "return",
+          "read_ms": 72.9855
+        },
+        {
+          "capture_ms": 90.88889999999999,
+          "multiline": false,
+          "pattern": "duplicate",
+          "read_ms": 72.9423
+        },
+        {
+          "capture_ms": 190.1374,
+          "multiline": true,
+          "pattern": "original",
+          "read_ms": 73.1505
+        },
+        {
+          "capture_ms": 155.7115,
+          "multiline": true,
+          "pattern": "sparse",
+          "read_ms": 70.61340000000001
+        },
+        {
+          "capture_ms": 157.42000000000002,
+          "multiline": true,
+          "pattern": "front",
+          "read_ms": 69.9616
+        },
+        {
+          "capture_ms": 160.031,
+          "multiline": true,
+          "pattern": "rewrite",
+          "read_ms": 70.6508
+        },
+        {
+          "capture_ms": 92.36410000000001,
+          "multiline": true,
+          "pattern": "return",
+          "read_ms": 70.5731
+        },
+        {
+          "capture_ms": 90.1025,
+          "multiline": true,
+          "pattern": "duplicate",
+          "read_ms": 74.9862
+        }
+      ],
+      "patterns": [
+        "single line",
+        "multiline",
+        "sparse",
+        "front",
+        "rewrite",
+        "return",
+        "duplicate"
+      ],
+      "read": {
+        "max_ms": 76.8509,
+        "p50_ms": 72.9423,
+        "p95_ms": 76.8509,
+        "samples": 12
+      },
+      "sha256": {
+        "max_ms": 12.7911,
+        "p50_ms": 12.5046,
+        "p95_ms": 12.7911,
+        "samples": 12
+      },
+      "size": 33554432,
+      "zstd1": {
+        "max_ms": 27.7436,
+        "p50_ms": 26.799400000000002,
+        "p95_ms": 27.7436,
+        "samples": 12
+      }
+    }
+  ],
+  "long_history": {
+    "changes": 2048,
+    "first_and_second_50_query": {
+      "max_ms": 0.28400000000000003,
+      "p50_ms": 0.1323,
+      "p95_ms": 0.1531,
+      "samples": 100
+    },
+    "newest": {
+      "max_ms": 0.0703,
+      "p50_ms": 0.012,
+      "p95_ms": 0.014,
+      "samples": 100
+    },
+    "oldest": {
+      "max_ms": 0.045599999999999995,
+      "p50_ms": 0.0121,
+      "p95_ms": 0.0176,
+      "samples": 100
+    },
+    "path_filter": {
+      "max_ms": 0.0982,
+      "p50_ms": 0.0686,
+      "p95_ms": 0.0756,
+      "samples": 100
+    },
+    "usage": {
+      "compressed_object_bytes": 75745,
+      "database_bytes": 1241088,
+      "legacy_bytes": 0,
+      "objects": 2048,
+      "pending_gc_bytes": 0,
+      "raw_distinct_bytes": 17219584,
+      "versions": 2048,
+      "wal_bytes": 4185952
+    }
+  },
+  "mixed": [
+    {
+      "after_compaction": {
+        "compressed_object_bytes": 27325205,
+        "database_bytes": 27934720,
+        "legacy_bytes": 0,
+        "objects": 444,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 94749411,
+        "versions": 504,
+        "wal_bytes": 0
+      },
+      "before_compaction": {
+        "compressed_object_bytes": 27325205,
+        "database_bytes": 24670208,
+        "legacy_bytes": 0,
+        "objects": 444,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 94749411,
+        "versions": 504,
+        "wal_bytes": 4449632
+      },
+      "capture": {
+        "max_ms": 17.3176,
+        "p50_ms": 2.2504,
+        "p95_ms": 5.4298,
+        "samples": 576
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 17.3176,
+          "p50_ms": 2.3062,
+          "p95_ms": 5.5275,
+          "samples": 444
+        },
+        "shared_object_new_version": {
+          "max_ms": 5.5322000000000005,
+          "p50_ms": 2.2587,
+          "p95_ms": 3.5807,
+          "samples": 60
+        },
+        "unchanged": {
+          "max_ms": 1.5878,
+          "p50_ms": 0.2592,
+          "p95_ms": 1.403,
+          "samples": 72
+        }
+      },
+      "first_decode_after_reopen": {
+        "max_ms": 1.4017000000000002,
+        "p50_ms": 0.1359,
+        "p95_ms": 1.1713,
+        "samples": 576
+      },
+      "original_capture_bytes": 123132542,
+      "repeat": 0,
+      "sha256": {
+        "max_ms": 0.45130000000000003,
+        "p50_ms": 0.0247,
+        "p95_ms": 0.2565,
+        "samples": 576
+      },
+      "success": 576,
+      "warm_decode": {
+        "max_ms": 1.3153,
+        "p50_ms": 0.1119,
+        "p95_ms": 1.1128,
+        "samples": 576
+      },
+      "zstd1": {
+        "max_ms": 1.6111,
+        "p50_ms": 0.2268,
+        "p95_ms": 1.4619,
+        "samples": 576
+      }
+    },
+    {
+      "after_compaction": {
+        "compressed_object_bytes": 27325205,
+        "database_bytes": 27934720,
+        "legacy_bytes": 0,
+        "objects": 444,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 94749411,
+        "versions": 504,
+        "wal_bytes": 0
+      },
+      "before_compaction": {
+        "compressed_object_bytes": 27325205,
+        "database_bytes": 24670208,
+        "legacy_bytes": 0,
+        "objects": 444,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 94749411,
+        "versions": 504,
+        "wal_bytes": 4449632
+      },
+      "capture": {
+        "max_ms": 18.0955,
+        "p50_ms": 2.2279999999999998,
+        "p95_ms": 5.3469,
+        "samples": 576
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 18.0955,
+          "p50_ms": 2.2889999999999997,
+          "p95_ms": 5.4299,
+          "samples": 444
+        },
+        "shared_object_new_version": {
+          "max_ms": 5.3419,
+          "p50_ms": 2.1582,
+          "p95_ms": 3.528,
+          "samples": 60
+        },
+        "unchanged": {
+          "max_ms": 1.5494,
+          "p50_ms": 0.22469999999999998,
+          "p95_ms": 1.3773,
+          "samples": 72
+        }
+      },
+      "first_decode_after_reopen": {
+        "max_ms": 1.1551,
+        "p50_ms": 0.096,
+        "p95_ms": 0.9135,
+        "samples": 576
+      },
+      "original_capture_bytes": 123132542,
+      "repeat": 1,
+      "sha256": {
+        "max_ms": 0.5425,
+        "p50_ms": 0.0249,
+        "p95_ms": 0.25970000000000004,
+        "samples": 576
+      },
+      "success": 576,
+      "warm_decode": {
+        "max_ms": 1.0508,
+        "p50_ms": 0.08990000000000001,
+        "p95_ms": 0.9001,
+        "samples": 576
+      },
+      "zstd1": {
+        "max_ms": 1.6237000000000001,
+        "p50_ms": 0.2319,
+        "p95_ms": 1.4019,
+        "samples": 576
+      }
+    },
+    {
+      "after_compaction": {
+        "compressed_object_bytes": 27325205,
+        "database_bytes": 27934720,
+        "legacy_bytes": 0,
+        "objects": 444,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 94749411,
+        "versions": 504,
+        "wal_bytes": 0
+      },
+      "before_compaction": {
+        "compressed_object_bytes": 27325205,
+        "database_bytes": 24670208,
+        "legacy_bytes": 0,
+        "objects": 444,
+        "pending_gc_bytes": 0,
+        "raw_distinct_bytes": 94749411,
+        "versions": 504,
+        "wal_bytes": 4449632
+      },
+      "capture": {
+        "max_ms": 17.8351,
+        "p50_ms": 2.2395,
+        "p95_ms": 5.3983,
+        "samples": 576
+      },
+      "capture_classes": {
+        "new_object": {
+          "max_ms": 17.8351,
+          "p50_ms": 2.2982,
+          "p95_ms": 5.4333,
+          "samples": 444
+        },
+        "shared_object_new_version": {
+          "max_ms": 5.4742999999999995,
+          "p50_ms": 2.1549,
+          "p95_ms": 3.558,
+          "samples": 60
+        },
+        "unchanged": {
+          "max_ms": 1.4735,
+          "p50_ms": 0.2182,
+          "p95_ms": 1.4049,
+          "samples": 72
+        }
+      },
+      "first_decode_after_reopen": {
+        "max_ms": 1.2365,
+        "p50_ms": 0.0994,
+        "p95_ms": 0.9183,
+        "samples": 576
+      },
+      "original_capture_bytes": 123132542,
+      "repeat": 2,
+      "sha256": {
+        "max_ms": 0.3886,
+        "p50_ms": 0.0248,
+        "p95_ms": 0.253,
+        "samples": 576
+      },
+      "success": 576,
+      "warm_decode": {
+        "max_ms": 1.1902,
+        "p50_ms": 0.0934,
+        "p95_ms": 0.9695,
+        "samples": 576
+      },
+      "zstd1": {
+        "max_ms": 1.5968,
+        "p50_ms": 0.223,
+        "p95_ms": 1.4119,
+        "samples": 576
+      }
+    }
+  ],
+  "near_budget": {
+    "after": {
+      "compressed_object_bytes": 54564,
+      "database_bytes": 131072,
+      "legacy_bytes": 0,
+      "objects": 1,
+      "pending_gc_bytes": 0,
+      "raw_distinct_bytes": 65536,
+      "versions": 1,
+      "wal_bytes": 0
+    },
+    "budget": 524288,
+    "capture_under_eviction": {
+      "max_ms": 7.2129,
+      "p50_ms": 2.3222,
+      "p95_ms": 2.7185,
+      "samples": 96
+    },
+    "clear_ms": 15.9148,
+    "leased_after_clear": {
+      "compressed_object_bytes": 54564,
+      "database_bytes": 131072,
+      "legacy_bytes": 0,
+      "objects": 1,
+      "pending_gc_bytes": 0,
+      "raw_distinct_bytes": 65536,
+      "versions": 1,
+      "wal_bytes": 0
+    },
+    "maintenance_ms": 0.2696,
+    "peak_database_bytes": 577536,
+    "peak_wal_bytes": 4206552
+  },
+  "phase_samples": "hash/codec sampled independently; capture totals include their actual internal work and SQLite FULL commit",
+  "profile": "release",
+  "repeats": 3,
+  "scratch": "C:\\Projects\\RustProjects\\Editor\\target\\history-product-benchmark-20261022-d",
+  "sqlite_sync": "FULL/WAL",
+  "zstd_level": 1
+}

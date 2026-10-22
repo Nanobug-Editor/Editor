@@ -1,0 +1,13 @@
+[package]
+name = "lifecycle-editor"
+version = "0.1.2"
+edition = "2024"
+license = "MIT"
+
+# Independent test-only consumer, built through the host-managed SDK source cache.
+[workspace]
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1"

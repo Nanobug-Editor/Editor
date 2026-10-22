@@ -1,0 +1,634 @@
+{
+  "recorded_at": "2026-10-22T18:13:36.925385+08:00",
+  "workspace_root": "C:\\Projects\\RustProjects\\Editor",
+  "baseline_head": "fc9dc531ef991315d73e21c8a092f12a0f1ff78b",
+  "current_head": "fc9dc531ef991315d73e21c8a092f12a0f1ff78b",
+  "baseline_directory": "target/history-implementation-baseline-20261022",
+  "cargo_target_directory": "target/history-implementation",
+  "scope": "History task files and shared integration files; shared-file hashes also include pre-existing or concurrent unrelated changes. Not a claim that all worktree changes belong to this task.",
+  "files": [
+    {
+      "path": "crates/editor-app/src/app/projects/close.rs",
+      "sha256": "6130b8f47d6239de318dbda6b3665f0647df45dca2907164d5291c0158c51188",
+      "baseline_sha256": "efa3c980040dc68c017680c0f8a6a3f070affc7e1e27475a6a6ddb8fb63e91e6",
+      "baseline_status": "modified",
+      "bytes": 18490
+    },
+    {
+      "path": "crates/editor-app/src/app/settings.rs",
+      "sha256": "1a8aa93081781307d4ca464e35d51fe23e327a3cfdcdc94124e970ca32b0c8ed",
+      "baseline_sha256": "c292fa032bbf64f7c67bcd0eb8f54b1f4be0dfcb0395647de7acd6b6ac377099",
+      "baseline_status": "modified",
+      "bytes": 16704
+    },
+    {
+      "path": "crates/editor-app/src/app/settings/history.rs",
+      "sha256": "0794de253055fc9bf7022b6dcac58c8cab6124deca092ba3fc146599e2ed3c3c",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 16210
+    },
+    {
+      "path": "crates/editor-app/src/app/settings/owner.rs",
+      "sha256": "67f36bd4dca133eaab1f6e9d01601eebede5ac781933b44624345b8fba86a120",
+      "baseline_sha256": "4efc9039a03d04665803d130d23ea8aab9c3c9f0e59fc30e6005464cf22a0e6d",
+      "baseline_status": "modified",
+      "bytes": 8173
+    },
+    {
+      "path": "crates/editor-app/src/app/shortcuts/menu.rs",
+      "sha256": "3b847a77dffea85aff952e168597862bc9bbc100794b24c788c53ea9e45d62a0",
+      "baseline_sha256": "281085d4bfac70fb2592f3c2a9a4f33a2369226fac112f5aeb4fdf446e91d9b7",
+      "baseline_status": "modified",
+      "bytes": 9447
+    },
+    {
+      "path": "crates/editor-app/src/editor.rs",
+      "sha256": "f6d9b11d5180a4ba4b00ac33ed6ec952d5d442c901d81d3ce0d8358983c448a1",
+      "baseline_sha256": "2c8175405ecd51259b5a8fa8fc412f97f97d84c84c9a9dfe3c82fe3540dc54e4",
+      "baseline_status": "modified",
+      "bytes": 1322
+    },
+    {
+      "path": "crates/editor-app/src/editor/documents.rs",
+      "sha256": "fe6faf7423c46012e8ad0e9aa0b86f7a446ebb086802563075a32e87a3cbc428",
+      "baseline_sha256": "93364101bdf35f9e68c33e61679630456698de4a64fa5edd7349154b8a8479b2",
+      "baseline_status": "modified",
+      "bytes": 56216
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/browsing.rs",
+      "sha256": "bba47da0128573aabfe9def715d3b5c56c5a7ff2455169ef0d2328414831f470",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 13388
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/cleanup.rs",
+      "sha256": "92f51c367facb2d7d6595db96215130da4cfd6d4f40491b978e5dd50632b3f08",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 3023
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/comparison.rs",
+      "sha256": "fa6d3a96b21fda3a28169a45628263c9a35fa9af017633535db16e29a2686e6d",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 7371
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/export.rs",
+      "sha256": "021c7398bb6a104d2ac255d7dfbb2b878f86af4014e1b7e9416751b2f0c3abe8",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 13347
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/mod.rs",
+      "sha256": "fd2c5e33e1cb97e4d053fdb95efaa50681e99ba9b80439ab523caa1dec68c3f0",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 16156
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/model.rs",
+      "sha256": "7ed54e0c3bc4090d12e2b9dcfb9b5b09e64f6d96000a0c591be0ffbda8fd6d24",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 7286
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/observations.rs",
+      "sha256": "0348cf4aef517e7e7754a9bc43b6625e788b73754764c4de579a584aa54265fb",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 9629
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/panel.rs",
+      "sha256": "25dfb9328508618561b418b7c854db535f62fc3aa85edb67a00017d8158d7f90",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 19710
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/profiles.rs",
+      "sha256": "e8dcb60bb5bef27e581f0bdffc7fdea1fcf654ba3aeef31140db58e26dabb536",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 6175
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/recovery.rs",
+      "sha256": "ba56ac230a32bfd3c98835514ae0119ff6b3b3f6d89f2acfb4d5c4c4b9124029",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 13034
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/save_sequence.rs",
+      "sha256": "6ff7d9616b9133b9990fc55926cb833b45042146895fd0ce2ee32252150b4bc1",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 2440
+    },
+    {
+      "path": "crates/editor-app/src/editor/history/saves.rs",
+      "sha256": "9bad5703f199e8019585c1159594c849c15da010c3788b2c7d9730d0a6e7e80f",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 13458
+    },
+    {
+      "path": "crates/editor-app/src/editor/native_text.rs",
+      "sha256": "7dd3940a1a65363cc190e39208c707860b6ce664a18e689ff775637085600c00",
+      "baseline_sha256": "79869af0a59734253991cadcd6a38159d8d7c146f94d55907fabeb911c64bdc8",
+      "baseline_status": "modified",
+      "bytes": 1299
+    },
+    {
+      "path": "crates/editor-app/src/editor/view.rs",
+      "sha256": "7c82286245bc3615172c7fb8f15493c10292f667360c7334bf11ade1952361ec",
+      "baseline_sha256": "f2fbbde2becdb5d555783ce2805ebce7a8335cc953fff7bdbb58af3d651d8373",
+      "baseline_status": "modified",
+      "bytes": 36268
+    },
+    {
+      "path": "crates/editor-app/src/explorer.rs",
+      "sha256": "dddd6db52d4ec1b0b95fc862df00019879e0bfc1c17d4e30dc72e15b5d87f1b9",
+      "baseline_sha256": "f9e1cb8429779319c2607d87aed52a23e1b0d324eed766f5efbc686d5eacf42c",
+      "baseline_status": "modified",
+      "bytes": 16699
+    },
+    {
+      "path": "crates/editor-app/src/explorer/history.rs",
+      "sha256": "20b8eba956a435e17a10d7b389c07f22c5960a13c698921eeaf23392aa8f6885",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 14229
+    },
+    {
+      "path": "crates/editor-app/src/explorer/interaction/tests/history.rs",
+      "sha256": "111d2f4c42e41b56c77ec02bdd3afe6dbb258caf809c33aa0e4aa0e260020c78",
+      "baseline_sha256": "4b8dc22f5e3da748b795581ddb37552fbc7ec021bb79161525f5557b283a6f33",
+      "baseline_status": "modified",
+      "bytes": 18311
+    },
+    {
+      "path": "crates/editor-app/src/explorer/menu.rs",
+      "sha256": "0e15ad7c95d672ae4c513b47668f842c3f03b76ce7131be7007ce2e2f4eccc8d",
+      "baseline_sha256": "75574927a951fb8e0f87905bac5cb105b039bb38a610e470797f4f4622476edf",
+      "baseline_status": "modified",
+      "bytes": 13737
+    },
+    {
+      "path": "crates/editor-app/src/explorer/transfer.rs",
+      "sha256": "fe07fd792bbf37079642b792da3fc036d46434588afba7fd1a385c5a2ec9434c",
+      "baseline_sha256": "5731883b7025a298b541e3ca7166bbcc4bef95100a498641bfec76ce72b31a9a",
+      "baseline_status": "modified",
+      "bytes": 22820
+    },
+    {
+      "path": "crates/editor-app/src/explorer/transfer/history.rs",
+      "sha256": "41883ef2318d4bf5b451ee7a01d245d4f10f579e74eddec329418aa586f914ff",
+      "baseline_sha256": "b19cafbd27ff500229ab18783e9e5f561d10deab6be3ceb7fa5f7d198a36da13",
+      "baseline_status": "modified",
+      "bytes": 10592
+    },
+    {
+      "path": "crates/editor-app/src/explorer/transfer/operation.rs",
+      "sha256": "b3ace1a65b12de31cfa8d0e608cc63cd2f63f3bcc47c53e1e71c06ec3f2838cd",
+      "baseline_sha256": "9a28c0488d67fb31a7d25bc913dfb17517a053f55d32d3235272885c0dcc953f",
+      "baseline_status": "modified",
+      "bytes": 21446
+    },
+    {
+      "path": "crates/editor-app/src/extensions.rs",
+      "sha256": "ad991c0c3545951470713d464620a35c3afe1819809859233b7b1a5b0bf85d4f",
+      "baseline_sha256": "d73fbcc0391b2d4528920ccd93b64c3a0172aabe37b9d34e0e3f3a31fd8be820",
+      "baseline_status": "modified",
+      "bytes": 95611
+    },
+    {
+      "path": "crates/editor-app/src/extensions/editor_requests.rs",
+      "sha256": "3774198b32dbd2edcafdaea198e6609fb795e8798a0008d870ccf8ce3ea8b229",
+      "baseline_sha256": "4d18e0039d48574b91e9d230c091affd754f922a55a5c7912fa6733e8f49e72a",
+      "baseline_status": "modified",
+      "bytes": 28234
+    },
+    {
+      "path": "crates/editor-app/src/extensions/image_input.rs",
+      "sha256": "fa00307ee3600c3f41f545bed4a7139d66cc57f4ee904fc2faada5efaeed8659",
+      "baseline_sha256": "571f306fca1debd95bc52383e3d0d8297ac02e7a4749710fd9081d663c7ee3e7",
+      "baseline_status": "modified",
+      "bytes": 21717
+    },
+    {
+      "path": "crates/editor-app/src/extensions/image_input/history_tests.rs",
+      "sha256": "0c1e3d8bb0c41d1fbd017ce05fca3835b6430761203a91a7fd36ec1af06819a3",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 1800
+    },
+    {
+      "path": "crates/editor-app/src/extensions/preview/providers.rs",
+      "sha256": "086b9b01ef8946c5753089a15b477db32cfb28bc2f8a5eba38590e3be8ef445e",
+      "baseline_sha256": "3d6dc47ba48835e769a96fe76d30be314a81bf308f9a20a6c3043092d3dda635",
+      "baseline_status": "modified",
+      "bytes": 14061
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_acceptance.rs",
+      "sha256": "b5099613f69e69a39fe577381be21fa0cee3dab8039acb939f3533aad49b5d60",
+      "baseline_sha256": "fa241156f4c291cdcc7b29d8d587da6aae1baec33056a088d89eff39bf885f22",
+      "baseline_status": "modified",
+      "bytes": 10522
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_acceptance/local_history.rs",
+      "sha256": "4a9fe1512b48690b5d4c0666ff5f6a66dcaa39983a6e1a2abde62dec93388b59",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 11026
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_acceptance/local_history/scene.rs",
+      "sha256": "16eaee39e9502a6b0dc5325f479333998af07819016df86dc86a6c29063faded",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 19563
+    },
+    {
+      "path": "crates/editor-app/src/main.rs",
+      "sha256": "79b1f308c09f7c51a809d0e45813a3ff91e289a6c8e18b5704b12cddf5c6b080",
+      "baseline_sha256": "0a41896a5a820e71804f95720a7d18d24293110500c9d5e195ba6bca702a1075",
+      "baseline_status": "modified",
+      "bytes": 53803
+    },
+    {
+      "path": "crates/editor-app/src/run/run_ui_tests.rs",
+      "sha256": "c08eb4c11176903b2241d96cbb55f9f8ac568c12ec254297cd384dba7eee3283",
+      "baseline_sha256": "012dbfa055b6f5a2b1150109acb03c4e88506779045356b03b3e5a0e8d835230",
+      "baseline_status": "modified",
+      "bytes": 46609
+    },
+    {
+      "path": "crates/editor-app/src/run/ui.rs",
+      "sha256": "d6b4e9b6bcfa6afc42e5712037d4feed5f274d824f5d687cb2f74bab1b9bed3b",
+      "baseline_sha256": "bb0246cfcb4e4e3d9c57c067dc7576713b99cddd62400501442c8ec4a8c7716e",
+      "baseline_status": "modified",
+      "bytes": 101548
+    },
+    {
+      "path": "crates/editor-app/src/run/ui/plugin_form/host.rs",
+      "sha256": "3ebbc69ab634e1d00f33667407909f7a47d2b8d7ce3ea224af7697b64a463c3f",
+      "baseline_sha256": "45ea30427f938fdc7735615cfde800c4c09a33e14b40d636bb9bf1f42503b01f",
+      "baseline_status": "modified",
+      "bytes": 14298
+    },
+    {
+      "path": "crates/editor-app/src/tests/history.rs",
+      "sha256": "079e506aa27dc4d614130c9347191f0918284158cc4aa25383686d1b13e6de73",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 5030
+    },
+    {
+      "path": "crates/editor-history/examples/benchmark.rs",
+      "sha256": "03cb35f49063ea4e3ba8bedfd2125bcd0b8704cb81baea145bf948569caa75c2",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 15655
+    },
+    {
+      "path": "crates/editor-history/src/changes.rs",
+      "sha256": "2a038b5140ce8f56ed34162893831df792d75749016383514ea8f9b42c4cd1be",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 7264
+    },
+    {
+      "path": "crates/editor-history/src/leases.rs",
+      "sha256": "a65ea2578a089429bdcc498a323ff1e7d7964359920fe244db09dc3c8737de97",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 2995
+    },
+    {
+      "path": "crates/editor-history/src/legacy/import.rs",
+      "sha256": "4a32f002bd15ed97d6500e0683da59657561a60bc28d2ebd745036641b406e68",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 7139
+    },
+    {
+      "path": "crates/editor-history/src/legacy/io.rs",
+      "sha256": "a3d08412ee5ebfc220e601d1cdd2616a4bdba4352a671bb66f5375735f0cf126",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 1092
+    },
+    {
+      "path": "crates/editor-history/src/legacy/mod.rs",
+      "sha256": "4af9b140b4c905c46a002d6a33037739dc4114b50026da08b5f48eae1774d86a",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 10030
+    },
+    {
+      "path": "crates/editor-history/src/legacy/reclaim.rs",
+      "sha256": "3b533ae7d192bddaedd743a0ab29ef918ec143a8c7ec744fc3becff177586810",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 1586
+    },
+    {
+      "path": "crates/editor-history/src/lib.rs",
+      "sha256": "5733c54edb2a0931f5dee0d6f59ea757dc33dc2ddba479457aecd6b17505201c",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 13348
+    },
+    {
+      "path": "crates/editor-history/src/maintenance.rs",
+      "sha256": "7dca7ed74a612e165106829d0d47785d3ef285a464bbb196f5c855f74fa421ef",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 12527
+    },
+    {
+      "path": "crates/editor-history/src/policy.rs",
+      "sha256": "065337e67f384acec25dd8fce52cc1ad95f30e2d251e6d66655251f14a53748f",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 3936
+    },
+    {
+      "path": "crates/editor-history/src/profiles.rs",
+      "sha256": "fc1cba21f601112f0dabae4f7031884d3b0a2cc67cb192a9555fbecc26d2fbb5",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 3217
+    },
+    {
+      "path": "crates/editor-history/src/query.rs",
+      "sha256": "e872443da6d6d0f9f00c1cf789008a94860168f1a4c5b14568510bcaa3766aac",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 4485
+    },
+    {
+      "path": "crates/editor-history/src/schema.rs",
+      "sha256": "f80a8698a449403c9b51b7ca19a078872c1a1613f77e08d69f31069fda9e12a8",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 4990
+    },
+    {
+      "path": "crates/editor-history/src/store.rs",
+      "sha256": "4a22a24e2c4ad995645d1af01516d54d59965e393f7c3583491412277b4fab2f",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 14375
+    },
+    {
+      "path": "crates/editor-history/src/worker.rs",
+      "sha256": "de07df1db15a07ec769d5203a7b51ca925a9f6ee44380c861c58e83f5a157013",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 9695
+    },
+    {
+      "path": "crates/editor-history/tests/contracts.rs",
+      "sha256": "44eeb4202afc929778a94fda1579cb5b6116c381184c1600e05ce1f82fac499e",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 8866
+    },
+    {
+      "path": "crates/editor-history/tests/crash.rs",
+      "sha256": "dd06d2f737bec21f14fb525fda17413f275f717e201e0a5f200e0f3037156c90",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 3024
+    },
+    {
+      "path": "crates/editor-history/tests/failures.rs",
+      "sha256": "8227ddfe5b7dfb21b5994ef012daad541613f0210815bbf1406112cb13d5c896",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 9068
+    },
+    {
+      "path": "crates/editor-history/tests/history.rs",
+      "sha256": "65abb5e74047d102e776e767abde0fc19c1b6424593f9758b28e3093362732d7",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 15424
+    },
+    {
+      "path": "crates/editor-history/tests/worker.rs",
+      "sha256": "4eed23d598d8f5a2f0cce6b7561916ac066b879e56201ec5b1187940607eed0f",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 4166
+    },
+    {
+      "path": "crates/platform-windows/src/attachments.rs",
+      "sha256": "09bb90cb383ee7de5202cce73eef8ee365ee785ad15ba1fe4d5a2e9d4d08aa96",
+      "baseline_sha256": "19d385c7d28f8ebda0fdb73adc9176cc86637045945d71cc23d072d32e8cd721",
+      "baseline_status": "modified",
+      "bytes": 14314
+    },
+    {
+      "path": "crates/platform-windows/src/history.rs",
+      "sha256": "3ac78d5cdcea3fa6af1d816d03d51be278ca8fffdd0a1bb021b377b5b56ffa7c",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 8750
+    },
+    {
+      "path": "crates/platform-windows/src/history/legacy.rs",
+      "sha256": "a83ce466a0a087605a4a5cb13c39664fa92f2cfb2954a57cefd9fb90305eea5a",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 4738
+    },
+    {
+      "path": "crates/platform-windows/src/lib.rs",
+      "sha256": "0b6a929f57c444ad89eb4c8df972e100f0759540447d6aa50d048ded0df7b524",
+      "baseline_sha256": "18afc44600f85d2a8317887caabff0213cce6842c25d17b52c5a6f351b543ec9",
+      "baseline_status": "modified",
+      "bytes": 3050
+    },
+    {
+      "path": "crates/platform-windows/src/staged.rs",
+      "sha256": "35ba121fcf2757f4f667134c02c8b110209b75fec11ac104271384949cf4376e",
+      "baseline_sha256": "0d92d456027afed286b876af166437349ae00b39417d948ad56fda0b5835a74a",
+      "baseline_status": "modified",
+      "bytes": 3819
+    },
+    {
+      "path": "crates/platform-windows/tests/history_files.rs",
+      "sha256": "11e1d2562a4ef4b24628880b0c6d9e2f5b42890f633a421dbc5639980186edcb",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 976
+    },
+    {
+      "path": "crates/platform-windows/tests/history_isolation.rs",
+      "sha256": "cb718be1652744e71956414ae42a2e577631728f1608d802102f992659bc24be",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 2995
+    },
+    {
+      "path": "crates/platform-windows/tests/history_legacy.rs",
+      "sha256": "536574d49ef3d74203fc9586397720285dcac1630b6773eb9709512524f04f6e",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 13079
+    },
+    {
+      "path": "crates/platform-windows/tests/history_paths.rs",
+      "sha256": "ffd19db63b18b3969e31b0f074c49a4d43053645f5c7e58262f1b63a93a89bd9",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 1476
+    },
+    {
+      "path": "crates/editor-app/src/extensions/request_tests.rs",
+      "sha256": "e4f5d86f67bb95193f82b9d278247be096ee8ce260aaf42a17d2c662d7376682",
+      "baseline_sha256": "b968c1619fe8017ce506d115b0f87f75e4d11c18e855f8b3d6a966ab46553e99",
+      "baseline_status": "modified",
+      "bytes": 15335
+    },
+    {
+      "path": "crates/editor-app/src/app/settings/history/tests.rs",
+      "sha256": "b970356098ef4fa643f758e5584346ca466a04a7a5064781ef4f4c4e4bc8bb2d",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 2793
+    },
+    {
+      "path": "crates/editor-app/src/explorer/history/tests.rs",
+      "sha256": "a5a392b54e3e4ced59c9a50dd80f52c3b20bc0f7f8f22f6e22d7bdf67955ca6c",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 3063
+    },
+    {
+      "path": "crates/editor-app/src/tests/history/late_results.rs",
+      "sha256": "e32b98514cf09770c40ecd99a56ccda2a5bd4b24a5473c80c24fa41cb1afe092",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 3482
+    },
+    {
+      "path": "crates/editor-app/src/tests/history/public_plugin.rs",
+      "sha256": "a4d4320573e1654a2adb49aec29cf8a9ebc5fd3fbfa71583d9bde1bc28420ea2",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 3752
+    },
+    {
+      "path": "crates/editor-app/src/tests/history/observations.rs",
+      "sha256": "1ff6e49180d317cd25caa991637d232fa44912500058ae701a6d102a8c2f3409",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 7571
+    },
+    {
+      "path": "crates/editor-app/src/tests/history/capture.rs",
+      "sha256": "0ef4df09386ebd64e3ab0b5411893bc824bf2ffe06417dbb085ede951d0e8c85",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 8804
+    },
+    {
+      "path": "crates/editor-app/src/tests/history/recovery.rs",
+      "sha256": "85a221b78a47539003926849950c7fea31eb3e7c8215f81eea3a6d73917cf7ff",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 16282
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_acceptance/local_history/timings.rs",
+      "sha256": "7489b6a3202d5343c7261fe91baf4cb9df2a42a74b640742f3b685748a78ca5e",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 4125
+    },
+    {
+      "path": "crates/editor-app/src/tests/project_windows/windows.rs",
+      "sha256": "5b103a9cbcda438a5c4fd92391d7470f8ff6ab559249576684dff23a417203f3",
+      "baseline_sha256": "ade588721e869b49720853afb95a1b1d4bb2e8386c5d9e644bcc5c89b9d0a3b7",
+      "baseline_status": "modified",
+      "bytes": 12938
+    },
+    {
+      "path": "crates/editor-app/src/app/projects/controller.rs",
+      "sha256": "ee968748c22578f734f567903980d6402e8b3ea27a00c75ce45eade3dc88ab51",
+      "baseline_sha256": "f0a92d7da0550462cc850f81eb9b01e073f66e74e5afae2ce0f1d25c90d4f1ee",
+      "baseline_status": "modified",
+      "bytes": 18639
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "0f4a525c935079718dadb5b2b0a0d9caf50dd43c3e1f678de1904dec8037e59f",
+      "baseline_sha256": "188a5cf399d4eff522651df82a835cdf2fddfbfa5a8aa0a79e64b6e8d95eafd5",
+      "baseline_status": "modified",
+      "bytes": 15769
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "6d952c52de2917b81830d8e309767dd122bbc1e59d30763ece0b984a4dac3aa6",
+      "baseline_sha256": "d4f83a25bcd0a353dd15247b144a573acf1732819a9407f4d60b911da910c123",
+      "baseline_status": "modified",
+      "bytes": 3069
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "f6abaa3d43b61c03ed81a8b2339af112a29ef76924addc0b76f99c3cd172dd08",
+      "baseline_sha256": "decb66a3e444b6c7250d4cc401b7ca76a54e18e823ec8a484b33e9a88b732348",
+      "baseline_status": "modified",
+      "bytes": 248821
+    },
+    {
+      "path": "crates/editor-app/Cargo.toml",
+      "sha256": "56ee024af3629682fa299c0fb2e932187485e03a7f146047860d08f11a739c42",
+      "baseline_sha256": "95fc0aba5f3d40c10967117240590dff3797c34bb93c117bc34b7218e56c7927",
+      "baseline_status": "modified",
+      "bytes": 3948
+    },
+    {
+      "path": "crates/platform-windows/Cargo.toml",
+      "sha256": "1841b664a48a79117c341d5786f95b16dc427d81a495bbdd28650fba9f36074d",
+      "baseline_sha256": "dafee25c54c807ac26c3a73b6d26db00c7551bbab5d8c9fe1fc604e231e85ca4",
+      "baseline_status": "modified",
+      "bytes": 728
+    },
+    {
+      "path": "crates/editor-history/Cargo.toml",
+      "sha256": "46b028333283baecf60730024308e330098316e2f192225f347280c0e419d4cb",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 478
+    },
+    {
+      "path": "crates/editor-ui/locales/history.yml",
+      "sha256": "40b7ccb7452adae21eccca17de29fff077f3b44ee2b8d9536991bab23b46f6ea",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 8438
+    },
+    {
+      "path": "crates/editor-app/src/extensions/worker/native_acceptance/local_history/entrypoints.rs",
+      "sha256": "70d2fe672ac077f1811aef471de75f061f4921d781ee9723f02731b4692cb99b",
+      "baseline_sha256": null,
+      "baseline_status": "added",
+      "bytes": 2875
+    }
+  ]
+}

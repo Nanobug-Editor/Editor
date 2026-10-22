@@ -158,7 +158,7 @@ impl LanguageServer {
     }
 
     /// Every editing method binds before sync and rechecks authority after a native response arrives.
-    fn edit_request<T>(
+    pub(super) fn edit_request<T>(
         &self,
         document: DocumentLease,
         operation: &str,
@@ -193,6 +193,7 @@ pub(super) fn document_edits(
     version: i32,
     logical_uri: impl Fn(&Uri) -> Uri,
 ) -> anyhow::Result<Vec<TextEdit>> {
+    let response = without_empty_representations(response);
     // OneOf<TextEdit, AnnotatedTextEdit> may deserialize the plain variant first and discard
     // annotationId as an unknown field. Check the actual wire before that lossy typed decoding.
     for document in response
@@ -309,6 +310,26 @@ pub(super) fn document_edits(
         }
     }
     Ok(edits)
+}
+
+/// An empty companion representation carries no effects. Some standard servers serialize their
+/// default empty map beside documentChanges; retain rejection of two nonempty representations.
+pub(super) fn without_empty_representations(mut response: Value) -> Value {
+    if let Some(object) = response.as_object_mut() {
+        if object
+            .get("changes")
+            .is_some_and(|value| value.as_object().is_some_and(|map| map.is_empty()))
+        {
+            object.remove("changes");
+        }
+        if object
+            .get("documentChanges")
+            .is_some_and(|value| value.as_array().is_some_and(|items| items.is_empty()))
+        {
+            object.remove("documentChanges");
+        }
+    }
+    response
 }
 
 /// Reject invalid UTF-16 positions instead of upstream clipping them to a different document location.

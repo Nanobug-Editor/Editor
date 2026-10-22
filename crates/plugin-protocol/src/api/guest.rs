@@ -2,6 +2,13 @@
 use super::*;
 use crate::bindings::editor::plugin::host;
 use std::cell::Cell;
+pub(crate) mod resources;
+pub use resources::{CleanupFailure, CleanupReport, ResourceGroup};
+mod intent;
+pub use intent::{EditorIntent, IntentFailure};
+
+#[cfg(test)]
+mod lifecycle_tests;
 
 thread_local! {
     /// A component instance dispatches serially, so IDs never need a cross-instance global.
@@ -173,6 +180,12 @@ pub fn read_document(
 
 /// Correlation IDs are transport details; callers receive typed values or failures.
 pub fn request(operation: Operation) -> Result<Value, Failure> {
+    // Unit tests exercise the public SDK against a private transport adapter; real WASM
+    // consumers still cross the exact imported transport and host permission gates.
+    #[cfg(test)]
+    if let Some(result) = lifecycle_tests::intercept(&operation) {
+        return result;
+    }
     let id = NEXT_ID.with(|next| {
         let id = next.get();
         let following = id

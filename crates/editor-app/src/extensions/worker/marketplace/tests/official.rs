@@ -139,7 +139,8 @@ fn marketplace_official_releases_install_with_native_consent(cx: &mut gpui_kit::
             installed.grants, package.manifest.permissions,
             "{id}: explicit consent"
         );
-        assert!(installed.enabled);
+        assert!(!installed.enabled);
+        assert!(installed.project_enabled_in(&home.path().to_string_lossy()));
         assert_eq!(
             server.downloads.load(Ordering::Acquire),
             1,
@@ -211,7 +212,7 @@ fn marketplace_published_pages_installs_reviewed_release() {
         "a real successful fetch must persist the inert cache"
     );
     // This is the same post-consent API used by the already-verified native confirmation window.
-    assert!(worker.install_market(release.clone(), generation, Default::default()));
+    assert!(worker.install_market(release.clone(), generation, Default::default(), true));
     wait(&worker, |state| state.progress.is_none());
     let status = worker
         .state

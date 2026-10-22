@@ -4,7 +4,17 @@ use crate::api::{ErrorCode, Failure};
 
 impl Document {
     pub fn validate_event(&self, event: &UiEvent) -> Result<(), Failure> {
-        if event.revision != self.revision {
+        // An explicit content epoch lets queued range movements survive painting only.
+        // Future scenes, modal transitions and editor-source gestures never use this exception.
+        let current_scroll = event.revision < self.revision
+            && self.dialog.is_none()
+            && self.menu.is_none()
+            && self.editor_action_source(&event.node).is_none()
+            && matches!(&event.action, Action::Canvas(CanvasEvent::ScrollInput { epoch, .. })
+                if *epoch != 0 && self.active_node(&event.node).is_some_and(|node|
+                    node.viewport.is_none() && matches!(&node.kind, Kind::Canvas(canvas)
+                        if canvas.scroll_epoch == Some(*epoch))));
+        if event.revision != self.revision && !current_scroll {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
                 "UI document was replaced",
@@ -103,6 +113,16 @@ impl Canvas {
     fn accepts(&self, event: &CanvasEvent) -> bool {
         let finite = |value: f32| value.is_finite() && value.abs() <= 1_000_000.;
         match event {
+            CanvasEvent::ScrollInput { epoch, change } => {
+                *epoch != 0
+                    && self.scroll_epoch == Some(*epoch)
+                    && self.scroll.as_ref().is_some_and(|range| match change {
+                        ScrollChange::Delta { delta_y } => finite(*delta_y),
+                        ScrollChange::To { offset } => {
+                            offset.is_finite() && *offset >= 0. && *offset <= range.content
+                        }
+                    })
+            }
             CanvasEvent::Scroll { offset } => self.scroll.as_ref().is_some_and(|range| {
                 offset.is_finite() && *offset >= 0. && *offset <= range.content
             }),

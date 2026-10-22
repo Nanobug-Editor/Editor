@@ -1,0 +1,222 @@
+{
+  "schema": 1,
+  "checked_at_utc": "2026-10-21T14:21:40.2541824Z",
+  "platform": "windows-x86_64",
+  "mode": "static_package_admission",
+  "executed": false,
+  "workspace_head_at_audit": "fc9dc531ef991315d73e21c8a092f12a0f1ff78b",
+  "host_executable": "target/plugin-developer-tooling/debug/editor-app.exe",
+  "host_sha256": "c82565746b49011761884604da17e1bcbd30a45cb972b42a2a6ba20fda940856",
+  "sdk_sha256": "8e2f359fedf819d8e8b6b3da1012722629e12d9731c02c38e5b01ccab8bd02e4",
+  "catalog_url": "https://nanobug-editor.github.io/Plugin-Marketplace/catalog.json",
+  "catalog_sha256": "0cff73e72a8b942cfdb24ae0d915c5baab9f07e7ef6b70087becbcd969664b24",
+  "registry_commit": "cd83b2f94814f6463f4104e5eaa6890f1132098a",
+  "marketplace": [
+    {
+      "id": "html",
+      "version": "0.3.1",
+      "source_commit": "68b8c7baabd0790cba884aa19e4f2523b2b2e7ce",
+      "url": "https://github.com/Nanobug-Editor/HTML/releases/download/v0.3.1/html-0.3.1.zip",
+      "sha256": "6f1ad3e33ade378f9fdbdedef5d1d8e6f91b4059f620f7a490f0dd97af4a4f5e",
+      "bytes": 217113,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    },
+    {
+      "id": "javascript",
+      "version": "0.3.1",
+      "source_commit": "18dc8818787857b75cb1ae1b4ffd88edfa35a631",
+      "url": "https://github.com/Nanobug-Editor/JavaScript/releases/download/v0.3.1/javascript-0.3.1.zip",
+      "sha256": "a09afb41de50211e5e0a866d2698dde2a6d524b54dc74149eda573f42eabe144",
+      "bytes": 1748556,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    },
+    {
+      "id": "markdown",
+      "version": "0.17.2",
+      "source_commit": "8480eb38e059d575cb5dafd740ed14f035d20936",
+      "url": "https://github.com/Nanobug-Editor/Markdown/releases/download/v0.17.2/markdown-0.17.2.zip",
+      "sha256": "cac840637b5348c553da810e0d101f318088714caec18e30710bbc97c8327e13",
+      "bytes": 616350,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    },
+    {
+      "id": "markdown",
+      "version": "0.17.1",
+      "source_commit": "31516790679c2ab591105d11e6fd15e974b72505",
+      "url": "https://github.com/Nanobug-Editor/Markdown/releases/download/v0.17.1/markdown-0.17.1.zip",
+      "sha256": "2438a081165de70acf0c30c560905167d46b44a5c30d7abf856fa420a14a17a3",
+      "bytes": 615054,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    },
+    {
+      "id": "rust",
+      "version": "0.6.1",
+      "source_commit": "942a905e4d4dfe02a9b9b162c35e3c2788691d5f",
+      "url": "https://github.com/Nanobug-Editor/Rust/releases/download/v0.6.1/rust-0.6.1.zip",
+      "sha256": "9da637f2852318c51fb7b008c1abaefe4848a1d0896d6205210558a561de6867",
+      "bytes": 720356,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    },
+    {
+      "id": "svg",
+      "version": "0.6.1",
+      "source_commit": "cac09895b6bc9cd227a6e318edb8c868da41084e",
+      "url": "https://github.com/Nanobug-Editor/Image/releases/download/v0.6.1/svg-0.6.1.zip",
+      "sha256": "911932c643bc9b7a538b3f4b5baa34e04a939256b61ee49bf6d2f9e84656a654",
+      "bytes": 544488,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    },
+    {
+      "id": "toml",
+      "version": "0.2.3",
+      "source_commit": "a1a4677118403ac01e6a0fd2f667cfa788aa9bd2",
+      "url": "https://github.com/Nanobug-Editor/TOML/releases/download/v0.2.3/toml-0.2.3.zip",
+      "sha256": "2b3dabe0b2f67b2ed2440fe5eb8e7ac2b3e408105accc2f7bbdc9a2ccf6ebeed",
+      "bytes": 14124,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    },
+    {
+      "id": "xml",
+      "version": "0.2.2",
+      "source_commit": "69749e0d37ca28571e39101678f77a051a939ca8",
+      "url": "https://github.com/Nanobug-Editor/XML/releases/download/v0.2.2/xml-0.2.2.zip",
+      "sha256": "c6bde8af6e724d2c9570502293f4e9d024137761759205baffb6f10a8bd3dd8a",
+      "bytes": 647240,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": []
+    }
+  ],
+  "local_candidates": [
+    {
+      "label": "git-local-0.1.23",
+      "source": "C:\\Projects\\RustProjects\\Editor\\target\\branch-tree-gestures-2026-10-21\\packages\\git-0.1.23.zip",
+      "sha256": "7d0ea99e484afafe343902a1cc30baaebbb7a618ae1c4ecee4144579727fe5bd",
+      "bytes": 887008,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": [],
+      "plugin": "git",
+      "version": "0.1.23"
+    },
+    {
+      "label": "markdown-local-0.18.2",
+      "source": "C:\\Projects\\RustProjects\\Markdown-for-Nanobug\\dist\\markdown-0.18.2.zip",
+      "sha256": "61a648070f6d659ffbadd9cf8a7f8da04110ba47d007a55f6ddcd28c93a31ca2",
+      "bytes": 872791,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": [],
+      "plugin": "markdown",
+      "version": "0.18.2"
+    },
+    {
+      "label": "typescript-supported-0.1.15",
+      "source": "C:\\Projects\\RustProjects\\TypeScript-for-Nanobug\\target\\s6-supported-015-package\\typescript-0.1.15.zip",
+      "sha256": "beab4419c7004ce96d4bf2ce3f4a826f0c8f2a777a9a4b0c3896496f314c038b",
+      "bytes": 37551056,
+      "exit": 1,
+      "passed": false,
+      "executed": false,
+      "diagnostics": [
+        {
+          "stage": "package_admission",
+          "message": "Invalid plugin manifest",
+          "code": "manifest",
+          "severity": "error",
+          "file": "manifest.json",
+          "pointer": "",
+          "location": [
+            480,
+            21
+          ],
+          "required": null,
+          "available": null,
+          "required_sha256": null,
+          "available_sha256": null,
+          "metadata_partial": false
+        }
+      ],
+      "plugin": null,
+      "version": null
+    },
+    {
+      "label": "typescript-desktop-0.1.15",
+      "source": "C:\\Projects\\RustProjects\\TypeScript-for-Nanobug\\target\\s6-desktop-candidate-015-package\\typescript-0.1.15.zip",
+      "sha256": "422074c65d63d89b2f8b060feb15ceaaffaf4b7a3c77b19f6c6c665ebdb39f43",
+      "bytes": 37549748,
+      "exit": 1,
+      "passed": false,
+      "executed": false,
+      "diagnostics": [
+        {
+          "stage": "package_admission",
+          "message": "Invalid plugin manifest",
+          "code": "manifest",
+          "severity": "error",
+          "file": "manifest.json",
+          "pointer": "",
+          "location": [
+            480,
+            21
+          ],
+          "required": null,
+          "available": null,
+          "required_sha256": null,
+          "available_sha256": null,
+          "metadata_partial": false
+        }
+      ],
+      "plugin": null,
+      "version": null
+    },
+    {
+      "label": "vue-supported-0.1.12",
+      "source": "C:\\Projects\\RustProjects\\Vue-for-Nanobug\\target\\s6-supported-012-package\\vue-0.1.12.zip",
+      "sha256": "5f6a14c2e6b4aa139e33bcdbb3711d56ac03620b784f2dd86cda39810b7e1b73",
+      "bytes": 4127784,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": [],
+      "plugin": "vue",
+      "version": "0.1.12"
+    },
+    {
+      "label": "vue-desktop-0.1.12",
+      "source": "C:\\Projects\\RustProjects\\Vue-for-Nanobug\\target\\s6-desktop-candidate-012-package\\vue-0.1.12.zip",
+      "sha256": "058cb1eec9dbef169aba8095c2e94c0f29935b845735d1c7488108e8a02e4a5e",
+      "bytes": 4121866,
+      "exit": 0,
+      "passed": true,
+      "executed": false,
+      "diagnostics": [],
+      "plugin": "vue",
+      "version": "0.1.12"
+    }
+  ]
+}

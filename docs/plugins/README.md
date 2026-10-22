@@ -1,5 +1,49 @@
 # 插件系统文档目录
 
+- [Git 面板隔离与原生帧滚动](verification/git-panel-isolation-2026-10-22.md)：Git 0.1.29 隔离普通交互、索引刷新和诊断；通用 `ui.canvas 1.3` 保留绘图缓冲，避免每帧等待 WASM 回包。[公开能力设计](specs/canvas-retained-scroll.md)。
+
+- [Git 提交目录勾选与索引锁反馈](verification/git-commit-checkbox-lock-2026-10-22.md)：0.1.28 保留整目录批量暂存语义，限制提交区错误显示高度，并关闭后台查询的可选索引写入；回归与环境恢复证据见记录。
+
+- [Git 提交窗口改造](verification/git-commit-panel-2026-10-22.md)：IDEA 式勾选文件树与固定提交区；Git 0.1.27 通过通用 ui.tree 1.7 接入立即暂存／取消暂存，实际包、检查结果与原生验收状态见记录。
+
+- [Git 大提交列表滚动与加载开销](verification/git-history-performance-2026-10-22.md)：0.1.26 增量维护分块分支线和 OID 索引，滚动不再遍历全部提交，未变化的定时观察只检查一页；复现数据、实际包和原生验证见记录。
+
+- [工作区文件着色与顶部插件入口](specs/workspace-presentation.md)：提供者选择、可调整颜色、多个入口排序及 IDEA 式分支菜单统一使用公开能力；Git 0.1.25 与非 Git 消费者、两组 Windows 原生行为已验收，未发布。全仓检查的并行改动限制及候选身份见[验收记录](verification/workspace-presentation-2026-10-22.md)。
+
+- [Java 插件首版方案与后续插件计划](specs/java-plugin.md)：2026-10-22 已确认并开始顺序实施；本轮仅 Java 插件及必要通用宿主能力，Lombok、Maven、Gradle、JUnit 为后续独立插件。[实施记录](verification/java-plugin-2026-10-22.md)区分实际进展、验收及限制。
+
+- [官方插件兼容核验与 SDK 助手接入方案](specs/official-plugin-sdk-adoption-2026-10-21.md)：已获用户授权，由三个独立会话并行实施 TypeScript 兼容修复、Git ResourceGroup、Markdown EditorIntent；进度见[实施调度记录](verification/official-plugin-sdk-adoption-execution-2026-10-21.md)。此前市场七项／八个发布包静态准入通过，固定证据见[兼容核验](verification/official-plugin-compatibility-2026-10-21.md)及[源码调研](specs/official-plugin-sdk-adoption-sources-2026-10-21.md)；当前未宣称改造已验收完成。
+
+- [分支树双击选择与菜单悬停](verification/git-branch-gestures-2026-10-21.md)：公开 ui.tree 1.5 选择手势、Git 0.1.23 接入，以及原生灰色悬停和菜单期间保留高亮；实际验证状态见记录。
+
+- [比较首次定位、居中导航与双折叠按钮](verification/comparison-navigation-2026-10-21.md)：从改动文件打开首处差异，前后差异按真实视口居中，折叠／展开独立置灰；实施与验证状态见记录。
+
+- [SDK 生命周期助手、运行诊断与兼容验证工具](specs/plugin-developer-tooling.md)：三项已实施并完成本批功能验收，兼容插件热安装保留进程、未保存内容及撤销/重做；实际检查及共享工作区格式限制见[实施验证记录](verification/plugin-developer-tooling.md)。
+
+- [安装确认框全局启用选项](verification/install-global-option-2026-10-21.md)：首次安装时在左下角提供默认未勾选的全局选项；更新保留原启用范围，实际验证状态见记录。
+
+- [多种插件系统对照与改进建议](specs/plugin-system-improvements-research-2026-10-21.md)：基于当前公开接口与外部一手资料的调研建议；区分已有基础、SDK 易用性、持续兼容验证和运行诊断，不代表已批准实施或完成验收。
+
+- [宿主与插件统一滚动条](../ui/verification/scrollbar-width-2026-10-21.md)：修正通用画布轨道定位，统一编辑器、树、列表、终端及插件界面的宽度隐藏动画；公开协议和独立 Git 包不变。
+
+- [插件与宿主共用平滑滚动](../ui/verification/scroll-validation-folds-2026-10-22.md)：普通滚动容器、横向标签与带范围的画布共用 UI 求解器；内容 epoch、精确滚轮、确认及比较区折叠输入的验证见记录。
+
+- [Git 分支缓存与快速筛选](verification/git-branch-fast-switch-2026-10-21.md)：独立 0.1.22 的有界首屏／预览缓存、已知祖先投影、只读查询抢占与历史面板局部发布；实际原生帧检查和候选身份见记录。
+
+- [通用画布连续滚动与绘制复用](verification/canvas-scroll-2026-10-21.md)：公开 `ui.canvas 1.2` 内容 epoch、原生连续滚轮、16ms 同步与矢量平移复用；独立 Git 0.1.21 的实际验证及候选状态见记录。
+
+- [Git 分支查询白屏与增量刷新](verification/git-incremental-refresh-2026-10-20.md)：保留完整日志／预览与缓存目录，公开 `ui.tree 1.4` 结构增量及比较单按钮切换；0.1.21 冻结候选与最终验证状态见记录。
+
+- [比较区单滚动条、等宽换行与顶部背景](../ui/verification/comparison-chrome-2026-10-20.md)：通用原生比较控件的轨道、占宽与顶部呈现修正；独立 Git 0.1.19 和公开契约不变，实际状态见记录。
+
+- [Git 比较无差异区段折叠／展开](verification/git-unchanged-folding-2026-10-20.md)：复制到独立插件的资源管理器图标、公开 `editor.diff 1.4` 与双／三栏同步折叠；当前候选及实际验收状态见记录。
+
+- [比较工具栏箭头与原提交文件导航](verification/git-comparison-arrows-2026-10-20.md)：四个原生箭头、固定于原提交的文件序列及公开 `editor.diff 1.3`；当前实施、实际验收与配套 0.1.18 包状态见记录。
+
+- [比较视图整行底色与默认同步](../ui/verification/diff-row-backgrounds-2026-10-20.md)：通用宿主控件保留左侧阅读边距、差异行尾和行号槽底色，默认同步并移除开关；独立 Git 0.1.17 包不变，当前验证及交付状态见记录。
+
+- [Git 首次选择与文件状态颜色](verification/git-default-selection-2026-10-19.md)：独立 0.1.17 默认定位当前分支、预览第一条提交并按增删改着色；公开 `ui.tree 1.3`、字节分页修正、最终包原生回归及规定门禁通过，产物身份见记录。
+
 - [Vue/TypeScript S1 正式基线复验](verification/vue-typescript-s1-delivery-2026-10-19.md)：2026-10-19 新工单 #121 已验收、三仓推送并读回关闭；正式基线门禁、真实插件与相关原生交互通过。此前过程见[恢复记录](verification/vue-typescript-s1-resume-2026-10-19.md)；#122–#126 暂停，旧 #108–#118 只作历史，未发布版本。
 
 - [Git 面板间距与文件图标](verification/git-panel-polish-2026-10-19.md)：独立 0.1.16 调整外层留白及预览内边距，配套宿主复用资源管理器文件图标并隐藏空菜单按钮；实际包原生回归、产物身份及既有格式检查例外见记录。

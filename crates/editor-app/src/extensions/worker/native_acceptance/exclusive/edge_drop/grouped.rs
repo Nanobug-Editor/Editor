@@ -54,7 +54,7 @@ pub(super) async fn cancel(
     preview_drag(h, edge(before[2], side), name, cx).await?;
     h.main.update(cx, |_, window, cx| {
         check_members(window, &before, members)?;
-        input::key(window, "escape", cx);
+        editor_ui::testing::press_key(window, "escape", cx);
         Ok::<_, anyhow::Error>(())
     })??;
     h.settle(cx).await?;

@@ -2,9 +2,13 @@
 use crate::process::{Spawned, spawn_piped};
 mod completion;
 mod consumers;
+mod contexts;
+mod files;
 mod modules;
+mod sources;
 pub(crate) use completion::CompletionHook;
 use plugin_protocol::language::Provider;
+pub use sources::LanguageSource;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -54,6 +58,13 @@ pub struct LanguageService {
         Mutex<std::collections::BTreeSet<plugin_protocol::language::DocumentContext>>,
     /// Original consumers retain native context references independently of shared adapter code.
     consumers: Mutex<consumers::Consumers>,
+    /// Opaque business context provenance never owns source text or an additional native process.
+    registered_context: Mutex<
+        Option<(
+            crate::LanguageContexts,
+            crate::language_contexts::RegisteredContext,
+        )>,
+    >,
 }
 #[derive(Default)]
 struct Lease {
@@ -195,6 +206,7 @@ impl LanguageService {
             modules: Default::default(),
             document_contexts: Default::default(),
             consumers: Default::default(),
+            registered_context: Default::default(),
         }
     }
     /// Return a negotiated public capability version for this plan, or `None` when unavailable.
@@ -211,13 +223,60 @@ impl LanguageService {
     pub fn can_read_workspace(&self) -> bool {
         self.policy.permissions.contains("workspace.read")
     }
+    /// Admit provider content using negotiated contracts and the original live service authority.
+    /// The host alone supplies source metadata; untrusted URIs never become filesystem paths.
+    /// Invalid schemes, excessive content and revoked owners fail before allocating resources.
+    pub fn open_content(
+        &self,
+        source: plugin_protocol::api::DocumentVersion,
+        location: plugin_protocol::language_content::Location,
+        title: String,
+        text: String,
+    ) -> Result<(), plugin_protocol::api::Failure> {
+        use plugin_protocol::api::{ErrorCode, Failure};
+        let state = self.state.lock().unwrap();
+        if state.retired || !self.authority.is_live() {
+            return Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Language content owner retired",
+            ));
+        }
+        let content = self
+            .provider
+            .content
+            .as_ref()
+            .filter(|content| content.accepts(&location.uri))
+            .ok_or_else(|| {
+                Failure::new(
+                    ErrorCode::UnsupportedOperation,
+                    "Undeclared language content scheme",
+                )
+            })?;
+        if !self.policy.permissions.contains("editor.read")
+            || !self.policy.capabilities.contains_key("language.content")
+            || !self.policy.capabilities.contains_key("editor.virtual")
+        {
+            return Err(Failure::new(
+                ErrorCode::PermissionDenied,
+                "Readonly language content was not granted",
+            ));
+        }
+        self.native_requests.lock().unwrap().open_content(
+            source,
+            location,
+            title,
+            content.language.clone(),
+            text,
+            self.analysis_conditions(),
+        )
+    }
     /// The current Manager-published incarnation alone enters this original policy. The lease lock
     /// serializes issuance with retirement; preview, revision checks and Undo remain native host work.
     pub(crate) fn submit_language_fix(
         &self,
         document: plugin_protocol::api::DocumentVersion,
         fix: plugin_protocol::diagnostics::Fix,
-        guard: Option<Arc<std::sync::atomic::AtomicBool>>,
+        mut guards: Vec<Arc<std::sync::atomic::AtomicBool>>,
     ) -> Result<plugin_protocol::api::Value, plugin_protocol::api::Failure> {
         let state = self.state.lock().unwrap();
         if state.retired || !self.authority.is_live() {
@@ -227,11 +286,14 @@ impl LanguageService {
             ));
         }
         let plan = crate::workspace_resources::language_plan(document, fix.plan)?;
+        // Registered configuration has the same pre-effect phase as native source/connection seals;
+        // neither can permanently narrow recovery of an already committed native document edit.
+        guards.extend(self.analysis_conditions());
         self.native_requests.lock().unwrap().submit(
             plan,
             &self.policy.capabilities,
             &self.policy.permissions,
-            guard,
+            guards,
         )
     }
     /// Transfer calls through the public Manager and its existing serialized native dispatcher.

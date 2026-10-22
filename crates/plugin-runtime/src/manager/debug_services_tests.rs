@@ -110,6 +110,7 @@ fn a_missing_optional_ability_does_not_withdraw_the_provider() {
     assert_eq!(
         debug_abilities(&host),
         DebugAbilities {
+            thread_tree: true,
             breakpoints: true,
             resume_pause: true,
             step: true,

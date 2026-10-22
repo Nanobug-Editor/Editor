@@ -6,6 +6,8 @@ pub(super) struct NativeTextarea {
     pub state: Entity<TextareaState>,
     value_revision: u64,
     last_value: String,
+    /// Fixed viewports use one minimum native row; auto-sized fields retain the usual row range.
+    fixed_height: bool,
     _subscription: Subscription,
 }
 
@@ -27,11 +29,15 @@ impl PluginView {
                 continue;
             };
             if !self.textareas.contains_key(&node.id) {
+                let fixed_height = node.layout.height.is_some();
                 let state = cx.new(|cx| {
                     TextareaState::new(window, cx)
                         .default_value(input.value.clone())
                         .placeholder(input.placeholder.clone())
-                        .auto_grow(3, 8)
+                        .auto_grow(
+                            if fixed_height { 1 } else { 3 },
+                            if fixed_height { 1 } else { 8 },
+                        )
                 });
                 let id = node.id.clone();
                 let subscription = cx.subscribe_in(
@@ -59,12 +65,16 @@ impl PluginView {
                         state,
                         value_revision: input.value_revision,
                         last_value: input.value.clone(),
+                        fixed_height,
                         _subscription: subscription,
                     },
                 );
             }
             let active = self.document.active_node(&node.id).is_some();
             let entry = self.textareas.get_mut(&node.id).unwrap();
+            let fixed_height = node.layout.height.is_some();
+            let changed_height_policy = entry.fixed_height != fixed_height;
+            entry.fixed_height = fixed_height;
             let replace = entry.value_revision != input.value_revision;
             if replace {
                 self.forms.cancel(&node.id);
@@ -72,6 +82,13 @@ impl PluginView {
                 entry.last_value = input.value.clone();
             }
             entry.state.update(cx, |state, cx| {
+                if changed_height_policy {
+                    state.set_auto_grow(
+                        if fixed_height { 1 } else { 3 },
+                        if fixed_height { 1 } else { 8 },
+                        cx,
+                    );
+                }
                 state.set_disabled(!active, cx);
                 state.set_placeholder(input.placeholder.clone(), window, cx);
                 if replace {

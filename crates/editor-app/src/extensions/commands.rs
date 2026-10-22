@@ -116,6 +116,31 @@ impl ExtensionPanel {
             .map(|_| ())
     }
 
+    /// Invoke an exact live owner without revealing its panels or substituting a new incarnation.
+    /// The original native intent and runtime lifetime are rechecked again by the worker.
+    pub(crate) fn enqueue_owned_command(
+        &self,
+        instance: &str,
+        command: &str,
+        arguments: serde_json::Value,
+        guard: super::command_intents::CommandGuard,
+    ) -> Result<(), String> {
+        let (plugin, epoch) = {
+            let state = self.worker.state.lock().unwrap();
+            state
+                .entries
+                .iter()
+                .find_map(|entry| {
+                    let plugin = &entry.manifest.id;
+                    state.owner_epoch(plugin, instance)?;
+                    Some((plugin.clone(), state.command_epoch(plugin, command)?))
+                })
+                .ok_or_else(|| t!("plugins.comparison_owner_changed").to_string())?
+        };
+        self.enqueue_command(&plugin, command, arguments, Some(epoch), None, Some(guard))
+            .map(|_| ())
+    }
+
     /// Validate and enqueue under one publication lock; an explicit owner is never recaptured.
     /// Ordinary host commands capture the current owner here instead of borrowing a UI snapshot.
     pub(super) fn enqueue_command(

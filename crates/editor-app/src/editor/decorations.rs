@@ -369,7 +369,7 @@ impl EditorApp {
                                     }),
                             )
                             .tooltip(move |window, cx| {
-                                crate::ui::controls::Tooltip::new(label.clone()).build(window, cx)
+                                editor_ui::Tooltip::new(label.clone()).build(window, cx)
                             })
                             .into_any_element();
                         // Native scroll geometry may leave a partial row at either edge. Clip both

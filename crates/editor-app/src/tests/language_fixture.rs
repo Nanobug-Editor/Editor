@@ -6,8 +6,8 @@ use std::{
     sync::Arc,
 };
 
-/// Return an active owner and lazy service plan; these callback tests never launch the executable.
-pub(crate) fn declared_language_service(root: &Path) -> (Manager, Arc<LanguageService>) {
+/// Build a declarative LSP package; recognition and installation alone never start its executable.
+pub(crate) fn language_service_package() -> Package {
     let manifest = serde_json::json!({
         "id":"novel-analysis", "name":"Novel analysis", "version":"1.0.0", "protocol":7,
         "api":{"base":"^1", "required":{"language.lsp":"^1", "process":"^1"}},
@@ -19,12 +19,17 @@ pub(crate) fn declared_language_service(root: &Path) -> (Manager, Arc<LanguageSe
     let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
     for (name, bytes) in [
         ("manifest.json", serde_json::to_vec(&manifest).unwrap()),
-        ("plugin.toml", b"[plugin]\nid = \"novel-analysis\"\nname = \"Novel analysis\"\nversion = \"1.0.0\"\nhost_version = \"^0.1\"\n".to_vec()),
+        ("plugin.toml", b"[plugin]\nid = \"novel-analysis\"\nname = \"Novel analysis\"\nversion = \"1.0.0\"\nhost_version = \"^0.1\"\n[[language_definitions]]\nid = \"fixture\"\nname = \"Fixture\"\nextensions = [\"fixture\"]\n".to_vec()),
     ] {
         archive.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
         archive.write_all(&bytes).unwrap();
     }
-    let package = Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap();
+    Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap()
+}
+
+/// Install under `root` and return its manager and demanded LSP plan without starting native code.
+pub(crate) fn declared_language_service(root: &Path) -> (Manager, Arc<LanguageService>) {
+    let package = language_service_package();
     let mut manager = Manager::open(
         root.join("fixture-plugins"),
         Environment {
@@ -36,6 +41,19 @@ pub(crate) fn declared_language_service(root: &Path) -> (Manager, Arc<LanguageSe
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    assert!(
+        manager.language_services().is_empty(),
+        "installation stays cold"
+    );
+    crate::extensions::demand_plugin_fixture(
+        &mut manager,
+        "novel-analysis",
+        plugin_runtime::DemandReason::Language {
+            provider: "novel-analysis/analysis".into(),
+            role: plugin_runtime::LanguageRole::Lsp,
+        },
+    )
+    .unwrap();
     let plan = manager.language_services()["novel-analysis/analysis"]
         .as_ref()
         .unwrap()

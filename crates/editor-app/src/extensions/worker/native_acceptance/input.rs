@@ -1,12 +1,10 @@
 //! Native observations locate painted Base controls; activation uses ordinary Window input dispatch.
 use super::*;
 use gpui_base::test_support::{ElementSnapshot, snapshots};
-use gpui_kit::{
-    ElementId, KeyDownEvent, KeyUpEvent, Keystroke, Role, ScrollDelta, test::TestWindowExt as _,
-};
+use gpui_kit::{ElementId, KeyDownEvent, KeyUpEvent, Keystroke, Role, ScrollDelta};
 
 /// Match the native identity while permitting source-action gesture incarnations to change.
-fn named(node: &ElementSnapshot, id: &str) -> bool {
+pub(super) fn named(node: &ElementSnapshot, id: &str) -> bool {
     node.path().iter().any(|part| matches!(part, ElementId::Name(name) if name.as_ref() == id || name.starts_with(&format!("{id}-action-"))))
 }
 
@@ -88,6 +86,26 @@ pub(super) fn point_click(
     position: Point<Pixels>,
     cx: &mut App,
 ) -> anyhow::Result<()> {
+    point_press_count(window, position, 1, cx)
+}
+
+/// Dispatch a native double-click sequence at the real accessible row, including its first press.
+pub(super) fn double_click(
+    window: &mut Window,
+    item: &ElementSnapshot,
+    cx: &mut App,
+) -> anyhow::Result<()> {
+    point_press_count(window, item.bounds().center(), 1, cx)?;
+    point_press_count(window, item.bounds().center(), 2, cx)
+}
+
+/// Deliver one validated native press/release pair with the platform's click count.
+fn point_press_count(
+    window: &mut Window,
+    position: Point<Pixels>,
+    click_count: usize,
+    cx: &mut App,
+) -> anyhow::Result<()> {
     let viewport = Bounds::new(point(px(0.), px(0.)), window.viewport_size());
     ensure!(
         viewport.contains(&position),
@@ -99,7 +117,7 @@ pub(super) fn point_click(
             position,
             button: MouseButton::Left,
             modifiers: Default::default(),
-            click_count: 1,
+            click_count,
             first_mouse: false,
         }),
         cx,
@@ -109,17 +127,11 @@ pub(super) fn point_click(
             position,
             button: MouseButton::Left,
             modifiers: Default::default(),
-            click_count: 1,
+            click_count,
         }),
         cx,
     );
     Ok(())
-}
-
-/// Kit's public Window helpers dispatch native KeyDown and the focused platform input handler, including
-/// printable Unicode. They do not fabricate a text model or depend on TestPlatform.
-pub(super) fn key(window: &mut Window, key: &str, cx: &mut App) {
-    window.press(key, cx);
 }
 
 /// Send one bounded nontext history key pair through the production native input route.
@@ -137,10 +149,6 @@ pub(super) fn history_control_key(window: &mut Window, key: &str, cx: &mut App) 
         cx,
     );
     window.dispatch_event(PlatformInput::KeyUp(KeyUpEvent { keystroke: key }), cx);
-}
-
-pub(super) fn text(window: &mut Window, text: &str, cx: &mut App) {
-    window.input(text, cx);
 }
 
 pub(super) fn wheel(window: &mut Window, position: Point<Pixels>, y: f32, cx: &mut App) {
@@ -263,7 +271,7 @@ impl Harness {
         self.settle(cx).await
     }
 
-    /// Folder expansion uses Base's real selection and Right-key behavior, preserving its focus/scroll state.
+    /// Expand with native double-click activation, keeping the normal Right-key fallback and focus.
     pub async fn expand(
         &self,
         target: AnyWindowHandle,
@@ -282,7 +290,13 @@ impl Harness {
                     return Ok(false);
                 }
                 if item.expanded() != Some(true) {
-                    click(window, &item, cx)?;
+                    // Commit directories explicitly use single-click disclosure; a double click
+                    // would toggle them twice and focus a different lazy row before the fallback.
+                    if tree == "staging" {
+                        click(window, &item, cx)?;
+                    } else {
+                        double_click(window, &item, cx)?;
+                    }
                 }
                 Ok(true)
             },
@@ -305,7 +319,7 @@ impl Harness {
                     return Ok(false);
                 }
                 if item.expanded() != Some(true) {
-                    key(window, "right", cx);
+                    editor_ui::testing::press_key(window, "right", cx);
                 }
                 Ok(true)
             },

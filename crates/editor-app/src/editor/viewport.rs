@@ -73,6 +73,8 @@ pub(crate) fn sample(editor: &EditorState, window: &Window, cx: &App) -> Option<
 /// Bounded, layout-driven vertical location; no text, selection, or editor entity is retained.
 pub(crate) struct Locator {
     target: Anchor,
+    /// Fraction of the actual content viewport reserved above the located native visual row.
+    viewport_anchor: f32,
     lower: f32,
     upper: Option<f32>,
     distance: f32,
@@ -139,6 +141,7 @@ impl Locator {
                 offset,
                 line_fraction,
             },
+            viewport_anchor: 0.,
             lower: 0.,
             upper: None,
             distance: 0.,
@@ -146,6 +149,14 @@ impl Locator {
             previous: None,
             steps: 0,
             finished: None,
+        }
+    }
+
+    /// Locate `offset` with its visual row centered, preserving native selection and x scrolling.
+    pub(crate) fn centered(offset: usize) -> Self {
+        Self {
+            viewport_anchor: 0.5,
+            ..Self::new(offset, 0.)
         }
     }
 
@@ -224,6 +235,7 @@ impl Locator {
             return self.finish(Step::Failed);
         };
         let delta = f32::from(editor.input_bounds().top() - bounds.top())
+            + (layout.height - f32::from(bounds.size.height)).max(0.) * self.viewport_anchor
             - layout.line_height * self.target.line_fraction;
         // Permit layout rounding only after one exact proposal was applied. Using the coarse
         // tolerance before that proposal would swallow small wheel gestures on tall preview blocks.

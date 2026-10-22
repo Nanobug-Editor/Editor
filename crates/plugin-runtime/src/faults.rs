@@ -223,6 +223,12 @@ pub(crate) fn operation(message: &Input) -> String {
 fn event_operation(event: &Notification) -> String {
     match event {
         Notification::Command { id, .. } => format!("command:{id}"),
+        Notification::ServicePreparation(context) => {
+            format!(
+                "service-preparation:{}:{}",
+                context.contract, context.method
+            )
+        }
         plugin_protocol::api::Notification::LanguageService(context) => {
             format!("lsp-hook:{}", context.provider)
         }

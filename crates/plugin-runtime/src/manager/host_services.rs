@@ -1234,8 +1234,20 @@ impl Manager {
         configuration: &str,
         request: RunRequest,
     ) -> anyhow::Result<HostExecution> {
+        self.start_terminal_configuration_execution_with_origins(configuration, request, &[])
+    }
+    /// Start a frozen launch under every original configuration/target contributor's authority.
+    /// Origins are host-issued receipts: stale scope, grants or incarnation fail before effects.
+    /// Retiring any source revokes the native target; literal host configurations use no sources.
+    pub fn start_terminal_configuration_execution_with_origins(
+        &mut self,
+        configuration: &str,
+        request: RunRequest,
+        origins: &[super::TargetOrigin],
+    ) -> anyhow::Result<HostExecution> {
+        anyhow::ensure!(origins.len() <= 32, "Execution source quota exceeded");
         let caller = host_caller(&self.host_scope());
-        let context = CallContext {
+        let mut context = CallContext {
             // Native terminal launches keep host ownership without acquiring command-picker authority.
             native_waits: Vec::new(),
             menu: None,
@@ -1245,6 +1257,9 @@ impl Manager {
             caller,
             ancestry: Vec::new(),
         };
+        for origin in origins {
+            origin.inherit_execution(self, &mut context)?;
+        }
         self.start_execution_from(request, context, Some(configuration), true)
     }
     /// Forward the source's shrinking authority and lifetime through the host gateway.

@@ -1,16 +1,15 @@
 //! Immutable plugin snapshots use Base selection and scrolling, with no editable document session.
 use super::*;
 use crate::ui::theme::ActiveTheme as _;
-use gpui_base::input::{
-    EditorState, RangeDecoration, RangeDecorationCollection, RangeDecorationStyle,
-};
+use editor_ui::row_backgrounds::RowBackgroundCollection;
+use gpui_base::input::{EditorState, RangeDecoration, RangeDecorationStyle};
 use gpui_kit::{AnyElement, IntoElement as _, SharedString};
 
 pub(super) struct Snapshot {
     pub(super) editor: Entity<EditorState>,
     text: String,
     pub(super) generation: u64,
-    marks: RangeDecorationCollection,
+    marks: RowBackgroundCollection,
 }
 impl PluginView {
     /// Retain native scroll/focus while replacing only supplied immutable bytes and owned colors.
@@ -67,7 +66,7 @@ impl PluginView {
                 let marks = editor.update(cx, |editor, cx| {
                     editor.set_value(text.clone(), window, cx);
                     editor.set_readonly(true, cx);
-                    editor.create_range_decorations_collection(marks, cx)
+                    RowBackgroundCollection::new(&cx.entity(), marks, cx)
                 });
                 self.readonly_code.insert(
                     node.id.clone(),
@@ -94,7 +93,7 @@ impl PluginView {
         let body = self
             .code_alignment_pane(id)
             .and_then(|(group, index)| group.pane(index));
-        let source = crate::ui::controls::readonly_editor_body(
+        let source = editor_ui::readonly_editor_body(
             SharedString::from(format!("plugin-code-{id}")),
             id.into(),
             &snapshot.editor,

@@ -1,7 +1,7 @@
 //! Home layout and consent composition use project-owned controls over native Base behavior.
 
 use super::*;
-use crate::ui::controls::file_operation::{FileChoice, conflict_prompt};
+use editor_ui::file_operation::{FileChoice, conflict_prompt};
 use gpui_kit::AnyElement;
 
 impl ProjectWindow {

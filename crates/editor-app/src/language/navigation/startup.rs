@@ -23,6 +23,7 @@ impl LanguageServerConnection {
         // Unsolicited server messages must reach the same log sink even with no open document.
         let output = transport::reader(stdout, service.clone(), retired.clone())?;
         let mut connection = Self {
+            incarnation_alive: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             documents: Default::default(),
             child,
             service: service.clone(),
@@ -97,8 +98,8 @@ impl LanguageServerConnection {
             "initializationOptions": self.configuration,
             "capabilities": {
                 "general": { "positionEncodings": ["utf-16"] },
-                // Single-document versioned text edits are supported; resource and annotation
-                // capabilities remain unadvertised because this native command cannot apply them.
+                // Resource support is added below only after the original file grants are checked.
+                // Annotation support remains absent; no rejected operation may be silently dropped.
                 "workspace": { "workspaceFolders": true, "workspaceEdit": {"documentChanges":true} },
                 "textDocument": {
                     "diagnostic": { "dynamicRegistration": false, "relatedDocumentSupport": false },
@@ -138,6 +139,10 @@ impl LanguageServerConnection {
             },
             "clientInfo": { "name": crate::app::APP_NAME, "version": env!("CARGO_PKG_VERSION") }
         });
+        if self.service.can_edit_workspace_files() {
+            parameters["capabilities"]["workspace"]["workspaceEdit"]["resourceOperations"] =
+                json!(["rename"]);
+        }
         if !language_features_authorized {
             // Preserve earlier completion/navigation/editing support without advertising methods
             // that the original runtime service did not negotiate, even when a server offers them.

@@ -1,0 +1,27 @@
+{
+  "exe_sha256": "D24BDE502FFB3CDB7572CC5A70D459BB86A4BCC881C26E3B52EBCDE375DA5E07",
+  "elapsed_ms": 16680.3252,
+  "samples": 140,
+  "sample_interval_ms": 100,
+  "peak_working_set_bytes": 163766272,
+  "max_sampled_private_bytes": 136552448,
+  "max_sampled_total_wal_bytes": 28213792,
+  "max_sampled_total_shm_bytes": 65536,
+  "max_sampled_temp_bytes": 65600,
+  "temp_directory": "C:\\Projects\\RustProjects\\Editor\\target\\history-benchmark-temp-20261022-d",
+  "exit_code": 0,
+  "scope": "Entire benchmark process including input vectors and codec/SQLite buffers; transient directory maxima are sampled observations, not guaranteed bounds",
+  "environment": {
+    "os": "Windows 11 Pro 10.0.26200",
+    "cpu": "AMD Ryzen 9 9950X3D",
+    "logical_processors": 32,
+    "os_physical_memory_bytes": 66094223360,
+    "filesystem": "NTFS",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "1.98.1",
+    "target": "x86_64-pc-windows-msvc",
+    "history_dependencies": "rusqlite 0.40.2 bundled, zstd 0.13.3, SHA-256; see Cargo.lock"
+  },
+  "native_binary_sha256": "0527C82DDD99A5921D3C60BC95CDF9CDEE56EC6768ECE9F7B7E83C0261F3EBC9",
+  "source_manifest": "sources-2026-10-22.json"
+}

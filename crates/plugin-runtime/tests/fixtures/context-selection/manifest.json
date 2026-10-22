@@ -1,0 +1,10 @@
+{
+  "id":"context-selection-fixture","name":"Context selection fixture","version":"0.1.1","protocol":7,
+  "api":{"base":"^1","required":{"language.lsp":">=1.6,<2","process":"^1","ui.native":"^1","ui.panels":"^1"}},
+  "component":"plugin.wasm","contributions":"plugin.toml","storage_limit":1024,
+  "permissions":["editor.read","workspace.read","ui.panels","process.service.engine"],
+  "panels":[{"id":"status","title":"Context result","position":"right"}],
+  "commands":[{"id":"probe","title":"Observe public context registration"}],
+  "services":{"engine":{"program":"unused-context-fixture-server"}},
+  "language_servers":[{"id":"analysis","language":"unfamiliar-context-language","service":"engine","hook":false}]
+}

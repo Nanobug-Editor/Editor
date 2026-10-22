@@ -82,6 +82,7 @@ pub(super) fn decode(
             let plan = Plan {
                 title: action.title.clone(),
                 origin: Some(source.document.clone()),
+                conditions: Vec::new(),
                 changes: vec![Change::EditDocument {
                     document: source.document.clone(),
                     edits,
@@ -100,7 +101,7 @@ pub(super) fn decode(
 
 /// Each range addresses the original UTF-8 snapshot. Sorted, disjoint edits stay one complete
 /// operation for DocumentSession's atomic proposal; the caret addresses the resulting text.
-fn native_edits(
+pub(in crate::language::navigation) fn native_edits(
     source: &str,
     edits: Vec<lsp_types::TextEdit>,
 ) -> anyhow::Result<(Vec<api::TextEdit>, api::TextRange)> {

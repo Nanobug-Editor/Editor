@@ -235,7 +235,7 @@ fn declarative_language_plan_needs_no_empty_wasm_and_retires_original_authority(
     assert!(authority.is_live());
     assert_eq!(
         original.capability("language.lsp").unwrap().to_string(),
-        "1.5.0"
+        "1.7.0"
     );
     exercise_native_snapshot_guard(&mut manager, &original);
     let requests = exercise_native_request_ownership(&mut manager, &original);
@@ -330,7 +330,8 @@ fn exercise_native_snapshot_guard(
     let guard = Arc::new(AtomicBool::new(true));
     let origin = LanguageFixOrigin::GuardedLsp {
         service: service.clone(),
-        guard: guard.clone(),
+        guards: vec![guard.clone()],
+        files: Vec::new(),
     };
     let (document, fix) = native_proposal();
     manager
@@ -488,6 +489,7 @@ fn native_proposal() -> (api::DocumentVersion, Fix) {
         plan: workspace::Plan {
             title: "Native proposal".into(),
             origin: Some(document.clone()),
+            conditions: Vec::new(),
             changes: vec![Change::EditDocument {
                 document: document.clone(),
                 edits: vec![api::TextEdit {

@@ -1,6 +1,6 @@
 //! Compose file groups and version-gated actions inside the existing native dock bounds.
 use super::*;
-use crate::ui::controls::{problems as appearance, vertical_scrollbar};
+use editor_ui::{problems as appearance, vertical_scrollbar};
 use gpui_kit::AnyElement;
 
 impl EditorApp {
@@ -130,7 +130,13 @@ impl EditorApp {
         if rows.is_empty() {
             list = list.child(appearance::problem_empty(cx));
         }
-        list.into_any_element()
+        editor_ui::scroll::SmoothScroll::new(
+            "problems-wheel",
+            &self.problems.scroll,
+            editor_ui::scroll::ScrollAxis::Vertical,
+            list,
+        )
+        .into_any_element()
     }
 
     /// Direct publications expose their existing fixes and related locations for the selected file.

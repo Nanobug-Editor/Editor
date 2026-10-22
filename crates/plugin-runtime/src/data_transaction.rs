@@ -351,7 +351,10 @@ pub(crate) fn copy_tree(
                 budget.0 <= 128 * 1024 * 1024,
                 "Private migration copy exceeds quota"
             );
-            atomic_write(&next, &std::fs::read(entry.path())?)?;
+            let bytes = std::fs::read(entry.path()).with_context(|| {
+                format!("Cannot snapshot private file {}", entry.path().display())
+            })?;
+            atomic_write(&next, &bytes)?;
         }
     }
     Ok(())

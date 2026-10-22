@@ -307,10 +307,17 @@ impl EditorApp {
             .contexts
             .iter()
             .filter(|(path, record)| {
-                record
-                    .server
-                    .as_ref()
-                    .is_some_and(|server| !server.is_active())
+                // Only a completed failure withdrawn by the Manager's changed input set permits
+                // another demand. User cancellation alone cannot reopen a native project picker.
+                (record.published_failure
+                    && record.error.is_some()
+                    && panel
+                        .language_document_service(&record.provider, &record.document)
+                        .is_none())
+                    || record
+                        .server
+                        .as_ref()
+                        .is_some_and(|server| !server.is_active())
                     || !wanted.get(*path).is_some_and(
                         |(provider, source, document, availability)| {
                             provider == &record.provider
@@ -328,7 +335,7 @@ impl EditorApp {
         for path in removed {
             let record = self.language_server_demands.contexts.remove(&path).unwrap();
             if let Some(server) = record.server {
-                Self::close_server_document(server, &path, cx);
+                Self::close_server_document(server, &path, None, cx);
             }
         }
         for (path, (provider, source, document, availability)) in wanted {
@@ -359,6 +366,7 @@ impl EditorApp {
                         availability,
                         pending,
                         error,
+                        published_failure: false,
                         server: None,
                     },
                 );
@@ -374,8 +382,13 @@ impl EditorApp {
                 .as_mut()
                 .and_then(crate::extensions::DemandWait::try_take)
             {
+                let published_error = record
+                    .pending
+                    .as_ref()
+                    .is_some_and(crate::extensions::DemandWait::preparation_error_was_published);
                 record.pending.take();
                 record.error = result.err().map(|error| error.to_string());
+                record.published_failure = record.error.is_some() && published_error;
             }
             let state_key = format!("context:{}", record.document.path);
             if let Some(error) = &record.error {
@@ -404,11 +417,14 @@ impl EditorApp {
             let plan = match plan {
                 Ok(plan) => plan,
                 Err(error) => {
-                    self.language_server_demands
+                    let record = self
+                        .language_server_demands
                         .contexts
                         .get_mut(&path)
-                        .unwrap()
-                        .error = Some(error);
+                        .unwrap();
+                    record.error = Some(error);
+                    // An observed cache error is not this waiter's Completed Err. In particular,
+                    // another waiter's failure cannot authorize re-entry after a user cancellation.
                     continue;
                 }
             };

@@ -15,6 +15,27 @@ pub(crate) struct PreparedTextEdits {
     selection: std::ops::Range<usize>,
 }
 
+/// Causal postimage of one synchronous native application, without another writable text or Undo.
+pub(crate) struct AppliedTextEdits {
+    /// Shared COW identity rejects notify-only IME changes even when no session Change was emitted.
+    postimage: super::native_text::NativeTextIdentity,
+    /// Replacing bytes emits one native Change; selection-only applications emit none.
+    emitted_change: bool,
+}
+
+impl AppliedTextEdits {
+    /// Expected DocumentSession revision after this application's own Change listener has drained.
+    /// Capability revisions may advance for both Notify and Change and are deliberately not inferred.
+    pub(crate) fn session_revision_after(&self, before: u64) -> Option<u64> {
+        before.checked_add(u64::from(self.emitted_change))
+    }
+
+    /// Match the exact synchronously captured Rope instance, not merely equal source bytes.
+    pub(crate) fn matches_postimage(&self, text: &gpui_base::input::Rope) -> bool {
+        self.postimage.matches(text)
+    }
+}
+
 impl PreparedTextEdits {
     /// Validate bounded UTF-8 ranges, reject overlap, and merge once without changing native history.
     pub(crate) fn new(
@@ -94,8 +115,30 @@ impl PreparedTextEdits {
         })
     }
 
-    /// Apply after the caller validates identity/revision. IME, readonly and source checks remain native.
+    /// Apply after identity/revision validation and return the exact native mutation's postimage.
+    /// The caller may ignore the receipt; IME, readonly and source checks remain native.
     pub(crate) fn apply(
+        &self,
+        editor: &mut EditorState,
+        window: &mut Window,
+        cx: &mut Context<EditorState>,
+    ) -> anyhow::Result<AppliedTextEdits> {
+        self.validate_current(editor, window, cx)?;
+        if let Some((range, text)) = &self.replacement {
+            // One public Atomic replacement preserves Base's sole Undo stack and separates nearby typing.
+            editor.set_selected_range(range.clone(), cx);
+            editor.replace(text.clone(), window, cx);
+        }
+        editor.set_selected_range(self.selection.clone(), cx);
+        Ok(AppliedTextEdits {
+            postimage: super::native_text::NativeTextIdentity::new(editor.text()),
+            emitted_change: self.replacement.is_some(),
+        })
+    }
+
+    /// Preflight the exact native editor preimage, access and IME state without mutating history.
+    /// Multi-document commits validate every session in one UI turn before their first replacement.
+    pub(crate) fn validate_current(
         &self,
         editor: &mut EditorState,
         window: &mut Window,
@@ -108,12 +151,6 @@ impl PreparedTextEdits {
             "{}",
             t!("editor.editing_stale")
         );
-        if let Some((range, text)) = &self.replacement {
-            // One public Atomic replacement preserves Base's sole Undo stack and separates nearby typing.
-            editor.set_selected_range(range.clone(), cx);
-            editor.replace(text.clone(), window, cx);
-        }
-        editor.set_selected_range(self.selection.clone(), cx);
         Ok(())
     }
 }

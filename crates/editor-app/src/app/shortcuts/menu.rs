@@ -1,8 +1,8 @@
 //! Grouped project and application commands preserve the active panel across popup focus transfers.
 
 use super::ShortcutOrigin;
-use crate::ui::controls::menu::{MenuStyle, PopupMenu};
 use crate::*;
+use editor_ui::menu::{MenuStyle, PopupMenu};
 use plugin_runtime::plugin_protocol::ui::{Action as MenuAction, MenuItem};
 
 /// Retain one menu and its original dispatch context independently of shortcut bindings.
@@ -100,6 +100,7 @@ impl EditorApp {
             ),
             ("project-show-home", "projects.home", !has_project, false),
             ("item-shortcuts", "shortcuts.title", false, true),
+            ("item-history", "history.title", false, false),
             (
                 "project-quit-application",
                 "projects.quit_application",
@@ -155,6 +156,7 @@ impl EditorApp {
                             let origin = app.application_menu.origin.take();
                             app.application_menu.clear();
                             match selected.as_deref() {
+                                Some("item-history") => app.open_workspace_history(window, cx),
                                 Some("item-shortcuts") => {
                                     if let Some(origin) = origin {
                                         app.open_shortcuts_from(origin, window, cx);

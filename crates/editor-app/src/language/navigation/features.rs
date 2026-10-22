@@ -11,6 +11,7 @@ use plugin_runtime::{
 };
 
 mod actions;
+pub(super) use actions::native_edits;
 mod signatures;
 
 impl LanguageServer {
@@ -114,7 +115,7 @@ impl LanguageServer {
 
     /// Waiting for another native request lock is cancellable. Shared first initialization retains
     /// its existing bounded lifetime, since another consumer may be using the same startup.
-    fn feature_connection(
+    pub(super) fn feature_connection(
         &self,
         document: &DocumentLease,
         cancellation: &RequestCancellation,
@@ -138,7 +139,7 @@ impl LanguageServer {
     }
 
     /// These delivery guards revoke this request without spending service retry attempts.
-    fn check_feature_lifetime(
+    pub(super) fn check_feature_lifetime(
         &self,
         document: &DocumentLease,
         cancellation: &RequestCancellation,

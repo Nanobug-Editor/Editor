@@ -1,6 +1,7 @@
 //! Native configuration tree over gpui-base; local rows and drops only change window drafts.
 use super::*;
-use crate::ui::controls::{Button, Icon, Input, TreeRowAppearance, tree_row};
+use editor_ui::scroll::{ScrollAxis, SmoothScrollable as _};
+use editor_ui::{Button, Icon, Input, TreeRowAppearance, tree_row};
 use gpui_base::TreeItem;
 use std::collections::BTreeSet;
 
@@ -104,6 +105,7 @@ pub(super) fn render(
     cx: &gpui_kit::App,
 ) -> AnyElement {
     let tree = form.read(cx).plugin.as_ref().unwrap().tree.clone().unwrap();
+    let wheel_scroll = tree.read(cx).scroll_handle().clone();
     let owner = app.clone();
     let form = form.clone();
     let root = app.clone();
@@ -194,13 +196,14 @@ pub(super) fn render(
                     selected.is_selected(),
                     invalid,
                     TreeRowAppearance::Standard,
+                    Default::default(),
                     cx,
                     folder.then_some(toggle),
                 )
                 .debug_selector(move || selector.clone())
                 .when_some(reason, |row, reason| {
                     row.tooltip(move |window, cx| {
-                        crate::ui::controls::Tooltip::new(reason.clone()).build(window, cx)
+                        editor_ui::Tooltip::new(reason.clone()).build(window, cx)
                     })
                 })
                 // Selection uses the base state but disclosure toggling belongs only to its arrow;
@@ -288,7 +291,7 @@ pub(super) fn render(
                 });
             }
         })
-        .child(element)
+        .child(element.smooth_scroll(&wheel_scroll, ScrollAxis::Vertical))
         .into_any_element()
 }
 

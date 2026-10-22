@@ -48,6 +48,9 @@ pub(super) struct ContextRecord {
     pub(super) availability: Availability,
     pub(super) pending: Option<DemandWait>,
     pub(super) error: Option<String>,
+    /// A real published preparation Err may be retried after its collection inputs change.
+    /// Cancelling a wait or failing admission cannot authorize automatic re-entry.
+    pub(super) published_failure: bool,
     pub(super) server: Option<Arc<language_navigation::LanguageServer>>,
 }
 

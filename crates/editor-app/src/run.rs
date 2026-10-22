@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 pub(crate) mod cleanup;
 mod debug_presentation;
+pub(crate) mod inspection;
 mod provider_preparation;
 pub(crate) mod ui;
 pub use ui::RunConfigForm;
@@ -235,6 +236,8 @@ pub struct RunControls {
     debug_preparations: std::collections::BTreeMap<String, serde_json::Value>,
     /// Resolution may fill only the original frozen final binding, not a later edited configuration.
     debug_preparation_bindings: std::collections::BTreeMap<String, (String, String)>,
+    /// The exact final target's preparation authority, independent of the later form selection.
+    debug_preparation_origins: BTreeMap<String, Vec<plugin_runtime::TargetOrigin>>,
     /// Whether the editor should move to where the target next stops.
     ///
     /// True from the start of a session, because a breakpoint hit is a pause the user did not ask
@@ -256,6 +259,8 @@ pub struct RunControls {
     debug_capabilities: editor_core::DebugCapabilities,
     /// Live targets use the declaration of their original owner; defaults only choose new launches.
     debug_provider_capabilities: std::collections::BTreeMap<String, editor_core::DebugCapabilities>,
+    /// Advanced inspection is readonly provider data keyed by its exact session and pause.
+    inspections: BTreeMap<String, inspection::State>,
     /// Which configured breakpoints the running provider could actually bind.
     ///
     /// The set is per session, not per configuration: the same position may be bindable under one
@@ -334,6 +339,14 @@ pub struct PendingDebugRequest {
 /// The debug methods this editor calls, so an answer can be joined to what it answers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DebugMethod {
+    Threads,
+    ThreadFrames(u32),
+    Children {
+        thread: u32,
+        frame: u32,
+        reference: u32,
+        start: u32,
+    },
     /// Begin a session. The only method that is not about a pause, because it is what starts one.
     Start,
     /// Set the configuration's breakpoints, which belongs to the session rather than to any pause.
@@ -371,6 +384,8 @@ pub struct DebugFrameRow {
 /// One variable row of the debug panel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DebugVariableRow {
+    pub depth: usize,
+    pub action: Option<inspection::VariableAction>,
     pub selector: String,
     /// The provider's own rendering of the value, shown as given.
     pub label: String,
@@ -379,6 +394,7 @@ pub struct DebugVariableRow {
 /// Everything the debug panel shows about the selected session.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DebugPanelRows {
+    pub threads: Vec<inspection::ThreadRow>,
     pub frames: Vec<DebugFrameRow>,
     /// The variables of the selected frame, empty when no frame is selected or none were read.
     pub variables: Vec<DebugVariableRow>,
@@ -453,11 +469,13 @@ impl Default for RunControls {
             debug_position_epochs: Default::default(),
             debug_preparations: Default::default(),
             debug_preparation_bindings: Default::default(),
+            debug_preparation_origins: Default::default(),
             debug_position_followed: true,
             debug_requests: Vec::new(),
             next_debug_request: 0,
             debug_capabilities: editor_core::DebugCapabilities::default(),
             debug_provider_capabilities: Default::default(),
+            inspections: Default::default(),
             debug_breakpoints_verified: BTreeMap::new(),
             error: None,
         }
@@ -1623,7 +1641,7 @@ impl RunControls {
         config: &str,
         index: usize,
         request: u64,
-        result: Result<&str, &str>,
+        result: Result<&crate::extensions::PreparedTarget, &str>,
     ) -> bool {
         // Provider preparations finish without HostRunSnapshot. Even a stopped/late receipt retires
         // only its own wait; it must never leave a ghost start or clear a newer request.
@@ -1649,10 +1667,21 @@ impl RunControls {
             return false;
         }
         if own_build
-            && let Ok(program) = result
+            && let Ok(prepared) = result
             && let Some(arguments) = self.debug_preparations.get_mut(config)
         {
-            arguments["program"] = serde_json::json!(program);
+            arguments["program"] = serde_json::json!(prepared.program);
+            self.debug_preparation_origins
+                .entry(config.into())
+                .or_default()
+                .extend(prepared.origin.iter().cloned());
+            let mut args = prepared
+                .prefix_args
+                .iter()
+                .map(|value| serde_json::json!(value))
+                .collect::<Vec<_>>();
+            args.extend(arguments["args"].as_array().into_iter().flatten().cloned());
+            arguments["args"] = serde_json::json!(args);
         }
         true
     }
@@ -1728,12 +1757,16 @@ impl RunControls {
                 .insert(config.into(), binding);
         }
         self.debug_preparations.insert(config.into(), arguments);
+        self.debug_preparation_origins.remove(config);
         let request = self.begin(config);
         self.begin_sequence(config, plan, request);
         Ok(request)
     }
     /// Only the completed sequence may consume this once; a stopped preparation discards it.
-    pub fn take_prepared_debug(&mut self, config: &str) -> Option<serde_json::Value> {
+    pub fn take_prepared_debug(
+        &mut self,
+        config: &str,
+    ) -> Option<(serde_json::Value, Vec<plugin_runtime::TargetOrigin>)> {
         if self.sequences.get(config)?.next_action(|_| true, |_| true) != SequenceAction::Done {
             return None;
         }
@@ -1741,10 +1774,16 @@ impl RunControls {
         self.debug_preparation_bindings.remove(config);
         self.sequences.remove(config);
         self.pending.retain(|request| request.config != config);
-        Some(arguments)
+        Some((
+            arguments,
+            self.debug_preparation_origins
+                .remove(config)
+                .unwrap_or_default(),
+        ))
     }
     /// A failed build is reported as a failed debug preparation, with no adapter or ordinary target.
     pub fn fail_prepared_debug(&mut self, config: &str, reason: &str) {
+        self.debug_preparation_origins.remove(config);
         self.debug_preparation_bindings.remove(config);
         if self.debug_preparations.remove(config).is_some() {
             self.note_debug_state(
@@ -1757,6 +1796,7 @@ impl RunControls {
     }
     /// Cancellation seals both ordinary preparation and its not-yet-created debug target.
     pub fn cancel_prepared_debug(&mut self, config: &str) {
+        self.debug_preparation_origins.remove(config);
         self.debug_preparation_bindings.remove(config);
         if self.debug_preparations.remove(config).is_some() {
             self.note_debug_state(config, editor_core::DebugSessionState::Exited);
@@ -2236,6 +2276,9 @@ impl RunControls {
 
     /// Select a frame of the selected session's pause, which is what locates the source.
     pub fn select_debug_frame(&mut self, frame: u32) -> Result<(), editor_core::InspectionError> {
+        if self.selected_debug_capabilities().thread_tree {
+            return self.select_tree_frame(frame);
+        }
         let (config, _) = self
             .debug_sessions
             .current()
@@ -2249,6 +2292,9 @@ impl RunControls {
 
     /// Where the selected session's selected frame is, which is the location to reveal.
     pub fn debug_location(&self) -> Option<(&str, u32)> {
+        if self.selected_debug_capabilities().thread_tree {
+            return self.tree_location();
+        }
         self.debug_sessions
             .current()
             .and_then(|(_, session)| session.pause().selected_location())
@@ -2256,6 +2302,9 @@ impl RunControls {
 
     /// The frames of the selected session's pause, empty when nothing has been reported.
     pub fn debug_frames(&self) -> &[editor_core::StackFrame] {
+        if self.selected_debug_capabilities().thread_tree {
+            return self.tree_frames();
+        }
         self.debug_sessions
             .current()
             .map(|(_, session)| session.pause().frames())
@@ -2410,7 +2459,10 @@ impl RunControls {
         match pending.method {
             // A session that has started is recorded with the provider's own identity, so every later
             // call names the session the provider knows rather than one the host made up.
-            DebugMethod::Start => Err(editor_core::InspectionError::NoSession),
+            DebugMethod::Start
+            | DebugMethod::Threads
+            | DebugMethod::ThreadFrames(_)
+            | DebugMethod::Children { .. } => Err(editor_core::InspectionError::NoSession),
             DebugMethod::Breakpoints => Err(editor_core::InspectionError::NoSession),
             DebugMethod::Frames => self.apply_debug_frames(
                 pending.scope,
@@ -2824,6 +2876,14 @@ impl RunControls {
             .config
             .ok_or(editor_core::InspectionError::NoSession)?;
         self.debug_action_in_flight.remove(&config);
+        if matches!(
+            pending.method,
+            DebugMethod::Threads | DebugMethod::ThreadFrames(_) | DebugMethod::Children { .. }
+        ) {
+            if let Some(state) = self.inspections.get_mut(&config) {
+                state.failed = true;
+            }
+        }
         if pending.method == DebugMethod::Start {
             self.note_debug_state(&config, editor_core::DebugSessionState::Failed { reason });
         }
@@ -2930,6 +2990,8 @@ impl RunControls {
                 self.debug_variables(frame)
                     .iter()
                     .map(|variable| DebugVariableRow {
+                        depth: 0,
+                        action: None,
                         selector: format!("run-debug-variable-{frame}-{}", variable.name),
                         // The value is the provider's rendering and is shown as given.
                         label: format!("{} = {}", variable.name, variable.value),
@@ -2937,7 +2999,13 @@ impl RunControls {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
+        let variables = if self.selected_debug_capabilities().thread_tree {
+            self.tree_variable_rows()
+        } else {
+            variables
+        };
         DebugPanelRows {
+            threads: self.tree_thread_rows(),
             frames,
             variables,
             location: self
@@ -2955,6 +3023,9 @@ impl RunControls {
 
     /// The frame the selected session's panel shows as selected.
     pub fn selected_debug_frame(&self) -> Option<u32> {
+        if self.selected_debug_capabilities().thread_tree {
+            return self.tree_selected_frame();
+        }
         self.debug_sessions
             .current()
             .and_then(|(_, session)| session.pause().selected_frame())

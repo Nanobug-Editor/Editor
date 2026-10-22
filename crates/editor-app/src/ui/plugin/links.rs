@@ -1,6 +1,6 @@
 //! Supplement Base link hit testing with the actual press identity; selection stays owned by Base.
 use super::*;
-use crate::ui::controls::Button;
+use editor_ui::Button;
 use gpui_kit::{
     AnyElement, ClickEvent, InteractiveElement as _, IntoElement as _, MouseButton, MouseDownEvent,
     ParentElement as _, Pixels, Point, Styled as _, div, prelude::FluentBuilder as _, px,

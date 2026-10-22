@@ -1,7 +1,8 @@
 //! Exercise source location through actual Base layouts, input and Undo.
 
 use super::*;
-use crate::ui::{theme, typography};
+use crate::ui::theme;
+use editor_ui::typography;
 use gpui_base::input::{Editor, InputEvent};
 use gpui_kit::{
     AppContext as _, Context, Entity, Focusable as _, IntoElement, ParentElement as _, Render,
@@ -91,6 +92,56 @@ fn paint_scroll(view: &Entity<View>, offset: Point<Pixels>, cx: &mut VisualTestC
         window.draw(cx).clear(cx);
         window.draw(cx).clear(cx);
     });
+}
+
+/// Center measured wrapped rows and accept both native clamps without changing source state.
+#[gpui::test]
+fn source_viewport_centered_location_preserves_native_state_and_clamps(cx: &mut TestAppContext) {
+    let text = (0..200)
+        .map(|row| format!("row{row:03} 中文😀 {}\r\n", "native context ".repeat(5)))
+        .collect::<String>();
+    for wrap in [false, true] {
+        let (view, changes, ui) = source_window(cx, &text, wrap);
+        paint_scroll(&view, point(px(-30.), px(0.)), ui);
+        let before = ui.update(|_, cx| {
+            let source = view.read(cx).editor.read(cx);
+            (source.selected_range(), source.scroll_offset().x)
+        });
+        for row in [80, 0, 199] {
+            let byte = text.find(&format!("row{row:03}")).unwrap();
+            let mut locator = Locator::centered(byte);
+            let mut settled = false;
+            for _ in 0..64 {
+                match ui.update(|_, cx| locator.step(view.read(cx).editor.read(cx))) {
+                    Step::Settled => {
+                        settled = true;
+                        break;
+                    }
+                    Step::Scroll(offset) => paint_scroll(&view, offset, ui),
+                    Step::Failed => panic!("native centered location must settle at row {row}"),
+                }
+            }
+            assert!(settled, "native location exceeded its bounded frame budget");
+            ui.update(|_, cx| {
+                let editor = view.read(cx).editor.read(cx);
+                let bounds = editor.range_to_bounds(&(byte..byte)).unwrap();
+                let viewport = editor.input_bounds();
+                if row == 80 {
+                    assert!((bounds.center().y - viewport.center().y).abs() <= px(0.5));
+                } else {
+                    assert!(bounds.bottom() > viewport.top() && bounds.top() < viewport.bottom());
+                }
+                assert_eq!(editor.value().as_ref(), text);
+                assert_eq!(editor.selected_range(), before.0);
+                assert_eq!(editor.scroll_offset().x, before.1);
+            });
+        }
+        assert_eq!(
+            changes.get(),
+            0,
+            "viewport requests must emit no text-change events"
+        );
+    }
 }
 
 /// A distant CRLF row reaches the real viewport without a selection or Undo side effect.

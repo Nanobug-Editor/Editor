@@ -50,7 +50,7 @@ impl EditorApp {
             && active.visible
         {
             let cancel = active.cancel.clone();
-            surface = surface.child(ui::controls::file_operation::progress(
+            surface = surface.child(editor_ui::file_operation::progress(
                 t!(
                     "transfer.progress",
                     completed = active.completed,
@@ -130,7 +130,7 @@ impl EditorApp {
             .into_iter()
             .map(|(id, label, choice, enabled)| {
                 let owner = owner.clone();
-                ui::controls::file_operation::FileChoice {
+                editor_ui::file_operation::FileChoice {
                     id,
                     label: label.into(),
                     enabled,
@@ -165,7 +165,7 @@ impl EditorApp {
                     .to_string(),
                 );
             }
-            surface = surface.child(ui::controls::file_operation::conflict_prompt(
+            surface = surface.child(editor_ui::file_operation::conflict_prompt(
                 prompt.focus.clone(),
                 if prompt.discard {
                     t!("transfer.discard_title")

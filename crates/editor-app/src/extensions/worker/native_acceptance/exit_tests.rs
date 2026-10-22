@@ -3,7 +3,6 @@ use gpui_base::input::EditorState;
 use gpui_kit::{
     AnyWindowHandle, App, AppContext as _, Bounds, Context, Focusable as _, IntoElement, Render,
     Role, Styled, WeakEntity, Window, WindowBounds, WindowOptions, div, px, rgb, size,
-    test::TestWindowExt as _,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -158,7 +157,7 @@ fn native_empty_window_shutdown_child() {
     application.run(move |cx| {
         if slice != Slice::Empty {
             gpui_kit::init(cx);
-            crate::ui::typography::init(cx);
+            editor_ui::typography::init(cx);
             crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(true), cx);
             cx.set_reduce_motion(true);
         }
@@ -209,7 +208,7 @@ fn open_window(
     let mut options = if slice == Slice::Empty {
         WindowOptions::default()
     } else {
-        crate::ui::controls::window::TitleBar::window_options()
+        editor_ui::window::TitleBar::window_options()
     };
     options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
         None,
@@ -273,7 +272,7 @@ fn native_input(
             .upgrade()
             .expect("editor disappeared before native input");
         assert!(native.read(cx).focus_handle(cx).is_focused(window));
-        window.input("退出验证", cx);
+        editor_ui::testing::input_text(window, "退出验证", cx);
         drop(native);
         window.on_next_frame(move |window, cx| {
             let native = editor
@@ -348,7 +347,7 @@ struct ExitWindow {
 impl Render for ExitWindow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(editor) = &self.editor {
-            crate::ui::controls::window_editor(editor, cx)
+            editor_ui::window_editor(editor, cx)
         } else {
             div().size_full().bg(rgb(0x101010)).into_any_element()
         }

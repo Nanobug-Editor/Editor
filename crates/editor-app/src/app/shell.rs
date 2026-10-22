@@ -1,7 +1,8 @@
 //! Owns window chrome, dock panels, settings UI, and shell rendering.
 
-pub(super) use crate::ui::controls::window::title_bar_window_control;
 use crate::*;
+use editor_ui::scroll::ScrollableElement as _;
+pub(super) use editor_ui::window::title_bar_window_control;
 
 /// Share one document scope between default keys and unbound shortcut metadata.
 /// Embedded native source panes receive document commands without granting surrounding plugin controls that authority.
@@ -24,6 +25,7 @@ pub(crate) fn bind_editor_shell_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("shift-alt-f", FormatDocument, document_context),
         KeyBinding::new("f2", RenameSymbol, document_context),
+        KeyBinding::new("f9", ToggleSourceBreakpoint, document_context),
         KeyBinding::new("ctrl-s", SaveDocument, document_context),
         // Match the tree's redo chord when text input owns focus; Base keeps its existing Ctrl+Y binding.
         KeyBinding::new("ctrl-shift-z", gpui_base::input::Redo, Some("Input")),
@@ -410,6 +412,9 @@ impl Render for EditorApp {
             .on_action(cx.listener(Self::on_show_definition_details))
             .on_action(cx.listener(Self::format_document_action))
             .on_action(cx.listener(Self::rename_symbol_action))
+            .on_action(cx.listener(|app, _: &ToggleSourceBreakpoint, _, cx| {
+                app.toggle_source_breakpoint(cx)
+            }))
             .on_action(cx.listener(Self::toggle_outline))
             .on_action(
                 cx.listener(|app, _: &ShowProblems, window, cx| app.show_problems(window, cx)),
@@ -445,7 +450,7 @@ impl Render for EditorApp {
             .bg(shell_style.background.unwrap_or(cx.theme().background))
             .text_color(shell_style.foreground.unwrap_or(cx.theme().foreground))
             .child(
-                crate::ui::controls::window::editor_title_bar(cx)
+                editor_ui::window::editor_title_bar(cx)
                     .child(
                         h_flex()
                             .h_full()
@@ -454,7 +459,8 @@ impl Render for EditorApp {
                             .px_3()
                             // Keep the dropdown outside the native drag region so its button owns input.
                             .child(self.render_application_menu_trigger(cx))
-                            .child(self.render_project_menu_trigger(cx)),
+                            .child(self.render_project_menu_trigger(cx))
+                            .child(self.render_workspace_entries(window, cx)),
                     )
                     .child(
                         div()
@@ -552,7 +558,7 @@ impl Render for EditorApp {
                     .bottom(px(36.))
                     .right(px(12.))
                     .max_h(px(420.))
-                    .overflow_y_scroll()
+                    .overflow_y_scrollbar()
                     .flex()
                     .flex_col()
                     .gap_2()
@@ -605,6 +611,6 @@ impl Render for EditorApp {
 
 impl EditorApp {
     fn render_window_controls(&self, window: &Window, cx: &Context<Self>) -> impl IntoElement {
-        crate::ui::controls::window::native_window_controls(window, cx)
+        editor_ui::window::native_window_controls(window, cx)
     }
 }

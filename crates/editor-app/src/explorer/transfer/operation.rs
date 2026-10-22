@@ -82,6 +82,8 @@ pub(super) struct Outcome {
 
 /// Responses cross executors as values; GPUI entities and document text remain on the UI thread.
 pub(super) enum Event {
+    /// Ordinary transfer success is independent from local-history availability, but failure is visible.
+    HistoryWarning(String),
     Documents {
         reply: oneshot::Sender<Vec<WatchedFile>>,
     },
@@ -119,6 +121,8 @@ pub(super) enum Event {
 }
 
 pub(super) struct Worker {
+    /// Native session backups and persistent profile history have independent ownership/lifetimes.
+    pub local_history: Option<editor_history::Worker>,
     pub root: PathBuf,
     pub kind: Kind,
     pub events: mpsc::UnboundedSender<Event>,
@@ -154,6 +158,7 @@ impl Worker {
         );
         let lifetime = resources.register(backup.path().to_path_buf(), &cancelled);
         Ok(Self {
+            local_history: None,
             root: workspace.root().to_path_buf(),
             workspace,
             watched,
@@ -317,6 +322,53 @@ impl Worker {
 
     /// The UI owns final session authorization and a short rename transaction; cleanup returns to this executor.
     pub(super) async fn publish(&mut self, plan: Plan) -> Result<Vec<Approval>, String> {
+        let mut preimages = Vec::new();
+        // Undo-copy can remove the only current destination. A failed history backup is not
+        // consent to discard it; ordinary moves retain their separate postcondition reconciliation.
+        let deletes = plan.movement.is_none()
+            && plan.entries.iter().any(|entry| {
+                matches!(entry.after, super::fingerprint::Node::Missing)
+                    && !matches!(entry.before, Snapshot::Missing)
+            });
+        if deletes && self.local_history.is_none() {
+            return Err(t!("history.delete_unavailable").to_string());
+        }
+        if let Some(history) = &self.local_history {
+            let paths: Vec<_> = plan
+                .entries
+                .iter()
+                .map(|entry| entry.path.clone())
+                .collect();
+            let root = self.root.clone();
+            match history
+                .call(0, move |history| {
+                    paths
+                        .iter()
+                        .map(|path| {
+                            crate::editor::history::observations::retain_tree(
+                                history,
+                                path,
+                                &root,
+                                editor_history::Reason::BeforeOverwrite,
+                            )
+                        })
+                        .collect::<editor_history::Result<Vec<_>>>()
+                })
+                .await
+            {
+                Ok(retained) => preimages = retained,
+                Err(error) => {
+                    if deletes {
+                        return Err(t!("history.delete_unavailable").to_string()
+                            + ": "
+                            + &error.to_string());
+                    }
+                    let _ = self
+                        .events
+                        .unbounded_send(Event::HistoryWarning(error.to_string()));
+                }
+            }
+        }
         let (reply, answer) = oneshot::channel();
         self.events
             .unbounded_send(Event::Publish { plan, reply })
@@ -337,6 +389,30 @@ impl Worker {
                     before: entry.before.clone(),
                     after: snapshot::stamp(&entry.path).unwrap_or(Stamp::Missing),
                 });
+            }
+        }
+        if let Some(history) = &self.local_history {
+            let root = self.root.clone();
+            let paths: Vec<_> = result
+                .plan
+                .entries
+                .iter()
+                .filter(|entry| result.result.is_ok() || entry.changed())
+                .map(|entry| entry.path.clone())
+                .collect();
+            let movement = result.plan.movement.clone();
+            let copied = self.kind == Kind::Copy && movement.is_none();
+            if let Err(error) = history
+                .call(0, move |history| {
+                    crate::editor::history::observations::finish_transfer(
+                        history, &root, preimages, paths, movement, copied,
+                    )
+                })
+                .await
+            {
+                let _ = self
+                    .events
+                    .unbounded_send(Event::HistoryWarning(error.to_string()));
             }
         }
         if let Err(error) = result.plan.cleanup(result.result.is_ok()) {

@@ -88,6 +88,11 @@ impl Manager {
             return;
         }
         self.invalidate_document_images(&change);
+        if change.closed {
+            self.host_resources
+                .contexts
+                .source_closed(&self.host_scope(), &change.document.path);
+        }
         if self.trusted && self.workspace_open {
             for instance in self.live.values_mut() {
                 instance.document_changed(change.clone());

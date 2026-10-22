@@ -1,3 +1,8 @@
+// Kit 0.8's compatibility namespace names the facade itself. Give GPUI test macro output the
+// same crate identity, including in nested modules that inherit the namespace through a glob.
+#[cfg(test)]
+extern crate gpui_kit as gpui;
+
 mod app;
 mod editor;
 mod explorer;
@@ -12,6 +17,9 @@ mod run;
 mod sdk_export;
 /// Native terminal state and presentation are independent from the installed plugin registry.
 mod terminal;
+#[cfg(test)]
+#[path = "../../plugin-runtime/tests/support/ui_demand.rs"]
+mod test_demand;
 /// Test-only frozen Package resources are shared with runtime integration tests and never embedded in releases.
 #[cfg(test)]
 #[path = "../../plugin-runtime/tests/support/packages.rs"]
@@ -21,14 +29,15 @@ mod tests;
 mod ui;
 
 // Compile translations from the app's locale files and retain English as fallback.
-rust_i18n::i18n!("locales", fallback = "en");
+rust_i18n::i18n!("../editor-ui/locales", fallback = "en");
 
-use crate::ui::controls::dock::panel::Panel as DockPanel;
-use crate::ui::controls::source_editor::Editor;
-use crate::ui::controls::window::TitleBar;
 use crate::ui::theme::ActiveTheme;
 use editor::file_watch::{FileWatch, Reconciliation};
 use editor_core::{DocumentSession, Workspace, WorkspaceSnapshot};
+use editor_ui::dock;
+use editor_ui::dock::Panel as DockPanel;
+use editor_ui::source_editor::Editor;
+use editor_ui::window::TitleBar;
 use futures::StreamExt;
 use gpui_base::dock::{DockArea, DockEvent, DockLayout, PanelEvent};
 use gpui_base::h_flex;
@@ -47,7 +56,7 @@ use gpui_kit::{
     actions,
 };
 use gpui_kit::{div, point, prelude::FluentBuilder, px, size};
-use platform_windows::{LocalHistory, NativeFileStore};
+use platform_windows::NativeFileStore;
 use plugin_schema::ThemeComponent;
 use rust_i18n::t;
 use sha2::{Digest, Sha256};
@@ -59,7 +68,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use ui::controls::dock::panel as dock;
 
 #[cfg(target_os = "windows")]
 use app::WindowsTimerResolution;
@@ -69,6 +77,9 @@ use app::projects::switcher::ProjectMenuHost as _;
 use app::session as session_state;
 use app::{EditorDockPanel, EditorDockPanelKind, bind_editor_shell_keys};
 use assets::AppAssets;
+use editor_ui::dock as local_dock;
+use editor_ui::typography;
+use editor_ui::{Button, Icon, StatusBar, Tooltip};
 use explorer::menu::ExplorerMenu;
 use explorer::tree as explorer_tree;
 use explorer::{ExplorerDelete, ExplorerEdit, ExplorerEditKind};
@@ -81,19 +92,18 @@ use session_state::SessionState;
 #[cfg(test)]
 use theme::builtin_theme;
 use theme::{apply_theme, component_styles};
-use ui::controls::dock as local_dock;
-use ui::controls::{Button, Icon, StatusBar, Tooltip};
-use ui::{assets, icons, theme, typography};
+use ui::{assets, icons, theme};
 
 const EXPLORER_INITIAL_WIDTH: f32 = 280.;
 /// Shared height for the Explorer title bar and editor tab bar, in pixels.
-const PANEL_HEADER_HEIGHT: f32 = 28.;
+use editor_ui::PANEL_HEADER_HEIGHT;
 actions!(
     me_editor,
     [
         SaveDocument,
         FormatDocument,
         RenameSymbol,
+        ToggleSourceBreakpoint,
         RefreshWorkspace,
         ToggleTheme,
         NavigateToDefinition,
@@ -124,7 +134,8 @@ struct EditorApp {
     /// Native Problems keeps focus/selection only and reads the existing document diagnostics model.
     problems: editor::diagnostics::problems::ProblemsState,
     file_store: NativeFileStore,
-    history: Option<LocalHistory>,
+    /// Profile-owned worker plus native history navigation and pending recovery metadata.
+    history: editor::history::State,
     editor: Entity<EditorState>,
     /// The dock entity must repaint when editor-owned popover state changes.
     editor_panel: Entity<EditorDockPanel>,
@@ -189,7 +200,6 @@ struct EditorApp {
     explorer_visible: bool,
     explorer_visibility: Rc<Cell<bool>>,
     tabs_scroll: ScrollHandle,
-    tabs_hovered: bool,
     titlebar_should_move: bool,
     dialog: Option<Entity<app_dialog::AppDialog>>,
     /// The shortcut lookup stays inside this window and captures its original focus target.
@@ -198,12 +208,16 @@ struct EditorApp {
     application_menu: app::shortcuts::menu::MenuState,
     /// The project dropdown owns only navigation metadata; document sessions stay in their windows.
     project_menu: app::projects::switcher::ProjectMenuState,
+    /// Generic plugin title entries and filename colors share this project window's lifecycle.
+    workspace_presentation: extensions::workspace_presentation::State,
     /// Native settings window handle used to activate an already open window.
     dialog_window: Option<WindowHandle<Root>>,
     /// Removes the settings view when its native window closes.
     _dialog_closed_subscription: Option<Subscription>,
     /// Remembers the selected settings category while the dialog is reopened.
     settings_section: app::SettingsSection,
+    /// The settings dialog retains startup preference write failures until the next attempt.
+    settings_startup_error: Option<String>,
     /// Preserve unsaved plugin form drafts while switching settings categories.
     plugin_settings: Option<Entity<extensions::SettingsView>>,
     /// Temporary name field for create and rename commands in the explorer.
@@ -224,7 +238,7 @@ struct EditorApp {
     status: String,
     definition_notice: Option<DefinitionNotice>,
     /// A local nonmodal card replaces informational dialogs and never owns the editor's focus.
-    notification: Option<Entity<ui::controls::Notification>>,
+    notification: Option<Entity<editor_ui::Notification>>,
     definition_request_id: u64,
     /// LSP readiness is tracked by declared language, independently from grammar loading.
     language_service_states: HashMap<String, app::language_servers::ServiceLoadState>,
@@ -272,17 +286,17 @@ struct EditorApp {
     document_command_menu: Option<extensions::command_menus::DocumentCommandMenu>,
     plugin_popup: Option<(PluginPopupKind, Point<Pixels>)>,
     /// A native file context menu captures the opened identity before presenting provider choices.
-    file_view_menu: Option<Entity<ui::controls::menu::PopupMenu>>,
+    file_view_menu: Option<Entity<editor_ui::menu::PopupMenu>>,
     /// Native toolbar focus does not replace the last valid file or independent plugin-window target.
     function_context: Option<extensions::FunctionContext>,
     /// Tracks toolbar ancestry so ordinary host focus can return tools to the current file.
     toolbar_focus: FocusHandle,
     /// Each group opens its own captured overflow list through the same native popup behavior.
-    tool_overflow: Option<Entity<ui::controls::menu::PopupMenu>>,
+    tool_overflow: Option<Entity<editor_ui::menu::PopupMenu>>,
     /// An immutable summary boundary separates reminder confirmation from visible-record reading.
     plugin_popup_snapshot: Option<PluginPopupSnapshot>,
     /// Native prompts retain the runtime gate and are discarded once their owner retires.
-    plugin_interactions: Vec<Entity<ui::controls::interaction::HostInteraction>>,
+    plugin_interactions: Vec<Entity<editor_ui::interaction::HostInteraction>>,
     /// Serialize OS picker ownership with native modal prompts; late picker results cannot grant access.
     plugin_picker_pending: bool,
     /// Dropping the window's sole controller actively closes its owned native selection dialog.
@@ -403,12 +417,8 @@ impl EditorApp {
             .map(|error| format!("{error:#}"));
         // Keep normal users' established LocalAppData history. A host-selected isolated profile
         // owns its history alongside its other data instead of writing through the ambient user.
-        let history = match resource_profile.as_ref().filter(|profile| {
-            dirs::config_dir().is_none_or(|root| **profile != root.join("MeEditor"))
-        }) {
-            Some(profile) => LocalHistory::at(profile.join("history")).ok(),
-            None => LocalHistory::for_current_user().ok(),
-        };
+        let history =
+            editor::history::State::new(resource_profile.as_deref(), Some(workspace.root()), cx);
         let mut session_state =
             prepared_session.unwrap_or_else(|| SessionState::load(workspace.root()));
         Self::prepare_sidebar_visibility(&mut session_state);
@@ -645,15 +655,16 @@ impl EditorApp {
             explorer_visible: session_state.explorer_visible,
             explorer_visibility,
             tabs_scroll: ScrollHandle::new(),
-            tabs_hovered: false,
             titlebar_should_move: false,
             dialog: None,
             shortcut_panel: None,
             application_menu: Default::default(),
             project_menu: Default::default(),
+            workspace_presentation: Default::default(),
             dialog_window: None,
             _dialog_closed_subscription: None,
             settings_section: app::SettingsSection::AppearanceAndBehavior,
+            settings_startup_error: None,
             plugin_settings: None,
             explorer_edit: None,
             explorer_delete: None,
@@ -778,6 +789,7 @@ impl EditorApp {
             }
         })
         .detach();
+        this.initialize_history(cx);
         if let Some(error) = terminal_upgrade_error {
             // File restoration can replace ordinary status text; retain the startup diagnostic in
             // the first visible frame even when the user has kept the terminal panel hidden.
@@ -927,6 +939,12 @@ impl EditorApp {
         }
         let source_path = self.active_path.clone();
         let source_revision = self.active_text_revision();
+        // Retain the approved source plan before awaiting F12. A target's existing display context
+        // is independent and cannot stand in for the project that produced this definition.
+        let source_service = source_path
+            .as_deref()
+            .and_then(|path| self.language_server_for_path(path))
+            .and_then(|server| server.navigation_context_service());
         let task = self.editor.update(cx, |editor, cx| {
             let provider = editor.lsp_mut().definition_provider.clone()?;
             Some(provider.definitions(editor.text(), editor.cursor(), window, cx))
@@ -947,6 +965,13 @@ impl EditorApp {
                 if app.definition_request_id != request_id
                     || app.active_path != source_path
                     || app.active_text_revision() != source_revision
+                    || source_service.as_ref().is_some_and(|source| {
+                        !source.is_active()
+                            || !source_path
+                                .as_deref()
+                                .and_then(|path| app.language_server_for_path(path))
+                                .is_some_and(|server| server.uses_service(source))
+                    })
                 {
                     return;
                 }
@@ -954,7 +979,8 @@ impl EditorApp {
                     .ok()
                     .and_then(|locations| locations.into_iter().next())
                     .is_some_and(|location| {
-                        app.open_definition_uri(
+                        app.open_definition_with_source(
+                            source_service.as_ref(),
                             &location.target_uri,
                             Some(location.target_selection_range),
                             window,
@@ -1059,8 +1085,8 @@ fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     let _timer_resolution = WindowsTimerResolution::enable_for_window_drag();
 
-    let target = launch.target;
     let profile = launch.profile;
+    let target = app::startup::preferences::target(&profile, launch.target);
     let development_workspace = plugin_development::instance::context()
         .map(|instance| Workspace::open(&instance.workspace))
         .transpose()?;
@@ -1088,7 +1114,7 @@ fn main() -> anyhow::Result<()> {
                 eprintln!("Could not load shortcut configuration: {error}");
             }
             // Keep pointer projection outside the complete native Root and its other decorators.
-            ui::controls::init(cx);
+            editor_ui::init(cx);
             if let Some(server) = incoming {
                 app::startup::attach(server, profile.clone(), cx);
             }
@@ -1125,7 +1151,9 @@ fn main() -> anyhow::Result<()> {
                 // Explicit development grants and its isolated profile keep the established startup contract.
                 gpui_kit::open_window(window_options, cx, move |window, cx| {
                     window.set_window_title(app::APP_NAME);
-                    cx.new(|cx| EditorApp::new(workspace, None, window, cx))
+                    let editor = cx.new(|cx| EditorApp::new(workspace, None, window, cx));
+                    plugin_development::report::attach_stop_listener(&editor, cx);
+                    editor
                 })
                 .expect("failed to open Nanobug development window");
             } else {

@@ -82,6 +82,8 @@ impl Published {
 
     /// Only an opened Manager supplies completion, effective entries and real instance identities.
     pub(in crate::extensions) fn publish_manager(&mut self, manager: &mut Manager) {
+        self.observations = manager.runtime_observations();
+        crate::plugin_development::report::checkpoint(manager, false);
         self.reconcile_availabilities(manager);
         self.reconcile_instances(manager);
         self.publish_entries(manager.published_entries());

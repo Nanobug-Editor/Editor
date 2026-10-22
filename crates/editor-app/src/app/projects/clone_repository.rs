@@ -1,7 +1,7 @@
 //! User-requested Git cloning has its own bounded native lifetime and normal project-open route.
 
 use super::*;
-use crate::ui::controls::{Input, project_dialog};
+use editor_ui::{Input, project_dialog};
 use gpui_kit::AnyElement;
 use plugin_runtime::native_processes::{
     NativeLaunch, NativeProcessEvent, NativeProcessGroup, resolve_program,

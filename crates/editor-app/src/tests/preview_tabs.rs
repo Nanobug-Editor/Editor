@@ -94,6 +94,65 @@ fn click(ui: &mut VisualTestContext, selector: &'static str, count: usize) {
     draw(ui);
 }
 
+/// Intrinsic document widths and measured scrolling survive long names, themes and scaling.
+#[gpui::test]
+fn preview_tabs_fit_titles_cap_width_and_reveal_selection(cx: &mut TestAppContext) {
+    let (fixture, ui) = mount(cx, true);
+    let names = [
+        "中文名称.txt".to_string(),
+        format!("{}.txt", "W".repeat(100)),
+    ];
+    for name in &names {
+        let path = fixture.workspace.root().join(name);
+        std::fs::write(&path, "content").unwrap();
+        ui.update(|window, cx| {
+            fixture
+                .app
+                .update(cx, |app, cx| app.open_file(path, window, cx));
+        });
+        draw(ui);
+    }
+    for (dark, scale) in [(false, 1.), (true, 1.5)] {
+        ui.update(|window, cx| {
+            apply_theme(builtin_theme(dark), cx);
+            window.refresh();
+        });
+        ui.simulate_scale_factor_change(scale);
+        ui.simulate_resize(size(px(1100.), px(700.)));
+        draw(ui);
+        let width = ui.debug_bounds("editor-tabs-container").unwrap().size.width;
+        ui.simulate_resize(size(px(1100.) + px(500.) - width, px(700.)));
+        draw(ui);
+        let short = ui.debug_bounds("editor-tab-0").unwrap();
+        let medium = ui.debug_bounds("editor-tab-1").unwrap();
+        let long = ui.debug_bounds("editor-tab-2").unwrap();
+        assert!(short.size.width < medium.size.width);
+        assert!(medium.size.width < px(400.));
+        assert!((long.size.width - px(400.)).abs() < px(0.1));
+        let title = ui.debug_bounds("editor-tab-title-2").unwrap();
+        let close = ui.debug_bounds("editor-tab-close-2").unwrap();
+        assert!(title.size.width < px(400.));
+        assert!(title.right() <= close.left());
+        assert!(close.right() <= long.right());
+        for (index, selector) in [
+            (0, "editor-tab-0"),
+            (2, "editor-tab-2"),
+            (1, "editor-tab-1"),
+        ] {
+            ui.update(|window, cx| {
+                fixture
+                    .app
+                    .update(cx, |app, cx| app.activate_tab(index, window, cx));
+            });
+            draw(ui);
+            let tab = ui.debug_bounds(selector).unwrap();
+            let strip = ui.debug_bounds("editor-tabs-container").unwrap();
+            assert!(tab.left() >= strip.left() - px(0.1));
+            assert!(tab.right() <= strip.right() + px(0.1));
+        }
+    }
+}
+
 /// Single clicks share a slot while fixed files retain their identity, order and tree focus.
 #[gpui::test]
 fn preview_tabs_reuse_one_slot_and_activate_existing_files(cx: &mut TestAppContext) {

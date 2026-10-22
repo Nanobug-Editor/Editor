@@ -1,0 +1,5 @@
+[plugin]
+id = "context-selection-fixture"
+name = "Context selection fixture"
+version = "0.1.1"
+host_version = "^0.1"

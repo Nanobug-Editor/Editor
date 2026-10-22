@@ -2,6 +2,22 @@
 use super::*;
 
 impl Processes {
+    /// Actual outstanding OS confirmation work and any earlier unconfirmed retirement.
+    pub(crate) fn cleanup_evidence(&self) -> (usize, bool) {
+        (
+            self.reapers
+                .iter()
+                .filter(|reaper| !reaper.is_finished())
+                .count(),
+            self.cleanup_unconfirmed,
+        )
+    }
+    /// Attach after successful spawn, before publishing its handle; no native arguments are retained.
+    pub(crate) fn observe(&mut self, id: u64, observation: crate::observability::Observation) {
+        if let Some(process) = self.items.get_mut(&id) {
+            process.observation = Some(observation);
+        }
+    }
     /// Revoke input now; a bounded background reaper drains final output before reporting termination.
     /// The retained callback is authenticated by the original resource context, not by a new caller.
     pub(crate) fn close_observed(
@@ -17,6 +33,7 @@ impl Processes {
         #[cfg(not(windows))]
         let termination = process.child.kill().map_err(anyhow::Error::from);
         if let Err(error) = termination {
+            self.cleanup_unconfirmed = true;
             observe(Err(format!("{error:#}")));
             return Err(error);
         }
@@ -54,6 +71,13 @@ impl Processes {
             if let Err(error) = &outcome {
                 observe(Err(format!("{error:#}")));
             }
+            if let Some(observation) = process.observation.take() {
+                observation.finish(if outcome.is_ok() {
+                    crate::observability::Outcome::Cancelled
+                } else {
+                    crate::observability::Outcome::Failed
+                });
+            }
             outcome
         }));
         Ok(())
@@ -64,8 +88,16 @@ impl Processes {
         let mut pending = Vec::new();
         for reaper in self.reapers.drain(..) {
             if reaper.is_finished() {
-                if let Ok(Err(error)) = reaper.join() {
-                    eprintln!("Native cleanup failed: {error:#}");
+                match reaper.join() {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.cleanup_unconfirmed = true;
+                        eprintln!("Native cleanup failed: {error:#}");
+                    }
+                    Err(_) => {
+                        self.cleanup_unconfirmed = true;
+                        eprintln!("Native cleanup worker failed");
+                    }
                 }
             } else {
                 pending.push(reaper);
@@ -87,6 +119,7 @@ impl Processes {
                 }
             }
         }
+        self.cleanup_unconfirmed |= failure.is_some();
         failure.map_or(Ok(()), Err)
     }
 }

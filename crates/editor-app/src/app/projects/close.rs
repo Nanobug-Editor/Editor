@@ -210,11 +210,24 @@ impl ProjectWindow {
                 cx.notify();
                 return;
             }
-            if !editor.update(cx, |app, cx| app.save_dirty_documents(cx)) {
-                self.error = Some(editor.read(cx).status.clone());
-                cx.notify();
-                return;
-            }
+            let owner = cx.entity().downgrade();
+            let approved_documents = documents.clone();
+            if editor.update(cx, |app, cx| app.defer_history_saves(move |_, window, cx| {
+                // Defer past the editor update before reading its final revisions from the project owner.
+                window.defer(cx, move |window, cx| {
+                    let _ = owner.update(cx, |this, cx| {
+                        if !matches!(&this.decision, Some(Decision::Leave { intent: current, documents, .. })
+                            if std::mem::discriminant(current) == std::mem::discriminant(&intent)
+                                && *documents == approved_documents) { return; }
+                        let Some(editor) = this.editor.clone() else { return; };
+                        let app = editor.read(cx);
+                        if app.tabs.iter().any(OpenTab::is_dirty) { return; }
+                        this.decision = Some(Decision::Leave { intent, documents: document_versions(app, cx),
+                            dirty: false, running: approved_running });
+                        this.accept_leave(false, window, cx);
+                    });
+                });
+            }, cx)) { return; }
         }
         self.decision = None;
         if matches!(intent, CloseIntent::Application) {
@@ -287,6 +300,9 @@ impl ProjectWindow {
             Ok(task) => task,
             Err(error) => {
                 self.close_state = CloseState::Failed;
+                if let Some(editor) = &self.editor {
+                    editor.update(cx, |app, cx| app.resume_history_saves(cx));
+                }
                 self.error = Some(error.clone());
                 cx.notify();
                 if matches!(intent, CloseIntent::Application) {
@@ -324,6 +340,9 @@ impl ProjectWindow {
             let _ = this.update_in(cx, |this, window, cx| {
                 if let Err(error) = result {
                     this.close_state = CloseState::Failed;
+                    if let Some(editor) = &this.editor {
+                        editor.update(cx, |app, cx| app.resume_history_saves(cx));
+                    }
                     this.error = Some(error.clone());
                     cx.notify();
                     if matches!(intent, CloseIntent::Application) {
@@ -348,7 +367,8 @@ impl ProjectWindow {
                 }
                 this.editor = None;
                 this.decision = None;
-                controller::reserve(window.window_handle(), None, cx);
+                // Retain directory ownership and exit metadata until the native window actually closes,
+                // including a last window waiting for the shared runtime's shutdown acknowledgment.
                 window.set_window_title(app::APP_NAME);
                 controller::local_cleanup_settled(window.window_handle(), cx);
                 match intent {

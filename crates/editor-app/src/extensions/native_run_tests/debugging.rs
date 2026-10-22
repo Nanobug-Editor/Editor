@@ -64,7 +64,9 @@ fn native_rust_debug_controls_inspect_and_confirm_a_real_paused_target(cx: &mut 
     driver.frame(&mut manager, &app, cx);
     assert!(cx.debug_bounds("plugin-ui-debug-text").is_none());
     click(cx, "run-debug");
-    let deadline = Instant::now() + Duration::from_secs(30);
+    // Debug includes the public 120-second cold component/preparation budget; controls below
+    // retain their short deadlines after the provider has actually started.
+    let deadline = Instant::now() + Duration::from_secs(120);
     loop {
         driver.frame(&mut manager, &app, cx);
         if cx.update(|_, cx| {

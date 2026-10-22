@@ -6,6 +6,48 @@ use super::{
 use crate::*;
 use gpui_kit::{TestAppContext, gpui};
 
+/// An invalid new project cannot leave an older run's passing report at the requested destination.
+#[test]
+fn developer_tooling_report_initialization_invalidates_stale_pass() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("report.json");
+    std::fs::write(&path, r#"{"status":"passed","session":"old"}"#).unwrap();
+    super::report::initialize(&path).unwrap();
+    let report: plugin_runtime::development::report::DevelopmentReport =
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_ne!(report.session, "old");
+    assert_eq!(
+        report.status,
+        plugin_runtime::development::report::CheckStatus::Inconclusive
+    );
+}
+
+/// A production admission rejection is an executed failed check; it must not remain a pending report.
+#[test]
+fn developer_tooling_report_classifies_admission_failure_as_failed() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("report.json");
+    super::report::initialize(&path).unwrap();
+    let diagnosis = plugin_runtime::validation::check_bytes(b"invalid zip", Default::default())
+        .diagnostics
+        .remove(0);
+    assert_eq!(
+        super::report::failure(&path, &anyhow::Error::from(diagnosis)).unwrap(),
+        1
+    );
+    let report: plugin_runtime::development::report::DevelopmentReport =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(
+        report.status,
+        plugin_runtime::development::report::CheckStatus::Failed
+    );
+    super::report::initialize(&path).unwrap();
+    assert_eq!(
+        super::report::failure(&path, &anyhow::anyhow!("Unavailable tool")).unwrap(),
+        2
+    );
+}
+
 fn resource(root: &Path) {
     std::fs::write(root.join("manifest.json"),r#"{"id":"test","name":"Test","version":"0.1.0","protocol":7,"api":{"base":"^1","required":{}},"contributions":"plugin.toml","permissions":[],"storage_limit":1024}"#).unwrap();
     std::fs::write(
@@ -90,6 +132,7 @@ fn reload_requires_the_same_identity_and_granted_permissions() {
     let mut manifest: plugin_runtime::plugin_protocol::Manifest =
         serde_json::from_slice(&std::fs::read(root.path().join("manifest.json")).unwrap()).unwrap();
     let descriptor = instance::Descriptor {
+        reporting: false,
         session: "test".into(),
         development: manifest.id.clone(),
         profile: root.path().into(),
@@ -249,5 +292,28 @@ fn host_templates_work_without_installed_plugins(cx: &mut TestAppContext) {
     });
     let _ = std::fs::remove_file(
         editor_core::storage_path(&root.path().display().to_string()).unwrap(),
+    );
+}
+
+/// Older validator branches carry a typed admission context even without a field-specific code.
+/// Recovering that context must not depend on std error-chain iteration or human error text.
+#[test]
+fn developer_tooling_report_classifies_untyped_admission_context_as_failed() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("report.json");
+    super::report::initialize(&path).unwrap();
+    let mut files = std::collections::BTreeMap::new();
+    files.insert("manifest.json".into(), br#"{"id":"INVALID","name":"Invalid","version":"1.0.0","protocol":7,"api":{"base":"^1"},"storage_limit":1024}"#.to_vec());
+    let error = plugin_runtime::Package::from_files(files).err().unwrap();
+    assert_eq!(super::report::failure(&path, &error).unwrap(), 1);
+    let report: plugin_runtime::development::report::DevelopmentReport =
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(
+        report.admission,
+        plugin_runtime::development::report::CheckStatus::Failed
+    );
+    assert_eq!(
+        report.status,
+        plugin_runtime::development::report::CheckStatus::Failed
     );
 }

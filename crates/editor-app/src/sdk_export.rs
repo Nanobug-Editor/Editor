@@ -12,9 +12,52 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // Public module declarations must remain independently buildable in the exported SDK.
+    (
+        "src/language_content.rs",
+        include_bytes!("../../plugin-protocol/src/language_content.rs"),
+    ),
+    (
+        "src/presentation.rs",
+        include_bytes!("../../plugin-protocol/src/presentation.rs"),
+    ),
+    (
+        "src/ui/menus.rs",
+        include_bytes!("../../plugin-protocol/src/ui/menus.rs"),
+    ),
+    (
+        "src/ui/workbench_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/workbench_tests.rs"),
+    ),
+    (
+        "src/api/negotiation.rs",
+        include_bytes!("../../plugin-protocol/src/api/negotiation.rs"),
+    ),
+    // Lifecycle owners are ordinary SDK source; no new imported capability or permission is needed.
+    (
+        "src/api/guest/resources.rs",
+        include_bytes!("../../plugin-protocol/src/api/guest/resources.rs"),
+    ),
+    (
+        "src/api/guest/intent.rs",
+        include_bytes!("../../plugin-protocol/src/api/guest/intent.rs"),
+    ),
+    (
+        "src/api/guest/lifecycle_tests.rs",
+        include_bytes!("../../plugin-protocol/src/api/guest/lifecycle_tests.rs"),
+    ),
+    (
+        "src/http/task.rs",
+        include_bytes!("../../plugin-protocol/src/http/task.rs"),
+    ),
     (
         "src/language_context.rs",
         include_bytes!("../../plugin-protocol/src/language_context.rs"),
+    ),
+    // Registered context references are part of the same independently buildable public module.
+    (
+        "src/language_context/registry.rs",
+        include_bytes!("../../plugin-protocol/src/language_context/registry.rs"),
     ),
     // Independent language guests share the same bounded native control contract.
     (
@@ -68,6 +111,10 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../plugin-protocol/src/api/documents.rs"),
     ),
     (
+        "src/api/comparisons.rs",
+        include_bytes!("../../plugin-protocol/src/api/comparisons.rs"),
+    ),
+    (
         "src/commands.rs",
         include_bytes!("../../plugin-protocol/src/commands.rs"),
     ),
@@ -110,6 +157,10 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../plugin-protocol/src/debug-session.json"),
     ),
     (
+        "src/debug-inspection.json",
+        include_bytes!("../../plugin-protocol/src/debug-inspection.json"),
+    ),
+    (
         "src/execution.rs",
         include_bytes!("../../plugin-protocol/src/execution.rs"),
     ),
@@ -128,6 +179,10 @@ const SDK_FILES: &[(&str, &[u8])] = &[
     (
         "src/ui/events.rs",
         include_bytes!("../../plugin-protocol/src/ui/events.rs"),
+    ),
+    (
+        "src/ui/scroll_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/scroll_tests.rs"),
     ),
     (
         "src/ui/tools.rs",
@@ -325,6 +380,13 @@ pub(crate) fn cargo_config() -> anyhow::Result<PathBuf> {
 
 /// Content-addressed caches let different editor versions build plugins independently.
 fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
+    let target = root.join(digest());
+    export(&target)?;
+    Ok(target)
+}
+
+/// Exact embedded SDK identity, available to static tools without creating a cache directory.
+pub(crate) fn digest() -> String {
     let mut digest = Sha256::new();
     for (name, bytes) in SDK_FILES {
         digest.update((name.len() as u64).to_le_bytes());
@@ -332,9 +394,7 @@ fn prepare_cache(root: &Path) -> anyhow::Result<PathBuf> {
         digest.update((bytes.len() as u64).to_le_bytes());
         digest.update(bytes);
     }
-    let target = root.join(format!("{:x}", digest.finalize()));
-    export(&target)?;
-    Ok(target)
+    format!("{:x}", digest.finalize())
 }
 
 /// Publish Rust sources, Cargo manifests, WIT and JSON protocol resources into `target`.
@@ -420,6 +480,8 @@ mod tests {
             "src/lib.rs",
             "src/activation.rs",
             "src/settings.rs",
+            "src/language_context.rs",
+            "src/language_context/registry.rs",
             "wit/plugin.wit",
             "src/http.rs",
             "src/secrets.rs",
@@ -429,6 +491,7 @@ mod tests {
             "src/direct.rs",
             "src/workspace.rs",
             "src/api/documents.rs",
+            "src/api/comparisons.rs",
             "src/commands.rs",
             "src/interaction.rs",
             "src/configurations.rs",

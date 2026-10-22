@@ -158,6 +158,9 @@ impl State {
             }
         }
         Ok(crate::LanguageControlMetadata {
+            selected_context: None,
+            selection_guard: None,
+            contexts: self.host_resources.contexts.clone(),
             collection_guards,
             provider: format!("{}/{}", principal.plugin, request.provider),
             owner: principal.instance.clone(),

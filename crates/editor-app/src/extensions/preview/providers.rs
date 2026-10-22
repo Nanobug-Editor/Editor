@@ -1,7 +1,7 @@
 //! Explicit file-provider choice and native recovery, scoped to the owning workspace and file type.
 use super::*;
 use crate::app::session::FileProviderChoice;
-use crate::ui::controls::menu::{MenuStyle, PopupMenu};
+use editor_ui::menu::{MenuStyle, PopupMenu};
 
 /// Display ordering never selects a provider; stable keys preserve a user's valid prior choice.
 struct Candidate {
@@ -242,6 +242,20 @@ impl EditorApp {
         };
         let mut choices = Vec::new();
         let mut items = Vec::new();
+        let history_path = self.active_tab_index().and_then(|index| {
+            let tab = &self.tabs[index];
+            tab.virtual_document
+                .is_none()
+                .then(|| tab.path().to_owned())
+        });
+        if history_path.is_some() {
+            items.push(protocol::ui::MenuItem {
+                id: "local-history".into(),
+                label: t!("history.title").to_string(),
+                disabled: false,
+                separator_before: false,
+            });
+        }
         if self.active_text_tab_index().is_some() {
             choices.push(FileProviderChoice::Native);
             items.push(protocol::ui::MenuItem {
@@ -296,6 +310,13 @@ impl EditorApp {
                             .as_ref()
                             != Some(&file)
                         {
+                            return;
+                        }
+                        if let protocol::ui::Action::Select(id) = &action
+                            && id == "local-history"
+                            && let Some(path) = &history_path
+                        {
+                            app.open_file_history(path.clone(), window, cx);
                             return;
                         }
                         if let protocol::ui::Action::Select(id) = &action

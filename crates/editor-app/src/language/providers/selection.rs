@@ -62,6 +62,9 @@ impl Providers {
         }
         for (owner, providers) in services {
             for provider in providers {
+                if provider.internal {
+                    continue;
+                }
                 let key = format!("{owner}/{}", provider.id);
                 for language in std::iter::once(&provider.language).chain(&provider.languages) {
                     if provider.primary {

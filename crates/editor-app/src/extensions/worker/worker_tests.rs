@@ -245,10 +245,17 @@ fn operation_errors_retain_plugin_ownership_through_worker_publication() {
     wait_for(&worker, |state| state.status.is_some());
     let status = worker.state.lock().unwrap().status.take().unwrap();
     assert_eq!(status.plugin.as_deref(), Some("missing-plugin"));
-    assert!(status.message.contains("Plugin command owner changed"));
+    let expected = api::Failure::new(
+        api::ErrorCode::StaleRevision,
+        rust_i18n::t!("plugins.command_owner_changed").to_string(),
+    )
+    .to_string();
+    assert_eq!(status.message, expected);
     let logs = worker.state.lock().unwrap().logs.clone();
     assert!(logs.records("missing-plugin").iter().any(|record| {
-        record.level == plugin_runtime::logs::LogLevel::Error && record.source == "host.operation"
+        record.level == plugin_runtime::logs::LogLevel::Error
+            && record.source == "host.operation"
+            && record.message == expected
     }));
     worker.queue_lifecycle(Work::Inspect(directory.path().join("missing.zip")));
     wait_for(&worker, |state| state.status.is_some());
@@ -445,7 +452,7 @@ fn run_preparation(restrict: bool) {
         serde_json::to_vec(&manifest).unwrap(),
     );
     let update = crate::extensions::language_tests::packages::repack(files).unwrap();
-    assert!(worker.queue_lifecycle(Work::Install(update)));
+    assert!(worker.queue_lifecycle(Work::Install(update, true)));
     waiting.recv_timeout(Duration::from_secs(60)).unwrap();
     worker
         .tx

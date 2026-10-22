@@ -1,12 +1,14 @@
 //! Connects plugin languages to their declared language servers.
 
 mod completion_hooks;
+mod content;
 mod context;
 #[cfg(test)]
 mod context_tests;
 mod control;
 #[cfg(test)]
 mod control_handshake_tests;
+mod registered_context;
 pub(crate) use context::{ContextCapture, ContextSource};
 mod definitions;
 mod diagnostics;
@@ -20,6 +22,7 @@ mod service;
 mod snapshots;
 mod startup;
 mod transport;
+pub(crate) mod workspace_edits;
 
 use anyhow::{Context as _, anyhow, ensure};
 use gpui_base::input::{DefinitionProvider, Rope};
@@ -311,6 +314,8 @@ impl DefinitionProvider for LanguageDefinitionProvider {
 
 /// Owns the language-server process and its framed JSON-RPC streams.
 struct LanguageServerConnection {
+    /// One native pipe incarnation seals results independently from a reused service plan.
+    incarnation_alive: Arc<std::sync::atomic::AtomicBool>,
     documents: HashMap<String, DocumentLease>,
     child: plugin_runtime::ServiceProcess,
     service: Arc<plugin_runtime::LanguageService>,
@@ -499,6 +504,8 @@ impl LanguageServerConnection {
 
 impl Drop for LanguageServerConnection {
     fn drop(&mut self) {
+        self.incarnation_alive
+            .store(false, std::sync::atomic::Ordering::Release);
         // Stop reader alerts before terminating the pipe; deliberate cleanup must not look like a crash.
         self.output.stop_logging();
         if self.failed {

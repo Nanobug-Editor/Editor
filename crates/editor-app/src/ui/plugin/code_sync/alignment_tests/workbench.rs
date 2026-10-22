@@ -22,7 +22,12 @@ fn document(version: &DocumentVersion) -> Document {
                     id,
                     Kind::ReadonlyCode {
                         text: text.into(),
-                        changes: Vec::new(),
+                        // Full-file changes also exercise background paints and their finite
+                        // geometry follow-ups in the real independent-window idle regression.
+                        changes: vec![plugin_runtime::plugin_protocol::api::TextRange {
+                            start: 0,
+                            end: text.len(),
+                        }],
                         sync_group: Some("comparison".into()),
                     },
                 )
@@ -368,7 +373,7 @@ fn native_code_alignment_independent_workbench_stops_painting_with_a_main_sessio
     let view = mounted.view.clone();
     let paint_count = paints.clone();
     let handle = main.update(|_, cx| {
-        let mut options = crate::ui::controls::window::TitleBar::window_options();
+        let mut options = editor_ui::window::TitleBar::window_options();
         options.window_background = crate::theme::window_background(cx);
         options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
             None,

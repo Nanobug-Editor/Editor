@@ -1,5 +1,7 @@
 //! Owned native pipes and PTYs with bounded I/O; no escape parsing or terminal state lives here.
 use plugin_protocol::process::{Stream, Update};
+#[cfg(test)]
+mod observation_tests;
 mod retirement;
 use portable_pty::{Child, MasterPty, PtySize};
 #[cfg(not(windows))]
@@ -17,6 +19,8 @@ use std::{
 const RESIZE_SETTLE: Duration = Duration::from_millis(150);
 
 struct Process {
+    /// One native lifetime receipt moves with this real process and its eventual EOF/tree reaper.
+    observation: Option<crate::observability::Observation>,
     // Drop the job and output receiver before ConPTY: otherwise a full reader queue
     // can block ClosePseudoConsole while it tries to flush the dying process output.
     #[cfg(windows)]
@@ -159,6 +163,8 @@ impl Drop for Job {
 
 #[derive(Default)]
 pub(crate) struct Processes {
+    /// Sticky evidence of failed native confirmation; joining/dropping a reaper cannot erase it.
+    cleanup_unconfirmed: bool,
     next: u64,
     items: BTreeMap<u64, Process>,
     /// Closed guest handles keep their native cleanup worker until tree/EOF completion.
@@ -250,6 +256,7 @@ impl Processes {
                 pending_resize: None,
                 exit_code: None,
                 forced: false,
+                observation: None,
                 #[cfg(windows)]
                 _job: job,
             },
@@ -440,7 +447,15 @@ impl Processes {
             }
         }
         for id in exited {
-            self.items.remove(&id);
+            if let Some(mut process) = self.items.remove(&id) {
+                if let Some(observation) = process.observation.take() {
+                    observation.finish(if process.forced {
+                        crate::observability::Outcome::Cancelled
+                    } else {
+                        crate::observability::Outcome::Completed
+                    });
+                }
+            }
         }
         events
     }
@@ -518,6 +533,7 @@ impl Processes {
                 pending_resize: None,
                 exit_code: None,
                 forced: false,
+                observation: None,
                 #[cfg(windows)]
                 _job: std::sync::Arc::new(job),
             },

@@ -1,8 +1,8 @@
 //! Explorer commands use local context-menu rows, submenus and Base button behavior.
 
-use crate::ui::controls::context_menu::PopupMenu as KitPopupMenu;
-use crate::ui::controls::context_menu::PopupMenuItem;
 use crate::*;
+use editor_ui::context_menu::PopupMenu as KitPopupMenu;
+use editor_ui::context_menu::PopupMenuItem;
 use gpui_kit::{ClipboardItem, DismissEvent, anchored};
 
 const MENU_WIDTH: f32 = 212.;
@@ -25,6 +25,8 @@ enum Command {
     Delete,
     Rename,
     Refresh,
+    /// Native local history is independent of file-operation session Undo/Redo.
+    History,
 }
 
 const ROW_COMMANDS: &[Command] = &[
@@ -37,6 +39,7 @@ const ROW_COMMANDS: &[Command] = &[
     Command::Undo,
     Command::Redo,
     Command::Refresh,
+    Command::History,
 ];
 const ROOT_COMMANDS: &[Command] = &[
     Command::Paste,
@@ -44,6 +47,7 @@ const ROOT_COMMANDS: &[Command] = &[
     Command::Undo,
     Command::Redo,
     Command::Refresh,
+    Command::History,
 ];
 const NEW_COMMANDS: &[Command] = &[Command::NewDirectory, Command::NewFile];
 const SPECIAL_COPY_COMMANDS: &[Command] = &[
@@ -78,6 +82,7 @@ impl Command {
             Self::Delete => t!("explorer.delete"),
             Self::Rename => t!("explorer.rename"),
             Self::Refresh => t!("explorer.refresh"),
+            Self::History => t!("history.title"),
         }
         .to_string()
     }
@@ -99,6 +104,7 @@ impl Command {
             Self::Delete => "explorer-menu-delete",
             Self::Rename => "explorer-menu-rename",
             Self::Refresh => "explorer-menu-refresh",
+            Self::History => "explorer-menu-history",
         }
     }
 }
@@ -249,6 +255,13 @@ impl EditorApp {
             .target
             .unwrap_or_else(|| self.workspace.root().to_path_buf());
         match command {
+            Command::History => {
+                if menu.folder {
+                    self.open_workspace_history(window, cx);
+                } else {
+                    self.open_file_history(target, window, cx);
+                }
+            }
             Command::Copy => self.copy_explorer_path(&target, cx),
             Command::CopyFileName | Command::CopyAbsolutePath | Command::CopyProjectRoot => {
                 // Tree targets and the workspace root are absolute; write text rather than CF_HDROP.

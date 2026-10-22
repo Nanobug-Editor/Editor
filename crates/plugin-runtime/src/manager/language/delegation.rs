@@ -93,7 +93,8 @@ impl Manager {
                     )
                 })?
                 .to_owned();
-            let method = plugin_protocol::language_control::binding_prepare_method();
+            let method =
+                plugin_protocol::language_control::binding_prepare_method_for(delegate.interactive);
             let contract =
                 &self.installed[plugin].manifest.plugin_services.provides[&delegate.contract];
             let dependency = plugin_protocol::service::Dependency {
@@ -114,15 +115,32 @@ impl Manager {
                 &owner,
             )?;
             let completion = Completion::new(120_000);
-            let call = super::super::host_services::host_method_call(
+            let mut arguments = serde_json::json!({"document":document});
+            if delegate.interactive
+                && let Some(hint) = self.host_resources.contexts.take_navigation_hint(
+                    &owner,
+                    token.scope(),
+                    &document.path,
+                )
+            {
+                arguments["source_context"] = Value::String(hint);
+            }
+            let mut call = super::super::host_services::host_method_call(
                 &caller,
                 reference,
                 &delegate.method,
-                serde_json::json!({"document":document}),
+                arguments,
                 &dependency,
                 completion.clone(),
                 self.host_alive.clone(),
             )?;
+            if delegate.interactive {
+                // Native origin permits own preference CAS and choice only on this first hop.
+                call.context.origin =
+                    crate::plugin_services::InvocationOrigin::LanguagePreparation {
+                        target: owner.clone(),
+                    };
+            }
             self.plugin_services.lock().unwrap().enqueue(call)?;
             Ok(Pending {
                 token,
@@ -165,14 +183,28 @@ impl Manager {
             return false;
         };
         let key = format!("{provider}!{}", serde_json::to_string(document).unwrap());
-        let Some(pending) = self
-            .language_services
-            .get_mut(&key)
-            .and_then(|slot| slot.delegation.as_mut())
-        else {
+        let Some(slot) = self.language_services.get_mut(&key) else {
             return false;
         };
-        pending.waiters.push((completion, receipt));
+        let Some(pending) = slot.delegation.as_ref() else {
+            return false;
+        };
+        if !pending.waiters.is_empty()
+            && pending
+                .waiters
+                .iter()
+                .all(|(waiter, _)| waiter.status().is_terminal())
+        {
+            // A renewed source must not join a call whose original waiters all cancelled.
+            // Dropping this call leaves its lender and other document calls alive.
+            slot.delegation.take();
+            return false;
+        }
+        slot.delegation
+            .as_mut()
+            .unwrap()
+            .waiters
+            .push((completion, receipt));
         true
     }
 

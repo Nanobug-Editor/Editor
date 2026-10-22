@@ -1,6 +1,6 @@
 //! Native editing preferences are user policy with independent per-language inheritance.
-use crate::ui::controls::Checkbox;
 use crate::*;
+use editor_ui::Checkbox;
 
 /// Use the same local Base checkbox behavior as the remaining settings dialog.
 pub(super) fn render(view: &Entity<EditorApp>, cx: &App) -> gpui_kit::AnyElement {

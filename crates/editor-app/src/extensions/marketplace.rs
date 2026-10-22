@@ -1,8 +1,8 @@
 //! Native marketplace uses inert catalog snapshots; consent never constructs a fake Package.
 use super::*;
-use crate::ui::controls::dialog::DialogAction;
-use crate::ui::controls::dialog::DialogFooter;
-use crate::ui::controls::overlay::WindowExt as _;
+use editor_ui::dialog::DialogAction;
+use editor_ui::dialog::DialogFooter;
+use editor_ui::overlay::WindowExt as _;
 use gpui_base::DialogClose;
 use plugin_runtime::marketplace::{CATALOG_URL, CompatibilityIssue, Release, Sort};
 mod details;
@@ -131,6 +131,7 @@ impl ExtensionPanel {
         cx: &mut Context<Self>,
     ) {
         let owner = cx.entity().downgrade();
+        let global_enabled = Rc::new(Cell::new(false));
         // Updating this owner or replacing another one retires its active targets only after commit.
         // Name the same real sessions used by disable/uninstall before the user authorizes that change.
         let impact = self
@@ -152,6 +153,7 @@ impl ExtensionPanel {
             })
             .filter(|text| !text.is_empty());
         window.open_dialog(cx, move |dialog, _, _| {
+            let global_enabled = global_enabled.clone();
             let release = release.clone();
             let candidate = release.clone();
             let owner = owner.clone();
@@ -223,6 +225,9 @@ impl ExtensionPanel {
                 })
                 .footer(
                     DialogFooter::new()
+                        .when(!upgrading, |footer| {
+                            footer.child(installation::global_enable_option(global_enabled.clone()))
+                        })
                         .child(DialogClose::new().trigger(|base| {
                             Button::new("market-consent-cancel")
                                 .with_base(base)
@@ -245,6 +250,7 @@ impl ExtensionPanel {
                                 candidate.clone(),
                                 generation,
                                 approved_replacements.clone(),
+                                global_enabled.get(),
                             );
                             cx.notify();
                             accepted

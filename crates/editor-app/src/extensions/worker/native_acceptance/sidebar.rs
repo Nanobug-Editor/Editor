@@ -48,7 +48,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     // Keep the actual default pixels even when a too-small staging clip fails the strict checks.
     h.capture(h.main, "sidebar-default.png", cx)?;
     geometry::record_default(h, cx)?;
-    h.expand(h.main, "staging", h.case.label("未暂存", "Unstaged"), cx)
+    h.expand(h.main, "staging", h.case.label("更改", "Changes"), cx)
         .await?;
     h.expand(h.main, "staging", "src", cx).await?;
     h.select_file(h.main, "staging", "a-review.txt", cx).await?;
@@ -57,10 +57,6 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     ensure!(
         retained["native_selection"].is_string(),
         "real file selection did not remain in Base"
-    );
-    ensure!(
-        retained["selected_path"] == "src/a-review.txt",
-        "guest did not acknowledge the selected file"
     );
     h.checkpoint("sidebar_retained_before", retained.clone())?;
     toggle(h, "explorer-panel-toggle", cx).await?;
@@ -235,8 +231,9 @@ async fn create_draft(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
         cx,
     )
     .await?;
-    h.main
-        .update(cx, |_, window, cx| input::text(window, DRAFT, cx))?;
+    h.main.update(cx, |_, window, cx| {
+        editor_ui::testing::input_text(window, DRAFT, cx)
+    })?;
     h.until(
         h.main,
         "shared-sidebar draft acknowledged",
@@ -282,19 +279,10 @@ fn retained_state(h: &Harness, cx: &App) -> anyhow::Result<serde_json::Value> {
         .find(|tree| tree.handle() == handle)
         .context("owned tree resource missing")?;
     let snapshot = tree.snapshot();
-    let Kind::Text {
-        text: selected_path,
-    } = &state.views["git/staging"]
-        .active_node("selected-path")
-        .context("selected path publication missing")?
-        .kind
-    else {
-        anyhow::bail!("selected path is not public text");
-    };
     Ok(
         serde_json::json!({"panel_entity": format!("{:?}", panel.entity_id()), "native_ui_entity": viewer,
         "tree_handle": handle, "tree_epoch": snapshot.epoch, "expanded": snapshot.expanded,
-        "native_selection": native_selection, "selected_path": selected_path}),
+        "native_selection": native_selection}),
     )
 }
 

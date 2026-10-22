@@ -101,6 +101,21 @@ impl Manager {
             ));
         }
         self.validate_demand_reason(token, &reason)?;
+        let mut observation = self.host_resources.observations.begin(
+            crate::observability::Owner::host_operation(token.plugin(), token.scope()),
+            crate::observability::Stage::Activation,
+            None,
+        );
+        observation.trigger(match &reason {
+            DemandReason::Command(_) => crate::observability::ActivationTrigger::Command,
+            DemandReason::View(_) => crate::observability::ActivationTrigger::View,
+            DemandReason::Service(_) => crate::observability::ActivationTrigger::Service,
+            DemandReason::Language { .. } | DemandReason::LanguageDocument { .. } => {
+                crate::observability::ActivationTrigger::Language
+            }
+            DemandReason::Background => crate::observability::ActivationTrigger::Background,
+        });
+        completion.observe(observation);
         self.activation.prune();
         self.resume_deferred_demands();
         let record = &self.activation.records[&(token.scope().into(), token.plugin().into())];
@@ -116,7 +131,10 @@ impl Manager {
         ]);
         // An expired forwarded parent consumes no reservation and cannot publish an already warm receipt.
         if completion.status().is_terminal() {
-            return Ok(DemandRequest { completion });
+            return Ok(DemandRequest {
+                completion,
+                failure_publication: None,
+            });
         }
         if reason.is_language() {
             self.language_services();
@@ -128,7 +146,10 @@ impl Manager {
                 availability: token.clone(),
                 owner: record.owner.clone(),
             }));
-            return Ok(DemandRequest { completion });
+            return Ok(DemandRequest {
+                completion,
+                failure_publication: self.language_failure_publication(&reason),
+            });
         }
         let receipt = record.materialized.then(|| ActivationReceipt {
             availability: token.clone(),
@@ -144,7 +165,10 @@ impl Manager {
         if let Some(receipt) = receipt
             && self.join_language_delegation(&reason, completion.clone(), receipt)
         {
-            return Ok(DemandRequest { completion });
+            return Ok(DemandRequest {
+                completion,
+                failure_publication: self.language_failure_publication(&reason),
+            });
         }
         if let DemandReason::LanguageDocument {
             provider, document, ..
@@ -165,6 +189,7 @@ impl Manager {
         let language_workspace = reason
             .is_language()
             .then(|| scopes::workspace_key(&self.environment.workspace));
+        let failure_publication = self.language_failure_publication(&reason);
         self.join_demand_waiter(
             token,
             Waiter {
@@ -173,7 +198,10 @@ impl Manager {
                 language_workspace,
             },
         )?;
-        Ok(DemandRequest { completion })
+        Ok(DemandRequest {
+            completion,
+            failure_publication,
+        })
     }
 
     /// New roles arriving after a worker snapshot retain their old completion/deadline in the same pool.
@@ -601,10 +629,12 @@ impl Manager {
             | DemandReason::LanguageDocument { provider, role, .. } => {
                 let id = provider.strip_prefix(&format!("{}/", manifest.id));
                 id.is_some_and(|id| match role {
+                    // Context control can demand an internal engine. Native provider catalogs
+                    // still hide it and expose only the plugin's declared primary facade.
                     LanguageRole::Lsp => manifest
                         .language_servers
                         .iter()
-                        .any(|item| item.id == id && item.primary),
+                        .any(|item| item.id == id && (item.primary || item.internal)),
                     LanguageRole::Formatter => manifest
                         .language_servers
                         .iter()

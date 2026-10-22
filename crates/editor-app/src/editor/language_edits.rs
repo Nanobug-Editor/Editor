@@ -23,6 +23,8 @@ pub(crate) struct State {
     /// Escape, replacement requests and service switches revoke both prepare and rename replies.
     rename_request: u64,
     rename_pending: bool,
+    /// Target discovery is bounded independently of transport retries; every wave recomputes edits.
+    rename_discoveries: u8,
 }
 
 impl State {
@@ -31,6 +33,7 @@ impl State {
         let had_work = self.rename.take().is_some() || self.rename_pending;
         self.rename_request = self.rename_request.wrapping_add(1);
         self.rename_pending = false;
+        self.rename_discoveries = 0;
         had_work
     }
 }

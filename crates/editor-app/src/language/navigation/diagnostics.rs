@@ -16,6 +16,9 @@ struct Document {
     source: String,
     /// None means the server has not published for this snapshot yet; Some([]) clears it.
     diagnostics: Option<Vec<Diagnostic>>,
+    /// Pull results share the synchronized source/version and feed later code-action context.
+    /// Keep the push supplement separate so repeated polls cannot append former pull results again.
+    pulled: Option<Vec<Diagnostic>>,
 }
 
 impl DiagnosticsStore {
@@ -40,6 +43,7 @@ impl DiagnosticsStore {
                 version,
                 source,
                 diagnostics: None,
+                pulled: None,
             },
         );
     }
@@ -69,12 +73,33 @@ impl DiagnosticsStore {
         document.diagnostics = Some(params.diagnostics);
     }
 
+    /// Only a full response for this exact synchronized text can become later diagnostic context.
+    /// The connection and native document lease still govern delivery and close/reopen lifetime.
+    fn record_pull(&mut self, uri: &str, source: &str, diagnostics: Vec<Diagnostic>) {
+        if let Some(document) = self.documents.get_mut(&document_key(uri))
+            && document.source == source
+        {
+            document.pulled = Some(diagnostics);
+        }
+    }
+
     /// Return results only for the exact text requested by the editor's revision-bound worker.
     pub(super) fn snapshot(&self, uri: &str, source: &str) -> Option<Vec<Diagnostic>> {
         self.documents
             .get(&document_key(uri))
             .filter(|document| document.source == source)
-            .and_then(|document| document.diagnostics.clone())
+            .and_then(|document| {
+                if document.pulled.is_none() && document.diagnostics.is_none() {
+                    return None;
+                }
+                let mut items = document.pulled.clone().unwrap_or_default();
+                for item in document.diagnostics.iter().flatten() {
+                    if !items.contains(item) {
+                        items.push(item.clone());
+                    }
+                }
+                Some(items)
+            })
     }
 }
 
@@ -132,7 +157,6 @@ impl LanguageServer {
                 connection.wire_uri(&uri).as_str().to_owned()
             };
             connection.drain_messages()?;
-            let pushed = connection.diagnostics.snapshot(uri.as_str(), source);
             if connection.pull_diagnostics {
                 // Pull analyzes the live document even when a server defers its
                 // push-based semantic pass. Omit previousResultId to request a
@@ -141,13 +165,13 @@ impl LanguageServer {
                     "textDocument/diagnostic",
                     json!({ "textDocument": { "uri": uri_text } }),
                 )?;
-                let mut items: Vec<Diagnostic> = serde_json::from_value(report["items"].clone())
+                let items: Vec<Diagnostic> = serde_json::from_value(report["items"].clone())
                     .context("decode full document diagnostic report")?;
-                items.extend(pushed.into_iter().flatten());
-                Ok(Some(items))
-            } else {
-                Ok(pushed)
+                connection
+                    .diagnostics
+                    .record_pull(uri.as_str(), source, items);
             }
+            Ok(connection.diagnostics.snapshot(uri.as_str(), source))
         })();
         self.connection_failed("diagnostics", &result, &mut connection);
         ensure!(

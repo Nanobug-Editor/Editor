@@ -74,6 +74,7 @@ fn feature(request: &direct::Request) -> direct::Result {
                     plan: workspace::Plan {
                         title: "Replace expression function / 替换表达式函数".into(),
                         origin: Some(request.source.document.clone()),
+                        conditions: Vec::new(),
                         changes: vec![workspace::Change::EditDocument {
                             document: request.source.document.clone(),
                             edits: vec![api::TextEdit {

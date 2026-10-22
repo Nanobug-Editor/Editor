@@ -1,4 +1,6 @@
 //! Package-boundary checks for capability negotiation before any guest can run.
+#[path = "support/demand.rs"]
+mod demand;
 /// Only checked-in, hash-checked Package inputs are used after plugin-source removal.
 #[path = "support/packages.rs"]
 mod test_packages;
@@ -103,11 +105,27 @@ fn capability_guest_installs_reads_assets_displays_fallback_and_uninstalls() {
     let path = test_packages::archive("capability-example");
     let package = Package::read(&path).expect("read independently built package");
     let directory = tempfile::tempdir().unwrap();
-    let mut manager = Manager::open(directory.path().into(), Environment::default()).unwrap();
+    let mut manager = Manager::open(
+        directory.path().into(),
+        Environment {
+            workspace: directory.path().display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
     assert!(manager.install(&package, Default::default()).is_err());
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    assert!(
+        manager.live.is_empty(),
+        "ordinary installation remains cold"
+    );
+    demand::ready(
+        &mut manager,
+        &package.manifest.id,
+        plugin_runtime::DemandReason::View(package.manifest.panels[0].id.clone()),
+    );
     let scene = manager.live[&package.manifest.id]
         .views
         .values()
@@ -182,18 +200,32 @@ fn capability_guest_cannot_borrow_undeclared_permissions_or_interfaces() {
         }
         let package = Package::from_bytes(&archive.finish().unwrap().into_inner()).unwrap();
         let directory = tempfile::tempdir().unwrap();
-        let mut manager = Manager::open(directory.path().into(), Environment::default()).unwrap();
-        let error = manager
+        let mut manager = Manager::open(
+            directory.path().into(),
+            Environment {
+                workspace: directory.path().display().to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        manager
             .install(&package, package.manifest.permissions.clone())
-            .unwrap_err();
+            .unwrap();
+        let error = demand::try_ready(
+            &mut manager,
+            &package.manifest.id,
+            plugin_runtime::DemandReason::View(package.manifest.panels[0].id.clone()),
+        )
+        .unwrap_err();
         assert!(
             // Structured failure survives contextual plugin/scope diagnostics.
-            error
-                .downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
-                .is_some_and(|failure| failure.code == expected),
+            error.code == expected,
             "unexpected rejection: {error:#}"
         );
-        assert!(manager.installed.is_empty());
+        assert!(
+            manager.installed.contains_key(&package.manifest.id),
+            "failed first birth retains the installed declaration for explicit retry"
+        );
         assert!(manager.live.is_empty());
     }
 }

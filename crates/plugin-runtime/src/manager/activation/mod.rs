@@ -200,6 +200,9 @@ impl Manager {
             self.activation.next += 1;
         }
         record.owner = owner;
+        // Rollback can restore an already activated owner after publishing a cold record. Adopt
+        // that incarnation so a later role does not Activate again and replace its resource owner.
+        record.materialized |= record.owner.is_some();
         Ok(record.token.clone())
     }
     /// Recheck the original static token and exact admitted owner before executing original arguments.

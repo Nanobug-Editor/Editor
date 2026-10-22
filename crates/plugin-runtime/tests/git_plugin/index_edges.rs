@@ -1,5 +1,7 @@
 //! Index-only changes preserve native unsaved buffers; intent-to-add retains a real stale-index guard.
 use super::*;
+#[path = "index_edges/commit_panel.rs"]
+mod commit_panel;
 
 /// Load the independently packaged candidate without rebuilding a host or embedding guest sources.
 fn candidate() -> Package {
@@ -161,6 +163,7 @@ fn git_package_unstage_hunk_ignores_dirty_native_buffer_but_staging_still_requir
         .invoke_command("git", "diff-index", json!({"path":"tracked.txt"}))
         .unwrap();
     idle_with_documents(&mut manager, &[dirty_document("tracked.txt")]);
+    click(&mut manager, "staging", "commit-hunks");
     let scene = &manager.live["git"].views["staging"];
     assert!(scene.active_node("hunk-1").is_some());
     let revision = scene.revision;
@@ -190,6 +193,7 @@ fn git_package_unstage_hunk_ignores_dirty_native_buffer_but_staging_still_requir
         .invoke_command("git", "refresh-hunks", json!({"path":"tracked.txt"}))
         .unwrap();
     idle_with_documents(&mut manager, &[]);
+    click(&mut manager, "staging", "commit-hunks");
     let revision = manager.live["git"].views["staging"].revision;
     manager
         .event(

@@ -95,6 +95,11 @@ impl EditorApp {
             })?;
             location.position.offset(text)?;
         }
+        if let LanguageFixOrigin::Lsp(service) | LanguageFixOrigin::GuardedLsp { service, .. } =
+            origin
+        {
+            self.inherit_source_language_context(service, &target, cx)?;
+        }
         self.open_file(target, window, cx);
         let index = self.active_text_tab_index().ok_or_else(|| {
             api::Failure::new(

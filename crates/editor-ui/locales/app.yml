@@ -1,0 +1,2463 @@
+_version: 2
+editor.preview_label:
+  en: "Preview"
+  zh-CN: "预览"
+editor.detached_source:
+  en: This document is open in a separate work window.
+  zh-CN: 此文档正在独立工作窗口中编辑。
+editor.window_save_conflict:
+  en: The disk file changed or was deleted. Review it, then use the explicit overwrite button to save.
+  zh-CN: 磁盘文件已被修改或删除。核对后请点击覆盖按钮保存。
+editor.window_confirm_overwrite:
+  en: Overwrite disk file
+  zh-CN: 覆盖磁盘文件
+editor.window_save_changed:
+  en: The document changed after confirmation. Save again to review the current result.
+  zh-CN: 文档已在确认后变化，请重新保存并核对当前结果。
+editor.diff_limit:
+  en: The comparison exceeds its complete-text limit. The file remains open for editing.
+  zh-CN: 差异比较超过完整文本限制，文件仍可继续编辑。
+editor.diff_previous:
+  en: Previous change
+  zh-CN: 上一处差异
+editor.diff_next:
+  en: Next change
+  zh-CN: 下一处差异
+editor.diff_file_previous:
+  en: Previous changed file
+  zh-CN: 上一个改动文件
+editor.diff_file_next:
+  en: Next changed file
+  zh-CN: 下一个改动文件
+editor.diff_collapse_unchanged:
+  zh-CN: 折叠无差异部分
+  en: Collapse unchanged regions
+editor.diff_expand_unchanged:
+  zh-CN: 展开全部无差异部分
+  en: Expand all unchanged regions
+editor.diff_expand_region:
+  zh-CN: 展开 %{count} 行无差异内容
+  en: Expand %{count} unchanged lines
+plugins.comparison_owner_changed:
+  en: The comparison's plugin is no longer active.
+  zh-CN: 此比较视图的插件已停止运行。
+editor.diff_unified:
+  en: Unified (read only)
+  zh-CN: 统一视图（只读）
+editor.diff_split:
+  en: Side by side
+  zh-CN: 双栏视图
+editor.diff_sync:
+  en: Synchronized scrolling
+  zh-CN: 同步滚动
+editor.code_sync_unavailable:
+  en: Synchronized scrolling is unavailable; panes scroll independently.
+  zh-CN: 同步滚动暂不可用，当前各栏独立滚动。
+editor.diff_alignment_paused_overlays:
+  en: Search or code actions are open. Panes scroll independently until they close.
+  zh-CN: 搜索或代码操作已打开，暂时使用独立滚动；关闭后恢复对齐。
+editor.diff_alignment_paused_sync:
+  en: Synchronized scrolling is off. Panes scroll independently.
+  zh-CN: 已关闭同步滚动，暂时使用独立滚动。
+editor.diff_alignment_unavailable:
+  en: This comparison cannot align blank rows. Panes scroll independently.
+  zh-CN: 当前文件无法补白对齐，使用独立滚动。
+editor.readonly_label:
+  en: "Read-only"
+  zh-CN: "只读"
+status.readonly_document:
+  en: "This document is read-only and cannot be saved"
+  zh-CN: "此文档为只读内容，无法保存"
+editor.diff_left:
+  en: "Previous / generated"
+  zh-CN: "历史 / 生成内容"
+editor.diff_right:
+  en: "Current document"
+  zh-CN: "当前文档"
+editor.close_diff:
+  en: "Close comparison"
+  zh-CN: "关闭比较"
+plugins.market_fetched_at:
+  en: "Catalog last fetched: %{time}"
+  zh-CN: "目录最后获取时间：%{time}"
+plugins.market_published_at:
+  en: "Published: %{time}"
+  zh-CN: "发布时间：%{time}"
+plugins.market_source:
+  en: "Source repository"
+  zh-CN: "源码仓库"
+plugins.market_feedback:
+  en: "Feedback / issues"
+  zh-CN: "反馈与问题"
+plugins.market_all_categories:
+  en: "All categories"
+  zh-CN: "全部分类"
+plugins.market_identity:
+  en: "ID: %{id} · Source: %{repository}"
+  zh-CN: "标识：%{id} · 来源：%{repository}"
+plugins.market_compatibility:
+  en: "Editor: %{host} · Platforms: %{platforms}"
+  zh-CN: "编辑器：%{host} · 平台：%{platforms}"
+plugins.market_all_tags:
+  en: "All tags"
+  zh-CN: "全部标签"
+plugins.market_filters:
+  en: "Filter marketplace"
+  zh-CN: "筛选插件市场"
+plugins.market_categories:
+  en: "Category"
+  zh-CN: "分类"
+plugins.market_tags:
+  en: "Tag"
+  zh-CN: "标签"
+plugins.market_sort:
+  en: "Sort by"
+  zh-CN: "排序"
+plugins.market_clear_filters:
+  en: "Clear filters"
+  zh-CN: "清除筛选"
+plugins.market_browsing_version:
+  en: "Browsing %{version}"
+  zh-CN: "浏览版本 %{version}"
+plugins.market_installed_version:
+  en: "Installed %{version}"
+  zh-CN: "已安装 %{version}"
+plugins.update_to_version:
+  en: "Update to %{version}"
+  zh-CN: "可更新至 %{version}"
+plugins.operation_in_progress:
+  en: "Working on %{plugin}…"
+  zh-CN: "正在处理 %{plugin}…"
+plugins.version_installed:
+  en: "Installed"
+  zh-CN: "已安装"
+plugins.version_browsing:
+  en: "Browsing"
+  zh-CN: "浏览中"
+plugins.info_basic:
+  en: "Plugin information"
+  zh-CN: "基本资料"
+plugins.info_compatibility:
+  en: "Compatibility and permissions"
+  zh-CN: "兼容性与权限"
+plugins.info_statistics:
+  en: "Catalog and statistics"
+  zh-CN: "目录与统计"
+plugins.info_id:
+  en: "Plugin ID"
+  zh-CN: "插件标识"
+plugins.info_version:
+  en: "Version"
+  zh-CN: "版本"
+plugins.info_maintainers:
+  en: "Maintainers"
+  zh-CN: "维护者"
+plugins.info_category:
+  en: "Category"
+  zh-CN: "分类"
+plugins.info_tags:
+  en: "Tags"
+  zh-CN: "标签"
+plugins.info_repository:
+  en: "Repository"
+  zh-CN: "源码仓库"
+plugins.info_license:
+  en: "License"
+  zh-CN: "许可协议"
+plugins.info_published:
+  en: "Published"
+  zh-CN: "发布时间"
+plugins.info_scope:
+  en: "Instance scope"
+  zh-CN: "实例作用域"
+plugins.info_permissions:
+  en: "Requested permissions"
+  zh-CN: "申请权限"
+plugins.info_host:
+  en: "Editor version"
+  zh-CN: "编辑器版本"
+plugins.info_platforms:
+  en: "Platforms"
+  zh-CN: "支持平台"
+plugins.info_downloads:
+  en: "Downloads"
+  zh-CN: "下载次数"
+plugins.info_fetched:
+  en: "Catalog fetched"
+  zh-CN: "目录获取时间"
+plugins.info_measured:
+  en: "Statistics measured"
+  zh-CN: "统计时间"
+plugins.info_none:
+  en: "None"
+  zh-CN: "无"
+plugins.scope_workspace:
+  en: "Workspace"
+  zh-CN: "工作区"
+plugins.scope_application:
+  en: "Application"
+  zh-CN: "应用"
+plugins.all_platforms:
+  en: "All platforms"
+  zh-CN: "所有平台"
+plugins.installed_incompatible:
+  en: "Incompatible; please update. %{reason} Settings and enablement are preserved."
+  zh-CN: "不兼容，请更新。%{reason} 原有设置和启用范围已保留。"
+plugins.market_sort_relevance:
+  en: "Match"
+  zh-CN: "相关"
+plugins.market_sort_downloads:
+  en: "Downloads"
+  zh-CN: "下载"
+plugins.market_sort_updated:
+  en: "Updated"
+  zh-CN: "更新"
+plugins.market_sort_name:
+  en: "Name"
+  zh-CN: "名称"
+plugins.market_refresh:
+  en: "Refresh catalog"
+  zh-CN: "刷新目录"
+plugins.market_refreshing:
+  en: "Refreshing catalog; cached entries are read-only."
+  zh-CN: "正在刷新目录；缓存内容仅供浏览。"
+plugins.market_offline:
+  en: "Catalog unavailable; installation is disabled. %{error}"
+  zh-CN: "目录不可用，已暂停安装。%{error}"
+plugins.market_downloads:
+  en: "Downloads: %{count}"
+  zh-CN: "下载次数：%{count}"
+plugins.market_downloads_unavailable:
+  en: "Download count unavailable"
+  zh-CN: "下载次数暂不可用"
+plugins.market_statistics_at:
+  en: "Downloads measured: %{time}; includes repeat and outside-market downloads."
+  zh-CN: "下载统计时间：%{time}；包含重复下载及市场外下载。"
+plugins.market_statistics_stale:
+  en: "Statistics unavailable; retaining the last measurement. %{error}"
+  zh-CN: "统计暂不可用，保留最后一次结果。%{error}"
+plugins.market_versions:
+  en: "Reviewed version history (select to view notes)"
+  zh-CN: "已审核版本历史（选择以查看更新日志）"
+plugins.market_available:
+  en: "Compatible"
+  zh-CN: "兼容可用"
+plugins.market_withdrawn:
+  en: "Withdrawn: %{reason}"
+  zh-CN: "已撤回：%{reason}"
+plugins.market_host_incompatible:
+  en: "Editor version incompatible"
+  zh-CN: "编辑器版本不兼容"
+plugins.market_platform_incompatible:
+  en: "Platform incompatible"
+  zh-CN: "当前平台不兼容"
+plugins.market_capability_incompatible:
+  en: "Plugin capability incompatible: %{reason}"
+  zh-CN: "插件能力不兼容：%{reason}"
+plugins.market_not_newer:
+  en: "Installed or older version; market upgrades only"
+  zh-CN: "同版或旧版；市场仅支持升级"
+plugins.market_incompatible:
+  en: "No compatible reviewed version for this editor and platform."
+  zh-CN: "当前编辑器和平台暂无兼容的已审核版本。"
+plugins.market_permissions:
+  en: "Requested permissions: %{permissions}"
+  zh-CN: "申请权限：%{permissions}"
+plugins.market_native_services:
+  en: "Native services (run outside the WASM sandbox): %{services}"
+  zh-CN: "原生服务（在 WASM 沙箱外运行）：%{services}"
+plugins.market_downloading:
+  en: "Downloading package: %{bytes} bytes"
+  zh-CN: "正在下载插件包：%{bytes} 字节"
+plugins.market_preparing:
+  en: "Preparing installation: %{stage}"
+  zh-CN: "正在准备安装：%{stage}"
+terminal.title:
+  en: "Terminal"
+  zh-CN: "终端"
+terminal.error.restore:
+  en: "Could not restore terminal data: %{details}"
+  zh-CN: "恢复终端数据失败：%{details}"
+terminal.error.save:
+  en: "Could not save terminal data: %{details}"
+  zh-CN: "保存终端数据失败：%{details}"
+terminal.error.settings:
+  en: "Could not apply terminal settings: %{details}"
+  zh-CN: "应用终端设置失败：%{details}"
+terminal.error.process:
+  en: "Terminal process failed: %{details}"
+  zh-CN: "终端进程操作失败：%{details}"
+terminal.invalid_profiles:
+  en: "Use 1–32 shell profiles and a font name of at most 256 bytes"
+  zh-CN: "请配置 1–32 个 Shell，字体名称不得超过 256 个字节"
+terminal.invalid_font_size:
+  en: "Font size must be between 8 and 32"
+  zh-CN: "字号必须在 8 到 32 之间"
+terminal.invalid_default_profile:
+  en: "The default profile does not identify a shell"
+  zh-CN: "默认配置没有指向有效的 Shell"
+terminal.invalid_history:
+  en: "History must be at most 100000 lines"
+  zh-CN: "历史记录最多保留 100000 行"
+terminal.invalid_font_family:
+  en: "Font family cannot be empty"
+  zh-CN: "字体名称不能为空"
+terminal.invalid_profile:
+  en: "Shell profile exceeds the accepted size or contains invalid characters"
+  zh-CN: "Shell 配置超出长度限制或包含非法字符"
+terminal.empty_profile:
+  en: "Shell name and program cannot be empty"
+  zh-CN: "Shell 名称和程序路径不能为空"
+terminal.invalid_color:
+  en: "Invalid color %{color}; use #RRGGBB"
+  zh-CN: "无效颜色 %{color}，请使用 #RRGGBB"
+terminal.invalid_snapshot:
+  en: "Terminal snapshot is invalid or unsupported; original data was preserved"
+  zh-CN: "终端快照损坏或版本不支持，已保留原数据"
+terminal.storage_quota:
+  en: "Terminal data exceeds the storage limit"
+  zh-CN: "终端数据超出存储容量限制"
+terminal.new:
+  en: "New terminal"
+  zh-CN: "新建终端"
+terminal.menu:
+  en: "Terminal actions"
+  zh-CN: "终端操作"
+terminal.exited:
+  en: "Exited"
+  zh-CN: "已退出"
+terminal.session_limit:
+  en: "The terminal session limit has been reached. Close an unused tab first."
+  zh-CN: "已达到终端会话上限，请先关闭不用的 Tab。"
+terminal.shell_scripts:
+  en: "Shell scripts"
+  zh-CN: "Shell 脚本"
+terminal.shell_unavailable:
+  en: "Shell is unavailable on this operating system"
+  zh-CN: "此操作系统不支持所选 Shell"
+terminal.script_required:
+  en: "Enter a script"
+  zh-CN: "请填写脚本内容"
+terminal.shell_no_debugger:
+  en: "This Shell template has no debugger"
+  zh-CN: "此 Shell 模板未提供调试器"
+terminal.clear:
+  en: "Clear buffer"
+  zh-CN: "清空缓冲区"
+terminal.close_task:
+  en: "Stop %{name} and close its tab?"
+  zh-CN: "停止 %{name} 并关闭此 Tab？"
+terminal.cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+terminal.stop_close:
+  en: "Stop and close"
+  zh-CN: "停止并关闭"
+terminal.stop:
+  en: "Stop task"
+  zh-CN: "停止任务"
+terminal.rerun:
+  en: "Run again"
+  zh-CN: "再次运行"
+terminal.interrupt:
+  en: "Interrupt"
+  zh-CN: "中断"
+terminal.settings:
+  en: "Terminal settings"
+  zh-CN: "终端设置"
+shortcuts.global_tab:
+  en: "Global shortcuts"
+  zh-CN: "全局快捷键"
+shortcuts.search:
+  en: "Search operations"
+  zh-CN: "搜索操作描述"
+shortcuts.capture:
+  en: "Search by shortcut"
+  zh-CN: "按快捷键搜索"
+shortcuts.press_keys:
+  en: "Press a shortcut…"
+  zh-CN: "请按下快捷键…"
+shortcuts.unbound:
+  en: "Unbound"
+  zh-CN: "未绑定"
+shortcuts.empty:
+  en: "No matching operations"
+  zh-CN: "没有匹配的操作"
+shortcuts.switch_tabs:
+  en: "Switch tabs"
+  zh-CN: "切换标签"
+shortcuts.capture_help:
+  en: "Esc cancels capture · 2 seconds for the next key"
+  zh-CN: "Esc 取消录入 · 2 秒内可按下一步"
+shortcuts.close_help:
+  en: "Esc closes"
+  zh-CN: "Esc 关闭"
+shortcuts.title:
+  en: "Keyboard shortcuts"
+  zh-CN: "快捷键"
+shortcuts.panel_tab:
+  en: "Panel shortcuts"
+  zh-CN: "面板快捷键"
+settings.file_associations:
+  en: "File associations (user settings)"
+  zh-CN: "文件关联（用户设置）"
+settings.file_association_add:
+  en: "Associate a file extension"
+  zh-CN: "关联文件扩展名"
+settings.file_association_extension:
+  en: "Extension, for example cfg"
+  zh-CN: "扩展名，例如 cfg"
+settings.file_association_error:
+  en: "Could not save the file association"
+  zh-CN: "无法保存文件关联"
+messages.title:
+  en: "Messages"
+  zh-CN: "消息"
+messages.unread:
+  en: "Messages: new warning or error"
+  zh-CN: "消息：有新的警告或错误"
+messages.hide:
+  en: "Hide messages"
+  zh-CN: "收起消息窗口"
+messages.clear:
+  en: "Clear messages"
+  zh-CN: "清空消息"
+messages.empty:
+  en: "No host messages"
+  zh-CN: "暂无宿主消息"
+messages.more:
+  en: "Show more..."
+  zh-CN: "查看更多..."
+messages.info:
+  en: "Information"
+  zh-CN: "信息"
+messages.warning:
+  en: "Warning"
+  zh-CN: "警告"
+messages.error:
+  en: "Error"
+  zh-CN: "错误"
+status.closed:
+  en: "Closed %{path}"
+  zh-CN: "已关闭 %{path}"
+explorer.created_file:
+  en: "Created file: %{path}"
+  zh-CN: "已创建文件：%{path}"
+explorer.created_directory:
+  en: "Created directory: %{path}"
+  zh-CN: "已创建目录：%{path}"
+explorer.renamed:
+  en: "Renamed %{from} to %{to}"
+  zh-CN: "已将 %{from} 重命名为 %{to}"
+explorer.pasted:
+  en: "Pasted %{count} entries into %{path}"
+  zh-CN: "已将 %{count} 个条目粘贴到 %{path}"
+explorer.deleted:
+  en: "Deleted %{path}"
+  zh-CN: "已删除 %{path}"
+plugins.command_menu:
+  en: "Plugin commands"
+  zh-CN: "插件命令"
+plugins.hide_panel:
+  en: "Hide panel"
+  zh-CN: "隐藏面板"
+preview.document_limit:
+  en: "The document exceeds the 1 MiB preview limit"
+  zh-CN: "文档超过 1 MiB，无法预览"
+file_view.provider_unavailable:
+  en: "The selected viewer is unavailable; choose another from the file Tab context menu"
+  zh-CN: "所选查看插件不可用，可从文件标签右键菜单选择其他插件"
+file_view.restore_text:
+  en: "Restore the plain text editor"
+  zh-CN: "恢复普通编辑界面"
+file_view.choose_provider:
+  en: "Choose a file viewer from the file Tab context menu"
+  zh-CN: "请从文件标签的右键菜单选择显示插件"
+file_view.retry:
+  en: "Retry"
+  zh-CN: "重试"
+file_view.restricted:
+  en: "Trust this workspace to run the file viewer"
+  zh-CN: "信任此工作区后才能运行文件查看插件"
+file_view.no_provider:
+  en: "No file viewer is installed for this format"
+  zh-CN: "尚未安装支持此格式的文件查看插件"
+file_view.disabled:
+  en: "The file viewer is disabled"
+  zh-CN: "文件查看插件已停用"
+file_view.denied:
+  en: "The file viewer requires permission to read this file"
+  zh-CN: "文件查看插件尚未获得读取此文件的权限"
+run.legacy_configuration:
+  en: "Legacy configurations are no longer supported. Clear only the explicitly approved workspace before saving new configurations."
+  zh-CN: "旧运行配置已停止支持。请先清理已明确授权的工作区，再保存新配置。"
+run.plugin_add_prompt:
+  en: "Please add a configuration"
+  zh-CN: "请添加配置"
+run.plugin_loading:
+  en: "Loading configuration…"
+  zh-CN: "正在加载配置…"
+run.plugin_add_folder:
+  en: "Add folder"
+  zh-CN: "添加文件夹"
+run.plugin_apply:
+  en: "Apply"
+  zh-CN: "应用"
+run.plugin_no_templates:
+  en: "No configuration templates"
+  zh-CN: "暂无命令配置"
+run.plugin_unnamed:
+  en: "Unnamed configuration"
+  zh-CN: "未命名配置"
+run.plugin_validating:
+  en: "Validating configuration…"
+  zh-CN: "正在校验配置…"
+run.plugin_unchecked:
+  en: "Configuration has not been validated"
+  zh-CN: "配置尚未校验"
+run.plugin_stale:
+  en: "Configuration changed; please try again"
+  zh-CN: "配置已经变化，请重试"
+run.plugin_edit_quota:
+  en: "Pending input exceeds the storage limit. Keep this window open or discard the draft."
+  zh-CN: "待确认输入超出存储上限。请保留窗口或放弃草稿。"
+run.plugin_pending_edits:
+  en: "Input could not be acknowledged. It has been retained; reopen when the provider is available."
+  zh-CN: "插件未能确认输入，内容已保留；提供者恢复后重新打开即可重试。"
+run.plugin_provider_unavailable:
+  en: "The configuration provider is unavailable. Reopen the form after enabling it."
+  zh-CN: "配置提供者不可用，启用后请重新打开表单。"
+run.plugin_timeout:
+  en: "The configuration provider did not reply within 30 seconds."
+  zh-CN: "配置提供者未在 30 秒内回复。"
+run.plugin_worker_unavailable:
+  en: "The plugin runtime is unavailable. Reopen the workspace to retry."
+  zh-CN: "插件运行时不可用，请重新打开工作区后重试。"
+editor.image_save_first:
+  en: "Save the document before importing images"
+  zh-CN: "请先保存文档，再导入图片"
+editor.image_save_first_detail:
+  en: "Images will be stored beside this document. Cancel keeps the files and source unchanged."
+  zh-CN: "图片将保存到文档同级目录。取消后不会保存图片或插入引用。"
+editor.image_save:
+  en: "Save"
+  zh-CN: "保存"
+editor.image_cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+editor.image_input_failed:
+  en: "Image import failed; no reference was inserted"
+  zh-CN: "图片导入失败，未插入引用"
+editor.image_input_denied:
+  en: "Image import requires document and workspace write permission; no file or reference was created"
+  zh-CN: "导入图片需要文档与工作区写入权限，未创建文件或引用"
+editor.image_input_busy:
+  en: "An image import is being prepared. Please retry after it finishes."
+  zh-CN: "正在准备上一批图片，请在完成后重试。"
+preview.image_loading:
+  en: "Loading image…"
+  zh-CN: "正在加载图片…"
+preview.image_denied:
+  en: "Permission required to read this image"
+  zh-CN: "未获读取此图片的权限"
+preview.image_path:
+  en: "Image path is invalid or outside the workspace"
+  zh-CN: "图片路径无效或超出工作区"
+preview.image_missing:
+  en: "Image file was not found"
+  zh-CN: "找不到图片文件"
+preview.image_timeout:
+  en: "Image request timed out"
+  zh-CN: "图片请求超时"
+preview.image_limit:
+  en: "Image exceeds the resource limit"
+  zh-CN: "图片超出资源限制"
+preview.image_unsupported:
+  en: "Unsupported image format or address"
+  zh-CN: "不支持此图片格式或地址"
+preview.image_failed:
+  en: "Image read, network request or decoding failed"
+  zh-CN: "图片读取、网络请求或解码失败"
+plugins.permission_network_images:
+  en: "Download preview images through bounded HTTP(S) requests"
+  zh-CN: "通过受限 HTTP(S) 请求下载预览图片"
+plugins.permission_workspace_write:
+  en: "Save pasted or dropped images as new files beside their bound document, without overwriting files"
+  zh-CN: "将粘贴或拖入的图片保存为绑定文档同级的新文件，不覆盖已有文件"
+plugins.permission_external_navigation:
+  en: "Open clicked HTTP(S) links through the system browser"
+  zh-CN: "通过系统浏览器打开用户点击的 HTTP(S) 链接"
+plugins.permission_editor_read:
+  en: "Read open documents and their selection and viewport"
+  zh-CN: "读取已打开文档及其选区和视口"
+plugins.permission_editor_write:
+  en: "Make undoable changes to open documents after checking their version"
+  zh-CN: "核对文档版本后，对已打开文档执行可撤销编辑"
+plugins.permission_workspace_read:
+  en: "Read files within the current workspace"
+  zh-CN: "读取当前工作区内的文件"
+plugins.permission_clipboard:
+  en: "Read and write the system clipboard"
+  zh-CN: "读写系统剪贴板"
+plugins.permission_assets:
+  en: "Read resources included in this plugin package"
+  zh-CN: "读取此插件安装包内的资源文件"
+plugins.permission_storage:
+  en: "Save private plugin configuration and session data"
+  zh-CN: "保存插件私有配置与会话数据"
+plugins.permission_process:
+  en: "Run local programs as the current user with file and network access; these programs are outside the WASM sandbox"
+  zh-CN: "以当前用户权限执行本机程序并访问文件与网络；这些程序不受 WASM 沙箱限制"
+plugins.permission_service:
+  en: "Run fixed local services declared by this package as the current user with file and network access"
+  zh-CN: "以当前用户权限启动此包声明的固定本机服务，可访问本机文件与网络"
+plugins.permission_native_modules:
+  en: "Share verified analysis modules with managed native workers; loaded modules run with the worker's file and network access outside the WASM sandbox"
+  zh-CN: "与受管分析进程共享经过校验的适配模块；模块使用该进程的文件与网络权限，不受 WASM 沙箱隔离"
+plugins.permission_dependencies_prepare:
+  en: "Download, verify and unpack declared service dependencies into editor-private directories without running installers or changing global PATH"
+  zh-CN: "下载、校验并解包声明的服务依赖到编辑器私有目录，不运行安装脚本、不修改全局 PATH"
+plugins.permission_dependencies_install:
+  en: "Native installation steps require separate confirmation of the program, arguments, destination and purpose; large SDKs also require an explicit opt-in"
+  zh-CN: "原生安装步骤另行确认程序、参数、目标和用途；大型 SDK 还需主动勾选"
+plugins.consent_unsigned:
+  en: "This local plugin is unsigned. Review its source and requested permissions."
+  zh-CN: "本机未签名插件，请确认安装来源和所需能力。"
+plugins.consent_source:
+  en: "Source: %{source}"
+  zh-CN: "来源：%{source}"
+plugins.consent_capabilities:
+  en: "%{action} permits the following capabilities:"
+  zh-CN: "%{action}后将允许以下能力："
+plugins.consent_resources:
+  en: "This plugin provides declarative resources only and needs no execution permissions."
+  zh-CN: "此插件仅提供声明式资源，无需额外运行权限。"
+plugins.consent_after_install:
+  en: "When enabled, the installed plugin can use the listed permissions and start its declared programs."
+  zh-CN: "安装并启用后，插件可以使用所列权限并启动其声明的程序。"
+plugins.install_global_enabled:
+  en: "Enable globally by default"
+  zh-CN: "默认全局启用"
+plugins.consent_after_update:
+  en: "Current plugin programs will stop before the new version starts. Sessions are saved; previous commands do not run again automatically."
+  zh-CN: "保存会话并停止当前程序后启动新版本；原有命令不会自动重跑。"
+plugins.consent_resource_install:
+  en: "%{action} makes syntax, theme or icon resources available when the plugin is enabled."
+  zh-CN: "%{action}后，语法、主题或图标资源在插件启用时生效。"
+plugins.consent_program:
+  en: "Program: %{program} · Arguments: %{args}"
+  zh-CN: "程序：%{program} · 参数：%{args}"
+plugins.consent_dependency:
+  en: "Dependency: %{id} %{version} · %{platform} · %{source} · SHA-256 %{sha256}"
+  zh-CN: "依赖：%{id} %{version} · %{platform} · %{source} · SHA-256 %{sha256}"
+plugins.consent_title:
+  en: "%{action} plugin · %{name} v%{version}"
+  zh-CN: "%{action}插件 · %{name} v%{version}"
+plugins.consent_confirm:
+  en: "Confirm %{action}"
+  zh-CN: "确认%{action}"
+plugins.cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+plugins.reinstall:
+  en: "Reinstall"
+  zh-CN: "重新安装"
+plugins.downgrade:
+  en: "Install older version"
+  zh-CN: "降级安装"
+preview.open_link:
+  en: "Open link"
+  zh-CN: "打开链接"
+preview.source_mode:
+  en: "Editor only"
+  zh-CN: "仅编辑"
+preview.split_mode:
+  en: "Editor and preview"
+  zh-CN: "编辑与预览"
+preview.preview_mode:
+  en: "Preview only"
+  zh-CN: "仅预览"
+preview.synchronized_scroll:
+  en: "Synchronize scrolling"
+  zh-CN: "同步滚动"
+plugins.manager_title:
+  en: "Plugin Management"
+  zh-CN: "插件管理"
+plugins.search:
+  en: "Search plugins"
+  zh-CN: "搜索插件"
+plugins.installed:
+  en: "Installed"
+  zh-CN: "已安装"
+plugins.market:
+  en: "Plugin Market"
+  zh-CN: "插件市场"
+plugins.install_local:
+  en: "Install local ZIP…"
+  zh-CN: "从本机安装 ZIP…"
+plugins.overview:
+  en: "Overview"
+  zh-CN: "概览"
+plugins.changes:
+  en: "Changes"
+  zh-CN: "最新变化"
+plugins.reviews:
+  en: "Reviews"
+  zh-CN: "评价"
+plugins.versions:
+  en: "Versions"
+  zh-CN: "其他版本"
+plugins.information:
+  en: "Information"
+  zh-CN: "其他信息"
+plugins.runtime_log:
+  en: "Runtime Log"
+  zh-CN: "运行日志"
+plugins.runtime_diagnostics:
+  en: "Runtime Diagnostics"
+  zh-CN: "运行诊断"
+plugins.diagnostics_start:
+  en: "Capture 60 seconds"
+  zh-CN: "采集 60 秒"
+plugins.diagnostics_stop:
+  en: "Stop capture"
+  zh-CN: "停止采集"
+plugins.diagnostics_export:
+  en: "Export diagnostics"
+  zh-CN: "导出诊断"
+plugins.diagnostics_scope:
+  en: "Host metadata only. Nested wall times overlap; CPU and drawing time are not measured."
+  zh-CN: "仅记录宿主元数据。嵌套耗时存在重叠；未测量 CPU 和绘制耗时。"
+plugins.diagnostics_dormant:
+  en: "Dormant or not observed. Opening this page does not start the plugin."
+  zh-CN: "插件休眠或尚未采集。打开此页不会启动插件。"
+plugins.diagnostics_partial:
+  en: "Partial capture: %{count} records omitted."
+  zh-CN: "采集不完整：已省略 %{count} 条记录。"
+plugins.diagnostics_resources:
+  en: "Handles %{handles} · Requests %{requests} · HTTP %{http} · Timers %{timers} · Subscriptions %{subscriptions} · Processes %{processes} · Native cleanup pending %{pending}"
+  zh-CN: "句柄 %{handles} · 请求 %{requests} · HTTP %{http} · 定时器 %{timers} · 订阅 %{subscriptions} · 进程 %{processes} · 原生收尾 %{pending}"
+plugins.diagnostics_cleanup_unknown:
+  en: "Native cleanup was not confirmed. Empty authority slots do not prove OS work has ended."
+  zh-CN: "原生清理未获确认。授权句柄归零不能证明系统任务已经结束。"
+plugins.diagnostics_stage:
+  en: "%{stage}: %{count} calls, %{elapsed} μs cumulative wall time"
+  zh-CN: "%{stage}：%{count} 次，累计墙钟耗时 %{elapsed} 微秒"
+plugins.diagnostics_export_failed:
+  en: "Could not export the diagnostic report."
+  zh-CN: "无法导出诊断报告。"
+plugins.diagnostics_queue:
+  en: "Actor queue"
+  zh-CN: "宿主队列"
+plugins.diagnostics_preparation:
+  en: "Preparation"
+  zh-CN: "实例准备"
+plugins.diagnostics_activation:
+  en: "Activation"
+  zh-CN: "按需激活"
+plugins.diagnostics_guest:
+  en: "Guest execution"
+  zh-CN: "WASM 执行"
+plugins.diagnostics_host_call:
+  en: "Host API"
+  zh-CN: "宿主 API"
+plugins.diagnostics_request:
+  en: "Asynchronous request"
+  zh-CN: "异步请求"
+plugins.diagnostics_http:
+  en: "HTTP stream"
+  zh-CN: "HTTP 流"
+plugins.diagnostics_native:
+  en: "Native producer"
+  zh-CN: "原生任务"
+plugins.diagnostics_publication:
+  en: "Validation and publication"
+  zh-CN: "校验与发布"
+plugins.diagnostics_completed:
+  en: "Completed"
+  zh-CN: "已完成"
+plugins.diagnostics_failed:
+  en: "Failed"
+  zh-CN: "失败"
+plugins.diagnostics_cancelled:
+  en: "Cancelled"
+  zh-CN: "已取消"
+plugins.diagnostics_timed_out:
+  en: "Timed out"
+  zh-CN: "超时"
+plugins.diagnostics_unknown:
+  en: "Not observed"
+  zh-CN: "未观测"
+plugins.restart:
+  en: "Restart Plugin"
+  zh-CN: "重启插件"
+plugins.global_enabled:
+  en: "Global On"
+  zh-CN: "全局启动"
+plugins.global_disabled:
+  en: "Global Off"
+  zh-CN: "全局禁用"
+plugins.project_enabled:
+  en: "Enable in This Project"
+  zh-CN: "本项目启用"
+plugins.manager_error:
+  en: "Plugin manager: %{error}"
+  zh-CN: "插件管理器：%{error}"
+plugins.language_demand_timeout:
+  en: "The selected language provider did not become available in time."
+  zh-CN: "所选语言提供者未能在规定时间内就绪。"
+plugins.command_target_changed:
+  en: "The command target changed. Invoke the command again."
+  zh-CN: "命令目标已改变，请重新执行命令。"
+plugins.document_target_changed:
+  en: "The original document changed or was closed."
+  zh-CN: "原文档已改变或关闭。"
+plugins.command_owner_changed:
+  en: "The plugin command was replaced or disabled."
+  zh-CN: "插件命令已被替换或禁用。"
+plugins.demand_queue_full:
+  en: "Too many plugin requests are pending. Try again later."
+  zh-CN: "等待中的插件请求过多，请稍后重试。"
+plugins.demand_cancelled:
+  en: "The plugin request was cancelled."
+  zh-CN: "插件请求已取消。"
+plugins.demand_timeout:
+  en: "The plugin did not become available in time."
+  zh-CN: "插件未能在规定时间内就绪。"
+plugins.worker_unavailable:
+  en: "The plugin worker is unavailable."
+  zh-CN: "插件后台服务不可用。"
+plugins.restricted:
+  en: "Plugins are unavailable in a restricted workspace."
+  zh-CN: "受限工作区中不能运行插件。"
+plugins.install:
+  en: "Install"
+  zh-CN: "安装"
+plugins.update:
+  en: "Update"
+  zh-CN: "更新"
+plugins.uninstall:
+  en: "Uninstall"
+  zh-CN: "卸载"
+plugins.no_readme:
+  en: "This plugin has no README.md."
+  zh-CN: "此插件没有提供 README.md。"
+plugins.no_runtime_logs:
+  en: "No runtime information for this plugin yet."
+  zh-CN: "此插件暂无运行信息。"
+plugins.log_info:
+  en: "Info"
+  zh-CN: "信息"
+plugins.log_warning:
+  en: "Warning"
+  zh-CN: "警告"
+plugins.log_error:
+  en: "Error"
+  zh-CN: "错误"
+plugins.log_retired_callback:
+  en: "Ignored a callback from a retired plugin view."
+  zh-CN: "已忽略旧插件界面的迟到回调。"
+plugins.log_service_prepared:
+  en: "Language service preparation completed."
+  zh-CN: "语言服务准备完成。"
+plugins.log_operation_complete:
+  en: "Plugin operation completed."
+  zh-CN: "插件操作完成。"
+plugins.logs.grammar_loading:
+  en: "Loading syntax highlighting resources."
+  zh-CN: "正在加载语法高亮资源。"
+plugins.logs.grammar_ready:
+  en: "Syntax highlighting resources are ready."
+  zh-CN: "语法高亮资源已就绪。"
+plugins.logs.lsp_started:
+  en: "Language service process started."
+  zh-CN: "语言服务进程已启动。"
+plugins.logs.lsp_starting:
+  en: "Starting the language service."
+  zh-CN: "正在启动语言服务。"
+plugins.logs.lsp_ready:
+  en: "Language service is ready."
+  zh-CN: "语言服务已就绪。"
+plugins.logs.lsp_stopped:
+  en: "Language service stopped."
+  zh-CN: "语言服务已停止。"
+plugins.logs.lsp_output_failed:
+  en: "Language service output closed or could not be read."
+  zh-CN: "语言服务输出已关闭或读取失败。"
+plugins.logs.lsp_retry:
+  en: "Waiting for a limited retry."
+  zh-CN: "等待有限重试。"
+plugins.logs.lsp_paused:
+  en: "Automatic retries paused; restart the plugin to recover."
+  zh-CN: "自动重试已暂停，请重启插件恢复。"
+plugins.logs.lsp_recovered:
+  en: "Language service recovered."
+  zh-CN: "语言服务已恢复。"
+plugins.logs.lsp_invalid_message:
+  en: "Invalid language service message."
+  zh-CN: "语言服务消息格式无效。"
+plugins.logs.notification_overflow:
+  en: "The document notification queue is full; extra notifications were dropped. Runtime logs remain available."
+  zh-CN: "文档通知队列已满，额外通知已丢弃；运行日志仍可查看。"
+plugins.empty_market:
+  en: "No plugin packages available in the local market."
+  zh-CN: "插件市场暂无可用插件包。"
+plugins.empty_installed:
+  en: "No installed plugins."
+  zh-CN: "暂无已安装插件。"
+notification.close:
+  en: "Close notification"
+  zh-CN: "关闭通知"
+panel.explorer:
+  en: "Explorer"
+  zh-CN: "资源管理器"
+panel.outline:
+  en: "Outline"
+  zh-CN: "大纲"
+outline.empty:
+  en: "No outline for this file"
+  zh-CN: "此文件暂无大纲"
+outline.loading:
+  en: "Loading outline…"
+  zh-CN: "正在加载大纲…"
+outline.failed:
+  en: "Cannot load outline"
+  zh-CN: "无法加载大纲"
+outline.hide:
+  en: "Hide Outline"
+  zh-CN: "隐藏大纲"
+outline.show:
+  en: "Show Outline"
+  zh-CN: "显示大纲"
+editor.format_document:
+  en: "Format document"
+  zh-CN: "格式化文档"
+editor.rename_symbol:
+  en: "Rename symbol"
+  zh-CN: "重命名符号"
+editor.rename_confirm:
+  en: "Rename"
+  zh-CN: "重命名"
+editor.rename_cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+editor.rename_unavailable:
+  en: "No rename is available at this position"
+  zh-CN: "此位置没有可重命名的符号"
+editor.format_unavailable:
+  en: "No formatter is available for this document"
+  zh-CN: "此文档没有可用的格式化程序"
+editor.editing_failed:
+  en: "Language edit failed: %{error}"
+  zh-CN: "语言编辑失败：%{error}"
+editor.editing_stale:
+  en: "The document changed; the language edit was discarded"
+  zh-CN: "文档已变化，语言编辑结果已丢弃"
+editor.formatted:
+  en: "Document formatted"
+  zh-CN: "文档已格式化"
+editor.renamed:
+  en: "Symbol renamed"
+  zh-CN: "符号已重命名"
+editor.rename_preview:
+  en: "Rename changes are ready for preview"
+  zh-CN: "重命名修改已准备预览"
+settings.provider_formatter:
+  en: "Formatter"
+  zh-CN: "格式化程序"
+settings.format_on_save:
+  en: "Format on save"
+  zh-CN: "保存时格式化"
+settings.linked_editing:
+  en: "Synchronize paired tag names"
+  zh-CN: "同步配对标签名"
+settings.editing_default:
+  en: "Use user default"
+  zh-CN: "使用用户默认值"
+settings.editing_override:
+  en: "Override for this language"
+  zh-CN: "覆盖此语言的设置"
+settings.editing_reset:
+  en: "Restore user defaults"
+  zh-CN: "恢复用户默认值"
+panel.minimize_explorer:
+  en: "Minimize Explorer"
+  zh-CN: "最小化资源管理器"
+explorer.reveal_active_file:
+  en: "Locate active file"
+  zh-CN: "定位当前文件"
+explorer.collapse_all:
+  en: "Collapse all"
+  zh-CN: "全部折叠"
+explorer.expand_all:
+  en: "Expand all"
+  zh-CN: "全部展开"
+explorer.reveal_failed:
+  en: "Cannot locate file"
+  zh-CN: "无法定位文件"
+explorer.reveal_outside_workspace:
+  en: "The active tab's file is outside this project and cannot be located in Explorer."
+  zh-CN: "当前标签页的文件不在本项目内，无法在资源管理器中定位。"
+explorer.reveal_no_active_file:
+  en: "There is no open file to locate."
+  zh-CN: "当前没有打开的文件可供定位。"
+explorer.reveal_unavailable_file:
+  en: "This file is not shown in Explorer. It may have been deleted or excluded."
+  zh-CN: "该文件未显示在资源管理器中，可能已被删除或被排除。"
+panel.editor:
+  en: "Editor"
+  zh-CN: "编辑器"
+editor.select_file:
+  en: "Select a file from the Explorer"
+  zh-CN: "请从资源管理器选择文件"
+editor.untitled:
+  en: "Untitled"
+  zh-CN: "未命名"
+editor.go_to_definition:
+  en: "Go to Definition"
+  zh-CN: "跳转到定义"
+editor.no_definition:
+  en: "No definition"
+  zh-CN: "暂无定义"
+diagnostics.missing:
+  en: "Syntax error: expected `%{token}`"
+  zh-CN: "语法错误：缺少 `%{token}`"
+diagnostics.unexpected:
+  en: "Syntax error: unexpected or incomplete syntax"
+  zh-CN: "语法错误：此处包含无法识别或不完整的语法"
+diagnostics.count:
+  en: "Problems: %{count}"
+  zh-CN: "问题：%{count}"
+diagnostics.navigate:
+  en: "Next problem (F8); previous problem (Shift+F8)"
+  zh-CN: "跳转到下一处问题（F8），上一处（Shift+F8）"
+diagnostics.error:
+  en: "Error"
+  zh-CN: "错误"
+diagnostics.warning:
+  en: "Warning"
+  zh-CN: "警告"
+diagnostics.info:
+  en: "Information"
+  zh-CN: "信息"
+diagnostics.hint:
+  en: "Hint"
+  zh-CN: "提示"
+diagnostics.location:
+  en: "Line %{line}, column %{column}"
+  zh-CN: "第 %{line} 行，第 %{column} 列"
+editor.code_actions:
+  en: "Show Code Actions"
+  zh-CN: "显示代码操作"
+editor.cut:
+  en: "Cut"
+  zh-CN: "剪切"
+editor.copy:
+  en: "Copy"
+  zh-CN: "复制"
+editor.paste:
+  en: "Paste"
+  zh-CN: "粘贴"
+editor.select_all:
+  en: "Select All"
+  zh-CN: "全选"
+explorer.copy:
+  en: "Copy"
+  zh-CN: "复制"
+explorer.special_copy:
+  en: "Special Copy"
+  zh-CN: "特殊复制"
+explorer.copy_file_name:
+  en: "Copy File Name"
+  zh-CN: "复制文件名"
+explorer.copy_absolute_path:
+  en: "Copy Absolute Disk Path"
+  zh-CN: "复制磁盘绝对路径"
+explorer.copy_project_root:
+  en: "Copy Project Relative Path"
+  zh-CN: "复制项目根路径"
+explorer.paste:
+  en: "Paste"
+  zh-CN: "粘贴"
+explorer.new:
+  en: "New"
+  zh-CN: "新建"
+explorer.directory:
+  en: "Directory"
+  zh-CN: "目录"
+explorer.file:
+  en: "File"
+  zh-CN: "文件"
+explorer.new_directory:
+  en: "New directory"
+  zh-CN: "新建目录"
+explorer.new_file:
+  en: "New file"
+  zh-CN: "新建文件"
+explorer.rename:
+  en: "Rename"
+  zh-CN: "重命名"
+explorer.delete:
+  en: "Delete"
+  zh-CN: "删除"
+explorer.delete_file_preview:
+  en: "Permanently delete this file?"
+  zh-CN: "确定永久删除此文件吗？"
+explorer.delete_directory_preview:
+  en: "Permanently delete this directory and all its contents?"
+  zh-CN: "确定永久删除此目录及其中全部内容吗？"
+explorer.close_before_delete:
+  en: "Close open files in this path before deleting"
+  zh-CN: "删除前请关闭该路径下已打开的文件"
+explorer.delete_failed:
+  en: "Delete failed: %{error}"
+  zh-CN: "删除失败：%{error}"
+explorer.delete_outside_workspace:
+  en: "Cannot delete the workspace root or a path outside it"
+  zh-CN: "无法删除工作区根目录或其外部路径"
+explorer.delete_symlink:
+  en: "Cannot delete a symbolic link from the explorer"
+  zh-CN: "无法从资源管理器删除符号链接"
+explorer.refresh:
+  en: "Refresh"
+  zh-CN: "刷新"
+explorer.confirm:
+  en: "Confirm"
+  zh-CN: "确定"
+explorer.cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+explorer.copied:
+  en: "File copied to clipboard"
+  zh-CN: "文件已复制到剪贴板"
+explorer.text_copied:
+  en: "Text copied to clipboard"
+  zh-CN: "文本已复制到剪贴板"
+explorer.close_before_rename:
+  en: "Close open files in this path before renaming"
+  zh-CN: "重命名前请关闭该路径下已打开的文件"
+explorer.invalid_name:
+  en: "Enter a valid file name"
+  zh-CN: "请输入有效的文件名"
+explorer.exists:
+  en: "A file or directory with this name already exists"
+  zh-CN: "文件或目录已存在"
+explorer.no_clipboard_files:
+  en: "The clipboard contains no files"
+  zh-CN: "剪贴板中没有文件"
+explorer.invalid_source:
+  en: "Invalid source file name"
+  zh-CN: "来源文件名无效"
+explorer.target_exists:
+  en: "Destination already exists: %{path}"
+  zh-CN: "目标已存在：%{path}"
+explorer.source_missing:
+  en: "Source does not exist: %{path}"
+  zh-CN: "来源不存在：%{path}"
+explorer.self_paste:
+  en: "Cannot paste a directory inside itself"
+  zh-CN: "无法将目录粘贴到其自身内部"
+explorer.symlink:
+  en: "Cannot copy symbolic link: %{path}"
+  zh-CN: "无法复制符号链接：%{path}"
+explorer.clipboard_failed:
+  en: "Could not copy file to clipboard"
+  zh-CN: "无法复制文件到剪贴板"
+explorer.clipboard_unsupported:
+  en: "File copy is not supported on this platform"
+  zh-CN: "当前平台暂不支持复制文件"
+status.ready:
+  en: "Ready"
+  zh-CN: "就绪"
+status.workspace_refreshed:
+  en: "Workspace refreshed · %{count} files"
+  zh-CN: "工作区已刷新 · 共 %{count} 个文件"
+status.refreshing_workspace:
+  en: "Checking workspace and open files..."
+  zh-CN: "正在核对工作区及已打开文件……"
+status.disk_updated:
+  en: "File changed on disk; editor reloaded"
+  zh-CN: "磁盘文件已变化，编辑器已重新加载"
+status.disk_conflict:
+  en: "File changed on disk; unsaved edits were preserved"
+  zh-CN: "磁盘文件已变化，未保存的编辑内容已保留"
+status.disk_deleted:
+  en: "File was deleted on disk; its tab was preserved"
+  zh-CN: "磁盘文件已删除，标签页已保留"
+status.confirm_disk_overwrite:
+  en: "File changed on disk. Save again to overwrite the disk version"
+  zh-CN: "磁盘文件已变化；再次保存将覆盖磁盘版本"
+status.confirm_disk_restore:
+  en: "File was deleted on disk. Save again to recreate it"
+  zh-CN: "磁盘文件已删除；再次保存将在原路径重建文件"
+status.modified:
+  en: "Modified · revision %{revision}"
+  zh-CN: "已修改 · 修订版本 %{revision}"
+status.open_failed:
+  en: "Open failed: %{error}"
+  zh-CN: "打开失败：%{error}"
+status.opened:
+  en: "Opened %{file_name} · %{language}"
+  zh-CN: "已打开 %{file_name} · %{language}"
+status.save_before_close:
+  en: "Save changes before closing this tab"
+  zh-CN: "关闭此标签页前请先保存更改"
+status.no_open_files:
+  en: "No open files"
+  zh-CN: "没有打开的文件"
+status.nothing_to_save:
+  en: "Nothing to save"
+  zh-CN: "没有可保存的内容"
+status.no_changes_to_save:
+  en: "No changes to save"
+  zh-CN: "没有未保存的更改"
+status.saved:
+  en: "Saved %{path}"
+  zh-CN: "已保存 %{path}"
+status.save_failed:
+  en: "Save failed: %{error}"
+  zh-CN: "保存失败：%{error}"
+status.cursor:
+  en: "Ln %{line}, Col %{column}"
+  zh-CN: "行 %{line}，列 %{column}"
+status.cursor_empty:
+  en: "Ln –, Col –"
+  zh-CN: "行 –，列 –"
+plugins.loading:
+  en: "Loading plugins"
+  zh-CN: "插件加载中"
+plugins.error:
+  en: "Plugin errors"
+  zh-CN: "插件错误"
+plugins.loading_list:
+  en: "Loading plugins"
+  zh-CN: "正在加载的插件"
+plugins.warning:
+  en: "Plugin warnings"
+  zh-CN: "插件警告"
+plugins.status_title:
+  en: "Plugin status"
+  zh-CN: "插件运行状态"
+plugins.status_starting:
+  en: "Starting the plugin."
+  zh-CN: "正在启动插件。"
+plugins.status_highlight_loading:
+  en: "Loading syntax highlighting for %{language}."
+  zh-CN: "正在加载 %{language} 的语法高亮。"
+plugins.status_service_loading:
+  en: "Starting %{language} language service · %{service}"
+  zh-CN: "正在启动 %{language} 语言服务 · %{service}"
+plugins.status_view_log:
+  en: "View runtime log"
+  zh-CN: "查看运行日志"
+plugins.status_uninstalled:
+  en: "Plugin is no longer installed"
+  zh-CN: "插件已卸载"
+plugins.status_source:
+  en: "Source · %{source}"
+  zh-CN: "来源 · %{source}"
+plugins.status_close:
+  en: "Close plugin status"
+  zh-CN: "关闭插件运行状态"
+plugins.status_loading_summary:
+  en: "Loading"
+  zh-CN: "加载中"
+plugins.error_list:
+  en: "Plugins that failed to load"
+  zh-CN: "加载失败的插件"
+settings.title:
+  en: "Settings"
+  zh-CN: "设置"
+settings.plugins:
+  en: "Plugins"
+  zh-CN: "插件设置"
+settings.languages:
+  en: "Language providers"
+  zh-CN: "语言提供者"
+settings.provider_scope_user:
+  en: "User default"
+  zh-CN: "用户全局"
+settings.provider_scope_project:
+  en: "This project"
+  zh-CN: "本项目"
+settings.providers_empty:
+  en: "No dynamic language providers are installed."
+  zh-CN: "尚未安装动态语言提供者。"
+settings.provider_recognition:
+  en: "Recognition"
+  zh-CN: "语言识别"
+settings.provider_highlight:
+  en: "Highlighting"
+  zh-CN: "语法高亮"
+settings.provider_missing:
+  en: "No provider available; using plain text."
+  zh-CN: "无可用提供者，已降级为纯文本。"
+settings.provider_choose:
+  en: "Multiple providers available; choose one to enable this capability."
+  zh-CN: "有多个候选，请选择一个以启用此能力。"
+settings.provider_invalid:
+  en: "Invalid provider setting %{provider} (%{source}); choose a provider or reset this scope."
+  zh-CN: "提供者配置 %{provider} 无效（%{source}）；请选择提供者或重置此作用域。"
+settings.provider_source_automatic:
+  en: "Automatically selected; kept until unavailable."
+  zh-CN: "自动选择，持续保留至该提供者不可用。"
+settings.provider_source_user:
+  en: "Using the user choice."
+  zh-CN: "当前采用用户全局选择。"
+settings.provider_source_project:
+  en: "Using this project's choice."
+  zh-CN: "当前采用本项目选择。"
+settings.plugin_hint:
+  en: "Apply confirms the selected scope and restarts only affected plugin instances. Reset removes that override."
+  zh-CN: "应用即确认所选作用域，仅重启受影响的插件实例。重置将移除此作用域的覆盖值。"
+settings.service_provider:
+  en: "Service provider"
+  zh-CN: "服务提供者"
+settings.service_auto:
+  en: "Automatic (one match)"
+  zh-CN: "自动（仅一个匹配）"
+settings.service_hint:
+  en: "Choose a provider when several are available. Selection applies immediately to new service references."
+  zh-CN: "有多个提供者时请选择一个；选择立即应用于之后建立的服务连接。"
+settings.plugin_user:
+  en: "User"
+  zh-CN: "用户全局"
+settings.plugin_project:
+  en: "This project"
+  zh-CN: "本项目"
+settings.plugin_user_only:
+  en: "User only"
+  zh-CN: "仅用户全局"
+settings.plugin_secret_reference_hint:
+  en: "Enter a key in this plugin's secret storage, not the token itself. Leave blank if unconfigured."
+  zh-CN: "填写此插件私有密钥存储中的 key，而非令牌内容；留空表示尚未配置。"
+settings.plugin_apply:
+  en: "Apply"
+  zh-CN: "应用"
+settings.plugin_reset:
+  en: "Reset override"
+  zh-CN: "重置覆盖"
+settings.plugin_source_default:
+  en: "Source: declared default"
+  zh-CN: "来源：声明默认值"
+settings.plugin_source_discovered:
+  en: "Source: automatic discovery"
+  zh-CN: "来源：自动发现"
+settings.plugin_source_user:
+  en: "Source: user configuration"
+  zh-CN: "来源：用户全局"
+settings.plugin_source_project:
+  en: "Source: confirmed project configuration"
+  zh-CN: "来源：已确认项目配置"
+settings.plugin_invalid_integer:
+  en: "Enter a valid integer."
+  zh-CN: "请输入有效整数。"
+settings.plugin_invalid_value:
+  en: "The value does not meet this setting's constraints."
+  zh-CN: "输入值不符合此设置的约束。"
+settings.plugin_applying:
+  en: "Validating and applying…"
+  zh-CN: "正在校验并应用…"
+settings.plugin_applied:
+  en: "Configuration applied."
+  zh-CN: "配置已生效。"
+settings.plugin_worker_unavailable:
+  en: "The plugin worker is unavailable."
+  zh-CN: "插件后台服务不可用。"
+settings.plugin_restricted:
+  en: "Configuration changes are unavailable in a restricted workspace."
+  zh-CN: "受限工作区不可修改插件配置。"
+settings.plugin_empty:
+  en: "No installed plugin declares settings."
+  zh-CN: "尚无已安装插件声明设置。"
+settings.appearance_and_behavior:
+  en: "Appearance & Behavior"
+  zh-CN: "外观与行为"
+settings.keymap:
+  en: "Keymap"
+  zh-CN: "按键映射"
+settings.editor:
+  en: "Editor"
+  zh-CN: "编辑器设置"
+settings.keymap_empty:
+  en: "Keyboard shortcut settings are not available yet."
+  zh-CN: "暂未提供快捷键设置。"
+settings.appearance:
+  en: "Appearance"
+  zh-CN: "外观"
+settings.startup:
+  en: "Startup"
+  zh-CN: "启动"
+settings.restore_last_project:
+  en: "Reopen the last project on startup"
+  zh-CN: "启动时恢复上次项目"
+settings.restore_last_project_hint:
+  en: "Enabled by default. Reopen the project from the last exit unless a project or file is specified."
+  zh-CN: "默认开启。未指定项目或文件时，恢复上次退出的项目。"
+settings.startup_error:
+  en: "Could not read or save startup settings: %{details}"
+  zh-CN: "无法读取或保存启动设置：%{details}"
+settings.theme:
+  en: "Theme"
+  zh-CN: "主题"
+settings.light:
+  en: "Light"
+  zh-CN: "浅色"
+settings.dark:
+  en: "Dark"
+  zh-CN: "深色"
+settings.font_size:
+  en: "Interface and editor font size"
+  zh-CN: "界面和编辑器字体大小"
+settings.font_size_value:
+  en: "%{size} px"
+  zh-CN: "%{size} px"
+settings.layout:
+  en: "Layout"
+  zh-CN: "布局"
+settings.workspace_trusted:
+  en: "Trust this workspace and allow plugins to run"
+  zh-CN: "信任此工作区并允许插件运行"
+settings.file_explorer:
+  en: "File explorer"
+  zh-CN: "文件资源管理器"
+settings.explorer_reveal_on_tab_switch:
+  en: "Reveal files in Explorer when switching tabs"
+  zh-CN: "切换标签页时定位到资源管理器"
+settings.visible:
+  en: "Visible"
+  zh-CN: "显示"
+settings.hidden:
+  en: "Hidden"
+  zh-CN: "隐藏"
+toolbar.more_windows:
+  en: "More windows"
+  zh-CN: "更多窗口"
+toolbar.more_tools:
+  en: "More plugin tools"
+  zh-CN: "更多插件工具"
+settings.resize_hint:
+  en: "Resize panels by dragging the dividers."
+  zh-CN: "拖动分隔线可调整面板大小。"
+run.target_config_missing:
+  en: "The run configuration no longer exists."
+  zh-CN: "运行配置不存在。"
+run.target_missing:
+  en: "The target is still missing. Check the project files and tools."
+  zh-CN: "该目标仍未被发现；检查项目文件或工具是否可用。"
+run.target_confirm_repair:
+  en: "Confirm repair: %{name} → %{program}"
+  zh-CN: "确认修复：%{name} → %{program}"
+run.target_repaired:
+  en: "The run target was updated as confirmed."
+  zh-CN: "已按确认更新运行目标。"
+run.target_found_confirm:
+  en: "The target was found again. Confirm its repair in the menu to update the configuration."
+  zh-CN: "已重新发现该目标；在菜单中确认修复后更新配置。"
+run.target_discovery_summary:
+  en: "Found %{count} run targets: %{repairs} repairs awaiting confirmation, %{offered} new candidates, %{missing} missing targets"
+  zh-CN: "发现 %{count} 个可运行目标：待确认修复 %{repairs}，新增候选 %{offered}，目标失效 %{missing}"
+run.local_restore_failed:
+  en: "%{error}; restoring local values also failed: %{restore}"
+  zh-CN: "%{error}；还原本机配置也失败了：%{restore}"
+run.force:
+  en: "Force"
+  zh-CN: "终止"
+run.force_hint:
+  en: "Immediately terminate the selected session and its process tree"
+  zh-CN: "立即终止所选会话及其进程树"
+run.locating:
+  en: "Locating session %{session}…"
+  zh-CN: "正在定位会话 %{session}…"
+run.located:
+  en: "Located session %{session}"
+  zh-CN: "已定位会话 %{session}"
+run.locate_failed:
+  en: "Cannot locate session output: %{error}"
+  zh-CN: "无法定位会话输出：%{error}"
+run.locate_unavailable:
+  en: "The plugin worker is unavailable. The session could not be located."
+  zh-CN: "插件后台服务不可用，无法定位会话。"
+run.target_added:
+  en: "Added run configuration %{name}. You can edit it in the configuration dialog."
+  zh-CN: "已添加运行配置 %{name}，可在配置弹窗中修改"
+run.no_configuration:
+  en: "Select a run configuration first."
+  zh-CN: "请先选择运行配置。"
+run.restricted:
+  en: "A restricted workspace cannot start programs."
+  zh-CN: "受限工作区不能启动程序。"
+run.preparing_debug:
+  en: "Preparing debug target %{name}…"
+  zh-CN: "正在准备调试目标 %{name}…"
+run.starting_debug:
+  en: "Starting debug target %{name}…"
+  zh-CN: "正在启动调试目标 %{name}…"
+run.debug_unavailable:
+  en: "The plugin worker is unavailable; debugging could not start."
+  zh-CN: "插件后台服务不可用，无法开始调试。"
+run.stop_before_debug:
+  en: "Stop this configuration's running target before starting debugging."
+  zh-CN: "请先停止该配置正在运行的目标，再启动调试。"
+run.debug_panel:
+  en: "Debug"
+  zh-CN: "调试"
+run.hide_output:
+  en: "Hide output"
+  zh-CN: "隐藏输出"
+run.discover:
+  en: "Discover configurations"
+  zh-CN: "发现配置"
+run.confirm_candidate:
+  en: "Confirm and save this target as an editable configuration"
+  zh-CN: "确认并保存此目标为可编辑配置"
+run.discovering:
+  en: "Discovering runnable targets…"
+  zh-CN: "正在发现运行目标…"
+run.debug_resume:
+  en: "Continue (F5)"
+  zh-CN: "继续 (F5)"
+run.debug_pause:
+  en: "Pause (F6)"
+  zh-CN: "暂停 (F6)"
+run.debug_stop:
+  en: "Stop debugging (Shift+F5)"
+  zh-CN: "停止调试 (Shift+F5)"
+run.debug_into:
+  en: "Step in (F11)"
+  zh-CN: "步入 (F11)"
+run.debug_over:
+  en: "Step over (F10)"
+  zh-CN: "步过 (F10)"
+run.debug_out:
+  en: "Step out (Shift+F11)"
+  zh-CN: "步出 (Shift+F11)"
+run.debug_hide:
+  en: "Hide"
+  zh-CN: "隐藏"
+run.debug_disconnected:
+  en: "Debugging has not started."
+  zh-CN: "尚未开始调试。"
+run.debug_connecting:
+  en: "Connecting to the debug target…"
+  zh-CN: "正在连接调试目标…"
+run.debug_running:
+  en: "Target is running."
+  zh-CN: "目标正在运行。"
+run.debug_paused:
+  en: "Paused at %{source}:%{line}"
+  zh-CN: "已在 %{source}:%{line} 暂停"
+run.debug_exited:
+  en: "Target exited."
+  zh-CN: "目标已退出。"
+run.debug_failed:
+  en: "Debugging failed: %{reason}"
+  zh-CN: "调试失败：%{reason}"
+run.debug_stack:
+  en: "Call stack"
+  zh-CN: "调用栈"
+run.debug_threads:
+  en: "Threads"
+  zh-CN: "线程"
+run.breakpoint_added:
+  en: "Breakpoint added: %{source}:%{line}"
+  zh-CN: "已添加断点：%{source}:%{line}"
+run.breakpoint_removed:
+  en: "Breakpoint removed: %{source}:%{line}"
+  zh-CN: "已移除断点：%{source}:%{line}"
+run.breakpoint_source_required:
+  en: "Select a run configuration and open a workspace source file to set a breakpoint."
+  zh-CN: "请先选择运行配置，并打开工作区源码文件以设置断点。"
+run.debug_load_more:
+  en: "Load more…"
+  zh-CN: "加载更多…"
+run.debug_inspection_limit:
+  en: "Inspection display limit reached. Select another frame or thread to inspect more."
+  zh-CN: "已达到检查视图容量限制，请选择其他栈帧或线程。"
+run.debug_locals:
+  en: "Variables"
+  zh-CN: "变量"
+run.debug_no_locals:
+  en: "No variables in this frame."
+  zh-CN: "该帧没有变量。"
+run.debug_other_paused:
+  en: "Another session is paused; the source view was left in place."
+  zh-CN: "另一个会话已暂停，源码视图保留在原位置。"
+run.step_unclosed_quote:
+  en: "A step contains an unclosed quoted value."
+  zh-CN: "步骤包含未闭合的引号。"
+run.step_invalid_quote:
+  en: "A quoted step value must use valid JSON string escapes."
+  zh-CN: "步骤的引号文本需要合法的字符串转义。"
+run.step_syntax:
+  en: "Write the step as name = program | argument: %{line}"
+  zh-CN: "步骤需要写成 名称 = 程序 | 参数：%{line}"
+run.step_name_missing:
+  en: "The step is missing its name: %{line}"
+  zh-CN: "步骤缺少名称：%{line}"
+run.step_program_missing:
+  en: "The step is missing its executable: %{line}"
+  zh-CN: "步骤缺少要运行的程序：%{line}"
+run.step_reference_arguments:
+  en: "A build reference cannot include program arguments."
+  zh-CN: "构建引用不能附带程序参数。"
+run.step_reference_missing:
+  en: "The build reference is missing a configuration: %{line}"
+  zh-CN: "构建引用缺少配置名称：%{line}"
+run.step_script_missing:
+  en: "An explicit Shell step needs a final script value."
+  zh-CN: "显式 Shell 步骤需要最后一个脚本值。"
+# Simplified native configuration: common fields first, optional details on demand.
+run.form_title:
+  en: "Run configurations"
+  zh-CN: "运行配置"
+run.form_configurations:
+  en: "Configurations"
+  zh-CN: "配置"
+run.form_target:
+  en: "Run target"
+  zh-CN: "运行目标"
+run.form_choose_target:
+  en: "Choose a run target…"
+  zh-CN: "选择运行目标…"
+run.form_arguments:
+  en: "Arguments"
+  zh-CN: "参数"
+run.form_optional:
+  en: "Optional"
+  zh-CN: "可选"
+run.form_unset:
+  en: "Not set"
+  zh-CN: "未设置"
+run.form_startup:
+  en: "Before launch"
+  zh-CN: "启动前"
+run.form_more:
+  en: "More settings"
+  zh-CN: "更多设置"
+run.form_startup_automatic:
+  en: "Automatic build · %{count} custom"
+  zh-CN: "自动构建 · %{count} 项自定义"
+run.form_startup_count:
+  en: "%{count} steps"
+  zh-CN: "%{count} 项步骤"
+run.form_default_settings:
+  en: "Workspace directory · Default environment"
+  zh-CN: "工作区目录 · 默认环境"
+run.form_custom_settings:
+  en: "Customized"
+  zh-CN: "已自定义"
+run.form_environment_short:
+  en: "Environment variables"
+  zh-CN: "环境变量"
+run.form_tools_short:
+  en: "Local tool paths"
+  zh-CN: "本机工具路径"
+run.form_breakpoints_short:
+  en: "Breakpoints"
+  zh-CN: "断点"
+run.form_provider:
+  en: "Execution provider"
+  zh-CN: "运行提供者"
+run.form_local_settings:
+  en: "Environment, tool paths and provider choice stay on this machine"
+  zh-CN: "环境、工具路径与提供者选择保留在本机"
+run.form_build_short:
+  en: "Build actions"
+  zh-CN: "构建动作"
+run.form_prelaunch_short:
+  en: "Prelaunch steps"
+  zh-CN: "运行前步骤"
+run.form_plugin_preparation:
+  en: "Prepared by the plugin"
+  zh-CN: "由项目插件准备"
+run.form_actions:
+  en: "More configuration actions"
+  zh-CN: "更多配置操作"
+run.plugin_new_folder:
+  en: "New folder"
+  zh-CN: "新建文件夹"
+run.plugin_tree_move_error:
+  en: "Cannot move a folder into itself or a descendant, or across sibling categories."
+  zh-CN: "不能移入自身或后代，也不能跨类别排序。"
+run.plugin_delete_count:
+  en: "Delete %{folders} folders and %{configurations} configurations? Changes take effect after Save."
+  zh-CN: "删除 %{folders} 个文件夹和 %{configurations} 条配置？保存后才会生效。"
+run.plugin_close_question:
+  en: "Save all unapplied changes before closing?"
+  zh-CN: "关闭前是否保存全部未应用的修改？"
+run.plugin_continue:
+  en: "Continue editing"
+  zh-CN: "继续编辑"
+run.form_copy:
+  en: "Copy configuration"
+  zh-CN: "复制配置"
+run.form_copy_name:
+  en: "%{name} copy"
+  zh-CN: "%{name} 副本"
+run.form_delete:
+  en: "Delete configuration"
+  zh-CN: "删除配置"
+run.form_delete_question:
+  en: "Delete this configuration? Its unsaved changes will be discarded."
+  zh-CN: "删除这个配置？当前未保存的修改将被放弃。"
+run.form_switch_question:
+  en: "Save your changes before switching configurations?"
+  zh-CN: "切换配置前是否保存当前修改？"
+run.form_discard:
+  en: "Discard changes"
+  zh-CN: "放弃修改"
+run.form_save_short:
+  en: "Save"
+  zh-CN: "保存"
+run.form_done:
+  en: "Done"
+  zh-CN: "完成"
+run.form_edit_step:
+  en: "Edit step"
+  zh-CN: "编辑步骤"
+run.form_build_reference:
+  en: "Build reference"
+  zh-CN: "构建引用"
+run.form_reference_config:
+  en: "Referenced configuration"
+  zh-CN: "引用配置"
+run.form_reference_hint:
+  en: "Runs this configuration's build actions, without its final program"
+  zh-CN: "执行所选配置的构建动作，不启动其最终程序"
+run.form_reference_summary:
+  en: "%{name} · Build actions"
+  zh-CN: "%{name} · 构建动作"
+run.form_invalid_step:
+  en: "Invalid step"
+  zh-CN: "步骤内容无效"
+run.form_script_required:
+  en: "Enter the script text"
+  zh-CN: "请填写脚本文本"
+run.form_basic:
+  en: "Basic"
+  zh-CN: "基本"
+run.form_build:
+  en: "Build"
+  zh-CN: "构建"
+run.form_debug:
+  en: "Debug"
+  zh-CN: "调试"
+run.form_environment:
+  en: "Environment"
+  zh-CN: "环境"
+run.field_name:
+  en: "Name"
+  zh-CN: "名称"
+run.field_program:
+  en: "Program"
+  zh-CN: "程序"
+run.field_arguments:
+  en: "Arguments (one per line)"
+  zh-CN: "参数（每行一个）"
+run.field_script:
+  en: "Script"
+  zh-CN: "脚本文本"
+run.field_directory:
+  en: "Working directory"
+  zh-CN: "工作目录"
+run.field_environment:
+  en: "Environment (NAME=value per line)"
+  zh-CN: "环境变量（每行 名称=值）"
+run.field_tool_paths:
+  en: "Local tool directories (one per line, before inherited PATH)"
+  zh-CN: "本机工具路径（每行一个目录，优先于继承的 PATH）"
+run.field_build:
+  en: "Build actions (name = program | arguments)"
+  zh-CN: "构建操作（每行 名称 = 程序 | 参数）"
+run.field_prelaunch:
+  en: "Prelaunch steps (in order)"
+  zh-CN: "启动前步骤（每行 名称 = 程序 | 参数，顺序执行）"
+run.field_breakpoints:
+  en: "Breakpoints (source:line per line)"
+  zh-CN: "断点（每行 源文件:行号）"
+run.field_interpreter:
+  en: "Interpreter"
+  zh-CN: "解释器"
+run.field_interpreter_arguments:
+  en: "Interpreter arguments (one per line)"
+  zh-CN: "解释器参数（每行一个）"
+run.form_mode:
+  en: "Run mode"
+  zh-CN: "运行方式"
+run.form_shell:
+  en: "Shell script"
+  zh-CN: "Shell 脚本"
+run.hint_basic:
+  en: "Name, program, arguments and working directory"
+  zh-CN: "名称、程序、参数与工作目录"
+run.hint_build:
+  en: "Build actions produce artifacts; prelaunch steps execute in order before the program."
+  zh-CN: "构建操作与启动前步骤：前者可只构建，后者在启动前按顺序执行"
+run.hint_debug:
+  en: "Choose the default or an explicit execution provider for this configuration."
+  zh-CN: "执行提供者：跟随默认，或为这个配置指定一个"
+run.hint_environment:
+  en: "This configuration's local environment, one NAME=value per line."
+  zh-CN: "本配置的环境变量，每行一个 名称=值"
+run.form_new:
+  en: "New"
+  zh-CN: "新建"
+run.form_destination:
+  en: "Save to"
+  zh-CN: "保存到："
+run.form_local:
+  en: "This machine"
+  zh-CN: "仅本机"
+run.form_shared:
+  en: "Project"
+  zh-CN: "项目共享"
+run.form_cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+run.form_save:
+  en: "Save configuration"
+  zh-CN: "保存配置"
+run.form_edit_title:
+  en: "Edit run configuration"
+  zh-CN: "编辑运行配置"
+run.form_new_title:
+  en: "New run configuration"
+  zh-CN: "新建运行配置"
+run.provider_default:
+  en: "Follow default"
+  zh-CN: "跟随默认"
+run.provider_none:
+  en: "No provider available"
+  zh-CN: "无可用提供者"
+run.step_add:
+  en: "+ Add"
+  zh-CN: "+ 添加"
+run.step_remove:
+  en: "Remove"
+  zh-CN: "删除"
+run.step_up:
+  en: "Up"
+  zh-CN: "上移"
+run.step_down:
+  en: "Down"
+  zh-CN: "下移"
+run.step_add_hint:
+  en: "Add an action to this configuration"
+  zh-CN: "在本配置中增加一条预置动作"
+run.step_remove_hint:
+  en: "Remove this action from the configuration"
+  zh-CN: "从本配置中删除这条预置动作"
+run.step_up_hint:
+  en: "Move this action one position earlier"
+  zh-CN: "把这条动作提前一位"
+run.step_down_hint:
+  en: "Move this action one position later"
+  zh-CN: "把这条动作推后一位"
+run.breakpoint_verified:
+  en: "Bound"
+  zh-CN: "已绑定"
+run.breakpoint_unverified:
+  en: "Provider could not bind this breakpoint"
+  zh-CN: "提供者未能绑定"
+run.breakpoint_waiting:
+  en: "Awaiting confirmation"
+  zh-CN: "等待确认"
+run.debug_no_location:
+  en: "No source location in this pause."
+  zh-CN: "本次暂停没有可显示的位置"
+run.leave_title:
+  en: "Managed programs are still active"
+  zh-CN: "仍有正在运行的程序"
+run.form_saved_count:
+  en: "%{count} saved configurations"
+  zh-CN: "已保存 %{count} 项"
+run.form_source_manual:
+  en: "Manual configuration"
+  zh-CN: "手动配置"
+run.form_source_provider:
+  en: "Provided by %{provider}"
+  zh-CN: "来自插件 %{provider}"
+run.form_prelaunch_count:
+  en: "%{count} prelaunch steps"
+  zh-CN: "启动前步骤：%{count}"
+run.form_debug_ready:
+  en: "Debugging ready"
+  zh-CN: "调试已就绪"
+run.form_debug_after_save:
+  en: "Debug availability is checked after saving"
+  zh-CN: "保存后检查调试可用性"
+run.debug_breakpoints:
+  en: "Breakpoints"
+  zh-CN: "断点"
+run.preparing_busy:
+  en: "This configuration is preparing"
+  zh-CN: "该配置正在准备"
+
+run.configurations:
+  en: "Run configurations"
+  zh-CN: "运行配置"
+
+run.build_only_hint:
+  en: "Execute build actions only"
+  zh-CN: "只执行构建操作"
+
+run.start:
+  en: "Run"
+  zh-CN: "运行"
+
+run.start_hint:
+  en: "Run the selected configuration"
+  zh-CN: "运行所选配置"
+
+run.debug_hint:
+  en: "Debug the selected configuration"
+  zh-CN: "调试所选配置"
+
+run.stop:
+  en: "Stop"
+  zh-CN: "停止"
+
+run.stop_hint:
+  en: "Stop the selected session"
+  zh-CN: "停止所选会话"
+
+run.rerun:
+  en: "Rerun"
+  zh-CN: "重新运行"
+
+run.rerun_hint:
+  en: "Stop the current target before starting its replacement"
+  zh-CN: "先停止当前实例，再重新启动"
+
+run.missing_configuration:
+  en: "Run configuration is missing; select it again"
+  zh-CN: "运行配置不存在，请重新选择"
+
+run.no_debug_session:
+  en: "No debug session is selected"
+  zh-CN: "没有正在检查的调试会话"
+
+run.debug_not_connected:
+  en: "Debug connection is not ready"
+  zh-CN: "调试会话尚未建立"
+
+run.debug_worker_missing:
+  en: "Plugin worker is unavailable; debugging cannot continue"
+  zh-CN: "插件后台服务不可用，无法执行调试操作"
+
+run.step_unsupported:
+  en: "This debug session does not support stepping"
+  zh-CN: "该调试会话不支持单步"
+
+run.step_pending:
+  en: "This pause already has a pending step"
+  zh-CN: "该暂停已有未完成的单步请求"
+
+run.step_worker_missing:
+  en: "Plugin worker is unavailable; stepping cannot continue"
+  zh-CN: "插件后台服务不可用，无法单步"
+
+run.step_no_command:
+  en: "The step has no executable command"
+  zh-CN: "步骤缺少可执行的命令"
+
+run.preparation_no_command:
+  en: "The preparation step has no executable command"
+  zh-CN: "准备步骤缺少可执行的命令"
+
+run.worker_missing:
+  en: "Plugin worker is unavailable"
+  zh-CN: "插件后台服务不可用"
+
+run.preparation_worker_missing:
+  en: "Plugin worker is unavailable; preparation cannot continue"
+  zh-CN: "插件后台服务不可用，无法继续准备"
+
+run.stop_worker_missing:
+  en: "Plugin worker is unavailable; preparation cannot be stopped"
+  zh-CN: "插件后台服务不可用，无法停止准备步骤"
+
+run.status_worker_missing:
+  en: "Plugin worker is unavailable; step state cannot be confirmed"
+  zh-CN: "插件后台服务不可用，无法确认步骤状态"
+
+run.start_worker_missing:
+  en: "Plugin worker is unavailable; launch cannot proceed"
+  zh-CN: "插件后台服务不可用，无法启动"
+
+run.session_ended:
+  en: "The selected session has ended"
+  zh-CN: "所选会话已经结束"
+
+run.stop_request_worker_missing:
+  en: "Plugin worker is unavailable; stop could not be requested"
+  zh-CN: "插件后台服务不可用，无法请求停止"
+
+run.rerun_worker_missing:
+  en: "Plugin worker is unavailable; rerun cannot proceed"
+  zh-CN: "插件后台服务不可用，无法重新运行"
+
+run.rerun_waiting:
+  en: "Waiting for the original program to end before rerunning"
+  zh-CN: "正在等待旧程序结束，然后重新运行"
+
+run.leave_confirm:
+  en: "Stop and close"
+  zh-CN: "停止并关闭"
+
+run.state_starting:
+  en: "Starting"
+  zh-CN: "启动中"
+
+run.state_running:
+  en: "Running"
+  zh-CN: "运行中"
+
+run.state_stopping:
+  en: "Stopping"
+  zh-CN: "停止中"
+
+run.state_terminating:
+  en: "Terminating"
+  zh-CN: "强制终止中"
+
+run.state_ended:
+  en: "Ended"
+  zh-CN: "已结束"
+
+run.resume_label:
+  en: "Continue"
+  zh-CN: "继续"
+
+run.pause_label:
+  en: "Pause"
+  zh-CN: "暂停"
+
+run.debug_stop_label:
+  en: "Stop debugging"
+  zh-CN: "停止调试"
+
+run.step_into_label:
+  en: "Step in"
+  zh-CN: "步入"
+
+run.step_over_label:
+  en: "Step over"
+  zh-CN: "步过"
+
+run.step_out_label:
+  en: "Step out"
+  zh-CN: "步出"
+
+run.phase_build:
+  en: "Build"
+  zh-CN: "构建"
+
+run.phase_prelaunch:
+  en: "Prelaunch"
+  zh-CN: "启动前"
+
+run.phase_program:
+  en: "Program"
+  zh-CN: "程序"
+
+run.menu_none:
+  en: "(No running sessions)"
+  zh-CN: "(没有运行中的会话)"
+
+run.menu_empty:
+  en: "No configurations"
+  zh-CN: "暂无配置"
+
+run.menu_edit:
+  en: "Edit configurations"
+  zh-CN: "编辑配置"
+
+run.menu_new:
+  en: "New run configuration…"
+  zh-CN: "新建运行配置…"
+
+run.menu_discover:
+  en: "Discover run targets…"
+  zh-CN: "发现运行目标…"
+
+run.menu_candidates:
+  en: "Discover run targets (%{count} candidates)…"
+  zh-CN: "发现运行目标（%{count} 个候选）…"
+
+run.menu_invalid:
+  en: " ⚠ Target missing"
+  zh-CN: " ⚠ 目标已失效"
+
+run.menu_repair:
+  en: "Target missing: %{name} (rediscover to repair)"
+  zh-CN: "目标已失效：%{name}（重新发现以修复）"
+
+run.stop_requested:
+  en: "Stop requested for session %{session}"
+  zh-CN: "已请求停止会话 %{session}"
+
+run.stop_failed:
+  en: "Failed to stop session %{session}: %{message}"
+  zh-CN: "停止会话 %{session} 失败：%{message}"
+
+run.leave_body:
+  en: "Closing stops %{count} managed sessions. Cancel keeps them running."
+  zh-CN: "关闭窗口会先停止 %{count} 个受管会话。取消可保留它们继续运行。"
+
+run.preparing_named:
+  en: "Preparing %{name}"
+  zh-CN: "正在准备 %{name}"
+
+run.building_named:
+  en: "Building %{name}"
+  zh-CN: "正在构建 %{name}"
+
+run.built_named:
+  en: "%{name} build completed"
+  zh-CN: "%{name} 构建完成"
+
+run.starting_named:
+  en: "Starting %{name}"
+  zh-CN: "正在启动 %{name}"
+
+run.stopping_named:
+  en: "Requesting stop for session %{session}"
+  zh-CN: "正在请求停止会话 %{session}"
+
+run.saved_named:
+  en: "Saved run configuration: %{name}"
+  zh-CN: "已保存运行配置：%{name}"
+
+run.saved_configurations:
+  en: "Saved run configurations"
+  zh-CN: "已保存运行配置"
+
+run.deleted_named:
+  en: "Deleted configuration: %{name}"
+  zh-CN: "已删除运行配置：%{name}"
+
+run.save_failed_named:
+  en: "Save failed; launch cancelled: %{path}"
+  zh-CN: "保存失败，未启动：%{path}"
+
+run.debug_via:
+  en: "Debug selected configuration through %{provider}"
+  zh-CN: "通过 %{provider} 调试所选配置"
+
+run.debug_unknown_action:
+  en: "Unknown debug action: %{action}"
+  zh-CN: "未知的调试操作：%{action}"
+
+run.provider_current:
+  en: "Currently active: %{provider}"
+  zh-CN: "当前生效：%{provider}"
+
+run.form_debug_panel_hint:
+  en: "Set launch breakpoints here. Continue, stepping, stack and variables are in the unified debug panel."
+  zh-CN: "在这里配置启动断点。继续、单步、调用栈和变量位于统一调试面板。"
+
+run.configuration_missing:
+  en: "Run configuration is missing; select it again"
+  zh-CN: "运行配置不存在，请重新选择"
+
+run.no_build_actions:
+  en: "This configuration has no build actions"
+  zh-CN: "该配置没有构建操作"
+
+run.debug_busy:
+  en: "A debug operation is in progress"
+  zh-CN: "调试操作正在进行"
+
+run.preparation_stopped:
+  en: "Preparation steps were stopped"
+  zh-CN: "已停止准备步骤"
+
+run.impact_running:
+  en: "Will stop %{count} running programs (%{names})"
+  zh-CN: "将停止 %{count} 个正在运行的程序（%{names}）"
+
+run.impact_debugging:
+  en: "Will end %{count} debug sessions (%{names})"
+  zh-CN: "将结束 %{count} 个调试会话（%{names}）"
+run.step_failed:
+  en: 'Step %{name} failed: %{message}'
+  zh-CN: '步骤 %{name} 失败：%{message}'
+run.debug_already_connected:
+  en: 'A debug session is active; stop it before starting another'
+  zh-CN: '已有调试会话；请先停止它再开始新的调试'
+run.debug_already_paused:
+  en: 'The target is already paused'
+  zh-CN: '目标已暂停'
+run.debug_pause_before_step:
+  en: 'Pause the running target before stepping'
+  zh-CN: '目标正在运行；请先暂停再单步'
+run.debug_resume_pause_undeclared:
+  en: 'This provider does not declare resume and pause controls'
+  zh-CN: '该调试提供者未声明继续与暂停能力'
+run.debug_unconfirmed:
+  en: 'Debug capability is not confirmed; open Debug settings and try again'
+  zh-CN: '尚未确认调试能力；打开调试页后重试'
+run.debug_inspection_not_paused:
+  en: 'The target is not paused; inspection is unavailable'
+  zh-CN: '目标未暂停，暂无暂停数据'
+run.debug_stale_pause:
+  en: 'This pause has ended; the late result will not replace the current view'
+  zh-CN: '该暂停已结束，迟到的结果不会覆盖当前视图'
+run.debug_unknown_frame:
+  en: 'This pause has no frame %{frame}'
+  zh-CN: '该暂停没有第 %{frame} 个栈帧'
+run.debug_wrong_session:
+  en: 'This result belongs to another debug session'
+  zh-CN: '该结果属于另一个调试会话'
+run.debug_provider_failure:
+  en: 'Debug provider failed: %{reason}'
+  zh-CN: '调试提供者报告失败：%{reason}'
+run.step_exited:
+  en: 'Step %{name} exited with code %{code}'
+  zh-CN: '步骤 %{name} 退出码 %{code}'
+run.step_terminated:
+  en: 'Step %{name} was terminated'
+  zh-CN: '步骤 %{name} 已终止'
+run.step_unknown_exit:
+  en: 'The final state of step %{name} could not be confirmed'
+  zh-CN: '步骤 %{name} 的结束状态无法确认'
+run.step_missing_result:
+  en: 'Step %{name} ended without a result'
+  zh-CN: '步骤 %{name} 的会话已结束但未报告结果'
+run.step_blocked:
+  en: '%{kind} step %{name}: %{reason}'
+  zh-CN: '%{kind}步骤 %{name}：%{reason}'
+run.build_limit:
+  en: 'A build cannot exceed %{limit} actions'
+  zh-CN: '一次构建不能超过 %{limit} 个操作'
+run.preparation_limit:
+  en: 'Launch preparation cannot exceed %{limit} steps'
+  zh-CN: '一次启动的准备步骤不能超过 %{limit} 个'
+run.reference_missing:
+  en: 'Pre-launch step %{step} references a missing build configuration: %{name}'
+  zh-CN: '启动前步骤 %{step} 引用的构建配置不存在：%{name}'
+run.reference_self:
+  en: 'Pre-launch step %{step} cannot reference its own build'
+  zh-CN: '启动前步骤 %{step} 不能引用当前配置自身的构建'
+run.step_not_action:
+  en: 'Step %{name} is not a directly executable action'
+  zh-CN: '步骤 %{name} 不是可直接执行的动作'
+run.target_not_discovered:
+  en: 'The discovered catalog does not contain target %{id}'
+  zh-CN: '发现结果里没有这个目标：%{id}'
+run.old_exit_unknown:
+  en: 'The previous program exit could not be confirmed; rerun cancelled'
+  zh-CN: '无法确认旧程序已结束，取消重新运行'
+run.configuration_unknown:
+  en: 'Unknown configuration: %{id}'
+  zh-CN: '未知的配置：%{id}'
+run.provider_not_installed:
+  en: 'Configured execution provider %{provider} is not installed'
+  zh-CN: '配置指定的执行提供者 %{provider} 未安装'
+run.environment_syntax:
+  en: 'Write environment entries as NAME=VALUE: %{line}'
+  zh-CN: '环境变量需要写成 名称=值：%{line}'
+run.environment_name_missing:
+  en: 'An environment entry is missing its name: %{line}'
+  zh-CN: '环境变量缺少名称：%{line}'
+run.breakpoint_syntax:
+  en: 'Write breakpoints as SOURCE:LINE: %{line}'
+  zh-CN: '断点需要写成 源文件:行号：%{line}'
+run.breakpoint_line_invalid:
+  en: 'Breakpoint line must be a number: %{line}'
+  zh-CN: '断点行号必须是数字：%{line}'
+run.steps_format_header:
+  en: '# Name = program | arguments'
+  zh-CN: '# 名称 = 程序 | 参数'
+
+run.provider_build_missing:
+  en: "The provider target requires its matching build action; repair the configuration"
+  zh-CN: "提供者目标缺少对应的构建操作，请修复运行配置"
+run.target_catalog_limit:
+  en: "The target catalog exceeds the limit of 128"
+  zh-CN: "目标目录超过 128 项限制"
+plugins.remove_programs:
+  en: "This will stop %{count} running programs."
+  zh-CN: "将关闭 %{count} 个运行中的程序。"
+plugins.remove_resources:
+  en: "This will withdraw the plugin's syntax, theme or icon resources."
+  zh-CN: "将撤销此插件提供的语法、主题或图标资源。"
+plugins.disable:
+  en: "Disable"
+  zh-CN: "停用"
+plugins.remove_title:
+  en: "%{action} plugin · %{name}"
+  zh-CN: "%{action}插件 · %{name}"
+plugins.remove_data_hint:
+  en: "You can preserve plugin configuration or delete its saved data as well."
+  zh-CN: "可保留插件配置，也可同时删除插件保存的数据。"
+plugins.remove_preserve:
+  en: "Uninstall and preserve data"
+  zh-CN: "卸载，保留数据"
+plugins.confirm_disable:
+  en: "Confirm disable"
+  zh-CN: "确认停用"
+plugins.remove_delete:
+  en: "Uninstall and delete data"
+  zh-CN: "卸载并删除数据"
+transfer.title:
+  en: "File operation"
+  zh-CN: "文件操作"
+transfer.copy:
+  en: "Copy"
+  zh-CN: "复制"
+transfer.move:
+  en: "Move"
+  zh-CN: "移动"
+transfer.busy:
+  en: "A file operation is still running. Finish or cancel it first."
+  zh-CN: "文件操作仍在进行，请先完成或取消当前操作。"
+transfer.conflict:
+  en: "The destination already exists"
+  zh-CN: "目标已存在，请选择处理方式"
+transfer.skip:
+  en: "Skip"
+  zh-CN: "跳过"
+transfer.keep_both:
+  en: "Keep both"
+  zh-CN: "保留两份"
+transfer.replace:
+  en: "Replace"
+  zh-CN: "替换"
+transfer.merge:
+  en: "Merge directories"
+  zh-CN: "合并目录"
+transfer.apply_subsequent:
+  en: "Apply to subsequent conflicts in this batch"
+  zh-CN: "应用于本批后续冲突"
+transfer.dirty_target:
+  en: "The target has unsaved changes. Save it first, skip it, or keep both."
+  zh-CN: "目标存在未保存修改，请先保存、跳过或保留两份。"
+transfer.progress:
+  en: "%{completed} completed · %{bytes} bytes\n%{path}"
+  zh-CN: "已完成 %{completed} 项 · %{bytes} 字节\n%{path}"
+transfer.result:
+  en: "%{completed} completed, %{failed} failed, %{skipped} skipped, %{remaining} top-level items not started"
+  zh-CN: "成功 %{completed} 项，失败 %{failed} 项，跳过 %{skipped} 项，未执行 %{remaining} 个顶层项"
+transfer.cancelled:
+  en: "Cancelled; completed items were kept"
+  zh-CN: "已取消，保留已完成项"
+transfer.outside_workspace:
+  en: "The destination is outside the workspace"
+  zh-CN: "目标位于工作区之外"
+transfer.missing_parent:
+  en: "The destination has no parent directory"
+  zh-CN: "目标缺少父目录"
+transfer.window_closed:
+  en: "The operation window was closed"
+  zh-CN: "操作所在窗口已关闭"
+transfer.cleanup_failed:
+  en: "Could not remove the private file operation backup %{path}: %{error}. Release the lock and retry closing."
+  zh-CN: "无法删除文件操作的私有备份 %{path}：%{error}。请解除占用后重试关闭。"
+transfer.link_target:
+  en: "Refusing to follow or replace a link"
+  zh-CN: "不能跟随或替换链接目标"
+transfer.unsupported:
+  en: "Unsupported file type"
+  zh-CN: "不支持该文件类型"
+transfer.changed:
+  en: "Disk content changed while the operation was being prepared; retry after reviewing it"
+  zh-CN: "准备操作期间磁盘内容发生变化，请核对后重试"
+transfer.new_edits_preserved:
+  en: "The document changed after confirmation. New edits were preserved; review the file operation again."
+  zh-CN: "确认后文档又发生了修改，已保留新输入，请重新核对文件操作。"
+transfer.rollback_backup:
+  en: "Rollback could not restore this entry. Its parked original was retained here for recovery."
+  zh-CN: "回滚未能恢复此项，原始内容已保留在此位置，可用于恢复。"
+transfer.invalid_directory:
+  en: "The destination is not a directory"
+  zh-CN: "目标不是目录"
+transfer.undo:
+  en: "Undo file operation · %{operation}"
+  zh-CN: "撤销文件操作 · %{operation}"
+transfer.redo:
+  en: "Redo file operation · %{operation}"
+  zh-CN: "重做文件操作 · %{operation}"
+transfer.no_history:
+  en: "No available record"
+  zh-CN: "暂无记录"
+transfer.recovery_conflict:
+  en: "Review file recovery"
+  zh-CN: "请确认文件恢复冲突"
+transfer.recovery_hint:
+  en: "These paths have changed or contain unsaved edits. Force recovery overwrites later changes."
+  zh-CN: "这些路径已发生变化或包含未保存内容。强制恢复将覆盖后续修改。"
+transfer.force:
+  en: "Force recovery"
+  zh-CN: "强制恢复"
+transfer.discard_title:
+  en: "Discard unsaved changes?"
+  zh-CN: "确认丢弃未保存修改？"
+transfer.discard_hint:
+  en: "This will discard unsaved editor content in the listed paths. This cannot be undone as a text edit."
+  zh-CN: "将丢弃上述路径的未保存编辑内容，不能通过文本撤销恢复。"
+transfer.confirm_discard:
+  en: "Discard changes and recover"
+  zh-CN: "丢弃修改并恢复"
+plugins.consent_replacements:
+  zh-CN: "本次安装将替代并停用：%{ids}。原有私有数据、备份和其他提供者选择会保留；权限不会自动转移。"
+  en: "This installation replaces and retires: %{ids}. Original private data, backups and other provider choices are retained; grants are not transferred automatically."
+workspace_presentation.settings:
+  en: "Workspace plugin presentation"
+  zh-CN: "工作区插件显示"
+workspace_presentation.enabled:
+  en: "Color file names by provider state"
+  zh-CN: "按提供者状态显示文件名颜色"
+workspace_presentation.provider:
+  en: "File color provider for this project"
+  zh-CN: "此项目的文件颜色提供者"
+workspace_presentation.no_provider:
+  en: "No enabled file color provider"
+  zh-CN: "没有已启用的文件颜色提供者"
+workspace_presentation.choose_provider:
+  en: "Choose one provider. New installations keep your existing choice."
+  zh-CN: "请选择一个提供者。新安装的插件会保留已有选择。"
+workspace_presentation.light_colors:
+  en: "Light appearance colors"
+  zh-CN: "浅色外观的文件颜色"
+workspace_presentation.dark_colors:
+  en: "Dark appearance colors"
+  zh-CN: "深色外观的文件颜色"
+workspace_presentation.color_hint:
+  en: "Enter #RRGGBB, or clear to use the theme default. Directories keep their original color."
+  zh-CN: "输入 #RRGGBB，留空使用主题默认颜色。目录保留原色。"
+workspace_presentation.theme_default:
+  en: "Theme default"
+  zh-CN: "主题默认"
+workspace_presentation.invalid_color:
+  en: "Use a six-digit RGB value such as #22AA66, or clear the field."
+  zh-CN: "请输入六位 RGB 颜色，例如 #22AA66，或清空输入。"
+workspace_presentation.positive:
+  en: "Added / positive"
+  zh-CN: "新增／正向状态"
+workspace_presentation.informative:
+  en: "Modified / informative"
+  zh-CN: "修改／信息状态"
+workspace_presentation.negative:
+  en: "Deleted / conflict"
+  zh-CN: "删除／冲突状态"
+workspace_presentation.entries:
+  en: "Title entries"
+  zh-CN: "顶部插件入口"
+workspace_presentation.move_up:
+  en: "Move entry left"
+  zh-CN: "向左移动入口"
+workspace_presentation.move_down:
+  en: "Move entry right"
+  zh-CN: "向右移动入口"
+workspace_presentation.more:
+  en: "More workspace entries"
+  zh-CN: "更多工作区入口"
+workspace_presentation.search:
+  en: "Search items and actions"
+  zh-CN: "搜索条目和操作"
+workspace_presentation.error:
+  en: "Could not apply presentation settings: %{details}"
+  zh-CN: "无法应用显示设置：%{details}"

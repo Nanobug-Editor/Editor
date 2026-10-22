@@ -60,7 +60,7 @@ struct Group {
     sample_attempts: u8,
     geometry_failed: bool,
     /// Optional zero-byte presentation; legacy 1.0 groups retain semantic scroll synchronization.
-    alignment: Option<crate::ui::controls::aligned_editor::AlignmentGroup>,
+    alignment: Option<editor_ui::aligned_editor::AlignmentGroup>,
     alignment_requested: bool,
 }
 
@@ -143,7 +143,7 @@ impl Group {
 
     fn unavailable(&self, cx: &App) -> bool {
         if self.alignment_requested {
-            use crate::ui::controls::aligned_editor::AlignmentStatus;
+            use editor_ui::aligned_editor::AlignmentStatus;
             self.alignment
                 .as_ref()
                 .is_none_or(|group| matches!(group.status(cx), AlignmentStatus::Unavailable(_)))

@@ -259,7 +259,30 @@ fn project_windows_quit_cancel_retains_every_editor_and_revalidates_new_input(
         // A final successful retry saves A explicitly and discards B only after both decisions have been accepted.
         click(visual, "project-quit-application");
         click(visual, "project-close-save");
+        // Saving now waits for background history protection/publication before advancing quit to B.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            visual.run_until_parked();
+            second.run_until_parked();
+            second.update(|window, cx| window.draw(cx).clear(cx));
+            if second.debug_bounds("project-close-discard").is_some() {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "saved history acknowledgement did not advance quit consent"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
         click(&mut second, "project-close-discard");
+        while !visual.cx.update(|cx| cx.windows().is_empty()) {
+            visual.cx.run_until_parked();
+            assert!(
+                std::time::Instant::now() < deadline,
+                "approved project history did not drain before quit"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
         assert!(visual.cx.update(|cx| cx.windows().is_empty()));
         assert_eq!(
             std::fs::read_to_string(a.path().join("a.txt")).unwrap(),

@@ -1,8 +1,12 @@
 //! Built-in plugin development workflows share the runtime's project builder with the CLI.
+mod check;
 mod cli;
 pub(crate) mod configuration;
 pub(crate) mod instance;
 pub(crate) mod jobs;
+#[cfg(test)]
+mod native_report_tests;
+pub(crate) mod report;
 #[cfg(test)]
 mod tests;
 pub(crate) use cli::run_cli;

@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 dirs.workspace = true
 editor-core = { path = "../editor-core" }
+editor-history = { path = "../editor-history" }
 tempfile.workspace = true
 thiserror.workspace = true
 

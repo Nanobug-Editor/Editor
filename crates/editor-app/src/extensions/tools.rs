@@ -1,7 +1,7 @@
 //! Two native toolbar groups route captured targets; all plugin functions and artwork stay in packages.
 use super::*;
 use crate::outline::ToggleOutline;
-use crate::ui::controls::menu::{MenuStyle, PopupMenu};
+use editor_ui::menu::{MenuStyle, PopupMenu};
 
 /// Native toolbar focus retains this context; reopening a file or replacing a window invalidates it.
 #[derive(Clone, Debug, PartialEq, Eq)]

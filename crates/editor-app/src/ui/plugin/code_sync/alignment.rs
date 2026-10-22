@@ -1,6 +1,6 @@
 //! Explicit 1.1 opt-in to bounded blank-row presentation over existing native source entities.
 use super::*;
-use crate::ui::controls::{
+use editor_ui::{
     aligned_editor::{AlignmentGroup, AlignmentPane},
     aligned_pointer,
 };
@@ -74,13 +74,11 @@ impl PluginView {
             let sources = panes
                 .iter()
                 .map(|pane| {
-                    Some(AlignmentPane {
-                        editor: pane.editor.clone()?,
-                        revision: pane.stamp.generation,
-                        label: pane.stamp.node.clone(),
-                        input_factory: None,
-                        native_authority_factory: None,
-                    })
+                    Some(AlignmentPane::new(
+                        pane.editor.clone()?,
+                        pane.stamp.generation,
+                        pane.stamp.node.clone(),
+                    ))
                 })
                 .collect::<Option<Vec<_>>>();
             if let (Some(group), Some(sources), Some(router)) =
@@ -126,7 +124,7 @@ impl PluginView {
 
     /// Keep preparation, budget failure and temporary native-menu pauses distinct in the UI.
     pub(in crate::ui::plugin) fn code_alignment_warning(&self, cx: &App) -> Option<&'static str> {
-        use crate::ui::controls::aligned_editor::AlignmentStatus;
+        use editor_ui::aligned_editor::AlignmentStatus;
         self.code_sync
             .groups
             .values()

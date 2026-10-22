@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io::Write, sync::OnceLock};
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Descriptor {
+    /// Explicit controller opt-in; ordinary development does not create diagnostic reports.
+    #[serde(default)]
+    pub reporting: bool,
     /// Separate successive controllers using the same persistent profile.
     pub session: String,
     /// One controller substitutes one installed identity; changing the ID needs a new bootstrap.

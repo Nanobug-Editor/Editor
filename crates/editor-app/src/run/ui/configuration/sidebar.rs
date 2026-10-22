@@ -21,7 +21,7 @@ pub(super) fn render_sidebar(
         .id("run-config-list")
         .flex_1()
         .min_h_0()
-        .overflow_y_scroll()
+        .overflow_y_scrollbar()
         .gap_1()
         .p_2();
     for config in stored {

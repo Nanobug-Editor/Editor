@@ -96,7 +96,8 @@ fn market_upgrades_require_fresh_review_and_exact_selected_zip_bytes() {
             worker.refresh_market(cache, format!("{}/catalog.json", server.url));
             wait(&worker, |state| state.market.error.is_some());
         }
-        let accepted = worker.install_market(candidate.clone(), generation, Default::default());
+        let accepted =
+            worker.install_market(candidate.clone(), generation, Default::default(), true);
         assert_eq!(
             accepted,
             !matches!(scenario, "offline" | "withdrawn"),
@@ -142,7 +143,7 @@ fn market_upgrades_require_fresh_review_and_exact_selected_zip_bytes() {
             wait(&worker, |state| state.market_statistics_error.is_some());
             assert!(worker.state.lock().unwrap().market.fresh());
             assert!(
-                !worker.install_market(candidate, generation, Default::default()),
+                !worker.install_market(candidate, generation, Default::default(), true),
                 "same-version reinstall must be rejected"
             );
         }

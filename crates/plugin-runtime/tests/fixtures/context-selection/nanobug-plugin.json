@@ -1,0 +1,1 @@
+{"version":1,"manifest":"manifest.json","output":".","wasm":{"manifest":"Cargo.toml"},"assets":[{"source":"plugin.toml","destination":"plugin.toml"}]}

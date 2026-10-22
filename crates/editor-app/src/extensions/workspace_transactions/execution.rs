@@ -2,6 +2,7 @@
 
 use super::*;
 use gpui_kit::AsyncWindowContext;
+mod documents;
 
 /// A closed window is a domain failure; no asynchronous result may switch to a different native owner.
 pub(super) fn update_native<R>(
@@ -32,6 +33,14 @@ pub(super) async fn apply(
         .await;
     record.files = Some(files);
     result?;
+    // Text-only refactors have no disk effects: all native replacements commit in one UI turn.
+    if record
+        .changes
+        .iter()
+        .all(|change| matches!(change, Change::EditDocument { .. }))
+    {
+        return documents::apply(app, cx, request, record).await;
+    }
     update_native(app, cx, |app, window, cx| {
         app.check_workspace_native(record, window, cx)?;
         if !request.enter_side_effect() {
@@ -92,14 +101,6 @@ pub(super) async fn apply(
                 .unwrap()
                 .0
                 != edit.prepared.result();
-            let expected = record
-                .native
-                .iter()
-                .find(|target| target.current.id == edit.id)
-                .unwrap()
-                .current
-                .revision
-                + u64::from(changed);
             let response = update_native(app, cx, |app, window, cx| {
                 app.check_workspace_native(record, window, cx)?;
                 if stopped(request, &record.batch) {
@@ -114,29 +115,15 @@ pub(super) async fn apply(
                     .position(|tab| native_version(tab).id == edit.id)
                     .unwrap();
                 let editor = app.text_tab(tab).unwrap().editor.clone();
-                editor
+                let before = native_version(&app.tabs[tab]);
+                let session_revision = app.text_tab(tab).unwrap().session.revision();
+                let applied = editor
                     .update(cx, |editor, cx| edit.prepared.apply(editor, window, cx))
                     .map_err(|error| Failure::new(ErrorCode::StaleRevision, error.to_string()))?;
+                let committed = documents::TextCommit::new(before, session_revision, applied);
                 let (answer, response) = oneshot::channel();
-                let id = edit.id.clone();
-                let result = edit.prepared.result().to_owned();
                 cx.defer_in(window, move |app, _, cx| {
-                    let version = app
-                        .tabs
-                        .iter()
-                        .find(|tab| native_version(tab).id == id)
-                        .and_then(|tab| {
-                            let text = tab.text.as_ref()?;
-                            (text.capability_revision == expected
-                                && text.editor.read(cx).text().to_string() == result)
-                                .then(|| native_version(tab))
-                        });
-                    let _ = answer.send(version.ok_or_else(|| {
-                        failure(
-                            ErrorCode::StaleRevision,
-                            "Native edit was superseded or closed",
-                        )
-                    }));
+                    let _ = answer.send(committed.version(app, cx));
                 });
                 Ok(response)
             })?;
@@ -255,6 +242,8 @@ impl EditorApp {
             return;
         }
         let Some(mut record) = self.workspace_changes.records.remove(&batch_key) else {
+            #[cfg(test)]
+            eprintln!("workspace undo: requested record is no longer retained");
             if let Some(request) = request {
                 request.finish(Err(failure(
                     ErrorCode::InvalidHandle,
@@ -264,6 +253,12 @@ impl EditorApp {
             return;
         };
         if !record.batch.is_live() || record.batch.receipt().state == BatchState::Undone {
+            #[cfg(test)]
+            eprintln!(
+                "workspace undo: record unavailable live={} receipt={:?}",
+                record.batch.is_live(),
+                record.batch.receipt()
+            );
             if let Some(request) = request {
                 request.finish(Err(failure(
                     ErrorCode::InvalidHandle,

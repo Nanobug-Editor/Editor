@@ -1,6 +1,6 @@
 //! Native plugin forms reuse editor-owned controls; confirmations cross the existing worker boundary.
 use super::*;
-use crate::ui::controls::{Checkbox, SegmentedTabs};
+use editor_ui::{Checkbox, SegmentedTabs};
 use protocol::settings::{Definition, EffectiveValue, Scope, SettingType, Source};
 use std::collections::BTreeSet;
 mod services;

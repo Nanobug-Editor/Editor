@@ -15,7 +15,7 @@ mod tag_editing;
 mod terminal;
 mod xml_formatting;
 mod xml_language_tools;
-pub(crate) use language_fixture::declared_language_service;
+pub(crate) use language_fixture::{declared_language_service, language_service_package};
 // Shared package transport remains test-only; model descendants can reuse its real native setup.
 pub(crate) use outline::wait_node as wait_outline_node;
 pub(crate) use shortcuts::with_editor as with_shortcut_editor;

@@ -1,6 +1,7 @@
 //! Bounded tree resources shared by the serial guest worker and native Base tree projection.
 //! Only provider metadata is retained here; text, document selection and tree scrolling stay native.
 use crate::EditorAuthority;
+mod patch;
 use plugin_protocol::{
     api::{ErrorCode, Failure, ResourceHandle},
     tree,
@@ -15,7 +16,7 @@ use std::{
 };
 
 /// One branch's publication and status. Existing pages remain visible during a continuation failure.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct TreeBranch {
     pub children: Vec<String>,
     pub next: Option<String>,
@@ -32,6 +33,8 @@ pub struct TreeSnapshot {
     pub branches: BTreeMap<Option<String>, TreeBranch>,
     pub expanded: BTreeSet<String>,
     pub icons: BTreeMap<String, Arc<[u8]>>,
+    /// A one-shot exact ID path; native interaction or successful reveal withdraws it.
+    pub initial_selection: Option<Vec<String>>,
 }
 struct Pending {
     request: tree::Request,
@@ -41,20 +44,46 @@ struct State {
     snapshot: TreeSnapshot,
     next: u64,
     pending: BTreeMap<u64, Pending>,
+    /// Defaults cannot be replayed after native input, even if it preceded the provider's first call.
+    initialized: bool,
+}
+/// Every node and nested native menu shares one admitted artwork set across update and patch.
+fn artwork_paths<'a>(nodes: impl Iterator<Item = &'a tree::Node>) -> BTreeSet<String> {
+    let mut paths = BTreeSet::new();
+    for node in nodes {
+        if let Some(icon) = &node.icon {
+            paths.extend([icon.light.clone(), icon.dark.clone()]);
+        }
+        for item in &node.action_menu {
+            item.visit(&mut |item| {
+                if let Some(icon) = &item.icon {
+                    paths.extend([icon.light.clone(), icon.dark.clone()]);
+                }
+            });
+        }
+    }
+    paths
 }
 /// Runtime-issued lifetime authority prevents stale native entities from reviving retired providers.
 pub struct TreeResource {
     handle: ResourceHandle,
     authority: EditorAuthority,
+    /// Creation-time preferences cannot be changed by retained native scene callbacks.
+    options: tree::Options,
     revoked: AtomicBool,
     state: Mutex<State>,
 }
 impl TreeResource {
     /// Only the admitted instance allocates a tree; callers never supply a replacement owner.
-    pub(crate) fn new(handle: ResourceHandle, authority: EditorAuthority) -> Self {
+    pub(crate) fn new(
+        handle: ResourceHandle,
+        authority: EditorAuthority,
+        options: tree::Options,
+    ) -> Self {
         Self {
             handle,
             authority,
+            options,
             revoked: AtomicBool::new(false),
             state: Mutex::new(State {
                 snapshot: TreeSnapshot {
@@ -65,11 +94,20 @@ impl TreeResource {
                 },
                 next: 1,
                 pending: BTreeMap::new(),
+                initialized: false,
             }),
         }
     }
     pub fn handle(&self) -> &ResourceHandle {
         &self.handle
+    }
+    /// Read the admitted immutable pointer preference, independent of provider pages and epochs.
+    pub fn selection_gesture(&self) -> tree::SelectionGesture {
+        self.options.selection
+    }
+    /// Directory gestures are fixed at creation and cannot change during a retained native press.
+    pub fn single_click_expand(&self) -> bool {
+        self.options.single_click_expand
     }
     /// Task completion does not revoke a tree; owner or delegated caller retirement does.
     pub fn is_live(&self) -> bool {
@@ -106,6 +144,69 @@ impl TreeResource {
             .keys()
             .cloned()
             .collect()
+    }
+    /// Admit one bounded default `path` without loading pages or granting activation authority.
+    pub(crate) fn initialize(&self, path: Vec<String>) -> Result<(), Failure> {
+        self.live()?;
+        if path.is_empty()
+            || path.len() > 64
+            || path.iter().any(|id| !tree::valid_id(id))
+            || path.iter().collect::<BTreeSet<_>>().len() != path.len()
+        {
+            return Err(Failure::new(
+                ErrorCode::InvalidRequest,
+                "Invalid initial tree selection path",
+            ));
+        }
+        let mut state = self.state.lock().unwrap();
+        if !state.initialized {
+            state.initialized = true;
+            state.snapshot.initial_selection = Some(path);
+            state.snapshot.revision += 1;
+        }
+        Ok(())
+    }
+    /// Native user input and completed/missing defaults permanently finish this resource's seed.
+    /// Does not change selection, disclosure, cached pages or pending ordinary requests.
+    pub fn dismiss_initial_selection(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.initialized = true;
+        if state.snapshot.initial_selection.take().is_some() {
+            state.snapshot.revision += 1;
+        }
+    }
+    /// Change only cached branch disclosure. Validate the entire ID list before any mutation;
+    /// native reconciliation requests missing child pages under the usual pending-page quota.
+    pub(crate) fn set_expanded(&self, nodes: Vec<String>, expanded: bool) -> Result<(), Failure> {
+        self.live()?;
+        if nodes.len() > tree::MAX_NODES || nodes.iter().any(|id| !tree::valid_id(id)) {
+            return Err(Failure::new(
+                ErrorCode::LimitExceeded,
+                "Invalid tree disclosure request",
+            ));
+        }
+        if !expanded {
+            for id in nodes {
+                self.collapse(&id);
+            }
+            return Ok(());
+        }
+        let mut state = self.state.lock().unwrap();
+        let mut changed = false;
+        for id in nodes {
+            if state
+                .snapshot
+                .nodes
+                .get(&id)
+                .is_some_and(|node| node.branch && !node.disabled)
+            {
+                changed |= state.snapshot.expanded.insert(id);
+            }
+        }
+        if changed {
+            state.snapshot.revision += 1;
+        }
+        Ok(())
     }
     /// Root loading, first expansion, continuation and retry all use this same bounded request.
     pub fn request(
@@ -224,6 +325,7 @@ impl TreeResource {
             revision: state.snapshot.revision + 1,
             branches: [(None, TreeBranch::default())].into(),
             expanded: state.snapshot.expanded.clone(),
+            initial_selection: state.snapshot.initial_selection.clone(),
             ..Default::default()
         };
         state.pending.clear();
@@ -273,11 +375,7 @@ impl TreeResource {
                 *previous = node;
             }
         }
-        let paths = candidate
-            .values()
-            .filter_map(|node| node.icon.as_ref())
-            .flat_map(|icon| [&icon.light, &icon.dark])
-            .collect::<BTreeSet<_>>();
+        let paths = artwork_paths(candidate.values());
         let mut artwork = state.snapshot.icons.clone();
         artwork.extend(icons.into_iter().filter(|(path, _)| paths.contains(path)));
         artwork.retain(|path, _| paths.contains(path));
@@ -322,6 +420,10 @@ impl TreeResource {
             tree::NodeAction::Menu { index } => usize::try_from(*index)
                 .ok()
                 .and_then(|index| node.menu.get(index)),
+            tree::NodeAction::MenuItem { id } => {
+                return plugin_protocol::ui::action_menu_command(&node.action_menu, id)
+                    .ok_or_else(stale);
+            }
         }
         .filter(|command| !command.disabled)
         .cloned()
@@ -350,6 +452,25 @@ impl TreeResource {
                         .nodes
                         .get(node)
                         .is_none_or(|node| node.disabled)
+                {
+                    return Err(stale());
+                }
+            }
+            tree::Event::Checked {
+                tree,
+                epoch,
+                node,
+                previous,
+                checked,
+            } => {
+                if tree != &self.handle
+                    || *epoch != state.snapshot.epoch
+                    || *checked != (*previous != tree::CheckState::Checked)
+                    || state
+                        .snapshot
+                        .nodes
+                        .get(node)
+                        .is_none_or(|node| node.disabled || node.checked != Some(*previous))
                 {
                     return Err(stale());
                 }
@@ -467,6 +588,19 @@ fn stale() -> Failure {
 }
 /// Cosmetic replacement cannot retarget callbacks captured in the current tree epoch.
 fn validate_update_intent(previous: &tree::Node, next: &tree::Node) -> Result<(), Failure> {
+    // Presentation and availability may change; stable menu IDs, command arguments and hierarchy
+    // cannot be retargeted under callbacks already admitted for this tree epoch.
+    fn menu_intent(items: &[plugin_protocol::ui::ActionMenuItem]) -> serde_json::Value {
+        use plugin_protocol::ui::ActionMenuKind;
+        serde_json::Value::Array(items.iter().map(|item| {
+            let kind = match &item.kind {
+                ActionMenuKind::Action { command } => serde_json::json!({"command":command.command,"arguments":command.arguments}),
+                ActionMenuKind::Group { items, .. } => serde_json::json!({"group":menu_intent(items)}),
+                ActionMenuKind::Submenu { items, on_open } => serde_json::json!({"submenu":menu_intent(items),"on_open":on_open.as_ref().map(|command| (&command.command, &command.arguments))}),
+            };
+            serde_json::json!({"id":item.id,"kind":kind})
+        }).collect())
+    }
     let same_command = |before: &tree::Command, after: &tree::Command| {
         before.command == after.command
             && before.arguments == after.arguments
@@ -479,6 +613,7 @@ fn validate_update_intent(previous: &tree::Node, next: &tree::Node) -> Result<()
             _ => true,
         }
         || previous.menu.len() != next.menu.len()
+        || menu_intent(&previous.action_menu) != menu_intent(&next.action_menu)
         || !previous
             .menu
             .iter()
@@ -570,6 +705,7 @@ mod tests {
                 resource: 1,
             },
             EditorAuthority::new(Arc::new(AtomicBool::new(true)), None),
+            tree::Options::default(),
         );
         let root = resource.request(None, false).unwrap().unwrap();
         resource
@@ -617,6 +753,12 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+#[path = "trees/check_tests.rs"]
+mod check_tests;
+#[cfg(test)]
+#[path = "trees/initial_tests.rs"]
+mod initial_tests;
 #[cfg(test)]
 #[path = "trees/update_tests.rs"]
 mod update_tests;

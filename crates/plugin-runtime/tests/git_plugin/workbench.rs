@@ -32,10 +32,14 @@ mod refresh_stability;
 mod scene_activity;
 #[path = "workbench/scene_receipts.rs"]
 mod scene_receipts;
+#[path = "workbench/sdk_resources.rs"]
+mod sdk_resources;
 #[path = "workbench/tree_collisions.rs"]
 mod tree_collisions;
 #[path = "workbench/tree_pages.rs"]
 mod tree_pages;
+#[path = "workbench/workspace_presentation.rs"]
+mod workspace_presentation;
 
 /// One exact environment-selected ZIP is shared with the native window and final delivery gates.
 fn candidate() -> Package {

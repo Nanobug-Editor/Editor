@@ -1,5 +1,12 @@
 # 插件工具与共享偏好
 
+工作区文件名着色与项目名右侧的入口使用公开 [presentation](src/presentation.rs)，
+分别协商 `explorer.decorations 1.0` 和 `ui.workspace 1.0`，均要求工作区实例和 `ui.panels` 授权。
+着色额外要求 `workspace.read`，只接受规范化相对文件路径，不创建节点；目录不着色。
+顶部入口使用包内图标与双语菜单，并复用既有类型化命令权限和原实例撤销机制。
+宿主用户设置控制单一提供者、深浅主题颜色、隐藏及稳定排序；插件不得争抢全局状态。
+`ui.tree 1.6` 的 `Node.action_menu` 使用相同菜单契约，详见 [menus](src/ui/menus.rs)。
+
 `ui.tools ^1` 为 `Document.tools` 提供至多 32 个原生底栏按钮。
 每项包含稳定 ID、`LocalizedText` 双语名称与提示、`ToolIcon` 深浅主题包内 SVG、
 `visible/selected/disabled/order` 及明确的 `ToolTarget`。
@@ -38,7 +45,7 @@ File 目标必须等于当前 `Document.file`；Window 目标只能是本贡献�
 图标归属和权限校验，并在整批通过后原子更新。仅替换已缓存同 ID 节点的显示字段及命令禁用
 状态；未缓存 ID 校验后忽略。分支类型、命令名、参数、菜单顺序及分隔位置不得改变，否则
 返回 `Conflict`。epoch、展开状态、已加载子节点、游标及未完成页请求保持不变；内容相同不
-推进 revision。结构变化仍显式 `refresh`，不能用元数据更新绕过旧回调与权限检查。
+推进 revision。结构变化须显式 `refresh` 或另行协商下述 1.4 增量补丁，不能用元数据更新绕过旧回调与权限检查。
 类型化命令的 `signature.permissions` 必须声明实际使用的既有权限，宿主继续取交集。
 宿主直接调用本实例命令时，`ui.panels` 允许更新本实例拥有的树，不要求无关的
 `files.select`。跨插件调用仍不能借用提供者已有的私有树；文件选择仍单独检查 picker 权限。
@@ -48,6 +55,23 @@ File 目标必须等于当前 `Document.file`；Window 目标只能是本贡献�
 真实宿主类型化命令也可关闭／取消本实例先前创建的资源，包括定时器回调创建的后台进程。
 此例外仅适用于资源清理，不授予读取或改写这些资源的权限；跨实例、失效句柄、嵌套委托及
 已撤销的宿主命令不能使用此例外。各调用清理其自己分配资源的既有撤销后收尾规则不变。
+
+`ui.tree >=1.3, <2` 增加 `tree::initialize(tree, path)`，传入从根到目标的 1～64 个唯一节点 ID。
+宿主按正常页／重试预算懒加载该链及必要的后续页，选中并滚动到目标，不抢焦点或发业务选择事件。
+原生鼠标、键盘和滚动输入优先；完成或被输入撤回后，重复调用、刷新及显隐不恢复默认定位。
+缺失／禁用节点停止定位，错误页等候显式重试；隐藏／来源切换仍撤销旧页请求和原生动作权限。
+`Node.tone` 同时提供 `positive`（绿色）、`negative`（红色）、`informative`（蓝色）文字语义；
+字面色图标及选择背景不改变，currentColor 图标继续跟随行文字。可用 1.2 的缓存更新修改 tone；
+发布 tone 还须明确协商 1.3。
+
+`ui.tree >=1.4, <2` 增加 `tree::apply_patch(tree, Patch { nodes, branches })`，须明确 required 下限。
+`nodes` 仅含新增／变化节点；`BranchPatch { parent, children, next }` 仅含变化的缓存目录前缀，
+`parent: None` 表示根。未变化目录及其已加载后续页不发送，未引用旧节点按可达性移除。
+节点保持既有类型和类型化命令身份；新目录后续仍走普通 Request/Reply 懒加载。
+补丁最多 4096 节点／目录及 4096 个子 ID，总 JSON 保留 4096 字节的请求信封余量，低于 2 MiB。
+完整结果遵守现有节点、64 层深度、2 MiB 元数据／图标预算，拒绝重复父级、环、悬空子节点和越界 artwork。
+变化一次性发布并撤销旧 epoch 的请求／动作，无变化不取消请求；失败完全保留旧缓存。
+这两项均须清单 required 排除所有更低 minor 的补丁版本；不增加安装权限。
 
 `storage.private >=1.1, <2` 增加 `ReadPreference/WritePreference`，需要 `storage` 权限。
 SDK 提供 `read_preference(key, watch)` 与 `write_preference(key, expected_revision, data)`。

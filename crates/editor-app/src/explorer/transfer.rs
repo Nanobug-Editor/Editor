@@ -254,7 +254,10 @@ impl EditorApp {
             label,
             self.file_transfers.resources.clone(),
         ) {
-            Ok(worker) => worker,
+            Ok(mut worker) => {
+                worker.local_history = self.history.worker.clone();
+                worker
+            }
             Err(error) => {
                 self.file_transfer_error(error, cx);
                 return;
@@ -326,6 +329,7 @@ impl EditorApp {
 
     fn file_transfer_event(&mut self, event: Event, window: &mut Window, cx: &mut Context<Self>) {
         match event {
+            Event::HistoryWarning(error) => self.history_failure(error, cx),
             Event::Documents { reply } => {
                 let _ = reply.send(
                     self.tabs
@@ -587,7 +591,7 @@ impl EditorApp {
         // Transfer failures retain the existing recovery card and the shared host history destination.
         self.report_host_message(MessageLevel::Error, message.clone(), cx);
         self.notification = Some(cx.new(|_| {
-            ui::controls::Notification::persistent(t!("transfer.title").to_string(), message)
+            editor_ui::Notification::persistent(t!("transfer.title").to_string(), message)
         }));
         cx.notify();
     }

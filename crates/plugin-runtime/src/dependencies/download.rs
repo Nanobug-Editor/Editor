@@ -40,9 +40,9 @@ pub(super) fn download(url: &str, file: &mut File, control: &InstallControl) -> 
         match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(Ok(bytes)) if bytes.is_empty() => return control.check(),
             Ok(Ok(bytes)) => {
-                total += bytes.len();
+                total += bytes.len() as u64;
                 anyhow::ensure!(
-                    total <= 128 * 1024 * 1024,
+                    total <= SOURCE_BYTE_LIMIT,
                     "Dependency download quota exceeded"
                 );
                 file.write_all(&bytes)?;

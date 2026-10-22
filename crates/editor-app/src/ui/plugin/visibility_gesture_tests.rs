@@ -11,7 +11,7 @@ use std::cell::RefCell;
 fn retained_view_visibility_revokes_ordinary_held_presses(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
     for (modal, draw_hidden_frame) in [(false, false), (false, true), (true, false), (true, true)] {
@@ -103,7 +103,7 @@ fn retained_view_visibility_revokes_ordinary_held_presses(cx: &mut TestAppContex
 fn retained_view_popup_remains_usable_after_visibility_withdrawal(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
     let events = Rc::new(RefCell::new(Vec::new()));

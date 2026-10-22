@@ -9,6 +9,8 @@ pub(super) struct Fixture {
     pub app: Entity<EditorApp>,
     pub actor: Arc<Worker>,
     pub workspace: PathBuf,
+    /// The fixture's isolated installed registry and managed private data.
+    pub store: PathBuf,
     _profile: tempfile::TempDir,
 }
 
@@ -52,7 +54,7 @@ pub(super) fn setup_for_workspace<'a>(
     }
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::controls::init(cx);
+        editor_ui::init(cx);
         crate::bind_editor_shell_keys(cx);
         typography::init(cx);
         apply_theme(builtin_theme(false), cx);
@@ -70,7 +72,7 @@ pub(super) fn setup_for_workspace<'a>(
         Root::new(app, window, cx)
     });
     let app = slot.borrow_mut().take().unwrap();
-    let actor = Arc::new(Worker::start_background(root, environment, true));
+    let actor = Arc::new(Worker::start_background(root.clone(), environment, true));
     visual.update(|_, cx| {
         app.read(cx)
             .extensions
@@ -83,6 +85,7 @@ pub(super) fn setup_for_workspace<'a>(
             app,
             actor,
             workspace,
+            store: root,
             _profile: profile,
         },
         visual,
@@ -303,7 +306,7 @@ pub(super) fn assert_native_source_diagnostic(
     });
 }
 
-/// Failure evidence reports lifecycle and routing state, not plugin data or source contents.
+/// Failure evidence reports routing and native diagnostic messages, without private plugin data.
 fn status(app: &Entity<EditorApp>, actor: &Worker, visual: &mut VisualTestContext) -> String {
     let worker = {
         let state = actor.state.lock().unwrap();
@@ -321,9 +324,20 @@ fn status(app: &Entity<EditorApp>, actor: &Worker, visual: &mut VisualTestContex
     };
     visual.update(|_, cx| {
         format!(
-            "{worker}; native={:?}; status={}",
+            "{worker}; native={:?}; status={}; markers={:?}",
             app.read(cx).language_service_states,
-            app.read(cx).status
+            app.read(cx).status,
+            app.read(cx)
+                .tabs
+                .iter()
+                .filter_map(|tab| tab.text.as_ref().map(|text| (
+                    tab.path().display().to_string(),
+                    text.editor.read(cx).diagnostics().map(|items| items
+                        .iter()
+                        .map(|item| item.message.to_string())
+                        .collect::<Vec<_>>())
+                )))
+                .collect::<Vec<_>>()
         )
     })
 }

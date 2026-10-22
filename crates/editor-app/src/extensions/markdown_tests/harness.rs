@@ -4,6 +4,14 @@ use gpui_kit::VisualTestContext;
 
 /// Inspect the current local candidate so native regressions execute its real component and resources.
 fn delivered_package() -> Package {
+    if let Some(path) = std::env::var_os("NANOBUG_MARKDOWN_SDK_PACKAGE") {
+        use sha2::Digest as _;
+        let bytes = std::fs::read(path).unwrap();
+        let expected = std::env::var("NANOBUG_MARKDOWN_SDK_SHA256")
+            .expect("An explicitly selected SDK candidate requires its exact archive digest");
+        assert_eq!(format!("{:x}", sha2::Sha256::digest(&bytes)), expected);
+        return Package::from_bytes(&bytes).unwrap();
+    }
     Package::read(&crate::test_packages::archive("markdown-0.18.2-readme-pr")).unwrap()
 }
 

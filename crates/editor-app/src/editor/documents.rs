@@ -4,6 +4,7 @@ use super::file_watch::{DiskContent, WatchedFile};
 use super::tabs::FileOpenMode;
 use crate::app::messages::MessageLevel;
 use crate::*;
+mod sources;
 
 impl EditorApp {
     /// Layout changes retire source gestures and popovers before handing native focus to another surface.
@@ -80,6 +81,16 @@ impl EditorApp {
             return;
         };
         self.publish_workspace_file_events(update.file_events.clone(), cx);
+        for (old, new) in &update.renames {
+            self.record_history_move(old.clone(), new.clone(), cx);
+        }
+        for event in &update.file_events {
+            if let plugin_runtime::plugin_protocol::workspace::FileEventKind::Deleted { path } =
+                event
+            {
+                self.observe_history_removal(self.workspace.root().join(path), true, cx);
+            }
+        }
         let renamed_from: Vec<_> = update.renames.iter().map(|(old, _)| old.clone()).collect();
         let mut renamed = false;
         let mut renamed_editors = Vec::new();
@@ -104,7 +115,7 @@ impl EditorApp {
                     continue;
                 }
                 let previous = self.tabs[index].path().to_path_buf();
-                self.close_language_document(&previous, cx);
+                self.close_language_document(&previous, None, cx);
                 let file = &mut self.tabs[index];
                 file.path = target.clone();
                 file.file_revision = file.file_revision.saturating_add(1);
@@ -182,6 +193,25 @@ impl EditorApp {
             if read_at < tab.last_saved_at {
                 continue;
             }
+            if let Ok(contents) = &disk_contents {
+                // Persist the bytes actually observed by this watcher read, including dirty-buffer conflicts.
+                let contents = contents.clone();
+                self.record_history_observation(
+                    path.clone(),
+                    contents,
+                    editor_history::Reason::External,
+                    cx,
+                );
+            } else if disk_contents
+                .as_ref()
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            {
+                self.observe_history_removal(path.clone(), false, cx);
+            }
+            let tab = self.tabs[index]
+                .text
+                .as_mut()
+                .expect("validated text session");
             let new_state = match disk_contents {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => DiskState::Deleted,
                 Err(error) => {
@@ -385,6 +415,38 @@ impl EditorApp {
         self.tabs.len() - 1
     }
 
+    /// A host-validated recovery creates a pending local document through the ordinary text/session owner.
+    pub(crate) fn open_pending_history_document(
+        &mut self,
+        path: PathBuf,
+        contents: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> usize {
+        let mut opened = DocumentSession::from_file_contents(path.clone(), contents);
+        opened.session.note_edit();
+        let mut text = self.create_native_text_tab(opened, window, cx);
+        text.disk_state = DiskState::Deleted;
+        text.overwrite_confirmed = true;
+        let index = self.insert_file_tab(
+            OpenTab {
+                preview: false,
+                virtual_document: None,
+                path,
+                file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                file_revision: 0,
+                opened_at: Instant::now(),
+                file_digest: None,
+                text: Some(text),
+                file_error: None,
+            },
+            cx,
+        );
+        self.sync_watched_documents();
+        self.activate_tab(index, window, cx);
+        index
+    }
+
     /// Apply explicit reveal/focus policies to existing tabs and newly opened documents alike.
     fn open_file_with_navigation(
         &mut self,
@@ -396,6 +458,14 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) {
         let path = path.canonicalize().unwrap_or(path);
+        if self.history_delete_blocks(&path) {
+            self.report_host_message(
+                MessageLevel::Warning,
+                t!("history.deleting").to_string(),
+                cx,
+            );
+            return;
+        }
         if let Some(index) = self.tabs.iter().position(|tab| tab.path() == path) {
             if mode == FileOpenMode::Fixed {
                 self.keep_tab(index);
@@ -428,6 +498,9 @@ impl EditorApp {
         match DocumentSession::open(&self.file_store, path.clone()) {
             Ok(opened) => {
                 let document_path = opened.session.path().to_path_buf();
+                let history_path = document_path.clone();
+                let history_contents =
+                    (opened.contents.len() <= 32 * 1024 * 1024).then(|| opened.contents.clone());
                 let language = self.language_for_path(&document_path);
                 let text = self.create_native_text_tab(opened, window, cx);
                 let index = self.insert_file_tab(
@@ -444,6 +517,14 @@ impl EditorApp {
                     },
                     cx,
                 );
+                if let Some(contents) = history_contents {
+                    self.record_history_observation(
+                        history_path,
+                        contents,
+                        editor_history::Reason::External,
+                        cx,
+                    );
+                }
                 self.sync_watched_documents();
                 self.activate_tab_with_navigation(index, reveal, focus_editor, window, cx);
                 self.refresh_syntax_diagnostics(self.editor.entity_id(), cx);
@@ -601,6 +682,47 @@ impl EditorApp {
             focus.focus(window, cx);
         }
         true
+    }
+
+    /// Lend an already validated source plan to one local jump without changing saved preferences.
+    /// F12 and the editor's show-document hook share this provenance path; list navigation validates
+    /// its sealed source separately before calling the same context inheritance mechanism.
+    pub(crate) fn open_definition_with_source(
+        &mut self,
+        source: Option<&Arc<plugin_runtime::LanguageService>>,
+        uri: &lsp_types::Uri,
+        selection: Option<lsp_types::Range>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if let Some(source) = source {
+            if !source.is_active() {
+                return false;
+            }
+            if source
+                .provider
+                .content
+                .as_ref()
+                .is_some_and(|content| content.accepts(uri.as_str()))
+            {
+                return self.open_language_content(source, uri, selection, window, cx);
+            }
+            let Some(target) = url::Url::parse(uri.as_str())
+                .ok()
+                .and_then(|url| url.to_file_path().ok())
+                .and_then(|path| path.canonicalize().ok())
+                .filter(|path| path.is_file())
+            else {
+                return false;
+            };
+            if self
+                .inherit_source_language_context(source, &target, cx)
+                .is_err()
+            {
+                return false;
+            }
+        }
+        self.open_definition_uri(uri, selection, window, cx)
     }
 
     /// Opens local LSP targets, including sources in the Cargo registry and sysroot.
@@ -827,26 +949,16 @@ impl EditorApp {
         if reveal && !self.restoring_documents && path.starts_with(self.workspace.root()) {
             self.select_file_in_tree(&path, cx);
         }
-        // Keep the selected tab fully visible when opening or switching files.
-        let measured_viewport = self.tabs_scroll.bounds().size.width;
-        let viewport = if measured_viewport > px(0.) {
-            measured_viewport
-        } else {
-            (window.bounds().size.width - px(EXPLORER_INITIAL_WIDTH) - px(24.)).max(px(0.))
-        };
-        let tab_left = px(190.) * index;
-        let tab_right = tab_left + px(190.);
-        let current = -self.tabs_scroll.offset().x;
-        let target = if tab_left < current {
-            tab_left
-        } else if tab_right > current + viewport {
-            tab_right - viewport
-        } else {
-            current
-        };
-        let max_scroll = (px(190.) * self.tabs.len() - viewport).max(px(0.));
-        self.tabs_scroll
-            .set_offset(point(-target.clamp(px(0.), max_scroll), px(0.)));
+        // Resolve the visible index after filtering hidden comparison sources; GPUI measures widths.
+        let visible_index = self.tabs[..index]
+            .iter()
+            .filter(|tab| {
+                tab.virtual_document
+                    .as_ref()
+                    .is_none_or(|source| !source.hidden)
+            })
+            .count();
+        self.tabs_scroll.scroll_to_item(visible_index);
         // Debugger source updates preserve inspection focus; explicit navigation focuses editing.
         if focus_editor && self.active_text_tab_index().is_some() {
             let focus = self.editor.focus_handle(cx);
@@ -968,7 +1080,8 @@ impl EditorApp {
     /// Closing and preview replacement revoke the same language, plugin and text resources.
     fn release_tab(&mut self, index: usize, cx: &mut Context<Self>) {
         let path = self.tabs[index].path().to_path_buf();
-        self.close_language_document(&path, cx);
+        self.release_history_document(self.tabs[index].file_id, &path);
+        self.close_language_document(&path, None, cx);
         self.sync_plugin_documents(cx);
         if let Some(virtual_tab) = &self.tabs[index].virtual_document {
             virtual_tab.resource.revoke();
@@ -1011,121 +1124,7 @@ impl EditorApp {
     /// Save this existing session without activating another main-window tab. Work-window commands
     /// resolve the actual focused document before entering the same disk-conflict and history path.
     pub(crate) fn save_text_tab(&mut self, index: usize, cx: &mut Context<Self>) {
-        if self.tabs[index].virtual_document.is_some() {
-            self.report_host_message(
-                MessageLevel::Warning,
-                t!("status.readonly_document").to_string(),
-                cx,
-            );
-            cx.notify();
-            return;
-        }
-        let Some(tab) = self.tabs[index].text.as_mut() else {
-            return;
-        };
-        if self.plugin_saves.contains(tab.path()) {
-            // Serialize user and plugin saves so a delayed plugin snapshot cannot overwrite a newer save.
-            self.status = "此文档正在保存，请稍候".into();
-            cx.notify();
-            return;
-        }
-        if !tab.session.is_dirty() && tab.disk_state != DiskState::Deleted {
-            self.status = t!("status.no_changes_to_save").to_string();
-            cx.notify();
-            return;
-        }
-
-        if tab.disk_state == DiskState::Synced {
-            // A save can precede its native event; compare the disk before overwriting it.
-            let path = tab.path();
-            match std::fs::read(path) {
-                Ok(bytes) if Sha256::digest(&bytes).as_slice() != tab.disk_digest => {
-                    tab.disk_state = DiskState::Conflict;
-                    tab.overwrite_confirmed = true;
-                    self.report_host_message(
-                        MessageLevel::Warning,
-                        t!("status.confirm_disk_overwrite").to_string(),
-                        cx,
-                    );
-                    cx.notify();
-                    return;
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    tab.disk_state = DiskState::Deleted;
-                    tab.overwrite_confirmed = true;
-                    self.report_host_message(
-                        MessageLevel::Warning,
-                        t!("status.confirm_disk_restore").to_string(),
-                        cx,
-                    );
-                    cx.notify();
-                    return;
-                }
-                Err(error) => {
-                    self.report_host_message(
-                        MessageLevel::Error,
-                        t!("status.save_failed", error = error.to_string()).to_string(),
-                        cx,
-                    );
-                    cx.notify();
-                    return;
-                }
-                Ok(_) => {}
-            }
-        }
-
-        if tab.disk_state != DiskState::Synced && !tab.overwrite_confirmed {
-            // Saving again is an explicit overwrite confirmation for a disk conflict or deletion.
-            tab.overwrite_confirmed = true;
-            let message = match tab.disk_state {
-                DiskState::Conflict => t!("status.confirm_disk_overwrite").to_string(),
-                DiskState::Deleted => t!("status.confirm_disk_restore").to_string(),
-                DiskState::Synced => unreachable!(),
-            };
-            self.report_host_message(MessageLevel::Warning, message, cx);
-            cx.notify();
-            return;
-        }
-
-        let save_path = tab.path().to_path_buf();
-        self.publish_document_save(index, None, cx);
-        let tab = self.tabs[index]
-            .text
-            .as_mut()
-            .expect("save target remains open");
-        let value = tab.editor.read(cx).value().to_string();
-        if let Some(history) = &self.history {
-            let _ = history.snapshot_file(&save_path);
-        }
-        let saved = tab.session.save(&self.file_store, &value);
-        let event_result = saved.as_ref().map(|_| ()).map_err(|error| {
-            plugin_runtime::plugin_protocol::api::Failure::new(
-                plugin_runtime::plugin_protocol::api::ErrorCode::OperationFailed,
-                error.to_string(),
-            )
-        });
-        match saved {
-            Ok(()) => {
-                tab.disk_digest = Sha256::digest(value.as_bytes()).into();
-                tab.last_saved_at = Instant::now();
-                tab.disk_state = DiskState::Synced;
-                tab.overwrite_confirmed = false;
-                let path = tab.path().to_path_buf();
-                // A successful routine save stays quiet; the document session still owns the write.
-                self.status =
-                    t!("status.saved", path = editor_core::display_path(&path)).to_string();
-                self.notify_language_document_saved(&path, value, cx);
-            }
-            Err(error) => {
-                self.report_host_message(
-                    MessageLevel::Error,
-                    t!("status.save_failed", error = error.to_string()).to_string(),
-                    cx,
-                );
-            }
-        }
-        self.publish_document_save(index, Some(event_result), cx);
-        cx.notify();
+        self.save_history_document(index, |_, _, _, _| {}, cx);
     }
 }
 
@@ -1211,6 +1210,7 @@ pub(crate) fn attach_language_server(
     }
     let completion_owner = app.clone();
     let navigation_owner = app.clone();
+    let navigation_server = server.clone();
     let editor_id = editor.entity_id();
     editor.update(cx, |editor, _| {
         let Some(provider) = language_navigation::LanguageDefinitionProvider::for_editor(
@@ -1235,11 +1235,18 @@ pub(crate) fn attach_language_server(
                 }
                 let app = app.clone();
                 let params = params.clone();
+                let source = navigation_server.navigation_context_service();
                 // Ctrl-click and native definition actions call this while the source editor
                 // is being updated. Release that entity before opening or moving its caret.
                 window.defer(cx, move |window, cx| {
                     let _ = app.update(cx, |app, cx| {
-                        app.open_definition_uri(&params.uri, params.selection, window, cx);
+                        app.open_definition_with_source(
+                            source.as_ref(),
+                            &params.uri,
+                            params.selection,
+                            window,
+                            cx,
+                        );
                     });
                 });
                 true

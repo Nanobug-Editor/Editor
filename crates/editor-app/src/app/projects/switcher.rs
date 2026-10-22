@@ -1,6 +1,6 @@
 //! Project management shares one popup between empty and active editor windows.
 use super::*;
-use crate::ui::controls::menu::{MenuRowContent, MenuStyle, PopupMenu};
+use editor_ui::menu::{MenuRowContent, MenuStyle, PopupMenu};
 use plugin_runtime::plugin_protocol::ui::{Action as MenuAction, MenuItem};
 use std::collections::BTreeMap;
 

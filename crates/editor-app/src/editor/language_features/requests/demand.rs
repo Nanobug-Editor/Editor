@@ -171,6 +171,11 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) {
         if event.keystroke.key == "escape" && event.keystroke.modifiers == Default::default() {
+            // A pending hover has no visible overlay to receive Base's Escape action.
+            // Retire its generation before the delayed provider reply can present it.
+            if self.pointer_hover_pending {
+                self.dismiss_pointer_hover(cx);
+            }
             if self.language_features.pending.is_some() {
                 self.cancel_language_features(window, cx);
             }

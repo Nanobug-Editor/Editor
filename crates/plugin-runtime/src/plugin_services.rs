@@ -16,6 +16,7 @@ use std::{
 mod availability;
 mod collections;
 mod registry;
+pub(crate) use collections::CollectionPublication;
 
 pub(crate) type Shared = Arc<Mutex<Broker>>;
 
@@ -58,7 +59,13 @@ struct Selection {
 #[derive(Clone)]
 pub(crate) enum InvocationOrigin {
     Delegated,
-    HostCommand { target: String },
+    HostCommand {
+        target: String,
+    },
+    /// Only a native direct preparation of the selected interactive provider issues this origin.
+    LanguagePreparation {
+        target: String,
+    },
 }
 
 /// The original source and shrinking authority survive nested calls; ancestry bounds asynchronous cycles.
@@ -76,6 +83,22 @@ pub(crate) struct Context {
     pub permissions: BTreeSet<String>,
 }
 impl Context {
+    /// Preferences belong to the first exact provider; nested calls and cancelled waits lose access.
+    pub(crate) fn direct_language_preparation(&self, instance: &str) -> bool {
+        matches!(&self.origin, InvocationOrigin::LanguagePreparation { target } if target == instance)
+            && self.ancestry.len() == 1
+            && self.ancestry[0] == instance
+            && self
+                .lifetimes
+                .iter()
+                .all(|alive| alive.load(Ordering::Acquire))
+            && self.native_waits.iter().all(|wait| {
+                !matches!(
+                    wait.status(),
+                    plugin_protocol::api::RequestUpdate::Cancelled { .. }
+                )
+            })
+    }
     /// A native command acts on its exact provider incarnation; nested calls cannot inherit this identity.
     pub(crate) fn direct_host_command(&self, instance: &str) -> bool {
         matches!(&self.origin, InvocationOrigin::HostCommand { target } if target == instance)

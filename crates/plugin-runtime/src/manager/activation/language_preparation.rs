@@ -57,6 +57,20 @@ impl DemandPreparation {
         if let Some(document) = document {
             validate_document(&self.environment.workspace, document)?;
         }
+        // A readonly hook receives only an already registered, exact live owner's selection.
+        // Its isolated worker identity must never replace the owning business instance.
+        let selected = document.and_then(|document| {
+            let instance = self
+                .existing_owner
+                .as_deref()
+                .or_else(|| owner.as_ref().and_then(|owner| owner.instance_id()))?;
+            self.host_resources.contexts.selected(
+                instance,
+                self.token.scope(),
+                &provider.id,
+                &document.path,
+            )
+        });
         let candidates = std::iter::once(&provider.service)
             .chain(&provider.alternatives)
             .map(|id| {
@@ -83,6 +97,9 @@ impl DemandPreparation {
                     provider: provider.id.clone(),
                     workspace: self.environment.workspace.clone(),
                     document: document.cloned(),
+                    selected_context: selected
+                        .as_ref()
+                        .map(|context| context.reference.descriptor.clone()),
                     // Demand uses an already approved dependency plan; discovery retains its separate flag.
                     preparing_dependencies: false,
                     package_root: String::new(),
@@ -93,6 +110,18 @@ impl DemandPreparation {
         } else {
             Default::default()
         };
+        if proposal.expand_dependencies {
+            anyhow::ensure!(
+                entry
+                    .manifest
+                    .api
+                    .as_ref()
+                    .and_then(|requirements| requirements.required.get("language.lsp"))
+                    .is_some_and(|range| range.matches(&semver::Version::new(1, 7, 0))
+                        && !range.matches(&semver::Version::new(1, 6, 0))),
+                "Dependency configuration requires language.lsp >=1.7,<2"
+            );
+        }
         let mut service = candidates
             .get(proposal.service.as_ref().unwrap_or(&provider.service))
             .ok_or_else(|| anyhow::anyhow!("LSP hook selected an undeclared service"))?
@@ -171,6 +200,17 @@ impl DemandPreparation {
             root.is_dir() && root.starts_with(&workspace),
             "LSP project root escaped workspace"
         );
+        if let Some(selected) = &selected {
+            anyhow::ensure!(
+                selected.is_live()
+                    && selected.root == root
+                    && context
+                        .as_ref()
+                        .is_some_and(|context| context.key == selected.reference.descriptor.key
+                            && context.generation == selected.reference.descriptor.generation),
+                "LSP hook did not preserve the selected registered context"
+            );
+        }
         if let Some(options) = proposal.initialization_options {
             provider.initialization_options = options;
         }
@@ -192,6 +232,19 @@ impl DemandPreparation {
                 }
             })
             .transpose()?;
+        if proposal.expand_dependencies {
+            let prepared = prepared.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Dependency configuration requires an installation plan")
+            })?;
+            prepared.expand_value(&mut provider.initialization_options)?;
+            for value in provider.configuration.values_mut() {
+                prepared.expand_value(value)?;
+            }
+            anyhow::ensure!(
+                provider.valid(),
+                "Expanded language configuration exceeds its bounds"
+            );
+        }
         let program = if let Some(prepared) = &prepared {
             prepared.program.clone()
         } else {
@@ -220,6 +273,9 @@ impl DemandPreparation {
                 inherited: authority,
             },
         );
+        if let Some(selected) = selected {
+            language_service.set_registered_context(self.host_resources.contexts.clone(), selected);
+        }
         if language_service.provider.completion_hook {
             // This independent instance sees no private snapshot and grants no host operation, even in Prepare.
             let instance = self.prepare_pure_worker(code.ok_or_else(|| {

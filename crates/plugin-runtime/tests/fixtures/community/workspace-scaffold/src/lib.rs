@@ -164,6 +164,7 @@ impl Scaffold {
         }
         let plan = Plan {
             origin: None,
+            conditions: Vec::new(),
             title: "Scaffold workspace / 生成工作区".into(),
             changes: vec![
                 Change::EditDocument {

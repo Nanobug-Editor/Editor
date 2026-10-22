@@ -141,6 +141,7 @@ pub(super) fn resolve_dependency_plans(
                     provider: provider.id.clone(),
                     workspace: environment.workspace.clone(),
                     document: None,
+                    selected_context: None,
                     preparing_dependencies: true,
                     package_root: String::new(),
                     data_root: String::new(),

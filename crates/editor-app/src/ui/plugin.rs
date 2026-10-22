@@ -26,6 +26,8 @@ mod link_tests;
 mod links;
 mod readonly_code;
 mod render;
+#[cfg(test)]
+mod scrollbar_tests;
 mod svg;
 #[cfg(test)]
 mod tests;
@@ -62,8 +64,8 @@ type EventSink = Rc<dyn Fn(UiEvent, &mut App)>;
 pub(crate) type NativeEditorRenderer = Rc<
     dyn Fn(
         &plugin_runtime::plugin_protocol::api::DocumentVersion,
-        Option<crate::ui::controls::EditorActionElements>,
-        Option<(crate::ui::controls::aligned_editor::AlignmentGroup, usize)>,
+        Option<editor_ui::EditorActionElements>,
+        Option<(editor_ui::aligned_editor::AlignmentGroup, usize)>,
         &mut Window,
         &mut App,
     ) -> Option<gpui_kit::AnyElement>,
@@ -613,7 +615,7 @@ impl PluginView {
                 let gesture = self.action_gesture(&node.id);
                 self.canvases[&node.id].update(cx, |view, cx| {
                     view.set_action_gesture(gesture);
-                    view.drawing = drawing.clone();
+                    view.update_drawing(drawing.clone());
                     if view.viewport.as_ref().and_then(|v| v.content)
                         != node.viewport.as_ref().and_then(|v| v.content)
                     {

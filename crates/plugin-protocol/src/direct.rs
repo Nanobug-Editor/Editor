@@ -290,6 +290,7 @@ mod tests {
             plan: Plan {
                 title: "Replace expression".into(),
                 origin: Some(document.clone()),
+                conditions: Vec::new(),
                 changes: vec![Change::EditDocument {
                     document: document.clone(),
                     edits: vec![TextEdit {

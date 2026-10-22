@@ -9,6 +9,10 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(test)]
+#[path = "images/scroll_tests.rs"]
+mod scroll_tests;
+
 /// The image bounds describe the visible raster; the SVG may extend beyond them after zooming.
 #[derive(Clone)]
 pub(crate) struct VectorImage {
@@ -129,25 +133,40 @@ impl VectorRenderer {
                 continue;
             }
             let mut images = Vec::with_capacity(scene.len());
-            for (index, operation) in scene.iter().enumerate() {
+            for operation in scene.iter() {
                 let image = if let Paint::Svg { source, rect, clip } = operation {
-                    // A focus or theme update can change labels without changing the vector itself.
-                    let cached =
-                        self.drawings
-                            .get(key)
-                            .and_then(|(old, images)| match old.get(index) {
-                                Some(Paint::Svg {
+                    // Scrolling a stable tile changes only its placement. Reuse its pixels when
+                    // size and source-relative clipping are identical, even if a sibling fill/text
+                    // changed its operation index. Scale or clipping changes still rasterize anew.
+                    let cached = self.drawings.get(key).and_then(|(old, images)| {
+                        old.iter()
+                            .zip(images.iter())
+                            .find_map(|(operation, image)| {
+                                let Paint::Svg {
                                     source: old_source,
                                     rect: old_rect,
                                     clip: old_clip,
-                                }) if source == old_source
-                                    && rect == old_rect
-                                    && clip == old_clip =>
-                                {
-                                    images.get(index).cloned().flatten()
-                                }
-                                _ => None,
-                            });
+                                } = operation
+                                else {
+                                    return None;
+                                };
+                                (source == old_source
+                                    && rect.w == old_rect.w
+                                    && rect.h == old_rect.h
+                                    && clip.w == old_clip.w
+                                    && clip.h == old_clip.h
+                                    && clip.x - rect.x == old_clip.x - old_rect.x
+                                    && clip.y - rect.y == old_clip.y - old_rect.y)
+                                    .then(|| image.as_ref())
+                                    .flatten()
+                                    .and_then(|image| {
+                                        Some(VectorImage {
+                                            rect: intersection(*rect, *clip)?,
+                                            image: image.image.clone(),
+                                        })
+                                    })
+                            })
+                    });
                     cached.or_else(|| self.rasterize(source, *rect, *clip))
                 } else {
                     None

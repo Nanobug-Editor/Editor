@@ -8,6 +8,52 @@
 //! execution permission and live instance ownership are checked before changing the writer state.
 use serde::{Deserialize, Serialize};
 
+/// `tools.inspect 1.0` describes one approved tool distribution without running its executable.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolMetadata {
+    /// Canonical executable selected from this package's declared service and trusted tool paths.
+    pub program: String,
+    /// Canonical distribution directory; descriptive text does not grant a filesystem handle.
+    pub root: String,
+    /// Requested UTF-8 metadata, at most 16 KiB per file and 64 KiB in total.
+    pub files: std::collections::BTreeMap<String, String>,
+}
+
+/// A caller may inspect its approved service or an explicitly selected local tool executable.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ToolSource {
+    /// Reuse an owned declaration, including its search paths or already prepared dependency lease.
+    Service { service: String },
+    /// Resolve a bare tool name or absolute executable without starting it or granting a file handle.
+    Program { program: String },
+}
+
+#[cfg(feature = "guest")]
+/// Inspect `source`'s distribution, moving `root_levels` (0–1) above its executable directory.
+/// `files` are bounded relative metadata paths. Requires tools.inspect and process.exec, plus
+/// declared service consent when applicable; readonly language hooks never start a process.
+pub fn inspect_tool(
+    source: ToolSource,
+    root_levels: u8,
+    files: Vec<String>,
+) -> Result<ToolMetadata, crate::api::Failure> {
+    match crate::api::guest::request(crate::api::Operation::Process {
+        operation: Operation::InspectTool {
+            source,
+            root_levels,
+            files,
+        },
+    })? {
+        crate::api::Value::ToolMetadata(value) => Ok(value),
+        _ => Err(crate::api::Failure::new(
+            crate::api::ErrorCode::InvalidState,
+            "Unexpected tool metadata result",
+        )),
+    }
+}
+
 /// Installation approves this exact program and argument vector. Calls supply only its map key.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -125,6 +171,19 @@ pub enum ExitMode {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
+    /// process 1.9: obtain this instance's immutable package and private native-data paths.
+    /// Requires process.exec and the named declared service's grant. These descriptive paths
+    /// confer no WASI/file handles; native execution retains its existing OS authority and lifetime.
+    NativeContext {
+        service: String,
+    },
+    /// tools.inspect 1.0: read bounded metadata beside an owned declared service's executable.
+    /// Does not probe, start or install anything; missing files and escaping paths fail explicitly.
+    InspectTool {
+        source: ToolSource,
+        root_levels: u8,
+        files: Vec<String>,
+    },
     /// process 1.7: present this caller's existing PTY in the host's native terminal.
     /// Requires process.exec and ui.panels, including the original service caller's grants.
     /// This creates no process and transfers no ownership. The host routes input/resize to this
@@ -192,6 +251,33 @@ pub enum Operation {
     Terminate {
         handle: crate::api::ResourceHandle,
     },
+}
+
+/// Paths for configuring an approved native service, scoped to one active package incarnation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeContext {
+    /// Immutable installed resources belonging to this package version.
+    pub assets: String,
+    /// Host-owned private data directory; plugins must keep project metadata outside the workspace.
+    pub data: String,
+}
+
+/// Resolve owned native paths without creating processes, downloading tools or granting file access.
+/// Returns permission/capability/state errors when the instance or named service is unavailable.
+#[cfg(target_arch = "wasm32")]
+pub fn native_context(service: &str) -> Result<NativeContext, crate::api::Failure> {
+    match crate::api::guest::request(crate::api::Operation::Process {
+        operation: Operation::NativeContext {
+            service: service.into(),
+        },
+    })? {
+        crate::api::Value::NativeContext(context) => Ok(context),
+        _ => Err(crate::api::Failure::new(
+            crate::api::ErrorCode::InvalidRequest,
+            "Expected native service context",
+        )),
+    }
 }
 
 /// Omitted/default options retain compatibility with older strict process decoders.

@@ -1094,6 +1094,7 @@ fn debug_controls_follow_the_session_state() {
     );
     // With the provider's own declaration, the abilities follow it.
     controls.note_debug_capabilities(editor_core::DebugCapabilities {
+        thread_tree: false,
         breakpoints: true,
         resume_pause: true,
         step: true,
@@ -1836,6 +1837,7 @@ fn a_control_action_is_awaited_before_the_next_one() {
     // rather than about a missing ability.
     controls.note_debug_availability(Ok("adapter".into()));
     controls.note_debug_capabilities(editor_core::DebugCapabilities {
+        thread_tree: false,
         breakpoints: true,
         resume_pause: true,
         step: true,

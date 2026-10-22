@@ -1,6 +1,34 @@
 //! The actor polls bounded target requests; Cargo/domain parsing stays inside providers.
 use super::*;
 use plugin_runtime::plugin_protocol::{api::RequestUpdate, targets::Candidate};
+/// A resolved command keeps authenticated receipt provenance beside its portable SDK result.
+#[derive(Clone, Debug)]
+pub(crate) struct PreparedTarget {
+    pub command: plugin_runtime::plugin_protocol::targets::Prepared,
+    pub origin: Option<plugin_runtime::TargetOrigin>,
+}
+impl std::ops::Deref for PreparedTarget {
+    type Target = plugin_runtime::plugin_protocol::targets::Prepared;
+    fn deref(&self) -> &Self::Target {
+        &self.command
+    }
+}
+#[cfg(test)]
+impl From<String> for PreparedTarget {
+    /// Program-only injected publications retain the existing host-owned test/execution semantics.
+    fn from(program: String) -> Self {
+        Self {
+            command: program.into(),
+            origin: None,
+        }
+    }
+}
+#[cfg(test)]
+impl From<&str> for PreparedTarget {
+    fn from(program: &str) -> Self {
+        program.to_owned().into()
+    }
+}
 /// Successful sources and unavailable sources remain distinct in one bounded discovery receipt.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TargetCatalog {
@@ -121,11 +149,13 @@ impl TargetCalls {
                     return true;
                 };
                 let result = result.and_then(|value| {
-                    value["program"]
-                        .as_str()
-                        .filter(|program| !program.is_empty() && !program.contains('\0'))
-                        .map(str::to_owned)
-                        .ok_or_else(|| "Preparation returned no executable".into())
+                    let prepared: plugin_runtime::plugin_protocol::targets::Prepared =
+                        serde_json::from_value(value).map_err(|error| error.to_string())?;
+                    prepared.validate()?;
+                    Ok(PreparedTarget {
+                        command: prepared,
+                        origin: Some(pending.origin()),
+                    })
                 });
                 output.lock().unwrap().target_preparations.push((
                     config.clone(),

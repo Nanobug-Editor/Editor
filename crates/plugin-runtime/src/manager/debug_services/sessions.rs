@@ -197,8 +197,27 @@ impl Manager {
         &mut self,
         configuration: Option<&str>,
         method: &str,
-        mut arguments: Value,
+        arguments: Value,
     ) -> anyhow::Result<DebugRequest> {
+        self.begin_configured_debug_call_with_origins(configuration, method, arguments, &[])
+    }
+    /// A prepared launch inherits its source providers' shrinking grants and instance lifetimes.
+    /// Later controls use the pinned session context; callers cannot replace that authority.
+    pub fn begin_configured_debug_call_with_origins(
+        &mut self,
+        configuration: Option<&str>,
+        method: &str,
+        mut arguments: Value,
+        origins: &[crate::TargetOrigin],
+    ) -> anyhow::Result<DebugRequest> {
+        anyhow::ensure!(
+            origins.len() <= 32 && (method == "start" || origins.is_empty()),
+            "Invalid debug execution origins"
+        );
+        anyhow::ensure!(
+            origins.iter().all(|origin| origin.valid_for(self)),
+            "Debug execution source is stale"
+        );
         anyhow::ensure!(
             self.trusted && self.workspace_open,
             "Restricted/closed workspace cannot debug"
@@ -254,7 +273,7 @@ impl Manager {
             });
             let native = Arc::new(Mutex::new(work));
             self.host_resources.preparations.register(&alive, &native);
-            let origin = Context {
+            let mut origin = Context {
                 native_waits: Vec::new(),
                 menu: None,
                 origin: crate::plugin_services::InvocationOrigin::Delegated,
@@ -263,6 +282,9 @@ impl Manager {
                 ancestry: vec![],
                 lifetimes: vec![self.host_alive.clone(), alive],
             };
+            for source in origins {
+                source.inherit_execution(self, &mut origin)?;
+            }
             let reference = self
                 .plugin_services
                 .lock()
@@ -432,6 +454,11 @@ impl Manager {
             // A cold start is valid before first birth. Once bound, the exact owner's retirement
             // is irreversible; a later incarnation cannot revive this session.
             if !session.provider.alive.load(Ordering::Acquire)
+                || session
+                    .origin
+                    .lifetimes
+                    .iter()
+                    .any(|alive| !alive.load(Ordering::Acquire))
                 || !session.reference.owner_alive()
                 || session
                     .reference

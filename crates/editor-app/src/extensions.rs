@@ -24,6 +24,7 @@ pub(crate) mod contributions;
 mod dependency_tests;
 mod editor_requests;
 mod image_input;
+pub(crate) mod workspace_presentation;
 #[cfg(test)]
 mod workspace_transaction_tests;
 pub(crate) mod workspace_transactions;
@@ -39,6 +40,8 @@ mod git_fixture_environment;
 #[cfg(test)]
 mod hot_update_tests;
 mod installation;
+#[cfg(test)]
+mod installation_tests;
 #[cfg(test)]
 mod installer_tests;
 #[cfg(test)]
@@ -113,12 +116,14 @@ mod windows;
 #[cfg(test)]
 mod windows_tests;
 pub(crate) use settings::SettingsView;
+#[cfg(test)]
+mod developer_tooling_tests;
 pub(crate) mod runtime_owners;
 #[cfg(test)]
 mod tests;
 mod worker;
-use crate::ui::controls::Input;
 use crate::*;
+use editor_ui::Input;
 
 #[cfg(test)]
 mod community_language_tests;
@@ -136,9 +141,12 @@ pub(crate) use worker::NativeExecutionMessage;
 pub(crate) use worker::PresentedTerminalMessage;
 pub(crate) use worker::configurations::{ConfigurationCatalog, ConfigurationReply};
 pub(crate) use worker::demands::DemandWait;
-pub(crate) use worker::targets::TargetCatalog;
+pub(crate) use worker::targets::{PreparedTarget, TargetCatalog};
 pub use worker::{HostRunSnapshot, RunStatus, Work as HostWork};
 use worker::{LifecycleAction, OperationProgress, Work, Worker};
+
+/// Publish plugin scene changes on a nominal 60 Hz cadence; unchanged snapshots do not redraw.
+const UI_PUBLICATION_INTERVAL: Duration = Duration::from_millis(16);
 
 actions!(extensions, [ToggleExtensions, QuitEditor]);
 /// Every startup reader shares the same host-selected runtime root, including offline upgrades.
@@ -180,7 +188,7 @@ pub fn init(cx: &mut App) {
 /// It contains only routing identity and an actor sender, so cancellation or window destruction
 /// releases the source without running UI code, reading text or changing the current workspace.
 pub(crate) struct LanguageDocumentLease {
-    tx: std::sync::mpsc::Sender<worker::Work>,
+    tx: worker::WorkSender,
     workspace: String,
     provider: String,
     document: protocol::language::DocumentContext,
@@ -285,7 +293,7 @@ pub struct ExtensionPanel {
     native_toolbar: Option<Entity<crate::ui::plugin::PluginView>>,
     manager_open: bool,
     commands_open: bool,
-    command_popup: Option<Entity<crate::ui::controls::menu::PopupMenu>>,
+    command_popup: Option<Entity<editor_ui::menu::PopupMenu>>,
     pending: Option<Package>,
     /// Prevent repainting from opening the same installation dialog repeatedly.
     pending_dialog_open: bool,
@@ -305,6 +313,8 @@ pub struct ExtensionPanel {
     manager_detail_tab: management::DetailTab,
     /// Entry boundary is captured once; later arrivals are read only when their message is visible.
     manager_log_view: Option<(String, u64)>,
+    /// Visible diagnostic snapshots are refreshed at most once per second and hold no resource owners.
+    manager_observation: Option<(String, Instant, plugin_runtime::observability::Snapshot)>,
     manager_packages: Vec<Package>,
     confirm: Option<(String, bool)>,
     /// Keep an uninstall confirmation to one overlay per click.
@@ -431,9 +441,44 @@ impl ExtensionPanel {
             .and_then(|entry| entry.manifest.api.as_ref())
             .and_then(|api| api.required.get("language.lsp"))
             .is_some_and(|requirement| {
-                requirement.matches(&semver::Version::new(1, 5, 0))
+                (requirement.matches(&semver::Version::new(1, 5, 0))
+                    || requirement.matches(&semver::Version::new(1, 6, 0)))
                     && !requirement.matches(&semver::Version::new(1, 4, 0))
             })
+    }
+
+    /// Native source switching admits only an owned interactive primary declaration.
+    pub(crate) fn language_provider_is_interactive(&self, provider: &str) -> bool {
+        let Some((plugin, local)) = provider.split_once('/') else {
+            return false;
+        };
+        self.entries
+            .iter()
+            .find(|entry| entry.manifest.id == plugin)
+            .is_some_and(|entry| {
+                entry.manifest.language_servers.iter().any(|declaration| {
+                    declaration.id == local
+                        && declaration.primary
+                        && !declaration.internal
+                        && declaration
+                            .delegate
+                            .as_ref()
+                            .is_some_and(|delegate| delegate.interactive)
+                })
+            })
+    }
+
+    /// Withdraw one source alias while other callers retain their shared transport.
+    pub(crate) fn release_language_document(
+        &self,
+        provider: &str,
+        document: &protocol::language::DocumentContext,
+    ) {
+        let _ = self.worker.tx.send(worker::Work::ReleaseLanguageDocument {
+            workspace: self.workspace.display().to_string(),
+            provider: provider.into(),
+            document: document.clone(),
+        });
     }
 
     /// Read one exact prepared binding from the actor snapshot; this never falls back to another
@@ -631,7 +676,7 @@ impl ExtensionPanel {
         let task = cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
-                    .timer(Duration::from_millis(33))
+                    .timer(UI_PUBLICATION_INTERVAL)
                     .await;
                 if this.update(cx, |panel, cx| panel.poll(cx)).is_err() {
                     break;
@@ -701,6 +746,7 @@ impl ExtensionPanel {
             manager_detail_scroll: gpui_kit::ScrollHandle::new(),
             manager_detail_tab: management::DetailTab::Overview,
             manager_log_view: None,
+            manager_observation: None,
             manager_packages: vec![],
             market_view,
             confirm: None,
@@ -744,7 +790,7 @@ impl ExtensionPanel {
         let task = cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor()
-                    .timer(Duration::from_millis(33))
+                    .timer(UI_PUBLICATION_INTERVAL)
                     .await;
                 if this.update(cx, |panel, cx| panel.poll(cx)).is_err() {
                     break;
@@ -820,6 +866,7 @@ impl ExtensionPanel {
             manager_detail_scroll: gpui_kit::ScrollHandle::new(),
             manager_detail_tab: management::DetailTab::Overview,
             manager_log_view: None,
+            manager_observation: None,
             manager_packages: vec![],
             market_view: Default::default(),
             confirm: None,
@@ -1076,6 +1123,7 @@ impl ExtensionPanel {
             cx.defer(move |cx| {
                 let _ = parent.update(cx, |app, cx| {
                     app.sync_shortcut_plugins(cx);
+                    app.sync_workspace_presentation(cx);
                     // Explicit resource release may leave package contributions unchanged. Wake the
                     // native shell so revoked readonly tabs cannot outlive their retained authority.
                     if app.tabs.iter().any(|tab| {
@@ -1150,7 +1198,7 @@ impl ExtensionPanel {
     }
     /// Queue a plugin lifecycle operation and expose its waiting state on this frame.
     fn queue_lifecycle(&mut self, work: Work) -> bool {
-        let installing = matches!(&work, Work::Install(_));
+        let installing = matches!(&work, Work::Install(..));
         if self.worker.queue_lifecycle(work) {
             if installing {
                 self.installation_dialog_open = false;
@@ -1561,6 +1609,7 @@ impl ExtensionPanel {
         self.worker
             .tx
             .send(crate::extensions::worker::Work::DebugCall {
+                origins: Vec::new(),
                 request,
                 configuration: None,
                 method: method.to_owned(),
@@ -1579,6 +1628,7 @@ impl ExtensionPanel {
         self.worker
             .tx
             .send(worker::Work::DebugCall {
+                origins: Vec::new(),
                 request,
                 configuration: Some(configuration.into()),
                 method: "start".into(),
@@ -1615,6 +1665,7 @@ impl ExtensionPanel {
     pub(crate) fn debug_capabilities(&self) -> Option<editor_core::DebugCapabilities> {
         let abilities = self.worker.state.lock().unwrap().debug_abilities.clone()?;
         Some(editor_core::DebugCapabilities {
+            thread_tree: abilities.thread_tree,
             breakpoints: abilities.breakpoints,
             resume_pause: abilities.resume_pause,
             step: abilities.step,
@@ -1638,6 +1689,7 @@ impl ExtensionPanel {
                 (
                     id.clone(),
                     editor_core::DebugCapabilities {
+                        thread_tree: abilities.thread_tree,
                         breakpoints: abilities.breakpoints,
                         resume_pause: abilities.resume_pause,
                         step: abilities.step,
@@ -1657,7 +1709,7 @@ impl ExtensionPanel {
     }
     pub(crate) fn take_target_preparations(
         &self,
-    ) -> Vec<(String, usize, u64, Result<String, String>)> {
+    ) -> Vec<(String, usize, u64, Result<PreparedTarget, String>)> {
         std::mem::take(&mut self.worker.state.lock().unwrap().target_preparations)
     }
     /// Discovery is asynchronous and never implicitly creates a saved configuration.
@@ -1726,8 +1778,18 @@ impl EditorApp {
                 return;
             }
         };
+        let pool = runtime_owners::for_application(cx);
         cx.spawn(async move |app, cx| {
-            let result = task.await;
+            // A standalone development editor has no ProjectWindow coordinator to retire shared
+            // store owners. Keep the native window alive until those owners also acknowledge exit.
+            let result = match task.await {
+                Ok(()) => {
+                    cx.background_executor()
+                        .spawn(async move { pool.shutdown() })
+                        .await
+                }
+                Err(error) => Err(error),
+            };
             let _ = app.update(cx, |app, cx| match result {
                 Ok(()) => cx.quit(),
                 Err(error) => {
@@ -1788,6 +1850,7 @@ impl EditorApp {
         // File workers and their private backups may outlive the platform's 200 ms quit grace.
         // Share the native close gate's cleanup and prevent new file commands while it runs.
         let file_cleanup = self.shutdown_file_transfers(cx);
+        let history_cleanup = self.shutdown_history(cx);
         let native_cleanup = cx
             .background_executor()
             .spawn(async move { native_cleanup.recv().map_err(|error| error.to_string()) });
@@ -1810,8 +1873,12 @@ impl EditorApp {
                 }
             };
             // Await all owners even if one fails; a retry must not race a still-running retirement.
-            let (files, native, plugins) =
-                futures::join!(file_cleanup, native_cleanup, plugin_cleanup);
+            let (files, native, plugins, ()) = futures::join!(
+                file_cleanup,
+                native_cleanup,
+                plugin_cleanup,
+                history_cleanup
+            );
             let errors = [files, native, plugins]
                 .into_iter()
                 .filter_map(Result::err)
