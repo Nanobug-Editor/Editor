@@ -1,0 +1,150 @@
+{
+  "date": "2026-10-15",
+  "repository": "Nanobug-Editor/Editor",
+  "parent": {
+    "number": 107,
+    "id": 5863452838,
+    "url": "https://github.com/Nanobug-Editor/Editor/issues/107",
+    "state": "open"
+  },
+  "tickets": [
+    {
+      "local": 1,
+      "file": "01-typescript-project.md",
+      "title": "01 TypeScript 单项目分析与公开上下文",
+      "number": 108,
+      "id": 5863453182,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/108",
+      "state": "open",
+      "blocked_by": []
+    },
+    {
+      "local": 2,
+      "file": "02-project-bindings.md",
+      "title": "02 子项目语言绑定与按需准备",
+      "number": 109,
+      "id": 5863453630,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/109",
+      "state": "open",
+      "blocked_by": [
+        108
+      ]
+    },
+    {
+      "local": 3,
+      "file": "03-adapter-lifecycle.md",
+      "title": "03 适配模块加载与联合撤销",
+      "number": 110,
+      "id": 5863455739,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/110",
+      "state": "open",
+      "blocked_by": [
+        108
+      ]
+    },
+    {
+      "local": 4,
+      "file": "04-vue-analysis.md",
+      "title": "04 Vue 多后端首次宿主分析",
+      "number": 111,
+      "id": 5863457379,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/111",
+      "state": "open",
+      "blocked_by": [
+        109,
+        110
+      ]
+    },
+    {
+      "local": 5,
+      "file": "05-unsaved-documents.md",
+      "title": "05 关联脏文档同步与结果隔离",
+      "number": 112,
+      "id": 5863458638,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/112",
+      "state": "open",
+      "blocked_by": [
+        111
+      ]
+    },
+    {
+      "local": 6,
+      "file": "06-source-edits.md",
+      "title": "06 跨文件重构与自动导入",
+      "number": 113,
+      "id": 5863460448,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/113",
+      "state": "open",
+      "blocked_by": [
+        112
+      ]
+    },
+    {
+      "local": 7,
+      "file": "07-compatibility.md",
+      "title": "07 历史写法与类型兼容",
+      "number": 114,
+      "id": 5863463643,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/114",
+      "state": "open",
+      "blocked_by": [
+        113
+      ]
+    },
+    {
+      "local": 8,
+      "file": "08-sfc-formatting.md",
+      "title": "08 SFC 高亮与块格式化",
+      "number": 115,
+      "id": 5863464387,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/115",
+      "state": "open",
+      "blocked_by": [
+        111
+      ]
+    },
+    {
+      "local": 9,
+      "file": "09-ecosystem.md",
+      "title": "09 专门生态插件组合",
+      "number": 116,
+      "id": 5863465157,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/116",
+      "state": "open",
+      "blocked_by": [
+        110,
+        112
+      ]
+    },
+    {
+      "local": 10,
+      "file": "10-recovery.md",
+      "title": "10 更新与上下文故障恢复",
+      "number": 117,
+      "id": 5863466321,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/117",
+      "state": "open",
+      "blocked_by": [
+        109,
+        110,
+        112
+      ]
+    },
+    {
+      "local": 11,
+      "file": "11-acceptance.md",
+      "title": "11 首批联合验收与交付准备",
+      "number": 118,
+      "id": 5863468828,
+      "url": "https://github.com/Nanobug-Editor/Editor/issues/118",
+      "state": "open",
+      "blocked_by": [
+        113,
+        114,
+        115,
+        116,
+        117
+      ]
+    }
+  ]
+}

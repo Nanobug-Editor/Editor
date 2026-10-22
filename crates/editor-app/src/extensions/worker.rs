@@ -21,6 +21,18 @@ pub(super) mod targets;
 mod viewport_tests;
 #[cfg(test)]
 mod worker_tests;
+#[cfg(test)]
+mod vue_typescript_tests;
+#[cfg(test)]
+mod vue_ecosystem_tests;
+#[cfg(test)]
+mod vue_test_support;
+#[cfg(test)]
+mod typescript_package_tests;
+#[cfg(test)]
+mod vue_recovery_tests;
+#[cfg(test)]
+mod vue_editing_tests;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -71,6 +83,12 @@ impl RunStatus {
 }
 
 pub enum Work {
+    /// Closing/rebinding one source releases only that exact language-context intent on the actor.
+    ReleaseLanguageDocument {
+        workspace: String,
+        provider: String,
+        document: language::DocumentContext,
+    },
     /// User-selected language data goes back to the sealed original provider's ordinary plan admission.
     LanguageFix {
         origin: plugin_runtime::LanguageFixOrigin,
@@ -390,6 +408,8 @@ pub(super) struct Published {
     pub install_control: Option<plugin_runtime::InstallControl>,
     pub service_states: BTreeMap<String, String>,
     pub language_services: BTreeMap<String, Result<Arc<plugin_runtime::LanguageService>, String>>,
+    /// Exact document intents point to one opaque provider context slot, never a second text model.
+    pub language_document_bindings: BTreeMap<(String, language::DocumentContext), String>,
     /// Readonly structure workers publish independently of native language-service availability.
     pub structure_providers:
         BTreeMap<String, Result<Arc<plugin_runtime::StructureProvider>, String>>,

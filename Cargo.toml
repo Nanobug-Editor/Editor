@@ -10,6 +10,8 @@ members = [
 # Test-only SDK consumers build independently through the host-managed public SDK cache.
 # Cargo exclusions name each actual package root; excluding only their parent does not detach guests.
 exclude = [
+    "crates/plugin-runtime/tests/fixtures/project-context",
+    "crates/plugin-runtime/tests/fixtures/language-delegate",
     "crates/plugin-runtime/tests/fixtures/sdk-completion",
     "crates/plugin-runtime/tests/fixtures/community/bookmarks",
     "crates/plugin-runtime/tests/fixtures/community/capability-example",

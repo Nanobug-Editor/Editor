@@ -139,6 +139,10 @@ fn shortcuts_language_commands_keep_overrides_after_shell_initialization(cx: &mu
                     "shortcut-operation-me_editor::FormatDocument",
                 ),
                 (
+                    "shortcuts.operation.FormatSelection",
+                    "shortcut-operation-me_editor::FormatSelection",
+                ),
+                (
                     "shortcuts.operation.RenameSymbol",
                     "shortcut-operation-me_editor::RenameSymbol",
                 ),

@@ -160,6 +160,25 @@ pub fn init(cx: &mut App) {
     )]);
 }
 
+/// Native document demand lifetime, shared by UI bindings and concurrent bounded control requests.
+/// It contains only routing identity and an actor sender, so cancellation or window destruction
+/// releases the source without running UI code, reading text or changing the current workspace.
+pub(crate) struct LanguageDocumentLease {
+    tx: std::sync::mpsc::Sender<worker::Work>,
+    workspace: String,
+    provider: String,
+    document: protocol::language::DocumentContext,
+}
+impl Drop for LanguageDocumentLease {
+    fn drop(&mut self) {
+        let _ = self.tx.send(worker::Work::ReleaseLanguageDocument {
+            workspace: self.workspace.clone(),
+            provider: self.provider.clone(),
+            document: self.document.clone(),
+        });
+    }
+}
+
 pub struct ExtensionPanel {
     /// Search filters are local; freshness and installation authority live on the worker.
     market_view: marketplace::ViewState,
@@ -342,6 +361,86 @@ impl ExtensionPanel {
             return BTreeMap::new();
         }
         self.worker.state.lock().unwrap().language_services.clone()
+    }
+    /// Request one native document context without activating unrelated language providers.
+    pub(crate) fn demand_language_document(
+        &self,
+        provider: &str,
+        document: protocol::language::DocumentContext,
+        role: plugin_runtime::LanguageRole,
+        guard: Option<command_intents::CommandGuard>,
+    ) -> Result<DemandWait, protocol::api::Failure> {
+        let plugin = provider
+            .split_once('/')
+            .map_or(provider, |(plugin, _)| plugin);
+        let availability = self.availability(plugin).ok_or_else(|| {
+            protocol::api::Failure::new(
+                protocol::api::ErrorCode::CapabilityUnavailable,
+                "Selected language provider unavailable",
+            )
+        })?;
+        self.worker.demand(
+            availability,
+            plugin_runtime::DemandReason::LanguageDocument {
+                provider: provider.into(),
+                role,
+                document,
+            },
+            guard,
+        )
+    }
+
+    /// A provider opts into source-scoped discovery explicitly; older workspace-only declarations
+    /// keep their original hook shape and native map entry until they require language.lsp 1.5.
+    pub(crate) fn language_provider_has_contexts(&self, provider: &str) -> bool {
+        let Some((plugin, _)) = provider.split_once('/') else {
+            return false;
+        };
+        self.entries
+            .iter()
+            .find(|entry| entry.manifest.id == plugin)
+            .and_then(|entry| entry.manifest.api.as_ref())
+            .and_then(|api| api.required.get("language.lsp"))
+            .is_some_and(|requirement| {
+                requirement.matches(&semver::Version::new(1, 5, 0))
+                    && !requirement.matches(&semver::Version::new(1, 4, 0))
+            })
+    }
+
+    /// Read one exact prepared binding from the actor snapshot; this never falls back to another
+    /// project of the same language. None means the publication/preparation is still pending.
+    pub(crate) fn language_document_service(
+        &self,
+        provider: &str,
+        document: &protocol::language::DocumentContext,
+    ) -> Option<Result<Arc<plugin_runtime::LanguageService>, String>> {
+        if !self
+            .worker
+            .trusted
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return None;
+        }
+        let state = self.worker.state.lock().unwrap();
+        let key = state
+            .language_document_bindings
+            .get(&(provider.into(), document.clone()))?;
+        state.language_services.get(key).cloned()
+    }
+
+    /// Create a native lifetime guard for one exact document intent in its captured workspace.
+    /// Sharing this guard coalesces UI and control needs; its final drop queues scoped release.
+    pub(crate) fn language_document_lease(
+        &self,
+        provider: String,
+        document: protocol::language::DocumentContext,
+    ) -> LanguageDocumentLease {
+        LanguageDocumentLease {
+            tx: self.worker.tx.clone(),
+            workspace: self.workspace.display().to_string(),
+            provider,
+            document,
+        }
     }
     /// Outline consumers receive immutable structure leases; trust revocation masks queued publications.
     pub(crate) fn structure_providers(

@@ -92,6 +92,7 @@ actions!(
     [
         SaveDocument,
         FormatDocument,
+        FormatSelection,
         RenameSymbol,
         RefreshWorkspace,
         ToggleTheme,

@@ -82,21 +82,40 @@ impl CompletionProvider for LanguageCompletionProvider {
                 let version = cx.update(|cx| completion_version(&app, editor, &source, cx))?;
                 let request_source = source.clone();
                 let request_version = version.clone();
+                let sealed_server = server.clone();
+                let context = if let Some(document) = &version.snapshot {
+                    cx.update(|cx| {
+                        app.upgrade()
+                            .ok_or_else(|| anyhow::anyhow!("Completion window closed"))?
+                            .read(cx)
+                            .capture_language_context(&server, document, &source, cx)
+                            .map_err(anyhow::Error::from)
+                    })?
+                } else {
+                    None
+                };
+                let response_context = context.clone();
                 let response = cx
                     .background_executor()
                     .scheduler_executor()
                     .spawn_dedicated(move |_| async move {
-                        let result = if let Some(snapshot) = request_version.snapshot {
-                            server.completions_at_version(
-                                document,
-                                request_source,
-                                position,
-                                snapshot,
-                            )
-                        } else {
-                            // Opening dependency source keeps native services available without extending
-                            // workspace-scoped guest document authority to that external file.
-                            server.completions_for(document, request_source, position)
+                        let operation = || {
+                            if let Some(snapshot) = request_version.snapshot {
+                                server.completions_at_version(
+                                    document,
+                                    request_source,
+                                    position,
+                                    snapshot,
+                                )
+                            } else {
+                                // Opening dependency source keeps native services available without extending
+                                // workspace-scoped guest document authority to that external file.
+                                server.completions_for(document, request_source, position)
+                            }
+                        };
+                        let result = match &context {
+                            Some(context) => server.with_context_snapshot(context, operation),
+                            None => operation(),
                         };
                         result.map(|response| rank_completions(response, &prefix, start, position))
                     })
@@ -106,6 +125,26 @@ impl CompletionProvider for LanguageCompletionProvider {
                     current == version,
                     "Completion document revision has changed"
                 );
+                if let Some(document) = version.snapshot {
+                    return cx.update(|cx| {
+                        app.update(cx, |app, cx| {
+                            anyhow::ensure!(
+                                response_context.as_ref().is_none_or(
+                                    |context| app.language_context_is_current(context, cx)
+                                ),
+                                "Completion context changed"
+                            );
+                            Ok(app.seal_completions(
+                                response,
+                                document,
+                                source,
+                                byte_offset,
+                                sealed_server,
+                                response_context,
+                            ))
+                        })
+                    })?;
+                }
                 Ok(response)
             });
         }

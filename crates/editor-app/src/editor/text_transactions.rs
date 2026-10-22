@@ -101,6 +101,19 @@ impl PreparedTextEdits {
         window: &mut Window,
         cx: &mut Context<EditorState>,
     ) -> anyhow::Result<()> {
+        self.validate_current(editor, window, cx)?;
+        if let Some((range, text)) = &self.replacement {
+            // One public Atomic replacement preserves Base's sole Undo stack and separates nearby typing.
+            editor.set_selected_range(range.clone(), cx);
+            editor.replace(text.clone(), window, cx);
+        }
+        editor.set_selected_range(self.selection.clone(), cx);
+        Ok(())
+    }
+
+    /// A multi-document coordinator preflights every session in the same UI turn before its first
+    /// replacement. This reads the unique native owner and performs no selection/history mutation.
+    pub(crate) fn validate_current(&self, editor: &mut EditorState, window: &mut Window, cx: &mut Context<EditorState>) -> anyhow::Result<()> {
         anyhow::ensure!(
             editor.is_editable()
                 && editor.marked_text_range(window, cx).is_none()
@@ -108,12 +121,6 @@ impl PreparedTextEdits {
             "{}",
             t!("editor.editing_stale")
         );
-        if let Some((range, text)) = &self.replacement {
-            // One public Atomic replacement preserves Base's sole Undo stack and separates nearby typing.
-            editor.set_selected_range(range.clone(), cx);
-            editor.replace(text.clone(), window, cx);
-        }
-        editor.set_selected_range(self.selection.clone(), cx);
         Ok(())
     }
 }

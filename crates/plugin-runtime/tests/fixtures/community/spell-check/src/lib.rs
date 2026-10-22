@@ -108,6 +108,7 @@ impl Checker {
                     plan: workspace::Plan {
                         title: "Correct spelling / 修正拼写".into(),
                         origin: Some(snapshot.info.document.clone()),
+                        conditions: Vec::new(),
                         changes: vec![workspace::Change::EditDocument {
                             document: snapshot.info.document.clone(),
                             edits: vec![api::TextEdit {

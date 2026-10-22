@@ -51,6 +51,11 @@ pub const SEMANTIC_LINKED_EDITING_METHOD: &str = "meEditor/semanticLinkedEditing
 /// Version one permits different initial text/lengths while retaining UTF-16 boundaries and name patterns.
 pub const SEMANTIC_LINKED_EDITING_VERSION: u32 = 1;
 
+/// Negotiated language.control support on the shared native transport, injected only by the host.
+pub const CONTROL_CAPABILITY: &str = "nanobugControl";
+/// Current bounded custom-control wrapper and managed module descriptor protocol.
+pub const CONTROL_VERSION: u32 = 1;
+
 /// Strict initialization marker for the generic semantic linked-editing extension.
 /// Both sides must advertise the supported version before the host selects the extension method.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -66,7 +71,23 @@ pub struct SemanticLinkedEditingCapabilities {
 pub struct Provider {
     pub id: String,
     pub language: String,
+    /// language.lsp 1.5: additional recognized source languages owned by the same context transport.
+    /// Each synchronized document retains its own language ID; the primary language is not repeated.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub languages: Vec<String>,
     pub service: String,
+    /// language.lsp 1.5: prepare a borrowed transport through this package's declared async service.
+    /// A delegated provider has no executable service; only a host-issued one-use binding is accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegate: Option<Delegate>,
+    /// language.control 1.0: explicitly declared bounded custom requests over the owned connection.
+    /// Standard lifecycle/synchronization methods and write/process permissions remain host-owned.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub control_methods: BTreeMap<String, crate::service::Method>,
+    /// language.lsp 1.5: explicitly query related open sources before native analysis. The named
+    /// control method must use language_context::related_documents_method's fixed readonly schema.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub related_documents: Option<String>,
     /// Main analysis participates in lsp selection; a formatting-only service sets this to false.
     #[serde(default = "default_primary")]
     pub primary: bool,
@@ -113,6 +134,35 @@ pub struct Provider {
     pub completion_after_whitespace: Vec<String>,
 }
 
+/// Public service entry that prepares a document's language transport without a second process.
+/// The host calls this exact package incarnation, never another provider selected by installation order.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Delegate {
+    /// Package-local provided collaboration contract containing the prepare method.
+    pub contract: String,
+    /// Declared method accepting the fixed document intent and returning a sealed binding token.
+    pub method: String,
+}
+impl Delegate {
+    /// Check bounded service identifiers; this declaration grants no service or process authority.
+    pub fn valid(&self) -> bool {
+        [&self.contract, &self.method].into_iter().all(|name| {
+            !name.is_empty()
+                && name.len() <= 100
+                && name.bytes().all(|byte| {
+                    byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte)
+                })
+        })
+    }
+
+    /// Require the complete closed prepare contract, including its read/module permission ceiling.
+    /// Package inspection rejects broader shapes before activation or native dependency preparation.
+    pub fn accepts(&self, method: &crate::service::Method) -> bool {
+        method == &crate::language_control::binding_prepare_method()
+    }
+}
+
 /// Existing current-protocol declarations retain their ordinary analysis role.
 fn default_primary() -> bool {
     true
@@ -134,6 +184,10 @@ pub struct Readiness {
 pub struct Context {
     pub provider: String,
     pub workspace: String,
+    /// language.lsp 1.5: original workspace-relative document and host configuration generation.
+    /// Absence retains the existing workspace-wide discovery/install behavior. The path grants no IO.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document: Option<DocumentContext>,
     /// dependencies 1.2: installation requests dependency plans without starting language analysis.
     /// False denotes ordinary language preparation; discovery without a download plan may be skipped.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -161,8 +215,50 @@ pub struct Proposal {
     pub args: Option<Vec<String>>,
     pub service: Option<String>,
     pub project_root: Option<String>,
+    /// language.lsp 1.5: opaque project identity and plugin configuration generation.
+    /// The separately validated project_root still defines filesystem containment, never this key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<ProjectContext>,
     pub initialization_options: Option<Value>,
     pub configuration: Option<BTreeMap<String, Value>>,
+}
+
+/// One host-issued discovery target. This identifies configuration intent rather than source text;
+/// ordinary feature requests must additionally retain their document incarnation and revision.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentContext {
+    /// Normalized workspace-relative logical path, including unsaved files with an existing parent.
+    pub path: String,
+    /// Monotonic host configuration intent for this document; old intents cannot replace newer ones.
+    pub generation: u64,
+}
+impl DocumentContext {
+    /// Validate shape only; native admission must also resolve links and check physical containment.
+    pub fn valid(&self) -> bool {
+        crate::api::ResourceIdentity::Local {
+            path: self.path.clone(),
+        }
+        .validate()
+        .is_ok()
+    }
+}
+
+/// Plugin-owned project identity. It is scoped to the selected provider, canonical root and package;
+/// matching keys do not authorize cross-plugin resources or substitute for an instance lease.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectContext {
+    /// Opaque stable identifier for this plugin's project discovery result, at most 256 UTF-8 bytes.
+    pub key: String,
+    /// Monotonic plugin facts/configuration generation; changed plans retire older generations.
+    pub generation: u64,
+}
+impl ProjectContext {
+    /// Reject oversized/control-bearing identities before they enter bounded native caches.
+    pub fn valid(&self) -> bool {
+        !self.key.is_empty() && self.key.len() <= 256 && !self.key.chars().any(char::is_control)
+    }
 }
 
 /// A readonly snapshot is tied to the editor incarnation and revision; it is never a document handle.
@@ -287,7 +383,45 @@ impl Provider {
         };
         id(&self.id)
             && id(&self.language)
-            && id(&self.service)
+            && self.languages.len() <= 32
+            && self
+                .languages
+                .iter()
+                .all(|language| id(language) && language != &self.language)
+            && self
+                .languages
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                == self.languages.len()
+            && self.control_methods.len() <= 32
+            && self.control_methods.iter().all(|(name, method)| {
+                valid_control_method(name)
+                    && method.parameters.validate(0).is_ok()
+                    && method.result.validate(0).is_ok()
+                    && method.permissions.iter().all(|permission| {
+                        matches!(
+                            permission.as_str(),
+                            "editor.read" | "workspace.read" | "native.modules"
+                        )
+                    })
+            })
+            && self.related_documents.as_ref().is_none_or(|name| {
+                valid_control_method(name)
+                    && self.control_methods.get(name)
+                        == Some(&crate::language_context::related_documents_method())
+            })
+            && match &self.delegate {
+                Some(delegate) => {
+                    delegate.valid()
+                        && self.service.is_empty()
+                        && self.alternatives.is_empty()
+                        && !self.hook
+                        && self.executable_setting.is_none()
+                        && self.control_methods.is_empty()
+                }
+                None => id(&self.service),
+            }
             && self.alternatives.len() <= 32
             && self.alternatives.iter().all(|value| id(value))
             && self.configuration.len() <= 64
@@ -313,6 +447,27 @@ impl Provider {
                 .all(|value| value.len() <= 256)
             && serde_json::to_vec(self).is_ok_and(|bytes| bytes.len() <= 256 * 1024)
     }
+}
+
+/// Custom control names remain plugin data, but cannot impersonate host-owned LSP lifecycle,
+/// synchronization or native editing channels. This shape check grants no request or process authority.
+pub fn valid_control_method(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"/._-".contains(&byte))
+        && !matches!(name, "initialize" | "initialized" | "shutdown" | "exit")
+        && ![
+            "textDocument/",
+            "workspace/",
+            "$/",
+            "notebookDocument/",
+            "window/",
+            "client/",
+        ]
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
 }
 
 /// The overall encoded budget limits breadth; a separate depth budget prevents pathological nested flags.

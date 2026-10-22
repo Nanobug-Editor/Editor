@@ -1,8 +1,8 @@
 //! Create an owned stdio transport and perform the standard LSP initialization handshake.
 use super::*;
 use plugin_runtime::plugin_protocol::language::{
-    SEMANTIC_LINKED_EDITING_CAPABILITY, SEMANTIC_LINKED_EDITING_VERSION,
-    SemanticLinkedEditingCapabilities,
+    CONTROL_CAPABILITY, CONTROL_VERSION, SEMANTIC_LINKED_EDITING_CAPABILITY,
+    SEMANTIC_LINKED_EDITING_VERSION, SemanticLinkedEditingCapabilities,
 };
 impl LanguageServerConnection {
     /// Starts the plugin's server and completes the LSP handshake.
@@ -41,7 +41,9 @@ impl LanguageServerConnection {
             pull_diagnostics: false,
             definition_provider: false,
             type_definition_provider: false,
+            completion_resolve_provider: false,
             formatting_provider: false,
+            range_formatting_provider: false,
             rename_provider: false,
             prepare_rename_provider: false,
             linked_editing_provider: false,
@@ -66,6 +68,14 @@ impl LanguageServerConnection {
         // from the negotiated runtime grant, never a plugin-supplied initialization override.
         let mut experimental = self.service.provider.client_experimental.clone();
         experimental.remove(SEMANTIC_LINKED_EDITING_CAPABILITY);
+        experimental.remove(CONTROL_CAPABILITY);
+        if self
+            .service
+            .capability("language.control")
+            .is_some_and(|version| version.major == 1)
+        {
+            experimental.insert(CONTROL_CAPABILITY.into(), json!(CONTROL_VERSION));
+        }
         let semantic_linked_authorized = self.service.provider.editing
             && self
                 .service
@@ -119,6 +129,7 @@ impl LanguageServerConnection {
                             "activeParameterSupport": true }
                     },
                     "formatting": { "dynamicRegistration": false },
+                    "rangeFormatting": { "dynamicRegistration": false },
                     "rename": { "dynamicRegistration": false, "prepareSupport": true },
                     "linkedEditingRange": { "dynamicRegistration": false },
                     "completion": {
@@ -151,9 +162,12 @@ impl LanguageServerConnection {
             .is_object()
             || initialized["capabilities"]["typeDefinitionProvider"] == Value::Bool(true);
         let capabilities = &initialized["capabilities"];
+        self.completion_resolve_provider =
+            capabilities["completionProvider"]["resolveProvider"] == Value::Bool(true);
         let supported =
             |key: &str| capabilities[key].is_object() || capabilities[key] == Value::Bool(true);
         self.formatting_provider = supported("documentFormattingProvider");
+        self.range_formatting_provider = supported("documentRangeFormattingProvider");
         self.rename_provider = supported("renameProvider");
         self.prepare_rename_provider =
             capabilities["renameProvider"]["prepareProvider"] == Value::Bool(true);

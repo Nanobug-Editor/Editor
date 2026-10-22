@@ -8,6 +8,10 @@ use gpui_kit::{
 use plugin_schema::Highlighter;
 #[cfg(test)]
 use plugin_schema::PluginManifest;
+#[cfg(test)]
+mod vue_package_tests;
+#[cfg(test)]
+mod vue_editor_tests;
 use std::{
     fs,
     path::{Path, PathBuf},

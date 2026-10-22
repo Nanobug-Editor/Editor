@@ -1,6 +1,11 @@
 //! Connects plugin languages to their declared language servers.
 
 mod completion_hooks;
+mod context;
+mod control;
+pub(crate) use context::{ContextCapture, ContextSource};
+#[cfg(test)]
+mod context_tests;
 mod definitions;
 mod diagnostics;
 mod documents;
@@ -16,7 +21,7 @@ mod transport;
 
 use anyhow::{Context as _, anyhow, ensure};
 use gpui_base::input::{DefinitionProvider, Rope};
-use gpui_kit::gpui::{App, Task, Window};
+use gpui_kit::gpui::{App, EntityId, Task, WeakEntity, Window};
 use lsp_types::{CompletionResponse, Hover, Location, LocationLink, Position, Uri};
 use plugin_runtime::RequestCancellation;
 use serde_json::{Value, json};
@@ -211,6 +216,8 @@ impl LanguageServer {
 pub struct LanguageDefinitionProvider {
     server: Arc<LanguageServer>,
     document: DocumentLease,
+    /// Production hooks defer native snapshot reads until the active input update has drained.
+    owner: Option<(WeakEntity<crate::EditorApp>, EntityId)>,
 }
 
 impl LanguageDefinitionProvider {
@@ -219,7 +226,19 @@ impl LanguageDefinitionProvider {
         Some(Self {
             document: server.open_document(file_uri(path)?),
             server,
+            owner: None,
         })
+    }
+    /// Bind the standard navigation hook to the real editor identity and related-source lifetime.
+    pub(crate) fn for_editor(
+        path: &Path,
+        server: Arc<LanguageServer>,
+        app: WeakEntity<crate::EditorApp>,
+        editor: EntityId,
+    ) -> Option<Self> {
+        let mut provider = Self::new(path, server)?;
+        provider.owner = Some((app, editor));
+        Some(provider)
     }
 }
 
@@ -237,6 +256,43 @@ impl DefinitionProvider for LanguageDefinitionProvider {
         let position = position_at_byte(&source, byte_offset);
         let server = self.server.clone();
         let document = self.document.clone();
+
+        if let Some((app, editor)) = &self.owner {
+            let app = app.clone();
+            let editor = *editor;
+            return cx.spawn(async move |cx| {
+                let context = cx.update(|cx| {
+                    app.upgrade()
+                        .context("Definition window has closed")?
+                        .read(cx)
+                        .capture_editor_language_context(&server, editor, &source, cx)
+                })?;
+                let response_context = context.clone();
+                let result = cx
+                    .background_executor()
+                    .scheduler_executor()
+                    .spawn_dedicated(move |_| async move {
+                        let operation = || server.definitions_for(document, source, position);
+                        match &context {
+                            Some(context) => server.with_context_snapshot(context, operation),
+                            None => operation(),
+                        }
+                    })
+                    .await?;
+                if let Some(context) = response_context {
+                    cx.update(|cx| {
+                        ensure!(
+                            app.upgrade().is_some_and(|app| app
+                                .read(cx)
+                                .language_context_is_current(&context, cx)),
+                            "Definition context has changed"
+                        );
+                        Ok::<_, anyhow::Error>(())
+                    })?;
+                }
+                Ok(result)
+            });
+        }
 
         // A dedicated executor keeps process I/O and workspace indexing off the UI thread.
         cx.background_executor()
@@ -271,7 +327,11 @@ struct LanguageServerConnection {
     /// Standard navigation capabilities remain independent of the concrete language or server.
     definition_provider: bool,
     type_definition_provider: bool,
+    /// Resolve only the selected completion when the standard server capability permits it.
+    completion_resolve_provider: bool,
     formatting_provider: bool,
+    /// Standard range support is negotiated independently from whole-document formatting.
+    range_formatting_provider: bool,
     rename_provider: bool,
     prepare_rename_provider: bool,
     linked_editing_provider: bool,
@@ -348,6 +408,16 @@ impl LanguageServerConnection {
         cancellation.check()?;
         ensure!(self.service.is_active(), "LSP provider has been retired");
         let id = self.next_id;
+        // The same ordered pipe releases dead consumers before a surviving consumer can allocate
+        // another context. A failed write stays pending and follows normal transport recovery.
+        let retired = self.service.retired_control_consumers();
+        if method != "initialize" && !retired.is_empty() {
+            self.notify(
+                plugin_runtime::plugin_protocol::language_control::CONSUMERS_RETIRED_METHOD,
+                json!({"consumers":retired}),
+            )?;
+            self.service.acknowledge_control_consumers(&retired);
+        }
         self.next_id += 1;
         let deadline = Instant::now() + Duration::from_secs(30);
         self.write_message(
@@ -391,15 +461,12 @@ impl LanguageServerConnection {
                     // These are per-request outcomes, not a broken transport or a reason to replay.
                     use plugin_runtime::plugin_protocol::api::{ErrorCode, Failure};
                     let code = match error["code"].as_i64() {
-                        Some(-32800) => Some(ErrorCode::Cancelled),
-                        Some(-32801) => Some(ErrorCode::StaleRevision),
-                        Some(-32601) => Some(ErrorCode::UnsupportedOperation),
-                        _ => None,
+                        Some(-32800) => ErrorCode::Cancelled,
+                        Some(-32801) => ErrorCode::StaleRevision,
+                        Some(-32601) => ErrorCode::UnsupportedOperation,
+                        _ => ErrorCode::OperationFailed,
                     };
-                    if let Some(code) = code {
-                        return Err(Failure::new(code, format!("LSP {method}: {error}")).into());
-                    }
-                    anyhow::bail!("language server {method} request failed: {error}");
+                    return Err(Failure::new(code, format!("LSP {method}: {error}")).into());
                 }
                 ensure!(self.service.is_active(), "LSP provider has been retired");
                 return Ok(message.get("result").cloned().unwrap_or(Value::Null));

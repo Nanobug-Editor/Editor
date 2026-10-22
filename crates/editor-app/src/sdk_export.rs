@@ -12,6 +12,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    (
+        "src/language_context.rs",
+        include_bytes!("../../plugin-protocol/src/language_context.rs"),
+    ),
+    // Independent language guests share the same bounded native control contract.
+    (
+        "src/language_control.rs",
+        include_bytes!("../../plugin-protocol/src/language_control.rs"),
+    ),
     // Old and new independent guests share the same documented demand/default lifecycle contract.
     (
         "src/activation.rs",

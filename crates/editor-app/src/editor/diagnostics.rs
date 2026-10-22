@@ -20,6 +20,8 @@ pub(crate) struct DocumentDiagnostics {
     /// Keep independent producers from overwriting one another's latest results.
     syntax: Vec<Diagnostic>,
     semantic: Vec<Diagnostic>,
+    /// Published semantic markers retain the same immutable related-source seal as their request.
+    semantic_context: Option<language_navigation::ContextCapture>,
     /// Owned direct publications share this document's model, never an independent Problems cache.
     pub(crate) direct: BTreeMap<String, OwnedDiagnostics>,
 }
@@ -40,10 +42,7 @@ impl EditorApp {
         };
         let path = self.tabs[index].path().to_path_buf();
         let language = self.providers.language_for_path(&path);
-        let server = language
-            .as_ref()
-            .and_then(|language| self.language_servers.get(language))
-            .cloned();
+        let server = self.language_server_for_path(&path).cloned();
         let version = self.plugin_document_version(index).ok();
         let trusted = self.session_state.workspace_trusted;
         let Some(tab) = self.tabs[index].text.as_mut() else {
@@ -52,6 +51,7 @@ impl EditorApp {
         tab.diagnostics.task = None;
         tab.diagnostics.syntax.clear();
         tab.diagnostics.semantic.clear();
+        tab.diagnostics.semantic_context = None;
         // Grammar/contribution refresh does not own another checker's result. Actual edits,
         // retirement and trust changes still invalidate its full native incarnation/revision.
         tab.diagnostics.direct.retain(|_, publication| {
@@ -129,19 +129,37 @@ impl EditorApp {
                 let worker = server.clone();
                 let document = document.clone();
                 let source = source.clone();
+                // Related dirty sources can change while this target revision remains unchanged.
+                // Capture a fresh vector on every poll, never reuse the previous graph's text.
+                let context = match this.update(cx, |app, cx| {
+                    app.capture_editor_language_context(&server, editor_id, source.as_str(), cx)
+                }) {
+                    Ok(Ok(context)) => context,
+                    _ => break,
+                };
+                let response_context = context.clone();
                 // Server startup and its serialized connection may wait; keep that
                 // blocking work off both the UI and the shared parsing executor.
                 let result = cx
                     .background_executor()
                     .scheduler_executor()
                     .spawn_dedicated(move |_| async move {
-                        worker.diagnostics_for(document, source.as_str())
+                        let operation = || worker.diagnostics_for(document, source.as_str());
+                        match &context {
+                            Some(context) => worker.with_context_snapshot(context, operation),
+                            None => operation(),
+                        }
                     })
                     .await;
                 let diagnostics = match result {
                     Ok(diagnostics) => diagnostics
                         .map(|items| crate::language::diagnostics::from_lsp(&text, items)),
                     Err(error) => {
+                        if error.downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
+                            .is_some_and(|failure| failure.code == plugin_runtime::plugin_protocol::api::ErrorCode::StaleRevision) {
+                            cx.background_executor().timer(Duration::from_millis(400)).await;
+                            continue;
+                        }
                         tracing::warn!(%error, "language diagnostics failed");
                         break;
                     }
@@ -158,8 +176,10 @@ impl EditorApp {
                                         && tab.diagnostics.generation == generation
                                 })
                                 && app.plugin_loading_generation == plugin_generation;
-                        if current && let Some(diagnostics) = diagnostics {
-                            app.apply_semantic_diagnostics(editor_id, diagnostics, cx);
+                        let context_current = response_context.as_ref()
+                            .is_none_or(|context| app.language_context_is_current(context, cx));
+                        if current && context_current && let Some(diagnostics) = diagnostics {
+                            app.apply_semantic_diagnostics(editor_id, diagnostics, response_context.clone(), cx);
                         }
                         current
                     })
@@ -211,6 +231,7 @@ impl EditorApp {
         &mut self,
         editor_id: gpui_kit::EntityId,
         diagnostics: Vec<Diagnostic>,
+        context: Option<language_navigation::ContextCapture>,
         cx: &mut Context<Self>,
     ) {
         let Some(tab) = self
@@ -221,11 +242,29 @@ impl EditorApp {
         else {
             return;
         };
+        tab.diagnostics.semantic_context = context;
         if tab.diagnostics.semantic == diagnostics {
             return;
         }
         tab.diagnostics.semantic = diagnostics;
         self.publish_document_diagnostics(editor_id, cx);
+    }
+
+    /// An auxiliary edit or close can invalidate another tab's markers without editing that target.
+    /// Reproject only expired semantic owners; unrelated documents retain their current diagnostics.
+    pub(crate) fn prune_related_semantic_diagnostics(&mut self, cx: &mut Context<Self>) {
+        let stale = self.tabs.iter().filter_map(|file| file.text.as_ref())
+            .filter(|tab| tab.diagnostics.semantic_context.as_ref()
+                .is_some_and(|context| !self.language_context_is_current(context, cx)))
+            .map(|tab| tab.editor.entity_id()).collect::<Vec<_>>();
+        for editor in stale {
+            if let Some(tab) = self.tabs.iter_mut().filter_map(|file| file.text.as_mut())
+                .find(|tab| tab.editor.entity_id() == editor) {
+                tab.diagnostics.semantic.clear();
+                tab.diagnostics.semantic_context = None;
+            }
+            self.publish_document_diagnostics(editor, cx);
+        }
     }
 
     /// Publish a sorted union; prefer the server's precise explanation for overlapping errors.
@@ -275,9 +314,8 @@ impl EditorApp {
         source: String,
         cx: &mut Context<Self>,
     ) {
-        let language = self.language_for_path(path);
         let (Some(server), Some(uri)) = (
-            self.language_servers.get(&language).cloned(),
+            self.language_server_for_path(path).cloned(),
             language_navigation::file_uri(path),
         ) else {
             return;

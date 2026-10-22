@@ -155,14 +155,7 @@ impl LanguageServer {
             // tabs. Actual transport faults alone consume this connection's finite retry budget.
             if error
                 .downcast_ref::<plugin_runtime::plugin_protocol::api::Failure>()
-                .is_some_and(|failure| {
-                    matches!(
-                        failure.code,
-                        plugin_runtime::plugin_protocol::api::ErrorCode::Cancelled
-                            | plugin_runtime::plugin_protocol::api::ErrorCode::StaleRevision
-                            | plugin_runtime::plugin_protocol::api::ErrorCode::UnsupportedOperation
-                    )
-                })
+                .is_some()
             {
                 return;
             }

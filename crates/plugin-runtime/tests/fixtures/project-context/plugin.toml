@@ -1,0 +1,5 @@
+[plugin]
+id = "project-context-fixture"
+name = "Project context fixture"
+version = "0.1.0"
+host_version = "^0.1"

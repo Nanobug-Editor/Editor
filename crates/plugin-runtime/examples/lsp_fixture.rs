@@ -165,6 +165,31 @@ fn main() {
                 Value::Null
             }
             "fixture/pending" => continue,
+            "fixture/context/documents" | "fixture/context/all-documents" => {
+                // This test backend selects an explicit project member; the host has no language
+                // or filename rule and must keep unrelated candidate text private.
+                let query = &params["arguments"];
+                let target = query["target"]["id"].as_str().unwrap();
+                let documents = query["candidates"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|candidate| candidate["id"].as_str())
+                    .filter(|id| {
+                        method == "fixture/context/all-documents"
+                            || *id == target
+                            || *id == "related"
+                    })
+                    .collect::<Vec<_>>();
+                json!({"generation":"fixture-graph-1","documents":documents})
+            }
+            "fixture/refuse" => {
+                // A valid per-request refusal must leave the shared framed connection usable.
+                send(
+                    json!({"jsonrpc":"2.0","id":id,"error":{"code":-32042,"message":"fixture request refused"}}),
+                );
+                continue;
+            }
             "fixture/block-with-ready" => {
                 // A reply much larger than the native pipe buffer tests the caller's existing deadline.
                 // Stop reading stdin only after publishing the request, readiness, and a receipt barrier.

@@ -315,6 +315,8 @@ pub struct Request {
 /// Result variants carry structured values, never JSON hidden inside a string result.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Value {
+    /// plugin.services 1.2: bounded explicitly composable, caller-owned service references.
+    ServiceSet(crate::service::ServiceSet),
     /// A plan's wait can stop independently from its current-session recovery resource.
     BatchAccepted {
         request: ResourceHandle,
@@ -347,6 +349,7 @@ impl std::fmt::Debug for Value {
     /// Credential bytes must not become an automatic debug field on a correlated transport response.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ServiceSet(value) => f.debug_tuple("ServiceSet").field(value).finish(),
             Self::Secret(_) => f.write_str("Secret(<redacted>)"),
             Self::Http(value) => f.debug_tuple("Http").field(value).finish(),
             Self::PrivateEntry(value) => f.debug_tuple("PrivateEntry").field(value).finish(),
@@ -616,6 +619,11 @@ pub struct DocumentChange {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum EditorOperation {
+    /// language.control 1.0: bounded provider-owned control over its existing native LSP connection.
+    /// It grants no arbitrary JSON-RPC, process or source-document write authority.
+    LanguageRequest {
+        request: crate::language_control::Request,
+    },
     /// Replace or clear only this instance's collection at the exact open document revision.
     Diagnostics {
         publication: crate::diagnostics::Publication,
@@ -739,6 +747,15 @@ pub enum EditorOperation {
 /// Values describe the actual document and revision observed or saved, rather than an acknowledgement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EditorValue {
+    /// Successful native attachment and a one-use, consumer/document-bound transport lease.
+    /// The guest may return this token to its declared language prepare method; it is not a process
+    /// handle and grants no filesystem access or permission to select an unrelated provider.
+    LanguageBinding {
+        value: serde_json::Value,
+        binding: String,
+    },
+    /// Schema-checked inert reply from the same native language context; at most 64 KiB encoded.
+    Language(serde_json::Value),
     Workspace(crate::workspace::Value),
     /// Native current positions are metadata, independent of text, selection or Undo storage.
     Decorations {

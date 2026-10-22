@@ -11,12 +11,19 @@ enum Kind {
 struct Key {
     provider: String,
     kind: Kind,
+    document: Option<plugin_protocol::language::DocumentContext>,
 }
 impl Key {
     /// LSP/formatter and individual direct features share their declared provider's existing executor.
     fn from_reason(reason: &DemandReason) -> Option<Self> {
-        let DemandReason::Language { provider, role } = reason else {
-            return None;
+        let (provider, role, document) = match reason {
+            DemandReason::Language { provider, role } => (provider, role, None),
+            DemandReason::LanguageDocument {
+                provider,
+                role,
+                document,
+            } => (provider, role, Some(document.clone())),
+            _ => return None,
         };
         let kind = match role {
             LanguageRole::Lsp | LanguageRole::Formatter => Kind::Native,
@@ -26,11 +33,16 @@ impl Key {
         Some(Self {
             provider: provider.clone(),
             kind,
+            document,
         })
     }
 }
 pub(super) enum Ready {
-    Native(Arc<crate::LanguageService>),
+    Delegate(plugin_protocol::language::Delegate),
+    Native(
+        Arc<crate::LanguageService>,
+        Option<plugin_protocol::language::ProjectContext>,
+    ),
     Direct(Arc<crate::DirectProvider>),
     Structure(Arc<crate::StructureProvider>),
 }
@@ -38,6 +50,16 @@ pub(super) struct PreparedRole {
     key: Key,
     fingerprint: language::Fingerprint,
     value: Result<Ready, api::Failure>,
+}
+/// Shared package preparation does not lend a cancelled document another role's publication authority.
+pub(super) fn retain_waited_documents(roles: &mut Vec<PreparedRole>, waiters: &[Waiter]) {
+    roles.retain(|role| {
+        role.key.document.is_none()
+            || waiters.iter().any(|waiter| {
+                !waiter.completion.status().is_terminal()
+                    && Key::from_reason(&waiter.reason).as_ref() == Some(&role.key)
+            })
+    });
 }
 impl DemandPreparation {
     /// Successful selected roles and actual command/view/service/background intent may activate business.
@@ -79,6 +101,7 @@ impl DemandPreparation {
     /// Late roles retain their original completion and join a subsequent bounded preparation.
     pub(super) fn prepare_roles(
         &self,
+        assets: &Path,
         code: Option<language_preparation::ComponentCode<'_>>,
         mut owner: Option<&mut Instance>,
         authority: Option<crate::EditorAuthority>,
@@ -122,14 +145,27 @@ impl DemandPreparation {
                                 .find(|item| item.id == id)
                                 .unwrap()
                                 .clone();
-                            Ready::Native(Arc::new(self.prepare_language_service(
+                            if let Some(delegate) = declaration.delegate.clone() {
+                                let document = key.document.as_ref().ok_or_else(|| {
+                                    anyhow::anyhow!("Delegation requires a document context")
+                                })?;
+                                language_preparation::validate_document(
+                                    &self.environment.workspace,
+                                    document,
+                                )?;
+                                return Ok(Ready::Delegate(delegate));
+                            }
+                            let (service, context) = self.prepare_language_service(
+                                assets,
                                 code,
                                 owner.as_deref_mut(),
                                 authority.clone(),
                                 &self.entry,
                                 declaration,
                                 settings.clone(),
-                            )?))
+                                key.document.as_ref(),
+                            )?;
+                            Ready::Native(Arc::new(service), context)
                         }
                         Kind::Direct => {
                             let declaration = self
@@ -248,6 +284,11 @@ impl Manager {
                 )
             })?;
         let result = match key.kind {
+            Kind::Native if key.document.is_some() => self.document_language_result(
+                &key.provider,
+                key.document.as_ref().unwrap(),
+                &fingerprint,
+            ),
             Kind::Native => self
                 .language_services
                 .get(&key.provider)
@@ -288,15 +329,36 @@ impl Manager {
             let error = role.value.as_ref().err().map(ToString::to_string);
             match (role.key.kind, role.value) {
                 (Kind::Native, value) => {
+                    if let Ok(Ready::Delegate(delegate)) = &value {
+                        self.begin_language_delegation(
+                            role.key.provider,
+                            role.key.document.unwrap(),
+                            role.fingerprint,
+                            delegate.clone(),
+                        );
+                        continue;
+                    }
+                    let mut context = None;
                     let service = value
                         .map(|ready| {
-                            let Ready::Native(service) = ready else {
+                            let Ready::Native(service, project) = ready else {
                                 unreachable!()
                             };
+                            context = project;
                             service
                         })
                         .map_err(|_| error.unwrap());
-                    self.publish_language_plan(role.key.provider, role.fingerprint, service);
+                    if let Some(document) = role.key.document {
+                        self.publish_document_language_plan(
+                            role.key.provider,
+                            document,
+                            context,
+                            role.fingerprint,
+                            service,
+                        );
+                    } else {
+                        self.publish_language_plan(role.key.provider, role.fingerprint, service);
+                    }
                 }
                 (Kind::Direct, value) => {
                     let provider = value

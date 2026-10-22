@@ -54,6 +54,9 @@ shortcuts.operation.ActivateToken:
 shortcuts.operation.FormatDocument:
   en: "Format document"
   zh-CN: "格式化文档"
+shortcuts.operation.FormatSelection:
+  en: "Format selection"
+  zh-CN: "格式化选区"
 shortcuts.operation.RenameSymbol:
   en: "Rename symbol"
   zh-CN: "重命名符号"

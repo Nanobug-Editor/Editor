@@ -9,13 +9,31 @@ use gpui_kit::{
 
 impl EditorApp {
     pub(super) fn prune_workspace_changes(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self
+        let changed =
+            self.workspace_changes
+                .prompt
+                .as_ref()
+                .is_some_and(|prompt| {
+                    prompt.documents.iter().any(|expected| {
+                        !self.tabs.iter().any(|tab| native_version(tab) == *expected)
+                    })
+                });
+        if changed {
+            self.answer_workspace_preview(
+                Err(failure(
+                    ErrorCode::StaleRevision,
+                    "The plan's source or target changed while previewing",
+                )),
+                window,
+                cx,
+            );
+        } else if self
             .workspace_changes
             .prompt
             .as_ref()
             .is_some_and(|prompt| stopped(&prompt.request, &prompt.batch))
         {
-            self.answer_workspace_preview(false, window, cx);
+            self.answer_workspace_preview(Ok(false), window, cx);
         }
         let retired: Vec<_> = self
             .workspace_changes
@@ -38,14 +56,14 @@ impl EditorApp {
 
     fn answer_workspace_preview(
         &mut self,
-        accept: bool,
+        accept: Result<bool, Failure>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(mut prompt) = self.workspace_changes.prompt.take() else {
             return;
         };
-        let accepted = accept && !stopped(&prompt.request, &prompt.batch);
+        let accepted = accept.map(|accept| accept && !stopped(&prompt.request, &prompt.batch));
         if let Some(answer) = prompt.answer.take() {
             let _ = answer.send(accepted);
         }
@@ -127,7 +145,7 @@ impl EditorApp {
                             .debug_selector(|| "workspace-plan-cancel".into())
                             .on_click(move |_, window, cx| {
                                 let _ = cancel.update(cx, |app, cx| {
-                                    app.answer_workspace_preview(false, window, cx)
+                                    app.answer_workspace_preview(Ok(false), window, cx)
                                 });
                             }),
                     )
@@ -139,7 +157,7 @@ impl EditorApp {
                             .debug_selector(|| "workspace-plan-confirm".into())
                             .on_click(move |_, window, cx| {
                                 let _ = confirm.update(cx, |app, cx| {
-                                    app.answer_workspace_preview(true, window, cx)
+                                    app.answer_workspace_preview(Ok(true), window, cx)
                                 });
                             }),
                     ),
@@ -150,7 +168,7 @@ impl EditorApp {
             .close_on_backdrop_press(false)
             .on_cancel(move |_, window, cx| {
                 let _ = escape.update(cx, |app, cx| {
-                    app.answer_workspace_preview(false, window, cx)
+                    app.answer_workspace_preview(Ok(false), window, cx)
                 });
                 true
             })

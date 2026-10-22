@@ -260,6 +260,7 @@ fn install_completion_actions(
     popup: &Rc<CompletionPopupState>,
     cx: &mut Context<EditorApp>,
 ) {
+    let host = cx.entity().downgrade();
     let popup = popup.clone();
     let (items, revision) = {
         let state = editor.read(cx);
@@ -289,9 +290,10 @@ fn install_completion_actions(
             } else if Enter::is_primary(&*action) {
                 let selected_revision = popup.selection.get().0;
                 let editor = editor.clone();
+                let host = host.clone();
                 // Defer the mutation until the engine finishes dispatching this key.
                 cx.spawn_in(window, async move |_, cx| {
-                    editor.update_in(cx, |state, window, cx| {
+                    let selected_item = editor.update_in(cx, |state, _window, _cx| {
                         let menu = state.completion_menu_state();
                         // A response may arrive before repaint installs a new action handler.
                         let selected = if menu.revision() == selected_revision {
@@ -300,12 +302,21 @@ fn install_completion_actions(
                             0
                         };
                         let Some(item) = menu.items.get(selected).cloned() else {
-                            return;
+                            return None;
                         };
                         let end = state.cursor();
                         let start = menu.trigger_start_offset.unwrap_or(end);
-                        state.insert_completion(&item, start..end, window, cx);
-                    })
+                        Some((item, start..end))
+                    });
+                    if let Ok(Some((item, range))) = selected_item {
+                        let _ = host.update_in(cx, |app, window, cx| {
+                            if !app.accept_language_completion(item.clone(), window, cx) {
+                                editor.update(cx, |state, cx| {
+                                    state.insert_completion(&item, range, window, cx)
+                                });
+                            }
+                        });
+                    }
                 })
                 .detach();
             } else if action.partial_eq(&Escape) {
@@ -367,6 +378,7 @@ fn render_completion(
         let popup = popup.clone();
         let pending_popup = popup.clone();
         let host = host.clone();
+        let click_host = host.clone();
         let deprecated = item.deprecated.unwrap_or(false);
         // Abbreviations highlight their matching letters, including gaps in fuzzy matches.
         let highlights = crate::language::completion::matching_ranges(&query, &item.label)
@@ -423,14 +435,16 @@ fn render_completion(
                     cx.stop_propagation();
                     return;
                 }
-                // All edits still pass through the upstream completion insertion path.
-                editor.update(cx, |state, cx| {
-                    if state.completion_menu_state().revision() != revision {
-                        // Wait for repaint if a refresh has replaced this row's edit data.
-                        return;
+                if editor.read(cx).completion_menu_state().revision() != revision {
+                    return;
+                }
+                let _ = click_host.update(cx, |app, cx| {
+                    if !app.accept_language_completion(item.clone(), window, cx) {
+                        editor.update(cx, |state, cx| {
+                            state.insert_completion(&item, start..end, window, cx);
+                            state.dismiss_completion_overlay(cx);
+                        });
                     }
-                    state.insert_completion(&item, start..end, window, cx);
-                    state.dismiss_completion_overlay(cx);
                 });
                 cx.stop_propagation();
             })

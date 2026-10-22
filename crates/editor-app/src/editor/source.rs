@@ -28,7 +28,7 @@ impl EditorApp {
             && !window.has_active_dialog(cx)
             && !window.has_active_sheet(cx);
         // The menu callback runs inside an editor update, so snapshot its state now.
-        let (enabled, editable, has_definition, has_code_actions) = {
+        let (enabled, editable, has_definition, has_code_actions, has_selection) = {
             let editor = self.editor.read(cx);
             let presentation = editor.presentation();
             (
@@ -40,6 +40,7 @@ impl EditorApp {
                         plugin_runtime::plugin_protocol::direct::Feature::CodeActions,
                         cx,
                     ),
+                !editor.selected_range().is_empty(),
             )
         };
         let app = cx.entity().downgrade();
@@ -65,11 +66,17 @@ impl EditorApp {
             .as_deref()
             .map(|path| self.language_for_path(path))
             .unwrap_or_default();
-        let can_format = editable && self.language_edits.formatters.contains_key(&language);
+        let can_format = editable
+            && self
+                .providers
+                .formatters()
+                .get(&language)
+                .is_some_and(Option::is_some);
         let can_rename = editable
             && self
-                .language_servers
-                .get(&language)
+                .active_path
+                .as_deref()
+                .and_then(|path| self.language_server_for_path(path))
                 .is_some_and(|server| server.provides_editing());
         // Preserve the native editor and all its popovers while a plugin adds a sibling preview.
         div()
@@ -175,6 +182,11 @@ impl EditorApp {
                                     t!("editor.format_document").to_string(),
                                     !can_format,
                                     Box::new(FormatDocument),
+                                )
+                                .menu_with_disabled(
+                                    t!("editor.format_selection").to_string(),
+                                    !(can_format && has_selection),
+                                    Box::new(FormatSelection),
                                 )
                                 .menu_with_disabled(
                                     t!("editor.rename_symbol").to_string(),

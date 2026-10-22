@@ -11,6 +11,8 @@ pub struct DemandPreparation {
     pub(super) environment: Environment,
     pub(super) configuration: plugin_protocol::settings::Effective,
     pub(super) engine: Option<wasmtime::Engine>,
+    /// Exact-owner code keeps late roles independent of cold compilation, never sharing Store state.
+    pub(super) compiled: Option<crate::instance::CompiledCode>,
     pub(super) host_resources: crate::HostResources,
     pub(super) diagnostics: crate::faults::NativeDiagnostics,
     pub(super) broker: crate::plugin_services::Shared,
@@ -88,14 +90,15 @@ impl DemandPreparation {
             return Ok(BuiltDemand {
                 instance: None,
                 existing_owner: None,
-                roles: self.prepare_roles(None, None, None),
+                roles: self.prepare_roles(&assets, None, None, None),
                 workspace: self.environment.workspace.clone(),
                 materialized: true,
             });
         };
-        let engine = match &self.engine {
-            Some(engine) => engine.clone(),
-            None => Instance::engine()?,
+        let engine = match (&self.compiled, &self.engine) {
+            (Some(code), _) => code.engine().clone(),
+            (_, Some(engine)) => engine.clone(),
+            _ => Instance::engine()?,
         };
         let snapshot_path = self.data.parent().unwrap().join("state.json");
         let snapshot = match std::fs::File::open(&snapshot_path) {
@@ -116,17 +119,30 @@ impl DemandPreparation {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(error.into()),
         };
-        let mut instance = Instance::prepare_with_resources(
-            &engine,
-            &package.files[component],
-            &self.entry.manifest,
-            &self.entry.grants,
-            self.environment.clone(),
-            self.data.clone(),
-            assets.clone(),
-            snapshot,
-            self.host_resources.clone(),
-        )?;
+        let mut instance = match &self.compiled {
+            Some(code) => Instance::prepare_role_worker(
+                code,
+                &package.files[component],
+                &self.entry.manifest,
+                &self.entry.grants,
+                self.environment.clone(),
+                self.data.clone(),
+                assets.clone(),
+                snapshot,
+                self.host_resources.clone(),
+            )?,
+            None => Instance::prepare_with_resources(
+                &engine,
+                &package.files[component],
+                &self.entry.manifest,
+                &self.entry.grants,
+                self.environment.clone(),
+                self.data.clone(),
+                assets.clone(),
+                snapshot,
+                self.host_resources.clone(),
+            )?,
+        };
         self.check()?;
         instance.configure_settings(&self.entry.manifest, self.configuration.clone())?;
         self.check()?;
@@ -136,12 +152,14 @@ impl DemandPreparation {
             .authority
             .clone()
             .or_else(|| Some(instance.editor_authority()));
+        let compiled = instance.compiled_code();
         let code = language_preparation::ComponentCode {
             engine: &engine,
             bytes: &package.files[component],
             assets: &assets,
+            compiled: &compiled,
         };
-        let mut roles = self.prepare_roles(Some(code), Some(&mut instance), authority);
+        let mut roles = self.prepare_roles(&assets, Some(code), Some(&mut instance), authority);
         // Activate owns candidate resources, but durable private writes and Secret/Temporary ownership
         // remain gated until final commit. Cancellation does not promise external side-effect rollback.
         self.check()?;

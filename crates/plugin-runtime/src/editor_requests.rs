@@ -49,9 +49,10 @@ impl EditorAuthority {
         callers.extend(self.callers.iter().cloned());
         Self { owner, callers }
     }
-    /// Compare sealed lifetimes when a native result is routed back to its original owner.
-    /// Matching display names or package IDs alone cannot authorize a replacement incarnation.
-    pub(crate) fn same_owner(&self, other: &Self) -> bool {
+    /// Compare exact sealed lifetime chains when retaining native resources between calls.
+    /// `other` must also originate from a checked request. Equality grants no authority: callers
+    /// still check `is_live` before use. Display names or package IDs cannot identify an incarnation.
+    pub fn same_owner(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.owner, &other.owner)
             && self.callers.len() == other.callers.len()
             && self
@@ -59,6 +60,17 @@ impl EditorAuthority {
                 .iter()
                 .zip(&other.callers)
                 .all(|(left, right)| Arc::ptr_eq(left, right))
+    }
+    /// Compare the issuing instance independently of a shrinking delegated caller chain.
+    pub(crate) fn same_instance(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.owner, &other.owner)
+    }
+    /// A native result may add a monotonic source/configuration seal without changing its issuer.
+    /// This narrows an existing lifetime only; it cannot grant permissions or revive an old owner.
+    pub(crate) fn with_guard(&self, guard: Arc<AtomicBool>) -> Self {
+        let mut authority = self.clone();
+        authority.callers.push(guard);
+        authority
     }
 }
 
@@ -90,6 +102,33 @@ pub struct EditorRequest {
     progress: std::sync::Arc<std::sync::Mutex<(String, Option<u8>)>>,
     /// Checked native roots and a separately releasable recovery resource never come from guest paths.
     workspace_request: Option<crate::WorkspaceRequest>,
+    /// Checked provider, original caller and immutable imports never come from guest identity strings.
+    language_control: Option<LanguageControlMetadata>,
+}
+
+/// Runtime-sealed metadata for the existing native language connection, unavailable to guest JSON.
+#[derive(Clone)]
+pub struct LanguageControlMetadata {
+    /// Host-owned collection epochs narrow pending results and bindings, including empty discovery.
+    pub(crate) collection_guards: Vec<Arc<AtomicBool>>,
+    /// Globally scoped provider (`package/local-provider`), owned by this exact issuing instance.
+    pub provider: String,
+    /// Exact current provider instance, sealed across delegation.
+    pub owner: String,
+    /// Original consumer incarnation; guest caller labels cannot replace it.
+    pub consumer: String,
+    /// Immediate caller owns the delegated provider; original consumer ownership remains separate.
+    pub borrower: String,
+    /// Logical workspace is runtime-issued and never taken from request arguments.
+    pub scope: String,
+    /// Optional original delegating provider document intent; standard source text is not embedded.
+    pub binding_document: Option<plugin_protocol::language::DocumentContext>,
+    /// Private issuance registry cannot be selected by a guest.
+    pub(crate) bindings: crate::LanguageBindings,
+    /// Result admission uses the same closed schema declared by the provider.
+    pub response: plugin_protocol::service::Schema,
+    /// Native code can attach these leases, but cannot construct a descriptor from an arbitrary path.
+    pub imports: Vec<Arc<crate::NativeModuleLease>>,
 }
 impl EditorRequest {
     /// Controlled native owners retain the common completion policy and their complete sealed
@@ -151,6 +190,7 @@ impl EditorRequest {
             selection: Default::default(),
             progress: Default::default(),
             workspace_request: None,
+            language_control: None,
         }
     }
     pub fn handle(&self) -> &ResourceHandle {
@@ -163,6 +203,18 @@ impl EditorRequest {
     /// Hosts may clone it to observe revocation, but cannot mutate its runtime-owned lifetimes.
     pub fn authority(&self) -> &EditorAuthority {
         &self.authority
+    }
+    /// Borrow the control metadata after runtime ownership, schema and permission admission.
+    pub fn language_control_metadata(&self) -> Option<&LanguageControlMetadata> {
+        self.language_control.as_ref()
+    }
+    pub(crate) fn with_language_control(mut self, metadata: LanguageControlMetadata) -> Self {
+        for guard in &metadata.collection_guards {
+            self.authority = self.authority.with_guard(guard.clone());
+            self.completion.lifetimes.push(guard.clone());
+        }
+        self.language_control = Some(metadata);
+        self
     }
     /// Native publishers receive only the admitted collection, never a guest-created source string.
     pub fn diagnostic_collection(&self) -> Option<&std::sync::Arc<crate::DiagnosticCollection>> {
@@ -269,6 +321,34 @@ impl EditorRequest {
     }
     pub fn finish(&self, result: Result<EditorValue, Failure>) {
         self.expire_parents();
+        if let Some(metadata) = &self.language_control {
+            if metadata.imports.iter().any(|lease| !lease.is_live()) {
+                self.completion.finish(Err(Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Native module was revoked",
+                )));
+                return;
+            }
+            if let Ok(value) = &result {
+                let validation = match value {
+                    EditorValue::Language(value) | EditorValue::LanguageBinding { value, .. }
+                        if serde_json::to_vec(value).is_ok_and(|bytes| {
+                            bytes.len() <= plugin_protocol::language_control::MAX_CONTROL_BYTES
+                        }) =>
+                    {
+                        metadata.response.accepts(value)
+                    }
+                    _ => Err(Failure::new(
+                        ErrorCode::InvalidRequest,
+                        "Invalid language control result",
+                    )),
+                };
+                if let Err(error) = validation {
+                    self.completion.finish(Err(error));
+                    return;
+                }
+            }
+        }
         // A normal completion cannot fabricate selected handles or bypass the trusted picker seam.
         if matches!(
             self.operation,
@@ -304,6 +384,79 @@ impl EditorRequest {
             result
         };
         self.completion.finish(result);
+    }
+    /// Retain the original consumer before dispatch. Exact service, workspace and document admission
+    /// prevents an unrelated plan from receiving lifecycle metadata or native context identities.
+    pub fn register_language_consumer(
+        &self,
+        service: &crate::LanguageService,
+    ) -> Result<(), Failure> {
+        let metadata = self.language_control.as_ref().ok_or_else(|| {
+            Failure::new(ErrorCode::InvalidRequest, "Not a native control request")
+        })?;
+        let EditorOperation::LanguageRequest { request: control } = &self.operation else {
+            unreachable!()
+        };
+        if self.status().is_terminal()
+            || !service.admits_control(
+                &self.authority,
+                std::path::Path::new(&self.workspace),
+                &control.document,
+            )
+            || metadata.provider != format!("{}/{}", service.owner, service.provider.id)
+        {
+            return Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Native control context changed",
+            ));
+        }
+        service.retain_control_consumer(&metadata.consumer, &self.authority)
+    }
+    /// Seal a successful module attachment to the actual native plan used by this request.
+    /// Callers must not call this with another plan; provider ownership, schema and live authority are
+    /// verified here as well as at redemption. Failure and cancellation never grant a usable binding.
+    pub fn finish_language_binding(
+        &self,
+        value: serde_json::Value,
+        service: Arc<crate::LanguageService>,
+    ) {
+        let result = (|| {
+            let metadata = self.language_control.as_ref().ok_or_else(|| {
+                Failure::new(ErrorCode::InvalidRequest, "Not a language control request")
+            })?;
+            let expected = format!("{}/{}", service.owner, service.provider.id);
+            let EditorOperation::LanguageRequest { request: control } = &self.operation else {
+                unreachable!()
+            };
+            if expected != metadata.provider
+                || !self.authority.is_live()
+                || self.status().is_terminal()
+                || !service.admits_control(
+                    &self.authority,
+                    std::path::Path::new(&self.workspace),
+                    &control.document,
+                )
+            {
+                return Err(Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Language binding native owner changed",
+                ));
+            }
+            metadata.response.accepts(&value)?;
+            if serde_json::to_vec(&value).map_or(true, |bytes| {
+                bytes.len() > plugin_protocol::language_control::MAX_CONTROL_BYTES
+            }) {
+                return Err(Failure::new(
+                    ErrorCode::LimitExceeded,
+                    "Language binding response exceeds quota",
+                ));
+            }
+            let binding = metadata
+                .bindings
+                .issue(metadata, service, self.authority.clone())?;
+            Ok(EditorValue::LanguageBinding { value, binding })
+        })();
+        self.finish(result);
     }
     /// Complete a native selection with user-chosen paths. No guest-supplied path is accepted here.
     /// Cancellation, timeout and retirement win over a late callback. The worker validates paths

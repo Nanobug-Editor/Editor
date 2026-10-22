@@ -744,6 +744,16 @@ impl Worker {
                             drop(reservation);
                             result
                         }
+                        Some(Work::ReleaseLanguageDocument {
+                            workspace,
+                            provider,
+                            document,
+                        }) => {
+                            manager.release_language_document_in_workspace(
+                                &workspace, &provider, &document,
+                            );
+                            Ok(())
+                        }
                         Some(Work::LanguageFix {
                             origin,
                             document,
@@ -965,6 +975,7 @@ impl Worker {
                     })
                     .collect::<BTreeMap<_, _>>();
                 let language_services = manager.language_services();
+                let language_document_bindings = manager.language_document_bindings();
                 let structure_providers = manager.structure_providers();
                 let direct_language_providers = manager.direct_language_providers();
                 for service in language_services
@@ -975,6 +986,10 @@ impl Worker {
                 }
                 let plugin_service_choices = manager.service_choices();
                 let mut published = output.lock().unwrap();
+                if published.language_document_bindings != language_document_bindings {
+                    published.language_document_bindings = language_document_bindings;
+                    published.configuration_revision += 1;
+                }
                 // Top-level Debug and the configuration page both follow the current actual registry.
                 published.debug_availability = Some(manager.debug_availability());
                 published.debug_abilities = manager.debug_service_abilities();

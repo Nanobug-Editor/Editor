@@ -17,7 +17,7 @@ fn arbitrary_client_capabilities_reach_the_native_lsp_handshake() {
     let mut files = package(&exe, &log).files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["language_servers"][0]["client_experimental"] =
-        json!({"unfamiliarFeature":{"version":2}});
+        json!({"unfamiliarFeature":{"version":2},"nanobugControl":999});
     files.insert(
         "manifest.json".into(),
         serde_json::to_vec(&manifest).unwrap(),

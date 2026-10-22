@@ -2,6 +2,7 @@
 
 use super::*;
 use gpui_kit::AsyncWindowContext;
+mod documents;
 
 /// A closed window is a domain failure; no asynchronous result may switch to a different native owner.
 pub(super) fn update_native<R>(
@@ -32,6 +33,15 @@ pub(super) async fn apply(
         .await;
     record.files = Some(files);
     result?;
+    // A text-only refactoring has no disk steps: commit all prepared native sessions in one UI
+    // turn so input/cancellation cannot interleave between a valid prefix and a later target.
+    if record
+        .changes
+        .iter()
+        .all(|change| matches!(change, Change::EditDocument { .. }))
+    {
+        return documents::apply(app, cx, request, record).await;
+    }
     update_native(app, cx, |app, window, cx| {
         app.check_workspace_native(record, window, cx)?;
         if !request.enter_side_effect() {

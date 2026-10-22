@@ -123,10 +123,11 @@ impl EditorApp {
             for (editor, path) in renamed_editors {
                 // A moved document's language providers must send the new file URI.
                 detach_language_server(&editor, cx);
-                if let Some(server) = self.language_servers.get(&self.language_for_path(&path)) {
+                if let Some(server) = self.language_server_for_path(&path) {
                     attach_language_server(
                         &editor,
                         &path,
+                        &self.language_for_path(&path),
                         server.clone(),
                         cx.entity().downgrade(),
                         cx,
@@ -1118,15 +1119,21 @@ fn lsp_position_to_offset(text: &gpui_base::input::Rope, position: lsp_types::Po
 pub(crate) fn attach_language_server(
     editor: &Entity<EditorState>,
     document_path: &Path,
+    language: &str,
     server: Arc<language_navigation::LanguageServer>,
     app: WeakEntity<EditorApp>,
     cx: &mut Context<EditorApp>,
 ) {
+    if let Some(uri) = language_navigation::file_uri(document_path) {
+        server.open_document_for_language(uri, language);
+    }
     let completion_owner = app.clone();
+    let navigation_owner = app.clone();
     let editor_id = editor.entity_id();
     editor.update(cx, |editor, _| {
         let Some(provider) =
-            language_navigation::LanguageDefinitionProvider::new(document_path, server.clone())
+            language_navigation::LanguageDefinitionProvider::for_editor(
+                document_path, server.clone(), navigation_owner.clone(), editor_id)
         else {
             return;
         };
@@ -1157,7 +1164,8 @@ pub(crate) fn attach_language_server(
         editor.lsp_mut().definition_provider = Some(Rc::new(provider));
         // Native hover and completion controls use the same server connection.
         editor.lsp_mut().hover_provider =
-            crate::language::hover::LanguageHoverProvider::new(document_path, server.clone())
+            crate::language::hover::LanguageHoverProvider::for_editor(
+                document_path, server.clone(), navigation_owner, editor_id)
                 .map(|provider| Rc::new(provider) as _);
         editor.lsp_mut().completion_provider =
             crate::language::completion::LanguageCompletionProvider::for_editor(

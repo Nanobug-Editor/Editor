@@ -35,18 +35,23 @@ impl NativeDocumentRequests {
         }
     }
 
-    /// Current-document text plans use original negotiated contracts and consent, including the
-    /// readonly source condition. Resource, foreign-document and application-scope effects fail
+    /// Workspace document text plans use original negotiated contracts and consent, including the
+    /// readonly source condition. Resource and application-scope effects fail
     /// before allocation; the native host still validates revision, previews and asks for consent.
     pub(crate) fn submit(
         &mut self,
         plan: plugin_protocol::workspace::Plan,
         capabilities: &BTreeMap<String, semver::Version>,
         permissions: &BTreeSet<String>,
+        guard: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> Result<api::Value, Failure> {
         self.poll();
         self.check_plan(&plan, capabilities, permissions)?;
-        self.issue(plan)
+        let authority = guard.map_or_else(|| self.authority.clone(), |guard| self.authority.with_guard(guard));
+        if !authority.is_live() {
+            return Err(Failure::new(ErrorCode::StaleRevision, "Language analysis snapshot changed"));
+        }
+        self.issue(plan, authority)
     }
 
     /// Shared document admission precedes native-only scope and shape restrictions; none of
@@ -98,21 +103,43 @@ impl NativeDocumentRequests {
             path: document.path.clone(),
         }
         .validate()?;
-        if plan.changes.iter().any(|change| {
-            !matches!(change,
-            Change::EditDocument { document: target, .. } if target == document)
-        }) {
-            return Err(Failure::new(
-                ErrorCode::UnsupportedOperation,
-                "Native language actions support only their current document",
-            ));
+        for change in &plan.changes {
+            let Change::EditDocument {
+                document: target, ..
+            } = change
+            else {
+                return Err(Failure::new(
+                    ErrorCode::UnsupportedOperation,
+                    "Native language actions support only document text edits",
+                ));
+            };
+            api::ResourceIdentity::Local {
+                path: target.path.clone(),
+            }
+            .validate()?;
+            if target != document && !permissions.contains("workspace.read") {
+                return Err(Failure::new(
+                    ErrorCode::PermissionDenied,
+                    "Related document edits require workspace.read",
+                ));
+            }
+            let root = PathBuf::from(&self.workspace)
+                .canonicalize()
+                .map_err(crate::native_path::io_failure)?;
+            let path = normalized_target(&root.join(&target.path))?;
+            if !path.starts_with(&root) {
+                return Err(Failure::new(
+                    ErrorCode::InvalidPath,
+                    "Language edit target escapes workspace",
+                ));
+            }
         }
         Ok(())
     }
 
     /// Allocate both handles only after the complete proposal is admitted and capacity preflight
     /// guarantees the pair. The returned ordinary request owns preview and native group recovery.
-    fn issue(&mut self, plan: plugin_protocol::workspace::Plan) -> Result<api::Value, Failure> {
+    fn issue(&mut self, plan: plugin_protocol::workspace::Plan, authority: EditorAuthority) -> Result<api::Value, Failure> {
         if self.pending.len() >= 32 || self.batches.len() >= 8 || self.roots.len() >= 127 {
             return Err(Failure::new(
                 ErrorCode::LimitExceeded,
@@ -124,7 +151,7 @@ impl NativeDocumentRequests {
         };
         let batch = Arc::new(WorkspaceBatch::new(
             batch_handle.clone(),
-            self.authority.clone(),
+            authority.clone(),
             None,
             BTreeSet::from(["editor.read".into(), "editor.write".into()]),
         ));
@@ -139,7 +166,7 @@ impl NativeDocumentRequests {
             self.workspace.clone(),
             self.data.clone(),
             120_000,
-            self.authority.clone(),
+            authority,
         )
         .with_workspace_request(WorkspaceRequest {
             batch: Some(batch.clone()),

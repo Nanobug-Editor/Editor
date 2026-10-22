@@ -304,33 +304,34 @@ impl EditorApp {
             if *state != ServiceLoadState::Loading {
                 continue;
             }
-            let owned = self
-                .language_servers
-                .get(language)
-                .and_then(|server| {
-                    available.iter().find_map(|(key, plan)| {
-                        plan.as_ref()
-                            .ok()
-                            .filter(|plan| server.uses_service(plan))
-                            .map(|plan| (plan.owner.clone(), key.clone()))
-                    })
-                })
-                .or_else(|| {
-                    selected
-                        .get(language)
-                        .and_then(|key| key.as_ref())
-                        .and_then(|key| {
-                            panel
-                                .entries
-                                .iter()
-                                .find(|entry| {
-                                    entry.manifest.language_servers.iter().any(|provider| {
-                                        format!("{}/{}", entry.manifest.id, provider.id) == *key
-                                    })
-                                })
-                                .map(|entry| (entry.manifest.id.clone(), key.clone()))
+            let owned = self.language_context_status_owner(language).or_else(|| {
+                self.language_servers
+                    .get(language)
+                    .and_then(|server| {
+                        available.iter().find_map(|(key, plan)| {
+                            plan.as_ref()
+                                .ok()
+                                .filter(|plan| server.uses_service(plan))
+                                .map(|plan| (plan.owner.clone(), key.clone()))
                         })
-                });
+                    })
+                    .or_else(|| {
+                        selected
+                            .get(language)
+                            .and_then(|key| key.as_ref())
+                            .and_then(|key| {
+                                panel
+                                    .entries
+                                    .iter()
+                                    .find(|entry| {
+                                        entry.manifest.language_servers.iter().any(|provider| {
+                                            format!("{}/{}", entry.manifest.id, provider.id) == *key
+                                        })
+                                    })
+                                    .map(|entry| (entry.manifest.id.clone(), key.clone()))
+                            })
+                    })
+            });
             let (plugin, service) = owned.map_or((None, language.clone()), |(plugin, service)| {
                 (Some(plugin), service)
             });

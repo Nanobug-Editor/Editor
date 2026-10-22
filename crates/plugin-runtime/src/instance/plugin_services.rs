@@ -7,6 +7,7 @@ use api::{ErrorCode, Failure, Value};
 use plugin_protocol::service::{self, Caller};
 use resource_roots::RootKind;
 use std::collections::BTreeMap;
+mod collections;
 
 pub(super) struct Services {
     pub alive: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -16,6 +17,8 @@ pub(super) struct Services {
     /// Typed commands use the broker's existing bounded call and source authority machinery.
     pub commands: BTreeMap<String, service::Method>,
     pub references: BTreeMap<u64, Reference>,
+    /// Successful OpenSet captures are instance-owned even when no member reference was returned.
+    pub sets: BTreeMap<String, (u64, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
     pub pending: BTreeMap<u64, Pending>,
     /// At most 32 provider callbacks may await a later event, under their original call authority.
     pub incoming: BTreeMap<u64, super::service_replies::Incoming>,
@@ -41,6 +44,7 @@ impl Default for Services {
             declarations: Default::default(),
             commands: Default::default(),
             references: Default::default(),
+            sets: Default::default(),
             pending: Default::default(),
             incoming: Default::default(),
             context: None,
@@ -65,6 +69,7 @@ impl Services {
         }
         self.incoming.clear();
         self.references.clear();
+        self.sets.clear();
         self.context = None;
         self.resources.clear();
         self.revoked_processes.clear();
@@ -98,6 +103,10 @@ impl State {
             ));
         }
         match operation {
+            service::Operation::OpenSet { contract } => self.open_service_set(&contract),
+            service::Operation::ValidateSet { contract, revision } => {
+                self.validate_service_set(&contract, revision)
+            }
             service::Operation::Reply { request, result } => {
                 self.finish_service_reply(request, result)
             }
@@ -186,6 +195,10 @@ impl State {
                         });
                 // A peer call receives its own parameters, never another command's native target.
                 source.menu = None;
+                // A deferred member call cannot outlive the complete discovered composition.
+                if let Some(alive) = &reference.collection {
+                    source.lifetimes.push(alive.clone());
+                }
                 let context = source.delegate(&reference.provider, &signature)?;
                 let Value::Resource(handle) = self.roots.open(RootKind::ServiceRequest)? else {
                     unreachable!()
@@ -352,6 +365,7 @@ impl State {
                 "workspace.read"
             }
             api::Operation::Editor { operation, .. } => match operation {
+                api::EditorOperation::LanguageRequest { .. } => "editor.read",
                 // Workspace admission checks every root direction and every delegated grant together.
                 api::EditorOperation::Workspace { .. } => return Ok(()),
                 api::EditorOperation::OpenDocument {
@@ -619,6 +633,7 @@ impl Instance {
                         id,
                     ),
                     service::Contract {
+                        collection: false,
                         // Package commands need no provider-owned dependency or contribution gate.
                         preparation: BTreeMap::new(),
                         enabled_setting: None,

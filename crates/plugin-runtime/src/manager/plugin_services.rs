@@ -47,6 +47,8 @@ impl Manager {
     /// session contract has exactly one provider per workspace, and it is the runtime that owns the
     /// table those sessions live in.
     pub(super) fn refresh_services(&mut self) {
+        // Static exports need no empty WASM, while executable exporters publish only an exact live owner.
+        let mut module_publishers = Vec::new();
         let live = self
             .live
             .values()
@@ -109,6 +111,7 @@ impl Manager {
                         contracts.insert(
                             plugin_protocol::commands::contract(&entry.manifest.id, &command.id),
                             plugin_protocol::service::Contract {
+                                collection: false,
                                 // Command invocation does not borrow native service preparation metadata.
                                 preparation: BTreeMap::new(),
                                 enabled_setting: None,
@@ -135,6 +138,25 @@ impl Manager {
                 };
                 if current.is_none() {
                     provider.caller.instance = provider.identity();
+                }
+                if !entry.manifest.module_exports.is_empty()
+                    && provider.caller.permissions.contains("native.modules")
+                    && (current.is_some() || entry.manifest.component.is_none())
+                {
+                    module_publishers.push(crate::native_modules::Publisher {
+                        instance: provider.caller.instance.clone(),
+                        scope: provider.caller.scope.clone(),
+                        root: self
+                            .root
+                            .join("packages")
+                            .join(&provider.caller.plugin)
+                            .join(&entry.digest),
+                        digest: entry.digest,
+                        alive: current
+                            .and_then(|provider| provider.owner_alive.clone())
+                            .unwrap_or_else(|| provider.alive.clone()),
+                        exports: entry.manifest.module_exports,
+                    });
                 }
                 provider
             })
@@ -167,6 +189,11 @@ impl Manager {
             .lock()
             .unwrap()
             .reconcile(providers, host);
+        for publisher in module_publishers {
+            self.host_resources.modules.publish(publisher);
+        }
+        self.host_resources.modules.sweep_dead();
+        self.host_resources.bindings.sweep_dead();
         for instance in self.live.values_mut().chain(
             self.parked
                 .values_mut()

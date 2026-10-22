@@ -332,6 +332,7 @@ fn workspace_transaction_missing_write_grants_and_unsupported_required_version_h
                         operation: workspace::Operation::ApplyPlan {
                             plan: workspace::Plan {
                                 origin: None,
+                                conditions: Vec::new(),
                                 title: "Denied proposal".into(),
                                 changes: vec![change]
                             },

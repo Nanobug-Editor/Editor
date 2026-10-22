@@ -1,4 +1,4 @@
-//! Standard editing requests retain document leases and return validated, single-document proposals.
+//! Standard editing requests retain document leases and return complete validated text proposals.
 use super::*;
 use lsp_types::{
     DocumentChanges, LinkedEditingRanges, OneOf, PrepareRenameResponse, TextEdit, WorkspaceEdit,
@@ -7,6 +7,8 @@ use plugin_runtime::plugin_protocol::api::{ErrorCode, Failure};
 use plugin_runtime::plugin_protocol::language::SEMANTIC_LINKED_EDITING_METHOD;
 #[cfg(test)]
 mod tests;
+mod workspace;
+pub(crate) use workspace::WorkspaceTextEdits;
 
 /// Pairing authority comes from the selected negotiated method, never an untrusted response flag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,16 +25,36 @@ pub(crate) struct LinkedEditingProposal {
 }
 
 impl LanguageServer {
+    /// Resolve one selected native candidate without executing any completion command.
+    pub(crate) fn resolve_completion_for(
+        &self,
+        document: DocumentLease,
+        source: String,
+        item: lsp_types::CompletionItem,
+    ) -> anyhow::Result<lsp_types::CompletionItem> {
+        self.edit_request(document, "completionResolve", move |connection, uri| {
+            connection.sync_document(uri, source)?;
+            if !connection.completion_resolve_provider {
+                return Ok(item);
+            }
+            let value =
+                connection.request("completionItem/resolve", serde_json::to_value(&item)?)?;
+            serde_json::from_value(value).context("Decode resolved completion")
+        })
+    }
     /// Declaration authority is separate from the server's runtime advertised support.
     pub(crate) fn provides_editing(&self) -> bool {
         self.service.provider.editing && self.is_active()
     }
 
-    /// Manual and save formatting share the selected immutable service and document lease.
+    /// Whole-document, selection and save formatting share one service, lease and source revision.
+    /// `selection` uses standard UTF-16 positions; absent server support fails without a fallback
+    /// whole-document edit. Every returned edit still enters the native all-or-nothing validator.
     pub(crate) fn format_for(
         &self,
         document: DocumentLease,
         source: String,
+        selection: Option<lsp_types::Range>,
         tab_size: usize,
         insert_spaces: bool,
     ) -> anyhow::Result<Vec<TextEdit>> {
@@ -41,11 +63,19 @@ impl LanguageServer {
             "Service did not declare formatting"
         );
         self.edit_request(document, "formatting", move |connection, uri| {
-            ensure!(connection.formatting_provider, "Language service does not support formatting");
+            let method = if selection.is_some() {
+                ensure!(connection.range_formatting_provider, "Language service does not support range formatting");
+                "textDocument/rangeFormatting"
+            } else {
+                ensure!(connection.formatting_provider, "Language service does not support formatting");
+                "textDocument/formatting"
+            };
             let wire = connection.sync_document(uri, source)?;
-            let response = connection.request("textDocument/formatting", json!({
+            let mut parameters = json!({
                 "textDocument":{"uri":wire}, "options":{"tabSize":tab_size,"insertSpaces":insert_spaces}
-            }))?;
+            });
+            if let Some(selection) = selection { parameters["range"] = serde_json::to_value(selection)?; }
+            let response = connection.request(method, parameters)?;
             if response.is_null() { Ok(Vec::new()) } else { serde_json::from_value(response).context("Decode formatting edits") }
         })
     }
@@ -83,25 +113,27 @@ impl LanguageServer {
         })
     }
 
-    /// Rename is deliberately restricted to this open document; resource and cross-file edits are refused.
+    /// Rename preserves every target; callers admit the complete proposal through native preview.
+    /// Related snapshots are frozen before dispatch and synchronized under this same request lock.
     pub(crate) fn rename_for(
         &self,
         document: DocumentLease,
         source: String,
         position: Position,
         new_name: String,
-    ) -> anyhow::Result<Vec<TextEdit>> {
+        related: Vec<(DocumentLease, String)>,
+    ) -> anyhow::Result<Vec<WorkspaceTextEdits>> {
         ensure!(self.provides_editing(), "Service did not declare editing");
         self.edit_request(document, "rename", move |connection, uri| {
             ensure!(
                 connection.rename_provider,
                 "Language service does not support rename"
             );
+            for (lease, text) in &related {
+                connection.bind_document(lease)?;
+                connection.sync_document(lease.uri.clone(), text.clone())?;
+            }
             let wire = connection.sync_document(uri.clone(), source)?;
-            let version = connection
-                .diagnostics
-                .document_version(uri.as_str())
-                .context("Rename document is not synchronized")?;
             let response = connection.request(
                 "textDocument/rename",
                 json!({"textDocument":{"uri":wire},"position":position,"newName":new_name}),
@@ -109,9 +141,11 @@ impl LanguageServer {
             if response.is_null() {
                 return Ok(Vec::new());
             }
-            document_edits(response, &uri, version, |target| {
-                connection.logical_uri(target)
-            })
+            ensure!(
+                related.iter().all(|(lease, _)| lease.is_active()),
+                "Related rename document was closed"
+            );
+            workspace::decode(connection, response)
         })
     }
 

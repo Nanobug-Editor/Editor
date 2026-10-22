@@ -66,9 +66,25 @@ impl EditorApp {
         };
         let mut wait = match self.extensions.read(cx).demand_entry(
             intent.choice.availability.clone(),
-            plugin_runtime::DemandReason::Language {
-                provider: intent.choice.key.clone(),
-                role: intent.choice.role.clone(),
+            if intent.choice.role == LanguageRole::Lsp
+                && self
+                    .extensions
+                    .read(cx)
+                    .language_provider_has_contexts(&intent.choice.key)
+            {
+                plugin_runtime::DemandReason::LanguageDocument {
+                    provider: intent.choice.key.clone(),
+                    role: LanguageRole::Lsp,
+                    document: plugin_runtime::plugin_protocol::language::DocumentContext {
+                        path: source.document.path.clone(),
+                        generation: intent.choice.availability.configuration_generation(),
+                    },
+                }
+            } else {
+                plugin_runtime::DemandReason::Language {
+                    provider: intent.choice.key.clone(),
+                    role: intent.choice.role.clone(),
+                }
             },
             Some(guard.clone()),
         ) {

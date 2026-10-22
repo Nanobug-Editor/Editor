@@ -24,6 +24,7 @@ impl State {
                 .retain(|waiter| !waiter.completion.status().is_terminal());
             flight.running || !flight.waiters.lock().unwrap().is_empty()
         });
+        self.prune_deferred();
         // Keep terminal attempts for the same token, preventing automatic failed-activation retries.
         self.background.retain(|token, _| {
             self.records
@@ -101,6 +102,7 @@ impl Manager {
         }
         self.validate_demand_reason(token, &reason)?;
         self.activation.prune();
+        self.resume_deferred_demands();
         let record = &self.activation.records[&(token.scope().into(), token.plugin().into())];
         // A stopped actor cannot provide another tick. Original host/scope seals therefore retire
         // request observation immediately, while same-owner configuration changes use explicit cancellation.
@@ -116,29 +118,52 @@ impl Manager {
         if completion.status().is_terminal() {
             return Ok(DemandRequest { completion });
         }
+        if reason.is_language() {
+            self.language_services();
+        }
+        let record = &self.activation.records[&(token.scope().into(), token.plugin().into())];
         let role = self.demanded_role_result(&reason);
-        if record.materialized
-            && (!matches!(reason, DemandReason::Language { .. }) || role.is_some())
-        {
+        if record.materialized && (!reason.is_language() || role.is_some()) {
             completion.finish(role.unwrap_or(Ok(())).map(|_| ActivationReceipt {
                 availability: token.clone(),
                 owner: record.owner.clone(),
             }));
             return Ok(DemandRequest { completion });
         }
-        let reserved = self
-            .activation
-            .flights
-            .values()
-            .map(|flight| flight.waiters.lock().unwrap().len())
-            .sum::<usize>();
+        let receipt = record.materialized.then(|| ActivationReceipt {
+            availability: token.clone(),
+            owner: record.owner.clone(),
+        });
+        let reserved = self.activation.waiter_count() + self.language_delegation_waiter_count();
         if reserved >= MAX_WAITERS {
             return Err(api::Failure::new(
                 api::ErrorCode::LimitExceeded,
                 "Activation waiter budget exhausted",
             ));
         }
-        let language_workspace = matches!(reason, DemandReason::Language { .. })
+        if let Some(receipt) = receipt
+            && self.join_language_delegation(&reason, completion.clone(), receipt)
+        {
+            return Ok(DemandRequest { completion });
+        }
+        if let DemandReason::LanguageDocument {
+            provider, document, ..
+        } = &reason
+        {
+            self.admit_language_document_intent(provider, document)?;
+            // Cancel old source intent immediately; the later worker result is also checked at publication.
+            self.activation.for_each_waiter(|_, waiter| {
+                    if matches!(&waiter.reason, DemandReason::LanguageDocument { provider: old_provider, document: old_document, .. }
+                        if old_provider == provider && old_document.path == document.path && old_document.generation < document.generation)
+                    {
+                        let _ = waiter
+                            .completion
+                            .cancel(api::CancelMode::TryTerminate, api::ErrorCode::InvalidHandle);
+                    }
+            });
+        }
+        let language_workspace = reason
+            .is_language()
             .then(|| scopes::workspace_key(&self.environment.workspace));
         self.join_demand_waiter(
             token,
@@ -152,17 +177,21 @@ impl Manager {
     }
 
     /// New roles arriving after a worker snapshot retain their old completion/deadline in the same pool.
-    fn join_demand_waiter(
+    pub(super) fn join_demand_waiter(
         &mut self,
         token: &Availability,
         waiter: Waiter,
     ) -> Result<(), api::Failure> {
         if let Some(flight) = self.activation.flights.get_mut(token) {
             if flight.running && flight.waiters.lock().unwrap().is_empty() {
-                return Err(api::Failure::new(
-                    api::ErrorCode::InvalidState,
-                    "Abandoned activation is still retiring",
-                ));
+                // Never add a renewed purpose to the cancelled worker's authority. The old job
+                // retires first, then the actor gives these independent completions fresh inputs.
+                self.activation
+                    .deferred
+                    .entry(token.clone())
+                    .or_default()
+                    .push(waiter);
+                return Ok(());
             }
             flight.waiters.lock().unwrap().push(waiter);
             return Ok(());
@@ -191,6 +220,9 @@ impl Manager {
             environment,
             configuration,
             engine: self.engine.clone(),
+            compiled: self
+                .demand_instance(token.plugin(), token.scope())
+                .map(Instance::compiled_code),
             host_resources: self.host_resources.clone(),
             diagnostics: self.native_diagnostics.clone(),
             broker: self.plugin_services.clone(),
@@ -225,6 +257,7 @@ impl Manager {
     /// terminates its pending waiters on the next poll and releases capacity; no guest runs here.
     pub fn take_demand_preparation(&mut self) -> Option<DemandPreparation> {
         self.activation.prune();
+        self.resume_deferred_demands();
         if self
             .activation
             .flights
@@ -291,19 +324,38 @@ impl Manager {
                 "Activation preparation is no longer owned",
             ));
         };
-        let result = (|| {
-            if self.availability_in_scope(token.plugin(), token.scope())? != token
-                || !flight
-                    .waiters
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|waiter| !waiter.completion.status().is_terminal())
-            {
-                return Err(api::Failure::new(
-                    api::ErrorCode::InvalidHandle,
-                    "Activation original intent was revoked",
-                ));
+        // Admission failure belongs to the abandoned original purpose, not the installation. In
+        // particular a cancelled/expired first document must not withdraw static recognition while
+        // this detached result is being discarded. Real preparation/Activate failures below still
+        // publish their normal package diagnostic.
+        let admission = self
+            .availability_in_scope(token.plugin(), token.scope())
+            .and_then(|current| {
+                if current != token
+                    || !flight
+                        .waiters
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .any(|waiter| !waiter.completion.status().is_terminal())
+                {
+                    Err(api::Failure::new(
+                        api::ErrorCode::InvalidHandle,
+                        "Activation original intent was revoked",
+                    ))
+                } else {
+                    Ok(())
+                }
+            });
+        // Abandonment is a host lifecycle outcome, not a guest/preparation failure. Keep it
+        // explicit so a guest returning the same error code cannot bypass normal diagnostics.
+        enum CommitOutcome {
+            Published(ActivationReceipt),
+            Abandoned(api::Failure),
+        }
+        let result = (|| -> Result<CommitOutcome, api::Failure> {
+            if let Err(error) = admission {
+                return Ok(CommitOutcome::Abandoned(error));
             }
             let mut built = prepared.result?;
             if built.instance.is_none()
@@ -330,10 +382,12 @@ impl Manager {
                     Instance::rollback_data(&originals).map_err(|error| {
                         api::Failure::new(api::ErrorCode::OperationFailed, format!("{error:#}"))
                     })?;
-                    return Err(api::Failure::new(
+                    // Only a successful rollback makes this a harmless abandoned purpose. A
+                    // rollback error above remains a genuine failure and must be published.
+                    return Ok(CommitOutcome::Abandoned(api::Failure::new(
                         api::ErrorCode::Cancelled,
                         "Activation wait was cancelled before publication",
-                    ));
+                    )));
                 }
                 instance.commit_activation();
                 instance.instance_id().map(str::to_owned)
@@ -369,24 +423,42 @@ impl Manager {
                 && scopes::workspace_key(&built.workspace)
                     == scopes::workspace_key(&self.environment.workspace)
             {
+                roles::retain_waited_documents(&mut built.roles, &flight.waiters.lock().unwrap());
                 self.publish_demanded_roles(built.roles);
             }
-            Ok(ActivationReceipt {
+            Ok(CommitOutcome::Published(ActivationReceipt {
                 availability: token.clone(),
                 owner,
-            })
+            }))
         })();
+        let result = match result {
+            Ok(CommitOutcome::Abandoned(error)) => {
+                for waiter in std::mem::take(&mut *flight.waiters.lock().unwrap()) {
+                    waiter.completion.finish(Err(error.clone()));
+                }
+                self.refresh_services();
+                return Err(error);
+            }
+            Ok(CommitOutcome::Published(receipt)) => Ok(receipt),
+            Err(error) => Err(error),
+        };
         let waiters = std::mem::take(&mut *flight.waiters.lock().unwrap());
         for waiter in waiters {
             if waiter.completion.status().is_terminal() {
                 continue;
             }
             match &result {
-                Ok(receipt) if matches!(waiter.reason, DemandReason::Language { .. }) => {
+                Ok(receipt) if waiter.reason.is_language() => {
                     let target = waiter.language_workspace.clone().unwrap_or_default();
                     let delivered = self.in_project(&target, |manager| {
                         if let Some(role) = manager.demanded_role_result(&waiter.reason) {
                             waiter.completion.finish(role.map(|_| receipt.clone()));
+                        } else if manager.join_language_delegation(
+                            &waiter.reason,
+                            waiter.completion.clone(),
+                            receipt.clone(),
+                        ) {
+                            // The async declared service now owns this original wait and deadline.
                         } else if let Err(error) =
                             manager.join_demand_waiter(&token, waiter.clone())
                         {
@@ -432,13 +504,13 @@ impl Manager {
                 .availability_in_scope(token.plugin(), token.scope())
                 .map_or(true, |current| current != token)
             {
-                if let Some(flight) = self.activation.flights.get(&token) {
-                    for waiter in flight.waiters.lock().unwrap().iter() {
+                self.activation.for_each_waiter(|candidate, waiter| {
+                    if candidate == &token {
                         let _ = waiter
                             .completion
                             .cancel(api::CancelMode::TryTerminate, api::ErrorCode::InvalidHandle);
                     }
-                }
+                });
             }
         }
         self.activation.prune();
@@ -471,7 +543,9 @@ impl Manager {
         reason: &DemandReason,
     ) -> Result<(), api::Failure> {
         let manifest = &self.installed[token.plugin()].manifest;
-        if let DemandReason::Language { role, .. } = reason {
+        if let DemandReason::Language { role, .. } | DemandReason::LanguageDocument { role, .. } =
+            reason
+        {
             let capability = match role {
                 LanguageRole::Lsp => "language.lsp",
                 LanguageRole::Formatter => "language.formatting",
@@ -487,6 +561,26 @@ impl Manager {
                 ));
             }
         }
+        if let DemandReason::LanguageDocument { role, document, .. } = reason {
+            if !matches!(role, LanguageRole::Lsp | LanguageRole::Formatter)
+                || !crate::capabilities::negotiate(manifest).is_ok_and(|api| {
+                    api.capabilities
+                        .get("language.lsp")
+                        .is_some_and(|version| version >= &semver::Version::new(1, 5, 0))
+                })
+            {
+                return Err(api::Failure::new(
+                    api::ErrorCode::CapabilityUnavailable,
+                    "Document contexts require language.lsp 1.5 and a native role",
+                ));
+            }
+            if !document.valid() {
+                return Err(api::Failure::new(
+                    api::ErrorCode::InvalidPath,
+                    "Invalid language document path",
+                ));
+            }
+        }
         let declared = match reason {
             DemandReason::Command(id) => manifest.commands.iter().any(|command| &command.id == id),
             DemandReason::View(id) => manifest.panels.iter().any(|panel| &panel.id == id),
@@ -498,7 +592,8 @@ impl Manager {
                     })
             }
             DemandReason::Background => manifest.activation.background.is_some(),
-            DemandReason::Language { provider, role } => {
+            DemandReason::Language { provider, role }
+            | DemandReason::LanguageDocument { provider, role, .. } => {
                 let id = provider.strip_prefix(&format!("{}/", manifest.id));
                 id.is_some_and(|id| match role {
                     LanguageRole::Lsp => manifest
@@ -530,15 +625,30 @@ impl Manager {
     }
 
     /// Pending original intent is cancelled by a configuration transition without sealing live references.
-    pub(in crate::manager) fn cancel_pending_demands(&mut self, id: &str, scope: Option<&str>) {
-        for (token, flight) in &self.activation.flights {
-            if token.plugin() == id && scope.is_none_or(|scope| scope == token.scope()) {
-                for waiter in flight.waiters.lock().unwrap().iter() {
+    pub(in crate::manager) fn cancel_language_document_waiters(
+        &mut self,
+        provider: &str,
+        document: &plugin_protocol::language::DocumentContext,
+    ) {
+        self.activation.for_each_waiter(|_, waiter| {
+                if matches!(&waiter.reason, DemandReason::LanguageDocument { provider: candidate, document: target, .. }
+                    if candidate == provider && target == document)
+                {
                     let _ = waiter
                         .completion
-                        .cancel(api::CancelMode::TryTerminate, api::ErrorCode::InvalidHandle);
+                        .cancel(api::CancelMode::TryTerminate, api::ErrorCode::Cancelled);
                 }
+        });
+    }
+
+    /// Pending original intent is cancelled by a configuration transition without sealing live references.
+    pub(in crate::manager) fn cancel_pending_demands(&mut self, id: &str, scope: Option<&str>) {
+        self.activation.for_each_waiter(|token, waiter| {
+            if token.plugin() == id && scope.is_none_or(|scope| scope == token.scope()) {
+                let _ = waiter
+                    .completion
+                    .cancel(api::CancelMode::TryTerminate, api::ErrorCode::InvalidHandle);
             }
-        }
+        });
     }
 }

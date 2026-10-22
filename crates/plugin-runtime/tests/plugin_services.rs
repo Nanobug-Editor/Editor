@@ -21,6 +21,7 @@ fn service_contract_rejects_unbounded_shapes_and_malformed_names() {
         provides: BTreeMap::from([(
             "example.echo".into(),
             Contract {
+                collection: false,
                 preparation: Default::default(),
                 enabled_setting: None,
                 platforms: Vec::new(),
@@ -31,6 +32,7 @@ fn service_contract_rejects_unbounded_shapes_and_malformed_names() {
         requires: BTreeMap::from([(
             "example.format".into(),
             Dependency {
+                collection: false,
                 version: "^1".parse().unwrap(),
                 optional: true,
                 methods: BTreeMap::from([("echo".into(), method)]),

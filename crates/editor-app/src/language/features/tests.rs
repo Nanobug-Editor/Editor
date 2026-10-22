@@ -282,6 +282,7 @@ fn native_language_features_code_action_returns_selected_complete_plan(cx: &mut 
         plan: plugin_runtime::plugin_protocol::workspace::Plan {
             title: title.into(),
             origin: Some(document.clone()),
+            conditions: Vec::new(),
             changes: vec![
                 plugin_runtime::plugin_protocol::workspace::Change::EditDocument {
                     document: document.clone(),

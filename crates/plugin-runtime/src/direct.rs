@@ -41,6 +41,12 @@ pub enum LanguageFixOrigin {
     Diagnostics(Arc<crate::DiagnosticCollection>),
     Direct(Arc<DirectProvider>),
     Lsp(Arc<crate::LanguageService>),
+    /// Native analysis may add a revocable configuration/file snapshot without replacing its owner.
+    /// The token is issued only by native UI code and cannot lend permissions to the service.
+    GuardedLsp {
+        service: Arc<crate::LanguageService>,
+        guard: Arc<AtomicBool>,
+    },
 }
 impl LanguageFixOrigin {
     /// A retired collection/provider cannot execute a result already rendered in native UI.
@@ -49,6 +55,8 @@ impl LanguageFixOrigin {
             Self::Diagnostics(owner) => owner.is_live(),
             Self::Direct(owner) => owner.is_active(),
             Self::Lsp(owner) => owner.is_active() && owner.authority().is_live(),
+            Self::GuardedLsp { service, guard } => guard.load(Ordering::Acquire)
+                && service.is_active() && service.authority().is_live(),
         }
     }
     /// Immutable package owner routes effects back to that instance's normal authority checks.
@@ -57,6 +65,7 @@ impl LanguageFixOrigin {
             Self::Diagnostics(owner) => owner.owner(),
             Self::Direct(owner) => &owner.owner,
             Self::Lsp(owner) => &owner.owner,
+            Self::GuardedLsp { service, .. } => &service.owner,
         }
     }
     /// This sealed chain distinguishes disable/re-enable or replacement by the same package ID.
@@ -65,6 +74,7 @@ impl LanguageFixOrigin {
             Self::Diagnostics(owner) => owner.authority(),
             Self::Direct(owner) => owner.authority(),
             Self::Lsp(owner) => owner.authority(),
+            Self::GuardedLsp { service, .. } => service.authority(),
         }
     }
     /// Revealing related files needs the originating installation's workspace read grant.
@@ -73,6 +83,7 @@ impl LanguageFixOrigin {
             Self::Diagnostics(owner) => owner.can_read_workspace(),
             Self::Direct(owner) => owner.can_read_workspace(),
             Self::Lsp(owner) => owner.can_read_workspace(),
+            Self::GuardedLsp { service, .. } => service.can_read_workspace(),
         }
     }
 }

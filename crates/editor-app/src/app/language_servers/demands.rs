@@ -8,7 +8,47 @@ use std::collections::BTreeMap;
 /// Closing the last original session drops its waiter; no text or alternate document model is kept.
 #[derive(Default)]
 pub(crate) struct DemandState {
+    /// Readonly result authority expires on configuration or disk graph changes, not UI tab switches.
+    pub(super) snapshot_epoch: super::snapshots::SnapshotEpoch,
     records: BTreeMap<String, Record>,
+    /// Native adapters are unique per immutable runtime plan, including plugin control consumers.
+    pub(super) transports: BTreeMap<usize, Arc<language_navigation::LanguageServer>>,
+    pub(super) contexts: BTreeMap<PathBuf, ContextRecord>,
+    /// Formatting consumers may retain a source while its primary analyzer is a different provider.
+    pub(super) auxiliary: BTreeMap<
+        (String, protocol::language::DocumentContext),
+        (PathBuf, Arc<crate::extensions::LanguageDocumentLease>),
+    >,
+    /// Successful control operations may return opaque state needed by later bounded calls.
+    /// The source and independently live callers own that state, never an individual request wait.
+    pub(super) control_sources:
+        BTreeMap<(String, protocol::language::DocumentContext), ControlSourceLease>,
+    /// Weak indexing shares one final-release guard across UI, formatting and concurrent controls.
+    pub(super) document_leases: BTreeMap<
+        (String, String, protocol::language::DocumentContext),
+        std::sync::Weak<crate::extensions::LanguageDocumentLease>,
+    >,
+}
+
+/// One open source retains a shared transport while at least one sealed call chain remains live.
+/// Store only identity and lifetime metadata; EditorState continues to own all editable text.
+pub(super) struct ControlSourceLease {
+    pub(super) incarnation: String,
+    pub(super) callers: Vec<plugin_runtime::EditorAuthority>,
+    pub(super) _lease: Arc<crate::extensions::LanguageDocumentLease>,
+}
+
+/// Per-source routing retains metadata and a plan lease, never text or another mutable document model.
+pub(super) struct ContextRecord {
+    pub(super) _lease: Arc<crate::extensions::LanguageDocumentLease>,
+    pub(super) provider: String,
+    pub(super) document: protocol::language::DocumentContext,
+    pub(super) incarnation: String,
+    pub(super) source_revision: u64,
+    pub(super) availability: Availability,
+    pub(super) pending: Option<DemandWait>,
+    pub(super) error: Option<String>,
+    pub(super) server: Option<Arc<language_navigation::LanguageServer>>,
 }
 
 struct Record {
@@ -45,6 +85,9 @@ impl EditorApp {
                 let Some(key) = selected.get(&language).and_then(Option::as_ref) else {
                     continue;
                 };
+                if self.extensions.read(cx).language_provider_has_contexts(key) {
+                    continue;
+                }
                 let Some(document) = self.native_language_document_version(index) else {
                     continue;
                 };

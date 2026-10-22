@@ -1,4 +1,4 @@
-//! Stable workspace.files 1.3 extends 1.2 discovery and mixed native plans with readonly origins.
+//! Stable workspace.files 1.4 extends 1.3 readonly origins with bounded readonly input vectors.
 //! Cancellation stops further work;
 //! receipts describe actual effects and current-session recovery, without global atomic rollback.
 //! The native implementation is verified on Windows; other hosts are compilation-only targets.
@@ -21,6 +21,8 @@
 //! document incarnation/revision is checked before preparation and after confirmation, even
 //! when the plan changes only another file. The origin grants no access and adds no text edit.
 //! An absent origin retains the 1.2 message shape; do not send origins to a negotiated older host.
+//! Readonly dependencies in [`Plan::conditions`] additionally require workspace.files 1.4 and
+//! are checked as one bounded revision vector before preview and commit, without granting IO.
 //!
 //! Pages contain 1..=256 entries. Read returns at most 1 MiB; directory listing admits at
 //! most 4,096 entries. Recursive discovery respects its FileQuery budget and ignore state.
@@ -212,12 +214,24 @@ pub struct Plan {
     /// other files. Hosts below 1.3 must not receive a plan using this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<crate::api::DocumentVersion>,
+    /// workspace.files 1.4: readonly input revisions, checked before preview and commit. These
+    /// conditions grant no IO authority and never become Undo targets. At most 128 distinct native
+    /// documents may participate; duplicate IDs or paths are invalid, even with identical revisions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<DocumentVersion>,
     pub changes: Vec<Change>,
 }
 
 impl Plan {
     /// Validate bounded transport shape before acquiring resources or reading any native target.
     pub fn validate(&self) -> Result<(), Failure> {
+        if self.conditions.len() > 128 { return Err(Failure::new(ErrorCode::LimitExceeded, "Too many readonly document conditions")); }
+        let mut ids = std::collections::BTreeSet::new();
+        let mut paths = std::collections::BTreeSet::new();
+        for condition in &self.conditions {
+            crate::api::FileVersion { id:condition.id.clone(),path:condition.path.clone(),revision:condition.revision }.validate()?;
+            if !ids.insert(&condition.id) || !paths.insert(&condition.path) { return Err(Failure::new(ErrorCode::InvalidRequest, "Duplicate readonly document condition")); }
+        }
         if let Some(origin) = &self.origin {
             crate::api::FileVersion {
                 id: origin.id.clone(),

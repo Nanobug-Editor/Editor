@@ -2,6 +2,12 @@
 
 本目录索引实际维护的插件资料。跨插件平台方案放在本目录的 specs、tickets 与 verification；插件自身的历史专题资料保留在对应包内，不复制正文或继承其他任务的完成状态。
 
+- [Vue 多后端与 TypeScript 协作方案](specs/vue-multi-backend.md)、[原工单及六场景执行入口](tickets/vue-typescript/README.md)、[已批准的剩余工作场景方案](tickets/vue-typescript/replan-proposal.md)、[初步工具层证据](verification/vue-typescript-p0-2026-10-15.md)、[持续实施记录](verification/vue-typescript-implementation-2026-10-15.md)：原 #107–#118 及已有进度保留；六场景 #121–#126 已发布，22:51 按最新指令暂停，见[暂停检查点](verification/vue-typescript-paused-2026-10-15-2251.md)。恢复时只执行新工单。完整支持状态以联合验收为准。
+- [六场景恢复实施记录](verification/vue-typescript-scenes-2026-10-15.md)：逐项记录新执行的测试、候选产物、真实失败与待验证断点，不把旧通过或跳过用例报告为最终通过。
+- [S4 生态组合阶段证据](verification/vue-typescript-s4-2026-10-15.md)：公开集合发现、不可变模块组合与真实映射贡献的已验证范围；包级及全部角色联合验收仍在进行。
+- [S5 通用运行时阶段证据](verification/vue-typescript-s5-runtime-2026-10-15.md)：私有依赖、真实故障、迁移与回滚的定向验证；实际 Vue/TypeScript 组合恢复仍需联合验收。
+- [S1 / S5 暂停续接记录](verification/vue-typescript-s1-s5-checkpoint-2026-10-15.md)：冷启动新需求排队与回滚恢复状态的实际回归结果、尚未执行的组合验证。
+
 - [独立插件市场规格与工单](https://github.com/T-miracle/Nanobug-Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
 - [插件管理器共用布局](specs/plugin-manager-shared-layout.md)、[2026-10-13 验收记录](verification/plugin-manager-shared-layout-2026-10-13.md)：已安装与市场共用窗口框架，搜索框内置左侧筛选，详情按数据分区；浏览版本与实际安装实例的操作目标分别明确。实现与测试记录不继承市场服务工单的交付状态。
 - [已验收的 Rust 合并方案](specs/rust-plugin-consolidation.md)与[历史验收](verification/rust-plugin-consolidation-2026-10-09.md)：市场工单 03 的外部准入依据；迁移与本次修复的结果另记，不将其他任务成果计为新实现。

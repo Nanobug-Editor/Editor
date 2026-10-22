@@ -5,12 +5,17 @@ use super::{
 };
 use crate::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
+mod contexts;
+mod control_lifetime;
+mod definition_offsets;
 mod formatting;
+mod selection_formatting;
 mod language_features;
 mod linked;
 mod persisted;
 mod queue;
 mod semantic;
+mod workspace;
 use plugin_runtime::{Manager, Package, plugin_protocol as protocol};
 use std::{cell::RefCell, time::Duration};
 

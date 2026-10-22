@@ -2,16 +2,26 @@
 use super::*;
 use crate::LanguageService;
 use std::sync::Arc;
+mod contexts;
+mod delegation;
 mod fingerprint;
 pub(super) use fingerprint::Fingerprint;
 
 pub(super) struct Prepared {
     pub(super) fingerprint: Fingerprint,
     pub(super) service: Result<Arc<LanguageService>, String>,
+    pub(super) context: Option<contexts::Binding>,
+    /// Pending intent remains in the same scope-owned cache, but is never published as a ready plan.
+    pub(super) pending: bool,
+    /// Borrowed aliases never retire or account for the original provider's native transport.
+    pub(super) owns_service: bool,
+    pub(super) delegation: Option<delegation::Pending>,
 }
 impl Drop for Prepared {
     fn drop(&mut self) {
-        if let Ok(service) = &self.service {
+        if self.owns_service
+            && let Ok(service) = &self.service
+        {
             service.retire();
         }
     }
@@ -24,13 +34,21 @@ impl Manager {
         // Same-owner HotApply hides an unvalidated configuration without killing its original process.
         // Metadata/grant/workspace retirement still revokes the lease immediately.
         self.language_services.retain(|key, prepared| {
-            expected
-                .get(key)
-                .is_some_and(|fingerprint| fingerprint.same_source(&prepared.fingerprint))
+            prepared
+                .service
+                .as_ref()
+                .map_or(true, |service| service.is_active())
+                && expected
+                    .get(contexts::provider_key(key))
+                    .is_some_and(|fingerprint| fingerprint.same_source(&prepared.fingerprint))
         });
+        self.reconcile_language_context_authority();
         self.language_services
             .iter()
-            .filter(|(key, prepared)| expected.get(*key) == Some(&prepared.fingerprint))
+            .filter(|(key, prepared)| {
+                !prepared.pending
+                    && expected.get(contexts::provider_key(key)) == Some(&prepared.fingerprint)
+            })
             .map(|(key, prepared)| (key.clone(), prepared.service.clone()))
             .collect()
     }
@@ -72,6 +90,10 @@ impl Manager {
             Prepared {
                 fingerprint,
                 service,
+                context: None,
+                pending: false,
+                owns_service: true,
+                delegation: None,
             },
         );
     }
@@ -96,13 +118,23 @@ impl Manager {
                 "No published workspace language authority",
             ));
         }
-        let key = format!("{}/{}", service.owner, service.provider.id);
-        let prepared = self.language_services.get(&key).ok_or_else(|| {
-            Failure::new(
-                ErrorCode::InvalidHandle,
-                "Language service is no longer published",
-            )
-        })?;
+        let prepared = self
+            .language_services
+            .values()
+            .find(|prepared| {
+                prepared.owns_service
+                    && !prepared.pending
+                    && prepared
+                        .service
+                        .as_ref()
+                        .is_ok_and(|current| Arc::ptr_eq(current, service))
+            })
+            .ok_or_else(|| {
+                Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Language service is no longer published",
+                )
+            })?;
         let values = self
             .effective_settings(&service.owner)
             .map_err(|error| format!("{error:#}"));
@@ -135,6 +167,7 @@ impl Manager {
         for service in self
             .language_services
             .values()
+            .filter(|prepared| prepared.owns_service)
             .filter_map(|prepared| prepared.service.as_ref().ok())
         {
             requests.extend(
@@ -151,6 +184,7 @@ impl Manager {
     pub(super) fn retire_language_services(&mut self, id: &str) {
         self.language_services
             .retain(|key, _| !key.starts_with(&format!("{id}/")));
+        self.collect_unused_language_contexts();
         // Every pure language role loses authority at the same package retirement boundary.
         self.retire_structure_providers(id);
         self.retire_direct_providers(id);

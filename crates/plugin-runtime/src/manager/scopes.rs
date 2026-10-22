@@ -126,6 +126,7 @@ impl Manager {
             + self
                 .language_services
                 .values()
+                .filter(|item| item.owns_service)
                 .filter_map(|item| item.service.as_ref().ok())
                 .map(|service| service.process_count() + service.request_resource_count())
                 .sum::<usize>()

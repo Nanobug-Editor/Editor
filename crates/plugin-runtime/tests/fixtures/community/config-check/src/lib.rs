@@ -108,6 +108,7 @@ impl Checker {
                     plan: workspace::Plan {
                         title: "Create included configuration / 创建所引用的配置".into(),
                         origin: Some(snapshot.info.document.clone()),
+                        conditions: Vec::new(),
                         changes: vec![workspace::Change::Write {
                             target: workspace::FileTarget {
                                 root: self.root.as_ref().unwrap().clone(),

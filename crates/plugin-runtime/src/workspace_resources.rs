@@ -42,6 +42,10 @@ pub(crate) fn validate_plan_documents(
         require("workspace.files", 3)?;
         permission("editor.read")?;
     }
+    if !plan.conditions.is_empty() {
+        require("workspace.files", 4)?;
+        permission("editor.read")?;
+    }
     plan.validate()?;
     if plan.changes.iter().any(|change| {
         matches!(

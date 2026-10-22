@@ -1,5 +1,7 @@
 //! Hot LSP selection is independent of grammar loading and rebinds already-open document snapshots.
 use crate::*;
+mod contexts;
+mod snapshots;
 mod demands;
 pub(crate) use demands::DemandState;
 
@@ -45,7 +47,9 @@ impl EditorApp {
     }
 
     pub(crate) fn sync_dynamic_language_servers(&mut self, cx: &mut Context<Self>) {
+        self.sync_language_snapshot_configuration();
         let selected = self.providers.language_servers();
+        let contexts_changed = self.sync_language_contexts(&selected, cx);
         let selected_formatters = self.providers.formatters();
         let wanted = self.demand_open_language_servers(&selected, cx);
         let available = self.extensions.read(cx).language_services();
@@ -79,7 +83,7 @@ impl EditorApp {
                 }
             }
         }
-        let mut changed = false;
+        let mut changed = contexts_changed;
         self.language_servers.retain(|language, server| {
             let keep = self.session_state.workspace_trusted
                 && wanted.contains_key(language)
@@ -94,8 +98,9 @@ impl EditorApp {
             }
             keep
         });
-        self.language_service_states
-            .retain(|language, _| wanted.contains_key(language));
+        self.language_service_states.retain(|language, _| {
+            language.starts_with("context:") || wanted.contains_key(language)
+        });
         self.publish_language_demand_states();
         if self.session_state.workspace_trusted {
             for (language, id) in selected {
@@ -268,6 +273,7 @@ impl EditorApp {
                 .language_servers
                 .values()
                 .chain(self.language_edits.formatters.values())
+                .chain(self.language_server_demands.transports.values())
                 .any(|active| Arc::ptr_eq(active, &server))
             {
                 server.retire();
@@ -287,10 +293,11 @@ impl EditorApp {
             }
             documents_changed = true;
             editor::detach_language_server(&tab.editor, cx);
-            if let Some(server) = self.language_servers.get(&language) {
+            if let Some(server) = self.language_server_for_path(path) {
                 editor::attach_language_server(
                     &tab.editor,
                     path,
+                    &language,
                     server.clone(),
                     cx.entity().downgrade(),
                     cx,
@@ -317,7 +324,7 @@ impl EditorApp {
         path: &Path,
         cx: &mut Context<Self>,
     ) {
-        let main = self.language_servers.get(language).cloned();
+        let main = self.language_server_for_path(path).cloned();
         let formatter = self.language_edits.formatters.get(language).cloned();
         if let Some(server) = &main {
             Self::close_server_document(server.clone(), path, cx);

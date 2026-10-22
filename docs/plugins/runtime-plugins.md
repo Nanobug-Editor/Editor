@@ -52,6 +52,7 @@ WASM 不继承宿主目录、环境、输入输出或网络访问。每次调用
 | process.exec | 使用程序路径与 argv 执行任意本机程序，支持 stdio 或 PTY |
 | services.call | 调用声明的插件服务；完整调用链仍受来源权限约束 |
 | dependencies.prepare / dependencies.install | 校验后准备私有依赖 / 经额外确认执行声明安装步骤 |
+| native.modules | 允许声明的不可变代码模块进入其他插件管理的原生分析进程；不授予 WASM/OS 沙箱隔离 |
 
 原生程序以当前 OS 用户身份运行，具有该用户的文件、网络与进程权限；WASM 权限不构成子进程文件沙箱。宿主经工具链解析程序并传 argv，不拼接 Shell 命令。插件自己的交互式 Shell 输入是用户授权的终端行为。
 

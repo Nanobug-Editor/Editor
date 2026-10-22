@@ -470,6 +470,9 @@ plugins.permission_process:
 plugins.permission_service:
   en: "Run fixed local services declared by this package as the current user with file and network access"
   zh-CN: "以当前用户权限启动此包声明的固定本机服务，可访问本机文件与网络"
+plugins.permission_native_modules:
+  en: "Share verified analysis modules with managed native workers; loaded modules run with the worker's file and network access outside the WASM sandbox"
+  zh-CN: "与受管分析进程共享经过校验的适配模块；模块使用该进程的文件与网络权限，不受 WASM 沙箱隔离"
 plugins.permission_dependencies_prepare:
   en: "Download, verify and unpack declared service dependencies into editor-private directories without running installers or changing global PATH"
   zh-CN: "下载、校验并解包声明的服务依赖到编辑器私有目录，不运行安装脚本、不修改全局 PATH"
@@ -710,12 +713,21 @@ outline.show:
 editor.format_document:
   en: "Format document"
   zh-CN: "格式化文档"
+editor.format_selection:
+  en: "Format selection"
+  zh-CN: "格式化选区"
+editor.format_selection_empty:
+  en: "Select text to format"
+  zh-CN: "请先选择要格式化的文本"
 editor.rename_symbol:
   en: "Rename symbol"
   zh-CN: "重命名符号"
 editor.rename_confirm:
   en: "Rename"
   zh-CN: "重命名"
+editor.rename_opened_targets:
+  en: "Opened related files for rename preview; recomputing against their current text"
+  zh-CN: "已打开关联文件以预览重命名，正在按当前文本重新计算"
 editor.rename_cancel:
   en: "Cancel"
   zh-CN: "取消"

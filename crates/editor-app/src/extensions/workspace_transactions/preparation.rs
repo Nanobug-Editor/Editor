@@ -104,6 +104,13 @@ impl EditorApp {
                                 title: record.title.clone(),
                                 source: record.source.clone(),
                                 details,
+                                documents: record
+                                    .origin
+                                    .iter()
+                                    .chain(&record.conditions)
+                                    .chain(record.native.iter().map(|target| &target.current))
+                                    .cloned()
+                                    .collect(),
                                 focus,
                                 previous,
                                 answer: Some(answer),
@@ -146,10 +153,14 @@ impl EditorApp {
                                     );
                                 })
                                 .detach();
-                                if response.await.unwrap_or(false) {
-                                    execution::apply(&app, cx, &request, &mut record).await
-                                } else {
-                                    Err(failure(ErrorCode::Cancelled, "Preview was dismissed"))
+                                match response.await.unwrap_or(Ok(false)) {
+                                    Ok(true) => {
+                                        execution::apply(&app, cx, &request, &mut record).await
+                                    }
+                                    Ok(false) => {
+                                        Err(failure(ErrorCode::Cancelled, "Preview was dismissed"))
+                                    }
+                                    Err(error) => Err(error),
                                 }
                             }
                             Err(error) => Err(error),
@@ -181,6 +192,14 @@ impl EditorApp {
             })
             .transpose()?;
         let mut record = Record {
+            conditions: plan
+                .conditions
+                .iter()
+                .map(|document| {
+                    self.plugin_document_target(document)
+                        .map(|index| native_version(&self.tabs[index]))
+                })
+                .collect::<Result<_, _>>()?,
             batch,
             title: plan.title,
             source: source.into(),
@@ -458,8 +477,11 @@ impl EditorApp {
                 record.batch.receipt().state,
                 BatchState::Preparing | BatchState::Preview | BatchState::Applying
             )
-            && let Some(origin) = &record.origin
-            && !self.tabs.iter().any(|tab| native_version(tab) == *origin)
+            && record
+                .origin
+                .iter()
+                .chain(&record.conditions)
+                .any(|origin| !self.tabs.iter().any(|tab| native_version(tab) == *origin))
         {
             return Err(failure(
                 ErrorCode::StaleRevision,

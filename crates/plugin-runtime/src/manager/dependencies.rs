@@ -125,6 +125,11 @@ pub(super) fn resolve_dependency_plans(
         }
     }
     for provider in &manifest.language_servers {
+        // A borrowed transport has no startup/dependency plan in this package. Its declared async
+        // preparation may consume another provider only after an actual document demand.
+        if provider.delegate.is_some() {
+            continue;
+        }
         let candidates = std::iter::once(&provider.service)
             .chain(&provider.alternatives)
             .map(|id| (id.clone(), manifest.services[id].clone()))
@@ -135,6 +140,7 @@ pub(super) fn resolve_dependency_plans(
                 .prepare_language(plugin_protocol::language::Context {
                     provider: provider.id.clone(),
                     workspace: environment.workspace.clone(),
+                    document: None,
                     preparing_dependencies: true,
                     package_root: String::new(),
                     data_root: String::new(),
@@ -174,6 +180,11 @@ pub(super) fn resolve_dependency_plans(
             "Undeclared dependency service"
         );
         let service = &manifest.services[service_id];
+        // Project-scoped discovery selects an actual compatibility backend later. Merely installing
+        // its provider must not download the default plan (or every declared alternative).
+        if service.on_demand {
+            continue;
+        }
         // Dynamic native discovery has the same precedence at install time as at activation.
         if let Some(program) = &proposal.program {
             anyhow::ensure!(

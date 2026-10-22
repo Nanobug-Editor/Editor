@@ -1,6 +1,6 @@
 //! Real SDK guests combine private data, native views, service calls and an owned LSP across cutover.
 use plugin_runtime::{
-    InstallControl, Manager, Package,
+    DemandReason, InstallControl, LanguageRole, Manager, Package,
     plugin_protocol::{Environment, ui::Kind},
 };
 use serde_json::{Value, json};
@@ -10,6 +10,8 @@ use std::{
     sync::Arc,
 };
 
+#[path = "support/demand.rs"]
+mod demand_support;
 #[path = "support/service_packages.rs"]
 mod service_packages;
 
@@ -54,8 +56,22 @@ fn text(manager: &Manager, id: &str) -> String {
 }
 
 fn command(manager: &mut Manager, id: &str, name: &str, args: Value) -> String {
+    // Commands consume their original cold publication; installation and enablement do no business work.
+    demand_support::ready(manager, id, DemandReason::Command(name.into()));
     manager.invoke_command(id, name, args).unwrap();
     text(manager, id)
+}
+
+/// Native resources are independently demanded after initial activation and rollback replaces them.
+fn analysis(manager: &mut Manager) {
+    demand_support::ready(
+        manager,
+        "mixed-provider",
+        DemandReason::Language {
+            provider: "mixed-provider/analysis".into(),
+            role: LanguageRole::Lsp,
+        },
+    );
 }
 
 /// A real stdio handshake proves the approved lease launches a functioning transport, not just a handle.
@@ -123,6 +139,13 @@ fn mixed_update_rollback_replaces_all_owners_and_preserves_latest_data() {
         ),
         "Service opened"
     );
+    command(
+        &mut manager,
+        "mixed-provider",
+        "scope-write",
+        json!({"text":"before"}),
+    );
+    analysis(&mut manager);
     let old_identity = manager.instance_id("mixed-provider").unwrap().to_owned();
     let old_lease = manager.language_services()["mixed-provider/analysis"]
         .as_ref()
@@ -130,12 +153,6 @@ fn mixed_update_rollback_replaces_all_owners_and_preserves_latest_data() {
         .clone();
     let (_old_process, mut input, mut output) = old_lease.spawn().unwrap();
     handshake(&mut input, &mut output);
-    command(
-        &mut manager,
-        "mixed-provider",
-        "scope-write",
-        json!({"text":"before"}),
-    );
 
     let candidate = mixed_package(&executable, &log, 2, "activate-fail");
     let control = InstallControl::default();
@@ -186,6 +203,7 @@ fn mixed_update_rollback_replaces_all_owners_and_preserves_latest_data() {
         !old_lease.is_active(),
         "rollback must retire the pre-cutover native lease"
     );
+    analysis(&mut manager);
     let restored = manager.language_services()["mixed-provider/analysis"]
         .as_ref()
         .unwrap()

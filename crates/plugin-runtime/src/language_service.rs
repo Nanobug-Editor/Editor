@@ -1,6 +1,8 @@
 //! Host protocols borrow approved native services; retiring the package revokes every borrowed process.
 use crate::process::{Spawned, spawn_piped};
 mod completion;
+mod modules;
+mod consumers;
 pub(crate) use completion::CompletionHook;
 use plugin_protocol::language::Provider;
 use std::{
@@ -45,6 +47,13 @@ pub struct LanguageService {
     pub(crate) dependencies: Vec<Arc<std::fs::File>>,
     /// Optional stateless worker uses the same immutable provider lease as the native service.
     pub(crate) completion: Option<CompletionHook>,
+    /// Executable adapter bytes stay pinned through process termination, even after a source revokes.
+    modules: Mutex<Vec<Arc<crate::NativeModuleLease>>>,
+    /// Manager-signed current document intents authorize native control without lending another project.
+    document_contexts:
+        Mutex<std::collections::BTreeSet<plugin_protocol::language::DocumentContext>>,
+    /// Original consumers retain native context references independently of shared adapter code.
+    consumers: Mutex<consumers::Consumers>,
 }
 #[derive(Default)]
 struct Lease {
@@ -183,6 +192,9 @@ impl LanguageService {
             runtime_logs,
             dependencies: vec![],
             completion: None,
+            modules: Default::default(),
+            document_contexts: Default::default(),
+            consumers: Default::default(),
         }
     }
     /// Return a negotiated public capability version for this plan, or `None` when unavailable.
@@ -205,6 +217,7 @@ impl LanguageService {
         &self,
         document: plugin_protocol::api::DocumentVersion,
         fix: plugin_protocol::diagnostics::Fix,
+        guard: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> Result<plugin_protocol::api::Value, plugin_protocol::api::Failure> {
         let state = self.state.lock().unwrap();
         if state.retired || !self.authority.is_live() {
@@ -218,6 +231,7 @@ impl LanguageService {
             plan,
             &self.policy.capabilities,
             &self.policy.permissions,
+            guard,
         )
     }
     /// Transfer calls through the public Manager and its existing serialized native dispatcher.
@@ -265,7 +279,8 @@ impl LanguageService {
     ) -> anyhow::Result<(ServiceProcess, ChildStdin, ChildStdout)> {
         let mut state = self.state.lock().unwrap();
         anyhow::ensure!(
-            !state.retired && !retired.load(std::sync::atomic::Ordering::Acquire),
+            !state.retired && !retired.load(std::sync::atomic::Ordering::Acquire)
+                && self.authority.is_live() && Self::modules_live(&self.modules.lock().unwrap()),
             "LSP provider has been retired"
         );
         state
@@ -310,9 +325,6 @@ impl LanguageService {
             stderr: stderr.clone(),
         });
         Ok((ServiceProcess { child, stderr }, input, output))
-    }
-    pub fn is_active(&self) -> bool {
-        !self.state.lock().unwrap().retired && self.authority.is_live()
     }
     /// Consent and lifecycle diagnostics include host-owned transports as well as guest-created processes.
     pub fn process_count(&self) -> usize {

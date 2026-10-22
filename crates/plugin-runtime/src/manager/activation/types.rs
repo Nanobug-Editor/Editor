@@ -21,6 +21,11 @@ impl Availability {
     pub fn scope(&self) -> &str {
         &self.scope
     }
+    /// Current host configuration intent, for document discovery and native result seals.
+    /// Guests cannot manufacture an Availability; zero in a control request asks the host to adopt it.
+    pub fn configuration_generation(&self) -> u64 {
+        self.configuration
+    }
 }
 
 /// A selected language role materializes only its explicitly named provider.
@@ -50,8 +55,21 @@ pub enum DemandReason {
         provider: String,
         role: LanguageRole,
     },
+    /// language.lsp 1.5: discover and prepare only the selected native role for one source context.
+    /// The host generation seals configuration intent; this never supplies text/revision authority.
+    LanguageDocument {
+        provider: String,
+        role: LanguageRole,
+        document: plugin_protocol::language::DocumentContext,
+    },
     /// An explicitly declared continuous purpose, still subject to trust and resource budgets.
     Background,
+}
+impl DemandReason {
+    /// Both legacy workspace roles and document-bound native roles share the same admission lifecycle.
+    pub(super) fn is_language(&self) -> bool {
+        matches!(self, Self::Language { .. } | Self::LanguageDocument { .. })
+    }
 }
 
 /// Final admission binds first birth once; retaining this receipt cannot resurrect a retired owner.
