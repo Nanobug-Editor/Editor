@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
+
 - [Vue/TypeScript 旧工单功能核对与关闭](verification/vue-typescript-legacy-closure-2026-10-20.md)：用户补充授权后，64 项旧要求逐项核对完成；#108–#118 已读回 completed，原正文和失败历史保留，父 #107 继续开放。
 
 - [Vue/TypeScript 剩余场景交付](verification/vue-typescript-remaining-delivery-2026-10-20.md)：新 #122–#126 已验收、三仓推送并读回 completed，连同 #121 六场景 6/6 完成；最终 .15/.12 双包、普通桌面和门禁有据。旧工单与父议题不变，固定支持范围和 AccessKit 退出限制保留，未创建 Release。
