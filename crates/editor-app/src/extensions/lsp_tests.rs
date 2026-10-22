@@ -102,12 +102,35 @@ pub(crate) fn publish(
     // First publish static declarations; native opened documents then produce their actual demand.
     // Two transport/publication turns expose its first role birth without activating unused plans.
     for _ in 0..2 {
-        cx.update(|window, cx| {
-            super::package_ui_test_support::pump(app, manager, cx);
-            app.update(cx, |app, cx| app.sync_runtime_contributions(window, cx));
-        });
-        cx.run_until_parked();
+        publish_with(app, manager, cx, |_, _, _, _| ());
     }
+}
+
+/// Drive `manager`'s recorded work, then run `before_frame` on `app` before native reconciliation.
+/// The callback receives the real manager, window and entity context; its result is returned after
+/// deferred work drains. Readiness tests can bind an original lazy adapter to an admitted plan at
+/// this boundary without publishing a plan and accidentally starting another adapter in between.
+pub(crate) fn publish_with<R>(
+    app: &Entity<EditorApp>,
+    manager: &mut plugin_runtime::Manager,
+    cx: &mut gpui_kit::VisualTestContext,
+    before_frame: impl FnOnce(
+        &mut EditorApp,
+        &mut plugin_runtime::Manager,
+        &mut Window,
+        &mut Context<EditorApp>,
+    ) -> R,
+) -> R {
+    let result = cx.update(|window, cx| {
+        super::package_ui_test_support::pump(app, manager, cx);
+        app.update(cx, |app, cx| {
+            let result = before_frame(app, manager, window, cx);
+            app.sync_runtime_contributions(window, cx);
+            result
+        })
+    });
+    cx.run_until_parked();
+    result
 }
 
 /// Standalone transport checks consume precisely the declared service under test.

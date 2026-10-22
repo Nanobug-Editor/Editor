@@ -9,6 +9,8 @@ pub(super) mod configurations;
 pub(crate) mod demands;
 mod form_delivery;
 mod installation_progress;
+#[cfg(all(test, windows))]
+mod java_package_tests;
 mod marketplace;
 #[cfg(all(test, windows))]
 mod native_acceptance;
@@ -21,6 +23,8 @@ mod native_selection_formatting_tests;
 #[cfg(all(test, windows))]
 mod native_vue_recovery_tests;
 mod preparation;
+mod queued;
+pub(super) use queued::WorkSender;
 #[cfg(test)]
 // The cross-feature native regression retains private actor seams without widening production APIs.
 #[path = "../tests/plugin_preview_activation.rs"]
@@ -200,6 +204,8 @@ pub enum Work {
     /// The request identity is the editor's own, so the answer is joined to what it answers; the
     /// method and arguments are the debug contract's, so nothing here decides what a call means.
     DebugCall {
+        /// Frozen configuration/target sources survive actor admission through native retirement.
+        origins: Vec<plugin_runtime::TargetOrigin>,
         request: u64,
         /// Stable configuration identity is host metadata, never an extra provider parameter.
         configuration: Option<String>,
@@ -234,7 +240,8 @@ pub enum Work {
         value: Option<serde_json::Value>,
     },
     Inspect(PathBuf),
-    Install(Package),
+    /// The second value is the first installation's global default; updates preserve existing choices.
+    Install(Package, bool),
     Enable(String),
     Restart(String),
     Disable(String),
@@ -284,7 +291,7 @@ pub enum Work {
         reason: plugin_runtime::DemandReason,
         guard: Option<super::command_intents::CommandGuard>,
         cancellation: plugin_runtime::RequestCancellation,
-        /// Exact reservation evidence distinguishes a published preparation Err from other failures.
+        /// Only the original reservation's published preparation error may authorize native retry.
         published_failure: Arc<std::sync::atomic::AtomicBool>,
         reply: futures::channel::oneshot::Sender<
             Result<plugin_runtime::ActivationReceipt, api::Failure>,
@@ -295,6 +302,8 @@ pub enum Work {
     /// The request already carries literal arguments and an absolute directory; the worker only asks
     /// the runtime, which selects a compatible provider by contract rather than by plugin identity.
     StartRun {
+        /// Original providers retain ownership after preparation has returned its executable.
+        origins: Vec<plugin_runtime::TargetOrigin>,
         request: plugin_runtime::RunRequest,
         config: String,
         /// Identity of the launch that requested this start, so the answer joins its own request.
@@ -339,7 +348,7 @@ impl Work {
             | Self::Demand { plugin, .. }
             | Self::FormChange { plugin, .. }
             | Self::ImageInput { plugin, .. } => Some(plugin),
-            Self::Install(package) => Some(&package.manifest.id),
+            Self::Install(package, _) => Some(&package.manifest.id),
             // A status query observes a program another owner already has, so it claims no plugin.
             Self::PollRun { .. } => None,
             Self::Enable(id)
@@ -364,7 +373,7 @@ impl Work {
                 action: LifecycleAction::Inspect,
                 delete_data: None,
             }),
-            Self::Install(package) => Some(OperationProgress {
+            Self::Install(package, _) => Some(OperationProgress {
                 id: package.manifest.id.clone(),
                 action: LifecycleAction::Install,
                 delete_data: None,
@@ -432,6 +441,8 @@ pub(super) struct Published {
     pub ready: bool,
     /// Kept independently of live instances and manager windows for this editor process only.
     pub logs: plugin_runtime::logs::RuntimeLogs,
+    /// Safe metadata observations share the real runtime owner; discovery never activates a guest.
+    pub observations: plugin_runtime::RuntimeObservations,
     pub diagnostics: BTreeMap<String, Vec<plugin_runtime::faults::Diagnostic>>,
     pub plugin_service_choices: Vec<service::Choice>,
     pub installation: Option<InstallationProgress>,
@@ -506,7 +517,7 @@ pub(super) struct Published {
     /// Actual provider observations are separate from one-shot control request completions.
     pub debug_observations: Vec<plugin_runtime::DebugSession>,
     /// Bounded one-shot target receipts are joined to the original plan step, never current selection.
-    pub target_preparations: Vec<(String, usize, u64, Result<String, String>)>,
+    pub target_preparations: Vec<(String, usize, u64, Result<targets::PreparedTarget, String>)>,
     /// One latest snapshot per request bounds UI traffic while keeping concurrent output separate.
     pub target_snapshots: BTreeMap<u64, (String, usize, plugin_runtime::PreparationSnapshot)>,
     /// Every discovery publication carries workspace and nonce for late-result rejection.
@@ -521,6 +532,8 @@ pub(super) struct Published {
     pub images: super::images::SceneImages,
     /// Native trees borrow current runtime resources; their pages remain bounded and owner checked.
     pub trees: Vec<Arc<plugin_runtime::TreeResource>>,
+    /// Checked workspace filename and title resources retain their exact runtime incarnation.
+    pub presentations: Vec<Arc<plugin_runtime::WorkspacePresentationResource>>,
     pub pending: Option<Package>,
     pub status: Option<OperationStatus>,
     pub progress: Option<OperationProgress>,
@@ -568,6 +581,7 @@ impl Published {
 /// One answer to one debug call, or the reason there is none.
 #[derive(Clone, Debug)]
 pub enum DebugAnswerMessage {
+    Inspection(crate::run::inspection::Answer),
     /// Pin an early stop to its resource root before the adapter returns a creation receipt.
     Connecting(String),
     Frames(Vec<plugin_runtime::DebugFrame>),
@@ -586,6 +600,29 @@ pub(super) fn debug_answer(
     result: Result<serde_json::Value, String>,
 ) -> DebugAnswerMessage {
     let decoded = result.and_then(|value| match method {
+        "threads" => serde_json::from_value(value)
+            .map(crate::run::inspection::Answer::Threads)
+            .map(DebugAnswerMessage::Inspection)
+            .map_err(|error| error.to_string()),
+        "variable_children" => serde_json::from_value(value)
+            .map(crate::run::inspection::Answer::Variables)
+            .map(DebugAnswerMessage::Inspection)
+            .map_err(|error| error.to_string()),
+        "thread_frames" => plugin_runtime::frames_from_value(&value)
+            .map(|frames| {
+                DebugAnswerMessage::Inspection(crate::run::inspection::Answer::Frames(
+                    frames
+                        .into_iter()
+                        .map(|frame| editor_core::StackFrame {
+                            id: frame.id,
+                            name: frame.name,
+                            source: frame.source,
+                            line: frame.line,
+                        })
+                        .collect(),
+                ))
+            })
+            .map_err(|error| error.message),
         "frames" => plugin_runtime::frames_from_value(&value)
             .map(DebugAnswerMessage::Frames)
             .map_err(|error| error.message),
@@ -646,7 +683,7 @@ pub struct PresentedTerminalMessage {
 }
 /// The channel disconnect also shuts down when the last UI owner is released.
 pub(super) struct Worker {
-    pub tx: mpsc::Sender<Work>,
+    pub tx: queued::WorkSender,
     pub state: Arc<Mutex<Published>>,
     /// UI publication is masked immediately, including results queued before revocation.
     pub trusted: Arc<std::sync::atomic::AtomicBool>,
@@ -766,10 +803,10 @@ impl Worker {
             return false;
         }
         let installation = match &work {
-            Work::Install(package) => Some(package),
+            Work::Install(package, global_enabled) => Some((package, *global_enabled)),
             _ => None,
         };
-        if let Some(package) = installation {
+        if let Some((package, global_enabled)) = installation {
             state.installation = Some(InstallationProgress {
                 id: package.manifest.id.clone(),
                 message: t!("plugins.install_progress.queued").to_string(),
@@ -786,6 +823,7 @@ impl Worker {
                         }
                     }
                 })
+                .with_default_global_enabled(global_enabled)
                 .with_installer_prompts()
                 // This local-package path is queued only after native consent has shown the replacement claims.
                 .with_replacements(package.manifest.replaces.iter().map(|rule| rule.id.clone())),
@@ -808,7 +846,7 @@ impl Worker {
     pub fn start(root: PathBuf, environment: Environment, trusted: bool) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
-            tx,
+            tx: queued::WorkSender::recording(tx),
             state: Arc::new(Mutex::new(Self::initial_state(
                 &root,
                 &environment,

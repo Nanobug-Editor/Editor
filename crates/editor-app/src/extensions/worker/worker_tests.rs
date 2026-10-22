@@ -41,7 +41,7 @@ fn queued_installation_progress_follows_the_selected_ui_locale() {
         rust_i18n::set_locale(locale);
         let directory = tempfile::tempdir().unwrap();
         let worker = Worker::start(directory.path().into(), Environment::default(), true);
-        assert!(worker.queue_lifecycle(Work::Install(package.clone())));
+        assert!(worker.queue_lifecycle(Work::Install(package.clone(), true)));
         let mut progress = worker
             .state
             .lock()
@@ -397,13 +397,17 @@ fn operation_errors_retain_plugin_ownership_through_worker_publication() {
     wait_for(&worker, |state| state.status.is_some());
     let status = worker.state.lock().unwrap().status.take().unwrap();
     assert_eq!(status.plugin.as_deref(), Some("missing-plugin"));
-    // Ownership is a typed stale-intent failure; its explanation follows the active UI catalog.
-    let explanation = rust_i18n::t!("plugins.command_owner_changed").to_string();
-    assert!(status.message.starts_with("StaleRevision: "));
-    assert!(status.message.contains(explanation.as_str()));
+    let expected = api::Failure::new(
+        api::ErrorCode::StaleRevision,
+        rust_i18n::t!("plugins.command_owner_changed").to_string(),
+    )
+    .to_string();
+    assert_eq!(status.message, expected);
     let logs = worker.state.lock().unwrap().logs.clone();
     assert!(logs.records("missing-plugin").iter().any(|record| {
-        record.level == plugin_runtime::logs::LogLevel::Error && record.source == "host.operation"
+        record.level == plugin_runtime::logs::LogLevel::Error
+            && record.source == "host.operation"
+            && record.message == expected
     }));
     worker.queue_lifecycle(Work::Inspect(directory.path().join("missing.zip")));
     wait_for(&worker, |state| state.status.is_some());
@@ -600,7 +604,7 @@ fn run_preparation(restrict: bool) {
         serde_json::to_vec(&manifest).unwrap(),
     );
     let update = crate::extensions::language_tests::packages::repack(files).unwrap();
-    assert!(worker.queue_lifecycle(Work::Install(update)));
+    assert!(worker.queue_lifecycle(Work::Install(update, true)));
     waiting.recv_timeout(Duration::from_secs(60)).unwrap();
     worker
         .tx

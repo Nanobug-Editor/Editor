@@ -1,12 +1,16 @@
 //! Bounded document comparison over the existing native editor sessions.
 
-use crate::ui::controls::aligned_editor::{AlignmentGroup, AlignmentPane, AlignmentStatus};
 use crate::*;
+use editor_ui::aligned_editor::{AlignmentGroup, AlignmentPane, AlignmentStatus};
+use editor_ui::row_backgrounds::RowBackgroundCollection;
 use gpui_base::TestSupportExt as _;
 use gpui_base::input::{RangeDecoration, RangeDecorationCollection, RangeDecorationStyle};
 use gpui_kit::Hsla;
 use plugin_runtime::plugin_protocol::api;
+mod folding;
 mod presentation;
+#[cfg(test)]
+mod render_tests;
 mod sessions;
 mod third;
 pub(crate) use sessions::ComparisonView;
@@ -36,8 +40,8 @@ pub(crate) struct DocumentComparison {
     left_readonly: bool,
     left_title: String,
     right_title: String,
-    left_marks: RangeDecorationCollection,
-    right_marks: RangeDecorationCollection,
+    left_marks: RowBackgroundCollection,
+    right_marks: RowBackgroundCollection,
     /// An optional readonly third source and its independently owned result/parent decorations.
     third: Option<third::ThirdComparison>,
     inline_marks: [RangeDecorationCollection; 2],
@@ -48,11 +52,10 @@ pub(crate) struct DocumentComparison {
     persistent: Option<String>,
     /// Only immutable derived unified text is cached; it can never edit either source.
     unified_editor: Option<Entity<EditorState>>,
-    unified_marks: Option<RangeDecorationCollection>,
+    unified_marks: Option<RowBackgroundCollection>,
     unified_hunks: Vec<std::ops::Range<usize>>,
     /// Alignment shares immutable row geometry while both EditorStates retain their sessions.
     alignment: AlignmentGroup,
-    synchronized: Cell<bool>,
     /// Independent-mode navigation uses measured native viewports and never changes selection.
     navigation: Rc<std::cell::RefCell<[Option<crate::editor::viewport::Locator>; 3]>>,
 }
@@ -68,40 +71,32 @@ fn comparison_colors(cx: &App) -> [Hsla; 3] {
 
 /// Refreshes source revisions without replacing native entities or their selection/history.
 fn configure_alignment(comparison: &mut DocumentComparison, window: &Window, cx: &mut App) {
-    let Some(router) = crate::ui::controls::aligned_pointer::for_window(window, cx) else {
+    let Some(router) = editor_ui::aligned_pointer::for_window(window, cx) else {
         return;
     };
     let mut panes = vec![
-        AlignmentPane {
-            editor: comparison.left_editor.clone(),
-            revision: comparison.left.revision,
-            label: comparison.left_title.clone(),
-            input_factory: None,
-            // PaneView supplies local appearance and the sole physical readonly a11y node.
-            native_authority_factory: None,
-        },
-        AlignmentPane {
-            editor: comparison.right_editor.clone(),
-            revision: comparison.right.revision,
-            label: comparison.right_title.clone(),
-            input_factory: None,
-            native_authority_factory: None,
-        },
+        AlignmentPane::new(
+            comparison.left_editor.clone(),
+            comparison.left.revision,
+            comparison.left_title.clone(),
+        ),
+        AlignmentPane::new(
+            comparison.right_editor.clone(),
+            comparison.right.revision,
+            comparison.right_title.clone(),
+        ),
     ];
     if let Some(third) = &comparison.third {
-        panes.push(AlignmentPane {
-            editor: third.editor.clone(),
-            revision: third.version.revision,
-            label: third.title.clone(),
-            input_factory: None,
-            native_authority_factory: None,
-        });
+        panes.push(AlignmentPane::new(
+            third.editor.clone(),
+            third.version.revision,
+            third.title.clone(),
+        ));
     }
     let _ = comparison.alignment.configure(panes, &router, cx);
     comparison.alignment.set_inner_gutters(true, cx);
-    comparison
-        .alignment
-        .set_enabled(comparison.synchronized.get(), cx);
+    // Comparison panes always share their viewport; only native overlays may pause alignment.
+    comparison.alignment.set_enabled(true, cx);
 }
 
 /// Build only this comparison's owner ranges; unrelated diagnostics and marks remain untouched.
@@ -137,7 +132,7 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<api::EditorValue, api::Failure> {
-        self.install_document_comparison(
+        let value = self.install_document_comparison(
             left,
             right,
             None,
@@ -145,7 +140,9 @@ impl EditorApp {
             Some(request),
             window,
             cx,
-        )
+        )?;
+        self.reveal_comparison_hunk(0, cx);
+        Ok(value)
     }
 
     /// Native tab activation can reuse already admitted ownership without forging another request.
@@ -274,10 +271,10 @@ impl EditorApp {
         let colors = comparison_colors(cx);
         let left_marks = left_editor.update(cx, |editor, cx| {
             editor.set_readonly(true, cx);
-            editor.create_range_decorations_collection(comparison_marks(&hunks, colors, true), cx)
+            RowBackgroundCollection::new(&cx.entity(), comparison_marks(&hunks, colors, true), cx)
         });
-        let right_marks = right_editor.update(cx, |editor, cx| {
-            editor.create_range_decorations_collection(comparison_marks(&hunks, colors, false), cx)
+        let right_marks = right_editor.update(cx, |_, cx| {
+            RowBackgroundCollection::new(&cx.entity(), comparison_marks(&hunks, colors, false), cx)
         });
         let inline_marks =
             presentation::create_inline_marks(&left_editor, &right_editor, &hunks, cx);
@@ -302,7 +299,6 @@ impl EditorApp {
             unified_marks: None,
             unified_hunks: Vec::new(),
             alignment: AlignmentGroup::new(cx),
-            synchronized: Cell::new(true),
             navigation: Rc::new(std::cell::RefCell::new([None, None, None])),
         };
         configure_alignment(&mut comparison, window, cx);
@@ -467,9 +463,7 @@ impl EditorApp {
         if comparison.third.is_some() {
             return self.render_three_document_comparison(window, cx);
         }
-        comparison
-            .alignment
-            .set_enabled(comparison.synchronized.get(), cx);
+        comparison.alignment.set_enabled(true, cx);
         comparison.alignment.refresh_native_overlays(cx);
         if self.active_comparison.as_ref().is_some_and(|id| {
             self.comparison_views
@@ -477,7 +471,7 @@ impl EditorApp {
                 .any(|view| &view.id == id && view.unified)
         }) {
             if let Some(editor) = &comparison.unified_editor {
-                let body = crate::ui::controls::readonly_editor(
+                let body = editor_ui::readonly_editor(
                     "unified-diff",
                     t!("editor.diff_unified").to_string(),
                     editor,
@@ -508,7 +502,7 @@ impl EditorApp {
         let right_label = format!("{} · {}", t!("editor.diff_right"), right_title);
         let alignment = self.comparison_alignment()?;
         let left_input = alignment.pane(0).unwrap_or_else(|| {
-            crate::ui::controls::readonly_editor(
+            editor_ui::readonly_editor(
                 "document-diff-left-input",
                 left_label.clone(),
                 &left,
@@ -579,11 +573,11 @@ impl EditorApp {
                                 .w_0()
                                 .min_h_0()
                                 .overflow_hidden()
-                                .child(div().px_2().child(format!(
-                                    "{} · {}",
-                                    t!("editor.diff_left"),
-                                    left_title
-                                )))
+                                .child(editor_ui::comparison_source_header(
+                                    0,
+                                    format!("{} · {}", t!("editor.diff_left"), left_title),
+                                    cx,
+                                ))
                                 .child(div().flex_1().min_h_0().child(left_input)),
                         )
                         .child(
@@ -600,11 +594,11 @@ impl EditorApp {
                                 .w_0()
                                 .min_h_0()
                                 .overflow_hidden()
-                                .child(div().px_2().child(format!(
-                                    "{} · {}",
-                                    t!("editor.diff_right"),
-                                    right_title
-                                )))
+                                .child(editor_ui::comparison_source_header(
+                                    1,
+                                    format!("{} · {}", t!("editor.diff_right"), right_title),
+                                    cx,
+                                ))
                                 .child(right),
                         ),
                 )

@@ -225,6 +225,11 @@ impl State {
                     unreachable!()
                 };
                 let mut completion = crate::request_state::Completion::new(timeout_ms);
+                completion.observe(self.host_resources.observations.begin(
+                    self.observation_identity(),
+                    crate::observability::Stage::Request,
+                    self.observed_parent,
+                ));
                 // The result belongs to the original caller chain. Callee retirement may produce
                 // an explicit failure, while its logical/exact seals separately revoke effects.
                 completion.lifetimes = source.lifetimes.clone();
@@ -339,7 +344,7 @@ impl State {
             ));
         }
         let permission = match operation {
-            // Project metadata belongs to this provider; no private preference namespace transfers.
+            // Context metadata keeps this provider's authority; no private namespace transfers.
             api::Operation::LanguageContexts { .. } => "workspace.read",
             // A genuine native command may persist its own scoped intent under its declared
             // storage grant. Delegated calls still cannot read or write provider preferences.
@@ -371,9 +376,13 @@ impl State {
             } if owned(handle) => return Ok(()),
             api::Operation::Tree { operation } => {
                 let handle = match operation {
-                    plugin_protocol::tree::Operation::Create => None,
+                    plugin_protocol::tree::Operation::Create
+                    | plugin_protocol::tree::Operation::CreateWithOptions { .. } => None,
                     plugin_protocol::tree::Operation::Refresh { tree }
-                    | plugin_protocol::tree::Operation::Update { tree, .. } => Some(tree),
+                    | plugin_protocol::tree::Operation::Initialize { tree, .. }
+                    | plugin_protocol::tree::Operation::SetExpanded { tree, .. }
+                    | plugin_protocol::tree::Operation::Update { tree, .. }
+                    | plugin_protocol::tree::Operation::ApplyPatch { tree, .. } => Some(tree),
                     plugin_protocol::tree::Operation::Reply { request, .. } => Some(&request.tree),
                 };
                 if handle.is_some_and(|handle| !owned(handle))
@@ -391,6 +400,34 @@ impl State {
             api::Operation::Commands {
                 operation: plugin_protocol::commands::Operation::Reply { .. },
             } => return Ok(()),
+            api::Operation::Presentation { operation } => {
+                let handle = match operation {
+                    plugin_protocol::presentation::Operation::Create => None,
+                    plugin_protocol::presentation::Operation::Files { resource, .. }
+                    | plugin_protocol::presentation::Operation::Entries { resource, .. } => {
+                        Some(resource)
+                    }
+                };
+                if handle.is_some_and(|handle| !owned(handle))
+                    && !context.direct_host_command(&self.plugin_services.principal.instance)
+                {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Service source cannot borrow private workspace presentation",
+                    ));
+                }
+                if matches!(
+                    operation,
+                    plugin_protocol::presentation::Operation::Files { .. }
+                ) && !context.permissions.contains("workspace.read")
+                {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Filename decorations require delegated workspace.read",
+                    ));
+                }
+                "ui.panels"
+            }
             api::Operation::Commands { .. } => "commands.call",
             api::Operation::ReadAsset { .. }
             | api::Operation::Service { .. }
@@ -403,7 +440,8 @@ impl State {
                 "workspace.read"
             }
             api::Operation::Editor { operation, .. } => match operation {
-                api::EditorOperation::LanguageRequest { .. } => "editor.read",
+                api::EditorOperation::LanguageRequest { .. }
+                | api::EditorOperation::RefreshLanguageContext { .. } => "editor.read",
                 // Workspace admission checks every root direction and every delegated grant together.
                 api::EditorOperation::Workspace { .. } => return Ok(()),
                 api::EditorOperation::OpenDocument {
@@ -462,8 +500,10 @@ impl State {
             },
             api::Operation::Process {
                 operation:
-                    process::Operation::Execute { .. }
+                    process::Operation::NativeContext { .. }
+                    | process::Operation::Execute { .. }
                     | process::Operation::StartService { .. }
+                    | process::Operation::InspectTool { .. }
                     | process::Operation::Resolve { .. },
             } => "process.exec",
             api::Operation::Process {
@@ -660,20 +700,24 @@ impl Instance {
     /// Resolve preparation against this exact incarnation, including a parked older package version.
     /// The service caller never supplies a plan, executable or package path.
     pub(crate) fn native_preparation(
-        &self,
+        &mut self,
         call: &crate::plugin_services::Call,
     ) -> Result<Option<(std::path::PathBuf, Vec<plugin_protocol::dependencies::Plan>)>, api::Failure>
     {
-        let state = self.store.data();
-        let Some(ids) = state
+        let Some(ids) = self
+            .store
+            .data()
             .plugin_services
             .declarations
             .provides
             .get(&call.reference.contract)
             .and_then(|contract| contract.preparation.get(&call.method))
+            .cloned()
         else {
             return Ok(None);
         };
+        let ids = self.select_service_preparation(call, ids)?;
+        let state = self.store.data();
         let mut plans = Vec::new();
         for id in ids {
             if !state.permissions.contains("dependencies.prepare")
@@ -684,7 +728,7 @@ impl Instance {
                     "Native preparation was not authorized",
                 ));
             }
-            if let Some(plan) = &state.services[id].installation {
+            if let Some(plan) = &state.services[&id].installation {
                 plans.push(plan.clone());
             }
         }

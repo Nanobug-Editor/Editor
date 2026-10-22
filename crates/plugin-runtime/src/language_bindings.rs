@@ -18,6 +18,8 @@ struct Binding {
     document: DocumentContext,
     service: Arc<LanguageService>,
     authority: EditorAuthority,
+    /// Source replacement revokes only the unconsumed handoff, not the shared native service.
+    selection_guard: Option<Arc<std::sync::atomic::AtomicBool>>,
     deadline: Instant,
 }
 
@@ -71,6 +73,7 @@ impl LanguageBindings {
                 document: document.clone(),
                 service,
                 authority,
+                selection_guard: metadata.selection_guard.clone(),
                 deadline: Instant::now() + Duration::from_secs(30),
             },
         );
@@ -130,6 +133,12 @@ impl LanguageBindings {
 }
 impl Binding {
     fn live(&self) -> bool {
-        Instant::now() < self.deadline && self.authority.is_live() && self.service.is_active()
+        Instant::now() < self.deadline
+            && self.authority.is_live()
+            && self.service.is_active()
+            && self
+                .selection_guard
+                .as_ref()
+                .is_none_or(|guard| guard.load(std::sync::atomic::Ordering::Acquire))
     }
 }

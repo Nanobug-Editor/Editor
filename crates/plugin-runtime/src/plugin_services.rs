@@ -71,7 +71,7 @@ pub(crate) enum InvocationOrigin {
     HostCommand {
         target: String,
     },
-    /// Issued only for the selected provider's explicit interactive preparation profile.
+    /// Only a native direct preparation of the selected interactive provider issues this origin.
     LanguagePreparation {
         target: String,
     },
@@ -92,7 +92,7 @@ pub(crate) struct Context {
     pub permissions: BTreeSet<String>,
 }
 impl Context {
-    /// Only the first exact provider can use its own preference namespace; no nested hop inherits it.
+    /// Preferences belong to the first exact provider; nested calls and cancelled waits lose access.
     pub(crate) fn direct_language_preparation(&self, instance: &str) -> bool {
         matches!(&self.origin, InvocationOrigin::LanguagePreparation { target } if target == instance)
             && self.ancestry.len() == 1

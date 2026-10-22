@@ -46,6 +46,11 @@
 use crate::api::{ErrorCode, Failure, ResourceHandle};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "guest")]
+mod task;
+#[cfg(feature = "guest")]
+pub use task::{HttpBatch, HttpCancellation, HttpStartError, HttpTask};
+
 /// One HTTP header. Duplicate response headers retain their order; request framing is host-owned.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

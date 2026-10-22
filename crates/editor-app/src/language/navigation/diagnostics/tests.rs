@@ -2,6 +2,29 @@
 
 use super::*;
 
+/// Notification loss withdraws both caches and forces a new wire version for unchanged text.
+#[test]
+fn notification_loss_retires_pull_and_push_until_resynchronization() {
+    let uri: Uri = "file:///sample.rs".parse().unwrap();
+    let mut store = DiagnosticsStore::default();
+    store.synchronized(uri.as_str().into(), "source".into(), 1);
+    let diagnostic = Diagnostic::new_simple(lsp_types::Range::default(), "old".into());
+    store.record_pull(uri.as_str(), "source", vec![diagnostic.clone()]);
+    store.publish(PublishDiagnosticsParams::new(
+        uri.clone(),
+        vec![diagnostic],
+        Some(1),
+    ));
+    assert_eq!(store.snapshot(uri.as_str(), "source").unwrap().len(), 1);
+    store.invalidate_notification_watermarks();
+    assert!(store.snapshot(uri.as_str(), "source").is_none());
+    assert_eq!(store.next_version(uri.as_str(), "source"), Some(2));
+    store.synchronized(uri.as_str().into(), "source".into(), 2);
+    assert_eq!(store.next_version(uri.as_str(), "source"), None);
+    store.record_pull(uri.as_str(), "source", Vec::new());
+    assert_eq!(store.snapshot(uri.as_str(), "source"), Some(Vec::new()));
+}
+
 /// A delayed push from a closed document must not match the next lifetime of its URI.
 #[test]
 fn reopened_document_rejects_old_lifetime_diagnostics() {

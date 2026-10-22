@@ -1,0 +1,192 @@
+{
+  "version": "1.2.0",
+  "methods": {
+    "threads": {
+      "parameters": {
+        "type": "record",
+        "fields": {
+          "session": {
+            "type": "string",
+            "max_bytes": 128
+          },
+          "pause": {
+            "type": "integer",
+            "min": 0,
+            "max": 9223372036854775807
+          }
+        }
+      },
+      "result": {
+        "type": "record",
+        "fields": {
+          "threads": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "fields": {
+                "id": {
+                  "type": "integer",
+                  "min": 1,
+                  "max": 2147483647
+                },
+                "name": {
+                  "type": "string",
+                  "max_bytes": 512
+                }
+              }
+            },
+            "max_items": 256
+          },
+          "selected": {
+            "type": "integer",
+            "min": 0,
+            "max": 2147483647
+          }
+        }
+      },
+      "permissions": [
+        "process.exec"
+      ]
+    },
+    "thread_frames": {
+      "parameters": {
+        "type": "record",
+        "fields": {
+          "session": {
+            "type": "string",
+            "max_bytes": 128
+          },
+          "pause": {
+            "type": "integer",
+            "min": 0,
+            "max": 9223372036854775807
+          },
+          "thread": {
+            "type": "integer",
+            "min": 1,
+            "max": 2147483647
+          }
+        }
+      },
+      "result": {
+        "type": "record",
+        "fields": {
+          "frames": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "fields": {
+                "id": {
+                  "type": "integer",
+                  "min": 0,
+                  "max": 2147483647
+                },
+                "name": {
+                  "type": "string",
+                  "max_bytes": 512
+                },
+                "source": {
+                  "type": "string",
+                  "max_bytes": 4096
+                },
+                "line": {
+                  "type": "integer",
+                  "min": 1,
+                  "max": 2147483647
+                }
+              }
+            },
+            "max_items": 256
+          }
+        }
+      },
+      "permissions": [
+        "process.exec"
+      ]
+    },
+    "variable_children": {
+      "parameters": {
+        "type": "record",
+        "fields": {
+          "session": {
+            "type": "string",
+            "max_bytes": 128
+          },
+          "pause": {
+            "type": "integer",
+            "min": 0,
+            "max": 9223372036854775807
+          },
+          "thread": {
+            "type": "integer",
+            "min": 1,
+            "max": 2147483647
+          },
+          "frame": {
+            "type": "integer",
+            "min": 0,
+            "max": 2147483647
+          },
+          "reference": {
+            "type": "integer",
+            "min": 0,
+            "max": 2147483647
+          },
+          "start": {
+            "type": "integer",
+            "min": 0,
+            "max": 2147483647
+          },
+          "count": {
+            "type": "integer",
+            "min": 1,
+            "max": 100
+          }
+        }
+      },
+      "result": {
+        "type": "record",
+        "fields": {
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "record",
+              "fields": {
+                "name": {
+                  "type": "string",
+                  "max_bytes": 512
+                },
+                "value": {
+                  "type": "string",
+                  "max_bytes": 4096
+                },
+                "reference": {
+                  "type": "integer",
+                  "min": 0,
+                  "max": 2147483647
+                },
+                "named": {
+                  "type": "integer",
+                  "min": 0,
+                  "max": 2147483647
+                },
+                "indexed": {
+                  "type": "integer",
+                  "min": 0,
+                  "max": 2147483647
+                }
+              }
+            },
+            "max_items": 100
+          },
+          "more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "permissions": [
+        "process.exec"
+      ]
+    }
+  }
+}

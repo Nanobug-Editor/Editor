@@ -1,7 +1,9 @@
 [workspace]
 members = [
     "crates/editor-app",
+    "crates/editor-ui",
     "crates/editor-core",
+    "crates/editor-history",
     "crates/platform-windows",
     "crates/plugin-schema",
     "crates/plugin-protocol",
@@ -10,6 +12,10 @@ members = [
 # Test-only SDK consumers build independently through the host-managed public SDK cache.
 # Cargo exclusions name each actual package root; excluding only their parent does not detach guests.
 exclude = [
+    "crates/plugin-runtime/tests/fixtures/tool-metadata",
+    "crates/plugin-runtime/tests/fixtures/context-selection",
+    "crates/plugin-runtime/tests/fixtures/lifecycle-http",
+    "crates/plugin-runtime/tests/fixtures/lifecycle-editor",
     "crates/plugin-runtime/tests/fixtures/sdk-completion",
     "crates/plugin-runtime/tests/fixtures/community/bookmarks",
     "crates/plugin-runtime/tests/fixtures/community/capability-example",
@@ -40,7 +46,8 @@ license = "MIT"
 anyhow = "1.0"
 dirs = "6.0"
 # UI behavior comes from Base; styled components and bundled native grammars stay disabled.
-gpui-kit = { version = "0.7.0", default-features = false, features = ["assets"] }
+# Base 0.8 exposes the original input display map, avoiding hidden full-source validation paints.
+gpui-kit = { version = "=0.8.0", default-features = false, features = ["assets"] }
 ignore = "0.4"
 # Native ReadDirectoryChangesW, FSEvents, and inotify backends watch the workspace.
 notify = "8.2"

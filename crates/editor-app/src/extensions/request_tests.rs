@@ -3,6 +3,9 @@ use super::*;
 use gpui_kit::{TestAppContext, gpui};
 use protocol::api::{self, EditorOperation as Op, EditorValue, RequestUpdate};
 
+#[path = "../tests/history/public_plugin.rs"]
+mod history;
+
 /// Read selection and save the exact requested revision through the real GPUI document path.
 #[gpui::test]
 #[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]

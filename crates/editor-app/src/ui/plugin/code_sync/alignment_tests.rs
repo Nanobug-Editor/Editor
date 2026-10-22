@@ -1,7 +1,7 @@
 //! Native opt-in alignment integration regressions through a real Base Root and PluginView.
 use super::*;
-use crate::ui::controls::{
-    self,
+use editor_ui::{
+    self as controls,
     aligned_editor::{AlignmentGroup, AlignmentStatus},
     aligned_pointer,
 };
@@ -114,7 +114,7 @@ fn mount_with_document(
 ) -> (Mounted, &mut VisualTestContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
         aligned_pointer::init(cx);
         cx.set_reduce_motion(true);

@@ -299,6 +299,18 @@ pub struct Invocation {
     pub reply: Option<ResourceHandle>,
 }
 
+/// Readonly selection for one admitted method. Arguments retain their validated schema;
+/// services are an immutable allowlist and settings retain host scope/provenance.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Preparation {
+    pub contract: String,
+    pub method: String,
+    pub arguments: Value,
+    pub settings: crate::settings::Effective,
+    pub services: Vec<String>,
+}
+
 /// The same accepted/progress/completed/cancelled lifecycle is shared with editor requests.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Notification {

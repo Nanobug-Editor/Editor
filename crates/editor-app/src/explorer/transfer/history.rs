@@ -80,7 +80,10 @@ impl EditorApp {
             receipt.label.clone(),
             self.file_transfers.resources.clone(),
         ) {
-            Ok(worker) => worker,
+            Ok(mut worker) => {
+                worker.local_history = self.history.worker.clone();
+                worker
+            }
             Err(error) => {
                 self.record_file_outcome(
                     Some(direction),

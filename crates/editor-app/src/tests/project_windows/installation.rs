@@ -120,7 +120,10 @@ fn concurrent_project_installation_serializes_metadata_and_preserves_both_live_g
         );
         let _ = stream.write_all(payload);
     });
-    assert!(first.queue_lifecycle(Work::Install(candidate(&package, 1, &url, payload, false))));
+    assert!(first.queue_lifecycle(Work::Install(
+        candidate(&package, 1, &url, payload, false),
+        true
+    )));
     waiting.recv_timeout(Duration::from_secs(60)).unwrap();
     assert!(second.queue_lifecycle(Work::Disable("installed-side".into())));
     second
@@ -172,7 +175,10 @@ fn concurrent_project_installation_serializes_metadata_and_preserves_both_live_g
         "B's ordered metadata write must follow A's commit"
     );
 
-    assert!(first.queue_lifecycle(Work::Install(candidate(&package, 2, &url, payload, true))));
+    assert!(first.queue_lifecycle(Work::Install(
+        candidate(&package, 2, &url, payload, true),
+        true
+    )));
     wait_for(&first, |state| {
         state.progress.is_none()
             && state

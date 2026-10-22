@@ -94,7 +94,7 @@ pub(super) async fn exercise(
             editor.focus_handle(cx).is_focused(window),
             "IME commit lost the original editor focus before Undo"
         );
-        input::key(window, "ctrl-z", cx);
+        editor_ui::testing::press_key(window, "ctrl-z", cx);
         Ok::<_, anyhow::Error>(())
     })??;
     h.frame(target, cx).await?;

@@ -176,7 +176,7 @@ impl EditorApp {
     pub(crate) fn aligned_linked_input_factory(
         &self,
         cx: &Context<Self>,
-    ) -> crate::ui::controls::aligned_editor::AlignmentInputFactory {
+    ) -> editor_ui::aligned_editor::AlignmentInputFactory {
         let owner = cx.entity().downgrade();
         let editor = self.editor.clone();
         Rc::new(move |bounds, _, cx| {

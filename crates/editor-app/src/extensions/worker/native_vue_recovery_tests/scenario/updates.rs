@@ -58,7 +58,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         let started = Instant::now();
         let mut previous_progress = String::new();
         ensure!(
-            h.actor.queue_lifecycle(Work::Install(candidate)),
+            h.actor.queue_lifecycle(Work::Install(candidate, true)),
             "candidate lifecycle queue was already occupied"
         );
         // A valid candidate compiles its real component again before cutover. This observer bounds

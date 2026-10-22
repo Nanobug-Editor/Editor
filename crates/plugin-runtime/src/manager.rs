@@ -157,6 +157,17 @@ impl Manager {
     pub fn runtime_logs(&self) -> crate::RuntimeLogs {
         self.host_resources.logs.clone()
     }
+    /// Shared, host-only metadata diagnostics; reading them does not activate any plugin.
+    pub fn runtime_observations(&self) -> crate::RuntimeObservations {
+        for instance in self.live.values() {
+            instance.sample_resources();
+        }
+        self.host_resources.observations.clone()
+    }
+    /// Actual shared producer occupancy, including cancelled DNS work which has not returned yet.
+    pub fn http_producer_count(&self) -> usize {
+        self.host_resources.http.active_workers()
+    }
     /// Expose an opaque live incarnation for host publications, never authority for guest-supplied requests.
     pub fn instance_id(&self, id: &str) -> Option<&str> {
         self.live.get(id).and_then(Instance::instance_id)
@@ -372,11 +383,7 @@ impl Manager {
         let version = self.root.join("packages").join(&id).join(&package.digest);
         package.extract(&version)?;
         self.prepare_dependencies(package, None, control)?;
-        let prior_projects = self
-            .installed
-            .get(&id)
-            .map(|entry| entry.project_enabled.clone())
-            .unwrap_or_default();
+        let (enabled, project_enabled) = self.installation_scope(&package.manifest, control);
         control.check()?;
         let previous = self.installed.insert(
             id.clone(),
@@ -385,8 +392,8 @@ impl Manager {
                 manifest: package.manifest.clone(),
                 digest: package.digest.clone(),
                 grants,
-                enabled: true,
-                project_enabled: prior_projects,
+                enabled,
+                project_enabled,
                 retired_ui_contract: false,
                 global_enabled: None,
                 error: None,
@@ -405,6 +412,27 @@ impl Manager {
             old.stop();
         }
         self.restore_install_scope(&id, previous.as_ref())
+    }
+    /// Preserve installed choices or derive first-install availability from the host's consent.
+    /// `manifest` supplies the instance scope; `control` supplies the initial global preference.
+    /// Returns the persisted global default and project overrides without activating an instance.
+    fn installation_scope(
+        &self,
+        manifest: &Manifest,
+        control: &crate::InstallControl,
+    ) -> (bool, BTreeSet<String>) {
+        if let Some(previous) = self.installed.get(&manifest.id) {
+            return (previous.enabled, previous.project_enabled.clone());
+        }
+        let project_enabled = if !control.default_global_enabled
+            && manifest.scope == api::InstanceScope::Workspace
+            && !self.environment.workspace.is_empty()
+        {
+            BTreeSet::from([self.environment.workspace.clone()])
+        } else {
+            BTreeSet::new()
+        };
+        (control.default_global_enabled, project_enabled)
     }
     /// Package replacement keeps the user's global default and project override.
     fn restore_install_scope(
@@ -873,6 +901,7 @@ mod icon_tests {
                 module_exports: Default::default(),
                 settings: Default::default(),
                 settings_hook: false,
+                service_preparation_hook: false,
                 id: "example".into(),
                 name: "Example".into(),
                 version: "1.0.0".into(),
@@ -954,6 +983,7 @@ mod scope_tests {
             module_exports: Default::default(),
             settings: Default::default(),
             settings_hook: false,
+            service_preparation_hook: false,
             id: "example".into(),
             name: "Example".into(),
             version: "1.0.0".into(),

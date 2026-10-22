@@ -50,15 +50,22 @@ impl DocumentSession {
     ) -> Result<OpenedDocument, DocumentError> {
         let path = path.into();
         let contents = store.read_utf8(&path)?;
-        Ok(OpenedDocument {
+        Ok(Self::from_file_contents(path, contents))
+    }
+
+    /// Create the ordinary file session from an already authorized UTF-8 read.
+    /// Native callers can enforce bounded IO and hold path pins through editor construction;
+    /// `contents` transfers the initial value, while the native editor owns all later mutable text.
+    pub fn from_file_contents(path: impl Into<PathBuf>, contents: String) -> OpenedDocument {
+        OpenedDocument {
             session: Self {
-                path,
+                path: path.into(),
                 revision: 0,
                 saved_revision: 0,
                 readonly: false,
             },
             contents,
-        })
+        }
     }
 
     pub fn path(&self) -> &Path {

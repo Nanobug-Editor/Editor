@@ -1,11 +1,11 @@
 //! Direct GPUI composition of the terminal canvas, native side tabs and explorer-style menus.
 
 use super::*;
-use gpui_kit::{AnyElement, rgb};
-use ui::controls::{
+use editor_ui::{
     menu::{MenuStyle, PopupMenu},
     side_tabs::{SideTabBar, SideTabsStyle},
 };
+use gpui_kit::{AnyElement, rgb};
 
 impl TerminalPanel {
     /// Resolve the previous terminal palette alongside host colors and explicit user settings.
@@ -213,11 +213,7 @@ impl TerminalPanel {
             .unwrap_or_default();
         let font = drawing.font.clone();
         canvas.update(cx, |canvas, cx| {
-            canvas.scrollbar_idle = Some(Duration::from_secs(1));
             if canvas.drawing != drawing || canvas.font != font {
-                if canvas.drawing.scroll != drawing.scroll {
-                    canvas.hold_scrollbar(cx);
-                }
                 canvas.drawing = drawing;
                 canvas.font = font;
                 canvas.foreground = colors.foreground;
@@ -264,8 +260,8 @@ impl TerminalPanel {
             .when_some(inspection, |body, view| {
                 body.child(
                     div()
-                        .h(px(180.))
-                        .max_h(gpui_kit::relative(0.5))
+                        .h(px(260.))
+                        .max_h(gpui_kit::relative(0.75))
                         .flex_shrink_0()
                         .min_h_0()
                         .child(view),

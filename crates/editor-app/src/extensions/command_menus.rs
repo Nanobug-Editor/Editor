@@ -1,8 +1,8 @@
 //! Native command contributions share live publication, target checks and deterministic grouping.
 use super::*;
-use crate::ui::controls::context_menu::PopupMenu as NativeMenu;
-use crate::ui::controls::context_menu::PopupMenuItem;
-use crate::ui::controls::menu::MenuStyle;
+use editor_ui::context_menu::PopupMenu as NativeMenu;
+use editor_ui::context_menu::PopupMenuItem;
+use editor_ui::menu::MenuStyle;
 use protocol::{
     api::{self, DocumentVersion},
     commands::{Context as MenuContext, Location},
@@ -34,7 +34,7 @@ pub(crate) struct Target {
 pub(crate) struct DocumentCommandMenu {
     target: Target,
     rows: Vec<Contribution>,
-    popup: Entity<crate::ui::controls::menu::PopupMenu>,
+    popup: Entity<editor_ui::menu::PopupMenu>,
     _dismiss: Subscription,
 }
 
@@ -375,7 +375,7 @@ impl EditorApp {
         let action_rows = rows.clone();
         let action_target = target.clone();
         let popup = cx.new(|cx| {
-            crate::ui::controls::menu::PopupMenu::new(
+            editor_ui::menu::PopupMenu::new(
                 items,
                 MenuStyle::current(cx),
                 position,
@@ -451,7 +451,7 @@ impl EditorApp {
     pub(crate) fn render_plugin_document_menu(
         &self,
         cx: &mut Context<Self>,
-    ) -> Option<Entity<crate::ui::controls::menu::PopupMenu>> {
+    ) -> Option<Entity<editor_ui::menu::PopupMenu>> {
         let menu = self.document_command_menu.as_ref()?;
         let style = MenuStyle::current(cx);
         menu.popup.update(cx, |popup, cx| {
@@ -474,10 +474,10 @@ pub(crate) struct InvokeMenu {
 
 /// The foundational editor menu keeps its native behavior while command actions retain their target.
 pub(crate) fn append_editor(
-    mut menu: crate::ui::controls::context_menu::NativeMenu,
+    mut menu: editor_ui::context_menu::NativeMenu,
     rows: Vec<Contribution>,
     target: Target,
-) -> crate::ui::controls::context_menu::NativeMenu {
+) -> editor_ui::context_menu::NativeMenu {
     let mut group = None;
     for row in rows {
         if group.as_ref() != Some(&row.group) {

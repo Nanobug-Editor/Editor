@@ -19,8 +19,9 @@ fn with_messages(
         cx.set_reduce_motion(true);
     });
     let directory = tempfile::tempdir().unwrap();
-    let root = directory.path().to_path_buf();
-    let workspace = Workspace::open(&root).unwrap();
+    let workspace = Workspace::open(directory.path()).unwrap();
+    // Session keys use Workspace's canonical identity, including Windows' extended path prefix.
+    let root = workspace.root().to_path_buf();
     let slot = Rc::new(RefCell::new(None));
     let capture = slot.clone();
     let (_, form) = cx.add_window_view(move |window, cx| {

@@ -1,7 +1,8 @@
 //! Composes shortcut state with local Base-backed controls and localized descriptions.
 
 use super::*;
-use crate::ui::controls::{
+use editor_ui::scroll::ScrollableElement as _;
+use editor_ui::{
     Icon, Input, shortcut_footer, shortcut_keycaps, shortcut_list, shortcut_modal, shortcut_row,
     shortcut_search, shortcut_tabs,
 };
@@ -126,7 +127,6 @@ impl Render for ShortcutPanel {
                     .px_2()
                     // Keep long recorded sequences inside the fixed search height, as text input
                     // does. Horizontal scrolling exposes every cap without overlapping the list.
-                    .overflow_x_scroll()
                     .child(if self.capture.strokes.is_empty() {
                         div()
                             .text_sm()
@@ -149,6 +149,7 @@ impl Render for ShortcutPanel {
                         .text_base(),
                 )
             })
+            .overflow_x_scrollbar()
             .into_any_element();
         let toggle = Button::new("shortcuts-capture")
             .debug_selector(|| "shortcuts-capture".into())

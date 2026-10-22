@@ -1,7 +1,7 @@
 //! An empty editor shell exposes application controls without creating a Workspace or its tools.
 
 use super::*;
-use crate::ui::controls::{
+use editor_ui::{
     menu::{MenuStyle, PopupMenu},
     window::{editor_title_bar, native_window_controls},
 };

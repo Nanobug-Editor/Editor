@@ -4,39 +4,7 @@ use gpui_kit::VisualTestContext;
 use plugin_runtime::Manager;
 use std::io::{Cursor, Write};
 
-/// Consume one explicitly requested public role; installation and browsing remain cold.
-/// Every fixture caller chooses its actual use instead of preparing every installed package.
-pub(crate) fn demand(
-    manager: &mut Manager,
-    plugin: &str,
-    reason: plugin_runtime::DemandReason,
-) -> Result<plugin_runtime::ActivationReceipt, protocol::api::Failure> {
-    let availability = manager.availability(plugin)?;
-    let request = manager.begin_demand(&availability, reason, 60_000)?;
-    let deadline = Instant::now() + Duration::from_secs(60);
-    loop {
-        manager.poll();
-        match request.status() {
-            protocol::api::RequestUpdate::Completed { result } => {
-                let receipt = result?;
-                manager.admit_receipt(&availability, &receipt)?;
-                return Ok(receipt);
-            }
-            protocol::api::RequestUpdate::Cancelled { .. } => {
-                return Err(protocol::api::Failure::new(
-                    protocol::api::ErrorCode::Cancelled,
-                    "Fixture demand cancelled",
-                ));
-            }
-            _ => {}
-        }
-        assert!(
-            Instant::now() < deadline,
-            "public fixture demand did not complete"
-        );
-        std::thread::sleep(Duration::from_millis(5));
-    }
-}
+pub(crate) use crate::test_demand::demand;
 
 /// Publish only real, prepared role leases. A first role birth updates the catalog, not availability.
 pub(super) fn publish_catalog(state: &mut worker::Published, manager: &mut Manager) {

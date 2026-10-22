@@ -4,9 +4,20 @@ use std::cell::RefCell;
 
 /// An immutable, single-use save; dropping it before commit removes the temporary file.
 pub struct PreparedFileStore {
+    /// Exact session path allowed to consume this prepared save.
     path: PathBuf,
+    /// Immutable text snapshot whose revision must still match at commit.
     contents: String,
-    temporary: RefCell<Option<NamedTempFile>>,
+    /// Single-use staging resource; cancellation drops only this task's temporary file.
+    temporary: RefCell<Option<PreparedSave>>,
+}
+
+/// Replace and create-only authority stay distinct until the DocumentSession performs its write.
+enum PreparedSave {
+    /// Ordinary overwrite after host identity and disk-conflict validation.
+    Replace(NamedTempFile),
+    /// Deleted-file recovery cannot replace a concurrent claimant.
+    Create(super::PreparedNewFile),
 }
 
 impl PreparedFileStore {
@@ -27,7 +38,27 @@ impl PreparedFileStore {
         Ok(Self {
             path,
             contents,
-            temporary: RefCell::new(Some(temporary)),
+            temporary: RefCell::new(Some(PreparedSave::Replace(temporary))),
+        })
+    }
+
+    /// Prepare contents for path inside resolved root, retaining atomic create-only authority.
+    pub fn prepare_new(
+        root: PathBuf,
+        path: PathBuf,
+        contents: String,
+    ) -> Result<Self, DocumentError> {
+        let temporary = super::PreparedNewFile::prepare(&root, &path, |file| {
+            file.write_all(contents.as_bytes())
+        })
+        .map_err(|source| DocumentError::Write {
+            path: path.clone(),
+            source,
+        })?;
+        Ok(Self {
+            path,
+            contents,
+            temporary: RefCell::new(Some(PreparedSave::Create(temporary))),
         })
     }
 
@@ -58,12 +89,16 @@ impl DocumentStore for PreparedFileStore {
                 path: path.into(),
                 source: std::io::Error::other("Prepared save was already committed"),
             })?;
-        temporary
-            .persist(path)
-            .map_err(|error| DocumentError::Write {
-                path: path.into(),
-                source: error.error,
-            })?;
-        Ok(())
+        match temporary {
+            PreparedSave::Replace(temporary) => temporary
+                .persist(path)
+                .map(|_| ())
+                .map_err(|error| error.error),
+            PreparedSave::Create(temporary) => temporary.commit(),
+        }
+        .map_err(|source| DocumentError::Write {
+            path: path.into(),
+            source,
+        })
     }
 }

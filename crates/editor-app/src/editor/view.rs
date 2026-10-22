@@ -1,6 +1,7 @@
 //! Renders the explorer, document tabs, and editor.
 
 use crate::*;
+use editor_ui::scroll::{ScrollAxis, ScrollableElement as _, SmoothScrollable as _};
 
 #[derive(Clone)]
 /// Carries a tab's identity while it is dragged in the tab strip.
@@ -53,6 +54,7 @@ impl EditorApp {
                     };
                     let is_folder = Path::new(item.id.as_str()).is_dir();
                     let row_path = PathBuf::from(item.id.as_str());
+                    let decoration = app.explorer_file_decoration(&row_path, is_folder, cx);
                     let drop_target = app.explorer_drag.target() == Some(row_path.as_path());
                     let icon = file_icon(
                         &app.providers,
@@ -216,6 +218,12 @@ impl EditorApp {
                                         .flex_1()
                                         .min_w(px(0.))
                                         .truncate()
+                                        .when_some(decoration, |label, (color, explanation)| {
+                                            label.text_color(color).tooltip(move |window, cx| {
+                                                editor_ui::Tooltip::new(explanation.clone())
+                                                    .build(window, cx)
+                                            })
+                                        })
                                         .child(item.label.clone()),
                                 ),
                         )
@@ -257,7 +265,8 @@ impl EditorApp {
             .flex_1()
             .min_h_0()
             .bg(tree_style.background.unwrap_or(cx.theme().background))
-            .text_color(tree_style.foreground.unwrap_or(cx.theme().foreground));
+            .text_color(tree_style.foreground.unwrap_or(cx.theme().foreground))
+            .smooth_scroll(&tree_scroll, ScrollAxis::Vertical);
 
         v_flex()
             .id("explorer-root")
@@ -295,7 +304,7 @@ impl EditorApp {
             .child(self.render_tree_drag_events(cx))
             .when_some(self.explorer_drag.intent(), |root, copy| {
                 root.child(div().absolute().bottom_0().left_0().child(
-                    ui::controls::file_operation::drag_preview(String::new(), copy, cx),
+                    editor_ui::file_operation::drag_preview(String::new(), copy, cx),
                 ))
             })
             .child(
@@ -305,7 +314,7 @@ impl EditorApp {
                     .top_0()
                     .bottom_0()
                     .w(px(8.))
-                    .child(ui::controls::vertical_scrollbar(&tree_scroll, cx)),
+                    .child(editor_ui::vertical_scrollbar(&tree_scroll, cx)),
             )
             .on_mouse_down(
                 MouseButton::Right,
@@ -315,7 +324,7 @@ impl EditorApp {
             )
     }
 
-    fn render_tabs(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_tabs(&self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tab_styles = component_styles(cx, ThemeComponent::EditorTab);
         let close_styles = component_styles(cx, ThemeComponent::EditorTabClose);
         let visible_count = self
@@ -373,7 +382,7 @@ impl EditorApp {
                 let selected_color = tab_styles.selected.border.unwrap_or(cx.theme().primary);
                 let separator_color = tab_styles.base.border.unwrap_or(cx.theme().border);
                 let external_background = gpui_kit::rgb(0xfff4c2);
-                crate::ui::controls::file_tab(
+                editor_ui::file_tab(
                     format!("editor-tab:{}", path.to_string_lossy()),
                     name.clone(),
                     is_active,
@@ -383,8 +392,6 @@ impl EditorApp {
                 .debug_selector(move || format!("editor-tab-{index}").into())
                 .relative()
                 .h_full()
-                .w(px(190.))
-                .flex_shrink_0()
                 .gap_2()
                 .px(px(tab_styles.base.padding_x_px.unwrap_or(8.)))
                 .text_size(px(if is_active {
@@ -461,7 +468,8 @@ impl EditorApp {
                 })
                 .child(
                     div()
-                        .flex_1()
+                        .id(format!("editor-tab-title-{index}"))
+                        .debug_selector(move || format!("editor-tab-title-{index}").into())
                         .min_w(px(0.))
                         .truncate()
                         .text_sm()
@@ -478,11 +486,12 @@ impl EditorApp {
                         )),
                 )
                 .when(tab.preview, |this| {
-                    this.child(crate::ui::controls::preview_tab_badge(cx))
+                    this.child(editor_ui::preview_tab_badge(cx))
                 })
                 .child(
                     div()
                         .id(format!("close-editor-tab:{}", path.to_string_lossy()))
+                        .debug_selector(move || format!("editor-tab-close-{index}").into())
                         .flex_shrink_0()
                         .rounded(px(close_styles.base.radius_px.unwrap_or(3.)))
                         .p_1()
@@ -535,32 +544,6 @@ impl EditorApp {
                 )
             });
 
-        let measured_viewport = self.tabs_scroll.bounds().size.width;
-        let viewport = if measured_viewport > px(0.) {
-            measured_viewport
-        } else {
-            (window.bounds().size.width - px(EXPLORER_INITIAL_WIDTH) - px(24.)).max(px(0.))
-        };
-        let content_width = px(190.) * total_count;
-        let max_scroll = if measured_viewport > px(0.) {
-            self.tabs_scroll.max_offset().x
-        } else {
-            (content_width - viewport).max(px(0.))
-        };
-        let thumb_width = if max_scroll > px(0.) {
-            (viewport * (viewport / (viewport + max_scroll)))
-                .max(px(24.))
-                .min(viewport)
-        } else {
-            viewport
-        };
-        let scroll_position = (-self.tabs_scroll.offset().x).clamp(px(0.), max_scroll);
-        let thumb_left = if max_scroll > px(0.) && viewport > thumb_width {
-            (scroll_position / max_scroll) * (viewport - thumb_width)
-        } else {
-            px(0.)
-        };
-
         div()
             .id("editor-tabs-container")
             .debug_selector(|| "editor-tabs-container".into())
@@ -578,10 +561,6 @@ impl EditorApp {
                 .base
                 .background
                 .unwrap_or(cx.theme().tab_bar))
-            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
-                this.tabs_hovered = *hovered;
-                cx.notify();
-            }))
             .child(
                 div()
                     .id("editor-tabs-scroll")
@@ -591,79 +570,50 @@ impl EditorApp {
                     .flex_row()
                     .track_scroll(&self.tabs_scroll)
                     .overflow_x_scroll()
-                    .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, window, cx| {
-                        let delta = event.delta.pixel_delta(window.line_height());
-                        let scroll_delta = if delta.x != px(0.) { delta.x } else { delta.y };
-                        let max_scroll = this.tabs_scroll.max_offset().x;
-                        let current = this.tabs_scroll.offset().x;
-                        let next = (current + scroll_delta).clamp(-max_scroll, px(0.));
-                        if next != current {
-                            this.tabs_scroll.set_offset(point(next, px(0.)));
-                            cx.notify();
-                        }
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    }))
-                    .child(
-                        // Let the content grow to the combined tab width so GPUI
-                        // retains a nonzero horizontal scroll range after layout.
-                        h_flex()
-                            .h_full()
-                            .flex_none()
-                            .w_auto()
-                            .min_w_full()
-                            .children(tabs)
-                            .children(self.comparison_views.iter().enumerate().map(
-                                |(index, view)| {
-                                    let activate = cx.entity().downgrade();
-                                    let close = activate.clone();
-                                    let activate_id = view.id.clone();
-                                    let close_id = view.id.clone();
-                                    crate::ui::controls::comparison_tab(
-                                        view.id.clone(),
-                                        view.title.clone(),
-                                        self.active_comparison.as_ref() == Some(&view.id),
-                                        view.preview,
-                                        visible_count + index,
-                                        total_count,
-                                        move |pin, window, cx| {
-                                            let _ = activate.update(cx, |app, cx| {
-                                                app.activate_comparison_view(
-                                                    &activate_id,
-                                                    pin,
-                                                    window,
-                                                    cx,
-                                                )
-                                            });
-                                        },
-                                        move |window, cx| {
-                                            let _ = close.update(cx, |app, cx| {
-                                                app.close_comparison_view(&close_id, window, cx)
-                                            });
-                                        },
-                                        cx,
-                                    )
-                                },
-                            )),
-                    ),
+                    // Direct children let GPUI reveal each tab using its measured bounds.
+                    .children(tabs)
+                    .children(
+                        self.comparison_views
+                            .iter()
+                            .enumerate()
+                            .map(|(index, view)| {
+                                let activate = cx.entity().downgrade();
+                                let close = activate.clone();
+                                let activate_id = view.id.clone();
+                                let close_id = view.id.clone();
+                                editor_ui::comparison_tab(
+                                    view.id.clone(),
+                                    view.title.clone(),
+                                    self.active_comparison.as_ref() == Some(&view.id),
+                                    view.preview,
+                                    visible_count + index,
+                                    total_count,
+                                    move |pin, window, cx| {
+                                        let _ = activate.update(cx, |app, cx| {
+                                            app.activate_comparison_view(
+                                                &activate_id,
+                                                pin,
+                                                window,
+                                                cx,
+                                            )
+                                        });
+                                    },
+                                    move |window, cx| {
+                                        let _ = close.update(cx, |app, cx| {
+                                            app.close_comparison_view(&close_id, window, cx)
+                                        });
+                                    },
+                                    cx,
+                                )
+                            }),
+                    )
+                    .smooth_scroll(&self.tabs_scroll, ScrollAxis::Horizontal),
             )
-            .when(max_scroll > px(0.) && self.tabs_hovered, |this| {
-                // Match the tab-strip indicator to the translucent scrollbar thumb.
-                let thumb_color = component_styles(cx, ThemeComponent::Scrollbar)
-                    .base
-                    .background
-                    .unwrap_or(cx.theme().primary)
-                    .opacity(0.55);
-                this.child(
-                    div()
-                        .absolute()
-                        .left(thumb_left)
-                        .top_0()
-                        .w(thumb_width)
-                        .h(px(2.))
-                        .bg(thumb_color),
-                )
-            })
+            // The shared overlay retains native dragging and contracts vertically at idle.
+            .child(
+                editor_ui::vertical_scrollbar(&self.tabs_scroll, cx)
+                    .axis(gpui_base::ScrollbarAxis::Horizontal),
+            )
     }
 
     pub(crate) fn render_editor_panel(
@@ -671,6 +621,14 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        if self.history.panel.is_some() {
+            return v_flex()
+                .size_full()
+                .min_h_0()
+                .child(self.render_tabs(window, cx))
+                .child(self.render_history_panel(cx))
+                .into_any_element();
+        }
         let style = component_styles(cx, ThemeComponent::Editor).base;
         // No document means no input handler, gutter, tab strip or drop caret.
         if self.tabs.is_empty() {
@@ -678,7 +636,7 @@ impl EditorApp {
                 .debug_selector(|| "editor-panel-content".into())
                 .size_full()
                 .min_h_0()
-                .child(crate::ui::controls::empty_editor_canvas(
+                .child(editor_ui::empty_editor_canvas(
                     t!("editor.select_file").to_string(),
                     style.background.unwrap_or(cx.theme().background),
                     cx.theme().muted_foreground,
@@ -740,7 +698,7 @@ impl EditorApp {
                             .flex_1()
                             .min_h_0()
                             .w_full()
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
                             .text_color(cx.theme().muted_foreground)
                             .child(message),
                     )
@@ -793,6 +751,7 @@ impl EditorApp {
             .min_h_0()
             .child(self.render_tabs(window, cx))
             // Keep the editor's flexible height when the body is either a source pane or a split.
+            .child(self.render_history_recovery_notice(cx))
             .child(v_flex().flex_1().min_h_0().child(body))
             .into_any_element()
     }

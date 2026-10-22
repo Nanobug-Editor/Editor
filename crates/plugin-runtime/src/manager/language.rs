@@ -244,6 +244,9 @@ impl Manager {
                     .map(|request| (service.owner.clone(), request)),
             );
         }
+        // Native virtual tabs and recovery receipts can outlive their final source. Once their
+        // arena has polled terminal/revoked resources, release the now-unused context owner too.
+        self.collect_unused_language_contexts();
         requests
     }
 

@@ -1,0 +1,15 @@
+[package]
+name = "tool-metadata-guest"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Built only through the selected host's public --plugin-cargo SDK cache.
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1.0"
+
+[workspace]

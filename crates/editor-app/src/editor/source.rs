@@ -1,8 +1,8 @@
 //! Compose the existing native editor, popovers and input gestures without replacing its session.
-use crate::ui::controls::aligned_editor::{AlignmentGroup, AlignmentNativeFactory};
-use crate::ui::controls::context_menu::NativeMenu;
-use crate::ui::controls::overlay::WindowExt as _;
 use crate::*;
+use editor_ui::aligned_editor::{AlignmentGroup, AlignmentNativeFactory};
+use editor_ui::context_menu::NativeMenu;
+use editor_ui::overlay::WindowExt as _;
 
 /// One menu definition serves ordinary and projected input; only its physical anchor changes.
 type SourceMenuBuilder = Rc<dyn Fn(NativeMenu, &mut Window, &mut App) -> NativeMenu>;
@@ -59,7 +59,7 @@ impl EditorApp {
                 .child(t!("editor.detached_source").to_string())
                 .into_any_element();
         }
-        crate::ui::controls::synchronize_editor_appearance(&self.editor, cx);
+        editor_ui::synchronize_editor_appearance(&self.editor, cx);
         if let Some(index) = self.active_text_tab_index() {
             self.tabs[index]
                 .text
@@ -200,7 +200,7 @@ impl EditorApp {
             // Match the ordinary SourceFrame switch: styled InputOverlays would replace the host's
             // completion action handler with one belonging to its hidden native completion menu.
             if custom_popovers {
-                return gpui_base::input::Editor::new(editor).into_any_element();
+                return editor_ui::native_editor_scrollbars(editor);
             }
             let menu = native_menu.clone();
             Editor::new(editor)
@@ -353,7 +353,7 @@ impl EditorApp {
             )
             // Ordinary sources retain Base's leading gutter, including during popup renderer switches.
             .when(!aligned, |source| {
-                source.child(crate::ui::controls::gutter_separator(&self.editor))
+                source.child(editor_ui::gutter_separator(&self.editor))
             })
             // Install after the atomic authority: its native handler otherwise opens a menu at
             // the synthetic source coordinate. Base still owns right-click selection semantics.

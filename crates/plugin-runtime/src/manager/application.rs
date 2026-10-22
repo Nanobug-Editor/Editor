@@ -146,23 +146,18 @@ impl Manager {
         }
         control.stage(crate::InstallStage::Committing)?;
         let previous = self.installed.get(id).cloned();
-        let mut record = Installed {
+        let (enabled, project_enabled) = self.installation_scope(&package.manifest, control);
+        let record = Installed {
             manifest: package.manifest.clone(),
             digest: package.digest.clone(),
             grants,
-            enabled: true,
-            project_enabled: previous
-                .as_ref()
-                .map(|old| old.project_enabled.clone())
-                .unwrap_or_default(),
+            enabled,
+            project_enabled,
             retired_ui_contract: false,
             replaced_by: None,
             global_enabled: None,
             error: None,
         };
-        if let Some(old) = &previous {
-            record.enabled = old.enabled;
-        }
         self.installed.insert(id.clone(), record);
         if let Err(error) = self.save_registry() {
             if let Some(old) = previous {

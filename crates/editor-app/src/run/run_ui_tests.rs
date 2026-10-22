@@ -9,9 +9,8 @@ mod selector;
 mod toolbar;
 // Plugin-owned forms replace the retired B3 modal assertions; actual-package coverage lives in
 // extensions::native_configuration_tests and ui::plugin_form::{tree,fault,rollout}_tests.
-use crate::ui::controls::DialogContent;
 use crate::*;
-use gpui_kit::test::TestWindowExt as _;
+use editor_ui::DialogContent;
 use gpui_kit::{ElementInputHandler, InputHandler as _, TestAppContext, gpui};
 
 /// Write one stored configuration into the same host-local location the editor resolves.
@@ -177,7 +176,8 @@ fn chinese_composition_enters_the_configuration_fields(cx: &mut TestAppContext) 
         // Compose Chinese: marked while composing, replaced on the next keystroke, committed at the
         // end. The marks are in UTF-16 units, which is the unit the protocol speaks in.
         handler.replace_and_mark_text_in_range(None, "我的程序", Some(0..4), window, cx);
-        window.render_frame(cx);
+        window.refresh();
+        window.draw(cx).clear(cx);
         assert_eq!(
             name.read(cx).value().as_ref(),
             "我的程序",
@@ -190,7 +190,8 @@ fn chinese_composition_enters_the_configuration_fields(cx: &mut TestAppContext) 
         );
         // Replacing the preedit while composing must not accumulate the intermediate text.
         handler.replace_and_mark_text_in_range(None, "我的程序集", Some(0..5), window, cx);
-        window.render_frame(cx);
+        window.refresh();
+        window.draw(cx).clear(cx);
         assert_eq!(
             name.read(cx).value().as_ref(),
             "我的程序集",
@@ -199,7 +200,8 @@ fn chinese_composition_enters_the_configuration_fields(cx: &mut TestAppContext) 
         assert_eq!(handler.marked_text_range(window, cx), Some(0..5));
         // Committing clears the mark, leaving exactly the text the user chose.
         handler.replace_text_in_range(None, "我的程序集", window, cx);
-        window.render_frame(cx);
+        window.refresh();
+        window.draw(cx).clear(cx);
         assert_eq!(name.read(cx).value().as_ref(), "我的程序集");
         assert_eq!(
             handler.marked_text_range(window, cx),
@@ -406,7 +408,7 @@ fn the_run_group_follows_the_interface_size(cx: &mut TestAppContext) {
         // The settings screen changes the base size and then pushes it into the theme, which is what the
         // window's `rem` resolves against; doing only the first would leave the layout untouched.
         cx.update(|window, cx| {
-            crate::ui::typography::set_font_size(cx, 14. + steps as f32);
+            editor_ui::typography::set_font_size(cx, 14. + steps as f32);
             crate::ui::theme::sync_font_sizes(cx);
             window.refresh();
         });
@@ -436,7 +438,7 @@ fn the_run_group_follows_the_interface_size(cx: &mut TestAppContext) {
     // controls past the window's edge.
     let narrow = size(px(520.), px(420.));
     cx.update(|window, cx| {
-        crate::ui::typography::set_font_size(cx, 24.);
+        editor_ui::typography::set_font_size(cx, 24.);
         crate::ui::theme::sync_font_sizes(cx);
         window.refresh();
     });
@@ -938,6 +940,8 @@ fn run_save_gate_refuses_an_unconfirmed_disk_conflict(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_launch_saves_modified_documents_before_starting(cx: &mut TestAppContext) {
+    let resumed = Rc::new(Cell::new(false));
+    let completed = resumed.clone();
     let root = tempfile::tempdir().unwrap();
     let workspace = root.path().join("project");
     std::fs::create_dir_all(&workspace).unwrap();
@@ -966,11 +970,28 @@ fn a_launch_saves_modified_documents_before_starting(cx: &mut TestAppContext) {
                 app.text_tab(0).unwrap().session.is_dirty(),
                 "the document is modified"
             );
-            let saved = app.save_dirty_documents(cx);
-            assert!(saved, "an ordinary save precedes the launch");
-            assert!(!app.text_tab(0).unwrap().session.is_dirty());
+            assert!(
+                app.defer_history_saves(
+                    move |app, _, cx| {
+                        assert!(!app.text_tab(0).unwrap().session.is_dirty());
+                        completed.set(true);
+                        cx.notify();
+                    },
+                    cx
+                ),
+                "dirty documents defer the launch until durable saving finishes"
+            );
         });
     });
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !resumed.get() {
+        cx.run_until_parked();
+        assert!(
+            std::time::Instant::now() < deadline,
+            "save-dependent launch did not resume"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
     // The file on disk is the version the program would run.
     let on_disk = std::fs::read_to_string(&path).unwrap();
     assert!(on_disk.contains("// 修改"), "{on_disk}");

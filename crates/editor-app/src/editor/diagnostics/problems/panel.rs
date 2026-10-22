@@ -73,14 +73,10 @@ impl DockPanel for ProblemsPanel {
             .upgrade()
             .map_or(0, |app| app.read(cx).problem_rows(cx).len());
         let parent = self.parent.clone();
-        crate::ui::controls::problems::problem_heading(
-            count,
-            &self.close_focus,
-            move |_, window, cx| {
-                cx.stop_propagation();
-                let _ = parent.update(cx, |app, cx| app.close_problems(window, cx));
-            },
-        )
+        editor_ui::problems::problem_heading(count, &self.close_focus, move |_, window, cx| {
+            cx.stop_propagation();
+            let _ = parent.update(cx, |app, cx| app.close_problems(window, cx));
+        })
     }
 }
 

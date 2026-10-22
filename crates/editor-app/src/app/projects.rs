@@ -29,7 +29,8 @@ pub(crate) enum CloseIntent {
     /// All native roots gather consent before any project begins resource retirement.
     Application,
 }
-actions!(projects, [OpenFolder, ShowHome, CloseWindow]);
+actions!(projects, [OpenFolder, ShowHome]);
+pub(crate) use editor_ui::window::CloseWindow;
 /// Empty and active editor windows use the same application-wide consent coordinator.
 pub(crate) fn quit_application(cx: &mut App) {
     controller::quit(cx);
@@ -126,11 +127,13 @@ pub(crate) struct ProjectWindow {
     pub(in crate::app) dialog_window: Option<WindowHandle<Root>>,
     pub(in crate::app) _dialog_closed_subscription: Option<Subscription>,
     pub(in crate::app) settings_section: app::settings::SettingsSection,
+    /// Empty-window settings report preference write errors without creating an editor.
+    pub(in crate::app) settings_startup_error: Option<String>,
     extensions: Option<Entity<extensions::ExtensionPanel>>,
     extensions_window: Option<WindowHandle<Root>>,
     _extensions_closed_subscription: Option<Subscription>,
     pub(in crate::app) plugin_settings: Option<Entity<extensions::SettingsView>>,
-    application_popup: Option<Entity<crate::ui::controls::menu::PopupMenu>>,
+    application_popup: Option<Entity<editor_ui::menu::PopupMenu>>,
     application_anchor: Rc<Cell<Point<Pixels>>>,
     _activation_subscription: Subscription,
 }
@@ -153,6 +156,11 @@ impl ProjectWindow {
             self.open_project_menu(focus, window, cx);
         }
     }
+    /// Return this root's host-selected user profile for application settings, independent of workspace data.
+    pub(in crate::app) fn profile_directory(&self) -> &Path {
+        &self.profile
+    }
+
     /// Create an empty editor shell in the selected profile without initializing workspace tools.
     pub(crate) fn new(profile: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
         app::bind_editor_shell_keys(cx);
@@ -184,6 +192,7 @@ impl ProjectWindow {
             dialog_window: None,
             _dialog_closed_subscription: None,
             settings_section: app::settings::SettingsSection::AppearanceAndBehavior,
+            settings_startup_error: None,
             extensions: None,
             extensions_window: None,
             _extensions_closed_subscription: None,
@@ -316,7 +325,7 @@ impl ProjectWindow {
                 return;
             }
             let root = workspace.root().to_owned();
-            crate::ui::controls::window::restore_editor_geometry(
+            editor_ui::window::restore_editor_geometry(
                 window,
                 size(px(session.window_width), px(session.window_height)),
                 cx,

@@ -1,0 +1,13 @@
+[package]
+name = "lifecycle-http"
+version = "0.1.2"
+edition = "2024"
+license = "MIT"
+
+# Independent test-only consumer; resolve the SDK exclusively through the building host's cache.
+[workspace]
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1"

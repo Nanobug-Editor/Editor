@@ -25,17 +25,21 @@ mod icons;
 mod image_inputs;
 mod language_contexts;
 mod language_control;
+mod observation;
 mod plugin_services;
 mod preferences;
+mod presentation;
 mod private;
 mod process_calls;
 mod resource_roots;
 mod selected_resources;
+mod service_preparation;
 mod service_replies;
 mod settings;
 mod stdio;
 mod structure;
 mod terminal_calls;
+mod tool_metadata;
 mod tools;
 mod trees;
 mod workspace_events;
@@ -46,6 +50,10 @@ pub(crate) use workspace_files::NativeDocumentRequests;
 wasmtime::component::bindgen!({path:"../plugin-protocol/wit",world:"plugin",require_store_data_send:true});
 
 struct State {
+    /// Safe metadata cached once; diagnostics never retain the original scope path.
+    observation_owner: Option<crate::observability::Owner>,
+    /// Host correlation for imports nested in the current guest callback.
+    observed_parent: Option<u64>,
     plugin_services: plugin_services::Services,
     /// Every instance has one negotiated capability transport; there is no legacy fallback.
     api: api::Negotiated,
@@ -53,6 +61,16 @@ struct State {
     tree_menu_1_1: bool,
     /// Cached metadata updates must opt in to 1.2 without silently widening older tree contracts.
     tree_update_1_2: bool,
+    /// Initial tree location and semantic tones require an explicit 1.3 baseline.
+    tree_presentation_1_3: bool,
+    /// Structural cache deltas require an explicit 1.4 minimum, independently of host inventory.
+    tree_patch_1_4: bool,
+    /// Non-default tree pointer gestures require an explicit 1.5 minimum.
+    tree_interaction_1_5: bool,
+    /// Required tree floors explicitly admit cascading action menus and single-click directories.
+    tree_action_menus_1_6: bool,
+    /// Checkboxes, inline counts and disclosure requests require an explicit 1.7 floor.
+    tree_checks_1_7: bool,
     /// Immutable metadata never becomes a preopened directory or guest-controlled file root.
     host_resources: crate::HostResources,
     native_diagnostics: crate::faults::NativeDiagnostics,
@@ -91,6 +109,9 @@ struct State {
         std::collections::BTreeMap<u64, std::sync::Arc<crate::DiagnosticCollection>>,
     /// Owned metadata survives UI publication, while retirement seals every native projection.
     trees: std::collections::BTreeMap<u64, std::sync::Arc<crate::TreeResource>>,
+    /// Workspace chrome and filename metadata are revoked with their exact publisher incarnation.
+    presentations:
+        std::collections::BTreeMap<u64, std::sync::Arc<crate::WorkspacePresentationResource>>,
     /// Marker collections retain only unforgeable lifetime/document metadata; native text owns positions.
     decorations: std::collections::BTreeMap<u64, std::sync::Arc<crate::DecorationResource>>,
     preference_subscriptions: std::collections::BTreeMap<u64, preferences::Subscription>,
@@ -121,6 +142,9 @@ struct State {
     activation_committed: bool,
     /// A bounded discovery invocation can read granted resources without launching native work.
     language_hook: bool,
+    /// Package opt-in and current callback identity never grant native execution authority.
+    service_preparation_hook: bool,
+    service_preparation_call: bool,
     /// Separate stateless language workers reject every host operation, including during Prepare.
     language_pure: bool,
     /// Typed outputs are accepted only while the matching pure callback is running.
@@ -381,6 +405,8 @@ impl Instance {
         wasi.stdout(stdout).stderr(stderr);
         // No preopened directories, environment inheritance or network access is granted to WASI.
         let mut state = State {
+            observation_owner: None,
+            observed_parent: None,
             plugin_services: Default::default(),
             api,
             host_resources,
@@ -400,15 +426,14 @@ impl Instance {
             virtual_documents: Default::default(),
             diagnostic_collections: Default::default(),
             trees: Default::default(),
-            tree_menu_1_1: manifest
-                .api
-                .as_ref()
-                .and_then(|requirements| requirements.required.get("ui.tree"))
-                .is_some_and(|range| {
-                    range.matches(&semver::Version::new(1, 2, 0))
-                        && !range.matches(&semver::Version::new(1, 0, 0))
-                }),
+            presentations: Default::default(),
+            tree_menu_1_1: trees::requires_menu_floor(manifest.api.as_ref()),
             tree_update_1_2: trees::requires_cached_update_floor(manifest.api.as_ref()),
+            tree_presentation_1_3: trees::requires_presentation_floor(manifest.api.as_ref()),
+            tree_patch_1_4: trees::requires_patch_floor(manifest.api.as_ref()),
+            tree_interaction_1_5: trees::requires_interaction_floor(manifest.api.as_ref()),
+            tree_action_menus_1_6: trees::requires_action_menu_floor(manifest.api.as_ref()),
+            tree_checks_1_7: trees::requires_check_floor(manifest.api.as_ref()),
             decorations: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest
@@ -457,6 +482,8 @@ impl Instance {
             active: false,
             activation_committed: false,
             language_hook: false,
+            service_preparation_hook: manifest.service_preparation_hook,
+            service_preparation_call: false,
             language_pure: pure,
             language_completion_call: false,
             language_structure_call: false,
@@ -467,6 +494,30 @@ impl Instance {
         };
         state.plugin_services.principal =
             state.roots.principal(&manifest.id, &manifest.permissions);
+        let principal = &state.plugin_services.principal;
+        let mut owner = crate::observability::Owner::new(
+            &principal.plugin,
+            &principal.instance,
+            &principal.scope,
+        );
+        // SemVer build metadata can be arbitrarily large. Diagnostics omit oversized identity
+        // metadata rather than copying it on every call or pretending a truncated version is real.
+        if manifest.version.len() <= 128 {
+            owner.package_version = Some(manifest.version.clone());
+        } else {
+            owner.metadata_partial = true;
+        }
+        // Package-owned asset roots use an immutable digest directory. Arbitrary host test roots
+        // have no such evidence and deliberately report unavailable metadata.
+        owner.package_digest = state
+            .assets
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|digest| {
+                digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+            .map(str::to_owned);
+        state.observation_owner = Some(owner);
         state.plugin_services.declarations = manifest.plugin_services.clone();
         state.plugin_services.commands = manifest
             .commands
@@ -519,7 +570,35 @@ impl Instance {
             "Plugin is paused; restart this instance"
         );
         let operation = crate::faults::operation(&message);
+        let stage = match &message {
+            api::Input::Activate => crate::observability::Stage::Activation,
+            api::Input::Prepare { .. } => crate::observability::Stage::Preparation,
+            _ => crate::observability::Stage::Guest,
+        };
+        let mut observation = self.store.data().host_resources.observations.begin(
+            self.store.data().observation_identity(),
+            stage,
+            None,
+        );
+        self.store.data_mut().observed_parent = Some(observation.id());
         let result = self.call_inner(message);
+        self.store.data_mut().observed_parent = None;
+        // call_inner installs a fresh finite budget for each invocation; remaining fuel is
+        // meaningful only relative to that budget, never as a wall-clock CPU measurement.
+        observation.fuel(self.store.get_fuel().ok().map(|remaining| {
+            let budget = if operation == "snapshot" {
+                crate::faults::SNAPSHOT_FUEL
+            } else {
+                crate::faults::CALL_FUEL
+            };
+            budget.saturating_sub(remaining)
+        }));
+        observation.finish(if result.is_ok() {
+            crate::observability::Outcome::Completed
+        } else {
+            crate::observability::Outcome::Failed
+        });
+        self.sample_resources();
         if let Err(error) = &result {
             let principal = &self.store.data().plugin_services.principal;
             let budget = error.downcast_ref::<wasmtime::Trap>().is_some_and(|trap| {
@@ -623,35 +702,50 @@ impl Instance {
             .bindings
             .call_dispatch(&mut self.store, &payload)?
             .map_err(anyhow::Error::msg)?;
-        anyhow::ensure!(
-            result.len() <= 32 * 1024 * 1024,
-            "Plugin reply quota exceeded"
+        // Observe only encoded size and validation/publication time; never retain guest UI bytes.
+        let mut publication = self.store.data().host_resources.observations.begin(
+            self.store.data().observation_identity(),
+            crate::observability::Stage::Publication,
+            self.store.data().observed_parent,
         );
-        let reply = self.decode_completion(&result, invocation_id)?;
-        let mut panels = std::collections::BTreeSet::new();
-        for view in &reply.views {
+        publication.bytes(result.len());
+        let published = (|| {
             anyhow::ensure!(
-                self.panels.contains(&view.panel),
-                "Undeclared panel: {}",
-                view.panel
+                result.len() <= 32 * 1024 * 1024,
+                "Plugin reply quota exceeded"
             );
-            anyhow::ensure!(
-                panels.insert(&view.panel),
-                "Duplicate panel in plugin reply"
-            );
-        }
-        // Publish only after every document validates; an invalid peer never partly updates the UI.
-        for view in &reply.views {
-            self.views.insert(
-                view.panel.clone(),
-                std::sync::Arc::new(view.document.clone()),
-            );
-        }
-        // Revoke against the newly published opt-in, before a second public event can use old slots.
-        // Accepted writers pin their payload independently and still deliver the original save receipt.
-        self.reconcile_image_inputs();
-        self.error = None;
-        Ok(reply)
+            let reply = self.decode_completion(&result, invocation_id)?;
+            let mut panels = std::collections::BTreeSet::new();
+            for view in &reply.views {
+                anyhow::ensure!(
+                    self.panels.contains(&view.panel),
+                    "Undeclared panel: {}",
+                    view.panel
+                );
+                anyhow::ensure!(
+                    panels.insert(&view.panel),
+                    "Duplicate panel in plugin reply"
+                );
+            }
+            // Publish only after every document validates; an invalid peer never partly updates the UI.
+            for view in &reply.views {
+                self.views.insert(
+                    view.panel.clone(),
+                    std::sync::Arc::new(view.document.clone()),
+                );
+            }
+            // Revoke against the newly published opt-in, before a second public event can use old slots.
+            // Accepted writers pin their payload independently and still deliver the original save receipt.
+            self.reconcile_image_inputs();
+            self.error = None;
+            Ok(reply)
+        })();
+        publication.finish(if published.is_ok() {
+            crate::observability::Outcome::Completed
+        } else {
+            crate::observability::Outcome::Failed
+        });
+        published
     }
     pub fn activate(&mut self) -> anyhow::Result<()> {
         self.store.data_mut().active = true;
@@ -717,6 +811,7 @@ impl Instance {
                 && self.store.data().staged_writes.is_none()
         );
         self.store.data_mut().activation_committed = true;
+        self.sample_resources();
         let state = self.store.data();
         if state.permissions.contains("native.modules") && !state.module_exports.is_empty() {
             state
@@ -791,6 +886,10 @@ impl Instance {
             tree.revoke();
         }
         self.store.data_mut().trees.clear();
+        for resource in self.store.data().presentations.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().presentations.clear();
         for resource in self.store.data().decorations.values() {
             resource.revoke();
         }
@@ -812,6 +911,8 @@ impl Instance {
         self.store.data_mut().process_display_scopes.clear();
         self.store.data_mut().process_dependencies.clear();
         self.store.data_mut().active = false;
+        // Only the final real maps can attest to cleanup; an earlier sample retains stale process slots.
+        self.sample_resources();
     }
     pub fn process_count(&self) -> usize {
         self.store.data().processes.len()

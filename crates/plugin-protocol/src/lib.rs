@@ -41,6 +41,17 @@
 //! metadata subscriptions, virtual content and comparisons use [`api::DocumentInfo`],
 //! [`api::DocumentSnapshot`] and [`api::EditorOperation`]. Instance retirement revokes
 //! resources; opaque handles and snapshots cannot restore external side effects.
+//!
+//! # Feature lifetimes
+//!
+//! With `guest`, [`api::guest::ResourceGroup`] owns independent document subscriptions and timers;
+//! [`api::guest::EditorIntent`] replaces asynchronous editor work without accepting late results;
+//! [`http::HttpTask`] owns a stream and its polling timer. Feed each helper its notifications and
+//! explicitly close it when the feature ends. Hiding a panel does not automatically end its work.
+//! Cleanup reports distinguish release failure from the business result. HTTP terminal events still
+//! require closing their stream, while editor terminal notifications and one-shot timer receipts
+//! arrive after the host released those handles. Drop never calls the host; instance retirement
+//! remains the final guard after a trap. Never serialize or duplicate live helper ownership.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -66,10 +77,12 @@ pub mod http;
 /// Native host dialogs and instance-bound user-selected file authority.
 pub mod interaction;
 pub mod language;
+pub mod language_content;
 /// Explicit native project membership and bounded metadata queries for shared source snapshots.
 pub mod language_context;
 /// Provider-owned native control over the existing language connection, with bounded inert values.
 pub mod language_control;
+pub mod presentation;
 pub mod process;
 /// System-protected credentials isolated by host profile and plugin identity.
 pub mod secrets;
@@ -141,6 +154,10 @@ pub struct Manifest {
     /// Opt in to a bounded, preparation-only validation/discovery callback.
     #[serde(default)]
     pub settings_hook: bool,
+    /// dependencies 1.4: readonly selection from each method's immutable native-plan allowlist.
+    /// Omission prepares all declared plans; the hook cannot add plans or start native work.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub service_preparation_hook: bool,
     pub id: String,
     pub name: String,
     pub version: String,

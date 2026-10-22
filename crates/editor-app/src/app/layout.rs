@@ -230,7 +230,7 @@ impl EditorApp {
                     .map(|node| (placement, node))
             });
             if let Some((placement, node)) = neighbor {
-                let stacking = crate::ui::controls::dock::stack_axis(area, node, Some(editor_id));
+                let stacking = editor_ui::dock::stack_axis(area, node, Some(editor_id));
                 area.add_panel_view(outline, placement, None, window, cx);
                 area.move_panel(
                     outline_id,
@@ -247,7 +247,7 @@ impl EditorApp {
                     cx,
                 );
             } else {
-                crate::ui::controls::dock::add_panel_view(
+                editor_ui::dock::add_panel_view(
                     area,
                     outline,
                     gpui_base::dock::DockPlacement::Left,

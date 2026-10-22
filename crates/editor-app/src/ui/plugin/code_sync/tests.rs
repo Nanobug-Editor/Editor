@@ -200,7 +200,7 @@ fn mount(
 ) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
         cx.set_reduce_motion(true);
     });
@@ -270,7 +270,7 @@ fn mount(
             let target = source.clone();
             let expected = version.clone();
             view.native_editor = Some(Rc::new(move |version, _, _, _, cx| {
-                (version == &expected).then(|| crate::ui::controls::window_editor(&target, cx))
+                (version == &expected).then(|| editor_ui::window_editor(&target, cx))
             }));
             view.action_source_current = Some(Rc::new(move |source, _| source == &version));
             view

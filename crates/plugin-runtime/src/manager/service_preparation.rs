@@ -22,8 +22,12 @@ impl Manager {
     ) -> Result<Option<Call>, api::Failure> {
         let provider = self
             .live
-            .values()
-            .chain(self.parked.values().flat_map(|scope| scope.live.values()))
+            .values_mut()
+            .chain(
+                self.parked
+                    .values_mut()
+                    .flat_map(|scope| scope.live.values_mut()),
+            )
             .find(|instance| {
                 instance.service_provider().is_some_and(|provider| {
                     provider.caller.instance == call.reference.provider.caller.instance

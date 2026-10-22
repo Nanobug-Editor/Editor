@@ -1,0 +1,20 @@
+[package]
+name = "editor-history"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# Keep complete content and version metadata in one durable SQLite transaction.
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+sha2 = "0.10"
+zstd = "=0.13.3"
+glob = "0.3"
+futures = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

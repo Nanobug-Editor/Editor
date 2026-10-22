@@ -10,21 +10,22 @@ use super::{
 };
 use crate::app::messages::MessageLevel;
 use crate::extensions::HostWork as Work;
-use crate::ui::controls::menu::MenuStyle;
-use crate::ui::controls::{Button, DialogContent};
+use editor_ui::menu::MenuStyle;
+use editor_ui::{Button, DialogContent};
 // The crate root already selects the same widget and styling traits the rest of the shell uses.
-use crate::ui::controls::menu::PopupMenu as NativePopupMenu;
 use crate::*;
+use editor_ui::menu::PopupMenu as NativePopupMenu;
 use gpui_base::input::{InputEvent, InputState, TextareaState};
 use gpui_kit::{AnyElement, DismissEvent, WeakEntity, Window, div, px};
 use rust_i18n::t;
-use sha2::{Digest, Sha256};
 
 mod configuration;
 mod terminal;
 pub(crate) use configuration::render_run_config_form;
 mod dialog;
 pub(crate) use dialog::RunConfigModal;
+mod breakpoints;
+mod inspection;
 pub(crate) mod panel;
 
 /// Width of the unified run dropdown; it holds session labels with state words beside them.
@@ -112,7 +113,7 @@ impl EditorApp {
                 &config,
                 index,
                 request,
-                result.as_deref().map_err(String::as_str),
+                result.as_ref().map_err(String::as_str),
             ) {
                 if let Err(error) = result {
                     self.status = error;
@@ -135,7 +136,14 @@ impl EditorApp {
         // were asked about: a late one is reported rather than replacing a newer view.
         for (request, answer) in self.extensions.read(cx).take_debug_answers() {
             use crate::extensions::DebugAnswerMessage;
+            let navigate = matches!(
+                &answer,
+                DebugAnswerMessage::Inspection(crate::run::inspection::Answer::Frames(_))
+            );
             let outcome = match answer {
+                DebugAnswerMessage::Inspection(answer) => {
+                    self.run_controls.apply_tree_answer(request, answer)
+                }
                 DebugAnswerMessage::Connecting(session) => {
                     self.run_controls.note_debug_connecting(request, &session)
                 }
@@ -190,6 +198,13 @@ impl EditorApp {
             };
             if let Err(reason) = outcome {
                 self.status = super::debug_presentation::inspection_error(&reason);
+            } else if navigate
+                && let Some((source, line)) = self
+                    .run_controls
+                    .debug_location()
+                    .map(|(source, line)| (source.to_owned(), line))
+            {
+                self.open_debug_location(&source, line, window, cx);
             }
         }
         // A pause is where the user wants to see the stack, so the editor asks for it. Without this
@@ -1078,7 +1093,14 @@ impl EditorApp {
                 };
                 // Only a preparation that was already accepted may save and start, so a refused plan
                 // never prompts for a save it cannot use.
-                if !self.save_dirty_documents(cx) {
+                let resume_id = config.id.clone();
+                let resume_env = env.clone();
+                if self.defer_history_saves(
+                    move |app, window, cx| {
+                        app.start_configuration(&resume_id, resume_env, window, cx);
+                    },
+                    cx,
+                ) {
                     // A failed or unconfirmed save must not be followed by a launch of stale code.
                     return;
                 }
@@ -1277,6 +1299,10 @@ impl EditorApp {
     /// moment that is over. Asking twice for the same pause is left to `begin_debug_request`, which
     /// refuses the duplicate rather than sending two calls whose answers would race.
     fn fetch_debug_inspection(&mut self, cx: &mut Context<Self>) {
+        if self.run_controls.selected_debug_capabilities().thread_tree {
+            self.fetch_tree_inspection(cx);
+            return;
+        }
         if self.run_controls.debug_action_pending() {
             return;
         }
@@ -1319,6 +1345,10 @@ impl EditorApp {
     /// update happened to pass through. The request is scoped to the frame, so a second selection makes
     /// the first answer stale rather than the two racing.
     fn fetch_debug_frame_variables(&mut self, cx: &mut Context<Self>) {
+        if self.run_controls.selected_debug_capabilities().thread_tree {
+            self.fetch_tree_inspection(cx);
+            return;
+        }
         if !self.run_controls.selected_debug_capabilities().inspect {
             return;
         }
@@ -1514,7 +1544,13 @@ impl EditorApp {
             }
         };
         // Saving and preparation are identical to Run; only the final target crosses debug.session.
-        if !self.save_dirty_documents(cx) {
+        let resume_id = configuration.id.clone();
+        if self.defer_history_saves(
+            move |app, window, cx| {
+                app.debug_configuration(&resume_id, window, cx);
+            },
+            cx,
+        ) {
             return;
         }
         match self
@@ -1553,6 +1589,7 @@ impl EditorApp {
         &mut self,
         configuration: &str,
         details: serde_json::Value,
+        origins: Vec<plugin_runtime::TargetOrigin>,
         cx: &mut Context<Self>,
     ) {
         self.run_controls.note_debug_session_begun(configuration);
@@ -1583,6 +1620,7 @@ impl EditorApp {
         if !self.stage_validated_run(
             configuration,
             Work::DebugCall {
+                origins,
                 request,
                 configuration: Some(configuration.into()),
                 method: "start".into(),
@@ -1667,7 +1705,19 @@ impl EditorApp {
                 return;
             }
         };
-        if !self.save_dirty_documents(cx) {
+        let resume_id = config.id.clone();
+        if self.defer_history_saves(
+            move |app, window, cx| {
+                if app
+                    .run_controls
+                    .selected()
+                    .is_some_and(|config| config.id == resume_id)
+                {
+                    app.build_selected(window, cx);
+                }
+            },
+            cx,
+        ) {
             // A build of stale code is worse than no build: the same confirmation the run path uses.
             return;
         }
@@ -1789,6 +1839,11 @@ impl EditorApp {
             }
         } else {
             Work::StartRun {
+                origins: self
+                    .run_controls
+                    .preparation(config)
+                    .map(|sequence| sequence.planned_origins(index).to_vec())
+                    .unwrap_or_default(),
                 request,
                 config: config.into(),
                 request_id,
@@ -1874,8 +1929,8 @@ impl EditorApp {
 
     /// Report a preparation that finished, whether it ended in a launch or a completed build.
     fn finish_preparation(&mut self, config: &str, cx: &mut Context<Self>) {
-        if let Some(details) = self.run_controls.take_prepared_debug(config) {
-            self.start_prepared_debug(config, details, cx);
+        if let Some((details, origins)) = self.run_controls.take_prepared_debug(config) {
+            self.start_prepared_debug(config, details, origins, cx);
             return;
         }
         let name = self
@@ -1914,6 +1969,7 @@ impl EditorApp {
         // builds it, without the title bar's preparation in between.
         let request_id = self.run_controls.begin(&config.id);
         let queued = self.extensions.read(cx).stage_host_run(Work::StartRun {
+            origins: Vec::new(),
             request,
             config: config.id.clone(),
             request_id,
@@ -2154,83 +2210,9 @@ impl EditorApp {
         cx.notify();
     }
 
-    /// Save every modified document before a launch, reporting a refusal instead of launching.
-    ///
-    /// A document whose disk copy changed underneath the editor, or whose file disappeared, needs an
-    /// explicit overwrite confirmation. Launching would run the older file, so the launch stops here.
+    /// Compatibility query for callers that do not have an action to resume; pending saves return false.
     pub(crate) fn save_dirty_documents(&mut self, cx: &mut Context<Self>) -> bool {
-        let dirty = (0..self.tabs.len())
-            .filter(|index| {
-                // Binary viewers retain file tabs but never acquire a text save obligation.
-                self.text_tab(*index).is_some_and(|tab| {
-                    tab.session.is_dirty() || tab.disk_state != crate::DiskState::Synced
-                })
-            })
-            .collect::<Vec<_>>();
-        for index in dirty {
-            let Some(tab) = self.text_tab(index) else {
-                continue;
-            };
-            if tab.disk_state != crate::DiskState::Synced && !tab.overwrite_confirmed {
-                // The ordinary save path asks for confirmation; the launch waits for that answer.
-                self.report_host_message(
-                    MessageLevel::Warning,
-                    t!("status.confirm_disk_overwrite").to_string(),
-                    cx,
-                );
-                cx.notify();
-                return false;
-            }
-            let path = tab.session.path().to_path_buf();
-            self.save_document_at(index, cx);
-            if self.text_tab(index).is_none_or(|tab| {
-                tab.session.is_dirty() || tab.disk_state != crate::DiskState::Synced
-            }) {
-                // A save that did not take effect must not be treated as a successful preparation.
-                // The detailed disk failure was already retained by save_document_at; do not duplicate it.
-                self.status = t!(
-                    "run.save_failed_named",
-                    path = editor_core::display_path(&path)
-                )
-                .to_string();
-                cx.notify();
-                return false;
-            }
-        }
-        true
-    }
-
-    /// Save one open document by index, using the same session and file store as a manual save.
-    fn save_document_at(&mut self, index: usize, cx: &mut Context<Self>) {
-        // Narrow to the actual text capability before consulting its session or editor entity.
-        let Some(tab) = self.text_tab(index) else {
-            return;
-        };
-        let value = tab.editor.read(cx).value().to_string();
-        if let Some(history) = &self.history {
-            let _ = history.snapshot_file(tab.session.path());
-        }
-        let Some(tab) = self.tabs.get_mut(index).and_then(|file| file.text.as_mut()) else {
-            return;
-        };
-        match tab.session.save(&self.file_store, &value) {
-            Ok(()) => {
-                tab.disk_digest = Sha256::digest(value.as_bytes()).into();
-                tab.last_saved_at = std::time::Instant::now();
-                tab.disk_state = crate::DiskState::Synced;
-                tab.overwrite_confirmed = false;
-                let path = tab.session.path().to_path_buf();
-                // Run preparation saves documents quietly, just like a successful active-document save.
-                self.notify_language_document_saved(&path, value, cx);
-            }
-            Err(error) => {
-                self.report_host_message(
-                    MessageLevel::Error,
-                    t!("status.save_failed", error = error.to_string()).to_string(),
-                    cx,
-                );
-            }
-        }
+        !self.defer_history_saves(|_, _, _| {}, cx)
     }
 }
 

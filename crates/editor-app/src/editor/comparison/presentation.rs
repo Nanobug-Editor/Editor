@@ -1,4 +1,4 @@
-//! Native comparison navigation, explicit alignment pauses and derived readonly unified text.
+//! Native comparison arrows, default shared scrolling and derived readonly comparison text.
 use super::*;
 use gpui_kit::AnyElement;
 use std::cell::RefCell;
@@ -109,6 +109,24 @@ pub(super) fn refresh_inline_marks(comparison: &mut DocumentComparison, cx: &mut
 }
 
 impl EditorApp {
+    /// Reveal hunk `index` in the actual shared viewport, with a measured independent-mode fallback.
+    /// Source selections, focus and Undo stay owned by their native editor sessions.
+    pub(super) fn reveal_comparison_hunk(&self, index: usize, cx: &mut App) {
+        let Some(comparison) = &self.document_comparison else {
+            return;
+        };
+        // A new location supersedes any independent-pane request, including after alignment resumes.
+        *comparison.navigation.borrow_mut() = [None, None, None];
+        let targets = third::navigation_targets(comparison);
+        let Some(target) = targets.get(index.min(targets.len().saturating_sub(1))) else {
+            return;
+        };
+        if !comparison.alignment.reveal_offset_at(1, target[1], 0.5, cx) {
+            *comparison.navigation.borrow_mut() =
+                target.map(|offset| Some(crate::editor::viewport::Locator::centered(offset)));
+        }
+    }
+
     /// Shared controls remain native local buttons and operate only on the mounted comparison.
     pub(super) fn comparison_toolbar(&self, cx: &mut Context<Self>) -> AnyElement {
         let comparison = self.document_comparison.as_ref().unwrap();
@@ -122,15 +140,48 @@ impl EditorApp {
                 .iter()
                 .any(|view| &view.id == id && view.unified)
         });
-        div()
+        editor_ui::comparison_header_surface(cx)
+            .id("comparison-toolbar")
+            .debug_selector(|| "comparison-toolbar".into())
             .flex()
             .items_center()
-            .gap_2()
+            .gap_1()
             .flex_wrap()
             .px_2()
             .child(
+                Button::new("diff-file-previous")
+                    .debug_selector(|| "diff-file-previous".into())
+                    .icon(IconName::ArrowLeft)
+                    .tooltip(t!("editor.diff_file_previous").to_string())
+                    .small()
+                    .compact()
+                    .ghost()
+                    .disabled(self.comparison_file_navigation(false).is_none())
+                    .on_click(
+                        cx.listener(|this, _, _, cx| this.navigate_comparison_file(false, cx)),
+                    ),
+            )
+            .child(
+                Button::new("diff-file-next")
+                    .debug_selector(|| "diff-file-next".into())
+                    .icon(IconName::ArrowRight)
+                    .tooltip(t!("editor.diff_file_next").to_string())
+                    .small()
+                    .compact()
+                    .ghost()
+                    .disabled(self.comparison_file_navigation(true).is_none())
+                    .on_click(
+                        cx.listener(|this, _, _, cx| this.navigate_comparison_file(true, cx)),
+                    ),
+            )
+            .child(
                 Button::new("diff-previous")
-                    .label(t!("editor.diff_previous").to_string())
+                    .debug_selector(|| "diff-previous".into())
+                    .icon(IconName::ArrowUp)
+                    .tooltip(t!("editor.diff_previous").to_string())
+                    .small()
+                    .compact()
+                    .ghost()
                     .disabled(no_changes)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.navigate_comparison_hunk(false, window, cx)
@@ -139,55 +190,17 @@ impl EditorApp {
             .child(
                 Button::new("diff-next")
                     .debug_selector(|| "diff-next".into())
-                    .label(t!("editor.diff_next").to_string())
+                    .icon(IconName::ArrowDown)
+                    .tooltip(t!("editor.diff_next").to_string())
+                    .small()
+                    .compact()
+                    .ghost()
                     .disabled(no_changes)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.navigate_comparison_hunk(true, window, cx)
                     })),
             )
-            .child(
-                Button::new("diff-unified")
-                    .debug_selector(|| "diff-unified".into())
-                    .label(if unified {
-                        t!("editor.diff_split").to_string()
-                    } else {
-                        t!("editor.diff_unified").to_string()
-                    })
-                    .disabled(self.active_comparison.is_none() || comparison.third.is_some())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        if let Some(id) = &this.active_comparison
-                            && let Some(view) =
-                                this.comparison_views.iter_mut().find(|view| &view.id == id)
-                        {
-                            view.unified = !view.unified;
-                            if view.unified {
-                                if let Some(comparison) = &this.document_comparison {
-                                    for region in comparison.alignment.regions() {
-                                        region.request_cancel();
-                                    }
-                                }
-                            }
-                        }
-                        this.prepare_unified_comparison(window, cx);
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("diff-sync")
-                    .label(t!("editor.diff_sync").to_string())
-                    .when(comparison.synchronized.get(), |button| button.primary())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(view) = &this.document_comparison {
-                            let enabled = !view.synchronized.get();
-                            view.synchronized.set(enabled);
-                            for region in view.alignment.regions() {
-                                region.request_cancel();
-                            }
-                            view.alignment.set_enabled(enabled, cx);
-                        }
-                        cx.notify();
-                    })),
-            )
+            .children(self.comparison_fold_buttons(cx))
             .children(
                 (!unified)
                     .then(|| match comparison.alignment.status(cx) {
@@ -204,23 +217,6 @@ impl EditorApp {
                     })
                     .flatten()
                     .map(|message| div().child(message)),
-            )
-            .child(div().flex_1())
-            .child(
-                Button::new("close-document-diff")
-                    .label(t!("editor.close_diff").to_string())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.close_plugin_document_menu(window, cx);
-                        if let Some(id) = this.active_comparison.clone() {
-                            this.close_comparison_view(&id, window, cx);
-                        } else {
-                            this.close_document_comparison(cx);
-                        }
-                        if this.active_text_tab_index().is_some() {
-                            this.editor
-                                .update(cx, |editor, cx| editor.focus(window, cx));
-                        }
-                    })),
             )
             .into_any_element()
     }
@@ -250,7 +246,6 @@ impl EditorApp {
             };
             view.hunk = index;
         }
-        let target = targets[index];
         if self.active_comparison.as_ref().is_some_and(|id| {
             self.comparison_views
                 .iter()
@@ -268,10 +263,7 @@ impl EditorApp {
             cx.notify();
             return;
         }
-        if !comparison.alignment.reveal_offset(1, target[1], cx) {
-            *comparison.navigation.borrow_mut() =
-                target.map(|offset| Some(crate::editor::viewport::Locator::new(offset, 0.0)));
-        }
+        self.reveal_comparison_hunk(index, cx);
         cx.notify();
     }
     /// Unified mode is an immutable derived display. Editing resumes in the shared right session.
@@ -340,7 +332,7 @@ impl EditorApp {
             let collection = editor.update(cx, |editor, cx| {
                 editor.set_value(text, window, cx);
                 editor.set_readonly(true, cx);
-                editor.create_range_decorations_collection(marks, cx)
+                RowBackgroundCollection::new(&cx.entity(), marks, cx)
             });
             comparison.unified_editor = Some(editor);
             comparison.unified_marks = Some(collection);

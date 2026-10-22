@@ -2,6 +2,19 @@
 //! Protocol 7 composes canvases with native controls through independently negotiated capabilities.
 //! No GPUI objects cross this interface.
 //!
+//! `ui.canvas` 1.2 adds [`Canvas::scroll_epoch`] and [`CanvasEvent::ScrollInput`].
+//! Give each replacement of a canvas's ordered content a fresh nonzero epoch, including a
+//! return to previously displayed content. Preserve it through painting, theme and size updates.
+//! Only native range deltas/positions may cross an older UI revision with that exact epoch;
+//! future revisions, disabled/removed nodes, modals and source-owned actions remain rejected.
+//! Ordinary wheels, pointer, key and text events still require the exact displayed UI revision.
+//! Apply [`ScrollChange`] in order, clamping against the actual viewport. Hosts may combine
+//! consecutive deltas of the same sign and retain the latest consecutive absolute position.
+//! `ui.canvas` 1.3 adds [`Canvas::scroll_buffer`]: a virtualized provider declares the complete
+//! painted content interval, including overscan. Native frames translate retained artwork while
+//! guest replies are in flight; pointer coordinates are mapped back to that drawing's offset.
+//! This opt-in excludes grid/IME canvases and visual viewport transforms. See [`ScrollBuffer`].
+//!
 //! `ui.windows` 1.0 permits a workspace package to declare `Panel.position = "window"`,
 //! with the ordinary `ui.panels` grant. Publish its `api::View` before requesting visibility
 //! through `EditorOperation::SetPanelVisibility`. Native close hides only that surface;
@@ -36,10 +49,15 @@ pub use styles::*;
 mod canvas;
 pub use canvas::*;
 mod events;
+#[cfg(test)]
+mod scroll_tests;
 mod visual_viewport;
 pub use visual_viewport::*;
 mod tools;
 pub use tools::*;
+mod menus;
+pub(crate) use menus::valid_text;
+pub use menus::*;
 pub mod incremental;
 pub use incremental::Reuse;
 
@@ -150,7 +168,11 @@ impl Document {
                     required.insert("editor.actions", semver::Version::new(1, 0, 0));
                 }
                 Kind::Canvas(canvas) => {
-                    let version = if canvas.scroll.is_some() || canvas.font != Default::default() {
+                    let version = if canvas.scroll_buffer.is_some() {
+                        semver::Version::new(1, 3, 0)
+                    } else if canvas.scroll_epoch.is_some() {
+                        semver::Version::new(1, 2, 0)
+                    } else if canvas.scroll.is_some() || canvas.font != Default::default() {
                         semver::Version::new(1, 1, 0)
                     } else {
                         semver::Version::new(1, 0, 0)

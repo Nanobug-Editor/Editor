@@ -1,8 +1,8 @@
 //! Reusable native modal window with a caller-owned title and content region.
 
-use crate::ui::controls::overlay::WindowExt as _;
-use crate::ui::controls::window::TitleBar;
 use crate::ui::theme::ActiveTheme;
+use editor_ui::overlay::WindowExt as _;
+use editor_ui::window::TitleBar;
 use gpui_base::{Root, StyledExt};
 use gpui_base::{h_flex, v_flex};
 use gpui_kit::assets::IconName;
@@ -15,10 +15,8 @@ use gpui_kit::{
 use gpui_kit::{div, px, size};
 use std::rc::Rc;
 
-use crate::{
-    PANEL_HEADER_HEIGHT,
-    ui::controls::{Button, DialogContent},
-};
+use crate::PANEL_HEADER_HEIGHT;
+use editor_ui::{Button, DialogContent};
 
 type ContentBuilder = Rc<dyn Fn(DialogContent, &mut Window, &mut App) -> DialogContent>;
 type TitleBuilder = Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>;

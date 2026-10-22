@@ -956,6 +956,7 @@ fn a_debug_package_offers_exactly_what_it_declares() {
     assert_eq!(
         full,
         plugin_runtime::DebugAbilities {
+            thread_tree: false,
             breakpoints: true,
             resume_pause: true,
             step: true,

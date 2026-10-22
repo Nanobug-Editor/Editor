@@ -43,6 +43,9 @@ fn host_messages_confirmation_and_clear_preserve_plugin_logs(cx: &mut TestAppCon
             assert!(form.debug_bounds("plugin-status-popup").is_none());
         };
         publish(form, app);
+        // Fresh workspaces keep messages closed. Open explicitly before inspecting their empty history.
+        assert!(form.debug_bounds("host-messages-panel").is_none());
+        click(form, "host-messages-toggle");
         assert!(form.debug_bounds("host-messages-empty").is_some());
         assert!(form.debug_bounds("host-message-1").is_none());
         assert!(form.debug_bounds("host-messages-dot").is_none());

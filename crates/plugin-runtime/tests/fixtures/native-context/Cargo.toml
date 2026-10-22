@@ -1,0 +1,15 @@
+[package]
+name = "native-context-fixture"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Independent consumer of the host-exported SDK, never a repository path dependency.
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1.0"

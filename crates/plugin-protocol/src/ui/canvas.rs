@@ -10,6 +10,19 @@ pub struct Canvas {
     /// Native scrollbar range. Content remains guest-owned; scrolling emits an absolute pixel offset.
     #[serde(default)]
     pub scroll: Option<ScrollRange>,
+    /// `ui.canvas` 1.2: nonzero identity of the current scroll content. Keep it through
+    /// drawing-only repaints; change it when content/order/meaning changes, including A → B → A.
+    /// Opted-in deltas and scrollbar positions survive older UI revisions with this same identity.
+    /// Other input remains scene-bound. Omission preserves the original exact-revision contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scroll_epoch: Option<u64>,
+    /// `ui.canvas` 1.3: retained content interval, in absolute vertical content pixels.
+    /// Paint coordinates still refer to `scroll.offset`. The host translates them each native
+    /// frame while a replacement drawing is in flight, and maps pointer coordinates back.
+    /// Supply overscan around the viewport; motion beyond this interval waits for new artwork.
+    /// Requires a scroll epoch, excludes grid/IME canvases and transformed visual viewports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scroll_buffer: Option<ScrollBuffer>,
     pub paint: Vec<crate::Paint>,
     /// Ordinary image surfaces do not claim text focus or IME; interactive canvases explicitly opt in.
     #[serde(default)]
@@ -27,6 +40,16 @@ pub struct Canvas {
 pub struct ScrollRange {
     pub content: f32,
     pub offset: f32,
+}
+
+/// The complete vertical interval painted by a virtualized canvas, including its overscan.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScrollBuffer {
+    /// First covered content pixel, inclusive.
+    pub start: f32,
+    /// Last covered content pixel, exclusive; must not exceed the scroll content extent.
+    pub end: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -47,6 +70,12 @@ pub enum PointerPhase {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CanvasEvent {
+    /// `ui.canvas` 1.2: range movement addressed to one still-current scroll content.
+    /// Only this event can cross a drawing revision; it grants no pointer, key or text authority.
+    ScrollInput {
+        epoch: u64,
+        change: ScrollChange,
+    },
     Scroll {
         offset: f32,
     },
@@ -84,14 +113,43 @@ pub enum CanvasEvent {
     },
 }
 
+/// A range movement uses logical pixels; apply each delta in order and clamp to the native viewport.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ScrollChange {
+    /// Native wheel convention: positive moves toward the start, negative toward the end.
+    Delta { delta_y: f32 },
+    /// A native scrollbar's absolute, nonnegative content offset.
+    To { offset: f32 },
+}
+
 impl Canvas {
     /// Validate geometry and bound expensive vectors before allocating host rendering resources.
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(buffer) = &self.scroll_buffer {
+            let valid = self.scroll_epoch.is_some()
+                && !self.grid
+                && self.caret.is_none()
+                && self.scroll.as_ref().is_some_and(|range| {
+                    buffer.start.is_finite()
+                        && buffer.end.is_finite()
+                        && buffer.start >= 0.
+                        && buffer.start <= range.offset
+                        && buffer.end >= range.offset
+                        && buffer.end <= range.content
+                });
+            if !valid {
+                return Err("Invalid retained canvas scroll buffer".into());
+            }
+        }
         if self
-            .font
-            .family
-            .as_ref()
-            .is_some_and(|font| font.is_empty() || font.len() > 256)
+            .scroll_epoch
+            .is_some_and(|epoch| epoch == 0 || self.scroll.is_none())
+            || self
+                .font
+                .family
+                .as_ref()
+                .is_some_and(|font| font.is_empty() || font.len() > 256)
             || self
                 .font
                 .size_px

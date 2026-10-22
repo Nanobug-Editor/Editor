@@ -1,0 +1,531 @@
+{
+  "binary_sha256": "0527C82DDD99A5921D3C60BC95CDF9CDEE56EC6768ECE9F7B7E83C0261F3EBC9",
+  "output_directory": "target/history-native-20261022-j",
+  "profile": "debug test; real Windows/D3D11",
+  "cases": {
+    "dark-zh-CN-100": {
+      "case": "dark-zh-CN-100",
+      "platform": "Windows/D3D11",
+      "shutdown_complete": true,
+      "os_ime_candidates_verified": false,
+      "observations": {
+        "native_history_entrypoints": [
+          "application-menu",
+          "explorer-context",
+          "tab-context"
+        ],
+        "comparison_visible_sources": {
+          "historical_readonly": true,
+          "current_writable": true,
+          "values_match_sources": true,
+          "bounds": "[Bounds { origin: Point { x: 570px, y: 139px }, size: Size { 290px × 609px } }, Bounds { origin: Point { x: 860px, y: 139px }, size: Size { 290px × 609px } }]",
+          "painted_glyphs": "[Bounds { origin: Point { x: 618.6094px, y: 139px }, size: Size { 14px × 21px } }, Bounds { origin: Point { x: 908.6094px, y: 139px }, size: Size { 8.203125px × 21px } }]"
+        },
+        "native_save_restore_undo_redo_disk_unchanged": true,
+        "native_ime_preedit_cancel": true,
+        "protected_delete_dirty_restore_create_only_save": true,
+        "native_small_save_including_history_ack": {
+          "disabled": {
+            "samples": 12,
+            "p50_ms": 59.1044,
+            "p95_ms": 122.586,
+            "max_ms": 122.586
+          },
+          "enabled": {
+            "samples": 12,
+            "p50_ms": 63.0753,
+            "p95_ms": 76.6578,
+            "max_ms": 76.6578
+          }
+        },
+        "background_diff_preparation": [
+          {
+            "case": "1MiB",
+            "accepted": true,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 0.0668,
+              "p95_ms": 0.0966,
+              "max_ms": 0.0966
+            }
+          },
+          {
+            "case": "1MiB+1",
+            "accepted": false,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 0.0,
+              "p95_ms": 9.999999999999999e-05,
+              "max_ms": 9.999999999999999e-05
+            }
+          },
+          {
+            "case": "2000-lines",
+            "accepted": true,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 99.2093,
+              "p95_ms": 108.38839999999999,
+              "max_ms": 108.38839999999999
+            }
+          },
+          {
+            "case": "2001-lines",
+            "accepted": false,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 0.044199999999999996,
+              "p95_ms": 0.0493,
+              "max_ms": 0.0493
+            }
+          }
+        ],
+        "8mib_single_line": {
+          "list_visible_ms": 718.0478,
+          "preview_visible_ms": 2120.9029,
+          "close_ms": 4067.3534,
+          "cancel_dispatch_ms": 0.2587,
+          "bytes": 8388608
+        },
+        "native_filter_cursor_pages": {
+          "rows": 113,
+          "pages": [
+            50,
+            50,
+            13
+          ],
+          "first_visible_ms": 30.5214
+        },
+        "clear_preview_cancel_confirm": true,
+        "native_settings_profile_toggle_persisted": true
+      },
+      "screenshots": {
+        "comparison.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "comparison.png",
+          "os_ime_candidates_verified": false
+        },
+        "ime-preedit.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "ime-preedit.png",
+          "os_ime_candidates_verified": false
+        },
+        "deleted-preview.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "deleted-preview.png",
+          "os_ime_candidates_verified": false
+        },
+        "recovered-pending.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "recovered-pending.png",
+          "os_ime_candidates_verified": false
+        },
+        "8mib-preview.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "8mib-preview.png",
+          "os_ime_candidates_verified": false
+        },
+        "8mib-diff-degraded.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "8mib-diff-degraded.png",
+          "os_ime_candidates_verified": false
+        },
+        "filtered-third-page.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "filtered-third-page.png",
+          "os_ime_candidates_verified": false
+        },
+        "clear-confirmation.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            1150.0,
+            820.0
+          ],
+          "client_physical": [
+            1150,
+            820
+          ],
+          "image_physical": [
+            1150,
+            820
+          ],
+          "screenshot": "clear-confirmation.png",
+          "os_ime_candidates_verified": false
+        },
+        "settings.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.0,
+          "viewport_logical": [
+            760.0,
+            508.0
+          ],
+          "client_physical": [
+            760,
+            508
+          ],
+          "image_physical": [
+            760,
+            508
+          ],
+          "screenshot": "settings.png",
+          "os_ime_candidates_verified": false
+        }
+      },
+      "verdict": "Ok(\n    (),\n)"
+    },
+    "light-en-150": {
+      "case": "light-en-150",
+      "platform": "Windows/D3D11",
+      "shutdown_complete": true,
+      "os_ime_candidates_verified": false,
+      "observations": {
+        "native_history_entrypoints": [
+          "application-menu",
+          "explorer-context",
+          "tab-context"
+        ],
+        "comparison_visible_sources": {
+          "historical_readonly": true,
+          "current_writable": true,
+          "values_match_sources": true,
+          "bounds": "[Bounds { origin: Point { x: 570px, y: 137.33334px }, size: Size { 292.66666px × 614.6667px } }, Bounds { origin: Point { x: 862.6667px, y: 137.33334px }, size: Size { 292.66666px × 614.6667px } }]",
+          "painted_glyphs": "[Bounds { origin: Point { x: 618.6094px, y: 137.33334px }, size: Size { 14px × 21px } }, Bounds { origin: Point { x: 911.27606px, y: 137.33334px }, size: Size { 8.203125px × 21px } }]"
+        },
+        "native_save_restore_undo_redo_disk_unchanged": true,
+        "native_ime_preedit_cancel": true,
+        "protected_delete_dirty_restore_create_only_save": true,
+        "native_small_save_including_history_ack": {
+          "disabled": {
+            "samples": 12,
+            "p50_ms": 84.3621,
+            "p95_ms": 107.63799999999999,
+            "max_ms": 107.63799999999999
+          },
+          "enabled": {
+            "samples": 12,
+            "p50_ms": 66.369,
+            "p95_ms": 82.7341,
+            "max_ms": 82.7341
+          }
+        },
+        "background_diff_preparation": [
+          {
+            "case": "1MiB",
+            "accepted": true,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 0.0674,
+              "p95_ms": 0.092,
+              "max_ms": 0.092
+            }
+          },
+          {
+            "case": "1MiB+1",
+            "accepted": false,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 0.0,
+              "p95_ms": 9.999999999999999e-05,
+              "max_ms": 9.999999999999999e-05
+            }
+          },
+          {
+            "case": "2000-lines",
+            "accepted": true,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 100.8592,
+              "p95_ms": 122.4627,
+              "max_ms": 122.4627
+            }
+          },
+          {
+            "case": "2001-lines",
+            "accepted": false,
+            "timing": {
+              "samples": 9,
+              "p50_ms": 0.044199999999999996,
+              "p95_ms": 0.050899999999999994,
+              "max_ms": 0.050899999999999994
+            }
+          }
+        ],
+        "8mib_single_line": {
+          "list_visible_ms": 736.9396,
+          "preview_visible_ms": 2348.6054,
+          "close_ms": 4393.0409,
+          "cancel_dispatch_ms": 0.3154,
+          "bytes": 8388608
+        },
+        "native_filter_cursor_pages": {
+          "rows": 113,
+          "pages": [
+            50,
+            50,
+            13
+          ],
+          "first_visible_ms": 46.0968
+        },
+        "clear_preview_cancel_confirm": true,
+        "native_settings_profile_toggle_persisted": true
+      },
+      "screenshots": {
+        "comparison.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "comparison.png",
+          "os_ime_candidates_verified": false
+        },
+        "ime-preedit.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "ime-preedit.png",
+          "os_ime_candidates_verified": false
+        },
+        "deleted-preview.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "deleted-preview.png",
+          "os_ime_candidates_verified": false
+        },
+        "recovered-pending.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "recovered-pending.png",
+          "os_ime_candidates_verified": false
+        },
+        "8mib-preview.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "8mib-preview.png",
+          "os_ime_candidates_verified": false
+        },
+        "8mib-diff-degraded.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "8mib-diff-degraded.png",
+          "os_ime_candidates_verified": false
+        },
+        "filtered-third-page.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "filtered-third-page.png",
+          "os_ime_candidates_verified": false
+        },
+        "clear-confirmation.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            1155.3333740234375,
+            822.6666870117188
+          ],
+          "client_physical": [
+            1733,
+            1234
+          ],
+          "image_physical": [
+            1733,
+            1234
+          ],
+          "screenshot": "clear-confirmation.png",
+          "os_ime_candidates_verified": false
+        },
+        "settings.png": {
+          "renderer": "Windows D3D11 render target readback",
+          "scale_factor": 1.5,
+          "viewport_logical": [
+            765.3333129882812,
+            510.6666564941406
+          ],
+          "client_physical": [
+            1148,
+            766
+          ],
+          "image_physical": [
+            1148,
+            766
+          ],
+          "screenshot": "settings.png",
+          "os_ime_candidates_verified": false
+        }
+      },
+      "verdict": "Ok(\n    (),\n)"
+    }
+  }
+}

@@ -21,7 +21,7 @@ pub(in crate::extensions::worker::native_vue_recovery_tests::scenario) async fn 
         .last()
         .map_or(0, |record| record.id);
     ensure!(
-        h.actor.queue_lifecycle(Work::Install(candidate)),
+        h.actor.queue_lifecycle(Work::Install(candidate, true)),
         "provider candidate lifecycle queue was already occupied"
     );
     wait_for_rejection(h, &original.manifest.id, log_watermark, cx).await?;

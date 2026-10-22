@@ -173,11 +173,11 @@ impl StepEditor {
             .child(labeled(
                 "run-step-name",
                 t!("run.field_name").into(),
-                crate::ui::controls::Input::new(&editor.name).into_any_element(),
+                editor_ui::Input::new(&editor.name).into_any_element(),
             ))
             .child(
                 div().debug_selector(|| "run-step-kind".into()).child(
-                    crate::ui::controls::SegmentedTabs::new("run-step-kind")
+                    editor_ui::SegmentedTabs::new("run-step-kind")
                         .labels([
                             t!("run.field_program"),
                             t!("run.form_shell"),
@@ -235,18 +235,18 @@ impl StepEditor {
                         t!("run.field_program")
                     }
                     .into(),
-                    crate::ui::controls::Input::new(&editor.program).into_any_element(),
+                    editor_ui::Input::new(&editor.program).into_any_element(),
                 ))
                 .child(labeled(
                     "run-step-arguments",
                     t!("run.field_arguments").into(),
-                    crate::ui::controls::Textarea::new(&editor.arguments).into_any_element(),
+                    editor_ui::Textarea::new(&editor.arguments).into_any_element(),
                 ));
             if editor.kind == ActionKind::Script {
                 fields = fields.child(labeled(
                     "run-step-script",
                     t!("run.field_script").into(),
-                    crate::ui::controls::Textarea::new(&editor.script).into_any_element(),
+                    editor_ui::Textarea::new(&editor.script).into_any_element(),
                 ));
             }
         }

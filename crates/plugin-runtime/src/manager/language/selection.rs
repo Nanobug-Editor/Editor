@@ -4,17 +4,41 @@ use crate::language_contexts::RegisteredContext;
 use plugin_protocol::language::DocumentContext;
 
 impl Manager {
-    /// Resolve the current business owner's selection; cached paths never substitute for a lease.
+    /// A pending navigation outranks a cached alias. Otherwise resolve the approved native plan's
+    /// provider: a delegated facade can have a different name from its registered execution context.
     pub(super) fn selected_language_context(
         &self,
         provider: &str,
         document: &DocumentContext,
+        prepared: &Prepared,
     ) -> Option<RegisteredContext> {
         let (plugin, local) = provider.split_once('/')?;
         let owner = self.live.get(plugin)?.instance_id()?;
-        self.host_resources
-            .contexts
-            .selected(owner, &self.host_scope(), local, &document.path)
+        let contexts = &self.host_resources.contexts;
+        let scope = self.host_scope();
+        // Only an interactive delegate consumes this handoff. A simultaneous explicit control
+        // of an internal/native provider must continue to use that provider's own selected context.
+        self.installed[plugin]
+            .manifest
+            .language_servers
+            .iter()
+            .any(|provider| {
+                provider.id == local
+                    && provider
+                        .delegate
+                        .as_ref()
+                        .is_some_and(|delegate| delegate.interactive)
+            })
+            .then(|| contexts.navigation_context(owner, &scope, &document.path))
+            .flatten()
+            .or_else(|| {
+                let native_provider = prepared
+                    .service
+                    .as_ref()
+                    .ok()
+                    .map_or(local, |service| service.provider.id.as_str());
+                contexts.selected(owner, &scope, native_provider, &document.path)
+            })
     }
 
     /// A prior native/borrowed plan cannot satisfy a new selection even when settings are unchanged.
@@ -24,7 +48,7 @@ impl Manager {
         document: &DocumentContext,
         prepared: &Prepared,
     ) -> bool {
-        let Some(selected) = self.selected_language_context(provider, document) else {
+        let Some(selected) = self.selected_language_context(provider, document, prepared) else {
             return true;
         };
         prepared
@@ -35,9 +59,9 @@ impl Manager {
                 project.key == selected.reference.descriptor.key
                     && project.generation == selected.reference.descriptor.generation
             })
-            && prepared
-                .service
-                .as_ref()
-                .is_ok_and(|service| service.root == selected.root)
+            && prepared.service.as_ref().is_ok_and(|service| {
+                service.provider.id == selected.reference.descriptor.provider
+                    && service.root == selected.root
+            })
     }
 }

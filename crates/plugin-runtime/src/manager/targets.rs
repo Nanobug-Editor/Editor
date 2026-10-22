@@ -142,13 +142,6 @@ impl Manager {
     }
     /// List compatible static contributors without selecting a default or starting project tools.
     pub fn target_providers(&self) -> Vec<String> {
-        let contract = targets::declaration();
-        let dependency = Dependency {
-            collection: false,
-            version: ">=1.0,<2".parse().unwrap(),
-            optional: false,
-            methods: contract.methods,
-        };
         self.published_entries()
             .into_iter()
             .filter(|entry| {
@@ -162,7 +155,16 @@ impl Manager {
                         .plugin_services
                         .provides
                         .get(targets::CONTRACT)
-                        .is_some_and(|contract| dependency.matches(contract))
+                        .is_some_and(|contract| {
+                            let canonical = target_contract(contract.version.minor >= 1);
+                            Dependency {
+                                collection: false,
+                                version: ">=1.0,<2".parse().unwrap(),
+                                optional: false,
+                                methods: canonical.methods,
+                            }
+                            .matches(contract)
+                        })
             })
             .map(|entry| entry.manifest.id)
             .collect()
@@ -182,10 +184,22 @@ impl Manager {
             matches!(method, "discover" | "prepare"),
             "Unknown target method"
         );
+        let with_arguments = self
+            .published_entries()
+            .iter()
+            .find(|entry| entry.manifest.id == provider)
+            .and_then(|entry| {
+                entry
+                    .manifest
+                    .plugin_services
+                    .provides
+                    .get(targets::CONTRACT)
+            })
+            .is_some_and(|contract| contract.version.major == 1 && contract.version.minor >= 1);
         self.begin_configuration_service(
             provider,
             targets::CONTRACT,
-            targets::declaration(),
+            target_contract(with_arguments),
             method,
             arguments,
         )
@@ -283,7 +297,14 @@ impl Manager {
             ancestry: vec![],
             lifetimes: vec![self.host_alive.clone(), alive.clone()],
         };
-        let mut completion = Completion::new(if method == "prepare" { 120_000 } else { 30_000 });
+        // First birth includes bounded WASM compilation/activation. Large independent providers
+        // need the same cold budget as preparation; already active metadata calls stay short.
+        let mut completion =
+            Completion::new(if method == "prepare" || reference.owner().is_none() {
+                120_000
+            } else {
+                30_000
+            });
         completion.lifetimes = origin.lifetimes.clone();
         let owner = reference.provider.clone();
         let mut call = host_method_call(
@@ -316,6 +337,15 @@ impl Manager {
     }
 }
 
+/// Each service consumer uses the exact canonical signature of the provider's declared minor.
+fn target_contract(with_arguments: bool) -> plugin_protocol::service::Contract {
+    if with_arguments {
+        targets::declaration_with_arguments()
+    } else {
+        targets::declaration()
+    }
+}
+
 /// Read-only provenance of a public service receipt. The runtime alone creates these values.
 /// Consumers recheck provenance before accepting delayed results; ordinary permission checks still apply.
 #[derive(Clone, Debug)]
@@ -336,6 +366,25 @@ impl PartialEq for TargetOrigin {
 }
 impl Eq for TargetOrigin {}
 impl TargetOrigin {
+    /// A frozen launch inherits the source instance's shrinking grants and lifetime after admission.
+    /// Configuration availability is checked once; later hot edits cannot retarget a running program.
+    pub(super) fn inherit_execution(
+        &self,
+        manager: &Manager,
+        context: &mut Context,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(self.valid_for(manager), "Execution source is stale");
+        let provider = manager
+            .live
+            .get(&self.provider)
+            .and_then(|instance| instance.service_provider())
+            .ok_or_else(|| anyhow::anyhow!("Execution source is unavailable"))?;
+        context
+            .permissions
+            .retain(|permission| provider.caller.permissions.contains(permission));
+        context.lifetimes.push(provider.alive);
+        Ok(())
+    }
     /// Whether the original trusted workspace and live provider incarnation still exist.
     pub fn valid_for(&self, manager: &Manager) -> bool {
         manager.trusted

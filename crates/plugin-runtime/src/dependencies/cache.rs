@@ -9,6 +9,37 @@ pub(crate) struct Prepared {
     pub locks: Vec<Arc<File>>,
 }
 impl Prepared {
+    /// Resolve only explicitly marked string values in bounded initialization/configuration JSON.
+    /// `value` is owned plan data; keys, ordinary strings and non-string values retain their meaning.
+    pub(crate) fn expand_value(&self, value: &mut serde_json::Value) -> anyhow::Result<()> {
+        self.expand_value_at(value, 0)
+    }
+
+    /// Keep recursive configuration traversal bounded independently of the JSON decoder's limits.
+    fn expand_value_at(&self, value: &mut serde_json::Value, depth: usize) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            depth <= 64,
+            "Dependency configuration nesting exceeds 64 levels"
+        );
+        match value {
+            serde_json::Value::String(text) if text.starts_with("${dependency:") => {
+                *text = self.args(std::slice::from_ref(text))?.remove(0);
+            }
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    self.expand_value_at(item, depth + 1)?;
+                }
+            }
+            serde_json::Value::Object(items) => {
+                for item in items.values_mut() {
+                    self.expand_value_at(item, depth + 1)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Only explicit whole-argument dependency references expand; ordinary user arguments stay literal.
     pub fn args(&self, args: &[String]) -> anyhow::Result<Vec<String>> {
         args.iter()
@@ -148,7 +179,7 @@ pub(crate) fn prepare(
         control.stage(InstallStage::Verifying(artifact.id.clone()))?;
         file.seek(SeekFrom::Start(0))?;
         let mut hash = Sha256::new();
-        copy(&mut file, &mut hash, 128 * 1024 * 1024, control)?;
+        copy(&mut file, &mut hash, SOURCE_BYTE_LIMIT, control)?;
         anyhow::ensure!(
             format!("{:x}", hash.finalize()).eq_ignore_ascii_case(&artifact.sha256),
             "Dependency checksum mismatch: {}",

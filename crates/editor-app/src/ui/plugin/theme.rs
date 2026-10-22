@@ -39,7 +39,9 @@ impl PluginView {
         Colors {
             background: color(
                 "background",
-                if role == "toolbar_button" {
+                if role == "primary_button" {
+                    palette.primary
+                } else if role == "toolbar_button" {
                     palette.transparent
                 } else if role == "button" {
                     palette.button
@@ -49,7 +51,9 @@ impl PluginView {
             ),
             foreground: color(
                 "foreground",
-                if role == "button" {
+                if role == "primary_button" {
+                    palette.primary_foreground
+                } else if role == "button" {
                     palette.button_foreground
                 } else {
                     palette.foreground
@@ -68,6 +72,8 @@ impl PluginView {
                 "hover_background",
                 if role == "button" {
                     palette.button_hover
+                } else if role == "primary_button" {
+                    palette.primary
                 } else {
                     palette.list_hover
                 },
@@ -76,6 +82,8 @@ impl PluginView {
                 "active_background",
                 if role == "button" {
                     palette.button_active
+                } else if role == "primary_button" {
+                    palette.primary
                 } else {
                     palette.list_active
                 },

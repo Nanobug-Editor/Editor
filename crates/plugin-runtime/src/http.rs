@@ -20,6 +20,12 @@ mod transport;
 /// Host-only proxy and trust configuration. Plugins cannot change proxy routing or TLS verification.
 #[derive(Clone, Default)]
 pub struct HttpConfiguration {
+    /// Optional host-selected metadata context; no URL, headers or body enter diagnostic records.
+    pub(crate) observation: Option<(
+        crate::RuntimeObservations,
+        crate::observability::Owner,
+        Option<u64>,
+    )>,
     /// Explicit HTTP(S) CONNECT proxy. None disables environment proxy inheritance.
     pub proxy: Option<String>,
     /// Explicit DER roots for a managed host; an empty list retains the standard WebPKI roots.
@@ -81,6 +87,7 @@ impl Control {
 
 /// Eight queued events bound resident body bytes to 256 KiB per stream; cancellation remains observable.
 pub(super) struct Stream {
+    observation: Option<crate::observability::Observation>,
     pub(super) control: Arc<Control>,
     receiver: mpsc::Receiver<Event>,
     terminal: bool,
@@ -93,26 +100,46 @@ impl Stream {
         if let Err(error) = self.control.check() {
             self.control.cancel();
             self.terminal = true;
+            self.finish_observation(if error.code == ErrorCode::TimedOut {
+                crate::observability::Outcome::TimedOut
+            } else {
+                crate::observability::Outcome::Cancelled
+            });
             return Ok(Some(Event::Failed { error }));
         }
         match self.receiver.try_recv() {
             Ok(event) => {
                 self.terminal = event.is_terminal();
+                if self.terminal {
+                    self.finish_observation(if matches!(&event, Event::Finished { .. }) {
+                        crate::observability::Outcome::Completed
+                    } else {
+                        crate::observability::Outcome::Failed
+                    });
+                }
                 Ok(Some(event))
             }
             Err(mpsc::TryRecvError::Empty) => Ok(None),
             Err(mpsc::TryRecvError::Disconnected) => {
                 self.terminal = true;
+                self.finish_observation(crate::observability::Outcome::Failed);
                 Ok(Some(Event::Failed {
                     error: failure(ErrorCode::OperationFailed, "HTTP producer stopped"),
                 }))
             }
         }
     }
+    /// Stream outcome is observed once, separately from the producer thread's actual finish.
+    fn finish_observation(&mut self, outcome: crate::observability::Outcome) {
+        if let Some(observation) = self.observation.take() {
+            observation.finish(outcome);
+        }
+    }
 }
 impl Drop for Stream {
     fn drop(&mut self) {
         self.control.cancel();
+        self.finish_observation(crate::observability::Outcome::Cancelled);
     }
 }
 
@@ -169,22 +196,45 @@ pub(super) fn start(
     let worker_control = control.clone();
     let count = configuration.workers.clone();
     let reservation = WorkerReservation(count.clone());
+    let observation = configuration
+        .observation
+        .as_ref()
+        .map(|(sink, owner, parent)| {
+            sink.begin(owner.clone(), crate::observability::Stage::Http, *parent)
+        });
+    let producer = configuration
+        .observation
+        .as_ref()
+        .map(|(sink, owner, parent)| {
+            sink.begin(owner.clone(), crate::observability::Stage::Native, *parent)
+        });
     std::thread::Builder::new()
         .name("plugin-http".into())
         .spawn(move || {
             let _reservation = reservation;
-            if let Err(error) = transfer(
+            let result = transfer(
                 request,
                 &permissions,
                 &configuration,
                 &worker_control,
                 &sender,
-            ) {
+            );
+            if let Some(producer) = producer {
+                producer.finish(if result.is_ok() {
+                    crate::observability::Outcome::Completed
+                } else if worker_control.cancelled.load(Ordering::Acquire) {
+                    crate::observability::Outcome::Cancelled
+                } else {
+                    crate::observability::Outcome::Failed
+                });
+            }
+            if let Err(error) = result {
                 let _ = send(&sender, Event::Failed { error }, &worker_control);
             }
         })
         .map_err(|_| failure(ErrorCode::OperationFailed, "Could not start HTTP worker"))?;
     Ok(Stream {
+        observation,
         control,
         receiver,
         terminal: false,

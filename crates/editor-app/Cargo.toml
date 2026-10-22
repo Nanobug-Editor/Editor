@@ -15,9 +15,12 @@ base64 = "0.22"
 # Use the already-locked date library to render receipt dates in the user's system timezone.
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 editor-core = { path = "../editor-core" }
+# Durable local history has no GPUI or native platform dependencies.
+editor-history = { path = "../editor-history" }
+editor-ui = { path = "../editor-ui" }
 dirs.workspace = true
 gpui-kit.workspace = true
-gpui-base = "0.7.0"
+gpui-base = "=0.8.0"
 # Use the same locked Rope implementation for its public O(1) immutable instance comparison.
 ropey = "=2.0.0-beta.1"
 glob = "0.3"
@@ -61,7 +64,12 @@ unicode-segmentation = "1"
 embed-resource = "=3.0.11"
 
 [dev-dependencies]
-gpui-kit = { workspace = true, features = ["test-support"] }
+editor-ui = { path = "../editor-ui", features = ["test-support"] }
+# Enable the already-locked test foundations directly: Kit's weak component feature
+# reference otherwise retains the unused styled runtime in Cargo.lock.
+gpui-base = { version = "=0.8.0", features = ["test-support"] }
+gpui-test-foundation = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = ["test-support"] }
 # Reidentified hybrid fixtures retain their declarative resources through a parsed TOML manifest.
 toml.workspace = true
 # Build independent declarative package fixtures through the public ZIP inspection boundary.

@@ -91,7 +91,7 @@ pub(in super::super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow
             && matches!(node.path().last(), Some(ElementId::Name(id)) if id.as_ref() == "local-dock-drop-indicator"))
             .context("equal-dimension marker missing")?.bounds();
         ensure!((target.size.width - before[2].size.width / 2.).abs() < px(1.));
-        input::key(window, "escape", cx);
+        editor_ui::testing::press_key(window, "escape", cx);
         Ok::<_, anyhow::Error>(())
     })??;
     h.settle(cx).await?;
@@ -166,7 +166,7 @@ pub(in super::super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow
             );
         }
         ensure!(frames(window)? == after);
-        input::key(window, "escape", cx);
+        editor_ui::testing::press_key(window, "escape", cx);
         Ok::<_, anyhow::Error>(())
     })??;
     h.settle(cx).await?;

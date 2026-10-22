@@ -1,8 +1,9 @@
 //! Native preview, attributed receipts and explicit whole-batch Undo share editor-owned controls.
 
 use super::*;
-use crate::ui::controls::Button;
 use crate::ui::theme::ActiveTheme as _;
+use editor_ui::Button;
+use editor_ui::scroll::ScrollableElement as _;
 use gpui_kit::div;
 use gpui_kit::{
     AnyElement, InteractiveElement as _, IntoElement as _, ParentElement as _,
@@ -101,7 +102,7 @@ impl EditorApp {
             .flex_col()
             .gap_2()
             .max_h(px(400.))
-            .overflow_y_scroll()
+            .overflow_y_scrollbar()
             .children(
                 prompt
                     .details
@@ -204,7 +205,7 @@ impl EditorApp {
             .left(px(12.))
             .max_w(px(480.))
             .max_h(px(220.))
-            .overflow_y_scroll()
+            .overflow_y_scrollbar()
             .flex()
             .flex_col()
             .gap_2();

@@ -1,6 +1,6 @@
 //! Recursive containers and editor references have a small stack independent of leaf control complexity.
 use super::*;
-use crate::ui::controls::vertical_scrollbar;
+use editor_ui::scroll::ScrollableElement as _;
 use gpui_base::{Tab, Tabs};
 use gpui_kit::{
     AnyElement, InteractiveElement, ParentElement, SharedString, StatefulInteractiveElement,
@@ -35,8 +35,16 @@ impl PluginView {
                 // Keep stale rails in the same geometry while withdrawing their activation.
                 // Native typing must not widen/reflow the result pane until the guest catches up.
                 let current = self.code_action_native_current(document, window, cx);
-                let actions = crate::ui::controls::EditorActionElements {
-                    left: left
+                let actions = editor_ui::EditorActionElements::new(
+                    left.iter()
+                        .map(|action| {
+                            (
+                                action.offset,
+                                self.node(&action.content, disabled || !current, window, cx),
+                            )
+                        })
+                        .collect(),
+                    right
                         .iter()
                         .map(|action| {
                             (
@@ -45,16 +53,7 @@ impl PluginView {
                             )
                         })
                         .collect(),
-                    right: right
-                        .iter()
-                        .map(|action| {
-                            (
-                                action.offset,
-                                self.node(&action.content, disabled || !current, window, cx),
-                            )
-                        })
-                        .collect(),
-                };
+                );
                 let source = self
                     .native_editor
                     .as_ref()
@@ -87,7 +86,7 @@ impl PluginView {
                     .map(|n| self.node(n, disabled, window, cx))
                     .collect();
                 if node.layout.resizable {
-                    crate::ui::controls::split_container(
+                    editor_ui::split_container(
                         SharedString::from(node.id.clone()),
                         matches!(node.kind, Kind::Column { .. }),
                         initial_sizes.into_iter().zip(children).collect(),
@@ -126,23 +125,12 @@ impl PluginView {
                 let child = self.node(&content, disabled, window, cx);
                 let handle = self.scrolls.get(&node.id).cloned().unwrap_or_default();
                 div()
+                    .id(native_id.clone())
                     .relative()
                     .size_full()
                     .min_h_0()
-                    .child(
-                        div()
-                            .id(native_id.clone())
-                            .size_full()
-                            .overflow_y_scroll()
-                            .track_scroll(&handle)
-                            .child(child),
-                    )
-                    .child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .child(vertical_scrollbar(&handle, cx)),
-                    )
+                    .overflow_y_scrollbar_with(&handle)
+                    .child(child)
                     .into_any_element()
             }
             Kind::Tabs { tabs, selected } => {
@@ -161,6 +149,7 @@ impl PluginView {
                             gesture,
                         ))
                         .selected(&tab.id == selected)
+                        .debug_selector(move || format!("plugin-tab-{index}"))
                         .disabled(disabled)
                         .accessibility_label(tab.label.clone())
                         .set_position(index + 1, tabs.len())
@@ -180,7 +169,21 @@ impl PluginView {
                         .child(tab.label.clone()),
                     );
                 }
-                let mut body = div().flex().flex_col().gap_2().child(strip);
+                // Overflowing guest tab labels use the same native horizontal viewport as host
+                // tabs; Base keeps selection/focus semantics and the UI layer owns wheel motion.
+                let mut body = div().flex().flex_col().gap_2().child(
+                    div()
+                        .id(gpui_kit::ElementId::NamedChild(
+                            gpui_kit::ElementId::Name(native_id.clone()).into(),
+                            "tab-scroll".into(),
+                        ))
+                        .relative()
+                        .flex()
+                        .w_full()
+                        .min_w_0()
+                        .overflow_x_scrollbar()
+                        .child(strip.flex_shrink_0()),
+                );
                 if let Some(tab) = tabs.iter().find(|t| &t.id == selected) {
                     body = body.child(self.node(&tab.content, disabled, window, cx));
                 }

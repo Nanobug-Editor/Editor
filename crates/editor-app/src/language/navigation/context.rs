@@ -110,6 +110,7 @@ impl ContextCapture {
         plugin_runtime::LanguageFixOrigin::GuardedLsp {
             service: server.service.clone(),
             guards,
+            files: Vec::new(),
         }
     }
     /// Read only the actual participating vector after native analysis; unfinished captures cannot

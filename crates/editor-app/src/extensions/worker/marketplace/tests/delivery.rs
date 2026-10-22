@@ -243,7 +243,11 @@ fn inspect_history_and_upgrade(
     assert_eq!(records["toml"].manifest.version, "0.2.3");
     assert_eq!(records["toml"].digest, release.sha256);
     assert_eq!(records["toml"].grants, release.manifest.permissions);
-    assert!(records["toml"].enabled);
+    assert_eq!(records["toml"].enabled, existing.is_some());
+    assert_eq!(
+        records["toml"].project_enabled_in(&root.parent().unwrap().to_string_lossy()),
+        existing.is_none(),
+    );
     assert!(!form.update(|_, cx| panel.read(cx).has_market_updates()));
     let path = root.parent().unwrap().join("sample.toml");
     let language = crate::language::providers::language_for_path(&path).unwrap();
@@ -299,7 +303,7 @@ fn outage_and_withdrawal(
             state.market.generation(),
         )
     };
-    assert!(!worker.install_market(release, generation, Default::default()));
+    assert!(!worker.install_market(release, generation, Default::default(), true));
     assert_eq!(server.downloads.load(Ordering::Acquire), before);
     server.offline.store(false, Ordering::Release);
     worker.refresh_market(

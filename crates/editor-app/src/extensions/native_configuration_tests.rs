@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 pub(crate) fn completed_preparation_frame(
     app: &EditorApp,
     cx: &App,
-    receipt: (String, usize, u64, Result<String, String>),
+    receipt: (String, usize, u64, Result<super::PreparedTarget, String>),
     snapshot: plugin_runtime::PreparationSnapshot,
 ) {
     let (config, index, request, _) = &receipt;

@@ -3,9 +3,10 @@ use super::surface::{package_action, uninstall_button_style, update_button_style
 use plugin_runtime::marketplace::{Listing, Release};
 mod actions;
 mod details;
+mod diagnostics;
 use super::*;
-use crate::ui::controls::scroll::ScrollableElement;
-use crate::ui::controls::{Checkbox, SegmentedTabs, tab_strip, vertical_viewport_scrollbar};
+use editor_ui::scroll::ScrollableElement;
+use editor_ui::{Checkbox, SegmentedTabs, tab_strip, vertical_viewport_scrollbar};
 
 /// Shared detail pages; unavailable data never becomes a stored selection.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -16,6 +17,8 @@ pub(super) enum DetailTab {
     Versions,
     Information,
     RuntimeLog,
+    /// Host metadata capture is separate from plugin-provided output and unread reminders.
+    RuntimeDiagnostics,
 }
 impl DetailTab {
     /// Map only supported tab positions; placeholders remain unavailable by keyboard and mouse.
@@ -26,6 +29,7 @@ impl DetailTab {
             3 => Some(Self::Versions),
             4 => Some(Self::Information),
             5 => Some(Self::RuntimeLog),
+            6 => Some(Self::RuntimeDiagnostics),
             _ => None,
         }
     }
@@ -36,6 +40,7 @@ impl DetailTab {
             Self::Versions => 3,
             Self::Information => 4,
             Self::RuntimeLog => 5,
+            Self::RuntimeDiagnostics => 6,
         }
     }
 }
@@ -309,7 +314,7 @@ impl ExtensionPanel {
                     .gap_2()
                     .when(selected, |row| {
                         row.custom(
-                            crate::ui::controls::ButtonCustomVariant::new(cx)
+                            editor_ui::ButtonCustomVariant::new(cx)
                                 .color(cx.theme().list_active)
                                 .foreground(cx.theme().foreground)
                                 .hover(cx.theme().list_active)

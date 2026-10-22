@@ -3,8 +3,25 @@
 use plugin_protocol::{Manifest, api};
 use semver::Version;
 
+/// One inventory value also governs language declaration floors as additive minors evolve.
+pub(crate) const LANGUAGE_LSP_VERSION: Version = Version::new(1, 7, 0);
+/// File refactors add explicit workspace authority to the earlier native-source edit contract.
+pub(crate) const LANGUAGE_EDITING_VERSION: Version = Version::new(1, 3, 0);
+
 /// Production admission and instance preparation enforce the same current baseline.
 pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
+    if manifest.service_preparation_hook {
+        anyhow::ensure!(
+            manifest.component.is_some()
+                && manifest
+                    .api
+                    .as_ref()
+                    .and_then(|api| api.required.get("dependencies"))
+                    .is_some_and(|range| range.matches(&Version::new(1, 4, 0))
+                        && !range.matches(&Version::new(1, 3, 0))),
+            crate::validation::Diagnostic::floor("dependencies", "1.4")
+        );
+    }
     // Composable contracts are new semantics, not an automatic expansion of old service grants.
     if manifest
         .plugin_services
@@ -25,25 +42,43 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
                 .is_some_and(|range| range.matches(&Version::new(1, 2, 0))
                     && !range.matches(&Version::new(1, 1, 0))
                     && !range.matches(&Version::new(1, 0, 0))),
-            "Composable service declarations require plugin.services >=1.2"
+            crate::validation::Diagnostic::floor("plugin.services", "1.2")
         );
     }
-    anyhow::ensure!(
-        manifest.protocol == 7,
-        "Incompatible plugin protocol {}; update the plugin with the current SDK (protocol 7 required).",
-        manifest.protocol
-    );
+    if manifest.protocol != 7 {
+        return Err(anyhow::Error::from(crate::validation::Diagnostic::new(
+            crate::validation::Code::Protocol,
+            Some("/protocol"),
+        ))
+        .context(format!(
+            "Incompatible plugin protocol {}; update the plugin with the current SDK (protocol 7 required).",
+            manifest.protocol
+        )));
+    }
     // Registry restoration uses the same release floor as ZIP/development admission. Neither
     // capability negotiation nor an already saved grant makes a future host contract available.
     if let Some(minimum) = &manifest.minimum_host {
-        anyhow::ensure!(minimum.len() <= 128, "Invalid minimum host version length");
-        let minimum = Version::parse(minimum)
-            .map_err(|error| anyhow::anyhow!("Invalid minimum host version: {error}"))?;
-        let host = Version::parse(env!("CARGO_PKG_VERSION"))?;
         anyhow::ensure!(
-            !host.cmp_precedence(&minimum).is_lt(),
-            "Incompatible plugin: minimum host {minimum}, current host {host}; please update the host."
+            minimum.len() <= 128,
+            crate::validation::Diagnostic::new(
+                crate::validation::Code::Manifest,
+                Some("/minimum_host")
+            )
         );
+        let minimum = Version::parse(minimum).map_err(|_| {
+            crate::validation::Diagnostic::new(
+                crate::validation::Code::HostVersion,
+                Some("/minimum_host"),
+            )
+        })?;
+        let host = Version::parse(env!("CARGO_PKG_VERSION"))?;
+        let mut host_error = crate::validation::Diagnostic::new(
+            crate::validation::Code::HostVersion,
+            Some("/minimum_host"),
+        );
+        host_error.required = Some(minimum.to_string());
+        host_error.available = Some(host.to_string());
+        anyhow::ensure!(!host.cmp_precedence(&minimum).is_lt(), host_error);
     }
     anyhow::ensure!(manifest.activation.valid(), "Invalid background purpose");
     if manifest.panels.iter().any(|panel| panel.exclusive) {
@@ -55,7 +90,7 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
                 .is_some_and(|range| range.matches(&Version::new(1, 2, 0))
                     && !range.matches(&Version::new(1, 1, 0))
                     && !range.matches(&Version::new(1, 0, 0))),
-            "Exclusive dock panels require ui.panels >=1.2"
+            crate::validation::Diagnostic::floor("ui.panels", "1.2")
         );
         anyhow::ensure!(
             manifest.panels.iter().all(|panel| !panel.exclusive
@@ -77,7 +112,7 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
                 .and_then(|requirements| requirements.required.get("ui.panels"))
                 .is_some_and(|range| range.matches(&Version::new(1, 2, 0))
                     && !range.matches(&Version::new(1, 0, 0))),
-            "Hidden window controls require ui.panels >=1.1"
+            crate::validation::Diagnostic::floor("ui.panels", "1.1")
         );
     }
     if manifest.activation.background.is_some() {
@@ -90,7 +125,7 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
                         .required
                         .get("lifecycle.activation")
                         .is_some_and(|range| range.matches(&Version::new(1, 0, 0)))),
-            "Background activation requires WASM and lifecycle.activation 1.0"
+            crate::validation::Diagnostic::floor("lifecycle.activation", "1.0")
         );
     }
     // Registry records and new archives agree on which added schema semantics an old callback
@@ -107,7 +142,7 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
                 .and_then(|requirements| requirements.required.get("configuration"))
                 .is_some_and(|range| range.matches(&Version::new(1, 1, 0))
                     && !range.matches(&Version::new(1, 0, 0))),
-            "Hot settings and secret references require configuration >=1.1"
+            crate::validation::Diagnostic::floor("configuration", "1.1")
         );
     }
     if manifest
@@ -134,12 +169,18 @@ pub(crate) fn require_current(manifest: &Manifest) -> anyhow::Result<()> {
                     .is_some_and(|requirements| requirements
                         .required
                         .contains_key("storage.secrets")),
-            "Secret references require storage.secrets and secrets permission"
+            crate::validation::Diagnostic::new(
+                crate::validation::Code::Permission,
+                Some("/permissions")
+            )
         );
     }
-    negotiate(manifest)
-        .map(|_| ())
-        .map_err(|error| anyhow::anyhow!("Incompatible plugin API; update the plugin: {error:#}"))
+    negotiate(manifest).map(|_| ()).map_err(|error| {
+        // Native callers localize their operation label; technical guidance keeps its typed
+        // cause for static checks, which formatting alone would otherwise erase.
+        let message = format!("Incompatible plugin API; update the plugin: {error:#}");
+        error.context(message)
+    })
 }
 
 /// Validate compatibility both when inspecting a package and before restoring an instance.
@@ -179,9 +220,11 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.file_images".into(), Version::new(1, 0, 0)),
         ("ui.viewport".into(), Version::new(1, 0, 0)),
         ("editor.files".into(), Version::new(1, 0, 0)),
-        ("ui.canvas".into(), Version::new(1, 1, 0)),
+        ("ui.canvas".into(), Version::new(1, 3, 0)),
         ("ui.collections".into(), Version::new(1, 0, 0)),
-        ("ui.tree".into(), Version::new(1, 2, 0)),
+        ("ui.tree".into(), Version::new(1, 7, 0)),
+        ("ui.workspace".into(), Version::new(1, 0, 0)),
+        ("explorer.decorations".into(), Version::new(1, 0, 0)),
         ("ui.grid".into(), Version::new(1, 0, 0)),
         ("plugin.services".into(), Version::new(1, 2, 0)),
         ("workspace.files".into(), Version::new(1, 4, 0)),
@@ -191,7 +234,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("storage.migration".into(), Version::new(1, 0, 0)),
         ("editor.documents".into(), Version::new(1, 1, 0)),
         ("editor.virtual".into(), Version::new(1, 1, 0)),
-        ("editor.diff".into(), Version::new(1, 2, 0)),
+        ("editor.diff".into(), Version::new(1, 4, 0)),
         ("editor.decorations".into(), Version::new(1, 0, 0)),
         ("editor.layout".into(), Version::new(1, 0, 0)),
         ("editor.viewport".into(), Version::new(1, 0, 0)),
@@ -206,11 +249,16 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.panels".into(), Version::new(1, 2, 0)),
         ("ui.clipboard".into(), Version::new(1, 0, 0)),
         // 1.7 presents an already-owned PTY; negotiation still grants no execution or UI authority.
-        ("process".into(), Version::new(1, 8, 0)),
+        ("process".into(), Version::new(1, 9, 0)),
+        // Readonly tool-distribution metadata remains separate from native execution and process IO.
+        ("tools.inspect".into(), Version::new(1, 0, 0)),
         // 1.2 owns native roots; 1.3 opts into immutable diagnostic URIs; 1.4 adds shared native
         // references/code actions/signature consumers, gated again by standard server advertisement.
-        ("language.lsp".into(), Version::new(1, 6, 0)),
+        // 1.6 registers sealed project choices and admits only canonical direct interactive prepares.
+        // 1.7 resolves explicitly requested dependency paths in initialization/configuration data.
+        ("language.lsp".into(), LANGUAGE_LSP_VERSION),
         ("language.control".into(), Version::new(1, 0, 0)),
+        ("language.content".into(), Version::new(1, 0, 0)),
         ("language.modules".into(), Version::new(1, 0, 0)),
         // Pure references/actions/signature help remain explicitly experimental until wider use.
         ("language.direct".into(), Version::new(0, 1, 0)),
@@ -218,15 +266,14 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         // Independent providers negotiate editing and structure without replacing primary LSP ownership.
         ("language.formatting".into(), Version::new(1, 0, 0)),
         // 1.1 permits explicitly negotiated semantic linked ranges with different initial names.
-        ("language.editing".into(), Version::new(1, 1, 0)),
+        ("language.editing".into(), LANGUAGE_EDITING_VERSION),
         ("language.structure".into(), Version::new(1, 0, 0)),
         // 1.2 prepares declared native services asynchronously at method invocation.
-        ("dependencies".into(), Version::new(1, 2, 0)),
+        // 1.3 supports bounded 256 MiB archives and 512 MiB extracted distributions.
+        ("dependencies".into(), Version::new(1, 4, 0)),
     ]
     .into();
-    Ok(requirements
-        .negotiate(Version::new(1, 0, 0), &available)
-        .map_err(anyhow::Error::msg)?)
+    Ok(requirements.negotiate_detailed(Version::new(1, 0, 0), &available)?)
 }
 
 /// Terminal presentation is an additive, negotiated process capability available to every identity.
@@ -244,7 +291,7 @@ mod terminal_tests {
             .unwrap();
             assert_eq!(
                 negotiate(&manifest).unwrap().capabilities["process"],
-                Version::new(1, 8, 0)
+                Version::new(1, 9, 0)
             );
         }
     }

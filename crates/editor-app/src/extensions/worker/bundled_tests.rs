@@ -212,7 +212,7 @@ fn production_actor_requires_explicit_import_and_installs_through_normal_lifecyc
         worker.state.lock().unwrap().entries.is_empty(),
         "inspection cannot install or grant permissions"
     );
-    assert!(worker.queue_lifecycle(Work::Install(package)));
+    assert!(worker.queue_lifecycle(Work::Install(package, true)));
     wait_for(&worker, |state| {
         state.progress.is_none() && !state.entries.is_empty()
     });
@@ -260,7 +260,10 @@ fn resource_only_explicit_import_revoked_during_preparation_cannot_commit() {
     worker.state.lock().unwrap().install_control = Some(control);
     worker
         .tx
-        .send(Work::Install(Package::from_bytes(&fixture.bytes).unwrap()))
+        .send(Work::Install(
+            Package::from_bytes(&fixture.bytes).unwrap(),
+            true,
+        ))
         .unwrap();
     wait_for(&worker, |state| {
         state.status.is_some() || !state.entries.is_empty()

@@ -1,22 +1,58 @@
 # 插件系统文档目录
 
+- [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
+
 - [Vue/TypeScript 旧工单功能核对与关闭](verification/vue-typescript-legacy-closure-2026-10-20.md)：用户补充授权后，64 项旧要求逐项核对完成；#108–#118 已读回 completed，原正文和失败历史保留，父 #107 继续开放。
 
 - [Vue/TypeScript 剩余场景交付](verification/vue-typescript-remaining-delivery-2026-10-20.md)：新 #122–#126 已验收、三仓推送并读回 completed，连同 #121 六场景 6/6 完成；最终 .15/.12 双包、普通桌面和门禁有据。旧工单与父议题不变，固定支持范围和 AccessKit 退出限制保留，未创建 Release。
 
-- [Vue/TypeScript 15:00 恢复记录](verification/vue-typescript-resumed-2026-10-20.md)：按用户继续指令恢复新 #122–#126；暂停字节基线已核对，先定位 Worker 回归，再完成双包、普通桌面及交付。
+- [Vue/TypeScript 15:00 恢复记录](verification/vue-typescript-resumed-2026-10-20.md)、[05:08 暂停检查点](verification/vue-typescript-paused-2026-10-20-0508.md)、[剩余场景双轴审查](verification/vue-typescript-remaining-review-2026-10-20.md)：保留恢复、失败检查点和后续修复过程；最终状态以上述交付记录为准。
 
-- [Vue/TypeScript 05:08 暂停检查点](verification/vue-typescript-paused-2026-10-20-0508.md)：按最新要求暂停所有工单，保留三仓未提交变更、已通过的 S4／S5 与最终生产门禁；附加 Worker ignored 回归仍失败，最终打包、普通桌面和提交交付未完成。
+- [取消后的独立委托请求](verification/vue-typescript-deferred-control-cancel-2026-10-20.md)、[S3 历史事务与 S4 生态宿主验收](verification/vue-typescript-s3-s4-native-acceptance-2026-10-20.md)、[剩余场景实施](verification/vue-typescript-remaining-2026-10-19.md)、[TypeScript 共享上下文选择](verification/vue-typescript-context-selection-2026-10-20.md)：保存固定包、原生交互、事务和请求生命周期的实际验证边界。
 
-- [Vue/TypeScript 剩余场景双轴审查](verification/vue-typescript-remaining-review-2026-10-20.md)：内层分析进程退出缺口已有真实 Windows 修复回归，后续增量持续复审；不以局部审查代替联合验收。
+- [Git 面板隔离与原生帧滚动](verification/git-panel-isolation-2026-10-22.md)：Git 0.1.29 隔离普通交互、索引刷新和诊断；通用 `ui.canvas 1.3` 保留绘图缓冲，避免每帧等待 WASM 回包。[公开能力设计](specs/canvas-retained-scroll.md)。
 
-- [取消后的独立委托请求](verification/vue-typescript-deferred-control-cancel-2026-10-20.md)：公开 SDK 回归复现并修复新需求串用旧取消结果；记录实际通过及未启动原生进程的证明边界。
+- [Git 提交目录勾选与索引锁反馈](verification/git-commit-checkbox-lock-2026-10-22.md)：0.1.28 保留整目录批量暂存语义，限制提交区错误显示高度，并关闭后台查询的可选索引写入；回归与环境恢复证据见记录。
 
-- [S3 历史事务与 S4 生态宿主验收](verification/vue-typescript-s3-s4-native-acceptance-2026-10-20.md)：固定真实包及宿主的逐次结果，区分 WindowsPlatform、GPUI 测试调度和工具证据；进行中结果不提前标为通过。
+- [Git 提交窗口改造](verification/git-commit-panel-2026-10-22.md)：IDEA 式勾选文件树与固定提交区；Git 0.1.27 通过通用 ui.tree 1.7 接入立即暂存／取消暂存，实际包、检查结果与原生验收状态见记录。
 
-- [Vue/TypeScript 剩余场景实施](verification/vue-typescript-remaining-2026-10-19.md)：用户恢复 #122–#126 连续实施；复用已批准规格、场景工单和公开测试接缝，保留 #121 已完成交付及旧工单历史，不发布版本。
+- [Git 大提交列表滚动与加载开销](verification/git-history-performance-2026-10-22.md)：0.1.26 增量维护分块分支线和 OID 索引，滚动不再遍历全部提交，未变化的定时观察只检查一页；复现数据、实际包和原生验证见记录。
 
-- [TypeScript 共享上下文选择](verification/vue-typescript-context-selection-2026-10-20.md)：公开注册接缝、稳定偏好键真实 RED/GREEN、冻结失败包与当前候选身份；原生选择、F12 和偏好保留以实际交互终态为准。
+- [工作区文件着色与顶部插件入口](specs/workspace-presentation.md)：提供者选择、可调整颜色、多个入口排序及 IDEA 式分支菜单统一使用公开能力；Git 0.1.25 与非 Git 消费者、两组 Windows 原生行为已验收，未发布。全仓检查的并行改动限制及候选身份见[验收记录](verification/workspace-presentation-2026-10-22.md)。
+
+- [Java 插件首版方案与后续插件计划](specs/java-plugin.md)：2026-10-22 已确认并开始顺序实施；本轮仅 Java 插件及必要通用宿主能力，Lombok、Maven、Gradle、JUnit 为后续独立插件。[实施记录](verification/java-plugin-2026-10-22.md)区分实际进展、验收及限制。
+
+- [官方插件兼容核验与 SDK 助手接入方案](specs/official-plugin-sdk-adoption-2026-10-21.md)：已获用户授权，由三个独立会话并行实施 TypeScript 兼容修复、Git ResourceGroup、Markdown EditorIntent；进度见[实施调度记录](verification/official-plugin-sdk-adoption-execution-2026-10-21.md)。此前市场七项／八个发布包静态准入通过，固定证据见[兼容核验](verification/official-plugin-compatibility-2026-10-21.md)及[源码调研](specs/official-plugin-sdk-adoption-sources-2026-10-21.md)；当前未宣称改造已验收完成。
+
+- [分支树双击选择与菜单悬停](verification/git-branch-gestures-2026-10-21.md)：公开 ui.tree 1.5 选择手势、Git 0.1.23 接入，以及原生灰色悬停和菜单期间保留高亮；实际验证状态见记录。
+
+- [比较首次定位、居中导航与双折叠按钮](verification/comparison-navigation-2026-10-21.md)：从改动文件打开首处差异，前后差异按真实视口居中，折叠／展开独立置灰；实施与验证状态见记录。
+
+- [SDK 生命周期助手、运行诊断与兼容验证工具](specs/plugin-developer-tooling.md)：三项已实施并完成本批功能验收，兼容插件热安装保留进程、未保存内容及撤销/重做；实际检查及共享工作区格式限制见[实施验证记录](verification/plugin-developer-tooling.md)。
+
+- [安装确认框全局启用选项](verification/install-global-option-2026-10-21.md)：首次安装时在左下角提供默认未勾选的全局选项；更新保留原启用范围，实际验证状态见记录。
+
+- [多种插件系统对照与改进建议](specs/plugin-system-improvements-research-2026-10-21.md)：基于当前公开接口与外部一手资料的调研建议；区分已有基础、SDK 易用性、持续兼容验证和运行诊断，不代表已批准实施或完成验收。
+
+- [宿主与插件统一滚动条](../ui/verification/scrollbar-width-2026-10-21.md)：修正通用画布轨道定位，统一编辑器、树、列表、终端及插件界面的宽度隐藏动画；公开协议和独立 Git 包不变。
+
+- [插件与宿主共用平滑滚动](../ui/verification/scroll-validation-folds-2026-10-22.md)：普通滚动容器、横向标签与带范围的画布共用 UI 求解器；内容 epoch、精确滚轮、确认及比较区折叠输入的验证见记录。
+
+- [Git 分支缓存与快速筛选](verification/git-branch-fast-switch-2026-10-21.md)：独立 0.1.22 的有界首屏／预览缓存、已知祖先投影、只读查询抢占与历史面板局部发布；实际原生帧检查和候选身份见记录。
+
+- [通用画布连续滚动与绘制复用](verification/canvas-scroll-2026-10-21.md)：公开 `ui.canvas 1.2` 内容 epoch、原生连续滚轮、16ms 同步与矢量平移复用；独立 Git 0.1.21 的实际验证及候选状态见记录。
+
+- [Git 分支查询白屏与增量刷新](verification/git-incremental-refresh-2026-10-20.md)：保留完整日志／预览与缓存目录，公开 `ui.tree 1.4` 结构增量及比较单按钮切换；0.1.21 冻结候选与最终验证状态见记录。
+
+- [比较区单滚动条、等宽换行与顶部背景](../ui/verification/comparison-chrome-2026-10-20.md)：通用原生比较控件的轨道、占宽与顶部呈现修正；独立 Git 0.1.19 和公开契约不变，实际状态见记录。
+
+- [Git 比较无差异区段折叠／展开](verification/git-unchanged-folding-2026-10-20.md)：复制到独立插件的资源管理器图标、公开 `editor.diff 1.4` 与双／三栏同步折叠；当前候选及实际验收状态见记录。
+
+- [比较工具栏箭头与原提交文件导航](verification/git-comparison-arrows-2026-10-20.md)：四个原生箭头、固定于原提交的文件序列及公开 `editor.diff 1.3`；当前实施、实际验收与配套 0.1.18 包状态见记录。
+
+- [比较视图整行底色与默认同步](../ui/verification/diff-row-backgrounds-2026-10-20.md)：通用宿主控件保留左侧阅读边距、差异行尾和行号槽底色，默认同步并移除开关；独立 Git 0.1.17 包不变，当前验证及交付状态见记录。
+
+- [Git 首次选择与文件状态颜色](verification/git-default-selection-2026-10-19.md)：独立 0.1.17 默认定位当前分支、预览第一条提交并按增删改着色；公开 `ui.tree 1.3`、字节分页修正、最终包原生回归及规定门禁通过，产物身份见记录。
 
 - [Vue/TypeScript S1 正式基线复验](verification/vue-typescript-s1-delivery-2026-10-19.md)：2026-10-19 新工单 #121 已验收、三仓推送并读回关闭；正式基线门禁、真实插件与相关原生交互通过。此前过程见[恢复记录](verification/vue-typescript-s1-resume-2026-10-19.md)；当次范围止于 S1，后续进度见剩余场景记录，旧 #108–#118 只作历史，未发布版本。
 
@@ -54,7 +90,8 @@
 
 - [Git 加载与工作窗口超时回归](verification/git-loading-window-timeout-2026-10-18.md)：2026-10-18 新反馈独立记录；已修复过期树分页残留 loading，Package/Manager、两种无插桩原生恢复、正常仓库完整流程及工作区检查通过，本地修复版已生成。容器目录与实际仓库入口、原工作区两处格式偏差及尚未独立复现的整窗卡死边界见记录。
 
-- [Vue 多版本插件与 TypeScript 协作方案](specs/vue-multi-backend.md)、[已批准的六场景与当前执行范围](tickets/vue-typescript/README.md)、[历史工具层探针](verification/vue-typescript-p0-2026-10-15.md)：正式新工单为 #121–#126；#121 已交付，#122–#126 连续实施。原 11 张工单和 2026-10-15 暂停、测试记录保留追溯，不继承为当前源码或候选包的通过证据。
+- [Vue 多版本插件与 TypeScript 协作方案](specs/vue-multi-backend.md)、[已批准的六场景与当前执行范围](tickets/vue-typescript/README.md)、[历史工具层探针](verification/vue-typescript-p0-2026-10-15.md)：正式新工单 #121–#126 已交付并读回 completed；当前版本、范围和限制以剩余场景交付记录为准。原 11 张工单和 2026-10-15 暂停、测试记录保留追溯，不继承为当前源码或候选包的通过证据。
+- [Vue/TypeScript 六场景历史检查点](verification/vue-typescript-scenes-2026-10-15.md)、[S4 生态组合历史证据](verification/vue-typescript-s4-2026-10-15.md)：从旧工作区保留的 2026-10-15 过程记录，包含当时的失败与未验收项；后续状态见[2026-10-20 联合交付](verification/vue-typescript-remaining-delivery-2026-10-20.md)，恢复原文不代表重新验收。
 - [Git 插件范围与原型方案](specs/git-plugin.md)、[实施验证记录](verification/git-plugin-2026-10-15.md)、[历史暂停现场](verification/git-plugin-paused-2026-10-16.md)、[场景工单与最终进度](tickets/git-plugin-remaining/README.md)：#119、#120 均已验收、普通推送并读回 closed／completed，100%。独立 0.1.7／52 项源码，访客 101/101、实际业务 43＋修正夹具 1、五窗口 5/5、正式原生完整流程／八组合、54 图核验及规定宿主检查有据，最终双轴无未解决项。原全量旧夹具失败按真实身份保留。Git 由宿主外独立项目和显式 ZIP 交付，不随宿主内置或自动恢复；系统 IME 候选弹窗仍未验证。
 - [独立插件市场规格与工单](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/docs)：统一维护静态注册、版本/统计和官方插件迁移的执行依据；[宿主工单 02 验收](verification/plugin-marketplace-02-2026-10-11.md)记录本分支实际测试和交付边界。
 - [插件管理器共用布局](specs/plugin-manager-shared-layout.md)、[2026-10-13 验收记录](verification/plugin-manager-shared-layout-2026-10-13.md)：已安装与市场共用窗口框架，搜索框内置左侧筛选，详情按数据分区；浏览版本与实际安装实例的操作目标分别明确。实现与测试记录不继承市场服务工单的交付状态。

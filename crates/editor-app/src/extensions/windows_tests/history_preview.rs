@@ -2,6 +2,7 @@
 use super::*;
 use gpui_base::test_support::snapshots;
 use plugin_runtime::plugin_protocol::{api, ui};
+mod navigation;
 
 /// Deliver one native log row press through its current public scene, then drain real Git/editor receipts.
 fn select_row(manager: &mut Manager, row: usize) {
@@ -83,7 +84,7 @@ fn changed_file(manager: &Manager) -> String {
 
 /// Merge and ordinary commits preview in the dock, open readonly tabs, retain pinned identities and clean up.
 #[gpui::test]
-#[ignore = "real independent Git ZIP, native GPUI, editor.diff 1.2; set NANOBUG_GIT_CANDIDATE"]
+#[ignore = "real independent Git ZIP, native GPUI, editor.diff 1.3; set NANOBUG_GIT_CANDIDATE"]
 fn git_inline_history_preview_opens_readonly_two_and_three_pane_tabs(cx: &mut TestAppContext) {
     if !run_isolated_test(
         "extensions::windows_tests::history_preview::git_inline_history_preview_opens_readonly_two_and_three_pane_tabs",
@@ -217,6 +218,38 @@ fn git_inline_history_preview_opens_readonly_two_and_three_pane_tabs(cx: &mut Te
             visual.debug_bounds("document-diff-third").is_some(),
             "merge opens three native panes in the main tab"
         );
+        // All four actions are compact native icon buttons in the requested left/right/up/down order.
+        for dark in [false, true] {
+            visual.update(|window, cx| {
+                crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(dark), cx);
+                window.draw(cx).clear(cx);
+            });
+            let mut right = gpui_kit::px(0.);
+            for selector in [
+                "diff-file-previous",
+                "diff-file-next",
+                "diff-previous",
+                "diff-next",
+            ] {
+                let bounds = visual
+                    .debug_bounds(selector)
+                    .expect("native comparison arrow");
+                assert!(bounds.left() >= right && bounds.size.width <= gpui_kit::px(32.));
+                right = bounds.right();
+            }
+            assert!(visual.debug_bounds("diff-unified").is_none());
+            assert!(visual.debug_bounds("diff-sync").is_none());
+            super::comparison_chrome::assert_comparison_chrome(visual, 3);
+        }
+        visual.update(|window, _| {
+            assert!(
+                !snapshots(window).iter().any(|node| {
+                    node.role() == Some(gpui_kit::Role::Button)
+                        && node.label() == Some(t!("editor.diff_sync").as_ref())
+                }),
+                "comparison scrolling is synchronized by default without a toggle button"
+            );
+        });
         let before = visual.update(|_, cx| {
             let owner = app.read(cx);
             let sources = owner
@@ -265,6 +298,92 @@ fn git_inline_history_preview_opens_readonly_two_and_three_pane_tabs(cx: &mut Te
             visual.update(|_, cx| app.read(cx).comparison_views.len()),
             1,
             "preview selection cannot retarget the pinned comparison"
+        );
+        // These real arrow clicks still navigate the pinned merge's list after selecting another
+        // commit. First/last disable rather than wrap; the log preview must stay on that other OID.
+        let preview_subject = serde_json::to_value(
+            &manager.live["git"].views["history"]
+                .active_node("history-subject")
+                .unwrap()
+                .kind,
+        )
+        .unwrap();
+        for (arrow, title, previous_disabled, next_disabled) in [
+            ("diff-file-previous", "settings.json", false, false),
+            ("diff-file-previous", "notes.md", true, false),
+            ("diff-file-next", "settings.json", false, false),
+            ("diff-file-next", "shared.txt", false, true),
+        ] {
+            press(visual, arrow.into(), 1);
+            flush(&mut manager, &app, visual);
+            let guest_error = manager.live["git"].views["history"]
+                .active_node("history-error")
+                .map(|node| serde_json::to_value(&node.kind).unwrap());
+            visual.update(|window, cx| {
+                let state = app.read(cx);
+                let worker = state.extensions.read(cx).worker.state.lock().unwrap();
+                let active = state
+                    .comparison_views
+                    .iter()
+                    .find(|view| Some(&view.id) == state.active_comparison.as_ref())
+                    .unwrap();
+                assert!(
+                    active.title.starts_with(title),
+                    "actual neighboring file: {}; host={}; worker={:?}; guest={guest_error:?}",
+                    active.title,
+                    state.status,
+                    worker.status.as_ref().map(|status| &status.message)
+                );
+                let controls = snapshots(window);
+                for (label, disabled) in [
+                    (t!("editor.diff_file_previous"), previous_disabled),
+                    (t!("editor.diff_file_next"), next_disabled),
+                ] {
+                    let button = controls
+                        .iter()
+                        .find(|node| {
+                            node.role() == Some(gpui_kit::Role::Button)
+                                && node.label() == Some(label.as_ref())
+                        })
+                        .unwrap();
+                    // Base buttons may omit a native disabled flag. Absence says nothing about
+                    // activation; boundary presses below verify the actual no-wrap behavior.
+                    if let Some(exposed) = button.disabled() {
+                        assert_eq!(exposed, disabled);
+                    }
+                }
+            });
+            assert!(
+                visual.debug_bounds("document-diff-third").is_some(),
+                "merge source count stays three"
+            );
+            assert_eq!(
+                serde_json::to_value(
+                    &manager.live["git"].views["history"]
+                        .active_node("history-subject")
+                        .unwrap()
+                        .kind
+                )
+                .unwrap(),
+                preview_subject
+            );
+            if previous_disabled {
+                let before = visual.update(|_, cx| app.read(cx).active_comparison.clone());
+                press(visual, "diff-file-previous".into(), 1);
+                flush(&mut manager, &app, visual);
+                assert_eq!(
+                    visual.update(|_, cx| app.read(cx).active_comparison.clone()),
+                    before,
+                    "the first file rejects a previous-file press instead of wrapping"
+                );
+            }
+        }
+        press(visual, "diff-file-next".into(), 1);
+        flush(&mut manager, &app, visual);
+        assert_eq!(
+            visual.update(|_, cx| app.read(cx).comparison_views.len()),
+            1,
+            "last file remains the original pinned tab"
         );
         press(
             visual,

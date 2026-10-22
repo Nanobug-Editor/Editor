@@ -30,35 +30,41 @@ impl State {
             ));
         }
         match operation {
-            tree::Operation::Create => {
-                if self.trees.len() >= tree::MAX_TREES {
+            tree::Operation::Create => self.allocate_tree(tree::Options::default()),
+            tree::Operation::SetExpanded {
+                tree,
+                nodes,
+                expanded,
+            } => {
+                self.validate_tree_checks()?;
+                self.owned_tree(&tree)?.set_expanded(nodes, expanded)?;
+                Ok(Value::Unit)
+            }
+            tree::Operation::CreateWithOptions { options } => {
+                if options.single_click_expand {
+                    self.validate_tree_action_menus()?;
+                }
+                if !self.tree_interaction_1_5
+                    || !self
+                        .api
+                        .capabilities
+                        .get("ui.tree")
+                        .is_some_and(|version| version >= &semver::Version::new(1, 5, 0))
+                {
                     return Err(Failure::new(
-                        ErrorCode::LimitExceeded,
-                        "Tree resource quota exceeded",
+                        ErrorCode::CapabilityUnavailable,
+                        "Tree interaction options require ui.tree >=1.5",
                     ));
                 }
-                let Value::Resource(handle) = self.roots.open(RootKind::Tree)? else {
-                    unreachable!()
-                };
-                let authority = crate::EditorAuthority::new(
-                    self.plugin_services.alive.clone(),
-                    self.plugin_services.context.as_ref(),
-                );
-                // A delegated view belongs to its initiating source chain, like native marker layers.
-                // Source retirement must release the persistent root, not only seal its projection.
-                if let Some(context) = &self.plugin_services.context {
-                    self.plugin_services
-                        .resources
-                        .insert(handle.resource, (handle.clone(), context.clone()));
-                }
-                self.trees.insert(
-                    handle.resource,
-                    Arc::new(crate::TreeResource::new(handle.clone(), authority)),
-                );
-                Ok(Value::Resource(handle))
+                self.allocate_tree(options)
             }
             tree::Operation::Refresh { tree } => {
                 self.owned_tree(&tree)?.refresh()?;
+                Ok(Value::Unit)
+            }
+            tree::Operation::Initialize { tree, path } => {
+                self.validate_tree_presentation()?;
+                self.owned_tree(&tree)?.initialize(path)?;
                 Ok(Value::Unit)
             }
             tree::Operation::Update { tree, nodes } => {
@@ -75,6 +81,25 @@ impl State {
                 let cached = resource.cached_ids();
                 let icons = self.prepare_tree_nodes(&nodes, Some(&cached))?;
                 resource.update(nodes, icons)?;
+                Ok(Value::Unit)
+            }
+            tree::Operation::ApplyPatch { tree, patch } => {
+                if !self.tree_patch_1_4
+                    || !self
+                        .api
+                        .capabilities
+                        .get("ui.tree")
+                        .is_some_and(|v| v >= &semver::Version::new(1, 4, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "Structural tree patches require ui.tree >=1.4",
+                    ));
+                }
+                let resource = self.owned_tree(&tree)?;
+                patch.validate()?;
+                let icons = self.prepare_tree_nodes(&patch.nodes, None)?;
+                resource.apply_patch(patch, icons)?;
                 Ok(Value::Unit)
             }
             tree::Operation::Reply { request, result } => {
@@ -97,6 +122,34 @@ impl State {
             }
         }
     }
+    /// Both creation operations use the same instance quota, delegated lifetime and owned root.
+    /// `options` are fixed before publication; provider refreshes cannot alter pointer semantics.
+    fn allocate_tree(&mut self, options: tree::Options) -> Result<Value, Failure> {
+        if self.trees.len() >= tree::MAX_TREES {
+            return Err(Failure::new(
+                ErrorCode::LimitExceeded,
+                "Tree resource quota exceeded",
+            ));
+        }
+        let Value::Resource(handle) = self.roots.open(RootKind::Tree)? else {
+            unreachable!()
+        };
+        let authority = crate::EditorAuthority::new(
+            self.plugin_services.alive.clone(),
+            self.plugin_services.context.as_ref(),
+        );
+        // Source retirement releases the persistent root as well as sealing its native projection.
+        if let Some(context) = &self.plugin_services.context {
+            self.plugin_services
+                .resources
+                .insert(handle.resource, (handle.clone(), context.clone()));
+        }
+        self.trees.insert(
+            handle.resource,
+            Arc::new(crate::TreeResource::new(handle.clone(), authority, options)),
+        );
+        Ok(Value::Resource(handle))
+    }
     /// Pages and cached updates share typed-command, metadata and owned SVG admission before mutation.
     fn prepare_tree_nodes(
         &self,
@@ -106,6 +159,20 @@ impl State {
         let mut icons = BTreeMap::new();
         for node in nodes {
             node.validate()?;
+            if node.checked.is_some() || !node.suffix.is_empty() {
+                self.validate_tree_checks()?;
+            }
+            if !node.action_menu.is_empty() {
+                self.validate_tree_action_menus()?;
+                let mut rows = Vec::new();
+                for item in &node.action_menu {
+                    item.visit(&mut |item| rows.push(item));
+                }
+                self.prepare_action_menu(&rows, &mut icons)?;
+            }
+            if node.tone.is_some() {
+                self.validate_tree_presentation()?;
+            }
             if (node.menu.len() > 8
                 || node
                     .activation
@@ -146,10 +213,67 @@ impl State {
                     // artwork after validating authority, without opening or parsing SVG bytes.
                     self.owned_icon_paths(icon)?;
                 }
+                // Structural deltas can span more than one page; stop at the retained artwork
+                // budget instead of reading every path before discovering an oversized batch.
+                if icons.values().map(|bytes| bytes.len()).sum::<usize>() > 2 * 1024 * 1024 {
+                    return Err(Failure::new(
+                        ErrorCode::LimitExceeded,
+                        "Tree icon budget exceeded",
+                    ));
+                }
             }
         }
         Ok(icons)
     }
+    /// Inventory alone must not silently opt older providers into new tree presentation semantics.
+    fn validate_tree_presentation(&self) -> Result<(), Failure> {
+        if !self.tree_presentation_1_3
+            || !self
+                .api
+                .capabilities
+                .get("ui.tree")
+                .is_some_and(|version| version >= &semver::Version::new(1, 3, 0))
+        {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Tree presentation requires ui.tree >=1.3",
+            ));
+        }
+        Ok(())
+    }
+    /// New cascading menus and directory gestures require an explicit floor excluding all 1.5 patches.
+    fn validate_tree_action_menus(&self) -> Result<(), Failure> {
+        if !self.tree_action_menus_1_6
+            || !self
+                .api
+                .capabilities
+                .get("ui.tree")
+                .is_some_and(|version| version >= &semver::Version::new(1, 6, 0))
+        {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Action menus require explicit ui.tree >=1.6",
+            ));
+        }
+        Ok(())
+    }
+    /// A current host cannot opt an older provider into checkbox or disclosure semantics.
+    fn validate_tree_checks(&self) -> Result<(), Failure> {
+        if !self.tree_checks_1_7
+            || !self
+                .api
+                .capabilities
+                .get("ui.tree")
+                .is_some_and(|version| version >= &semver::Version::new(1, 7, 0))
+        {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Tree checkboxes and disclosure require explicit ui.tree >=1.7",
+            ));
+        }
+        Ok(())
+    }
+
     /// Handle resolution never accepts a different incarnation, scope or resource kind.
     pub(super) fn owned_tree(
         &self,
@@ -185,22 +309,109 @@ fn validate_update_capability(api: &api::Negotiated, explicit_floor: bool) -> Re
     Ok(())
 }
 
+/// Extended menus retain their explicit 1.1 minimum when a provider requires a newer tree minor.
+pub(super) fn requires_menu_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 1)
+}
+
 /// Required ranges must exclude every patch of older minors, not merely 1.0.0 and 1.1.0.
 /// SemVer requirements intersect their comparators, so a range admitting 1.2 and any older minor
 /// also admits that minor's last representable patch; checking its tail rejects patch-only floors.
 pub(super) fn requires_cached_update_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 2)
+}
+
+/// A required 1.3 range must exclude every patch of all older tree minors.
+pub(super) fn requires_presentation_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 3)
+}
+
+/// Structural patches are additive; older required ranges cannot obtain them from new inventory.
+pub(super) fn requires_patch_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 4)
+}
+
+/// Creation-time interaction preferences are available only to explicit 1.5 consumers.
+pub(super) fn requires_interaction_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 5)
+}
+
+/// Cascading action menus are opt-in and cannot appear through an older tree requirement.
+pub(super) fn requires_action_menu_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 6)
+}
+
+/// Checkable rows and programmatic disclosure are available only to explicit 1.7 consumers.
+pub(super) fn requires_check_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 7)
+}
+
+/// Resolve each feature against the current inventory while rejecting every older minor tail.
+fn requires_tree_floor(requirements: Option<&api::Requirements>, minor: u64) -> bool {
     requirements
         .and_then(|requirements| requirements.required.get("ui.tree"))
         .is_some_and(|range| {
-            range.matches(&semver::Version::new(1, 2, 0))
-                && !range.matches(&semver::Version::new(1, 1, u64::MAX))
-                && !range.matches(&semver::Version::new(1, 0, u64::MAX))
+            range.matches(&semver::Version::new(1, 7, 0))
+                && (0..minor).all(|old| !range.matches(&semver::Version::new(1, old, u64::MAX)))
         })
 }
 
 #[cfg(test)]
 mod update_tests {
     use super::*;
+
+    /// New host inventory retains prior floors but cannot grant checkboxes to broad or optional ranges.
+    #[test]
+    fn tree_checkbox_floor_requires_explicit_minor() {
+        for (range, expected) in [
+            ("^1", false),
+            (">=1.6,<2", false),
+            (">=1.6.99,<2", false),
+            (">=1.7,<2", true),
+        ] {
+            let requirements = api::Requirements {
+                base: "^1".parse().unwrap(),
+                required: [("ui.tree".into(), range.parse().unwrap())].into(),
+                optional: Default::default(),
+            };
+            assert_eq!(
+                requires_check_floor(Some(&requirements)),
+                expected,
+                "{range}"
+            );
+            if expected {
+                assert!(requires_action_menu_floor(Some(&requirements)));
+            }
+        }
+    }
+
+    /// New explicit floors include older features; an inventory bump never widens old manifests.
+    #[test]
+    fn incremental_tree_patch_floor_preserves_prior_features_and_rejects_older_minors() {
+        for (range, expected) in [
+            ("^1", [false, false, false, false]),
+            (">=1.2,<2", [true, true, false, false]),
+            (">=1.3,<2", [true, true, true, false]),
+            (">=1.3.99,<2", [true, true, true, false]),
+            (">=1.4,<2", [true, true, true, true]),
+        ] {
+            let requirements = api::Requirements {
+                base: "^1".parse().unwrap(),
+                required: [("ui.tree".into(), range.parse().unwrap())].into(),
+                optional: Default::default(),
+            };
+            assert_eq!(
+                [
+                    requires_menu_floor(Some(&requirements)),
+                    requires_cached_update_floor(Some(&requirements)),
+                    requires_presentation_floor(Some(&requirements)),
+                    requires_patch_floor(Some(&requirements))
+                ],
+                expected,
+                "{range}"
+            );
+        }
+    }
 
     /// Negotiating the current inventory alone must not authorize new mutation semantics.
     #[test]
@@ -246,6 +457,31 @@ mod update_tests {
                 allowed,
                 "{range}"
             );
+        }
+    }
+    /// Any 1.0/1.1/1.2 patch admitted by the range forbids initial selection and semantic tones.
+    #[test]
+    fn initial_selection_requires_explicit_presentation_floor() {
+        for (range, allowed) in [
+            ("^1", false),
+            (">=1.2,<2", false),
+            (">=1.2.999,<2", false),
+            (">=1.3,<2", true),
+            ("^1.3", true),
+        ] {
+            let requirements = api::Requirements {
+                base: "^1".parse().unwrap(),
+                required: [("ui.tree".into(), range.parse().unwrap())].into(),
+                optional: Default::default(),
+            };
+            assert_eq!(
+                requires_presentation_floor(Some(&requirements)),
+                allowed,
+                "{range}"
+            );
+            if allowed {
+                assert!(requires_cached_update_floor(Some(&requirements)));
+            }
         }
     }
 }

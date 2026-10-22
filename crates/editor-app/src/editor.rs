@@ -11,6 +11,8 @@ mod empty_canvas_tests;
 pub(crate) mod file_watch;
 #[cfg(test)]
 mod file_watch_tests;
+/// Local history coordinates immutable background storage with the unique native text session.
+pub(crate) mod history;
 #[cfg(test)]
 mod hover_hit_test;
 pub(crate) mod language_edits;

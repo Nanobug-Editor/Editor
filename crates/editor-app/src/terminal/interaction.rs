@@ -7,6 +7,8 @@ use protocol::ui::{MenuItem, PointerPhase};
 impl TerminalPanel {
     pub(super) fn canvas_event(&mut self, event: CanvasEvent, cx: &mut Context<Self>) {
         match event {
+            // The native terminal owns its viewport directly and does not opt into guest scroll epochs.
+            CanvasEvent::ScrollInput { .. } => return,
             CanvasEvent::Resize {
                 width,
                 height,

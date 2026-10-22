@@ -1,6 +1,6 @@
 //! The complete source frame preserves native edits and its local completion popup inside alignment.
 use super::*;
-use crate::ui::controls::{aligned_editor::AlignmentPane, aligned_pointer};
+use editor_ui::{aligned_editor::AlignmentPane, aligned_pointer};
 use gpui_base::Root;
 use gpui_kit::TestAppContext;
 use gpui_kit::gpui;
@@ -64,17 +64,37 @@ impl Render for AlignedSourceHost {
 #[gpui::test]
 #[ignore = "native aligned SourceFrame regression; run explicitly with --ignored --test-threads=1"]
 fn aligned_source_frame_keeps_completion_anchor_and_native_history(cx: &mut TestAppContext) {
+    verify_aligned_source_frame(cx, false);
+}
+
+/// Large original source factories must keep the same session while root validation retains glyphs.
+#[gpui::test]
+#[ignore = "native large SourceFrame cache/input regression; run explicitly with --ignored --test-threads=1"]
+fn large_aligned_source_frame_keeps_native_input_completion_and_history(cx: &mut TestAppContext) {
+    verify_aligned_source_frame(cx, true);
+}
+
+/// Use the production Root plugins and atomic SourceFrame for both small and batched sources.
+fn verify_aligned_source_frame(cx: &mut TestAppContext, large: bool) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        aligned_pointer::init(cx);
+        editor_ui::init(cx);
         typography::init(cx);
         theme::apply_theme(theme::builtin_theme(false), cx);
         cx.set_reduce_motion(true);
     });
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("source.txt");
-    let source = "first\nsecond\n";
-    std::fs::write(&path, source).unwrap();
+    let tail = if large {
+        (0..300)
+            .map(|row| format!("source {row} 中文😀 native input\n"))
+            .collect::<String>()
+    } else {
+        String::new()
+    };
+    let source = format!("first\nsecond\n{tail}");
+    let snapshot_text = format!("first\ninsert one\ninsert two\nsecond\n{tail}");
+    std::fs::write(&path, &source).unwrap();
     let workspace = editor_core::Workspace::open(directory.path()).unwrap();
     let (root, visual) = cx.add_window_view(move |window, cx| {
         let app = cx.new(|cx| EditorApp::new(workspace, Some(path), window, cx));
@@ -102,7 +122,7 @@ fn aligned_source_frame_keeps_completion_anchor_and_native_history(cx: &mut Test
         let editor = app.read(cx).editor.clone();
         let snapshot = cx.new(|cx| EditorState::new(window, cx).line_number(false));
         snapshot.update(cx, |state, cx| {
-            state.set_value("first\ninsert one\ninsert two\nsecond\n", window, cx);
+            state.set_value(snapshot_text.clone(), window, cx);
             state.set_readonly(true, cx);
         });
         let router = aligned_pointer::for_window(window, cx).unwrap();
@@ -110,20 +130,8 @@ fn aligned_source_frame_keeps_completion_anchor_and_native_history(cx: &mut Test
         group
             .configure(
                 vec![
-                    AlignmentPane {
-                        editor: snapshot.clone(),
-                        revision: 0,
-                        label: "Snapshot".into(),
-                        input_factory: None,
-                        native_authority_factory: None,
-                    },
-                    AlignmentPane {
-                        editor: editor.clone(),
-                        revision: 0,
-                        label: "Source".into(),
-                        input_factory: None,
-                        native_authority_factory: None,
-                    },
+                    AlignmentPane::new(snapshot.clone(), 0, "Snapshot".into()),
+                    AlignmentPane::new(editor.clone(), 0, "Source".into()),
                 ],
                 &router,
                 cx,
@@ -223,6 +231,16 @@ fn aligned_source_frame_keeps_completion_anchor_and_native_history(cx: &mut Test
             "notice remains at the physical click"
         );
     });
+    // Platform text input traverses the actual SourceFrame delegate before the session's Undo.
+    visual.simulate_input("中文😀");
+    visual.update(|_, cx| {
+        assert_eq!(
+            app.read(cx).editor.read(cx).value().as_ref(),
+            format!("first\n中文😀second\n{tail}")
+        );
+    });
+    visual.simulate_keystrokes("ctrl-z");
+    visual.update(|_, cx| assert_eq!(app.read(cx).editor.read(cx).value().as_ref(), source));
     visual.update(|_, cx| {
         app.read(cx).editor.clone().update(cx, |state, cx| {
             state.present_completion_items(
@@ -252,15 +270,12 @@ fn aligned_source_frame_keeps_completion_anchor_and_native_history(cx: &mut Test
     visual.update(|_, cx| {
         assert_eq!(
             app.read(cx).editor.read(cx).value().as_ref(),
-            "first\ninsertedsecond\n"
+            format!("first\ninsertedsecond\n{tail}")
         )
     });
     visual.simulate_keystrokes("ctrl-z");
     visual.update(|_, cx| {
         assert_eq!(app.read(cx).editor.read(cx).value().as_ref(), source);
-        assert_eq!(
-            snapshot.read(cx).value().as_ref(),
-            "first\ninsert one\ninsert two\nsecond\n"
-        );
+        assert_eq!(snapshot.read(cx).value().as_ref(), snapshot_text);
     });
 }

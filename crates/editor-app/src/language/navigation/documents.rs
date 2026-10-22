@@ -46,6 +46,21 @@ impl LanguageServer {
         lease.active.store(false, Ordering::Release);
         Some(lease)
     }
+    /// Recognition may lag an already admitted control request. Keep a lease that already has the
+    /// recognized language; compare and withdraw atomically so a concurrent reopen cannot be retired.
+    pub(crate) fn retire_document_if_language_changed(
+        &self,
+        uri: &Uri,
+        language: &str,
+    ) -> Option<DocumentLease> {
+        let mut documents = self.documents.lock().unwrap();
+        if documents.get(uri.as_str())?.language_id == language {
+            return None;
+        }
+        let lease = documents.remove(uri.as_str())?;
+        lease.active.store(false, Ordering::Release);
+        Some(lease)
+    }
     /// Only the matching old wire lifetime may close; a delayed close cannot remove a reopened document.
     pub(crate) fn close_document(&self, document: DocumentLease) -> anyhow::Result<()> {
         let mut connection = self

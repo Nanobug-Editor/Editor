@@ -494,6 +494,7 @@ fn git_package_stages_one_path_and_commits_only_the_index_with_multiline_stdin()
         .invoke_command("git", "refresh-hunks", json!({"path":"selected space.txt"}))
         .unwrap();
     idle(&mut manager);
+    click(&mut manager, "staging", "commit-hunks");
     let scene = &manager.live["git"].views["staging"];
     assert!(
         scene.active_node("hunk-1").is_some(),
@@ -547,7 +548,8 @@ fn git_package_stages_one_path_and_commits_only_the_index_with_multiline_stdin()
         panic!("history canvas")
     };
     canvas.validate().unwrap();
-    assert!(canvas.paint.iter().any(|paint|matches!(paint,plugin_runtime::plugin_protocol::Paint::Text{text,..} if text=="history 0")));
+    // The virtualized canvas paints the newest visible commits, not the oldest loaded record.
+    assert!(canvas.paint.iter().any(|paint|matches!(paint,plugin_runtime::plugin_protocol::Paint::Text{text,..} if text=="history 19")));
     // Cancelling a staged rename restores both index paths; the renamed worktree file is retained.
     std::fs::write(root.join("old.txt"), "rename bytes\n").unwrap();
     git(root, &["add", "--", "old.txt"]);

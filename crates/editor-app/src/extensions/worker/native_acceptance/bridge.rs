@@ -30,7 +30,11 @@ impl Harness {
             last_frame_log: Cell::new(None),
             evidence: RefCell::new(serde_json::json!({
                 "case": case.name,
-                "workflow": if exclusive::requested() {
+                "workflow": if commit_panel::requested() {
+                    "commit-panel-only"
+                } else if workspace_presentation::requested() {
+                    "workspace-presentation-only"
+                } else if exclusive::requested() {
                     "exclusive-dock-only"
                 } else if sidebar::requested() {
                     "shared-sidebar-only"
@@ -139,8 +143,10 @@ impl Harness {
     pub async fn activate(&self, cx: &mut AsyncApp) -> anyhow::Result<()> {
         eprintln!("native {}: wait visible-panel activation", self.case.name);
         self.settle(cx).await?;
-        // Exercise manual refresh only after first birth, using its actually painted native button.
-        self.click_button(self.main, "refresh", cx).await
+        // Headerless workbenches expose refresh as a registered command/context action.
+        // Invoke it only after the real native canvas is current, then observe its completion.
+        self.command("refresh", serde_json::json!({}), cx)?;
+        self.settle(cx).await
     }
 
     /// Require the current public guest Node and matching host/worker/window. The click adapter
@@ -184,7 +190,7 @@ impl Harness {
     }
 
     /// `active_node` excludes disabled targets. Join that public admission to the actually painted
-    /// Base button and the same host publication before counting stable native turns.
+    /// native canvas and the same host publication before counting stable native turns.
     pub async fn settle(&self, cx: &mut AsyncApp) -> anyhow::Result<()> {
         let deadline = Instant::now() + Duration::from_secs(90);
         let mut previous = None;
@@ -200,7 +206,7 @@ impl Harness {
                     state
                         .views
                         .get("git/history")
-                        .and_then(|view| view.active_node("refresh"))
+                        .and_then(|view| view.active_node("log"))
                         .is_some_and(|node| !node.disabled)
                         && state.processes.get("git").copied().unwrap_or(0) == 0,
                     state
@@ -219,8 +225,20 @@ impl Harness {
                 actual
                     .as_ref()
                     .is_some_and(|scene| scenes.get("git/history") == Some(&scene.revision))
-                    && input::button(window, "refresh")
-                        .is_ok_and(|button| button.disabled() != Some(true))
+                    && input::tree(window, "branches").is_ok()
+                    && owner
+                        .plugin_panels
+                        .get("git/history")
+                        .and_then(|panel| panel.read(cx).native_ui.as_ref())
+                        .and_then(|view| {
+                            view.read(cx)
+                                .native_canvas_input_snapshot("log", window, cx)
+                        })
+                        .is_some_and(|input| {
+                            input["enabled"] == true
+                                && input["scene_current"] == true
+                                && input["node_active"] == true
+                        })
             })?;
             if !captured && ready {
                 // Save real idle-worker pixels even if native publication is lagging. This is
@@ -504,7 +522,7 @@ impl Harness {
                 .map(|(id, view)| (
                     id,
                     view.revision,
-                    view.active_node("refresh").map(|node| node.disabled)
+                    view.active_node("log").map(|node| node.disabled)
                 ))
                 .collect::<Vec<_>>(),
             state.status.as_ref().map(|status| &status.message)

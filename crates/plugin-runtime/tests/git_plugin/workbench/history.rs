@@ -2,6 +2,8 @@
 use super::*;
 use plugin_runtime::plugin_protocol::tree;
 use std::{io::Write as _, process::Stdio};
+#[path = "history/performance.rs"]
+mod performance;
 
 /// Import distinct blobs in one Git process, keeping a large-history fixture inexpensive on Windows.
 fn import_history(root: &Path, count: usize) {
@@ -45,6 +47,86 @@ fn import_history(root: &Path, count: usize) {
         String::from_utf8_lossy(&output.stderr)
     );
     git(root, &["reset", "--hard", "HEAD"]);
+}
+
+/// One displayed frame can emit many deltas before the next paint; every pixel must be retained.
+#[test]
+#[ignore = "build independent Git candidate; set NANOBUG_GIT_CANDIDATE; real scroll stream"]
+fn git_package_scroll_burst_keeps_every_delta_and_rejects_old_clicks() {
+    if !run_isolated_test(
+        "workbench::history::git_package_scroll_burst_keeps_every_delta_and_rejects_old_clicks",
+    ) {
+        return;
+    }
+    let repository = repository();
+    import_history(repository.path(), 128);
+    let (_profile, mut manager) = activate(&candidate(), repository.path());
+    send(
+        &mut manager,
+        "history",
+        "log",
+        ui::Action::Canvas(ui::CanvasEvent::Resize {
+            width: 1000.,
+            height: 280.,
+            grid: None,
+        }),
+    );
+    let captured = manager.live["git"].views["history"].clone();
+    let staging_before = manager.live["git"].views["staging"].clone();
+    let ui::Kind::Canvas(canvas) = &captured.active_node("log").unwrap().kind else {
+        panic!("history canvas")
+    };
+    let epoch = canvas.scroll_epoch.expect("content-owned range input");
+    let started = Instant::now();
+    for _ in 0..64 {
+        manager
+            .event(
+                "git",
+                Some("history".into()),
+                api::Notification::Ui(ui::UiEvent {
+                    revision: captured.revision,
+                    node: "log".into(),
+                    action: ui::Action::Canvas(ui::CanvasEvent::ScrollInput {
+                        epoch,
+                        change: ui::ScrollChange::Delta { delta_y: -7. },
+                    }),
+                }),
+            )
+            .expect("painting does not revoke the remaining wheel deltas");
+    }
+    assert_eq!(log_range(&manager).offset, 448.);
+    assert!(
+        std::sync::Arc::ptr_eq(&staging_before, &manager.live["git"].views["staging"]),
+        "scrolling history must not replace unrelated panel input authority"
+    );
+    eprintln!(
+        "64 real WASM scroll deltas retained 448px in {:?}",
+        started.elapsed()
+    );
+    let error = manager
+        .event(
+            "git",
+            Some("history".into()),
+            api::Notification::Ui(ui::UiEvent {
+                revision: captured.revision,
+                node: "log".into(),
+                action: ui::Action::Canvas(ui::CanvasEvent::Pointer {
+                    phase: ui::PointerPhase::Down,
+                    x: 100.,
+                    y: 14.,
+                    button: 0,
+                    clicks: 1,
+                    shift: false,
+                }),
+            }),
+        )
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<api::Failure>().unwrap().code,
+        api::ErrorCode::StaleRevision
+    );
+    manager.disable("git").unwrap();
+    assert_eq!(manager.resource_count(), 0);
 }
 
 /// The public canvas declares one shared scroll range for both topology and table rows.

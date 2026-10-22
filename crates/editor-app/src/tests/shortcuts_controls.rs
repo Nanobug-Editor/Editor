@@ -1,7 +1,8 @@
 //! Verifies edited bindings against real Base inputs, document sessions and native windows.
 
 use super::shortcuts::{click, draw, second_editor_window, with_editor};
-use crate::{EditorApp, ui::controls::Input};
+use crate::EditorApp;
+use editor_ui::Input;
 use gpui_base::Root;
 use gpui_base::input::{InputEvent, InputState};
 use gpui_kit::{

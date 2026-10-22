@@ -81,6 +81,8 @@ impl Case {
 pub(super) fn run(case: Case) -> anyhow::Result<()> {
     // Each narrow receipt has one scope; inherited diagnostic flags cannot shorten another workflow.
     let narrow = [
+        commit_panel::requested(),
+        workspace_presentation::requested(),
         exclusive::requested(),
         sidebar::requested(),
         caption_controls::requested(),
@@ -179,7 +181,36 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
         "receipt belongs to a different case"
     );
     // The separately named keyboard diagnostic has an explicit, narrower evidence contract.
-    let images: &[&str] = if exclusive::requested() {
+    let images: &[&str] = if commit_panel::requested() {
+        ensure!(
+            evidence["workflow"] == "commit-panel-only",
+            "commit receipt has wrong scope"
+        );
+        ensure!(
+            evidence["observations"]["checkbox_partial_stage_unstage_and_draft"] == true,
+            "commit workflow incomplete"
+        );
+        &[
+            "commit-default.png",
+            "commit-checked.png",
+            "commit-final.png",
+        ]
+    } else if workspace_presentation::requested() {
+        ensure!(
+            evidence["workflow"] == "workspace-presentation-only",
+            "presentation receipt has wrong scope"
+        );
+        ensure!(
+            evidence["observations"]["workspace_presentation_complete"] == true,
+            "presentation workflow incomplete"
+        );
+        &[
+            "presentation-files.png",
+            "presentation-head-menu.png",
+            "presentation-overflow.png",
+            "presentation-withdrawn.png",
+        ]
+    } else if exclusive::requested() {
         ensure!(
             evidence["workflow"] == "exclusive-dock-only",
             "exclusive receipt has wrong scope"
@@ -228,6 +259,8 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
             "idle-menu-before.png",
             "idle-menu-after.png",
         ]
+    } else if std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_some() {
+        &["history-scroll.png"]
     } else if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
         &["history-keyboard-probe.png"]
     } else {

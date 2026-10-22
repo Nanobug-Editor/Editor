@@ -56,6 +56,19 @@ impl SnapshotEpoch {
 }
 
 impl EditorApp {
+    /// Native result preparation follows monotonic configuration/disk and source-selection epochs.
+    /// These bits retain no text and do not extend original plugin authority or a document revision.
+    pub(crate) fn language_result_conditions(
+        &self,
+        path: &str,
+    ) -> Result<Vec<Arc<AtomicBool>>, Failure> {
+        Ok(vec![
+            self.language_server_demands.snapshot_epoch.guard.clone(),
+            self.language_server_demands
+                .snapshot_epoch
+                .source_guard(path)?,
+        ])
+    }
     /// Every observed workspace file event may change dependency membership or configuration. Only
     /// outstanding result guards expire; open contexts and native process leases remain intact.
     pub(crate) fn invalidate_language_context_snapshots(&mut self) {

@@ -1,8 +1,8 @@
 //! Shares runtime-log reminders with a fixed summary snapshot beside the status bar.
 
 use crate::extensions::{level_label, log_time, severity_icon};
-use crate::ui::controls::{Spinner, StatusIcon};
 use crate::*;
+use editor_ui::{Spinner, StatusIcon};
 use gpui_base::PopoverState;
 use plugin_runtime::logs::{LogLevel, LogRecord};
 use std::collections::BTreeMap;

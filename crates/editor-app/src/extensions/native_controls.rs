@@ -1,6 +1,6 @@
 //! Panel title commands use the same native popup as guest-supplied menus.
 use super::*;
-use crate::ui::controls::menu::{MenuStyle, PopupMenu};
+use editor_ui::menu::{MenuStyle, PopupMenu};
 impl ExtensionPanel {
     /// Revoke pointer projections before dropping either native surface. Old rendered frames may
     /// retain their pane entities until the router has delivered the original editor's MouseUp.

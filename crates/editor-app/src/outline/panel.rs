@@ -1,6 +1,7 @@
 //! Outline uses Base tree selection/keyboard/virtualization and project-owned row and dock chrome.
 use super::*;
-use crate::ui::controls::{TreeRowAppearance, tree_row};
+use editor_ui::scroll::{ScrollAxis, SmoothScrollable as _};
+use editor_ui::{TreeRowAppearance, tree_row};
 use gpui_base::Tree;
 
 pub(crate) struct OutlinePanel {
@@ -63,7 +64,7 @@ impl DockPanel for OutlinePanel {
                     .gap_1()
                     // Cursor following belongs to the model; the header only needs the hide control.
                     .child(
-                        crate::ui::controls::Button::new("outline-hide")
+                        editor_ui::Button::new("outline-hide")
                             .debug_selector(|| "outline-hide".into())
                             .icon(Icon::new(IconName::WindowMinimize))
                             .small()
@@ -130,6 +131,7 @@ impl Render for OutlinePanel {
                 .into_any_element();
         }
         let tree = app.outline.tree.clone();
+        let wheel_scroll = tree.read(cx).scroll_handle().clone();
         let definitions = app.outline.definitions.clone();
         let current = app.outline.current.clone();
         let icons = app.outline.snapshot.as_ref().unwrap().icons.clone();
@@ -215,6 +217,7 @@ impl Render for OutlinePanel {
                             current.as_ref() == Some(&id),
                             false,
                             TreeRowAppearance::Explorer,
+                            Default::default(),
                             cx,
                             entry
                                 .is_folder()
@@ -233,7 +236,8 @@ impl Render for OutlinePanel {
                             click_owner.update(cx, |app, cx| app.navigate_outline(&id, window, cx));
                         })
                         .into_any_element()
-                    }),
+                    })
+                    .smooth_scroll(&wheel_scroll, ScrollAxis::Vertical),
             )
             .into_any_element()
     }

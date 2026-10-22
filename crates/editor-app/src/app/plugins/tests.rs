@@ -505,12 +505,7 @@ fn status_indicators_open_plugin_lists(cx: &mut TestAppContext) {
     cx.simulate_resize(size(px(1000.), px(800.)));
     cx.update(|window, cx| {
         view.update(cx, |app, cx| {
-            // Readiness supplies loading state; startup failures separately emit an owned runtime log.
-            // Keep both seams in this fixture so a persistent Failed state cannot recreate confirmed alerts.
-            app.language_service_states.insert(
-                "custom-language".into(),
-                ServiceLoadState::Failed("missing service".into()),
-            );
+            // Startup failures emit an owned runtime log independently from pending restore metadata.
             app.extensions.read(cx).runtime_logs().append(
                 "custom-plugin",
                 plugin_runtime::LogLevel::Error,
@@ -533,8 +528,13 @@ fn status_indicators_open_plugin_lists(cx: &mut TestAppContext) {
 
     cx.update(|window, cx| {
         view.update(cx, |app, cx| {
-            app.language_service_states
-                .insert("custom-language".into(), ServiceLoadState::Loading);
+            // No document demands a language here; model a pending package restore instead.
+            app.extensions.update(cx, |panel, cx| {
+                panel
+                    .startup
+                    .insert("custom-plugin".into(), "Custom plugin".into());
+                cx.notify();
+            });
             cx.notify();
         });
         window.draw(cx).clear(cx);

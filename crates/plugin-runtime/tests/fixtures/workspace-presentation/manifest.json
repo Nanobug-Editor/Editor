@@ -1,0 +1,13 @@
+{
+  "id":"review-queue", "name":"Review queue", "version":"0.1.0", "protocol":7,
+  "component":"fixture.wasm", "storage_limit":1024,
+  "permissions":["ui.panels","assets.read","workspace.read"],
+  "activation":{"background":{"purpose":"Observe file review status for workspace presentation"}},
+  "api":{"base":"^1","required":{"lifecycle.activation":"^1","ui.native":"^1","ui.panels":"^1","ui.icons":"^1","ui.workspace":"^1","explorer.decorations":"^1","plugin.commands":"^1"}},
+  "commands":[
+    {"id":"publish","title":"Publish review queue","signature":{"permissions":["ui.panels","assets.read","workspace.read"],"parameters":{"type":"null"},"result":{"type":"null"}}},
+    {"id":"next","title":"Review next file","signature":{"permissions":["ui.panels","assets.read","workspace.read"],"parameters":{"type":"null"},"result":{"type":"null"}}},
+    {"id":"rename","title":"Rename review queue","signature":{"permissions":["ui.panels","assets.read","workspace.read"],"parameters":{"type":"null"},"result":{"type":"null"}}},
+    {"id":"invalid","title":"Reject an escaping decoration","signature":{"permissions":["ui.panels","assets.read","workspace.read"],"parameters":{"type":"null"},"result":{"type":"null"}}}
+  ]
+}

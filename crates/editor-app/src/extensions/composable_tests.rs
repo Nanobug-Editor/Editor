@@ -128,6 +128,13 @@ fn native_input_and_canvas_route_text_to_their_own_nodes_and_hide_reclaims_targe
             .iter()
             .any(|event| event.node == "caption" && matches!(event.action, Action::Change(_)))
     );
+    let retained = cx.update(|_, cx| {
+        app.read(cx).plugin_panels["capability-example/welcome"]
+            .read(cx)
+            .native_ui
+            .clone()
+            .unwrap()
+    });
     cx.update(|_, cx| {
         app.update(cx, |app, cx| {
             app.hide_plugin_panel("capability-example", "welcome", cx)
@@ -135,12 +142,30 @@ fn native_input_and_canvas_route_text_to_their_own_nodes_and_hide_reclaims_targe
     });
     cx.update(|window, cx| window.draw(cx).clear(cx));
     assert!(cx.debug_bounds("plugin-ui-viewport").is_none());
-    assert!(cx.update(|_, cx| {
-        app.read(cx).plugin_panels["capability-example/welcome"]
+    cx.update(|window, cx| {
+        let hidden = app.read(cx).plugin_panels["capability-example/welcome"]
             .read(cx)
             .native_ui
-            .is_none()
-    }));
+            .as_ref()
+            .unwrap();
+        assert_eq!(hidden.entity_id(), retained.entity_id());
+        assert_eq!(
+            hidden
+                .read(cx)
+                .native_canvas_input_snapshot("viewport", window, cx)
+                .unwrap()["scene_current"],
+            false
+        );
+    });
+    // Hiding retains native state, but the previous focus and IME target cannot emit guest input.
+    events(&app, cx);
+    cx.simulate_input("隐藏后输入");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert!(!events(&app, cx).iter().any(|event| matches!(
+        event.action,
+        Action::Change(_) | Action::Canvas(CanvasEvent::Text { .. } | CanvasEvent::Key { .. })
+    )));
 }
 
 /// Observe public node events as they enter the production worker channel, without reaching into widgets.
@@ -404,6 +429,7 @@ pub(super) fn pump_recording_all(
     });
     work.retain(|item| {
         let Work::DebugCall {
+            origins,
             request,
             configuration,
             method,
@@ -412,10 +438,11 @@ pub(super) fn pump_recording_all(
         else {
             return true;
         };
-        let answer = manager.begin_configured_debug_call(
+        let answer = manager.begin_configured_debug_call_with_origins(
             configuration.as_deref(),
             method,
             arguments.clone(),
+            origins,
         );
         cx.update(|_, cx| {
             let mut state = app
@@ -594,13 +621,16 @@ pub(super) fn pump_recording_all(
     let _ = &mut statuses;
     work.retain(|item| match item {
         Work::StartRun {
+            origins,
             request,
             config,
             request_id,
         } => {
-            let session = match manager
-                .start_terminal_configuration_execution(config, request.clone())
-            {
+            let session = match manager.start_terminal_configuration_execution_with_origins(
+                config,
+                request.clone(),
+                origins,
+            ) {
                 Ok(session) => session,
                 Err(error) => panic!(
                     "a compatible execution provider is installed: {error:#} (request {request:?})"

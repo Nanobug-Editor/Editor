@@ -10,6 +10,62 @@ pub(super) enum SettingsOwner {
 }
 
 impl SettingsOwner {
+    /// History and other user settings resolve the selected profile without reading unrelated preferences.
+    pub(super) fn profile(&self, cx: &App) -> anyhow::Result<PathBuf> {
+        match self {
+            Self::Project(view) => view
+                .read(cx)
+                .session_state
+                .file_path()
+                .and_then(|path| path.parent().map(Path::to_owned))
+                .ok_or_else(|| anyhow::anyhow!(t!("projects.launch_missing_default_profile"))),
+            Self::Empty(view) => Ok(view.read(cx).profile_directory().to_owned()),
+        }
+    }
+
+    /// Read the user profile and startup preferences belonging to this actual dialog owner.
+    pub(super) fn startup_preferences(
+        &self,
+        cx: &App,
+    ) -> anyhow::Result<(PathBuf, app::startup::preferences::Preferences)> {
+        let profile = match self {
+            Self::Project(view) => view
+                .read(cx)
+                .session_state
+                .file_path()
+                .and_then(|path| path.parent().map(Path::to_owned))
+                .ok_or_else(|| anyhow::anyhow!(t!("projects.launch_missing_default_profile")))?,
+            Self::Empty(view) => view.read(cx).profile_directory().to_owned(),
+        };
+        let preferences = app::startup::preferences::Preferences::load(&profile)?;
+        Ok((profile, preferences))
+    }
+
+    /// Return the most recent write error for this settings dialog, if any.
+    pub(super) fn startup_error(&self, cx: &App) -> Option<String> {
+        match self {
+            Self::Project(view) => view.read(cx).settings_startup_error.clone(),
+            Self::Empty(view) => view.read(cx).settings_startup_error.clone(),
+        }
+    }
+
+    /// Save `enabled` in the selected user profile and redraw only after the atomic write settles.
+    pub(super) fn set_restore_last_project(&self, enabled: bool, cx: &mut App) {
+        let error = self
+            .startup_preferences(cx)
+            .and_then(|(profile, mut preferences)| {
+                preferences.restore_last_project = enabled;
+                preferences.save(&profile)
+            })
+            .err()
+            .map(|error| error.to_string());
+        match self {
+            Self::Project(view) => view.update(cx, |app, _| app.settings_startup_error = error),
+            Self::Empty(view) => view.update(cx, |app, _| app.settings_startup_error = error),
+        }
+        self.refresh(cx);
+    }
+
     /// Workspace-only categories receive an actual editor or stay absent.
     pub(super) fn project(&self) -> Option<Entity<EditorApp>> {
         match self {

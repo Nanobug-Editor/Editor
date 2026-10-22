@@ -3,7 +3,5 @@
 mod registry;
 mod source;
 mod syntax;
-mod theme;
 pub(crate) use registry::{GrammarConfig, LanguageParserFactory, LanguageRegistry};
 pub(crate) use syntax::SyntaxHighlighter;
-pub(crate) use theme::HighlightTheme;

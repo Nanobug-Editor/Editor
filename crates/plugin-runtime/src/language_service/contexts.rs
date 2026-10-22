@@ -3,6 +3,22 @@ use super::*;
 use crate::{LanguageContexts, language_contexts::RegisteredContext};
 
 impl LanguageService {
+    /// A control call may run only on the exact immutable registration that it captured at admission.
+    /// A later source choice cannot substitute a different live plan with the same provider/path.
+    pub(crate) fn matches_registered_context(&self, selected: &RegisteredContext) -> bool {
+        selected.is_live()
+            && selected.root == self.root
+            && selected.reference.descriptor.provider == self.provider.id
+            && self
+                .registered_context
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|(_, current)| {
+                    current.is_live() && current.reference.token == selected.reference.token
+                })
+    }
+
     /// Attach an explicitly selected configuration before publication. Its temporary seal is separate
     /// from enduring owner/caller authority so completed effects retain their recovery receipts.
     pub(crate) fn set_registered_context(

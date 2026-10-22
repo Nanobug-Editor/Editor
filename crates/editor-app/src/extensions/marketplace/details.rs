@@ -111,9 +111,12 @@ impl ExtensionPanel {
                     // Existing grants never authorize replacing another installed owner without visible consent.
                     if installed.is_some() && new_permissions.is_empty() && replacements.is_empty()
                     {
-                        let _ =
-                            this.worker
-                                .install_market(candidate.clone(), generation, replacements);
+                        let _ = this.worker.install_market(
+                            candidate.clone(),
+                            generation,
+                            replacements,
+                            false,
+                        );
                         cx.notify();
                     } else {
                         this.confirm_market_install(
@@ -187,7 +190,7 @@ impl ExtensionPanel {
                     .border_color(cx.theme().border)
                     .when(chosen == Some(version.version.as_str()), |button| {
                         button.custom(
-                            ui::controls::ButtonCustomVariant::new(cx)
+                            editor_ui::ButtonCustomVariant::new(cx)
                                 .color(cx.theme().list_active)
                                 .hover(cx.theme().list_active)
                                 .active(cx.theme().list_active)

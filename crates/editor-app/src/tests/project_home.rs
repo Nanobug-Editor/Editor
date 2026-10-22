@@ -13,6 +13,8 @@ mod ime;
 mod menu;
 #[path = "project_home/queue.rs"]
 mod queue;
+#[path = "project_home/restore.rs"]
+mod restore;
 #[path = "project_home/startup.rs"]
 mod startup;
 #[path = "project_home/switcher.rs"]
@@ -32,6 +34,10 @@ mod external_windows;
 #[cfg(windows)]
 #[path = "project_windows/geometry.rs"]
 mod geometry;
+
+#[cfg(windows)]
+#[path = "project_windows/startup_restore.rs"]
+mod native_startup_restore;
 
 /// Use the production window and platform picker in an isolated profile for each behavioral scenario.
 fn with_home(

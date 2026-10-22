@@ -151,7 +151,7 @@ impl EditorApp {
                 tab.diagnostics.syntax.len() == crate::language::diagnostics::MAX_DIAGNOSTICS
             });
         Some(
-            crate::ui::controls::problems::problem_indicator(errors, warnings, others, capped, cx)
+            editor_ui::problems::problem_indicator(errors, warnings, others, capped, cx)
                 .on_click(cx.listener(|app, _, window, cx| app.show_problems(window, cx)))
                 .into_any_element(),
         )

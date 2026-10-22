@@ -18,9 +18,10 @@
 //! result rather than executing a valid prefix. Accepted actions use the shared native preview,
 //! permission, conflict and group-Undo workflow, with readonly `workspace.files 1.3` plan origins.
 //! Cross-document rename preserves every source edit for the same preview workflow. Auxiliary
-//! native input conditions require `workspace.files 1.4`; changed inputs reject the whole plan.
-//! Selected completions resolve on their original source lease, and their main/additional text
-//! edits validate together as one local Undo action. Commands and snippets are not executed.
+//! readonly native input conditions require `workspace.files 1.4`; changed inputs reject the whole
+//! plan before preview or effects. Selected completions resolve on their original source lease,
+//! and their main/additional text edits validate together as one local Undo action. Commands and
+//! snippets are not executed.
 //! A declarative language package needs no empty WASM component for this workflow: its controlled
 //! service owns an incarnation seal and bounded request/recovery resources under the original
 //! `editor.read`, `editor.write`, `editor.edit 1.1` and `workspace.files 1.3` consent/contracts.
@@ -107,6 +108,10 @@ pub struct SemanticLinkedEditingCapabilities {
 pub struct Provider {
     pub id: String,
     pub language: String,
+    /// language.content 1.0: retrieve readonly definitions for explicitly declared URI schemes.
+    /// The native host owns presentation, source revision checks and revocable virtual documents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<crate::language_content::Provider>,
     /// language.lsp 1.5: additional recognized source languages owned by the same context transport.
     /// Each synchronized document retains its own language ID; the primary language is not repeated.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -139,6 +144,15 @@ pub struct Provider {
     /// Pairing remains provider policy; this declaration grants neither file IO nor additional processes.
     #[serde(default)]
     pub editing: bool,
+    /// language.editing 1.2: native manual refactors may propose edits to related workspace sources.
+    /// Every target needs an exact native revision; multiple targets enter normal preview and group Undo.
+    /// This declaration grants no filesystem access or permission to bypass ordinary plan admission.
+    /// Version 1.3 also admits standard RenameFile proposals when workspace.read/write,
+    /// editor.documents 1.1 and the ordinary document/file-plan contracts were granted. File names,
+    /// native revisions and disk stamps enter one preview and group recovery; annotations and
+    /// unsupported resource operations still fail as a whole. Older negotiated minors stay text-only.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub workspace_edits: bool,
     /// A hook may select another approved startup plan, not invent an executable or argument vector.
     #[serde(default)]
     pub alternatives: Vec<String>,
@@ -256,6 +270,11 @@ pub struct Context {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Proposal {
+    /// language.lsp 1.7: expand whole `${dependency:id}/relative/path` strings in initialization
+    /// options and configuration after preparation. Keys and ordinary strings stay literal;
+    /// paths must exist inside this plan's leased artifacts. Requires a prepared installation plan.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub expand_dependencies: bool,
     /// Dynamic download plans require the separate dependencies.prepare installation grant.
     pub installation: Option<crate::dependencies::Plan>,
     /// Dynamic executables/arguments require the separate process.exec grant; fixed plans do not.
@@ -431,6 +450,8 @@ impl Provider {
         };
         id(&self.id)
             && id(&self.language)
+            && (!self.workspace_edits || self.editing)
+            && self.content.as_ref().is_none_or(|content| content.valid())
             && self.languages.len() <= 32
             && self
                 .languages

@@ -1,6 +1,8 @@
 //! Native user gestures offer bounded immutable image resources to one authorized editor surface.
+#[cfg(test)]
+mod history_tests;
 use super::*;
-use crate::ui::controls::overlay::WindowExt as _;
+use editor_ui::overlay::WindowExt as _;
 use gpui_kit::{ClipboardEntry, DragMoveEvent, ExternalPaths, PromptLevel};
 use plugin_runtime::{HostImageInput, HostImageOrigin};
 use protocol::api::{DocumentVersion, ErrorCode, Failure, TextRange};
@@ -429,6 +431,7 @@ impl EditorApp {
         tab.overwrite_confirmed = false;
         tab.last_saved_at = Instant::now();
         let path = tab.path().to_path_buf();
+        self.record_history_save(path.clone(), contents.clone(), cx);
         self.notify_language_document_saved(&path, contents, cx);
         cx.notify();
         Ok(())

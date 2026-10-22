@@ -68,7 +68,11 @@ fn four_ecosystem_roles_map_native_queries_edits_replacement_and_removal(cx: &mu
     // Hold an actual style-mapped native preview across a real contributor replacement. Its
     // original authority must die before any late consent can apply that now-missing mapping.
     pending_mapped_rename(&fixture, &path, "shade", visual);
-    fixture.actor.tx.send(Work::Install(replacement)).unwrap();
+    fixture
+        .actor
+        .tx
+        .send(Work::Install(replacement, true))
+        .unwrap();
     wait_retired(&fixture, visual, &original);
     assert_pending_mapping_withdrawn(&fixture, &path, visual);
     wait_effects(&fixture, visual, false);
@@ -139,7 +143,7 @@ fn conflicting_and_irreversible_package_contributions_reject_and_recover(cx: &mu
     ] {
         let package = Package::read(&input(input_name)).unwrap();
         let id = package.manifest.id.clone();
-        fixture.actor.tx.send(Work::Install(package)).unwrap();
+        fixture.actor.tx.send(Work::Install(package, true)).unwrap();
         wait(
             &fixture.app,
             &fixture.actor,

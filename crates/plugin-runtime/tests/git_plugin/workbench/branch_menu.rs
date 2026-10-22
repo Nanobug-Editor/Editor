@@ -3,6 +3,39 @@ use super::*;
 use plugin_runtime::plugin_protocol::tree;
 use std::{collections::VecDeque, sync::Arc};
 
+/// Resolve actual published action identities through both supported public native menu shapes.
+pub(super) fn menu_commands(node: &tree::Node) -> Vec<(tree::NodeAction, tree::Command)> {
+    if node.action_menu.is_empty() {
+        return node
+            .menu
+            .iter()
+            .enumerate()
+            .map(|(index, command)| {
+                (
+                    tree::NodeAction::Menu {
+                        index: index as u32,
+                    },
+                    command.clone(),
+                )
+            })
+            .collect();
+    }
+    let mut actions = Vec::new();
+    for item in &node.action_menu {
+        item.visit(&mut |item| {
+            if let ui::ActionMenuKind::Action { command } = &item.kind {
+                actions.push((
+                    tree::NodeAction::MenuItem {
+                        id: item.id.clone(),
+                    },
+                    command.clone(),
+                ));
+            }
+        });
+    }
+    actions
+}
+
 /// Load one native provider page using the currently admitted history scene.
 fn load(
     manager: &mut Manager,
@@ -47,7 +80,7 @@ pub(crate) fn context_press(manager: &mut Manager, action: &str, input: Option<&
         .nodes
         .values()
         .find(|node| {
-            node.menu.iter().any(|item| {
+            menu_commands(node).iter().any(|(_, item)| {
                 item.arguments["action"] == action
                     && !item.disabled
                     && (action != "switch"
@@ -111,7 +144,10 @@ pub(crate) fn repository_text(manager: &mut Manager, id: &str) -> String {
 }
 
 /// Resolve a visible local leaf from real lazy pages, preserving its exact epoch and menu slot.
-fn branch(manager: &mut Manager, label: &str) -> (Arc<plugin_runtime::TreeResource>, tree::Node) {
+pub(super) fn branch(
+    manager: &mut Manager,
+    label: &str,
+) -> (Arc<plugin_runtime::TreeResource>, tree::Node) {
     let resource = manager.live["git"]
         .tree_resources()
         .into_iter()
@@ -275,7 +311,7 @@ fn git_package_branch_tree_uses_explorer_folders_and_supplied_branch_artwork() {
     ] {
         let expected = std::fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../editor-app/assets/file-icons")
+                .join("../editor-ui/assets/file-icons")
                 .join(original),
         )
         .unwrap();
@@ -305,11 +341,11 @@ fn invoke(
     node: &tree::Node,
     action: &str,
 ) -> anyhow::Result<()> {
-    let index = node
-        .menu
-        .iter()
-        .position(|item| item.arguments["action"] == action)
-        .expect("published branch action");
+    let action = menu_commands(node)
+        .into_iter()
+        .find(|(_, item)| item.arguments["action"] == action)
+        .map(|(action, _)| action)
+        .ok_or_else(|| anyhow::anyhow!("Branch action is not published"))?;
     let revision = manager.live["git"].views["history"].revision;
     manager.event(
         "git",
@@ -321,12 +357,67 @@ fn invoke(
                 tree: resource.handle().clone(),
                 epoch: resource.snapshot().epoch,
                 node: node.id.clone(),
-                action: tree::NodeAction::Menu {
-                    index: index as u32,
-                },
+                action,
             }),
         }),
     )
+}
+
+/// A cold native filter can be superseded by an explicit menu without consuming the reviewed write.
+#[test]
+#[ignore = "real independent Git candidate; set NANOBUG_GIT_CANDIDATE; typed command after cold filters"]
+fn git_package_branch_menu_after_cold_filters_keeps_switch_review() {
+    if !run_isolated_test(
+        "workbench::branch_menu::git_package_branch_menu_after_cold_filters_keeps_switch_review",
+    ) {
+        return;
+    }
+    let repo = isolated_repository();
+    let root = repo.path();
+    commit_file(root, "base.txt", "base\n", "base");
+    git(root, &["branch", "topic"]);
+    let (_profile, mut manager) = activate(&candidate(), root);
+    for label in ["topic", "main"] {
+        let (resource, node) = branch(&mut manager, label);
+        let revision = manager.live["git"].views["history"].revision;
+        manager
+            .event(
+                "git",
+                Some("history".into()),
+                api::Notification::Ui(ui::UiEvent {
+                    revision,
+                    node: "branches".into(),
+                    action: ui::Action::Tree(tree::Event::Selected {
+                        tree: resource.handle().clone(),
+                        epoch: resource.snapshot().epoch,
+                        node: node.id,
+                    }),
+                }),
+            )
+            .unwrap();
+    }
+    let call = manager
+        .invoke_typed_command(
+            "git",
+            "branch-context",
+            serde_json::json!({"action":"switch","target":"refs/heads/topic"}),
+            30_000,
+        )
+        .unwrap();
+    idle(&mut manager);
+    if let api::RequestUpdate::Completed { result } = call.status() {
+        result.expect("the exact typed menu call must succeed after canceling history reads");
+    } else {
+        panic!("typed switch still pending: {:?}", call.status());
+    }
+    assert!(
+        manager.live["git"].views["history"]
+            .active_node("confirm-command")
+            .is_some(),
+        "switch review must remain visible after late history replies"
+    );
+    assert_eq!(git(root, &["branch", "--show-current"]).trim(), "main");
+    manager.shutdown_checked().unwrap();
 }
 
 /// A clicked branch supplies switch/merge/create targets; unavailable actions cannot bypass a grey menu.
@@ -357,10 +448,9 @@ fn git_package_branch_context_owns_targets_and_rejects_disabled_actions() {
     );
     let (resource, topic) = branch(&mut manager, "topic");
     assert!(
-        topic
-            .menu
+        menu_commands(&topic)
             .iter()
-            .any(|item| item.arguments["action"] == "switch")
+            .any(|(_, item)| item.arguments["action"] == "switch")
     );
     assert!(
         invoke(&mut manager, &resource, &topic, "pull").is_err(),
@@ -543,7 +633,7 @@ fn git_package_extended_branch_menu_requires_an_explicit_tree_minor_floor() {
         panic!("native capability diagnostic");
     };
     assert!(
-        status.contains("ui.tree >=1.1"),
+        status.contains("ui.tree >=1.3") || status.contains("ui.tree >=1.1"),
         "missing explicit capability diagnostic: {status}"
     );
     manager.shutdown_checked().unwrap();

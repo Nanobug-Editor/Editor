@@ -1,0 +1,8 @@
+{
+  "id":"lifecycle-http", "name":"HTTP lifecycle consumer", "version":"0.1.2", "protocol":7,
+  "component":"lifecycle-http.wasm", "storage_limit":1024,
+  "api":{"base":"^1","required":{"network.http":"^1","lifecycle.timers":"^1","ui.native":"^1"}},
+  "permissions":["network.http","network.http:http://127.0.0.1:18927","ui.panels"],
+  "panels":[{"id":"result","title":"Lifecycle / 生命周期","position":"right"}],
+  "commands":[{"id":"query","title":"Query / 查询"},{"id":"close","title":"Close / 关闭"},{"id":"trap","title":"Trap regression / 故障回归"},{"id":"full_timers","title":"Partial startup / 部分启动"}]
+}

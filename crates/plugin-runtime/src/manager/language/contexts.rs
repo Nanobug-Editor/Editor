@@ -146,8 +146,8 @@ impl Manager {
         });
     }
 
-    /// Native owners outlive empty document indexes while a live alias or unredeemed binding borrows
-    /// their exact Arc. This collector removes the final owner only after those independent needs end.
+    /// Native owners outlive empty document indexes while an alias, unredeemed binding, readonly tab
+    /// or recovery receipt borrows their exact authority. Collection waits for those independent needs.
     pub(in crate::manager) fn collect_unused_language_contexts(&mut self) {
         let borrowed = self
             .language_services
@@ -174,6 +174,7 @@ impl Manager {
                         .iter()
                         .any(|borrower| Arc::ptr_eq(borrower, service))
                         || self.host_resources.bindings.retains(service)
+                        || service.request_resource_count() > 0
                 })
         });
         self.reconcile_language_context_authority();

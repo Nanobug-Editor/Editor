@@ -1,6 +1,7 @@
 //! Draws editor popovers locally while retaining the upstream editing engine.
 
 use crate::*;
+use editor_ui::scroll::ScrollableElement as _;
 use gpui_base::input::{Backspace, Delete, Enter, Escape, InputOverlayKind, MoveDown, MoveUp};
 use gpui_kit::{AnyElement, BoxShadow, Hsla, StyledText, deferred, relative};
 use lsp_types::{Documentation, HoverContents, MarkedString};
@@ -15,16 +16,13 @@ mod completion_refresh;
 /// Read-only geometry shared by source-owned overlays; text and native session stay in EditorState.
 #[derive(Clone)]
 pub(super) struct SourceProjection {
-    group: crate::ui::controls::aligned_editor::AlignmentGroup,
+    group: editor_ui::aligned_editor::AlignmentGroup,
     index: usize,
 }
 
 impl SourceProjection {
     /// Retains the same measured group, never a copied geometry snapshot or editor instance.
-    pub(super) fn new(
-        group: crate::ui::controls::aligned_editor::AlignmentGroup,
-        index: usize,
-    ) -> Self {
+    pub(super) fn new(group: editor_ui::aligned_editor::AlignmentGroup, index: usize) -> Self {
         Self { group, index }
     }
 
@@ -210,7 +208,7 @@ pub(super) fn render(
             };
             let host = cx.entity().downgrade();
             Some(
-                ui::controls::diagnostic_popup(
+                editor_ui::diagnostic_popup(
                     bounds,
                     diagnostic,
                     hover_focus.track_diagnostic(diagnostic),
@@ -286,7 +284,7 @@ pub(super) fn render(
             })
             .child(
                 body.take()
-                    .unwrap_or_else(|| gpui_base::input::Editor::new(editor).into_any_element()),
+                    .unwrap_or_else(|| editor_ui::native_editor_scrollbars(editor)),
             )
             .children(completion_view)
             .children(hover_view)
@@ -517,8 +515,7 @@ fn render_completion(
         .max_w(max_width.max(px(120.)))
         .min_w(px(120.))
         .max_h(px(240.))
-        .overflow_y_scroll()
-        .track_scroll(&popup.scroll)
+        .overflow_y_scrollbar_with(&popup.scroll)
         .children(rows);
     let mut layout = div()
         .flex()
@@ -539,7 +536,7 @@ fn render_completion(
                 .px_2()
                 .w(if vertical_layout { max_width } else { width })
                 .max_h(px(240.))
-                .overflow_y_scroll()
+                .overflow_y_scrollbar()
                 .child(markdown_view(
                     "editor-completion-documentation",
                     documentation,
@@ -580,7 +577,7 @@ fn render_hover(
     let markdown = hover_markdown(&hover.hover.contents);
     let host_for_key = cx.entity().downgrade();
     Some(
-        ui::controls::definition_popup(
+        editor_ui::definition_popup(
             bounds,
             card(cx, "editor-definition-card")
                 // The card and Markdown share one focus boundary; entering it
@@ -593,7 +590,7 @@ fn render_hover(
                 .flex_shrink_1()
                 .min_w_0()
                 .min_h_0()
-                .overflow_y_scroll()
+                .overflow_y_scrollbar()
                 .font_family(cx.theme().mono_font_family.clone())
                 .text_size(typography::editor_font_size(cx))
                 // Opaque hit testing protects the editor while the window's
@@ -626,7 +623,7 @@ fn render_hover(
 
 /// Match the editor font in markdown and fenced code without changing other UI text.
 fn markdown_view(id: &'static str, markdown: String, cx: &App) -> gpui_base::TextView {
-    ui::controls::markdown_view(id, markdown, typography::editor_font_size(cx), cx)
+    editor_ui::markdown_view(id, markdown, typography::editor_font_size(cx), cx)
 }
 
 /// Keep editor popovers on the live theme surface used by their Markdown content.

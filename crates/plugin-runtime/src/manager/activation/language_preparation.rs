@@ -110,6 +110,18 @@ impl DemandPreparation {
         } else {
             Default::default()
         };
+        if proposal.expand_dependencies {
+            anyhow::ensure!(
+                entry
+                    .manifest
+                    .api
+                    .as_ref()
+                    .and_then(|requirements| requirements.required.get("language.lsp"))
+                    .is_some_and(|range| range.matches(&semver::Version::new(1, 7, 0))
+                        && !range.matches(&semver::Version::new(1, 6, 0))),
+                "Dependency configuration requires language.lsp >=1.7,<2"
+            );
+        }
         let mut service = candidates
             .get(proposal.service.as_ref().unwrap_or(&provider.service))
             .ok_or_else(|| anyhow::anyhow!("LSP hook selected an undeclared service"))?
@@ -220,6 +232,19 @@ impl DemandPreparation {
                 }
             })
             .transpose()?;
+        if proposal.expand_dependencies {
+            let prepared = prepared.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Dependency configuration requires an installation plan")
+            })?;
+            prepared.expand_value(&mut provider.initialization_options)?;
+            for value in provider.configuration.values_mut() {
+                prepared.expand_value(value)?;
+            }
+            anyhow::ensure!(
+                provider.valid(),
+                "Expanded language configuration exceeds its bounds"
+            );
+        }
         let program = if let Some(prepared) = &prepared {
             prepared.program.clone()
         } else {

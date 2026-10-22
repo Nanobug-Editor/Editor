@@ -1,9 +1,10 @@
 //! Owns the settings navigation and the content shown by each category.
 
-use crate::ui::controls::{Checkbox, DialogContent};
 use crate::*;
+use editor_ui::{Checkbox, DialogContent};
+mod history;
 mod owner;
-use crate::ui::controls::scroll::ScrollableElement;
+use editor_ui::scroll::ScrollableElement;
 use gpui_kit::{AnyElement, App, Entity};
 use owner::SettingsOwner;
 
@@ -15,6 +16,8 @@ pub(crate) enum SettingsSection {
     Editor,
     Plugins,
     Languages,
+    /// Profile-wide local history applies even before a workspace is open.
+    History,
 }
 
 impl SettingsSection {
@@ -26,6 +29,7 @@ impl SettingsSection {
             Self::Editor => t!("settings.editor").to_string(),
             Self::Plugins => t!("settings.plugins").to_string(),
             Self::Languages => t!("settings.languages").to_string(),
+            Self::History => t!("history.title").to_string(),
         }
     }
 
@@ -37,6 +41,7 @@ impl SettingsSection {
             Self::Editor => "settings-nav-editor",
             Self::Plugins => "settings-nav-plugins",
             Self::Languages => "settings-nav-languages",
+            Self::History => "settings-nav-history",
         }
     }
 }
@@ -67,7 +72,7 @@ fn trigger(view: SettingsOwner) -> impl IntoElement {
                 .ghost()
                 .tooltip(t!("settings.title").to_string()),
             t!("settings.title").to_string(),
-            move |content, _, cx| render_settings_content(&view, content, cx),
+            move |content, window, cx| render_settings_content(&view, content, window, cx),
             move |cx| existing.dialog_window(cx),
             move |dialog, handle, _, cx| owner.retain_dialog(dialog, handle, cx),
         ))
@@ -77,6 +82,7 @@ fn trigger(view: SettingsOwner) -> impl IntoElement {
 fn render_settings_content(
     view: &SettingsOwner,
     content: DialogContent,
+    window: &mut Window,
     cx: &mut App,
 ) -> DialogContent {
     let selected = view.section(cx);
@@ -86,6 +92,7 @@ fn render_settings_content(
         SettingsSection::Editor,
         SettingsSection::Plugins,
         SettingsSection::Languages,
+        SettingsSection::History,
     ]
     .into_iter()
     .filter(|section| view.project().is_some() || *section != SettingsSection::Languages)
@@ -145,21 +152,32 @@ fn render_settings_content(
                     .p_5()
                     .overflow_y_scrollbar()
                     .child(div().text_lg().font_semibold().child(selected.label()))
-                    .child(render_section(view, selected, cx)),
+                    .child(render_section(view, selected, window, cx)),
             ),
     )
 }
 
 /// Keeps each category's controls in one content pane.
-fn render_section(view: &SettingsOwner, section: SettingsSection, cx: &mut App) -> AnyElement {
+fn render_section(
+    view: &SettingsOwner,
+    section: SettingsSection,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
     match section {
         SettingsSection::AppearanceAndBehavior => {
-            let workspace = view
-                .project()
-                .map(|project| render_workspace_appearance(&project, cx));
+            let workspace = view.project().map(|project| {
+                v_flex()
+                    .gap_6()
+                    .child(render_workspace_appearance(&project, cx))
+                    .child(extensions::workspace_presentation::settings::render(
+                        &project, window, cx,
+                    ))
+            });
             v_flex()
                 .gap_6()
                 .child(render_theme(view, cx))
+                .child(render_startup(view, cx))
                 .children(workspace)
                 .into_any_element()
         }
@@ -170,7 +188,58 @@ fn render_section(view: &SettingsOwner, section: SettingsSection, cx: &mut App) 
             .map(|project| super::languages::render_settings(&project, cx))
             .unwrap_or_else(|| div().into_any_element()),
         SettingsSection::Plugins => view.plugin_form(cx).into_any_element(),
+        SettingsSection::History => history::render(view, window, cx),
     }
+}
+
+/// Startup policy is application-wide and remains editable before choosing a workspace.
+fn render_startup(view: &SettingsOwner, cx: &App) -> AnyElement {
+    let preferences = view.startup_preferences(cx);
+    let enabled = preferences
+        .as_ref()
+        .map_or(true, |(_, preferences)| preferences.restore_last_project);
+    let error = preferences
+        .as_ref()
+        .err()
+        .map(ToString::to_string)
+        .or_else(|| view.startup_error(cx));
+    let change_view = view.clone();
+    v_flex()
+        .gap_3()
+        .child(
+            div()
+                .text_sm()
+                .font_semibold()
+                .child(t!("settings.startup").to_string()),
+        )
+        .child(
+            div()
+                .id("settings-restore-last-project")
+                .debug_selector(|| "settings-restore-last-project".into())
+                .child(
+                    Checkbox::new("settings-restore-last-project-checkbox")
+                        .label(t!("settings.restore_last_project").to_string())
+                        .checked(enabled)
+                        .disabled(preferences.is_err())
+                        .on_change(move |checked, _, cx| {
+                            change_view.set_restore_last_project(*checked, cx);
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(t!("settings.restore_last_project_hint").to_string()),
+        )
+        .children(error.map(|error| {
+            div()
+                .debug_selector(|| "settings-startup-error".into())
+                .text_xs()
+                .text_color(cx.theme().danger)
+                .child(t!("settings.startup_error", details = error).to_string())
+        }))
+        .into_any_element()
 }
 
 /// Theme selection is application-wide, including all already open native editor windows.

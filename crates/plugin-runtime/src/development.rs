@@ -3,6 +3,8 @@
 mod build;
 mod process;
 mod project;
+/// Safe lifecycle evidence shared by isolated development controllers and native hosts.
+pub mod report;
 #[cfg(test)]
 mod tests;
 pub use build::{read_directory, stage};

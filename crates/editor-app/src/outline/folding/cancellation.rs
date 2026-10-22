@@ -3,7 +3,6 @@
 //! This tight loop uses the existing dynamic grammar loader and public input-highlighter
 //! factory. Package installation and outline navigation remain covered by the actual ZIP tests.
 use super::*;
-use gpui_base::input::Editor as NativeEditor;
 use gpui_kit::{ClipboardItem, TestAppContext, gpui};
 use plugin_schema::PluginManifest;
 
@@ -71,7 +70,7 @@ impl Render for View {
             .debug_selector(|| "cancelled-parser-native-source".into())
             .size_full()
             .text_size(px(14.))
-            .child(NativeEditor::new(&self.editor))
+            .child(editor_ui::native_editor_scrollbars(&self.editor))
     }
 }
 

@@ -262,8 +262,9 @@ async fn cancel_plugin_drag(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()
         cx,
     )
     .await?;
-    h.main
-        .update(cx, |_, window, cx| input::key(window, "escape", cx))?;
+    h.main.update(cx, |_, window, cx| {
+        editor_ui::testing::press_key(window, "escape", cx)
+    })?;
     h.settle(cx).await?;
     h.main.update(cx, |_, window, cx| {
         ensure!(!cx.has_active_drag() && !h.app.read(cx).dock_ui.is_dragging());
@@ -345,8 +346,9 @@ async fn cancel_child_drag(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()>
             );
             Ok::<_, anyhow::Error>(())
         })??;
-        h.main
-            .update(cx, |_, window, cx| input::key(window, "escape", cx))?;
+        h.main.update(cx, |_, window, cx| {
+            editor_ui::testing::press_key(window, "escape", cx)
+        })?;
         h.settle(cx).await?;
         h.main.update(cx, |_, window, _| {
             ensure!(geometry(window)? == before);

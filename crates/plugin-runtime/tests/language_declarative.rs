@@ -11,6 +11,9 @@ use plugin_runtime::{
 };
 use std::collections::BTreeMap;
 
+#[path = "language_declarative/cross_document.rs"]
+mod cross_document;
+
 /// Dropped background work is observable as a terminal request, and its reservation permits a new attempt.
 #[test]
 fn dropping_taken_or_finished_preparation_releases_original_wait_and_capacity() {
@@ -235,7 +238,7 @@ fn declarative_language_plan_needs_no_empty_wasm_and_retires_original_authority(
     assert!(authority.is_live());
     assert_eq!(
         original.capability("language.lsp").unwrap().to_string(),
-        "1.6.0"
+        "1.7.0"
     );
     exercise_native_snapshot_guard(&mut manager, &original);
     let requests = exercise_native_request_ownership(&mut manager, &original);
@@ -331,6 +334,7 @@ fn exercise_native_snapshot_guard(
     let origin = LanguageFixOrigin::GuardedLsp {
         service: service.clone(),
         guards: vec![guard.clone()],
+        files: Vec::new(),
     };
     let (document, fix) = native_proposal();
     manager

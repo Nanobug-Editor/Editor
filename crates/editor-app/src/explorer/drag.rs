@@ -10,7 +10,7 @@ pub(crate) struct TreeDrag {
 }
 impl Render for TreeDrag {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        ui::controls::file_operation::drag_preview(
+        editor_ui::file_operation::drag_preview(
             self.path
                 .file_name()
                 .unwrap_or_default()

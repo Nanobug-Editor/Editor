@@ -23,7 +23,7 @@ pub(super) fn render_editor(
                 .id("run-config-detail-body")
                 .flex_1()
                 .min_h_0()
-                .overflow_y_scroll()
+                .overflow_y_scrollbar()
                 .p_4()
                 .gap_3()
                 .child(fields)

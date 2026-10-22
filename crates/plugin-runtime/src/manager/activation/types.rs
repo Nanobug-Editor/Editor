@@ -102,9 +102,10 @@ pub struct DemandRequest {
     pub(super) failure_publication: Option<Arc<AtomicBool>>,
 }
 impl DemandRequest {
-    /// Whether this request's original document reservation actually published a terminal language
-    /// preparation error. This host-only observation survives its cache withdrawal; it grants no
-    /// guest authority and is false for cancellation, timeout or an unreserved admission failure.
+    /// Whether the original shared document reservation published a terminal preparation Err.
+    /// Another waiter can set this historical bit after this wait ends or the cache is withdrawn.
+    /// Callers must also require their own Completed Err before retrying; a cancelled/timed-out
+    /// wait or an admission failure never authorizes re-entry into a native interaction.
     pub fn has_published_language_error(&self) -> bool {
         self.failure_publication
             .as_ref()

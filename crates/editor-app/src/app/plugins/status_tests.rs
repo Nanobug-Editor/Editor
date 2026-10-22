@@ -169,6 +169,8 @@ fn status_popover_confirms_the_round_and_preserves_older_unread_errors(cx: &mut 
         draw(form);
         // Even host-reported plugin failures retain their package log destination.
         // Publishing the shared runtime sink must not create a host message receipt.
+        assert!(form.debug_bounds("host-messages-panel").is_none());
+        click(form, "host-messages-toggle");
         assert!(form.debug_bounds("host-messages-empty").is_some());
         assert!(form.debug_bounds("host-message-1").is_none());
         assert!(form.debug_bounds("plugin-error-indicator").is_some());
@@ -422,18 +424,48 @@ fn status_popover_preserves_language_loading_and_keyboard_dismissal(cx: &mut Tes
     use crate::app::language_servers::ServiceLoadState;
     with_status(cx, 1, "zh-CN", true, |form, app, manager| {
         let workspace = form.update(|_, cx| app.read(cx).workspace.root().to_owned());
-        let (_fixture, plan) = crate::tests::declared_language_service(&workspace);
-        let server = Arc::new(language_navigation::LanguageServer::from_service(plan).unwrap());
-        form.update(|_, cx| {
-            app.update(cx, |app, cx| {
+        let package = crate::tests::language_service_package();
+        manager
+            .install(&package, package.manifest.permissions.clone())
+            .unwrap();
+        assert!(manager.language_services().is_empty());
+        crate::extensions::lsp_tests::publish(app, manager, form);
+        let path = workspace.join("loading.fixture");
+        std::fs::write(&path, "fixture").unwrap();
+        form.update(|window, cx| {
+            app.update(cx, |app, cx| app.open_file(path, window, cx));
+        });
+        draw(form);
+        assert!(form.debug_bounds("plugin-loading-indicator").is_some());
+        // Replay the recorded native request through public Manager admission. Only the native
+        // handshake is left pending, so this UI test never launches the fixture executable.
+        let server = crate::extensions::lsp_tests::publish_with(
+            app,
+            manager,
+            form,
+            |app, manager, _, cx| {
+                let plans = manager.language_services();
+                let plan = plans["novel-analysis/analysis"].as_ref().unwrap().clone();
+                let server =
+                    Arc::new(language_navigation::LanguageServer::from_service(plan).unwrap());
                 app.language_servers
                     .insert("fixture".into(), server.clone());
                 app.language_service_states
                     .insert("fixture".into(), ServiceLoadState::Loading);
                 cx.notify();
-            })
-        });
+                server
+            },
+        );
         draw(form);
+        assert!(server.is_active());
+        assert!(
+            !manager
+                .runtime_logs()
+                .records("novel-analysis")
+                .iter()
+                .any(|record| record.source == "lsp/analysis"),
+            "this callback test must not start a native process"
+        );
         click(form, "plugin-loading-indicator");
         assert!(form.debug_bounds("plugin-status-popup").is_some());
         form.update(|_, cx| {

@@ -169,8 +169,16 @@ impl EditorApp {
             cx.notify();
             return true;
         }
-        if !build_only && !self.save_dirty_documents(cx) {
-            return true;
+        if !build_only {
+            let resume_id = id.to_owned();
+            if self.defer_history_saves(
+                move |app, window, cx| {
+                    app.start_host_configuration(&resume_id, false, window, cx);
+                },
+                cx,
+            ) {
+                return true;
+            }
         }
         if snapshot.template == "development" && !build_only {
             let result = (|| -> anyhow::Result<_> {

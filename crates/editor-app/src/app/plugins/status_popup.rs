@@ -157,12 +157,9 @@ impl EditorApp {
             .overflow_y_scroll()
             .children(rows);
         if let Some(snapshot) = snapshot {
-            body =
-                body.track_scroll(&snapshot.scroll)
-                    .child(crate::ui::controls::vertical_scrollbar(
-                        &snapshot.scroll,
-                        cx,
-                    ));
+            body = body
+                .track_scroll(&snapshot.scroll)
+                .child(editor_ui::vertical_scrollbar(&snapshot.scroll, cx));
         }
         let mut card = v_flex()
             .id("plugin-status-popup")
@@ -213,7 +210,17 @@ impl EditorApp {
                             })),
                     ),
             )
-            .child(body);
+            .child(if let Some(snapshot) = snapshot {
+                editor_ui::scroll::SmoothScroll::new(
+                    "plugin-status-wheel",
+                    &snapshot.scroll,
+                    editor_ui::scroll::ScrollAxis::Vertical,
+                    body,
+                )
+                .into_any_element()
+            } else {
+                body.into_any_element()
+            });
         if let Some(snapshot) = snapshot {
             card = card.track_focus(&snapshot.state.read(cx).focus_handle(cx));
         }

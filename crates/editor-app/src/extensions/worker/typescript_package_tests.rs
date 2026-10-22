@@ -174,15 +174,9 @@ fn typescript_package_serves_configured_and_inferred_sources_after_vue_disabled(
                     captured.clone(),
                     lsp_types::Position::new(3, 15),
                     "renamed".into(),
-                    Vec::new(),
                 )?;
                 anyhow::ensure!(
-                    rename.len() == 1
-                        && rename[0].edits.len() == 3
-                        && rename[0]
-                            .edits
-                            .iter()
-                            .all(|edit| edit.new_text == "renamed"),
+                    rename.len() == 3 && rename.iter().all(|edit| edit.new_text == "renamed"),
                     "rename must preserve the complete edit set"
                 );
                 let format = server.format_for(document, captured, None, 2, true)?;
@@ -238,10 +232,26 @@ fn typescript_package_serves_configured_and_inferred_sources_after_vue_disabled(
         .values()
         .filter_map(|entry| entry.as_ref().ok().cloned())
         .collect::<Vec<_>>();
+    // Public facades and their internal engines may publish aliases of the same plan. Inspect
+    // each document's actual selected connection instead of treating aliases as extra contexts.
+    let roots = visual.update(|_, cx| {
+        paths
+            .iter()
+            .map(|path| {
+                app.read(cx)
+                    .language_server_for_path(path)
+                    .unwrap()
+                    .navigation_context_service()
+                    .unwrap()
+                    .root
+                    .clone()
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+    });
     assert_eq!(
-        plans.len(),
+        roots.len(),
         2,
-        "configured and inferred roots must retain separate native contexts"
+        "configured and inferred sources must use distinct native roots"
     );
     assert!(
         plans

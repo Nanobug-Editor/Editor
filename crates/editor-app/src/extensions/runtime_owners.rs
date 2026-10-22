@@ -113,8 +113,11 @@ impl RuntimePool {
         self.closing.store(true, Ordering::Release);
         let mut failures = Vec::new();
         for manager in self.managers.lock().unwrap().values() {
-            if let Err(error) = manager.lock().unwrap().shutdown_checked() {
+            let mut manager = manager.lock().unwrap();
+            if let Err(error) = manager.shutdown_checked() {
                 failures.push(format!("{error:#}"));
+            } else {
+                crate::plugin_development::report::checkpoint(&manager, true);
             }
         }
         if failures.is_empty() {

@@ -1,6 +1,6 @@
 //! Render portable trees through gpui-base behavior with editor-owned appearance.
 use super::*;
-use crate::ui::controls::{Button, ButtonCustomVariant};
+use editor_ui::{Button, ButtonCustomVariant};
 use gpui_base::Dialog;
 use gpui_kit::{
     AnyElement, InteractiveElement, ParentElement, SharedString, Styled, div,
@@ -151,7 +151,9 @@ impl PluginView {
                     .border_1()
                     .border_color(colors.border)
                     .rounded(px(6.))
-                    .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
+                    // Occlusion shields the backdrop without consuming the press needed by
+                    // native child controls to establish their click/focus state.
+                    .occlude()
                     .child(
                         div()
                             .flex()

@@ -3,6 +3,8 @@
 use super::*;
 use crate::{EditorRequest, editor_requests::PreparationConditions};
 use std::collections::BTreeMap;
+mod content;
+mod files;
 
 /// The original service incarnation owns both transient requests and separately retained receipts.
 /// RootKinds remain private to the normal resource issuer; no caller can manufacture file grants.
@@ -13,11 +15,15 @@ pub(crate) struct NativeDocumentRequests {
     authority: EditorAuthority,
     pending: BTreeMap<u64, (EditorRequest, bool)>,
     batches: BTreeMap<u64, Arc<WorkspaceBatch>>,
+    /// Persistent virtual handles contain ownership/navigation metadata, never document text.
+    virtuals: BTreeMap<u64, Arc<crate::VirtualDocumentResource>>,
+    /// Proofs, queued requests and native recovery retain this root; no permanent file grant leaks.
+    file_root: Option<(api::ResourceHandle, Arc<AtomicBool>)>,
 }
 
 impl NativeDocumentRequests {
     /// Create one real service owner, with its immutable workspace and installation data metadata.
-    /// It issues only document handles; zero private-file quota cannot become file-root authority.
+    /// File roots require separate grants; zero private-data quota never grants private-file access.
     pub(crate) fn new(
         workspace: &Path,
         data: PathBuf,
@@ -32,12 +38,14 @@ impl NativeDocumentRequests {
             authority,
             pending: BTreeMap::new(),
             batches: BTreeMap::new(),
+            virtuals: BTreeMap::new(),
+            file_root: None,
         }
     }
 
     /// Workspace document plans use original negotiated contracts and consent, including readonly
-    /// input conditions. Resource and application-scope effects fail
-    /// before allocation; the native host still validates revision, previews and asks for consent.
+    /// input conditions. File effects additionally require the issued root and independent grants;
+    /// application effects fail before allocation. The native host owns revision, preview and consent.
     pub(crate) fn submit(
         &mut self,
         plan: plugin_protocol::workspace::Plan,
@@ -47,6 +55,7 @@ impl NativeDocumentRequests {
     ) -> Result<api::Value, Failure> {
         self.poll();
         self.check_plan(&plan, capabilities, permissions)?;
+        let files = self.plan_files(&plan, capabilities, permissions)?;
         // A result may expire after rendering. Preparation seals govern pending execution only:
         // once a real write occurs, recovery must retain the original instance/caller authority.
         let conditions = Arc::new(PreparationConditions::new(guards));
@@ -56,7 +65,7 @@ impl NativeDocumentRequests {
                 "Language analysis snapshot changed",
             ));
         }
-        self.issue(plan, conditions)
+        self.issue(plan, conditions, files, capabilities)
     }
 
     /// Shared document admission precedes native-only scope and shape restrictions; none of
@@ -116,10 +125,8 @@ impl NativeDocumentRequests {
                 document: target, ..
             } = change
             else {
-                return Err(Failure::new(
-                    ErrorCode::UnsupportedOperation,
-                    "Native language actions support only document text edits",
-                ));
+                // File targets are separately checked against this original owner's issued root.
+                continue;
             };
             api::ResourceIdentity::Local {
                 path: target.path.clone(),
@@ -148,6 +155,8 @@ impl NativeDocumentRequests {
         &mut self,
         plan: plugin_protocol::workspace::Plan,
         conditions: Arc<PreparationConditions>,
+        files: Vec<crate::AuthorizedFile>,
+        capabilities: &BTreeMap<String, semver::Version>,
     ) -> Result<api::Value, Failure> {
         if self.pending.len() >= 32 || self.batches.len() >= 8 || self.roots.len() >= 127 {
             return Err(Failure::new(
@@ -163,7 +172,16 @@ impl NativeDocumentRequests {
                 batch_handle.clone(),
                 self.authority.clone(),
                 None,
-                BTreeSet::from(["editor.read".into(), "editor.write".into()]),
+                if files.is_empty() {
+                    BTreeSet::from(["editor.read".into(), "editor.write".into()])
+                } else {
+                    BTreeSet::from([
+                        "editor.read".into(),
+                        "editor.write".into(),
+                        "workspace.read".into(),
+                        "workspace.write".into(),
+                    ])
+                },
             )
             .with_preparation(conditions.clone()),
         );
@@ -184,9 +202,11 @@ impl NativeDocumentRequests {
         .with_workspace_request(WorkspaceRequest {
             batch: Some(batch.clone()),
             can_edit: true,
-            // The origin permits a version condition, not arbitrary document reads.
-            can_read_documents: false,
-            files: Vec::new(),
+            // File reconciliation can inspect native buffers only with its independent read contract.
+            can_read_documents: capabilities
+                .get("editor.documents")
+                .is_some_and(|version| *version >= semver::Version::new(1, 1, 0)),
+            files,
         });
         self.batches.insert(batch_handle.resource, batch);
         self.pending.insert(handle.resource, (request, false));
@@ -236,6 +256,24 @@ impl NativeDocumentRequests {
                 true
             }
         });
+        self.virtuals.retain(|_, resource| {
+            if !resource.is_live() || Arc::strong_count(resource) == 1 {
+                resource.revoke();
+                self.roots.remove(resource.handle());
+                false
+            } else {
+                true
+            }
+        });
+        if self
+            .file_root
+            .as_ref()
+            .is_some_and(|(_, alive)| Arc::strong_count(alive) == 1)
+        {
+            let (handle, alive) = self.file_root.take().unwrap();
+            alive.store(false, Ordering::Release);
+            self.roots.remove(&handle);
+        }
     }
 
     /// Retirement seals queued work and native group recovery immediately, without requiring a
@@ -247,8 +285,15 @@ impl NativeDocumentRequests {
         for batch in self.batches.values() {
             batch.revoke();
         }
+        for resource in self.virtuals.values() {
+            resource.revoke();
+        }
         self.pending.clear();
         self.batches.clear();
+        self.virtuals.clear();
+        if let Some((_, alive)) = self.file_root.take() {
+            alive.store(false, Ordering::Release);
+        }
         self.roots.retire();
     }
 

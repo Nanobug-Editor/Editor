@@ -41,6 +41,54 @@ impl State {
     /// Service calls cannot provide a program, arguments, cwd, environment, or installer step.
     pub(super) fn process_request(&mut self, operation: Operation) -> Result<Value, Failure> {
         match operation {
+            Operation::NativeContext { service } => {
+                self.process_authority("process.exec")?;
+                self.process_authority(&format!("process.service.{service}"))?;
+                if !self
+                    .api
+                    .capabilities
+                    .get("process")
+                    .is_some_and(|version| *version >= semver::Version::new(1, 9, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "process 1.9 is required for native service context",
+                    ));
+                }
+                if !self.activation_committed || !self.services.contains_key(&service) {
+                    return Err(Failure::new(
+                        ErrorCode::InvalidState,
+                        "Native service context is not published",
+                    ));
+                }
+                // These paths configure an already authorized native process. They are never
+                // reopened as guest roots and never resolve a caller-supplied relative path.
+                let canonical = |path: &std::path::Path| {
+                    path.canonicalize()
+                        .map(|path| path.display().to_string())
+                        .map_err(|error| {
+                            Failure::new(ErrorCode::OperationFailed, error.to_string())
+                        })
+                };
+                let assets = canonical(&self.assets)?;
+                let data = canonical(&self.data)?;
+                // Native program/path fields share a bounded UTF-8 representation even when
+                // the platform can internally represent longer directory names.
+                if assets.len() > 4096 || data.len() > 4096 {
+                    return Err(Failure::new(
+                        ErrorCode::LimitExceeded,
+                        "Native service paths exceed 4096 bytes",
+                    ));
+                }
+                Ok(Value::NativeContext(
+                    plugin_protocol::process::NativeContext { assets, data },
+                ))
+            }
+            Operation::InspectTool {
+                source,
+                root_levels,
+                files,
+            } => self.inspect_tool_metadata(&source, root_levels, &files),
             Operation::PresentTerminal { handle, title } => {
                 let id = self.presentation_authority(&handle)?;
                 if !self.processes.is_pty(id) {
@@ -440,7 +488,12 @@ impl State {
             }
             None => self.workspace.clone(),
         };
-        let id = match transport {
+        let observation = self.host_resources.observations.begin(
+            self.observation_identity(),
+            crate::observability::Stage::Native,
+            self.observed_parent,
+        );
+        let spawned = match transport {
             Transport::Stdio => self.processes.spawn_stdio(&program, &args, &cwd, &env),
             Transport::Pty {
                 columns,
@@ -459,8 +512,15 @@ impl State {
                     &self.plugin_services.principal.scope,
                 ),
             ),
-        }
-        .map_err(process_failure)?;
+        };
+        let id = match spawned {
+            Ok(id) => id,
+            Err(error) => {
+                observation.finish(crate::observability::Outcome::Failed);
+                return Err(process_failure(error));
+            }
+        };
+        self.processes.observe(id, observation);
         let value = match self.roots.open(RootKind::Process(id)) {
             Ok(value) => value,
             Err(error) => {

@@ -1,6 +1,6 @@
 //! Retained discovery filters presented in a popover inside the shared search frame.
 use super::*;
-use crate::ui::controls::{Icon, popover};
+use editor_ui::{Icon, popover};
 
 /// Each choice changes existing catalog search inputs; it never grants install authority.
 #[derive(Clone)]
@@ -24,7 +24,9 @@ impl ExtensionPanel {
             .compact()
             .h(px(24.))
             .w(px(24.))
-            .icon(Icon::default().data(include_bytes!("../../../assets/icons/filter.svg")))
+            .icon(Icon::default().data(include_bytes!(
+                "../../../../editor-ui/assets/icons/filter.svg"
+            )))
             .accessibility_label(t!("plugins.market_filters").to_string())
             .tooltip(t!("plugins.market_filters").to_string())
             .when(active, |button| {

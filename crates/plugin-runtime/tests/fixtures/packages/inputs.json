@@ -646,6 +646,36 @@
       "host_revision": null,
       "sdk_sha256": "2180e97920c48bcaca5c98805573b50c7018a46c3919038bc8a60d572f24eff8",
       "scope": "Test-only minimal independent SDK consumer for public native style negotiation; no assets, services or document authority."
+    },
+    {
+      "id": "language-delegate-fixture",
+      "version": "0.1.0",
+      "archive": "../language-delegate/language-delegate-fixture-0.1.0.zip",
+      "sha256": "2b59d3d625f9d1a389ea028f18c584a99393d282912fc04a1d863a010291daad",
+      "repository": "Nanobug-Editor/Editor",
+      "source_commit": null,
+      "host_revision": null,
+      "sdk_sha256": null,
+      "toolchain": null,
+      "snapshot_tree": "3d35734b4c2a6f8c353b111d591f307ed4383d58",
+      "snapshot_blob": "9861cef6adfab7ae61d2d5dd642d307639531308",
+      "scope": "Historical fixed Package input restored byte-for-byte from the original Vue/TypeScript worktree on 2026-10-22; not an application, installer, SDK or registry payload.",
+      "provenance_note": "Only archive bytes and manifest identity were rechecked during restoration. Original SDK, source commit and toolchain are unrecorded; this is not a current-SDK build or a new runtime acceptance result. Consumers may explicitly select a rebuilt candidate with NANOBUG_LANGUAGE_DELEGATE_PACKAGE."
+    },
+    {
+      "id": "project-context-fixture",
+      "version": "0.1.0",
+      "archive": "../project-context/project-context-fixture-0.1.0.zip",
+      "sha256": "6b91818682148d4f2e5debe4becc971b8692ca57d4e54b86b79afdea5af1bcd3",
+      "repository": "Nanobug-Editor/Editor",
+      "source_commit": null,
+      "host_revision": null,
+      "sdk_sha256": null,
+      "toolchain": null,
+      "snapshot_tree": "3d35734b4c2a6f8c353b111d591f307ed4383d58",
+      "snapshot_blob": "e90793125311cc010972765af0a751b10e8bc75a",
+      "scope": "Historical fixed Package input restored byte-for-byte from the original Vue/TypeScript worktree on 2026-10-22; the adjacent source has since advanced to 0.1.1 and does not identify this binary.",
+      "provenance_note": "Only archive bytes and manifest identity were rechecked during restoration. Original SDK, source commit and toolchain are unrecorded; this is not a current-SDK build or a new runtime acceptance result. Consumers may explicitly select a rebuilt candidate with NANOBUG_PROJECT_CONTEXT_PACKAGE."
     }
   ],
   "official_catalog": {

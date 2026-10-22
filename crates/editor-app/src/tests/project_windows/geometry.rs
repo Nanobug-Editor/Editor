@@ -74,7 +74,7 @@ fn project_selection_centers_native_window() {
             cx.set_reduce_motion(true);
             crate::app::shortcuts::bootstrap::configure(cx, profile_path.join("shortcuts.json"))
                 .unwrap();
-            let mut options = crate::ui::controls::window::TitleBar::window_options();
+            let mut options = editor_ui::window::TitleBar::window_options();
             let display = cx.primary_display().unwrap().visible_bounds();
             options.window_bounds = Some(WindowBounds::Windowed(Bounds::new(
                 display.origin + point(px(40.), px(40.)),

@@ -21,7 +21,7 @@ fn standard_rename_forms_preserve_one_complete_document_plan() {
     }
 }
 
-/// Invalid metadata in a later edit cannot authorize a valid prefix or bypass confirmation.
+/// Invalid metadata or a separate command cannot authorize a valid prefix or bypass confirmation.
 #[test]
 fn rename_rejects_stale_foreign_resource_mixed_and_annotated_plans() {
     let uri: Uri = "file:///sample.novel".parse().unwrap();
@@ -37,7 +37,9 @@ fn rename_rejects_stale_foreign_resource_mixed_and_annotated_plans() {
         json!({"documentChanges":[good.clone(),stale]}),
         json!({"documentChanges":[good.clone(),foreign]}),
         json!({"documentChanges":[good.clone(),{"kind":"delete","uri":uri}]}),
-        json!({"changes":{},"documentChanges":[good.clone()]}),
+        json!({"documentChanges":[good.clone()],"command":{"command":"fixture/side-effect"}}),
+        // Both representations carry real effects; an empty companion map is inert server metadata.
+        json!({"changes":{uri.as_str():[{"range":range,"newText":"mixed"}]},"documentChanges":[good.clone()]}),
         json!({"documentChanges":[good,annotated]}),
         json!({"changes":{uri.as_str():[{"range":range,"newText":"renamed","annotationId":"needs-confirmation"}]}}),
     ] {
@@ -75,12 +77,12 @@ fn packaged_rename_server(
     let manifest = json!({
         "id":"complete-rename", "name":"Complete rename", "version":"0.1.0", "protocol":7,
         "api":{"base":"^1","required":{"language.lsp":"^1.5","process":"^1",
-            "language.editing":"^1","editor.edit":"^1.1","workspace.files":"^1.4"}},
+            "language.editing":"^1.2","editor.edit":"^1.1","workspace.files":"^1.4"}},
         "contributions":"plugin.toml", "storage_limit":1024,
         "permissions":["process.service.analysis","editor.read","editor.write","workspace.read"],
         "services":{"analysis":{"program":executable,"args":[root.join("wire.jsonl")]}},
         "language_servers":[{"id":"analysis","language":"unfamiliar","service":"analysis",
-            "editing":true,"initialization_options":{"fixtureRenameReplies":replies}}]
+            "editing":true,"workspace_edits":true,"initialization_options":{"fixtureRenameReplies":replies}}]
     });
     let package = plugin_runtime::Package::from_files(std::collections::BTreeMap::from([
         ("manifest.json".into(), serde_json::to_vec(&manifest).unwrap()),
@@ -158,7 +160,7 @@ fn packaged_rename_rejects_illegal_tail_without_exposing_a_valid_prefix() {
             }
             "stale" => invalid["documentChanges"][1]["textDocument"]["version"] = json!(0),
             "command" => invalid["command"] = json!({"command":"fixture/side-effect"}),
-            "mixed" => invalid["changes"] = json!({}),
+            "mixed" => invalid["changes"] = json!({first.as_str():leading["edits"].clone()}),
             "duplicate" => invalid["documentChanges"]
                 .as_array_mut()
                 .unwrap()
@@ -168,39 +170,65 @@ fn packaged_rename_rejects_illegal_tail_without_exposing_a_valid_prefix() {
         let (mut manager, server) =
             packaged_rename_server(&root, json!({"valid":valid,"invalid":invalid}));
         let first_lease = server.open_document(first.clone());
-        let second_lease = server.open_document(second.clone());
-        let related = || vec![(second_lease.clone(), source.to_owned())];
+        server.open_document(second.clone());
+        // Exercise the negotiated production path, with every preimage captured before analysis.
+        let sources = || super::super::workspace_edits::Sources {
+            workspace: root.clone(),
+            documents: ["first.unfamiliar", "second.unfamiliar"]
+                .into_iter()
+                .map(
+                    |path| plugin_runtime::plugin_protocol::language::SourceSnapshot {
+                        document: plugin_runtime::plugin_protocol::api::DocumentVersion {
+                            id: path.into(),
+                            path: path.into(),
+                            revision: 1,
+                        },
+                        text: source.into(),
+                    },
+                )
+                .collect(),
+            conditions: Vec::new(),
+        };
         let complete = server
-            .rename_for(
+            .rename_workspace_for(
                 first_lease.clone(),
-                source.into(),
                 Position::new(0, 1),
                 "valid".into(),
-                related(),
+                sources(),
+                "Rename fixture".into(),
             )
             .unwrap();
+        let super::super::workspace_edits::Rename::Workspace(plan) = complete.proposal else {
+            panic!("{case}: both targets must enter one native preview");
+        };
         assert_eq!(
-            complete.len(),
+            plan.changes.len(),
             2,
             "{case}: the complete valid proposal must survive"
         );
-        assert_eq!(complete[0].uri, first);
-        assert_eq!(complete[1].uri, second);
-        for target in complete {
-            assert_eq!(
-                merge_edits(source, &target.edits)
-                    .unwrap()
-                    .unwrap()
-                    .new_text,
-                "renamed"
-            );
+        for (change, path) in plan
+            .changes
+            .iter()
+            .zip(["first.unfamiliar", "second.unfamiliar"])
+        {
+            let plugin_runtime::plugin_protocol::workspace::Change::EditDocument {
+                document,
+                edits,
+                ..
+            } = change
+            else {
+                panic!("{case}: expected a native document change");
+            };
+            assert_eq!(document.path, path);
+            assert_eq!(edits.len(), 1);
+            assert_eq!(edits[0].text, "renamed");
         }
-        let rejected = server.rename_for(
+        let rejected = server.rename_workspace_for(
             first_lease,
-            source.into(),
             Position::new(0, 1),
             "invalid".into(),
-            related(),
+            sources(),
+            "Rename fixture".into(),
         );
         assert!(
             rejected.is_err(),

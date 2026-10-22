@@ -154,6 +154,52 @@ fn fixed_header_and_available_tabs_in_english_dark_theme(cx: &mut TestAppContext
     with_manager(cx, "en", true, check_detail_navigation);
 }
 
+/// Dormant diagnostics and its capture controls remain passive in both locales and themes.
+#[gpui::test]
+fn developer_tooling_diagnostics_capture_does_not_start_a_plugin(cx: &mut TestAppContext) {
+    with_manager(cx, "zh-CN", false, check_diagnostics_capture);
+}
+
+/// A separate native context avoids selecting an older window while testing English/dark appearance.
+#[gpui::test]
+fn developer_tooling_diagnostics_capture_is_passive_in_english_dark(cx: &mut TestAppContext) {
+    with_manager(cx, "en", true, check_diagnostics_capture);
+}
+
+/// Native capture buttons leave resource owners empty until an actual plugin demand occurs.
+fn check_diagnostics_capture(form: &mut VisualTestContext, owner: &Entity<ExtensionPanel>) {
+    click(form, "plugin-manager-tabs-0");
+    click(form, "plugin-row-manager-first");
+    click(form, "plugin-detail-tabs-6");
+    assert!(form.debug_bounds("plugin-diagnostics-dormant").is_some());
+    click(form, "plugin-diagnostics-start");
+    form.update(|_, cx| {
+        let snapshot = owner
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .observations
+            .snapshot(None);
+        assert!(snapshot.capture_active);
+        assert!(snapshot.owners.is_empty());
+    });
+    click(form, "plugin-diagnostics-stop");
+    form.update(|_, cx| {
+        let snapshot = owner
+            .read(cx)
+            .worker
+            .state
+            .lock()
+            .unwrap()
+            .observations
+            .snapshot(None);
+        assert!(!snapshot.capture_active);
+        assert!(snapshot.owners.is_empty());
+    });
+}
+
 /// Closing and reopening the native manager restores its default page without recreating plugins.
 #[gpui::test]
 fn newly_opened_manager_starts_at_overview(cx: &mut TestAppContext) {
@@ -425,7 +471,7 @@ fn check_detail_navigation(form: &mut VisualTestContext, owner: &Entity<Extensio
     for (key, expected) in [
         ("right", management::DetailTab::Information),
         ("left", management::DetailTab::Overview),
-        ("end", management::DetailTab::RuntimeLog),
+        ("end", management::DetailTab::RuntimeDiagnostics),
         ("home", management::DetailTab::Overview),
     ] {
         form.simulate_keystrokes(key);

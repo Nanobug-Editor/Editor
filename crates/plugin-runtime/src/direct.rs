@@ -46,6 +46,9 @@ pub enum LanguageFixOrigin {
     GuardedLsp {
         service: Arc<crate::LanguageService>,
         guards: Vec<Arc<AtomicBool>>,
+        /// Keep original root leases across the asynchronous host queue until request admission.
+        /// These proofs grant nothing beyond the service's independently rechecked permissions.
+        files: Vec<crate::AuthorizedFile>,
     },
 }
 impl LanguageFixOrigin {
@@ -55,8 +58,13 @@ impl LanguageFixOrigin {
             Self::Diagnostics(owner) => owner.is_live(),
             Self::Direct(owner) => owner.is_active(),
             Self::Lsp(owner) => owner.is_active() && owner.authority().is_live(),
-            Self::GuardedLsp { service, guards } => {
+            Self::GuardedLsp {
+                service,
+                guards,
+                files,
+            } => {
                 guards.iter().all(|guard| guard.load(Ordering::Acquire))
+                    && files.iter().all(crate::AuthorizedFile::is_live)
                     && service.is_active()
                     && service.authority().is_live()
             }

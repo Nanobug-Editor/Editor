@@ -1,5 +1,6 @@
 //! Ordinary GUI launches join the existing profile owner before allocating project resources.
 mod failure;
+pub(crate) mod preferences;
 mod transport;
 pub(crate) use failure::show as show_error;
 use gpui_kit::{App, Global};

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "sdk_sha256": "8e2f359fedf819d8e8b6b3da1012722629e12d9731c02c38e5b01ccab8bd02e4",
+  "toolchain": "Rust 1.98.1 / wasm32-wasip2 / windows-x86_64",
+  "packages": [
+    {"archive":"lifecycle-http-0.1.0.zip","sha256":"70156d0ac5eda309b98b5efea3de8064fd5c7449d40d95d51c069689b1308e91","sdk_sha256":"b421dcac6685b18e948b605f6067c63bddfd4f9759db0527a46122c669c067b3"},
+    {"archive":"lifecycle-editor-0.1.0.zip","sha256":"26cdf20517b142f8f0ae8b7857b0e2fba032fd7659e804bc79ff4e5c5b2ba7db","sdk_sha256":"b421dcac6685b18e948b605f6067c63bddfd4f9759db0527a46122c669c067b3"},
+    {"archive":"lifecycle-http-0.1.1.zip","sha256":"fed50c32ca713c55f268f2e66ed0b4ed2f7cf2c059953f93ae51e720fa20de4a","sdk_sha256":"77e44140ef37faf00a9b9bb8e71d39bec40ce0cea7db2c66d1a57a3b7f129eca"},
+    {"archive":"lifecycle-editor-0.1.1.zip","sha256":"64c33d3836b5b6d8b5d88ff38b5286931e08d7c6a2f8f679fe3a62677e9e95dc","sdk_sha256":"77e44140ef37faf00a9b9bb8e71d39bec40ce0cea7db2c66d1a57a3b7f129eca"},
+    {"archive":"lifecycle-http-0.1.2.zip","sha256":"32c15c54e97715f7b58c2bfb291def7e8a86488421ab40fd52849a965ee3ccfa"},
+    {"archive":"lifecycle-editor-0.1.2.zip","sha256":"07e91160ee8a8fa5a8387b561bde4c939cf2b9b5755bbf8dd118897ad8923e99"}
+  ]
+}

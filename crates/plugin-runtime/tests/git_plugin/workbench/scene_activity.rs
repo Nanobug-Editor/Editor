@@ -79,7 +79,7 @@ fn git_package_history_activity_defers_automatic_refresh_until_quiet() {
         .unwrap();
     idle(&mut manager);
     // A mounted native canvas supplies its viewport before keyboard review. All four
-    // fixture commits fit here, so retaining End's scroll cannot hide the new top row.
+    // fixture commits fit here, so the inserted top row stays visible throughout the test.
     send(
         &mut manager,
         "history",
@@ -95,11 +95,13 @@ fn git_package_history_activity_defers_automatic_refresh_until_quiet() {
     assert!(manager.take_editor_requests().is_empty());
 
     // Direct key/poll pairs cross two thirty-second timer deadlines without idle gaps.
+    // Repeat a boundary Home key: it expresses review activity without selecting another
+    // commit whose legitimate preview query would be confused with background Git work.
     // The ordinary send helper would settle the queue and could mask input interruption.
     let active = Instant::now();
     let mut inputs = 0;
     while active.elapsed() < Duration::from_secs(65) {
-        let name = if inputs % 2 == 0 { "home" } else { "end" };
+        let name = "home";
         let event = key(&manager, name);
         manager.event("git", Some("history".into()), event).unwrap();
         let revision = manager.live["git"].views["history"].revision;
@@ -163,6 +165,13 @@ fn git_package_history_activity_defers_automatic_refresh_until_quiet() {
         quiet.elapsed().as_millis()
     );
 
+    // Home may legitimately select the newly inserted commit first. Finish that business
+    // preview before a second boundary key establishes a quiet interval without Git work.
+    let select = key(&manager, "home");
+    manager
+        .event("git", Some("history".into()), select)
+        .unwrap();
+    idle(&mut manager);
     let recent = key(&manager, "home");
     manager
         .event("git", Some("history".into()), recent)

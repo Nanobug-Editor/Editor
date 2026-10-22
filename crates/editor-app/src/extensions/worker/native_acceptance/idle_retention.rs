@@ -38,7 +38,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     h.activate(cx).await?;
     h.expand(h.main, "branches", h.case.label("本地", "Local"), cx)
         .await?;
-    h.expand(h.main, "staging", h.case.label("未暂存", "Unstaged"), cx)
+    h.expand(h.main, "staging", h.case.label("更改", "Changes"), cx)
         .await?;
     h.expand(h.main, "staging", "src", cx).await?;
     h.select_file(h.main, "staging", "a-review.txt", cx).await?;
@@ -51,8 +51,9 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
 
     // Replacing the originally selected first character proves its range survived idle.
     // This is one new edit after the observation, never a retry of a rejected gesture.
-    h.main
-        .update(cx, |_, window, cx| input::text(window, "D", cx))?;
+    h.main.update(cx, |_, window, cx| {
+        editor_ui::testing::input_text(window, "D", cx)
+    })?;
     h.until(
         h.main,
         "idle-retained textarea selection accepted one edit",
@@ -89,8 +90,9 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         "idle validation never crossed a real background Git observation"
     );
     h.capture(h.main, "idle-menu-after.png", cx)?;
-    h.main
-        .update(cx, |_, window, cx| input::key(window, "escape", cx))?;
+    h.main.update(cx, |_, window, cx| {
+        editor_ui::testing::press_key(window, "escape", cx)
+    })?;
     h.until(
         h.main,
         "idle-retained menu accepted one Escape",
@@ -169,7 +171,7 @@ async fn draft_with_selection(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<
     )
     .await?;
     h.main.update(cx, |_, window, cx| {
-        input::text(window, "draft-kept中文", cx)
+        editor_ui::testing::input_text(window, "draft-kept中文", cx)
     })?;
     h.until(
         h.main,
@@ -184,8 +186,8 @@ async fn draft_with_selection(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<
     )
     .await?;
     h.main.update(cx, |_, window, cx| {
-        input::key(window, "home", cx);
-        input::key(window, "shift-right", cx);
+        editor_ui::testing::press_key(window, "home", cx);
+        editor_ui::testing::press_key(window, "shift-right", cx);
         window
             .focused(cx)
             .context("commit textarea lost original focus")

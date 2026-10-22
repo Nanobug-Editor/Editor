@@ -308,8 +308,8 @@ impl EditorApp {
             .contexts
             .iter()
             .filter(|(path, record)| {
-                // The Manager withdraws only completed failures whose declared collection inputs
-                // changed. A missing publication is meaningful after completion, not at admission.
+                // Only a completed failure withdrawn by the Manager's changed input set permits
+                // another demand. User cancellation alone cannot reopen a native project picker.
                 (record.published_failure
                     && record.error.is_some()
                     && panel
@@ -336,16 +336,10 @@ impl EditorApp {
         for path in removed {
             let record = self.language_server_demands.contexts.remove(&path).unwrap();
             if let Some(server) = record.server {
-                Self::close_server_document(server, &path, cx);
+                Self::close_server_document(server, &path, None, cx);
             }
         }
         for (path, (provider, source, document, availability)) in wanted {
-            let published_failure = matches!(
-                self.extensions
-                    .read(cx)
-                    .language_document_service(&provider, &document),
-                Some(Err(_))
-            );
             if !self.language_server_demands.contexts.contains_key(&path) {
                 let lease = self.acquire_language_document_lease(&provider, &document, cx);
                 let result = self
@@ -398,11 +392,6 @@ impl EditorApp {
                 record.error = result.err().map(|error| error.to_string());
                 record.published_failure = record.error.is_some() && published_error;
             }
-            if record.error.is_some() && published_failure {
-                // Runtime quota/validation failures can arrive through the same async receiver.
-                // Only an observed Err for this provider/document seals a retriable publication.
-                record.published_failure = true;
-            }
             let state_key = format!("context:{}", record.document.path);
             if let Some(error) = &record.error {
                 self.language_service_states
@@ -436,7 +425,8 @@ impl EditorApp {
                         .get_mut(&path)
                         .unwrap();
                     record.error = Some(error);
-                    record.published_failure = true;
+                    // An observed cache error is not this waiter's Completed Err. In particular,
+                    // another waiter's failure cannot authorize re-entry after a user cancellation.
                     continue;
                 }
             };

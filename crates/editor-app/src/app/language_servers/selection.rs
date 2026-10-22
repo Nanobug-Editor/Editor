@@ -46,7 +46,11 @@ impl EditorApp {
             ));
         }
         request.commit_language_refresh()?;
-        self.cancel_language_features(window, cx);
+        // The native reply may arrive after focus moved to another document. Its visible
+        // requests belong to that document; the selected source is revoked by its own epoch.
+        if self.active_path.as_deref() == Some(path.as_path()) {
+            self.cancel_language_features(window, cx);
+        }
         self.withdraw_source_language_binding(&path, cx);
         self.sync_dynamic_language_servers(cx);
         Ok(())
@@ -96,7 +100,7 @@ impl EditorApp {
                 .read(cx)
                 .release_language_document(&record.provider, &record.document);
             if let Some(server) = record.server {
-                Self::close_server_document(server, path, cx);
+                Self::close_server_document(server, path, None, cx);
             }
         }
         if let Some(editor) = self

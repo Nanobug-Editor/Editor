@@ -2,13 +2,15 @@
 //! the shared runtime resource retains bounded provider pages and rejects obsolete callbacks.
 use super::action_gestures::ActionGesture;
 use super::*;
-use crate::ui::controls::{
-    Icon, TreeRowAppearance, TreeRowIcon,
+use crate::ui::theme::ActiveTheme as _;
+use editor_ui::scroll::{ScrollAxis, SmoothScrollable as _};
+use editor_ui::{
+    Icon, TreeRowAppearance, TreeRowIcon, TreeRowState,
     menu::{MenuStyle, PopupMenu},
     tree_row,
 };
-use crate::ui::theme::ActiveTheme as _;
 use gpui_base::{Tree, TreeEvent, TreeItem, TreeState};
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     InteractiveElement as _, MouseButton, ParentElement as _, StatefulInteractiveElement as _,
     StyleRefinement, Styled as _, div,
@@ -17,6 +19,9 @@ use plugin_runtime::{TreeResource, TreeSnapshot, plugin_protocol::tree as api};
 use rust_i18n::t;
 use std::sync::Arc;
 
+mod interaction;
+mod menu;
+mod presentation;
 mod projection;
 #[cfg(test)]
 mod refresh_tests;
@@ -28,6 +33,8 @@ enum Dispatch {
     Load {
         parent: Option<String>,
         continuation: bool,
+        /// A late automatic seed must yield to intervening native interaction.
+        initial: bool,
     },
 }
 type TreeSink = Rc<dyn Fn(Dispatch, u64, Option<ActionGesture>, &mut App)>;
@@ -47,8 +54,12 @@ pub(super) struct TreeView {
     gate: Rc<Cell<bool>>,
     sink: TreeSink,
     sentinels: BTreeMap<String, (Option<String>, bool)>,
-    popup: Option<Entity<PopupMenu>>,
+    popup: Option<menu::TreeMenu>,
+    /// Menu ownership keeps only the target's hover appearance, never the business selection.
+    popup_node: Option<String>,
     popup_epoch: Option<(u64, u64)>,
+    /// Distinguish two menus opened on the same node within the same scene revision.
+    popup_serial: u64,
     _subscriptions: Vec<Subscription>,
     _pulse: gpui_kit::Task<()>,
 }
@@ -88,6 +99,7 @@ impl TreeView {
                 .selected_item()
                 .map(|item| item.id.to_string());
             if id.as_ref().is_some_and(|id| !id.starts_with('@')) && id != this.selected {
+                this.resource.dismiss_initial_selection();
                 this.selected = id.clone();
                 this.emit(
                     api::Event::Selected {
@@ -126,7 +138,9 @@ impl TreeView {
             sink,
             sentinels: BTreeMap::new(),
             popup: None,
+            popup_node: None,
             popup_epoch: None,
+            popup_serial: 0,
             _subscriptions: vec![expanded, selected],
             _pulse: pulse,
         };
@@ -148,13 +162,14 @@ impl TreeView {
         self.action_gesture = gesture;
         self.revision = revision;
         self.popup_epoch = None;
+        self.popup_node = None;
         if let Some(menu) = self.popup.take() {
             let target = self.window;
             // Dismiss through the native menu lifecycle after its current owner borrow ends.
             // The old callback checks its credential before it can affect a newly opened menu.
             cx.defer(move |cx| {
                 let _ = target.update(cx, |_, window, cx| {
-                    menu.update(cx, |menu, cx| menu.dismiss(window, cx));
+                    menu.dismiss(window, cx);
                 });
             });
         }
@@ -200,6 +215,7 @@ impl TreeView {
             Dispatch::Load {
                 parent,
                 continuation,
+                initial: false,
             },
             self.revision,
             self.action_gesture,
@@ -237,7 +253,20 @@ impl TreeView {
         {
             self.load(None, false, cx);
         }
-        let snapshot = self.resource.snapshot();
+        let mut snapshot = self.resource.snapshot();
+        // A scene handover may reject a deferred seed without changing resource metadata. Retry
+        // the bounded path just like ordinary unloaded expanded pages until it yields/completes.
+        let initial_target = if self.gate.get() && snapshot.initial_selection.is_some() {
+            self.initial_target(&snapshot, cx)
+        } else {
+            None
+        };
+        if let Some(target) = &initial_target {
+            // Set the observer's comparison identity before Base publishes its selection. Defaults
+            // are presentation only: they must not filter business data or open a file/window.
+            self.selected = Some(target.clone());
+            snapshot = self.resource.snapshot();
+        }
         // A source handover can reject a deferred page intent without changing resource metadata.
         // Retry only current unloaded expanded pages before the unchanged-projection fast path;
         // load still captures the current source/scene authority and never replays native gestures.
@@ -269,6 +298,15 @@ impl TreeView {
                 tree.set_items(roots, cx);
                 if let Some(selected) = selected {
                     tree.set_selected_index(tree.index_of(&selected.into()), cx);
+                }
+            });
+        }
+        if let Some(target) = initial_target {
+            self.tree.update(cx, |tree, cx| {
+                let index = tree.index_of(&target.into());
+                tree.set_selected_index(index, cx);
+                if let Some(index) = index {
+                    tree.scroll_to_item(index, gpui_kit::ScrollStrategy::Center);
                 }
             });
         }
@@ -323,6 +361,7 @@ impl TreeView {
     }
     /// Disclosure changes only Base's current items; resource reconciliation preserves native selection.
     fn toggle(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.resource.dismiss_initial_selection();
         if self.snapshot.expanded.contains(id) {
             self.resource.collapse(id);
         } else {
@@ -369,74 +408,6 @@ impl TreeView {
             cx,
         );
     }
-    /// Captured menus carry their tree epoch; worker admission rejects stale node or command metadata.
-    fn open_menu(
-        &mut self,
-        id: &str,
-        position: gpui_kit::Point<gpui_kit::Pixels>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(node) = self
-            .snapshot
-            .nodes
-            .get(id)
-            .filter(|node| !node.disabled && !node.menu.is_empty())
-        else {
-            return;
-        };
-        let items = node
-            .menu
-            .iter()
-            .enumerate()
-            .map(|(index, command)| ui::MenuItem {
-                // Distinct slots keep separate native row identities even for the same typed command.
-                id: format!("tree-menu-{index}"),
-                label: command.label.for_locale(&self.environment.locale).into(),
-                disabled: command.disabled,
-                separator_before: command.separator_before,
-            })
-            .collect::<Vec<_>>();
-        let owner = cx.entity().downgrade();
-        let id = id.to_string();
-        let epoch = self.snapshot.epoch;
-        let revision = self.revision;
-        let gesture = self.action_gesture;
-        let menu = cx.new(|cx| {
-            PopupMenu::new(
-                items,
-                MenuStyle::current(cx),
-                position,
-                move |action, _, cx| {
-                    let _ = owner.update(cx, |this, cx| {
-                        if !this.frame_current(gesture)
-                            || this.popup_epoch != Some((epoch, revision))
-                            || this.revision != revision
-                            || this.snapshot.epoch != epoch
-                        {
-                            return;
-                        }
-                        if let Action::Select(item) = action {
-                            if let Some(index) = item
-                                .strip_prefix("tree-menu-")
-                                .and_then(|index| index.parse::<u32>().ok())
-                            {
-                                this.invoke(&id, api::NodeAction::Menu { index }, cx);
-                            }
-                        }
-                        this.popup = None;
-                        this.popup_epoch = None;
-                        cx.notify();
-                    });
-                },
-                window,
-                cx,
-            )
-        });
-        self.popup = Some(menu);
-        self.popup_epoch = Some((epoch, revision));
-        cx.notify();
-    }
 }
 impl Render for TreeView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -448,14 +419,14 @@ impl Render for TreeView {
         {
             if let Some(menu) = self.popup.take() {
                 // Normal dismissal restores owned focus; defer past this borrowed TreeView render.
-                window.defer(cx, move |window, cx| {
-                    menu.update(cx, |menu, cx| menu.dismiss(window, cx))
-                });
+                window.defer(cx, move |window, cx| menu.dismiss(window, cx));
             }
             self.popup_epoch = None;
+            self.popup_node = None;
         }
         let owner = cx.entity().downgrade();
         let snapshot = self.snapshot.clone();
+        let popup_node = self.popup_node.clone();
         let rows_owner = owner.clone();
         let gesture = self.action_gesture;
         let workspace = std::path::Path::new(&self.environment.workspace).to_path_buf();
@@ -487,6 +458,8 @@ impl Render for TreeView {
             .capture_key_down(cx.listener(move |this, _, _, cx| {
                 if !this.frame_current(gesture) {
                     cx.stop_propagation();
+                } else {
+                    this.resource.dismiss_initial_selection();
                 }
             }))
             .on_key_down(
@@ -512,7 +485,7 @@ impl Render for TreeView {
                     .size_full()
                     .px_1()
                     .list_style(StyleRefinement::default().flex_grow_1().size_full())
-                    .item(move |index, entry, state, _, cx| {
+                    .item(move |_, entry, state, _, cx| {
                         let id = entry.item().id.to_string();
                         let data = snapshot.nodes.get(&id);
                         let icon = data
@@ -552,6 +525,58 @@ impl Render for TreeView {
                         let description = data
                             .map(|node| node.description.clone())
                             .unwrap_or_default();
+                        let check_owner = rows_owner.clone();
+                        let check_id = id.clone();
+                        let epoch = snapshot.epoch;
+                        let leading =
+                            data.and_then(|node| {
+                                node.checked.map(|previous| {
+                                    div()
+                                        .id(format!("tree-check-{id}"))
+                                        .debug_selector({
+                                            let id = id.clone();
+                                            move || format!("plugin-tree-check-{id}").into()
+                                        })
+                                        // Checkbox input must not select the file or toggle its directory.
+                                        .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                            cx.stop_propagation()
+                                        })
+                                        .child(
+                                            editor_ui::Checkbox::new(action_gestures::native_id(
+                                                format!("tree-checkbox-{id}-{epoch}-{previous:?}"),
+                                                gesture,
+                                            ))
+                                            .label(node.label.clone())
+                                            .marker_only()
+                                            .checked(previous == api::CheckState::Checked)
+                                            .indeterminate(previous == api::CheckState::Mixed)
+                                            .disabled(node.disabled)
+                                            .on_change(move |checked, _, cx| {
+                                                cx.stop_propagation();
+                                                let _ = check_owner.update(cx, |this, cx| {
+                                                    if this.frame_current(gesture)
+                                                        && this.snapshot.epoch == epoch
+                                                    {
+                                                        this.emit(
+                                                            api::Event::Checked {
+                                                                tree: this
+                                                                    .resource
+                                                                    .handle()
+                                                                    .clone(),
+                                                                epoch,
+                                                                node: check_id.clone(),
+                                                                previous,
+                                                                checked: *checked,
+                                                            },
+                                                            cx,
+                                                        );
+                                                    }
+                                                });
+                                            }),
+                                        )
+                                        .into_any_element()
+                                })
+                            });
                         let row = tree_row(
                             action_gestures::native_id(format!("plugin-tree-row-{id}"), gesture)
                                 .to_string(),
@@ -560,14 +585,24 @@ impl Render for TreeView {
                             icon,
                             entry.is_folder(),
                             entry.is_expanded(),
-                            state.is_selected(),
+                            TreeRowState {
+                                selected: state.is_selected(),
+                                context_menu: popup_node.as_ref() == Some(&id),
+                            },
                             id.starts_with("@retry/"),
                             TreeRowAppearance::Explorer,
+                            editor_ui::TreeRowExtras {
+                                leading,
+                                suffix: data.map(|node| node.suffix.clone()).unwrap_or_default(),
+                            },
                             cx,
                             entry
                                 .is_folder()
                                 .then_some(toggle as Rc<dyn Fn(&mut Window, &mut App)>),
                         )
+                        .when_some(data.and_then(|node| node.tone), |row, tone| {
+                            row.text_color(presentation::text_color(tone, cx))
+                        })
                         .debug_selector(move || format!("plugin-tree-row-{id}").into())
                         .on_mouse_down(MouseButton::Left, move |event, window, cx| {
                             cx.stop_propagation();
@@ -575,13 +610,7 @@ impl Render for TreeView {
                                 if !this.frame_current(gesture) {
                                     return;
                                 }
-                                this.tree.update(cx, |tree, cx| {
-                                    tree.set_selected_index(Some(index), cx);
-                                    tree.focus(window, cx);
-                                });
-                                if event.click_count == 2 {
-                                    this.activate(&click_id, window, cx);
-                                }
+                                this.press_row(&click_id, event.click_count, window, cx);
                             });
                         })
                         .on_mouse_down(
@@ -590,6 +619,7 @@ impl Render for TreeView {
                                 cx.stop_propagation();
                                 let _ = menu_owner.update(cx, |this, cx| {
                                     if this.frame_current(gesture) {
+                                        this.resource.dismiss_initial_selection();
                                         this.open_menu(&menu_id, event.position, window, cx);
                                     }
                                 });
@@ -599,14 +629,16 @@ impl Render for TreeView {
                             row.into_any_element()
                         } else {
                             row.tooltip(move |_, cx| {
-                                cx.new(|_| crate::ui::controls::Tooltip::new(description.clone()))
+                                cx.new(|_| editor_ui::Tooltip::new(description.clone()))
                                     .into()
                             })
                             .into_any_element()
                         }
-                    }),
+                    })
+                    .smooth_scroll(self.tree.read(cx).scroll_handle(), ScrollAxis::Vertical),
             )
-            .children(self.popup.clone())
+            .child(self.initial_input_guard(cx))
+            .children(self.popup.as_ref().map(menu::TreeMenu::element))
     }
 }
 
@@ -659,7 +691,11 @@ impl PluginView {
             Dispatch::Load {
                 parent,
                 continuation,
+                initial,
             } => {
+                if initial && resource.snapshot().initial_selection.is_none() {
+                    return;
+                }
                 let Ok(Some(request)) = resource.request(parent, continuation) else {
                     return;
                 };

@@ -1,7 +1,7 @@
 //! Initializes the shared shortcut profile before an editor window can receive input.
 
 use super::{catalog, engine::BindingEngine};
-use crate::ui::controls::Button;
+use editor_ui::Button;
 use gpui_kit::{App, BorrowAppContext as _, Global};
 use std::path::PathBuf;
 

@@ -146,9 +146,9 @@ fn git_package_branch_selection_and_panel_visibility_keep_loaded_branch_pages() 
     branch_menu::context_action(&mut manager, "refresh", None);
     retained(&resource, &before, "worktree-only change");
     assert!(resource.snapshot().nodes.values().all(|node| {
-        node.menu
+        branch_menu::menu_commands(node)
             .iter()
-            .any(|action| action.arguments["action"] == "stash" && !action.disabled)
+            .any(|(_, action)| action.arguments["action"] == "stash" && !action.disabled)
     }));
     // A real ref addition must remain observable; cache retention cannot hide repository changes.
     git(root, &["branch", "feature/added"]);

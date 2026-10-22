@@ -148,7 +148,10 @@ pub(super) async fn provider(h: &native::Harness, cx: &mut AsyncApp) -> anyhow::
     .map_err(anyhow::Error::msg)?;
     h.actor
         .tx
-        .send(Work::Install(Package::read(&input("NANOBUG_VUE_PACKAGE"))?))
+        .send(Work::Install(
+            Package::read(&input("NANOBUG_VUE_PACKAGE"))?,
+            true,
+        ))
         .map_err(|_| anyhow::anyhow!("worker stopped before Vue installation"))?;
     h.catalog(cx).await?;
     h.main.update(cx, |_, _, cx| -> anyhow::Result<()> {

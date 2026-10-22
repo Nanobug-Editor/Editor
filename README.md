@@ -74,7 +74,7 @@ Checkouts and source snapshots with different contents need separate Cargo targe
 
 Validate startup fixes with the IDE's actual command and profile. Per-package `cargo clean -p ...` leaves Release artifacts intact; add `--release` when recovering a Release build. See the [Release startup diagnosis](docs/project/verification/build-cache-release-2026-10-18.md).
 
-Starting without a path opens an empty editor window with its **Select folder** dropdown collapsed. Drop a file into the empty area to open it through the normal folder and trust flow. The upper-left project menu provides search, **Open**, **Clone repository**, open and recent projects, history removal, and **Close project**. Settings and plugin management are available before choosing a project; workspace tools start only after opening a real folder. Any ordinary folder can be a project. Cloning uses your installed Git and its authentication settings, then follows the normal trust and project-open flow. **Close project** closes its window after handling unsaved changes and confirming resource cleanup; closing the last editor window exits the application. Cancelling or a save failure keeps the project open. Reopening restores saved tabs and layout without restarting programs.
+Starting without a path reopens the project from the last successful exit by default. Disable **Settings → Appearance & Behavior → Startup → Reopen the last project on startup** to start empty; explicit project or file arguments always take priority. With restoration disabled or no available saved project, an empty editor opens with its **Select folder** dropdown collapsed. Drop a file into the empty area to open it through the normal folder and trust flow. The upper-left project menu provides search, **Open**, **Clone repository**, open and recent projects, history removal, and **Close project**. Settings and plugin management are available before choosing a project; workspace tools start only after opening a real folder. Any ordinary folder can be a project. Cloning uses your installed Git and its authentication settings, then follows the normal trust and project-open flow. **Close project** closes its window after handling unsaved changes and confirming resource cleanup; closing the last editor window exits the application. Cancelling or a save failure keeps the project open. Reopening restores saved tabs and layout without restarting programs.
 
 Opening another project keeps the current project running in its own window; opening from an empty editor uses that window. Reopening the same real directory activates its existing window. A repeated launch without a target foregrounds the last-used editor window in the same profile. **Quit application** gathers decisions from all windows; cancelling any decision keeps every window open. Portable builds accept the same directory or file arguments without registering menus. `Nanobug.exe --profile "<isolated profile directory>" -- "<project or file>"` selects an isolated GUI profile; plugin tooling and explicit development instances retain their independent startup behavior.
 
@@ -104,6 +104,12 @@ cargo build -p editor-app
 # Prepare the development instance; add explicit --grant arguments for the manifest's declared permissions.
 .\target\debug\editor-app.exe --plugin-dev ../Rust --watch --grant workspace.read --grant process.exec --grant ui.panels --grant process.service.analysis --grant process.service.adapter --grant dependencies.prepare
 
+# Check package admission without starting the application or executing plugin code.
+.\target\debug\editor-app.exe --plugin-check target/plugin-build/example-1.0.0.zip --format json
+
+# Capture lifecycle evidence; exercise the isolated plugin, then send stop on standard input.
+.\target\debug\editor-app.exe --plugin-dev ../Rust --report target/plugin-lifecycle.json --grant workspace.read --grant process.exec --grant ui.panels --grant process.service.analysis --grant process.service.adapter --grant dependencies.prepare
+
 # Low-level independent Cargo builds still use the host's embedded SDK.
 .\target\debug\editor-app.exe --plugin-cargo ../Rust/Cargo.toml check --target wasm32-wasip2
 
@@ -114,6 +120,8 @@ cargo build -p editor-app
 For CLI development, send `reload` or `stop` on standard input. `--workspace` selects a test workspace (the plugin project by default); `--profile` selects isolated data. Repeat `--grant <permission>` for the permissions declared in the manifest. New permissions require stopping and authorizing another run; changing the plugin ID also requires restarting the configuration. Missing compilers/SDK targets are reported and never installed automatically. Native build steps declare their exact OS/architecture; foreign native artifacts are rejected. Windows is verified; macOS/Linux use portable paths and process interfaces but remain unverified.
 
 Install or update generated ZIPs in the plugin manager and approve their declared permissions. Interface usage is documented in [SDK source comments](crates/plugin-protocol/src/lib.rs); debugger setup is described in the [Rust plugin README](https://github.com/Nanobug-Editor/Rust). Maintainer decisions and verification are indexed in [docs/plugins/README.md](docs/plugins/README.md).
+
+Static checks return 0 for admission, 1 for rejection, and 2 for invalid input. Lifecycle reports additionally return 3 for `cancel`; a session with unobserved activation or cleanup remains inconclusive (2). A lifecycle pass does not certify business behavior. The plugin manager's Runtime Diagnostics page captures bounded host metadata and exports a JSON report. Compatible plugin installation takes effect in the running host.
 
 ## Contributing
 

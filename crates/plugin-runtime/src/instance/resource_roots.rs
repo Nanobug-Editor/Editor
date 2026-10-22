@@ -21,6 +21,8 @@ pub(super) enum RootKind {
     DiagnosticCollection,
     /// Native tree metadata is not a filesystem root.
     Tree,
+    /// Native workspace chrome and filename metadata grant no filesystem authority.
+    WorkspacePresentation,
     /// Point/range metadata grants no file access.
     Decoration,
     ServiceReference,
@@ -166,6 +168,7 @@ impl State {
             | RootKind::VirtualDocument
             | RootKind::DiagnosticCollection
             | RootKind::Tree
+            | RootKind::WorkspacePresentation
             | RootKind::Decoration
             | RootKind::Selected
             | RootKind::ImageInput
@@ -316,6 +319,9 @@ impl State {
                 if let Some(tree) = self.trees.remove(&handle.resource) {
                     tree.revoke();
                 }
+                if let Some(resource) = self.presentations.remove(&handle.resource) {
+                    resource.revoke();
+                }
                 if let Some(resource) = self.decorations.remove(&handle.resource) {
                     resource.revoke();
                 }
@@ -352,6 +358,7 @@ impl State {
             | api::Operation::Timer { .. }
             | api::Operation::Private { .. }
             | api::Operation::Tree { .. }
+            | api::Operation::Presentation { .. }
             | api::Operation::Commands { .. }
             | api::Operation::DescribeSdk
             | api::Operation::Service { .. }

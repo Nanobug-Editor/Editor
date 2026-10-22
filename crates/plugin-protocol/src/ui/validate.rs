@@ -222,6 +222,9 @@ impl Validator {
         node.layout.margin.validate(10000.)?;
         if let Some(viewport) = &node.viewport {
             viewport.validate(&node.kind)?;
+            if matches!(&node.kind, Kind::Canvas(canvas) if canvas.scroll_buffer.is_some()) {
+                return Err("Retained canvas scroll cannot use a visual viewport transform".into());
+            }
         }
         if depth > 24 {
             return Err("UI nesting quota exceeded".into());

@@ -22,8 +22,10 @@
 | 位置 | 职责 |
 | --- | --- |
 | `crates/editor-app` | GPUI 应用、文档集成、语言服务与通用插件 UI |
+| `crates/editor-ui` | 本地通用控件、主题、字号、静态资源与统一控件入口；不管理宿主工作区和插件实例 |
 | `crates/editor-core` | 文档、工作区与命令的核心逻辑 |
-| `crates/platform-windows` | 平台保存、本地历史等适配 |
+| `crates/editor-history` | 平台无关的本地历史对象、版本索引、迁移与保留管理 |
+| `crates/platform-windows` | 平台保存、历史目录与安全文件访问等原生适配 |
 | `crates/plugin-schema` | 稳定声明式插件格式与校验 |
 | `crates/plugin-protocol` | 公开版本化能力、消息、UI、WIT 与访客 SDK 契约 |
 | `crates/plugin-runtime` | 包验证、WASM 隔离、资源与权限、实例生命周期和事务 |
@@ -33,7 +35,7 @@
 | `docs/` | 分类文档入口；项目基线、插件系统、UI 调研和协作约定（AI 与维护者工作面，不发布为站点） |
 
 - 复用现有模块和公开接口，不为每个逻辑模块新增 crate，不建立仅转发调用的包装层。
-- `crates/editor-app/src/main.rs` 仅负责启动、应用状态组装和顶层路由。`app/` 管理窗口、布局、设置、对话框和会话；`editor/` 管理文档与编辑区；`explorer/` 管理文件树；`language/` 管理语言接入；`extensions/` 管理通用插件宿主集成；`ui/` 管理本地控件、主题、图标、字体和绘制。
+- `crates/editor-app/src/main.rs` 仅负责启动、应用状态组装和顶层路由。`app/` 管理窗口、布局、设置、对话框和会话；`editor/` 管理文档与编辑区；`explorer/` 管理文件树；`language/` 管理语言接入；`extensions/` 管理通用插件宿主集成；`ui/` 仅保留插件呈现、主题选择和资源组合等宿主适配，本地通用控件集中在 `crates/editor-ui/`。
 - 新文件按主要职责放入相应功能模块，以 Rust 模块声明连接；共享逻辑先靠近调用方，形成稳定复用后再提取。跨功能 GPUI 测试放在 `crates/editor-app/src/tests/`，模块行为测试靠近对应实现。
 - 移动包含 `include_str!`、`include_bytes!` 的文件时同步核对资源相对路径。不要顺手重构、格式化或修复本次范围以外的代码。
 
@@ -42,10 +44,10 @@
 - `EditorState` 是唯一内存文本、IME、选择、布局与会话 Undo/Redo 真相来源。不得维护第二份可变 Rope 或撤销栈，不得绕过 `DocumentSession` 写入文本。
 - 异步语言结果、格式化、搜索替换计划和插件文档请求必须校验目标及 revision；过期、取消或目标已关闭的结果不得应用到当前文档。
 - 所有语法高亮通过插件提供的 Tree-sitter WASM grammar 与查询规则动态加载，不重新引入宿主内建 grammar。
-- **所有 UI 组件仅使用 `gpui-kit` 的 GPUI 原语和 `gpui-base` 行为、状态与交互能力，在 `crates/editor-app/src/ui/` 中实现本地控件。** `gpui-component` 仅可作为实现参考标准；禁止直接依赖、通过 `gpui_kit::component` 间接调用或以重导出、包装层引入其组件、主题及运行时。图标等静态资源可使用独立的 Kit assets。
+- **所有 UI 组件仅使用 `gpui-kit` 的 GPUI 原语和 `gpui-base` 行为、状态与交互能力，本地通用控件集中在 `crates/editor-ui/src/<组件名>/mod.rs`。** 每个控件的绘制、状态、辅助模块与测试都放在该组件目录内，通过 `mod.rs` 暴露统一入口；宿主调用公开接口，不在 `editor-app` 复制控件实现。`gpui-component` 仅可作为实现参考标准；禁止直接依赖、通过 `gpui_kit::component` 间接调用或以重导出、包装层引入其组件、主题及运行时。图标等静态资源可使用独立的 Kit assets。
 - 修改按钮、输入框、菜单、标签、列表、树、弹窗等控件，先核对上游公开行为接口和项目主题契约，再提供小而稳定的本地接口。调用方不得散落复制绘制逻辑。
 - 编辑器和停靠布局保留上游状态与交互接缝，外观在本地 UI 层组合。缺失行为先查上游接口，不复制整套上游源码，不 fork GPUI Kit。
-- Kit 依赖必须关闭默认功能，显式选择不引入 `gpui-component` 的功能；主题、菜单、弹窗、停靠外观及高亮接入同样遵守此边界。迁移后检索全部源码（含测试）并检查 Cargo 依赖树，确认无 `gpui-component` 调用及依赖，再验证受影响交互；主题覆盖或重导出不算迁移。
+- Kit 依赖必须关闭默认功能，显式选择不引入 `gpui-component` 的功能；主题、菜单、弹窗、停靠外观及高亮接入同样遵守此边界。GPUI 测试功能直接在锁定版本的 `gpui-base`、`gpui-pre` 和 `gpui-pre-platform` 上启用，不启用 Kit 的 `test-support` 弱引用。迁移后检索全部源码（含测试），检查 Cargo 依赖树与 `Cargo.lock` 均无 `gpui-component` 及其宏库，再验证受影响交互；主题覆盖或重导出不算迁移。
 - 用户可见文本使用现有 i18n 资源，保留中英文；检查深浅主题、焦点、键盘、中文 IME、滚动和缩放中与改动相关的行为。
 
 ## 插件平台边界
@@ -86,12 +88,12 @@
 - 构建内容不同的源码快照或其他工作区时，为每份源码使用独立 Cargo 输出目录；构建副本前用 `cargo metadata --no-deps --format-version 1` 核对 `workspace_root` 和 `target_directory`。源码中接口存在但编译报缺失时，先按[缓存诊断记录](docs/project/verification/build-cache-2026-10-18.md)核对产物来源。
 - 构建或启动报错先核对 IDE 的实际命令和 profile，修复后重复同一入口；按包清理默认 profile 不覆盖 Release，需显式加 `--release`，见 [Release 复查](docs/project/verification/build-cache-release-2026-10-18.md)。
 - 代码变更先运行受影响模块的针对性测试；编辑、插件、工具链、搜索、历史或 Git 缺陷补充可观察行为的回归测试。优先从插件包进入公开管理器和宿主集成验证，不为特定插件新增测试专用宿主 API。
-- 每个实现阶段交付前至少执行以下检查；这些命令不包含 `editor-app` 的 UI 测试，也不会执行 ignored 测试：
+- 每个实现阶段交付前至少执行以下检查；workspace 测试包含 `editor-ui` 控件测试，不包含 `editor-app` 的 UI 测试，也不会执行 ignored 测试：
 
   ```powershell
   # Rust 格式检查。
   cargo fmt --check
-  # 非 UI workspace 测试。
+  # editor-app 以外的 workspace 测试（含 editor-ui 控件）。
   cargo test --workspace --exclude editor-app
   # workspace 编译检查。
   cargo check --workspace

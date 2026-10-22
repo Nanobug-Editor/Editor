@@ -207,12 +207,7 @@ impl EditorApp {
                 return;
             }
             self.plugin_interactions.push(cx.new(|cx| {
-                crate::ui::controls::interaction::HostInteraction::new(
-                    plugin.to_owned(),
-                    request,
-                    window,
-                    cx,
-                )
+                editor_ui::interaction::HostInteraction::new(plugin.to_owned(), request, window, cx)
             }));
             cx.notify();
             return;
@@ -282,6 +277,8 @@ impl EditorApp {
                 left,
                 right,
                 third,
+                navigation,
+                folding,
                 preview,
             } => self.open_comparison_view(
                 key,
@@ -289,6 +286,8 @@ impl EditorApp {
                 left,
                 right,
                 third.as_ref(),
+                navigation.as_ref(),
+                folding.as_ref(),
                 *preview,
                 &request,
                 window,
@@ -505,33 +504,67 @@ impl EditorApp {
             )));
             return;
         }
-        let value = tab.editor.read(cx).value().to_string();
+        let snapshot =
+            crate::editor::native_text::NativeTextIdentity::new(tab.editor.read(cx).text());
         let digest = tab.disk_digest;
-        let history = self.history.clone();
+        let history = self.history.worker.clone();
+        let workspace = self.workspace.root().to_owned();
         let saved_path = path.clone();
         cx.spawn(async move |app, cx| {
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    let disk = std::fs::read(&saved_path)
+                    let stamp = platform_windows::history::FileStamp::read(&saved_path)
+                        .map_err(|error| Failure::new(ErrorCode::Conflict, error.to_string()))?;
+                    let disk = crate::editor::history::disk_digest(&saved_path)
                         .map_err(|e| Failure::new(ErrorCode::Conflict, e.to_string()))?;
-                    if Sha256::digest(&disk).as_slice() != digest {
+                    if disk != Some(digest) {
                         return Err(Failure::new(
                             ErrorCode::Conflict,
                             "File changed on disk; explicit user resolution required",
                         ));
                     }
-                    if let Some(history) = history {
-                        let _ = history.snapshot_file(&saved_path);
+                    let history_error = if let Some(history) = history {
+                        let observed = saved_path.clone();
+                        // A history failure cannot prevent a valid ordinary plugin save.
+                        let failure = history
+                            .call(0, move |history| {
+                                crate::editor::history::observe_disk(
+                                    history,
+                                    &observed,
+                                    Some(&workspace),
+                                    editor_history::Reason::BeforeOverwrite,
+                                )
+                            })
+                            .await
+                            .err()
+                            .map(|error| error.to_string());
+                        failure
+                    } else {
+                        None
+                    };
+                    if platform_windows::history::FileStamp::read(&saved_path)
+                        .map_err(|error| Failure::new(ErrorCode::Conflict, error.to_string()))?
+                        != stamp
+                    {
+                        return Err(Failure::new(
+                            ErrorCode::Conflict,
+                            "File changed during save preparation",
+                        ));
                     }
-                    platform_windows::PreparedFileStore::prepare(saved_path, value)
+                    platform_windows::PreparedFileStore::prepare(saved_path, snapshot.contents())
+                        .map(|prepared| (prepared, stamp, history_error))
                         .map_err(|e| Failure::new(ErrorCode::OperationFailed, e.to_string()))
                 })
                 .await;
             let _ = app.update(cx, |app, cx| {
                 app.plugin_saves.remove(&path);
-                let result = result
-                    .and_then(|prepared| app.commit_plugin_save(&document, &request, prepared, cx));
+                let result = result.and_then(|(prepared, stamp, history_error)| {
+                    if let Some(error) = history_error {
+                        app.history_failure(error, cx);
+                    }
+                    app.commit_plugin_save(&document, &request, prepared, stamp, cx)
+                });
                 request.finish(result);
                 cx.notify();
             });
@@ -545,9 +578,10 @@ impl EditorApp {
         document: &DocumentVersion,
         request: &EditorRequest,
         prepared: platform_windows::PreparedFileStore,
+        stamp: Option<platform_windows::history::FileStamp>,
         cx: &mut Context<Self>,
     ) -> Result<Value, Failure> {
-        if !self.session_state.workspace_trusted {
+        if self.shutting_down || !self.session_state.workspace_trusted {
             return Err(Failure::new(
                 ErrorCode::PermissionDenied,
                 "Workspace trust revoked",
@@ -572,11 +606,9 @@ impl EditorApp {
                 "File has no text save capability",
             )
         })?;
-        let disk =
-            std::fs::read(&path).map_err(|e| Failure::new(ErrorCode::Conflict, e.to_string()))?;
-        if tab.disk_state != DiskState::Synced
-            || Sha256::digest(&disk).as_slice() != tab.disk_digest
-        {
+        let disk = platform_windows::history::FileStamp::read(&path)
+            .map_err(|e| Failure::new(ErrorCode::Conflict, e.to_string()))?;
+        if tab.disk_state != DiskState::Synced || disk != stamp {
             return Err(Failure::new(
                 ErrorCode::Conflict,
                 "File changed during save preparation",
@@ -599,6 +631,7 @@ impl EditorApp {
         tab.disk_state = DiskState::Synced;
         tab.last_saved_at = Instant::now();
         tab.overwrite_confirmed = false;
+        self.record_history_save(path.clone(), prepared.contents().to_owned(), cx);
         self.notify_language_document_saved(&path, prepared.contents().to_owned(), cx);
         self.publish_document_save(index, Some(Ok(())), cx);
         Ok(Value::Saved {

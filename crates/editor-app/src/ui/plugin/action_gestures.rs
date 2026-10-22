@@ -5,7 +5,7 @@ use plugin_runtime::plugin_protocol::ui::Node;
 
 /// Source changes and visibility withdrawal cannot reauthorize an earlier frame's press.
 /// Both kinds share one view-local nonce; their distinct variants never imply document authority.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ActionGesture {
     /// Editor edge actions also capture the UI revision supplying their document-source binding.
     Source { incarnation: u64, revision: u64 },

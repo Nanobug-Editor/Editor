@@ -22,25 +22,36 @@ impl Worker {
         environment: Environment,
         trusted: bool,
     ) -> Self {
-        let (tx, rx) = mpsc::channel();
         let state = Arc::new(Mutex::new(Self::initial_state(
             &root,
             &environment,
             trusted,
         )));
+        let (tx, rx) = super::queued::channel(
+            &environment.workspace,
+            state.lock().unwrap().observations.clone(),
+        );
+        let actor_sender = tx.clone();
         let output = state.clone();
         let trust = Arc::new(std::sync::atomic::AtomicBool::new(trusted));
         let authority = trust.clone();
         let shutdown_complete = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let actor_complete = shutdown_complete.clone();
         std::thread::spawn(move || {
+            // One guard must be released before constructing resources: temporary guards in
+            // consecutive struct fields would live until the statement ends and deadlock.
+            let (logs, observations) = {
+                let published = output.lock().unwrap();
+                (published.logs.clone(), published.observations.clone())
+            };
             // Prepare the public SDK off the UI thread. A failure is delivered only to guests that request it.
             let resources = plugin_runtime::HostResources {
                 // This explicit host setting never inherits generic HTTP_PROXY or plugin configuration.
                 http: plugin_runtime::HttpConfiguration::default()
                     .with_proxy(std::env::var("NANOBUG_HTTP_PROXY").ok()),
                 sdk: Some(crate::sdk_export::descriptor().map_err(|error| format!("{error:#}"))),
-                logs: output.lock().unwrap().logs.clone(),
+                logs,
+                observations,
                 ..Default::default()
             };
             let shared = match pool.open(root, environment.clone(), trusted, resources) {
@@ -58,6 +69,7 @@ impl Worker {
                 }
             };
             let mut last_save = Instant::now();
+            actor_sender.bind(shared.lock().unwrap().runtime_observations());
             let mut development = crate::plugin_development::instance::Loader::default();
             let mut development_install = None::<String>;
             let mut vectors = super::super::images::VectorRenderer::default();
@@ -88,7 +100,7 @@ impl Worker {
                         development.poll(authority.load(std::sync::atomic::Ordering::Acquire))
                     {
                         development_install = Some(package.manifest.id.clone());
-                        deferred.push_back(Work::Install(package));
+                        deferred.push_back(Work::Install(package, true));
                     }
                 }
                 // Target calls use their own bounded roots and never block the actor on build output.
@@ -153,7 +165,7 @@ impl Worker {
                             | Work::SetProjectEnabled(_, _)
                             | Work::SetTrust(true)
                             | Work::Uninstall(_, _)
-                            | Work::Install(_),
+                            | Work::Install(..),
                         ) => {
                             // Persistent choices cannot write through the transaction lock. Old commands and
                             // typed requests continue normally until the candidate returns for cutover.
@@ -205,7 +217,7 @@ impl Worker {
                                 | Work::Disable(_)
                                 | Work::SetProjectEnabled(_, _)
                                 | Work::Uninstall(_, _)
-                                | Work::Install(_)
+                                | Work::Install(..)
                                 | Work::Shutdown(_)
                         )
                     })
@@ -225,7 +237,7 @@ impl Worker {
                 // Resource-only packages have no PreparedInstallation token. Their synchronous
                 // route still checks its existing pure admission prefix before UI retirement.
                 let synchronous_admission = match &work {
-                    Some(Work::Install(package)) if package.manifest.component.is_none() => {
+                    Some(Work::Install(package, _)) if package.manifest.component.is_none() => {
                         let control = output
                             .lock()
                             .unwrap()
@@ -274,7 +286,7 @@ impl Worker {
                             | Work::Uninstall(id, _)
                             | Work::SetProjectEnabled(id, false),
                         ) => vec![id.clone()],
-                        Some(Work::Install(package))
+                        Some(Work::Install(package, _))
                             if package.manifest.component.is_none()
                                 && synchronous_admission.is_ok() =>
                         {
@@ -348,6 +360,7 @@ impl Worker {
                         // A debug call is answered by the provider and published as what it said,
                         // never as a state the host inferred.
                         Some(Work::DebugCall {
+                            origins,
                             request,
                             configuration,
                             method,
@@ -360,10 +373,11 @@ impl Worker {
                                     "Debug request quota exhausted or duplicate identity"
                                 ))
                             } else {
-                                manager.begin_configured_debug_call(
+                                manager.begin_configured_debug_call_with_origins(
                                     configuration.as_deref(),
                                     &method,
                                     arguments,
+                                    &origins,
                                 )
                             };
                             match result {
@@ -496,6 +510,7 @@ impl Worker {
                             result
                         }
                         Some(Work::StartRun {
+                            origins,
                             request,
                             config,
                             request_id,
@@ -503,7 +518,9 @@ impl Worker {
                             // The runtime selects a compatible provider by contract and scope; a
                             // missing or ambiguous provider is reported instead of being guessed at.
                             let result = manager
-                                .start_terminal_configuration_execution(&config, request)
+                                .start_terminal_configuration_execution_with_origins(
+                                    &config, request, &origins,
+                                )
                                 .map(|session| {
                                     // Remember which launch produced this session before it is published.
                                     run_requests.insert(session.id(), (config.clone(), request_id));
@@ -621,13 +638,14 @@ impl Worker {
                         }
                         Some(Work::Inspect(path)) => Package::read(&path)
                             .map(|package| output.lock().unwrap().pending = Some(package)),
-                        Some(Work::Install(package)) => {
+                        Some(Work::Install(package, global_enabled)) => {
                             let control = output
                                 .lock()
                                 .unwrap()
                                 .install_control
                                 .clone()
-                                .unwrap_or_default();
+                                .unwrap_or_default()
+                                .with_default_global_enabled(global_enabled);
                             // Public installation owns preparation and cutover; document opening never selects a package.
                             if manager.is_application_management()
                                 && package.manifest.scope == api::InstanceScope::Workspace
@@ -1099,8 +1117,10 @@ impl Worker {
                 // The public drain includes both WASM and component-free native language requests.
                 let editor_requests = manager.take_editor_requests();
                 let mut trees = Vec::new();
+                let mut presentations = Vec::new();
                 for (id, instance) in &mut manager.live {
                     trees.extend(instance.tree_resources());
+                    presentations.extend(instance.workspace_presentations());
                     for (panel, scene) in &instance.views {
                         views.insert(format!("{id}/{panel}"), scene.clone());
                     }
@@ -1368,6 +1388,7 @@ impl Worker {
                     .is_some_and(|operation| development_install.as_ref() == Some(&operation.id))
                 {
                     let id = development_install.take().unwrap();
+                    crate::plugin_development::report::candidate(result.is_ok());
                     match &result {
                         Ok(()) => println!("Development plugin activated: {id}"),
                         Err(error) => eprintln!(
@@ -1389,6 +1410,7 @@ impl Worker {
                 published.views = views;
                 published.images = images;
                 published.trees = trees;
+                published.presentations = presentations;
                 published.processes = processes;
                 published.generation += 1;
             }
@@ -1416,4 +1438,31 @@ impl Worker {
 fn retire_publication(published: &mut Published, id: &str) {
     published.retire_instance(id);
     published.retire_commands(id);
+}
+
+/// Real actors must open without recursively locking Published while assembling shared resources.
+#[test]
+fn developer_tooling_real_actor_startup_reaches_ready_without_lock_reentry() {
+    let directory = tempfile::tempdir().unwrap();
+    let worker = Worker::start_background(
+        directory.path().join("runtime"),
+        Environment {
+            workspace: directory.path().display().to_string(),
+            ..Default::default()
+        },
+        true,
+    );
+    let until = Instant::now() + Duration::from_secs(10);
+    loop {
+        let ready = worker.state.try_lock().is_ok_and(|state| state.ready);
+        if ready {
+            break;
+        }
+        assert!(
+            Instant::now() < until,
+            "real actor startup must release the publication lock"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    worker.tx.send(Work::Shutdown(None)).unwrap();
 }

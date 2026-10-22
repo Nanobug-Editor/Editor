@@ -23,7 +23,12 @@ impl Work {
             return Some(self);
         };
         if origin.valid_for(manager) {
-            return operation.admit(manager, output);
+            let mut operation = operation.admit(manager, output)?;
+            if let Self::StartRun { origins, .. } | Self::DebugCall { origins, .. } = &mut operation
+            {
+                origins.push(origin);
+            }
+            return Some(operation);
         }
         let reason = t!("run.plugin_stale").to_string();
         let mut published = output.lock().unwrap();

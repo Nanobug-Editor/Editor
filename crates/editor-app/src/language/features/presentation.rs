@@ -1,7 +1,8 @@
 //! Local themed language content uses Base modal, focus-trap and button behavior.
 use super::*;
-use crate::ui::controls::Button;
 use crate::ui::theme::ActiveTheme as _;
+use editor_ui::Button;
+use editor_ui::scroll::ScrollableElement as _;
 use gpui_base::{StyledExt as _, TestSupportExt as _};
 use gpui_kit::{
     InteractiveElement as _, ParentElement as _, SharedString, StatefulInteractiveElement as _,
@@ -52,17 +53,12 @@ impl LanguageFeatures {
 
     /// References and fixes use the same named local Base rows. Signature cards are readonly
     /// plain text, so they neither allocate row focus handles nor imitate an executable action.
-    fn result_list(
-        &self,
-        height: f32,
-        cx: &mut Context<Self>,
-    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+    fn result_list(&self, height: f32, cx: &mut Context<Self>) -> impl IntoElement {
         let labels = self.proposal_labels();
         let mut list = div()
             .id("language-feature-results")
             .h(px(height))
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll);
+            .overflow_y_scrollbar_with(&self.scroll);
         for (index, label) in labels.iter().enumerate() {
             list = list.child(
                 Button::new(SharedString::from(format!("language-feature-row-{index}")))

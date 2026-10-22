@@ -1,6 +1,7 @@
 //! Actual installed TypeScript project choices use native QuickPick, source epochs and private CAS.
 use super::vue_test_support::{Fixture, setup_for_workspace, shutdown, wait};
 use super::*;
+use crate::extensions::protocol;
 use crate::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
@@ -120,7 +121,7 @@ fn shared_typescript_choice_is_native_scoped_and_retains_navigation_provenance(
     let a_preview = old_a.fix_origin(&a_service);
     let b_preview = old_b.fix_origin(&b_service);
     command(&fixture, &plugin, visual);
-    choose(&fixture, "right", visual);
+    choose_after_focus_moves(&fixture, "right", &right, visual);
     wait(
         &fixture.app,
         &fixture.actor,
@@ -478,6 +479,88 @@ fn choose(fixture: &Fixture, value: &str, visual: &mut VisualTestContext) {
         30,
         |app, cx| !modal(app, cx),
     );
+}
+
+/// Hold a real SDK refresh at the existing actor/UI boundary, move focus and start another
+/// document's native request, then dispatch the original refresh through the ordinary UI route.
+fn choose_after_focus_moves(
+    fixture: &Fixture,
+    value: &str,
+    other: &Path,
+    visual: &mut VisualTestContext,
+) {
+    picker(fixture, visual);
+    visual.simulate_input(value);
+    visual.simulate_keystrokes("enter");
+    // Pause the existing UI queue at its scheduling seam. Production polling still publishes
+    // every real request; this fixture executes preceding controls and retains only Refresh.
+    visual.update(|_, cx| {
+        fixture.app.update(cx, |app, _| {
+            app.editor_request_dispatch_scheduled = true;
+        })
+    });
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let refresh = loop {
+        // The preceding real Control request must run on the UI before the guest can emit
+        // Refresh. Drain that ordinary work while withholding only the refresh receipt.
+        visual.executor().advance_clock(Duration::from_millis(20));
+        visual.run_until_parked();
+        let mut requests = {
+            let mut state = fixture.actor.state.lock().unwrap();
+            std::mem::take(&mut state.editor_requests)
+        };
+        let found = visual.update(|window, cx| {
+            let found = fixture.app.update(cx, |app, cx| {
+                requests.append(&mut app.pending_editor_requests);
+                let found = requests
+                    .iter()
+                    .position(|(_, request)| {
+                        matches!(
+                            request.operation(),
+                            protocol::api::EditorOperation::RefreshLanguageContext { .. }
+                        )
+                    })
+                    .map(|index| requests.remove(index));
+                for (plugin, request) in requests {
+                    app.perform_editor_request(&plugin, request, window, cx);
+                }
+                found
+            });
+            window.draw(cx).clear(cx);
+            found
+        });
+        if let Some(refresh) = found {
+            break refresh;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "real context refresh did not reach the UI boundary"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    visual.update(|_, cx| {
+        fixture.app.update(cx, |app, _| {
+            app.editor_request_dispatch_scheduled = false;
+        })
+    });
+    visual.run_until_parked();
+    open(fixture, other, visual);
+    visual.update(|window, cx| {
+        fixture.app.update(cx, |app, cx| {
+            assert!(
+                app.native_language_feature_available(protocol::direct::Feature::References, cx)
+            );
+            app.request_language_feature(protocol::direct::Feature::References, window, cx);
+            let sequence = app.language_features_sequence();
+            app.pending_editor_requests.push(refresh);
+            app.dispatch_editor_requests(window, cx);
+            assert_eq!(
+                app.language_features_sequence(),
+                sequence,
+                "a late refresh for A must retain B's current native request"
+            );
+        });
+    });
 }
 fn picker(fixture: &Fixture, visual: &mut VisualTestContext) {
     wait(

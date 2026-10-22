@@ -18,7 +18,7 @@ pub(crate) struct DynamicLanguages {
 
 /// Reuse native host controls for independent recognition and grammar preferences.
 pub(crate) fn render_settings(view: &Entity<EditorApp>, cx: &App) -> AnyElement {
-    use crate::ui::controls::SegmentedTabs;
+    use editor_ui::SegmentedTabs;
     use plugin_runtime::plugin_protocol::settings::Scope;
     let scope = view.read(cx).dynamic_languages.scope;
     let trusted = view.read(cx).session_state.workspace_trusted;

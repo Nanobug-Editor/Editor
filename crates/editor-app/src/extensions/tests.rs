@@ -1,6 +1,6 @@
 //! Exercise dynamic native panels, declarative input commits and shortcut isolation.
 use super::*;
-use crate::ui::controls::overlay::WindowExt as _;
+use editor_ui::overlay::WindowExt as _;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
 /// Installed theme definitions use the generic plugin environment API.
@@ -285,6 +285,22 @@ fn second_local_import_shows_visible_consent(cx: &mut TestAppContext) {
         "README should remain in the detail pane behind the dialog"
     );
     let cancel = dialog_cx.debug_bounds("plugin-install-cancel").unwrap();
+    let global = dialog_cx
+        .debug_bounds("plugin-install-global-option")
+        .unwrap();
+    assert!(
+        global.right() <= cancel.left(),
+        "scope choice stays left of the actions"
+    );
+    assert!(
+        global.bottom() <= viewport_height,
+        "scope choice stays visible"
+    );
+    // Cancelling a checked prompt must not make a later installation opt in implicitly.
+    dialog_cx.simulate_click(
+        point(global.left() + px(7.), global.center().y),
+        Default::default(),
+    );
     dialog_cx.simulate_click(cancel.center(), Default::default());
     dialog_cx.run_until_parked();
     assert!(
@@ -326,7 +342,7 @@ fn second_local_import_shows_visible_consent(cx: &mut TestAppContext) {
                 .lock()
                 .unwrap()
                 .try_iter()
-                .any(|work| matches!(work, Work::Install(package) if package.digest == "second"))
+                .any(|work| matches!(work, Work::Install(package, false) if package.digest == "second"))
         }),
         "confirming the reopened dialog must queue installation"
     );
@@ -600,7 +616,7 @@ fn terminal_theme_icons_render_in_opposite_colors() {
     }
 }
 
-/// A manifest dynamically adds a bottom dock; generic input commits Enter and blur once.
+/// An incompatible install retains preferences and update/uninstall actions without offering activation.
 #[gpui::test]
 fn incompatible_plugin_details_keep_preferences_and_update_uninstall_actions(
     cx: &mut TestAppContext,
@@ -678,14 +694,17 @@ fn incompatible_plugin_details_keep_preferences_and_update_uninstall_actions(
             .is_some()
     );
     assert!(dialog_cx.debug_bounds("plugin-restart-action").is_none());
-    let global = dialog_cx
-        .debug_bounds("plugin-global-scope-region")
-        .unwrap();
-    let project_scope = dialog_cx
-        .debug_bounds("plugin-project-scope-region")
-        .unwrap();
-    dialog_cx.simulate_click(global.center(), Default::default());
-    dialog_cx.simulate_click(project_scope.center(), Default::default());
+    // The current manager hides inapplicable actions instead of rendering disabled scope controls.
+    assert!(
+        dialog_cx
+            .debug_bounds("plugin-global-scope-region")
+            .is_none()
+    );
+    assert!(
+        dialog_cx
+            .debug_bounds("plugin-project-scope-region")
+            .is_none()
+    );
     dialog_cx.run_until_parked();
     dialog_cx.update(|_, cx| {
         let owner = app.read(cx).extensions.read(cx);

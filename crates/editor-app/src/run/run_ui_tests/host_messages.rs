@@ -10,6 +10,12 @@ fn host_messages_run_admission_retains_host_refusals(cx: &mut TestAppContext) {
     let workspace = root.path().join("project");
     std::fs::create_dir_all(&workspace).unwrap();
     let (app, cx) = open_editor(cx, &workspace);
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(cx.debug_bounds("host-messages-panel").is_none());
+    // Receipts do not open the panel; use its production button before inspecting visible rows.
+    let toggle = cx.debug_bounds("host-messages-toggle").unwrap();
+    cx.simulate_click(toggle.center(), Default::default());
+    cx.run_until_parked();
     let mut retained = 0;
     for restricted in [false, true] {
         for action in ["run", "build", "debug"] {

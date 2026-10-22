@@ -2,7 +2,7 @@
 
 日期：2026-10-15。
 
-状态：已启动实施，工具层探针通过；完整 P0、正式插件、公开宿主接入与原生 UI 尚未验收。依据为[多后端方案](../specs/vue-multi-backend.md)；正式切片见[工单拆分草案](../tickets/vue-typescript/README.md)。
+状态：历史工具层探针通过；本记录不代表正式插件或宿主验收。依据为[多后端方案](../specs/vue-multi-backend.md)；[正式工单](../tickets/vue-typescript/README.md)已发布，后续结果见[实施记录](vue-typescript-implementation-2026-10-15.md)。
 
 ## 范围与环境
 
@@ -61,7 +61,7 @@ node --check probe.cjs
 
 ## 本机证据
 
-实验输入、锁文件、源码、tsserver 日志与[原始结果](../../../target/vue-typescript-p0/observations.json)位于忽略目录，不属于发行产物或 SDK。探针为可丢弃验证代码，不作为最终跨插件实现直接交付。
+实验输入、锁文件、源码、tsserver 日志与原始结果保留于最初工作区 `C:/Projects/RustProjects/Editor/target/vue-typescript-p0/` 的忽略目录。当前隔离实施 worktree 不包含该目录，因此不提供指向不存在文件的相对链接。这些输入不属于发行产物或 SDK；探针为可丢弃验证代码，不作为最终跨插件实现直接交付。
 
 | 文件 | SHA256 |
 | --- | --- |

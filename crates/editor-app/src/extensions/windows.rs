@@ -82,9 +82,7 @@ impl Render for WorkWindow {
                             .window_control_area(gpui_kit::WindowControlArea::Drag)
                             .child(self.title.clone()),
                     )
-                    .child(crate::ui::controls::window::native_window_controls(
-                        window, cx,
-                    )),
+                    .child(editor_ui::window::native_window_controls(window, cx)),
             )
             .child(div().flex_1().min_h_0().child(self.panel.clone()))
             .child(
@@ -190,8 +188,7 @@ impl EditorApp {
                 let close_panel = panel.downgrade();
                 window.on_window_should_close(cx, move |window, cx| {
                     let _ = close_panel.update(cx, |panel, cx| panel.retire_native_inputs(cx));
-                    if let Some(router) =
-                        crate::ui::controls::aligned_pointer::for_window(window, cx)
+                    if let Some(router) = editor_ui::aligned_pointer::for_window(window, cx)
                         && !router.flush(window, cx)
                     {
                         let owner = owner.clone();
@@ -318,7 +315,7 @@ pub(super) fn remove_work_window_after_release(handle: WindowHandle<Root>, cx: &
     let handle: gpui_kit::AnyWindowHandle = handle.into();
     cx.defer(move |cx| {
         let _ = handle.update(cx, |_, window, cx| {
-            if let Some(router) = crate::ui::controls::aligned_pointer::for_window(window, cx) {
+            if let Some(router) = editor_ui::aligned_pointer::for_window(window, cx) {
                 router.after_pending_release(window, cx, |window, _| window.remove_window());
             } else {
                 window.remove_window();

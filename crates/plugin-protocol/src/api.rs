@@ -3,7 +3,11 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+mod comparisons;
+mod negotiation;
+pub use negotiation::{NegotiationFailure, NegotiationKind};
 mod documents;
+pub use comparisons::{ComparisonCommand, ComparisonFolding, ComparisonNavigation};
 mod edits;
 #[cfg(feature = "guest")]
 pub use edits::apply_edits;
@@ -109,30 +113,8 @@ impl Requirements {
         base: Version,
         available: &BTreeMap<String, Version>,
     ) -> Result<Negotiated, String> {
-        if !self.base.matches(&base) {
-            return Err(format!(
-                "Unsupported base API: requires {}, host {base}",
-                self.base
-            ));
-        }
-        if self.required.len() + self.optional.len() > 128 {
-            return Err("Too many capability requirements".into());
-        }
-        let mut capabilities = BTreeMap::new();
-        for (id, range) in self.required.iter().chain(&self.optional) {
-            if id.is_empty() || id.len() > 128 {
-                return Err("Invalid capability identity".into());
-            }
-            if self.required.contains_key(id) && self.optional.contains_key(id) {
-                return Err(format!("Capability is both required and optional: {id}"));
-            }
-            if let Some(version) = available.get(id).filter(|version| range.matches(version)) {
-                capabilities.insert(id.clone(), version.clone());
-            } else if self.required.contains_key(id) {
-                return Err(format!("Required capability unavailable: {id} {range}"));
-            }
-        }
-        Ok(Negotiated { base, capabilities })
+        self.negotiate_detailed(base, available)
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -243,6 +225,10 @@ pub enum Operation {
     Tree {
         operation: crate::tree::Operation,
     },
+    /// Workspace-scoped native filename and title presentation; no file or process authority.
+    Presentation {
+        operation: crate::presentation::Operation,
+    },
     /// Typed calls preserve caller ownership through the shared request completion gate.
     Commands {
         operation: crate::commands::Operation,
@@ -319,6 +305,10 @@ pub struct Request {
 /// Result variants carry structured values, never JSON hidden inside a string result.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Value {
+    /// process 1.9: descriptive paths for a declared owned native service; no file capability.
+    NativeContext(crate::process::NativeContext),
+    /// Readonly distribution metadata; the accompanying paths grant no resource capability.
+    ToolMetadata(crate::process::ToolMetadata),
     /// Bounded registered contexts; descriptive roots and keys confer no authority by themselves.
     LanguageContexts(Vec<crate::language_context::Reference>),
     /// plugin.services 1.2: bounded explicitly composable, caller-owned service references.
@@ -355,6 +345,11 @@ impl std::fmt::Debug for Value {
     /// Credential bytes must not become an automatic debug field on a correlated transport response.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::NativeContext(_) => f.write_str("NativeContext(<owned paths>)"),
+            Self::ToolMetadata(value) => f
+                .debug_struct("ToolMetadata")
+                .field("file_count", &value.files.len())
+                .finish(),
             Self::LanguageContexts(value) => {
                 f.debug_tuple("LanguageContexts").field(value).finish()
             }
@@ -468,6 +463,8 @@ pub enum Notification {
         snapshot: Option<crate::Snapshot>,
     },
     Service(crate::service::Notification),
+    /// dependencies 1.4: readonly selection from the admitted method's native declarations.
+    ServicePreparation(crate::service::Preparation),
     /// An authorized preview receives the current unsaved text with the open-document identity/version.
     Preview {
         document: Option<DocumentVersion>,
@@ -712,6 +709,12 @@ pub enum EditorOperation {
         right: DocumentVersion,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         third: Option<DocumentVersion>,
+        /// editor.diff 1.3: frozen adjacent-item actions in this instance's declared typed commands.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        navigation: Option<ComparisonNavigation>,
+        /// editor.diff 1.4: synchronized unchanged-region controls and owned theme artwork.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        folding: Option<ComparisonFolding>,
         #[serde(default)]
         preview: bool,
     },
@@ -939,6 +942,9 @@ pub struct ViewPatch {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Output {
+    /// Only the dependencies 1.4 readonly callback may return its selected declared service IDs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_preparation: Option<Vec<String>>,
     /// Accepted only by the negotiated experimental pure language callback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language_direct: Option<crate::direct::Proposal>,

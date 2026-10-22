@@ -8,7 +8,7 @@ use gpui_kit::{
 };
 use plugin_runtime::plugin_protocol::{
     self as protocol,
-    ui::{Canvas, CanvasEvent, GridMetrics, PointerPhase},
+    ui::{Canvas, CanvasEvent, GridMetrics, PointerPhase, ScrollChange},
 };
 use std::ops::Range;
 mod scroll;
@@ -31,14 +31,15 @@ pub(crate) struct CanvasView {
     selection: Range<usize>,
     drag: Option<MouseButton>,
     scroll: scroll::CanvasScroll,
-    /// Optional native visibility cap; Base's theme supplies motion for ordinary plugin canvases.
-    pub(crate) scrollbar_idle: Option<std::time::Duration>,
-    scrollbar_visible: bool,
-    scrollbar_hold: Option<gpui_kit::Task<()>>,
     sink: Rc<dyn Fn(CanvasEvent, u64, Option<action_gestures::ActionGesture>, &mut App)>,
     /// Native acceptance observes the original callback before its ordinary input gates.
     #[cfg(test)]
     key_observer: Option<Rc<dyn Fn(serde_json::Value)>>,
+    /// Test-only evidence of text actually submitted by the last native paint, including disabled canvases.
+    #[cfg(test)]
+    painted_text: Vec<String>,
+    #[cfg(test)]
+    paint_revision: u64,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -66,7 +67,14 @@ impl PluginView {
             "gesture_current": self.action_gesture_current(id, canvas.action_gesture),
             "source_gesture": canvas.action_gesture.is_some_and(action_gestures::ActionGesture::is_source),
             "bounds": format!("{:?}", canvas.bounds),
+            "origin_x": canvas.bounds.origin.x / px(1.),
+            "origin_y": canvas.bounds.origin.y / px(1.),
             "scroll_offset": canvas.drawing.scroll.as_ref().map(|scroll| scroll.offset),
+            "paint_scroll_offset": canvas.drawing.scroll.as_ref().map(|scroll| scroll.offset - canvas.scroll_translation()),
+            "paint_revision": canvas.paint_revision,
+            "painted_text": canvas.painted_text,
+            "width": canvas.bounds.size.width / px(1.),
+            "height": canvas.bounds.size.height / px(1.),
         }))
     }
 
@@ -96,9 +104,29 @@ impl PluginView {
 }
 
 impl CanvasView {
+    /// Content replacement retires an unacknowledged scrollbar drag; drawing repaints retain it.
+    pub(super) fn update_drawing(&mut self, drawing: Canvas) {
+        if self.drawing.scroll_epoch != drawing.scroll_epoch {
+            self.scroll.reset();
+        }
+        self.drawing = drawing;
+    }
+
+    /// Opted-in ranges carry content authority independently of the drawing revision.
+    fn scroll_event(&self, change: ScrollChange) -> CanvasEvent {
+        if let Some(epoch) = self.drawing.scroll_epoch {
+            CanvasEvent::ScrollInput { epoch, change }
+        } else {
+            match change {
+                ScrollChange::To { offset } => CanvasEvent::Scroll { offset },
+                ScrollChange::Delta { .. } => unreachable!("legacy wheels retain their position"),
+            }
+        }
+    }
     /// Canvas artwork uses the same public content transform as either native image kind.
     fn project(&self, rect: protocol::Rect, bounds: Bounds<Pixels>) -> protocol::Rect {
-        self.viewport
+        let mut projected = self
+            .viewport
             .as_ref()
             .and_then(|viewport| {
                 viewport.content.map(|content| {
@@ -112,7 +140,18 @@ impl CanvasView {
                     )
                 })
             })
-            .unwrap_or(rect)
+            .unwrap_or(rect);
+        projected.y += self.scroll_translation();
+        projected
+    }
+
+    /// Retained drawing follows native motion without awaiting a guest scene acknowledgement.
+    /// Legacy canvases keep their original coordinates and visual viewport transform semantics.
+    fn scroll_translation(&self) -> f32 {
+        self.drawing
+            .scroll_buffer
+            .as_ref()
+            .map_or(0., |buffer| self.scroll.translation(buffer))
     }
     /// Sibling native controls return keyboard input to the addressed canvas after their action.
     pub(crate) fn focus_handle(&self) -> FocusHandle {
@@ -160,6 +199,10 @@ impl CanvasView {
             action_gesture: None,
             foreground: 0,
             images: None,
+            #[cfg(test)]
+            painted_text: Vec::new(),
+            #[cfg(test)]
+            paint_revision: 0,
             focus,
             bounds: Bounds::default(),
             measured: None,
@@ -167,9 +210,6 @@ impl CanvasView {
             selection: 0..0,
             drag: None,
             scroll: Default::default(),
-            scrollbar_idle: None,
-            scrollbar_visible: false,
-            scrollbar_hold: None,
             sink: Rc::new(sink),
             #[cfg(test)]
             key_observer: None,
@@ -207,33 +247,6 @@ impl CanvasView {
     pub(crate) fn invalidate_measurement(&mut self) {
         self.measured = None;
     }
-    /// Base exposes motion globally; this bounded wrapper permits a shorter per-canvas idle hold.
-    /// Its native scrollbar still owns drag, hover, hit testing and appearance.
-    pub(crate) fn hold_scrollbar(&mut self, cx: &mut Context<Self>) {
-        let Some(idle) = self.scrollbar_idle else {
-            return;
-        };
-        self.scrollbar_visible = true;
-        self.scrollbar_hold = Some(cx.spawn(async move |view, cx| {
-            loop {
-                cx.background_executor().timer(idle).await;
-                let keep = view
-                    .update(cx, |view, cx| {
-                        if view.scroll.dragging() {
-                            return true;
-                        }
-                        view.scrollbar_visible = false;
-                        cx.notify();
-                        false
-                    })
-                    .unwrap_or(false);
-                if !keep {
-                    break;
-                }
-            }
-        }));
-        cx.notify();
-    }
     fn pointer(
         &self,
         phase: PointerPhase,
@@ -248,7 +261,8 @@ impl CanvasView {
             CanvasEvent::Pointer {
                 phase,
                 x: point.x / px(1.),
-                y: point.y / px(1.),
+                // Hit testing refers to the guest drawing, including unacknowledged local motion.
+                y: point.y / px(1.) - self.scroll_translation(),
                 button,
                 clicks,
                 shift,
@@ -261,8 +275,7 @@ impl CanvasView {
         self.bounds = bounds;
         self.scroll.update(bounds, self.drawing.scroll.clone());
         if let Some(offset) = self.scroll.take_offset() {
-            self.hold_scrollbar(cx);
-            self.emit(CanvasEvent::Scroll { offset }, cx);
+            self.emit(self.scroll_event(ScrollChange::To { offset }), cx);
         }
         let grid = self.drawing.grid.then(|| {
             let face = font(
@@ -293,6 +306,30 @@ impl CanvasView {
         }
     }
     fn paint(&mut self, bounds: Bounds<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        #[cfg(test)]
+        {
+            self.paint_revision = self.revision;
+            self.painted_text = self
+                .drawing
+                .paint
+                .iter()
+                .filter_map(|operation| {
+                    if let protocol::Paint::Text {
+                        x, y, text, size, ..
+                    } = operation
+                        && !text.is_empty()
+                        && *x >= 0.
+                        && *x < bounds.size.width / px(1.)
+                        && *y + *size > 0.
+                        && *y < bounds.size.height / px(1.)
+                    {
+                        Some(text.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+        }
         self.capture_pointer(window, cx);
         if self.enabled && self.drawing.focusable && self.focus.is_focused(window) {
             window.handle_input(
@@ -597,16 +634,23 @@ impl Render for CanvasView {
                 };
                 let delta = event.delta.pixel_delta(px(line_height));
                 let at = event.position - this.bounds.origin;
-                this.emit(
+                let event = if this.drawing.scroll_epoch.is_some()
+                    && delta.x == px(0.)
+                    && !event.modifiers.shift
+                {
+                    this.scroll_event(ScrollChange::Delta {
+                        delta_y: delta.y / px(1.),
+                    })
+                } else {
                     CanvasEvent::Wheel {
                         x: at.x / px(1.),
                         y: at.y / px(1.),
                         delta_x: delta.x / px(1.),
                         delta_y: delta.y / px(1.),
                         shift: event.modifiers.shift,
-                    },
-                    cx,
-                );
+                    }
+                };
+                this.emit(event, cx);
                 cx.stop_propagation();
             }))
             .child(
@@ -625,16 +669,40 @@ impl Render for CanvasView {
                 .size_full(),
             );
         // The overlay must paint after the guest canvas, which may fill its entire bounds.
-        if self.enabled
-            && self.drawing.scroll.is_some()
-            && (self.scrollbar_idle.is_none() || self.scrollbar_visible)
-        {
-            element = element.child(crate::ui::controls::vertical_viewport_scrollbar(
-                &self.scroll,
-                cx,
-            ));
+        if self.enabled && self.drawing.scroll.is_some() {
+            element = element.child(editor_ui::vertical_viewport_scrollbar(&self.scroll, cx));
         }
-        element
+        if self.enabled && self.drawing.scroll.is_some() {
+            let line_height = match &self.measured {
+                Some(CanvasEvent::Resize {
+                    grid: Some(grid), ..
+                }) => grid.cell_height,
+                _ => self.font.size_px.unwrap_or(14.),
+            };
+            // Content identity retires kinetic motion on replacement. Legacy scenes remain
+            // revision-bound; opted-in drawing repaints retain the same shared motion state.
+            let identity = self.drawing.scroll_epoch.unwrap_or(self.revision);
+            let motion_id = action_gestures::native_id(
+                gpui_kit::SharedString::from(format!(
+                    "canvas-wheel:{:?}:{identity}",
+                    cx.entity_id()
+                )),
+                gesture,
+            );
+            editor_ui::scroll::SmoothScroll::new(
+                motion_id,
+                &self.scroll,
+                editor_ui::scroll::ScrollAxis::Vertical,
+                element,
+            )
+            .external_scroll(px(line_height))
+            .filter_wheel(|event| {
+                !event.modifiers.shift && event.delta.pixel_delta(px(1.)).x == px(0.)
+            })
+            .into_any_element()
+        } else {
+            element.into_any_element()
+        }
     }
 }
 

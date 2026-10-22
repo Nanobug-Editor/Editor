@@ -9,7 +9,7 @@ use std::cell::RefCell;
 fn init(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
 }

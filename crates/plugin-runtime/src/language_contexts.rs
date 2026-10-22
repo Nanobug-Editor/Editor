@@ -40,9 +40,15 @@ pub struct LanguageContexts(Arc<Mutex<State>>);
 #[derive(Default)]
 struct State {
     references: BTreeMap<String, RegisteredContext>,
-    selected: BTreeMap<(String, String, String, String), String>,
+    selected: BTreeMap<(String, String, String, String), SourceSelection>,
     /// Native navigation lends one current source context to the next exact target preparation.
     navigation: BTreeMap<(String, String, String), (String, Instant)>,
+}
+
+/// A source choice seals transient waits and binding handoffs without owning its shared process.
+struct SourceSelection {
+    token: String,
+    alive: Arc<AtomicBool>,
 }
 impl std::fmt::Debug for LanguageContexts {
     fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -245,8 +251,34 @@ impl LanguageContexts {
                 "Selected source quota exceeded",
             ));
         }
-        state.selected.insert(key, token.into());
+        state.select_source(key, token.into());
         Ok(context)
+    }
+
+    /// Capture the exact source choice after admission. Replacing it revokes this bit permanently,
+    /// including A→B→A; independent documents and consumers keep their original process authority.
+    pub(crate) fn selection_guard(
+        &self,
+        context: &RegisteredContext,
+        path: &str,
+    ) -> Result<Arc<AtomicBool>, Failure> {
+        let state = self.0.lock().unwrap();
+        let key = (
+            context.owner.clone(),
+            context.scope.clone(),
+            context.reference.descriptor.provider.clone(),
+            path.into(),
+        );
+        state
+            .selected
+            .get(&key)
+            .filter(|selection| {
+                selection.token == context.reference.token
+                    && selection.alive.load(Ordering::Acquire)
+                    && context.is_live()
+            })
+            .map(|selection| selection.alive.clone())
+            .ok_or_else(|| Failure::new(ErrorCode::InvalidHandle, "Source context choice changed"))
     }
 
     /// A runtime-issued refresh retains its exact registration instead of trusting guest identity strings.
@@ -254,7 +286,8 @@ impl LanguageContexts {
         &self,
         context: &RegisteredContext,
         path: &str,
-    ) -> Result<(), Failure> {
+        expected: Option<&Arc<AtomicBool>>,
+    ) -> Result<Arc<AtomicBool>, Failure> {
         let context = self.resolve(&context.reference.token, &context.owner, &context.scope)?;
         validate_source(&context.workspace, path)?;
         let key = (
@@ -266,6 +299,20 @@ impl LanguageContexts {
         let hint = (context.owner.clone(), context.scope.clone(), path.into());
         let mut state = self.0.lock().unwrap();
         state.sweep();
+        let current = state.selected.get(&key);
+        let unchanged = match (expected, current) {
+            (None, None) => true,
+            (Some(expected), Some(current)) => {
+                Arc::ptr_eq(expected, &current.alive) && current.alive.load(Ordering::Acquire)
+            }
+            _ => false,
+        };
+        if !unchanged {
+            return Err(Failure::new(
+                ErrorCode::InvalidHandle,
+                "Source choice changed before refresh",
+            ));
+        }
         // Selection and its one-use preparation hint publish together after the native source check.
         // A prior durable preference must not override this explicit choice during alias refresh.
         if (!state.selected.contains_key(&key)
@@ -283,7 +330,7 @@ impl LanguageContexts {
                 "Context refresh quota exceeded",
             ));
         }
-        state.selected.insert(key, context.reference.token.clone());
+        state.select_source(key.clone(), context.reference.token.clone());
         state.navigation.insert(
             hint,
             (
@@ -291,7 +338,25 @@ impl LanguageContexts {
                 Instant::now() + Duration::from_secs(30),
             ),
         );
-        Ok(())
+        Ok(state.selected[&key].alive.clone())
+    }
+
+    /// Refresh captures the prior choice, including absence; commit checks that epoch under its lock.
+    pub(crate) fn refresh_guard(
+        &self,
+        context: &RegisteredContext,
+        path: &str,
+    ) -> Option<Arc<AtomicBool>> {
+        let state = self.0.lock().unwrap();
+        state
+            .selected
+            .get(&(
+                context.owner.clone(),
+                context.scope.clone(),
+                context.reference.descriptor.provider.clone(),
+                path.into(),
+            ))
+            .map(|choice| choice.alive.clone())
     }
 
     /// Initial ordinary native plans may acquire provenance only when one registered identity matches.
@@ -341,7 +406,22 @@ impl LanguageContexts {
         Ok(())
     }
 
-    /// The next native prepare consumes the hint; it never writes a durable user preference.
+    /// Cache admission may inspect a live navigation hint without spending its one-use handoff.
+    pub(crate) fn navigation_context(
+        &self,
+        owner: &str,
+        scope: &str,
+        path: &str,
+    ) -> Option<RegisteredContext> {
+        let mut state = self.0.lock().unwrap();
+        state.sweep();
+        let (token, _) = state
+            .navigation
+            .get(&(owner.into(), scope.into(), path.into()))?;
+        state.references.get(token).cloned()
+    }
+
+    /// Consume the hint only when an actual new delegated preparation begins.
     pub(crate) fn take_navigation_hint(
         &self,
         owner: &str,
@@ -361,7 +441,13 @@ impl LanguageContexts {
         let mut state = self.0.lock().unwrap();
         state
             .selected
-            .retain(|(_, candidate, _, source), _| candidate != scope || source != path);
+            .retain(|(_, candidate, _, source), selection| {
+                let keep = candidate != scope || source != path;
+                if !keep {
+                    selection.alive.store(false, Ordering::Release);
+                }
+                keep
+            });
         state
             .navigation
             .retain(|(_, candidate, source), _| candidate != scope || source != path);
@@ -380,7 +466,7 @@ impl LanguageContexts {
             state
                 .selected
                 .get(&(owner.into(), scope.into(), provider.into(), path.into()))?;
-        state.references.get(token).cloned()
+        state.references.get(&token.token).cloned()
     }
 
     /// Settings/cutover revoke registered generations before callbacks can issue another native request.
@@ -397,10 +483,35 @@ impl LanguageContexts {
     }
 }
 impl State {
+    /// Repeating one choice is idempotent; any replacement creates a new monotonic lifetime bit.
+    fn select_source(&mut self, key: (String, String, String, String), token: String) {
+        if self
+            .selected
+            .get(&key)
+            .is_some_and(|selected| selected.token == token)
+        {
+            return;
+        }
+        if let Some(previous) = self.selected.insert(
+            key,
+            SourceSelection {
+                token,
+                alive: Arc::new(AtomicBool::new(true)),
+            },
+        ) {
+            previous.alive.store(false, Ordering::Release);
+        }
+    }
+
     fn sweep(&mut self) {
         self.references.retain(|_, context| context.is_live());
-        self.selected
-            .retain(|_, token| self.references.contains_key(token));
+        self.selected.retain(|_, selected| {
+            let live = self.references.contains_key(&selected.token);
+            if !live {
+                selected.alive.store(false, Ordering::Release);
+            }
+            live
+        });
         self.navigation.retain(|_, (token, deadline)| {
             *deadline > Instant::now() && self.references.contains_key(token)
         });
@@ -431,4 +542,117 @@ fn validate_source(workspace: &Path, path: &str) -> Result<(), Failure> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    //! Source selection affects transient handoffs, independently from registered process metadata.
+    use super::*;
+
+    /// A→B→A cannot revive an old wait; selecting or closing another document remains independent.
+    #[test]
+    fn source_choice_revocation_is_monotonic_and_document_scoped() {
+        let workspace = tempfile::tempdir().unwrap();
+        for name in ["left", "right"] {
+            std::fs::create_dir(workspace.path().join(name)).unwrap();
+        }
+        let registry = LanguageContexts::default();
+        let authority = EditorAuthority::new(Arc::new(AtomicBool::new(true)), None);
+        let references = registry
+            .register(
+                "owner",
+                "scope",
+                workspace.path(),
+                ["left", "right"]
+                    .map(|key| Descriptor {
+                        provider: "engine".into(),
+                        key: key.into(),
+                        generation: 1,
+                        project_root: key.into(),
+                        data: serde_json::Value::Null,
+                    })
+                    .to_vec(),
+                authority,
+            )
+            .unwrap();
+        let left_a = registry
+            .select(&references[0].token, "owner", "scope", "a.ts")
+            .unwrap();
+        let old_a = registry.selection_guard(&left_a, "a.ts").unwrap();
+        let left_b = registry
+            .select(&references[0].token, "owner", "scope", "b.ts")
+            .unwrap();
+        let old_b = registry.selection_guard(&left_b, "b.ts").unwrap();
+        registry
+            .select(&references[0].token, "owner", "scope", "a.ts")
+            .unwrap();
+        assert!(old_a.load(Ordering::Acquire), "same choice is idempotent");
+
+        registry
+            .select(&references[1].token, "owner", "scope", "a.ts")
+            .unwrap();
+        assert!(!old_a.load(Ordering::Acquire));
+        assert!(
+            old_b.load(Ordering::Acquire),
+            "other source waits stay live"
+        );
+        assert!(
+            left_a.is_live(),
+            "selection never retires shared configuration metadata"
+        );
+        let returned_a = registry
+            .select(&references[0].token, "owner", "scope", "a.ts")
+            .unwrap();
+        let new_a = registry.selection_guard(&returned_a, "a.ts").unwrap();
+        assert!(new_a.load(Ordering::Acquire));
+        assert!(
+            !old_a.load(Ordering::Acquire),
+            "returning to A cannot revive its old wait"
+        );
+        assert_eq!(
+            registry
+                .select_registered(&returned_a, "a.ts", Some(&old_a))
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidHandle,
+            "a queued refresh cannot pass an A→B→A choice change"
+        );
+        assert!(
+            new_a.load(Ordering::Acquire),
+            "rejected refresh preserves the current choice"
+        );
+
+        registry.navigation_hint(&returned_a, "target.ts").unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                registry
+                    .navigation_context("owner", "scope", "target.ts")
+                    .unwrap()
+                    .reference
+                    .token,
+                returned_a.reference.token,
+                "cache checks must not consume a navigation handoff"
+            );
+        }
+        assert_eq!(
+            registry.take_navigation_hint("owner", "scope", "target.ts"),
+            Some(returned_a.reference.token.clone())
+        );
+        assert!(
+            registry
+                .navigation_context("owner", "scope", "target.ts")
+                .is_none()
+        );
+        registry.navigation_hint(&left_b, "b.ts").unwrap();
+        registry.source_closed("scope", "b.ts");
+        assert!(
+            registry
+                .navigation_context("owner", "scope", "b.ts")
+                .is_none()
+        );
+        assert!(!old_b.load(Ordering::Acquire));
+        assert!(new_a.load(Ordering::Acquire));
+        registry.revoke_owner("owner");
+        assert!(!new_a.load(Ordering::Acquire));
+    }
 }

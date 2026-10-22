@@ -83,6 +83,31 @@
 //! readonly, including when one source is a local document; it never changes that document's
 //! editing behavior outside this tab. Omitting `third` retains the 1.1 two-pane behavior and
 //! serialization. A caller supplying `third` must negotiate `editor.diff >=1.2,<2`.
+//!
+//! # Adjacent comparisons (`editor.diff` 1.3)
+//!
+//! `OpenDocumentComparison.navigation` binds previous/next native arrows to the publishing
+//! instance's declared typed commands (`plugin.commands`). Parameters are frozen in the tab,
+//! validated against the command schema, and bounded to 64 KiB per direction. The provider owns
+//! ordering and immutable source context. Missing neighbors disable their arrows without wrapping.
+//! Another selection, a pinned tab or hidden panels cannot substitute another sequence; owner
+//! retirement and source closure revoke navigation along with the comparison. No command is
+//! invoked during publication. Callers supplying this metadata negotiate `editor.diff >=1.3,<2`.
+//!
+//! # Unchanged regions (`editor.diff` 1.4)
+//!
+//! `OpenDocumentComparison.folding` opts into native collapse/expand controls and supplies owned
+//! light/dark SVG artwork using `ui.icons` and `assets.read`. The runtime admits at most four
+//! distinct 64 KiB geometry-only SVGs with the same canonical package boundary as other icons.
+//! The descriptor's `context_lines` is 1..=20; every exact common run keeps that many original
+//! lines at both edges. At least two hidden lines are replaced by one disclosure row. New views
+//! start expanded. Toolbar actions affect every region, and a disclosure expands its region in
+//! every peer. Only rows identical in all two/three sources may be hidden; CRLF/LF changes remain
+//! visible. Choices survive tab activation; an edited row plan retains choices only if its common
+//! intervals are unchanged, otherwise it follows the last all-regions action. Navigation and real
+//! caret movement reveal hidden targets. Native overlays temporarily show the full native source.
+//! Source bytes, line numbers, selection, IME and Undo are never replaced by folding. Omitting the
+//! field retains the older contract, and no provider identity receives a special host code path.
 use super::{DocumentVersion, ErrorCode, Failure, ResourceHandle, TextRange};
 use serde::{Deserialize, Serialize};
 
@@ -378,6 +403,8 @@ mod tests {
             left: version("left"),
             right: version("result"),
             third: None,
+            navigation: None,
+            folding: None,
             preview: true,
         };
         let encoded = serde_json::to_value(&operation).unwrap();

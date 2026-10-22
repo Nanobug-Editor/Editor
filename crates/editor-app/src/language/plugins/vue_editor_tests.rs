@@ -74,7 +74,7 @@ fn paint_until_ready(app: &Entity<EditorApp>, visual: &mut VisualTestContext) {
 fn vue_editor_native_highlights_themes_keyboard_and_ime(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::controls::init(cx);
+        editor_ui::init(cx);
         crate::bind_editor_shell_keys(cx);
         typography::init(cx);
         apply_theme(builtin_theme(false), cx);

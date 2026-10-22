@@ -6,8 +6,10 @@ use plugin_runtime::Manager;
 use serde_json::json;
 mod branch_retention;
 mod close_error;
+mod comparison_chrome;
 mod comparisons;
 mod history_preview;
+mod incremental_review;
 mod merge;
 mod shutdown;
 
@@ -28,6 +30,16 @@ fn git(root: &Path, args: &[&str]) -> bool {
 
 /// Drive the existing worker publication and native request path until the owned Git query ends.
 fn flush(manager: &mut Manager, app: &Entity<EditorApp>, visual: &mut VisualTestContext) {
+    flush_checked(manager, app, visual, |_, _| {});
+}
+
+/// Observe every published/drawn intermediate frame, not just the final settled workbench.
+fn flush_checked(
+    manager: &mut Manager,
+    app: &Entity<EditorApp>,
+    visual: &mut VisualTestContext,
+    mut inspect: impl FnMut(&Manager, &mut VisualTestContext),
+) {
     let mut images = images::VectorRenderer::default();
     let deadline = Instant::now() + Duration::from_secs(30);
     let mut settled_frames = 0;
@@ -63,6 +75,7 @@ fn flush(manager: &mut Manager, app: &Entity<EditorApp>, visual: &mut VisualTest
                     .unwrap();
             }
         });
+        inspect(manager, visual);
         // Match the production actor's two document ingress streams. UI publication alone does
         // not deliver native changes back to the guest's revision-bound merge proposals.
         let (changes, events) = visual.update(|_, cx| {

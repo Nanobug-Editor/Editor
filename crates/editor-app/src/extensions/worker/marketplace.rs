@@ -133,11 +133,13 @@ impl Worker {
 
     /// Explicit native consent precedes this call. Check review and approved target records before I/O.
     /// A replacement approval belongs to these exact installed records, not just their plugin IDs.
+    /// `global_enabled` sets only the first install's default; updates retain installed scope choices.
     pub fn install_market(
         &self,
         release: Release,
         generation: u64,
         approved_replacements: BTreeMap<String, Installed>,
+        global_enabled: bool,
     ) -> bool {
         let mut state = self.state.lock().unwrap();
         let id = release.manifest.id.clone();
@@ -199,6 +201,7 @@ impl Worker {
                 }
             }
         })
+        .with_default_global_enabled(global_enabled)
         .with_installer_prompts()
         .with_replacements(replacement_ids)
         .with_guard(move || {
@@ -246,7 +249,7 @@ impl Worker {
                     }
                 })
                 .and_then(|package| {
-                    tx.send(Work::Install(package))
+                    tx.send(Work::Install(package, global_enabled))
                         .map_err(|_| anyhow::anyhow!("Plugin worker stopped"))
                 });
             if let Err(error) = result {

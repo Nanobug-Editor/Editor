@@ -1,6 +1,7 @@
 //! Local window chrome surrounds provider-owned native forms; only the content panes scroll.
 use super::*;
-use crate::ui::controls::{Button, Icon};
+use editor_ui::scroll::ScrollableElement as _;
+use editor_ui::{Button, Icon};
 
 /// Create keyed native views in the actual dialog window, preserving input and composition on refresh.
 pub(in crate::run::ui) fn render(
@@ -140,7 +141,7 @@ pub(in crate::run::ui) fn render(
                             .id("plugin-configuration-error")
                             .debug_selector(|| "plugin-configuration-error".into())
                             .max_h(px(64.))
-                            .overflow_y_scroll()
+                            .overflow_y_scrollbar()
                             .text_sm()
                             .text_color(cx.theme().danger)
                             .child(error),
@@ -318,8 +319,7 @@ fn sidebar(
                 })
                 .flex_1()
                 .min_h_0()
-                .overflow_y_scroll()
-                .track_scroll(&state.scroll)
+                .overflow_y_scrollbar_with(&state.scroll)
                 .p_2()
                 .children(rows),
         )

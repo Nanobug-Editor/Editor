@@ -10,17 +10,20 @@ use std::{cell::RefCell, fs};
 
 mod bridge;
 mod caption_controls;
+mod commit_panel;
 mod exclusive;
 mod exit_tests;
 mod fixture;
 mod idle_retention;
 mod input;
 mod lifecycle;
+mod local_history;
 mod matrix;
 mod scenario;
 pub(super) mod scene_probe;
 mod sidebar;
 mod windows;
+mod workspace_presentation;
 use bridge::Harness;
 use fixture::Fixture;
 use matrix::Case;
@@ -94,6 +97,10 @@ pub(super) fn probe_key_result(
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_workbench_smoke() {
     assert!(
+        !workspace_presentation::requested(),
+        "full acceptance refuses presentation-only workflow"
+    );
+    assert!(
         !exclusive::requested(),
         "complete acceptance refuses exclusive-only workflow"
     );
@@ -124,6 +131,18 @@ fn git_native_history_keyboard_probe() {
     matrix::run(Case::SMOKE).unwrap();
 }
 
+/// Range input uses the current inline preview, without the retired detail-window workflow.
+#[test]
+#[ignore = "requires Windows desktop, candidate/output and NANOBUG_GIT_NATIVE_SCROLL_ONLY"]
+fn git_native_history_scroll_probe() {
+    assert!(std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some());
+    assert!(std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_some());
+    // Cover both palettes and a fractional native scale for the same range input path.
+    for case in [Case::SMOKE, Case::ALL[7]] {
+        matrix::run(case).unwrap();
+    }
+}
+
 /// One native startup samples independent current-input operations across real guest timer phases.
 #[test]
 #[ignore = "requires Windows desktop, candidate/output, HISTORY_ONLY and HISTORY_PHASES diagnostic flags"]
@@ -137,6 +156,10 @@ fn git_native_history_keyboard_phase_probe() {
 #[test]
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_visual_matrix() {
+    assert!(
+        !workspace_presentation::requested(),
+        "full acceptance refuses presentation-only workflow"
+    );
     assert!(
         !exclusive::requested(),
         "complete acceptance refuses exclusive-only workflow"
@@ -184,7 +207,7 @@ fn git_native_matrix_child() {
             extensions::init(cx);
             app::shortcuts::bootstrap::configure(cx, fixture.profile.join("shortcuts.json"))
                 .unwrap();
-            ui::controls::init(cx);
+            editor_ui::init(cx);
             cx.activate(true);
             let harness = open(case, fixture, cx).unwrap();
             cx.spawn(async move |cx| {
@@ -205,7 +228,8 @@ fn open(case: Case, fixture: Rc<Fixture>, cx: &mut App) -> anyhow::Result<Harnes
     session.workspace_trusted = true;
     session.messages_visible = false;
     // Only the sidebar workflow starts from the ordinary new-user host visibility default.
-    session.explorer_visible = sidebar::requested() || exclusive::requested();
+    session.explorer_visible =
+        sidebar::requested() || exclusive::requested() || workspace_presentation::requested();
     session.outline_visible = exclusive::requested();
     session
         .plugin_panel_visibility
@@ -219,7 +243,7 @@ fn open(case: Case, fixture: Rc<Fixture>, cx: &mut App) -> anyhow::Result<Harnes
         extensions::environment(&fixture.workspace, cx),
         true,
     ));
-    let mut options = crate::ui::controls::window::TitleBar::window_options();
+    let mut options = editor_ui::window::TitleBar::window_options();
     options.window_background = theme::window_background(cx);
     options.window_bounds = Some(WindowBounds::Windowed(Bounds::centered(
         None,

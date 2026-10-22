@@ -2,13 +2,8 @@
 
 use crate::*;
 
-/// Severity is chosen by the originating operation, independent of translated message wording.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum MessageLevel {
-    Info,
-    Warning,
-    Error,
-}
+// The same severity drives host publication and shared native message presentation.
+pub(crate) use editor_ui::message_panel::MessageLevel;
 
 impl EditorApp {
     /// Retain an important host result without replacing its internal status or notification UI.

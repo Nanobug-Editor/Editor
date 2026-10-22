@@ -1,5 +1,25 @@
 //! Installation feedback remains in a dialog while work runs independently from the UI event loop.
 use super::*;
+use editor_ui::scroll::ScrollableElement as _;
+
+/// Render a shared left-aligned footer choice backed by this confirmation's `selected` value.
+/// The caller creates a fresh unchecked value whenever it opens an installation confirmation.
+pub(super) fn global_enable_option(selected: Rc<Cell<bool>>) -> impl IntoElement {
+    h_flex()
+        .id("plugin-install-global-option")
+        .debug_selector(|| "plugin-install-global-option".into())
+        .flex_1()
+        .items_center()
+        .child(
+            editor_ui::Checkbox::new("plugin-install-global-enabled")
+                .label(t!("plugins.install_global_enabled").to_string())
+                .checked(selected.get())
+                .on_change(move |checked, _, cx| {
+                    selected.set(*checked);
+                    cx.refresh_windows();
+                }),
+        )
+}
 
 /// Observe the manager's publications while the native modal window owns its local controls and focus.
 struct InstallationView {
@@ -66,7 +86,7 @@ impl Render for InstallationView {
                     .debug_selector(|| "plugin-install-progress".into())
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
+                    .overflow_y_scrollbar()
                     .gap_3()
                     .child(message)
                     .when_some(prompt.clone(), |view, prompt| {
@@ -130,19 +150,15 @@ impl Render for InstallationView {
                                     .id("plugin-install-sdk-region")
                                     .debug_selector(|| "plugin-install-sdk-region".into())
                                     .child(
-                                        crate::ui::controls::Checkbox::new(
-                                            "plugin-install-sdk-opt-in",
-                                        )
-                                        .label(t!("plugin_installation.sdk_opt_in").to_string())
-                                        .checked(self.sdk_selected)
-                                        .on_change(
-                                            move |checked, _, cx| {
+                                        editor_ui::Checkbox::new("plugin-install-sdk-opt-in")
+                                            .label(t!("plugin_installation.sdk_opt_in").to_string())
+                                            .checked(self.sdk_selected)
+                                            .on_change(move |checked, _, cx| {
                                                 entity.update(cx, |this, cx| {
                                                     this.sdk_selected = *checked;
                                                     cx.notify();
                                                 })
-                                            },
-                                        ),
+                                            }),
                                     ),
                             )
                         })

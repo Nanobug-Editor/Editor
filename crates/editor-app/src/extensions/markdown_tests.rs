@@ -21,6 +21,7 @@ mod navigation_safety;
 mod preview_updates;
 mod range_edits;
 mod responsiveness;
+mod sdk_adoption;
 mod small_scroll;
 mod source_layout;
 mod source_overlay;
@@ -498,7 +499,7 @@ fn markdown_language_package_restores_open_document_and_retires_highlighting(
         parser
             .styles(
                 &(0..source.len()),
-                crate::language::highlighter::HighlightTheme::default_dark().as_ref(),
+                editor_ui::theme::HighlightTheme::default_dark().as_ref(),
             )
             .into_iter()
             .filter(|(_, style)| *style != gpui_kit::HighlightStyle::default())

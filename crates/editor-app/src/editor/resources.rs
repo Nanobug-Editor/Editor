@@ -6,6 +6,7 @@ use plugin_runtime::{
     EditorRequest,
     plugin_protocol::api::{self, EditorOperation as Op, EditorValue as Value, ErrorCode, Failure},
 };
+mod content;
 
 impl EditorApp {
     /// Global edit/save commands use actual pane focus and reject provider-owned readonly sessions.
@@ -162,7 +163,7 @@ impl EditorApp {
             .map(Value::DocumentOpened)
     }
 
-    /// Provider text has no disk file, watcher, history entry, language process or restoration record.
+    /// Provider text has no disk file, watcher, history entry, separate analysis session or restoration record.
     pub(crate) fn open_plugin_virtual(
         &mut self,
         title: &str,
@@ -177,11 +178,20 @@ impl EditorApp {
             .filter(|resource| resource.is_live())
             .ok_or_else(|| Failure::new(ErrorCode::InvalidHandle, "Virtual resource was revoked"))?
             .clone();
+        self.check_content_origin(&resource)?;
         if !request.enter_side_effect() {
             return Err(Failure::new(
                 ErrorCode::Cancelled,
                 "Virtual open did not execute",
             ));
+        }
+        if let Some(index) = self.find_language_content_tab(&resource) {
+            self.refresh_language_content_tab(index, text, window, cx);
+            self.activate_tab(index, window, cx);
+            self.reveal_language_content(&resource, window, cx)?;
+            return self
+                .plugin_document_info(index, cx)
+                .map(Value::DocumentOpened);
         }
         let path = PathBuf::from(resource.uri());
         let native = self.create_native_text_tab(
@@ -211,6 +221,7 @@ impl EditorApp {
         }
         let info = self.plugin_document_info(index, cx)?;
         resource.bind(info.document.clone());
+        self.reveal_language_content(&resource, window, cx)?;
         Ok(Value::DocumentOpened(info))
     }
 

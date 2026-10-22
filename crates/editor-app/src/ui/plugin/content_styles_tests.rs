@@ -11,7 +11,7 @@ use plugin_runtime::plugin_protocol::{FontStyle, ui};
 fn content_styles_control_native_heading_code_and_user_override_geometry(cx: &mut TestAppContext) {
     cx.update(|cx| {
         gpui_kit::init(cx);
-        crate::ui::typography::init(cx);
+        editor_ui::typography::init(cx);
         crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
     });
     let (_, ui) = cx.add_window_view(|window, cx| {

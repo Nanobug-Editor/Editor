@@ -98,7 +98,7 @@ impl Fresh {
             });
             for work in work {
                 match work {
-                    Work::Install(package) => {
+                    Work::Install(package, _) => {
                         let (trusted, control) = ui.update(|_, cx| {
                             let owner = self.native.app.read(cx).extensions.read(cx);
                             let trusted = owner

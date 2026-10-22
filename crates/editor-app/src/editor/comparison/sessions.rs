@@ -7,11 +7,15 @@ pub(crate) struct ComparisonView {
     pub(crate) id: String,
     owner: String,
     pub(crate) title: String,
-    authority: plugin_runtime::EditorAuthority,
+    pub(super) authority: plugin_runtime::EditorAuthority,
     left: api::DocumentVersion,
     right: api::DocumentVersion,
     /// The optional third readonly source participates in the same retained-view lifetime.
     third: Option<api::DocumentVersion>,
+    /// Frozen provider actions retain their exact issuer, independently of later panel selections.
+    navigation: Option<(String, api::ComparisonNavigation)>,
+    /// Optional generic unchanged-region controls supplied by this view's provider.
+    pub(super) folding: Option<folding::FoldControls>,
     pub(crate) preview: bool,
     pub(crate) unified: bool,
     pub(crate) hunk: usize,
@@ -49,6 +53,8 @@ impl EditorApp {
         left: &api::DocumentVersion,
         right: &api::DocumentVersion,
         third: Option<&api::DocumentVersion>,
+        navigation: Option<&api::ComparisonNavigation>,
+        folding: Option<&api::ComparisonFolding>,
         preview: bool,
         request: &plugin_runtime::EditorRequest,
         window: &mut Window,
@@ -56,6 +62,20 @@ impl EditorApp {
     ) -> Result<api::EditorValue, api::Failure> {
         let owner = format!("{}/{}", request.handle().instance, request.handle().scope);
         let id = format!("{owner}/{key}");
+        let navigation =
+            navigation.map(|navigation| (request.handle().instance.clone(), navigation.clone()));
+        let folding = folding
+            .map(|descriptor| {
+                let admitted = folding::FoldControls::admit(descriptor, request)?;
+                Ok(folding::retain_choices(
+                    self.comparison_views
+                        .iter()
+                        .find(|view| view.id == id)
+                        .and_then(|view| view.folding.as_ref()),
+                    admitted,
+                ))
+            })
+            .transpose()?;
         self.sync_comparison_views(window, cx);
         if self.comparison_views.len() >= 32
             && !self.comparison_views.iter().any(|view| view.id == id)
@@ -89,6 +109,10 @@ impl EditorApp {
             view.left = left.clone();
             view.right = right.clone();
             view.third = third.cloned();
+            view.navigation = navigation;
+            view.folding = folding;
+            // An explicit changed-file open begins at its first difference, even for a reused key.
+            view.hunk = 0;
             if third.is_some() {
                 view.unified = false;
             }
@@ -105,6 +129,8 @@ impl EditorApp {
                 left: left.clone(),
                 right: right.clone(),
                 third: third.cloned(),
+                navigation,
+                folding,
                 preview,
                 unified: false,
                 hunk: 0,
@@ -112,6 +138,8 @@ impl EditorApp {
         }
         self.active_comparison = Some(id.clone());
         self.document_comparison.as_mut().unwrap().persistent = Some(id);
+        self.mount_comparison_folding(cx);
+        self.reveal_comparison_hunk(0, cx);
         if self
             .comparison_views
             .iter()
@@ -128,13 +156,67 @@ impl EditorApp {
                     .as_ref()
                     .is_none_or(|source| !source.hidden)
             })
-            .count()
-            + self.comparison_views.len();
-        let viewport = self.tabs_scroll.bounds().size.width.max(px(190.));
-        self.tabs_scroll
-            .set_offset(point(-(px(190.) * count - viewport).max(px(0.)), px(0.)));
+            .count();
+        // Reused previews can sit before the last tab; reveal the active view's measured bounds.
+        if let Some(index) = self
+            .comparison_views
+            .iter()
+            .position(|view| self.active_comparison.as_ref() == Some(&view.id))
+        {
+            self.tabs_scroll.scroll_to_item(count + index);
+        }
         cx.notify();
         Ok(result)
+    }
+
+    /// Borrow only this tab's frozen neighbors; a missing sequence or boundary disables its arrow.
+    pub(super) fn comparison_file_navigation(&self, next: bool) -> Option<&api::ComparisonCommand> {
+        let view = self
+            .comparison_views
+            .iter()
+            .find(|view| Some(&view.id) == self.active_comparison.as_ref())?;
+        if !view.authority.is_live() {
+            return None;
+        }
+        let (_, navigation) = view.navigation.as_ref()?;
+        if next {
+            navigation.next.as_ref()
+        } else {
+            navigation.previous.as_ref()
+        }
+    }
+
+    /// Queue a provider-owned adjacent item using its original source/lifetime and frozen arguments.
+    pub(super) fn navigate_comparison_file(&mut self, next: bool, cx: &mut Context<Self>) {
+        let Some(action) = self.comparison_file_navigation(next).cloned() else {
+            return;
+        };
+        let Some(view) = self
+            .comparison_views
+            .iter()
+            .find(|view| Some(&view.id) == self.active_comparison.as_ref())
+            .cloned()
+        else {
+            return;
+        };
+        let result = (|| {
+            let document = self
+                .current_comparison_source(&view.right)
+                .ok_or_else(|| t!("plugins.document_target_changed").to_string())?;
+            let guard = self
+                .capture_document_intent_guard(document)
+                .map_err(|error| error.to_string())?
+                .with_authority(view.authority.clone());
+            self.extensions.read(cx).enqueue_owned_command(
+                &view.navigation.as_ref().unwrap().0,
+                &action.command,
+                action.arguments,
+                guard,
+            )
+        })();
+        if let Err(message) = result {
+            self.report_host_message(app::messages::MessageLevel::Warning, message, cx);
+        }
     }
     /// Reopening a retained tab reacquires current versions of the same native sessions.
     pub(crate) fn activate_comparison_view(
@@ -182,6 +264,7 @@ impl EditorApp {
             )?;
             self.active_comparison = Some(id.into());
             self.document_comparison.as_mut().unwrap().persistent = Some(id.into());
+            self.mount_comparison_folding(cx);
             if view.unified {
                 self.prepare_unified_comparison(window, cx);
             }

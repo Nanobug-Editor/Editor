@@ -8,6 +8,81 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+/// A delayed highlighter recognition cannot close a Control lease already opened as Vue. A genuine
+/// language change still revokes it, and a late wire close cannot revoke the replacement lifetime.
+#[test]
+#[ignore = "build plugin-runtime --example lsp_fixture first"]
+fn recognition_preserves_the_actual_control_language_and_retires_only_mismatches() {
+    let directory = tempfile::tempdir().unwrap();
+    let (mut manager, server) = native_owner(directory.path());
+    let uri = file_uri(&directory.path().join("source.vue")).unwrap();
+    // Unlike idle push-diagnostic polling, a real definition reply waits for prior sync frames.
+    let synchronize = |source: &str| {
+        assert_eq!(
+            server
+                .definitions(uri.clone(), source.into(), lsp_types::Position::new(0, 0))
+                .unwrap()
+                .len(),
+            1
+        );
+    };
+    let control = server.open_document_for_language(uri.clone(), "vue");
+    synchronize("old");
+    let peer = server
+        .open_document_for_language(file_uri(&directory.path().join("peer.vue")).unwrap(), "vue");
+    assert!(
+        server
+            .retire_document_if_language_changed(&uri, "vue")
+            .is_none(),
+        "the UI's delayed recognition must preserve an already matching Control lease"
+    );
+    assert!(control.is_active());
+    let retired = server
+        .retire_document_if_language_changed(&uri, "typescript")
+        .unwrap();
+    assert!(
+        !control.is_active(),
+        "a genuinely changed recognition withdraws old authority"
+    );
+    assert!(peer.is_active(), "another source retains its lease");
+    let replacement = server.open_document_for_language(uri.clone(), "typescript");
+    synchronize("new");
+    // The completed definition request is a wire-order barrier. Inspect lifetime frames as well as
+    // request success: bind_document could otherwise conceal an erroneous close by reopening it.
+    let lifetime_events = || {
+        std::fs::read_to_string(directory.path().join("recovery-wire.jsonl"))
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .filter(|message| {
+                matches!(
+                    message["method"].as_str(),
+                    Some("textDocument/didOpen" | "textDocument/didClose")
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before_late_close = lifetime_events();
+    assert_eq!(before_late_close.len(), 3, "open old, close old, open new");
+    server.close_document(retired).unwrap();
+    assert!(
+        replacement.is_active(),
+        "a late old close cannot close its replacement"
+    );
+    synchronize("new");
+    assert_eq!(
+        lifetime_events(),
+        before_late_close,
+        "late old close must neither close nor reopen the new wire document"
+    );
+    server.retire_document(&uri).unwrap();
+    assert!(
+        !replacement.is_active(),
+        "true native close remains unconditional"
+    );
+    manager.shutdown_checked().unwrap();
+}
+
 /// Use one resource-only Package and the real stdio fixture, without compiling or loading a guest.
 fn native_owner(root: &Path) -> (Manager, LanguageServer) {
     let executable = std::env::current_exe()

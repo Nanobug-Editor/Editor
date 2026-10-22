@@ -54,6 +54,14 @@ fn capability_package_consent_displays_native_text_and_uninstall_reclaims_panel(
         manager.installed.is_empty(),
         "consent must precede installation"
     );
+    // This fixture is consumed through application management, so explicitly opt into global use.
+    let option = dialog_cx
+        .debug_bounds("plugin-install-global-option")
+        .unwrap();
+    dialog_cx.simulate_click(
+        point(option.left() + px(7.), option.center().y),
+        Default::default(),
+    );
     let confirm = dialog_cx.debug_bounds("plugin-install-confirm").unwrap();
     dialog_cx.simulate_click(confirm.center(), Default::default());
     let approved = dialog_cx.update(|_, cx| {
@@ -69,7 +77,7 @@ fn capability_package_consent_displays_native_text_and_uninstall_reclaims_panel(
         received
             .into_iter()
             .find_map(|work| match work {
-                Work::Install(package) => Some(package),
+                Work::Install(package, true) => Some(package),
                 _ => None,
             })
             .expect("confirmation sends the approved real package to the existing worker seam")

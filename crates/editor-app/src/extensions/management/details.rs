@@ -108,6 +108,7 @@ impl ExtensionPanel {
             selection.listing.is_none(),
             false,
             selection.installed.is_none(),
+            selection.installed.is_none(),
         ];
         // Uninstall and catalog refresh can remove the data required by a previously selected page.
         if tabs[self.manager_detail_tab.index()] {
@@ -219,6 +220,7 @@ impl ExtensionPanel {
                 (t!("plugins.versions").into(), tabs[3]),
                 (t!("plugins.information").into(), tabs[4]),
                 (t!("plugins.runtime_log").into(), tabs[5]),
+                (t!("plugins.runtime_diagnostics").into(), tabs[6]),
             ],
             [
                 None,
@@ -230,6 +232,7 @@ impl ExtensionPanel {
                     .installed
                     .as_ref()
                     .and_then(|_| self.log_badge(&id)),
+                None,
             ],
             &self.manager_detail_focus,
             move |index, _, cx| {
@@ -246,12 +249,15 @@ impl ExtensionPanel {
         if self.manager_detail_tab != DetailTab::RuntimeLog {
             self.manager_log_view = None;
         }
+        if self.manager_detail_tab != DetailTab::RuntimeDiagnostics {
+            self.manager_observation = None;
+        }
         let body = match self.manager_detail_tab {
             DetailTab::Overview => self.manager_overview(selection, cx),
             DetailTab::Changes => div()
                 .debug_selector(|| "market-changelog-region".into())
                 .p_5()
-                .child(ui::controls::untrusted_markdown_view(
+                .child(editor_ui::untrusted_markdown_view(
                     "market-changelog",
                     selection.release.as_ref().unwrap().changelog.clone(),
                     typography::font_size(cx),
@@ -269,6 +275,7 @@ impl ExtensionPanel {
                 cx,
             ),
             DetailTab::RuntimeLog => self.runtime_status(&id, cx),
+            DetailTab::RuntimeDiagnostics => self.runtime_diagnostics(&id, cx),
         };
         detail
             .child(
@@ -284,7 +291,15 @@ impl ExtensionPanel {
                             .size_full()
                             .overflow_y_scroll()
                             .track_scroll(&self.manager_detail_scroll)
-                            .child(body),
+                            .child(body)
+                            .map(|body| {
+                                editor_ui::scroll::SmoothScroll::new(
+                                    "plugin-detail-wheel",
+                                    &self.manager_detail_scroll,
+                                    editor_ui::scroll::ScrollAxis::Vertical,
+                                    body,
+                                )
+                            }),
                     )
                     .child(
                         div()
@@ -308,7 +323,7 @@ impl ExtensionPanel {
             if let Some(listing) = &selection.listing {
                 body = body.child(listing.summary.clone());
             }
-            body.child(ui::controls::untrusted_markdown_view(
+            body.child(editor_ui::untrusted_markdown_view(
                 "market-readme",
                 release.readme.clone(),
                 typography::font_size(cx),
@@ -330,7 +345,7 @@ impl ExtensionPanel {
                     .ok()
                 })
                 .unwrap_or_else(|| t!("plugins.no_readme").to_string());
-            body.child(ui::controls::markdown_view(
+            body.child(editor_ui::markdown_view(
                 "plugin-readme",
                 readme,
                 typography::font_size(cx),

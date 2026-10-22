@@ -5,6 +5,11 @@ use api::{ErrorCode, Failure};
 impl State {
     /// Domain failures remain correlated responses, including malformed and unknown operations.
     pub(super) fn capability_request(&mut self, payload: &str) -> Result<String, String> {
+        let observation = self.host_resources.observations.begin(
+            self.observation_identity(),
+            crate::observability::Stage::HostCall,
+            self.observed_parent,
+        );
         let mut id = 0;
         let result = (|| {
             if self.roots.retired {
@@ -68,6 +73,7 @@ impl State {
                 "timer",
                 "private",
                 "tree",
+                "presentation",
             ]
             .contains(&method)
             {
@@ -141,11 +147,14 @@ impl State {
                         | api::Operation::ReadFile { .. }
                         | api::Operation::FindFiles { .. }
                         | api::Operation::DescribeSdk
+                        | api::Operation::Process {
+                            operation: plugin_protocol::process::Operation::InspectTool { .. },
+                        }
                 )
             {
                 return Err(Failure::new(
                     ErrorCode::InvalidState,
-                    "LSP discovery is read-only",
+                    "Preparation discovery is read-only",
                 ));
             }
             self.check_service_authority(&request.operation)?;
@@ -159,6 +168,7 @@ impl State {
                 api::Operation::Timer { operation } => self.timer_request(operation),
                 api::Operation::Private { operation } => self.private_request(operation),
                 api::Operation::Tree { operation } => self.tree_request(operation),
+                api::Operation::Presentation { operation } => self.presentation_request(operation),
                 api::Operation::Commands { operation } => self.command_request(operation),
                 api::Operation::Service { operation } => self.service_request(operation),
                 api::Operation::Process { operation } => self.process_request(operation),
@@ -231,6 +241,11 @@ impl State {
             }
             result
         })();
+        observation.finish(if result.is_ok() {
+            crate::observability::Outcome::Completed
+        } else {
+            crate::observability::Outcome::Failed
+        });
         serde_json::to_string(&api::Response { id, result }).map_err(|error| error.to_string())
     }
 
@@ -465,6 +480,7 @@ impl Instance {
                     && output.snapshot.is_none()
                     && output.configuration.is_none()
                     && output.language_service.is_none()
+                    && output.service_preparation.is_none()
                     && output.service_reply.is_none()),
             "Pure language workers can return only snapshot language data"
         );
@@ -516,6 +532,10 @@ impl Instance {
             "Migration may return only an opaque snapshot"
         );
         anyhow::ensure!(
+            output.service_preparation.is_none() || self.store.data().service_preparation_call,
+            "Native preparation selection requires its negotiated readonly invocation"
+        );
+        anyhow::ensure!(
             output.service_reply.is_none() || self.store.data().plugin_services.invoking,
             "Service results require an owning invocation"
         );
@@ -525,7 +545,7 @@ impl Instance {
                 || (output.views.is_empty()
                     && output.snapshot.is_none()
                     && output.configuration.is_none()),
-            "LSP hook can return only a language proposal"
+            "Readonly preparation cannot publish UI, snapshots or configuration"
         );
         let api = &self.store.data().api;
         anyhow::ensure!(

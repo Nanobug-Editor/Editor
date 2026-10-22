@@ -74,7 +74,7 @@ Debug 构建未经优化，窗口拖动与编辑响应可能较慢，日常体�
 
 验证启动修复时使用 IDE 的实际命令与 profile。按包执行 `cargo clean -p ...` 会保留 Release 产物，恢复 Release 构建时需显式加 `--release`。见 [Release 启动复查](docs/project/verification/build-cache-release-2026-10-18.md)。
 
-不传路径启动时显示空编辑器窗口，左上角 **选择文件夹** 下拉默认收起。可将文件拖入空白区域，按正常的目录识别和信任流程打开。项目菜单提供搜索、**打开**、**克隆仓库**、已打开和最近项目、移除历史记录及**关闭项目**。选择项目前即可使用设置和插件管理；工作区工具只在打开真实文件夹后启用。普通目录即可作为项目。克隆使用本机 Git 及其认证配置，完成后进入正常的信任与项目打开流程。**关闭项目**在处理未保存修改、确认停止运行程序并完成清理后关闭该窗口；关闭最后一个编辑器窗口会退出应用。取消或保存失败保留当前项目。重新打开恢复已保存标签和布局，不自动重启程序。
+不传路径启动时默认恢复上次成功退出的项目；可在 **设置 → 外观与行为 → 启动 → 启动时恢复上次项目** 中关闭，显式指定项目或文件始终优先。关闭恢复开关或无可用记录时显示空编辑器窗口，左上角 **选择文件夹** 下拉默认收起。可将文件拖入空白区域，按正常的目录识别和信任流程打开。项目菜单提供搜索、**打开**、**克隆仓库**、已打开和最近项目、移除历史记录及**关闭项目**。选择项目前即可使用设置和插件管理；工作区工具只在打开真实文件夹后启用。普通目录即可作为项目。克隆使用本机 Git 及其认证配置，完成后进入正常的信任与项目打开流程。**关闭项目**在处理未保存修改、确认停止运行程序并完成清理后关闭该窗口；关闭最后一个编辑器窗口会退出应用。取消或保存失败保留当前项目。重新打开恢复已保存标签和布局，不自动重启程序。
 
 打开另一个项目时，当前项目继续在自己的窗口运行；从空编辑器打开项目则使用当前窗口。重复打开同一实际目录会激活原窗口。同一 profile 无参数再次启动会显示最后使用的编辑器窗口。**退出应用**统一收集全部窗口的决定，任一取消都会保留所有窗口。便携版支持相同目录或文件参数，启动不会注册菜单。`Nanobug.exe --profile "<独立 profile 目录>" -- "<项目或文件>"` 可选择隔离 GUI profile；插件工具命令与显式开发实例保持独立启动行为。
 
@@ -104,6 +104,12 @@ cargo build -p editor-app
 # 启动隔离开发实例；仅为当前清单声明的权限提供显式 --grant。
 .\target\debug\editor-app.exe --plugin-dev ../Rust --watch --grant workspace.read --grant process.exec --grant ui.panels --grant process.service.analysis --grant process.service.adapter --grant dependencies.prepare
 
+# 静态检查包准入，不启动应用或执行插件。
+.\target\debug\editor-app.exe --plugin-check target/plugin-build/example-1.0.0.zip --format json
+
+# 记录隔离开发会话的生命周期证据；实际操作插件后，通过标准输入发送 stop。
+.\target\debug\editor-app.exe --plugin-dev ../Rust --report target/plugin-lifecycle.json --grant workspace.read --grant process.exec --grant ui.panels --grant process.service.analysis --grant process.service.adapter --grant dependencies.prepare
+
 # 底层独立 Cargo 构建继续使用宿主内嵌 SDK。
 .\target\debug\editor-app.exe --plugin-cargo ../Rust/Cargo.toml check --target wasm32-wasip2
 
@@ -114,6 +120,8 @@ cargo build -p editor-app
 CLI 开发运行通过标准输入发送 `reload` 或 `stop`。`--workspace` 指定测试工作区，默认使用插件项目；`--profile` 指定隔离数据目录。用多个 `--grant <权限名>` 显式授权清单中声明的权限。新增权限需停止后重新授权运行，更改插件 ID 也需重新启动配置。缺失的编译器／SDK 目标会报错，不会自动安装。原生构建明确声明系统和架构，拒绝混入其他平台的原生产物。Windows 已验证；macOS/Linux 使用兼容的路径与进程接口，尚未实测。
 
 在插件管理中安装或更新生成的 ZIP，并批准声明的权限。接口使用方法见 [SDK 源码注释](crates/plugin-protocol/src/lib.rs)，调试器配置见 [Rust 插件说明](https://github.com/Nanobug-Editor/Rust)。维护者决策和验收见[插件文档入口](docs/plugins/README.md)。
+
+静态检查退出码为 0（准入通过）、1（拒绝）、2（输入无效）。生命周期报告另以 3 表示 `cancel`；未观测到激活或最终清理的会话为不完整（2）。生命周期通过不代表业务功能均已验证。插件管理的“运行诊断”页提供有界宿主元数据采集和 JSON 导出；安装兼容插件会在运行中的宿主生效。
 
 ## 参与贡献
 

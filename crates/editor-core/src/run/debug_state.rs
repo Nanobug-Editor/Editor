@@ -77,6 +77,8 @@ impl DebugStep {
 /// capability it may offer, so an unknown provider leaves every ability disabled with a reason.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DebugCapabilities {
+    /// debug.session 1.2: explicit threads and pause-scoped lazy variable pages.
+    pub thread_tree: bool,
     pub breakpoints: bool,
     pub resume_pause: bool,
     pub step: bool,

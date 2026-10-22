@@ -1,9 +1,9 @@
 //! Plugin management and the native document surface share the editor's controls and theme.
 use super::*;
-use crate::ui::controls::ButtonCustomVariant;
-use crate::ui::controls::dialog::DialogAction;
-use crate::ui::controls::dialog::DialogFooter;
-use crate::ui::controls::overlay::WindowExt as _;
+use editor_ui::ButtonCustomVariant;
+use editor_ui::dialog::DialogAction;
+use editor_ui::dialog::DialogFooter;
+use editor_ui::overlay::WindowExt as _;
 use gpui_base::DialogClose;
 use gpui_kit::rgb;
 impl ExtensionPanel {
@@ -169,15 +169,14 @@ impl ExtensionPanel {
                     let body = alignment
                         .as_ref()
                         .and_then(|(group, index)| group.pane(*index));
-                    let source = crate::ui::controls::window_editor_body(&binding.editor, body, cx);
+                    let source = editor_ui::window_editor_body(&binding.editor, body, cx);
                     return Some(if let Some(actions) = actions {
                         let projection = alignment.map(|(group, index)| {
                             Rc::new(move |offset, cx: &App| {
                                 group.project_range(index, offset..offset, cx)
-                            })
-                                as crate::ui::controls::EditorActionProjection
+                            }) as editor_ui::EditorActionProjection
                         });
-                        crate::ui::controls::with_projected_editor_actions(
+                        editor_ui::with_projected_editor_actions(
                             source,
                             &binding.editor,
                             actions,
@@ -212,9 +211,9 @@ impl ExtensionPanel {
                                 Rc::new(move |offset, cx: &App| {
                                     group.project_range(index, offset..offset, cx)
                                 })
-                                    as crate::ui::controls::EditorActionProjection
+                                    as editor_ui::EditorActionProjection
                             });
-                            crate::ui::controls::with_projected_editor_actions(
+                            editor_ui::with_projected_editor_actions(
                                 source,
                                 &app.editor,
                                 actions,
@@ -249,7 +248,8 @@ impl ExtensionPanel {
         view
     }
 
-    /// Show package origin and requested capabilities above the manager's README.
+    /// Show `package` origin, capabilities and first-install scope in `window` before queuing consent.
+    /// `cx` retains the panel owner; each confirmation starts with the global option unchecked.
     pub(super) fn open_install_dialog(
         &mut self,
         package: impl Into<Arc<Package>>,
@@ -267,6 +267,8 @@ impl ExtensionPanel {
             .iter()
             .find(|entry| entry.manifest.id == package.manifest.id)
             .map(|entry| entry.manifest.version.as_str());
+        let first_install = current.is_none();
+        let global_enabled = Rc::new(Cell::new(false));
         let action = match package_action(&version, current) {
             "已安装" => "重新安装",
             action => action,
@@ -331,6 +333,7 @@ impl ExtensionPanel {
                 })
                 .filter(|text| !text.is_empty());
             window.open_dialog(cx, move |dialog, _, cx| {
+                let global_enabled = global_enabled.clone();
                 let source = source.clone();
                 let permissions = permissions.clone();
                 let services = services.clone();
@@ -461,6 +464,11 @@ impl ExtensionPanel {
                     // Base Dialog needs an explicit footer; button props only label actions.
                     .footer(
                         DialogFooter::new()
+                            .when(first_install, |footer| {
+                                footer.child(installation::global_enable_option(
+                                    global_enabled.clone(),
+                                ))
+                            })
                             .child(
                                 div()
                                     .id("plugin-install-cancel")
@@ -492,7 +500,10 @@ impl ExtensionPanel {
                         install_owner
                             .update(cx, |this, cx| {
                                 // Explicit consent submits the same inspected package through the ordinary lifecycle.
-                                let work = Work::Install(install_package.as_ref().clone());
+                                let work = Work::Install(
+                                    install_package.as_ref().clone(),
+                                    global_enabled.get(),
+                                );
                                 if this.queue_lifecycle(work) {
                                     this.pending = None;
                                     this.pending_dialog_open = false;

@@ -273,6 +273,7 @@ impl Manager {
                 &serde_json::to_vec(&target)?,
             )?;
             let mut registry = self.installed.clone();
+            let (enabled, project_enabled) = self.installation_scope(manifest, control);
             registry.insert(
                 id.clone(),
                 Installed {
@@ -280,12 +281,8 @@ impl Manager {
                     manifest: manifest.clone(),
                     digest: prepared.package.digest.clone(),
                     grants: prepared.grants.clone(),
-                    enabled: prepared.enable_requested
-                        || previous.as_ref().is_none_or(|entry| entry.enabled),
-                    project_enabled: previous
-                        .as_ref()
-                        .map(|entry| entry.project_enabled.clone())
-                        .unwrap_or_default(),
+                    enabled: prepared.enable_requested || enabled,
+                    project_enabled,
                     global_enabled: None,
                     retired_ui_contract: false,
                     error: None,

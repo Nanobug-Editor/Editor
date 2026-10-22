@@ -71,7 +71,20 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
 
     collapse(h, remote, cx).await?;
     h.expand(h.main, "branches", local, cx).await?;
-    h.select_file(h.main, "branches", "incoming", cx).await?;
+    h.until(
+        h.main,
+        "incoming branch double click",
+        |window, cx| {
+            let Ok(item) = input::tree_item(window, "branches", "incoming") else {
+                return Ok(false);
+            };
+            input::double_click(window, &item, cx)?;
+            Ok(true)
+        },
+        cx,
+    )
+    .await?;
+    h.settle(cx).await?;
     h.until(h.main, "incoming selection filtered native history", |_, _| {
         Ok(history_has(h, "Incoming native changes") && !history_has(h, "Review history 35"))
     }, cx).await?;
@@ -113,7 +126,7 @@ async fn collapse(h: &Harness, label: &str, cx: &mut AsyncApp) -> anyhow::Result
                 return Ok(false);
             }
             if row.expanded() == Some(true) {
-                input::click(window, &row, cx)?;
+                input::double_click(window, &row, cx)?;
             }
             Ok(true)
         },
@@ -132,7 +145,7 @@ async fn collapse(h: &Harness, label: &str, cx: &mut AsyncApp) -> anyhow::Result
                 return Ok(false);
             }
             if row.expanded() == Some(true) {
-                input::key(window, "left", cx);
+                editor_ui::testing::press_key(window, "left", cx);
             }
             Ok(true)
         },

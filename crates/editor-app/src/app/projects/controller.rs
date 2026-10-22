@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 mod choices;
+mod startup;
 pub(super) use choices::{
     ProjectChoice, focus_project, mark_opened, project_choices, recent_paths,
 };
@@ -52,6 +53,8 @@ struct QuitRound {
     waiting: Option<WindowId>,
     phase: QuitPhase,
     failed: bool,
+    /// Freeze the last-used project before close prompts can activate other native roots.
+    projects_to_restore: Vec<(PathBuf, PathBuf)>,
 }
 
 pub(super) fn is_quitting(cx: &App) -> bool {
@@ -76,11 +79,13 @@ pub(super) fn quit(cx: &mut App) {
         .keys()
         .map(|id| (*id, (None, false)))
         .collect();
+    let projects_to_restore = startup::exit_projects(cx);
     cx.global_mut::<Windows>().quit = Some(QuitRound {
         members,
         waiting: None,
         phase: QuitPhase::Collecting,
         failed: false,
+        projects_to_restore,
     });
     cx.defer(advance_quit);
 }
@@ -257,6 +262,9 @@ pub(super) fn cleaned(handle: AnyWindowHandle, result: Result<(), String>, cx: &
             for entry in entries {
                 let _ = entry.host.update(cx, |host, cx| {
                     host.close_state = CloseState::Failed;
+                    if let Some(editor) = &host.editor {
+                        editor.update(cx, |app, cx| app.resume_history_saves(cx));
+                    }
                     cx.notify();
                 });
             }
@@ -272,6 +280,8 @@ pub(super) fn cleaned(handle: AnyWindowHandle, result: Result<(), String>, cx: &
             .await;
         cx.update(move |cx| match result {
             Ok(()) => {
+                // Persist only after every project and the shared runtime have acknowledged exit.
+                startup::remember_exit(cx);
                 let entries = cx
                     .global::<Windows>()
                     .entries
@@ -300,6 +310,9 @@ pub(super) fn cleaned(handle: AnyWindowHandle, result: Result<(), String>, cx: &
                 for entry in entries {
                     let _ = entry.host.update(cx, |host, cx| {
                         host.close_state = CloseState::Failed;
+                        if let Some(editor) = &host.editor {
+                            editor.update(cx, |app, cx| app.resume_history_saves(cx));
+                        }
                         host.error = Some(error.clone());
                         cx.notify();
                     });
@@ -501,6 +514,7 @@ pub(super) fn activate_or_open(profile: PathBuf, cx: &mut App) -> anyhow::Result
 pub(super) fn close_window(handle: AnyWindowHandle, window: &mut Window, cx: &mut App) {
     let last = cx.global::<Windows>().entries.len() == 1;
     if !last {
+        startup::remember_closed(handle, cx);
         unregister(handle, cx);
         window.remove_window();
         return;

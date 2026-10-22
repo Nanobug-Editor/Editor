@@ -7,8 +7,6 @@ use plugin_runtime::plugin_protocol::api::{ErrorCode, Failure};
 use plugin_runtime::plugin_protocol::language::SEMANTIC_LINKED_EDITING_METHOD;
 #[cfg(test)]
 mod tests;
-mod workspace;
-pub(crate) use workspace::WorkspaceTextEdits;
 
 /// Pairing authority comes from the selected negotiated method, never an untrusted response flag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,27 +123,26 @@ impl LanguageServer {
         })
     }
 
-    /// Preserve every rename target for native preview, synchronizing frozen related preimages
-    /// under this request's connection lock. Unsupported resource effects reject the whole reply.
+    /// Unnegotiated workspace refactors remain restricted to the original open document.
+    /// Cross-document and resource effects require `rename_workspace_for` and its guarded preview.
     pub(crate) fn rename_for(
         &self,
         document: DocumentLease,
         source: String,
         position: Position,
         new_name: String,
-        related: Vec<(DocumentLease, String)>,
-    ) -> anyhow::Result<Vec<WorkspaceTextEdits>> {
+    ) -> anyhow::Result<Vec<TextEdit>> {
         ensure!(self.provides_editing(), "Service did not declare editing");
         self.edit_request(document, "rename", move |connection, uri| {
             ensure!(
                 connection.rename_provider,
                 "Language service does not support rename"
             );
-            for (lease, text) in &related {
-                connection.bind_document(lease)?;
-                connection.sync_document(lease.uri.clone(), text.clone())?;
-            }
             let wire = connection.sync_document(uri.clone(), source)?;
+            let version = connection
+                .diagnostics
+                .document_version(uri.as_str())
+                .context("Rename document is not synchronized")?;
             let response = connection.request(
                 "textDocument/rename",
                 json!({"textDocument":{"uri":wire},"position":position,"newName":new_name}),
@@ -153,11 +150,9 @@ impl LanguageServer {
             if response.is_null() {
                 return Ok(Vec::new());
             }
-            ensure!(
-                related.iter().all(|(lease, _)| lease.is_active()),
-                "Related rename document was closed"
-            );
-            workspace::decode(connection, response)
+            document_edits(response, &uri, version, |target| {
+                connection.logical_uri(target)
+            })
         })
     }
 
@@ -204,7 +199,7 @@ impl LanguageServer {
     }
 
     /// Every editing method binds before sync and rechecks authority after a native response arrives.
-    fn edit_request<T>(
+    pub(super) fn edit_request<T>(
         &self,
         document: DocumentLease,
         operation: &str,
@@ -239,6 +234,15 @@ pub(super) fn document_edits(
     version: i32,
     logical_uri: impl Fn(&Uri) -> Uri,
 ) -> anyhow::Result<Vec<TextEdit>> {
+    let response = without_empty_representations(response);
+    // Single-document fallback must not discard an unsupported effect while accepting its text.
+    ensure!(
+        response.get("command").is_none(),
+        Failure::new(
+            ErrorCode::UnsupportedOperation,
+            "Workspace edit commands are not supported"
+        )
+    );
     // OneOf<TextEdit, AnnotatedTextEdit> may deserialize the plain variant first and discard
     // annotationId as an unknown field. Check the actual wire before that lossy typed decoding.
     for document in response
@@ -355,6 +359,26 @@ pub(super) fn document_edits(
         }
     }
     Ok(edits)
+}
+
+/// An empty companion representation carries no effects. Some standard servers serialize their
+/// default empty map beside documentChanges; retain rejection of two nonempty representations.
+pub(super) fn without_empty_representations(mut response: Value) -> Value {
+    if let Some(object) = response.as_object_mut() {
+        if object
+            .get("changes")
+            .is_some_and(|value| value.as_object().is_some_and(|map| map.is_empty()))
+        {
+            object.remove("changes");
+        }
+        if object
+            .get("documentChanges")
+            .is_some_and(|value| value.as_array().is_some_and(|items| items.is_empty()))
+        {
+            object.remove("documentChanges");
+        }
+    }
+    response
 }
 
 /// Reject invalid UTF-16 positions instead of upstream clipping them to a different document location.

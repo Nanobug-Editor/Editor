@@ -135,8 +135,7 @@ impl Manager {
                 self.host_alive.clone(),
             )?;
             if delegate.interactive {
-                // Only this native direct prepare may access its own preferences and QuickPick.
-                // The ancestry/deadline checks reject subsequent plugin-service hops.
+                // Native origin permits own preference CAS and choice only on this first hop.
                 call.context.origin =
                     crate::plugin_services::InvocationOrigin::LanguagePreparation {
                         target: owner.clone(),
@@ -196,10 +195,8 @@ impl Manager {
                 .iter()
                 .all(|(waiter, _)| waiter.status().is_terminal())
         {
-            // Same-configuration source edits can cancel every original wait before the next
-            // broker tick. A renewed source needs fresh guest/control authority; joining the old
-            // invocation would inherit its stale result. Drop only that abandoned call, never the
-            // lender. An empty list is a new preparation awaiting its first native waiter.
+            // A renewed source must not join a call whose original waiters all cancelled.
+            // Dropping this call leaves its lender and other document calls alive.
             slot.delegation.take();
             return false;
         }

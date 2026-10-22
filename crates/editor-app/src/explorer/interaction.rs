@@ -82,8 +82,7 @@ impl EditorApp {
             let title = t!("explorer.reveal_failed").to_string();
             // The replaceable card may expire, but its user-facing result remains in host history.
             self.record_host_message(MessageLevel::Warning, format!("{title}: {message}"), cx);
-            self.notification =
-                Some(cx.new(|cx| ui::controls::Notification::new(title, message, cx)));
+            self.notification = Some(cx.new(|cx| editor_ui::Notification::new(title, message, cx)));
             cx.notify();
             return;
         }

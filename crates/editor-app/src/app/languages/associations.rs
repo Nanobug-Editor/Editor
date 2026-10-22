@@ -1,6 +1,6 @@
 //! Native file-association settings share the language registry and its installed providers.
 use super::*;
-use crate::ui::controls::Input;
+use editor_ui::Input;
 use gpui_base::input::InputState;
 
 /// User associations live outside project content and never enable a plugin or grant trust.

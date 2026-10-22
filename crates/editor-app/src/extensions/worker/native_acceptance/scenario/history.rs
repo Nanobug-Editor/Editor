@@ -2,6 +2,8 @@
 use super::*;
 use plugin_runtime::plugin_protocol::Paint;
 mod phase_probe;
+mod scroll;
+pub(super) use scroll::exercise as exercise_scroll;
 
 /// The log's pointer, wheel and keyboard routes select immutable history; the file tree opens two readonly panes.
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
@@ -345,7 +347,7 @@ async fn readonly_input(
         Ok(active && focused)
     }, cx).await?;
     target.update(cx, |_, window, cx| {
-        input::text(window, "must remain readonly", cx)
+        editor_ui::testing::input_text(window, "must remain readonly", cx)
     })?;
     h.frame(target, cx).await?;
     target.update(cx, |_, window, cx| {

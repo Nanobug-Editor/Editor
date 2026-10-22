@@ -58,7 +58,7 @@ mod tests {
                 _ => {}
             }
         }
-        let source = include_str!("../../editor-app/assets/themes/default.json");
+        let source = include_str!("../../editor-ui/assets/themes/default.json");
         let file = ThemeFile::parse(source).unwrap();
         let mut declared = std::collections::BTreeSet::new();
         let mut complete = std::collections::BTreeSet::new();
@@ -79,7 +79,7 @@ mod tests {
     #[test]
     fn window_materials_are_optional_and_validated() {
         let mut source: serde_json::Value =
-            serde_json::from_str(include_str!("../../editor-app/assets/themes/default.json"))
+            serde_json::from_str(include_str!("../../editor-ui/assets/themes/default.json"))
                 .unwrap();
         source["themes"][0]
             .as_object_mut()
@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn host_alpha_colors_are_validated_at_every_style_state() {
         let mut file =
-            ThemeFile::parse(include_str!("../../editor-app/assets/themes/default.json")).unwrap();
+            ThemeFile::parse(include_str!("../../editor-ui/assets/themes/default.json")).unwrap();
         file.themes[0].colors.background = "#ffffff80".into();
         let styles = file.themes[0]
             .components

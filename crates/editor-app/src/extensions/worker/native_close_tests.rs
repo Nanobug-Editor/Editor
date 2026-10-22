@@ -117,7 +117,7 @@ fn failed_window_caption_child() {
         typography::init(cx);
         apply_theme(builtin_theme(false), cx);
         extensions::init(cx);
-        crate::ui::controls::init(cx);
+        editor_ui::init(cx);
         crate::app::shortcuts::bootstrap::configure(cx, profile.join("shortcuts.json")).unwrap();
         let actor = actual.then(|| Arc::new(Worker::start_background(
             extensions::profile_runtime_root(&profile), extensions::environment(&workspace_path, cx), true

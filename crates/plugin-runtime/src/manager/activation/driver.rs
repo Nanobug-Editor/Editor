@@ -101,6 +101,21 @@ impl Manager {
             ));
         }
         self.validate_demand_reason(token, &reason)?;
+        let mut observation = self.host_resources.observations.begin(
+            crate::observability::Owner::host_operation(token.plugin(), token.scope()),
+            crate::observability::Stage::Activation,
+            None,
+        );
+        observation.trigger(match &reason {
+            DemandReason::Command(_) => crate::observability::ActivationTrigger::Command,
+            DemandReason::View(_) => crate::observability::ActivationTrigger::View,
+            DemandReason::Service(_) => crate::observability::ActivationTrigger::Service,
+            DemandReason::Language { .. } | DemandReason::LanguageDocument { .. } => {
+                crate::observability::ActivationTrigger::Language
+            }
+            DemandReason::Background => crate::observability::ActivationTrigger::Background,
+        });
+        completion.observe(observation);
         self.activation.prune();
         self.resume_deferred_demands();
         let record = &self.activation.records[&(token.scope().into(), token.plugin().into())];
@@ -614,6 +629,8 @@ impl Manager {
             | DemandReason::LanguageDocument { provider, role, .. } => {
                 let id = provider.strip_prefix(&format!("{}/", manifest.id));
                 id.is_some_and(|id| match role {
+                    // Context control can demand an internal engine. Native provider catalogs
+                    // still hide it and expose only the plugin's declared primary facade.
                     LanguageRole::Lsp => manifest
                         .language_servers
                         .iter()
