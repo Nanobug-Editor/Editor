@@ -254,7 +254,7 @@ impl EditorApp {
         }
     }
 
-    /// Host-local visibility follows the workspace session; hiding does not destroy the dock leaf's position.
+    /// Toggle actual visibility through the shared dock policy; the session retains the user's intent.
     pub(crate) fn toggle_outline(
         &mut self,
         _: &ToggleOutline,
@@ -263,7 +263,7 @@ impl EditorApp {
     ) {
         let id = gpui_base::dock::PanelId::from(self.outline_panel.entity_id());
         self.session_state.outline_visible =
-            !self.session_state.outline_visible || self.dock_presentation.is_suppressed(id);
+            !local_dock::panel_visible(self.dock_area.read(cx), id, cx);
         if self.session_state.outline_visible {
             self.dock_presentation.activate(id);
         }

@@ -62,7 +62,7 @@ impl EditorApp {
             .dock_presentation
             .synchronize(self.dock_area.read(cx), cx)
             .0;
-        let layout = self.dock_area.read(cx).dump(cx);
+        let layout = self.dock_ui.dump(self.dock_area.read(cx), cx);
         for (name, dock) in [
             ("left", &layout.left_dock),
             ("right", &layout.right_dock),
@@ -161,6 +161,7 @@ impl EditorApp {
             sidebar::separate_left(&mut layout, px(self.session_state.explorer_width));
         }
         self.pending_dock_restore = false;
+        self.dock_ui.reset_hidden_sizes();
         let restored = self
             .dock_area
             .update(cx, |area, cx| area.load(layout, window, cx));
@@ -173,8 +174,9 @@ impl EditorApp {
             // Old default plugin columns must join their shared band before the whole band
             // becomes independent. Do this before adding missing leaves: dumping a newly
             // inserted, unpainted split would freeze its temporary measurements as preferences.
-            let mut independent = self.dock_area.read(cx).dump(cx);
+            let mut independent = self.dock_ui.dump(self.dock_area.read(cx), cx);
             if sidebar::separate_left(&mut independent, px(self.session_state.explorer_width)) {
+                self.dock_ui.reset_hidden_sizes();
                 if let Err(error) = self
                     .dock_area
                     .update(cx, |area, cx| area.load(independent, window, cx))

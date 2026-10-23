@@ -4,6 +4,8 @@ use super::*;
 use gpui_base::dock::{DockPlacement, PanelId};
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
+mod terminal;
+
 /// Publish arbitrary declarative panels at the same boundary used by installed contributions.
 fn publish(app: &Entity<EditorApp>, manifest: &protocol::Manifest, visual: &mut VisualTestContext) {
     visual.update(|window, cx| {

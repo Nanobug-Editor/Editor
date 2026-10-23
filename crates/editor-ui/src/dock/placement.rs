@@ -10,6 +10,8 @@ pub(super) struct Band<'a> {
     root: &'a PaneNode,
     /// First-level side regions stack vertically; top/bottom regions stack horizontally.
     axis: Axis,
+    /// The occupied side of the elastic editor, independent of native versus center-local storage.
+    side: Placement,
 }
 
 impl<'a> Band<'a> {
@@ -82,6 +84,12 @@ pub(super) fn region_band(
             Axis::Horizontal
         } else {
             Axis::Vertical
+        },
+        side: match region {
+            DockPlacement::Left => Placement::Left,
+            DockPlacement::Right => Placement::Right,
+            DockPlacement::Bottom => Placement::Bottom,
+            DockPlacement::Center => unreachable!(),
         },
     })
 }
@@ -246,6 +254,85 @@ pub fn stack_axis(
     target_band(area, node, anchor).map(|band| band.axis)
 }
 
+/// Rejoin a lone revealed leaf to the already displayed combination on its actual side.
+/// A retained hidden leaf can outlive its peers moving to a center-local band. Its old slot
+/// must not create another occupied side; existing shared and nested placements stay intact.
+pub(super) fn reveal_target(
+    area: &DockArea,
+    panel: PanelId,
+    cx: &App,
+) -> Option<(NodeId, Placement)> {
+    let center = area.layout(DockPlacement::Center)?;
+    let anchor = center.panels().find(|id| {
+        area.panel(*id)
+            .is_some_and(|view| view.panel_name(cx) == "Editor")
+    })?;
+    let placements = [
+        DockPlacement::Center,
+        DockPlacement::Left,
+        DockPlacement::Right,
+        DockPlacement::Bottom,
+    ];
+    let (source_placement, source) = placements.into_iter().find_map(|placement| {
+        let tree = area.layout(placement)?;
+        region_band(tree, placement, tree.find_panel_node(panel)?, Some(anchor))
+            .map(|band| (placement, band))
+    })?;
+    // An exclusive selection may still suppress every ordinary peer from the previous frame.
+    // Their raw intent preserves the existing combination when an ordinary leaf reclaims it.
+    // A suppressed exclusive leaf is an alternative, not a member of that ordinary combination.
+    let mut retained_peers = false;
+    source.root.walk(&mut |node| {
+        if let PaneRef::Tabs { panels, .. } = node.kind() {
+            retained_peers |= panels.iter().any(|id| {
+                *id != panel
+                    && *id != anchor
+                    && area.panel(*id).is_some_and(|view| {
+                        !presentation::is_exclusive(view, cx)
+                            && PanelHandle::of(view)
+                                .map_or_else(|| view.visible(cx), |handle| handle.visible(cx))
+                    })
+            });
+        }
+    });
+    // Closing a native dock preserves raw intent but frees its side for another band.
+    // Reveal only the requested leaf there; its old peers remain registered in the closed dock.
+    if retained_peers
+        && (source_placement == DockPlacement::Center || area.is_dock_open(source_placement))
+    {
+        return None;
+    }
+    for placement in placements {
+        if placement != DockPlacement::Center && !area.is_dock_open(placement) {
+            continue;
+        }
+        let Some(tree) = area.layout(placement) else {
+            continue;
+        };
+        for peer in tree.panels().filter(|id| *id != panel && *id != anchor) {
+            if !area.panel(peer).is_some_and(|view| view.visible(cx)) {
+                continue;
+            }
+            let Some(target) =
+                region_band(tree, placement, tree.find_panel_node(peer)?, Some(anchor))
+            else {
+                continue;
+            };
+            if source.side == target.side && source.root.id() != target.root.id() {
+                return Some((
+                    target.root.id(),
+                    if target.axis == Axis::Horizontal {
+                        Placement::Right
+                    } else {
+                        Placement::Bottom
+                    },
+                ));
+            }
+        }
+    }
+    None
+}
+
 /// Locate the entire existing band immediately left of Editor, independent of plugin IDs.
 /// Hidden host panels still anchor their band; a moved Explorer never drags a new left panel rightward.
 pub(super) fn left_sidebar_target(area: &DockArea, cx: &App) -> Option<(NodeId, Option<Pixels>)> {
@@ -317,6 +404,12 @@ fn beside_anchor(root: &PaneNode, target: NodeId, anchor: NodeId) -> Option<Band
             axis: match axis {
                 Axis::Horizontal => Axis::Vertical,
                 Axis::Vertical => Axis::Horizontal,
+            },
+            side: match (axis, target_child < anchor_child) {
+                (Axis::Horizontal, true) => Placement::Left,
+                (Axis::Horizontal, false) => Placement::Right,
+                (Axis::Vertical, true) => Placement::Top,
+                (Axis::Vertical, false) => Placement::Bottom,
             },
         })
     } else {

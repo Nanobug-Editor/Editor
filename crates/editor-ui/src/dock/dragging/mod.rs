@@ -195,7 +195,7 @@ impl LiveDrag {
         let Some(session) = self.0.borrow_mut().take() else {
             return;
         };
-        if commit && !area.is_locked() && session.owns_layout(area) {
+        if commit && !area.is_locked() && session.owns_layout(area, cx) {
             if let Some(target) = session.target {
                 session.original.place(
                     session.source,
@@ -237,7 +237,7 @@ impl LiveDrag {
         let Some(session) = state.as_mut() else {
             return;
         };
-        if area.is_locked() || !session.owns_layout(area) {
+        if area.is_locked() || !session.owns_layout(area, cx) {
             drop(state);
             self.finish(false, area, window, cx);
             return;
@@ -260,15 +260,21 @@ impl LiveDrag {
 }
 
 impl Session {
-    /// Registration/removal invalidates a commit instead of reviving stale plugins or losing new ones.
-    fn owns_layout(&self, area: &DockArea) -> bool {
+    /// Membership or visibility changes invalidate the frozen transaction rather than replaying it
+    /// over newly shown peers, restored hidden preferences, or removed plugin instances.
+    fn owns_layout(&self, area: &DockArea, cx: &App) -> bool {
         let ids: std::collections::HashSet<_> = REGIONS
             .into_iter()
             .filter_map(|placement| area.layout(placement))
             .flat_map(|tree| tree.panels())
             .collect();
         ids.len() == self.original.views.len()
-            && self.original.views.keys().all(|id| ids.contains(id))
+            && self.original.views.keys().all(|id| {
+                ids.contains(id)
+                    && area.panel(*id).is_some_and(|panel| {
+                        panel.visible(cx) == self.original.visible.contains(id)
+                    })
+            })
     }
     /// Resolve edges against real painted windows, excluding the grabbed leaf and central merge zone.
     fn hit(

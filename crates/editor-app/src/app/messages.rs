@@ -34,20 +34,7 @@ impl EditorApp {
     /// A closed dock region hides its leaves even when their own visibility flag remains enabled.
     pub(crate) fn messages_visible(&self, cx: &App) -> bool {
         let id = gpui_base::dock::PanelId::from(self.messages.entity_id());
-        let area = self.dock_area.read(cx);
-        self.messages.read(cx).is_visible()
-            && !self.dock_presentation.is_suppressed(id)
-            && ![
-                gpui_base::dock::DockPlacement::Left,
-                gpui_base::dock::DockPlacement::Right,
-                gpui_base::dock::DockPlacement::Bottom,
-            ]
-            .into_iter()
-            .any(|placement| {
-                area.layout(placement)
-                    .is_some_and(|tree| tree.panels().any(|panel| panel == id))
-                    && !area.is_dock_open(placement)
-            })
+        local_dock::panel_visible(self.dock_area.read(cx), id, cx)
     }
 
     /// Toggle only this host panel; other panels sharing a dock retain their own visibility.
@@ -67,21 +54,7 @@ impl EditorApp {
         if self.messages.read(cx).is_visible() {
             let id = gpui_base::dock::PanelId::from(self.messages.entity_id());
             self.dock_area.update(cx, |area, cx| {
-                for placement in [
-                    gpui_base::dock::DockPlacement::Left,
-                    gpui_base::dock::DockPlacement::Right,
-                    gpui_base::dock::DockPlacement::Bottom,
-                ] {
-                    if area
-                        .layout(placement)
-                        .is_some_and(|tree| tree.panels().any(|panel| panel == id))
-                        && !area.is_dock_open(placement)
-                    {
-                        area.toggle_dock(placement, window, cx);
-                    }
-                }
-                // Opening must refresh Base's active group as well as this panel's visibility.
-                area.select_panel(id, window, cx);
+                local_dock::reveal_panel(area, id, window, cx);
                 cx.notify();
             });
         }

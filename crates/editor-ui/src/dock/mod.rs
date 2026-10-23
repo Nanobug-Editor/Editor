@@ -1,7 +1,7 @@
 //! Project-owned presentation for the GPUI Base dock layout engine.
 //!
 //! GPUI Base owns the lasting tree, constraints and native panel identities. This module owns
-//! local appearance and release-only placement; each panel retains its independent split slot.
+//! local appearance, placement and regional reveal policy; each panel retains its split slot.
 
 use std::{
     cell::{Cell, RefCell},
@@ -32,7 +32,7 @@ use gpui_kit::{
 };
 use plugin_schema::ThemeComponent;
 
-/// Transient paint allocations only; Base retains the sole persistent layout and size preferences.
+/// Transient paint allocations only; Base retains the sole persistent layout tree.
 #[derive(Clone, Default)]
 struct PaintedFrames {
     /// Tab slots supply source dimensions and pointer hit targets.
@@ -49,6 +49,8 @@ pub struct LocalDock {
     frames: PaintedFrames,
     /// All users of this surface share one reversible drag transaction, including plugin panels.
     dragging: dragging::LiveDrag,
+    /// Only temporarily hidden slot preferences live outside Base's visible size projection.
+    hidden_sizes: hidden_sizes::HiddenSizes,
 }
 
 impl LocalDock {
@@ -58,6 +60,7 @@ impl LocalDock {
             title_height,
             frames: Default::default(),
             dragging: Default::default(),
+            hidden_sizes: Default::default(),
         }
     }
 
@@ -95,6 +98,16 @@ impl LocalDock {
         self.dragging.active()
     }
 
+    /// Save Base's current tree, restoring hidden slot preferences into its existing size fields.
+    pub fn dump(&self, area: &DockArea, cx: &App) -> DockAreaState {
+        self.hidden_sizes.dump(area, self.dragging.anchor(), cx)
+    }
+
+    /// Discard a previous visibility projection immediately before loading a complete saved layout.
+    pub fn reset_hidden_sizes(&self) {
+        self.hidden_sizes.clear();
+    }
+
     /// Prepare this root area's `width` from its current paint measurements, leaving Editor elastic.
     /// The host calls this after visibility reconciliation and before rendering the Base entity.
     pub fn prepare_frame(
@@ -104,8 +117,30 @@ impl LocalDock {
         window: &mut Window,
         cx: &mut Context<DockArea>,
     ) {
+        // Explicit visibility changes take effect immediately, including during a gesture.
+        // They invalidate its original snapshot; ordinary hover never changes this projection.
+        self.hidden_sizes
+            .prepare(area, self.dragging.anchor(), window, cx);
+        // Regional reflow still waits until the gesture releases or cancels its source geometry.
+        if self.is_dragging() || cx.has_active_drag() {
+            return;
+        }
         let frames = self.frames.panels.borrow().clone();
-        columns::prepare(area, &frames, width, self.dragging.anchor(), window, cx);
+        let center_width = self
+            .frames
+            .regions
+            .borrow()
+            .get(&DockPlacement::Center)
+            .map(|bounds| bounds.size.width);
+        columns::prepare(
+            area,
+            &frames,
+            width,
+            center_width,
+            self.dragging.anchor(),
+            window,
+            cx,
+        );
     }
 }
 
@@ -342,6 +377,7 @@ pub fn add_panel_view(
     // Admission uses its raw intent; the next presentation pass selects the displayed combination.
     let visible =
         PanelHandle::of(&panel).map_or_else(|| panel.visible(cx), |handle| handle.visible(cx));
+    let exclusive = presentation::is_exclusive(&panel, cx);
     // A declared left panel joins the existing sidebar instead of reserving another
     // outer column. Register first, then let Base split the retained sidebar band.
     if placement == DockPlacement::Left && placement::left_sidebar_target(area, cx).is_some() {
@@ -353,8 +389,23 @@ pub fn add_panel_view(
         return;
     }
     let neighbor = area.layout(placement).and_then(|tree| {
+        // Hidden alternatives have no ordinary share to divide. Prefer a displayed member
+        // so a new ordinary leaf cannot inherit an exclusive leaf's zero-sized placeholder.
         tree.panels()
+            .filter(|id| {
+                area.panel(*id)
+                    .is_some_and(|view| view.visible(cx) && !presentation::is_exclusive(view, cx))
+            })
             .last()
+            .or_else(|| {
+                tree.panels()
+                    .filter(|id| {
+                        area.panel(*id)
+                            .is_some_and(|view| !presentation::is_exclusive(view, cx))
+                    })
+                    .last()
+            })
+            .or_else(|| tree.panels().last())
             .and_then(|panel| tree.find_panel_node(panel))
     });
     // Base registers the view before it can be moved; finish both edits in one UI turn.
@@ -369,7 +420,7 @@ pub fn add_panel_view(
             InsertTarget::Split {
                 node,
                 placement,
-                size: None,
+                size: exclusive.then_some(px(0.)),
             },
             window,
             cx,
@@ -380,14 +431,32 @@ pub fn add_panel_view(
     }
 }
 
-/// Reveal a registered leaf in its current region without moving it or changing peers' visibility.
-/// Hidden host sidebars retain their tree while closed, so explicit reveals must reopen the region.
+/// Reveal a registered leaf on its actual side, joining an existing region if its old slot is isolated.
+/// Shared/nested placements and peers' visibility survive; hidden native docks reopen as needed.
 pub fn reveal_panel(
     area: &mut DockArea,
     panel: gpui_base::dock::PanelId,
     window: &mut Window,
     cx: &mut Context<DockArea>,
 ) {
+    if let Some((node, placement)) = placement::reveal_target(area, panel, cx) {
+        // An exclusive alternative never takes a share from the ordinary combination.
+        // Base expands its sole visible slot; its zero retained weight preserves peer proportions.
+        let size = area
+            .panel(panel)
+            .is_some_and(|view| presentation::is_exclusive(view, cx))
+            .then_some(px(0.));
+        area.move_panel(
+            panel,
+            InsertTarget::Split {
+                node,
+                placement,
+                size,
+            },
+            window,
+            cx,
+        );
+    }
     for placement in [
         DockPlacement::Left,
         DockPlacement::Right,
@@ -402,6 +471,25 @@ pub fn reveal_panel(
         }
     }
     area.select_panel(panel, window, cx);
+}
+
+/// Whether a registered leaf is painted in its actual region, including center-local placements.
+/// Presentation filtering is supplied by the panel handle; a closed native dock is not visible.
+pub fn panel_visible(area: &DockArea, panel: gpui_base::dock::PanelId, cx: &App) -> bool {
+    area.panel(panel).is_some_and(|view| view.visible(cx))
+        && [
+            DockPlacement::Center,
+            DockPlacement::Left,
+            DockPlacement::Right,
+            DockPlacement::Bottom,
+        ]
+        .into_iter()
+        .any(|placement| {
+            (placement == DockPlacement::Center || area.is_dock_open(placement))
+                && area
+                    .layout(placement)
+                    .is_some_and(|tree| tree.find_panel_node(panel).is_some())
+        })
 }
 
 /// Move a registered panel into the existing left band without replacing its view or layout tree.
@@ -420,8 +508,15 @@ pub fn move_to_left_sidebar(
     };
     // A new peer shares the whole sidebar, rather than halving a possibly hidden
     // last leaf. Give it the existing band's aggregate height as an initial weight;
-    // before measurement use the viewport. Base constrains and scales all peers.
-    let height = height.unwrap_or_else(|| window.viewport_size().height);
+    // before measurement use the viewport. Exclusive alternatives retain no ordinary share.
+    let height = if area
+        .panel(panel)
+        .is_some_and(|view| presentation::is_exclusive(view, cx))
+    {
+        px(0.)
+    } else {
+        height.unwrap_or_else(|| window.viewport_size().height)
+    };
     area.move_panel(
         panel,
         InsertTarget::Split {
@@ -437,6 +532,7 @@ pub fn move_to_left_sidebar(
 
 mod columns;
 mod dragging;
+mod hidden_sizes;
 mod panel;
 pub use panel::{
     BasePanel, BasePanelView, DockAreaState, DockState, Panel, PanelId, PanelState, TabGroup,

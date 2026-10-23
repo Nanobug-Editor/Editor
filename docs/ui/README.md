@@ -30,6 +30,7 @@
 
 - [Base 控件边界与本地 UI 迁移](verification/base-only-components-2026-10-19.md)：`gpui-component` 仅作实现参考；依赖边界、控件迁移与本轮验证结果见记录。
 
+- [工具窗口显隐统一布局](verification/dock-reveal-2026-10-23.md)：终端、大纲及其他窗口共用实际区域显隐，保留普通组合和独占切换的布局；本轮验证状态见记录。
 - [四侧组合拖放与单侧唯一占用](verification/dock-group-fallback-2026-10-19.md)：一级成员拖回本侧时按完整组合检查占用并整组移动；空侧和具体窗口保留单独拖动，嵌套子窗口不提升。
 - [单侧唯一组合与子窗口拖放（前一阶段）](verification/dock-single-side-2026-10-19.md)：保留四侧占用、局部分栏和实际验证记录；整组触发规则按后续修正执行。
 - [停靠窗口嵌套布局与拖动范围（前一阶段）](verification/dock-nested-layout-2026-10-19.md)：一级方向、内部嵌套与 `>=` 尺寸边界；保留当时的隐式组合拖动及实际验证记录。

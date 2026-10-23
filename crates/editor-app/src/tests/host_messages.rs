@@ -457,18 +457,29 @@ fn host_messages_extend_legacy_layout_and_support_native_keyboard(cx: &mut TestA
         assert!(restored.debug_bounds("host-messages-panel").is_none());
         click(restored, "host-messages-toggle");
         let panel = restored.debug_bounds("host-messages-panel").unwrap();
-        let peer_selector = restored.update(|_, cx| {
-            let area = app.read(cx).dock_area.read(cx);
-            let id = PanelId::from(app.read(cx).explorer_panel.entity_id());
-            let node = area
-                .layout(DockPlacement::Right)
-                .unwrap()
-                .find_panel_node(id)
-                .unwrap();
-            Box::leak(format!("local-dock-content-{}", node.as_u64()).into_boxed_str())
-                as &'static str
-        });
-        let peer = restored.debug_bounds(peer_selector).unwrap();
+        let peer_panel = restored.update(|_, cx| app.read(cx).explorer_panel.clone());
+        let peer_id = PanelId::from(peer_panel.entity_id());
+        // Hidden unconstrained slots may rebuild Base nodes while retaining the original views.
+        // Resolve each painted allocation by stable panel identity, not a preceding frame's NodeId.
+        let peer_bounds = |form: &mut VisualTestContext| {
+            let selector = form.update(|_, cx| {
+                let current = app.read(cx);
+                assert_eq!(current.explorer_panel.entity_id(), peer_panel.entity_id());
+                let area = current.dock_area.read(cx);
+                let view = area.panel(peer_id).unwrap();
+                assert_eq!(view.view().entity_id(), peer_panel.entity_id());
+                assert!(view.visible(cx), "the peer retains its visible intent");
+                let node = area
+                    .layout(DockPlacement::Right)
+                    .unwrap()
+                    .find_panel_node(peer_id)
+                    .unwrap();
+                Box::leak(format!("local-dock-content-{}", node.as_u64()).into_boxed_str())
+                    as &'static str
+            });
+            form.debug_bounds(selector)
+        };
+        let peer = peer_bounds(restored).unwrap();
         assert!(
             peer.bottom() <= panel.top(),
             "the existing peer keeps its independent split"
@@ -489,10 +500,10 @@ fn host_messages_extend_legacy_layout_and_support_native_keyboard(cx: &mut TestA
             restored.debug_bounds("host-messages-panel").is_some(),
             "one bottom activation reopens a closed region"
         );
-        assert!(restored.debug_bounds(peer_selector).is_some());
+        assert!(peer_bounds(restored).is_some());
         click(restored, "host-messages-hide");
         assert!(
-            restored.debug_bounds(peer_selector).is_some(),
+            peer_bounds(restored).is_some(),
             "hiding messages leaves its peer visible"
         );
         // Keyboard activation uses the local Base button's actual focus handle.

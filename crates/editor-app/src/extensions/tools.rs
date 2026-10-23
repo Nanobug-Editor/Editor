@@ -153,12 +153,11 @@ impl EditorApp {
             label: label.clone(),
             tooltip: label,
             icon: Some(explorer),
-            selected: self.explorer_visible
-                && !self
-                    .dock_presentation
-                    .is_suppressed(gpui_base::dock::PanelId::from(
-                        self.explorer_panel.entity_id(),
-                    )),
+            selected: local_dock::panel_visible(
+                self.dock_area.read(cx),
+                gpui_base::dock::PanelId::from(self.explorer_panel.entity_id()),
+                cx,
+            ),
             disabled: false,
             action: Action::Explorer,
         }];
@@ -171,23 +170,23 @@ impl EditorApp {
             disabled: false,
             action: Action::Terminal,
         });
-        // Outline remains available when hidden, with selection reflecting its persisted visibility.
+        // Every host control reflects actual regional display, including closed and exclusive docks.
+        let outline_visible = local_dock::panel_visible(
+            self.dock_area.read(cx),
+            gpui_base::dock::PanelId::from(self.outline_panel.entity_id()),
+            cx,
+        );
         result.push(Entry {
             id: "outline-toggle".into(),
             label: t!("panel.outline").to_string(),
-            tooltip: t!(if self.session_state.outline_visible {
+            tooltip: t!(if outline_visible {
                 "outline.hide"
             } else {
                 "outline.show"
             })
             .to_string(),
             icon: Some(Icon::default().path("icons/outline-panel.svg")),
-            selected: self.session_state.outline_visible
-                && !self
-                    .dock_presentation
-                    .is_suppressed(gpui_base::dock::PanelId::from(
-                        self.outline_panel.entity_id(),
-                    )),
+            selected: outline_visible,
             disabled: false,
             action: Action::Outline,
         });

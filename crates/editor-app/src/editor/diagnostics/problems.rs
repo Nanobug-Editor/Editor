@@ -111,23 +111,7 @@ impl EditorApp {
         self.ensure_problems_dock(window, cx);
         let id = gpui_base::dock::PanelId::from(self.problems.panel.entity_id());
         self.dock_area.update(cx, |area, cx| {
-            // A user may have moved this leaf; reopen its actual dock instead of forcing it below.
-            let placement = [
-                gpui_base::dock::DockPlacement::Left,
-                gpui_base::dock::DockPlacement::Right,
-                gpui_base::dock::DockPlacement::Bottom,
-            ]
-            .into_iter()
-            .find(|placement| {
-                area.layout(*placement)
-                    .is_some_and(|layout| layout.find_panel_node(id).is_some())
-            });
-            if let Some(placement) = placement
-                && !area.is_dock_open(placement)
-            {
-                area.toggle_dock(placement, window, cx);
-            }
-            area.select_panel(id, window, cx);
+            local_dock::reveal_panel(area, id, window, cx);
             cx.notify();
         });
         self.problems.focus.focus(window, cx);

@@ -545,37 +545,23 @@ impl EditorApp {
 
     /// Dock-level hiding also affects the footer, without changing whether Shell resources are alive.
     pub(crate) fn terminal_visible(&self, cx: &App) -> bool {
-        self.terminal.read(cx).visible()
-            && !self
-                .dock_presentation
-                .is_suppressed(gpui_base::dock::PanelId::from(self.terminal.entity_id()))
-            && self
-                .dock_area
-                .read(cx)
-                .is_dock_open(gpui_base::dock::DockPlacement::Bottom)
+        local_dock::panel_visible(
+            self.dock_area.read(cx),
+            gpui_base::dock::PanelId::from(self.terminal.entity_id()),
+            cx,
+        )
     }
 
     /// Reveal the native dock leaf; opening it never depends on installed package contributions.
     pub(crate) fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let visible = !self.terminal_visible(cx);
-        if visible {
-            self.dock_presentation
-                .activate(gpui_base::dock::PanelId::from(self.terminal.entity_id()));
-        }
         let trusted = self.extensions.read(cx).workspace_trusted();
         self.terminal.update(cx, |panel, cx| {
             panel.set_trusted(trusted, cx);
             panel.set_visible(visible, cx);
         });
         if visible {
-            self.ensure_terminal_dock(window, cx);
-            let id = gpui_base::dock::PanelId::from(self.terminal.entity_id());
-            self.dock_area.update(cx, |area, cx| {
-                if !area.is_dock_open(gpui_base::dock::DockPlacement::Bottom) {
-                    area.toggle_dock(gpui_base::dock::DockPlacement::Bottom, window, cx);
-                }
-                area.select_panel(id, window, cx);
-            });
+            self.reveal_terminal(window, cx);
         }
         self.dock_area.update(cx, |_, cx| cx.notify());
         cx.notify();

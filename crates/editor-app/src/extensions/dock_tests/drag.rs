@@ -99,28 +99,6 @@ fn check_right(app: &Entity<EditorApp>, ids: &[PanelId], visual: &mut VisualTest
     }
 }
 
-/// Returning Explorer above Outline must free its custom column instead of widening the old column.
-fn rejoin(
-    app: &Entity<EditorApp>,
-    ids: [PanelId; 3],
-    width: Pixels,
-    visual: &mut VisualTestContext,
-) {
-    let outline = native_panel_bounds(app, ids[1], visual);
-    drag(
-        app,
-        ids[0],
-        point(outline.center().x, outline.top() + px(8.)),
-        false,
-        visual,
-    );
-    let after = ids.map(|id| native_panel_bounds(app, id, visual));
-    assert!((after[0].size.width - width).abs() < px(2.));
-    assert!((after[1].size.width - width).abs() < px(2.));
-    assert!(after[0].bottom() <= after[1].top() + px(2.));
-    assert!((after[2].left() - width).abs() < px(2.));
-}
-
 /// An own-side title relocates the whole first-level group, or the sole visible member, and persists it.
 fn exercise(cx: &mut TestAppContext, outline_visible: bool, preview: bool) {
     cx.update(|cx| {
@@ -196,10 +174,31 @@ fn exercise(cx: &mut TestAppContext, outline_visible: bool, preview: bool) {
         assert!((outline.left() - restored.left()).abs() < px(2.));
         assert!((outline.size.width - restored.size.width).abs() < px(2.));
     } else {
-        // A hidden peer remains at the former native sidebar; revealing it creates a real return target.
+        // A hidden peer may retain its former slot, but opening it joins the current left group.
+        // Saving and reopening before this click also covers a dormant leaf restored from disk.
+        let editor_before = native_panel_bounds(&reopened, ids[2], visual);
         let toggle = visual.debug_bounds("outline-toggle").unwrap();
         visual.simulate_click(toggle.center(), Default::default());
-        rejoin(&reopened, ids, before.size.width, visual);
+        let [explorer, outline, editor] = ids.map(|id| native_panel_bounds(&reopened, id, visual));
+        assert!(
+            (outline.left() - explorer.left()).abs() < px(2.),
+            "opening Outline must join Explorer's existing left group: Explorer={explorer:?}, Outline={outline:?}"
+        );
+        assert!((outline.size.width - explorer.size.width).abs() < px(2.));
+        assert!((explorer.left() - restored.left()).abs() < px(2.));
+        assert!((explorer.size.width - restored.size.width).abs() < px(2.));
+        assert!(
+            explorer.bottom() <= outline.top() + px(2.)
+                || outline.bottom() <= explorer.top() + px(2.),
+            "ordinary left peers must share separate vertical slots"
+        );
+        assert!(
+            (editor.left() - editor_before.left()).abs() < px(2.)
+                && (editor.top() - editor_before.top()).abs() < px(2.)
+                && (editor.size.width - editor_before.size.width).abs() < px(2.)
+                && (editor.size.height - editor_before.size.height).abs() < px(2.),
+            "opening Outline must not reserve an additional sidebar: {editor_before:?} -> {editor:?}"
+        );
     }
 }
 
@@ -209,7 +208,7 @@ fn explorer_drop_on_editor_left_moves_its_whole_group(cx: &mut TestAppContext) {
     exercise(cx, true, true);
 }
 
-/// An empty former source column must not leave reserved pixels after the move or restart.
+/// A hidden Outline rejoins the moved left group after restart without reserving a second column.
 #[gpui::test]
 fn explorer_drop_on_editor_left_without_visible_peers(cx: &mut TestAppContext) {
     exercise(cx, false, true);

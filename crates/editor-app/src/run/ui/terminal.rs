@@ -75,15 +75,13 @@ impl EditorApp {
         accepted
     }
 
-    /// Select the built-in leaf without the empty-panel action that creates a Shell.
+    /// Reveal the retained terminal through shared regional policy without creating an empty Shell.
     pub(crate) fn reveal_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.ensure_terminal_dock(window, cx);
         let id = gpui_base::dock::PanelId::from(self.terminal.entity_id());
+        self.dock_presentation.activate(id);
         self.dock_area.update(cx, |area, cx| {
-            if !area.is_dock_open(gpui_base::dock::DockPlacement::Bottom) {
-                area.toggle_dock(gpui_base::dock::DockPlacement::Bottom, window, cx);
-            }
-            area.select_panel(id, window, cx);
+            local_dock::reveal_panel(area, id, window, cx);
         });
         cx.notify();
     }

@@ -194,9 +194,9 @@ fn collect_bands(node: &PaneNode, editor: PanelId, regions: &mut [Vec<PanelId>; 
 }
 
 /// Only visibility is filtered; callbacks, resources and the presentation downcast stay native.
-struct PresentedPanel {
+pub(super) struct PresentedPanel {
     /// Original component handle owns title rendering and all Base lifecycle callbacks.
-    inner: Arc<dyn PanelView>,
+    pub(super) inner: Arc<dyn PanelView>,
     /// Shared per-editor selection, never a second persistent layout.
     presentation: PanelPresentation,
 }
@@ -239,6 +239,21 @@ impl PanelView for PresentedPanel {
         self.inner.dump(cx)
     }
     fn as_any(&self) -> &dyn std::any::Any {
-        self.inner.as_any()
+        self
     }
+}
+
+/// Read a wrapped leaf's declared mode without treating last frame's suppression as its intent.
+pub(super) fn is_exclusive(panel: &Arc<dyn PanelView>, cx: &App) -> bool {
+    panel
+        .as_any()
+        .downcast_ref::<PresentedPanel>()
+        .is_some_and(|view| {
+            view.presentation
+                .0
+                .read()
+                .unwrap()
+                .exclusive
+                .contains(&view.panel_id(cx))
+        })
 }

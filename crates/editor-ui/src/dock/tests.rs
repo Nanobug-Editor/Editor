@@ -5,6 +5,8 @@ use gpui_base::Placement;
 use gpui_base::dock::{DockPlacement, PaneRef, Panel, PanelEvent, PanelId};
 use gpui_kit::{EventEmitter, FocusHandle, Focusable, Render, TestAppContext, gpui};
 
+mod reveal;
+
 /// Minimal content exercises real DockArea registration without a plugin worker.
 struct TestPanel(FocusHandle);
 
@@ -28,6 +30,13 @@ impl Panel for TestPanel {
     fn panel_name(&self) -> &'static str {
         // Instances deliberately share a type name; entity IDs identify panels.
         "LocalDockTestPanel"
+    }
+}
+
+impl super::Panel for TestPanel {
+    /// Test panels need only the local title contract to participate in presentation filtering.
+    fn title(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        Empty
     }
 }
 
@@ -354,4 +363,113 @@ fn nested_split_layouts_keep_their_axes(cx: &mut TestAppContext) {
         });
         gpui_base::Root::new(area, window, cx)
     });
+}
+
+/// An exclusive window beside the elastic editor owns its whole region, not a zero-weight alternative.
+#[gpui::test]
+fn exclusive_editor_edge_keeps_its_regional_allocation(cx: &mut TestAppContext) {
+    use gpui_base::dock::DockLayout;
+    use gpui_kit::Axis;
+
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        crate::typography::init(cx);
+        crate::theme::apply_theme(crate::theme::builtin_theme(false), cx);
+    });
+    for edge in [
+        Placement::Left,
+        Placement::Right,
+        Placement::Top,
+        Placement::Bottom,
+    ] {
+        let slot = Rc::new(RefCell::new(None));
+        let capture = slot.clone();
+        let (_, visual) = cx.add_window_view(move |window, cx| {
+            let editor = cx.new(|cx| TestPanel(cx.focus_handle()));
+            let exclusive = cx.new(|cx| TestPanel(cx.focus_handle()));
+            let editor_id = PanelId::from(editor.entity_id());
+            let exclusive_id = PanelId::from(exclusive.entity_id());
+            let presentation = PanelPresentation::default();
+            presentation.set_exclusive(exclusive_id, true);
+            let dock = LocalDock::new(28.).with_elastic_panel(editor_id);
+            let area = dock.create_area("exclusive-editor-edge", None, window, cx);
+            area.update(cx, |area, cx| {
+                let editor = DockLayout::tabs().panel_view(presentation.panel_handle(editor), cx);
+                let exclusive =
+                    DockLayout::tabs().panel_view(presentation.panel_handle(exclusive), cx);
+                let horizontal = edge.axis() == Axis::Horizontal;
+                let layout = if horizontal {
+                    DockLayout::h_split()
+                } else {
+                    DockLayout::v_split()
+                };
+                let editor_size = Some(px(if horizontal { 800. } else { 500. }));
+                let exclusive_size = Some(px(200.));
+                let layout = if matches!(edge, Placement::Left | Placement::Top) {
+                    layout
+                        .child(exclusive, exclusive_size)
+                        .child(editor, editor_size)
+                } else {
+                    layout
+                        .child(editor, editor_size)
+                        .child(exclusive, exclusive_size)
+                };
+                area.set_center(layout, window, cx);
+            });
+            *capture.borrow_mut() = Some((area.clone(), dock, [editor_id, exclusive_id]));
+            gpui_base::Root::new(area, window, cx)
+        });
+        let (area, dock, ids) = slot.borrow_mut().take().unwrap();
+        visual.simulate_resize(size(px(1000.), px(700.)));
+        visual.run_until_parked();
+        visual.update(|window, cx| window.draw(cx).clear(cx));
+        let selectors = ids.map(|id| {
+            let node = visual.update(|_, cx| {
+                area.read(cx)
+                    .layout(DockPlacement::Center)
+                    .unwrap()
+                    .find_panel_node(id)
+                    .unwrap()
+            });
+            &*Box::leak(format!("local-dock-content-{}", node.as_u64()).into_boxed_str())
+        });
+        let before = selectors.map(|selector| visual.debug_bounds(selector).unwrap());
+        visual.update(|window, cx| {
+            area.update(cx, |area, cx| {
+                let tree = area.layout(DockPlacement::Center).unwrap();
+                let root = tree.root().id();
+                let PaneRef::Split { sizes, .. } = tree.root().kind() else {
+                    panic!("the editor edge must retain its regional split");
+                };
+                let before = sizes.to_vec();
+                dock.prepare_frame(area, window.viewport_size().width, window, cx);
+                let tree = area.layout(DockPlacement::Center).unwrap();
+                assert_eq!(
+                    tree.root().id(),
+                    root,
+                    "preparation must keep the live tree"
+                );
+                let PaneRef::Split { sizes, .. } = tree.root().kind() else {
+                    panic!("preparation must retain the regional split");
+                };
+                assert_eq!(
+                    sizes,
+                    before.as_slice(),
+                    "{edge:?} lost its outer allocation"
+                );
+            });
+        });
+        visual.run_until_parked();
+        visual.update(|window, cx| window.draw(cx).clear(cx));
+        for (selector, before) in selectors.into_iter().zip(before) {
+            let after = visual.debug_bounds(selector).unwrap();
+            assert!(
+                (after.left() - before.left()).abs() < px(2.)
+                    && (after.top() - before.top()).abs() < px(2.)
+                    && (after.size.width - before.size.width).abs() < px(2.)
+                    && (after.size.height - before.size.height).abs() < px(2.),
+                "{edge:?} preparation changed a regional allocation: {before:?} -> {after:?}"
+            );
+        }
+    }
 }

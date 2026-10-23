@@ -818,10 +818,10 @@ impl EditorApp {
         }
     }
 
-    /// Toggle this host leaf and reopen its retained side dock when becoming visible.
+    /// Toggle actual visibility through the shared regional reveal policy, retaining host state.
     fn toggle_explorer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let id = gpui_base::dock::PanelId::from(self.explorer_panel.entity_id());
-        self.explorer_visible = !self.explorer_visible || self.dock_presentation.is_suppressed(id);
+        self.explorer_visible = !local_dock::panel_visible(self.dock_area.read(cx), id, cx);
         if self.explorer_visible {
             self.dock_presentation.activate(id);
         }

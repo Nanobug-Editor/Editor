@@ -40,6 +40,12 @@ impl PanelHandle {
     }
     /// Recover the local presentation carried through Base's panel view object.
     pub(crate) fn of(panel: &Arc<dyn BasePanelView>) -> Option<&Self> {
+        if let Some(presented) = panel
+            .as_any()
+            .downcast_ref::<super::presentation::PresentedPanel>()
+        {
+            return Self::of(&presented.inner);
+        }
         panel.as_any().downcast_ref()
     }
     /// Draw the live panel title.

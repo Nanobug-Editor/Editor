@@ -1,15 +1,17 @@
 //! Editor-local columns keep their pixels while the editor absorbs regional width changes.
-//! All trees, view identities and lasting resize preferences remain in the original Base DockArea.
+//! Base owns the tree, live views and visible weights; LocalDock restores hidden preferences separately.
 use super::*;
 use gpui_base::dock::{DockLayout, PaneNode, PaneRef, PanelId};
 use gpui_kit::{Axis, Size};
 
 /// Before a root frame, keep measured side-column widths and give the new available width to Editor.
 /// Native split gestures continue to own their intermediate sizes; only external width changes reflow.
+/// `center_width` is the last painted regional width; leaf frames can span different visibility states.
 pub(super) fn prepare(
     area: &mut DockArea,
     frames: &HashMap<NodeId, Bounds<Pixels>>,
     viewport_width: Pixels,
+    center_width: Option<Pixels>,
     elastic: Option<PanelId>,
     window: &mut Window,
     cx: &mut Context<DockArea>,
@@ -26,13 +28,18 @@ pub(super) fn prepare(
     if !has_columns(area, tree.root(), anchor, cx) {
         return;
     }
-    let Some(measured) = extent(area, tree.root(), frames, None, None, cx)
-        .map(|size| size.width)
-        .or_else(|| preferred_width(area, tree.root(), cx))
-    else {
-        return;
-    };
-    if (measured - available_width(area, viewport_width, cx)).abs() < px(0.5) {
+    // A newly shown leaf can retain old bounds while its visible peer still fills their whole row.
+    // Summing those frames would turn every reveal into a resize and repeatedly shrink that leaf.
+    let measured = center_width
+        .filter(|width| *width > px(0.))
+        .or_else(|| preferred_width(area, tree.root(), cx));
+    // A hidden column can miss an intervening viewport resize. Its saved width plus Editor's
+    // expanded paint then exposes the mismatch even though the outer region is already current.
+    let anchored = anchor_path_width(area, tree.root(), anchor, frames, cx);
+    let available = available_width(area, viewport_width, cx);
+    if measured.is_none_or(|width| (width - available).abs() < px(0.5))
+        && anchored.is_none_or(|width| (width - available).abs() < px(0.5))
+    {
         return;
     }
     install(area, frames, viewport_width, elastic, window, cx);
@@ -69,6 +76,46 @@ fn preferred_width(area: &DockArea, node: &PaneNode, cx: &App) -> Option<Pixels>
             .iter()
             .filter_map(|child| preferred_width(area, child, cx))
             .reduce(|a, b| a.max(b)),
+    }
+}
+
+/// Measure only Editor's ancestor path, adding visible columns from their Base slot preferences.
+/// Vertical siblings never affect this width, so stale bottom-panel frames cannot turn reveals into resizes.
+fn anchor_path_width(
+    area: &DockArea,
+    node: &PaneNode,
+    anchor: NodeId,
+    frames: &HashMap<NodeId, Bounds<Pixels>>,
+    cx: &App,
+) -> Option<Pixels> {
+    match node.kind() {
+        PaneRef::Tabs { .. } => frames.get(&node.id()).map(|bounds| bounds.size.width),
+        PaneRef::Split {
+            axis,
+            children,
+            sizes,
+        } => {
+            let editor = children.iter().position(|child| contains(child, anchor))?;
+            let width = anchor_path_width(area, &children[editor], anchor, frames, cx)?;
+            if axis == Axis::Vertical {
+                return Some(width);
+            }
+            children
+                .iter()
+                .enumerate()
+                .filter(|(index, child)| *index != editor && visible(area, child, cx))
+                .try_fold(width, |total, (index, child)| {
+                    let width = sizes
+                        .get(index)
+                        .copied()
+                        .flatten()
+                        .or_else(|| {
+                            extent(area, child, frames, None, None, cx).map(|size| size.width)
+                        })
+                        .or_else(|| preferred_width(area, child, cx))?;
+                    Some(total + width)
+                })
+        }
     }
 }
 
@@ -162,7 +209,7 @@ fn contains(node: &PaneNode, target: NodeId) -> bool {
 }
 
 /// Reuse live views while the anchor absorbs space released by a departing peripheral region.
-/// Both axes retain tool dimensions; a group's own children scale together in their original ratio.
+/// Tool subtrees retain Base's split preferences, including hidden slots, while Base scales their bounds.
 fn compose(
     area: &DockArea,
     node: &PaneNode,
@@ -184,12 +231,36 @@ fn compose(
             children,
             sizes,
         } => {
+            let editor = children.iter().position(|child| contains(child, anchor));
+            let mut layout = if axis == Axis::Horizontal {
+                DockLayout::h_split()
+            } else {
+                DockLayout::v_split()
+            };
+            if editor.is_none() {
+                // Only ancestors of Editor need elastic allocation. Tool-only combinations keep
+                // their stored ratios; a hidden peer's expanded neighbor is not a new preference.
+                for (index, child) in children.iter().enumerate() {
+                    layout = layout.child(
+                        compose(area, child, anchor, allocation, frames, cx)?,
+                        sizes.get(index).copied().flatten(),
+                    );
+                }
+                return Some(layout);
+            }
             let dimensions = children
                 .iter()
                 .enumerate()
                 .map(|(index, child)| {
                     if !visible(area, child, cx) {
                         return Some(px(0.));
+                    }
+                    // A retained column's preference survives hidden viewport resizes. Temporary
+                    // expanded bounds must not replace the pixels recorded by a completed divider drag.
+                    if axis == Axis::Horizontal && Some(index) != editor {
+                        if let Some(width) = sizes.get(index).copied().flatten() {
+                            return Some(width);
+                        }
                     }
                     extent(area, child, frames, None, None, cx)
                         .map(|extent| axis_extent(extent, axis))
@@ -203,7 +274,6 @@ fn compose(
                         })
                 })
                 .collect::<Option<Vec<_>>>()?;
-            let editor = children.iter().position(|child| contains(child, anchor));
             let fixed = dimensions
                 .iter()
                 .enumerate()
@@ -214,15 +284,8 @@ fn compose(
             // the editor absorbs reclaimed space instead of proportionally enlarging the moved tools.
             let factor = if fixed <= px(0.) {
                 1.
-            } else if editor.is_some() {
+            } else {
                 ((available - gpui_base::PANEL_MIN_SIZE).max(px(0.)) / fixed).min(1.)
-            } else {
-                available / fixed
-            };
-            let mut layout = if axis == Axis::Horizontal {
-                DockLayout::h_split()
-            } else {
-                DockLayout::v_split()
             };
             for (index, child) in children.iter().enumerate() {
                 let along = if Some(index) == editor {
@@ -235,7 +298,8 @@ fn compose(
                 } else {
                     size(allocation.width, along)
                 };
-                let weight = if available > px(0.) {
+                // Hidden regions retain the zero projection supplied by LocalDock's preference overlay.
+                let weight = if available > px(0.) && visible(area, child, cx) {
                     Some(along)
                 } else {
                     sizes.get(index).copied().flatten()
