@@ -1,6 +1,6 @@
 # Canvas 可编辑目标与语义实施记录
 
-日期：2026-10-25。状态：实施中，尚未验收或关闭 #129。来源：[02 工单](../tickets/canvas-protocol-extension/02-text-input-semantics.md)、[公共契约方案](../specs/canvas-protocol-extension.md)。
+日期：2026-10-25。最新状态：阶段验收与双轴审查通过，等待分支推送及 #129 关闭；四单完成后统一合回 main。来源：[02 工单](../tickets/canvas-protocol-extension/02-text-input-semantics.md)、[公共契约方案](../specs/canvas-protocol-extension.md)。
 
 前置 #128 已通过双轴审查、实际 WASM 与原生验收，独立分支推送至 `d12c4d2139aaaf8dbb5ab5780d464944b5a22e13` 后读回为 closed/completed。用户要求四单在 `C:/Users/Tmiracle/.codex/worktrees/canvas-prerequisite/Editor` 的 `codex/canvas-protocol-extension` 分支完成，全部完成后统一合回 main；本单不修改或同步主工作区。
 
@@ -95,3 +95,30 @@ Windows UIA 实测通过（`target/canvas-b-target-semantics-os.log` 1.86 s，�
 Standards 对 `09954722` 复核为 0；Spec 原三项已解决，又在“视口完全落在大型孔洞内”组合中发现 1 项 P2。两个新增原生样本 `target-keys-viewport-hole.json` 与 `target-semantics-viewport-hole.json` 均先复现失败：Tab 仍进入包围视口的不可见外环；独立 COM 客户端多读到 hole-target/hole-label 两项。现保留 worker 已接纳的真实凸填充片段，最后再与实际 native viewport 做固定 scratch 相交；Tab 使用原显示帧 basis，元素/语义使用实际布局 viewport。目标与对应语义共享 Arc 片段，稳定 ID 使用有序索引查找，不在 Tab 中重复扫描全部 regions。最终没有展开路径、重新 tessellate 或分配 native clip 片段。两项绿灯通过，OS 树只保留四个可见节点。
 
 此后 13 项原生输入/文字/语义回归全部通过（`target/canvas-b-green-*.log`），覆盖原孔洞、视口孔洞、窗口失活、多键捕获、模态、普通/affine/真实 OS IME、旧帧 wheel、圆角像素/命中与长行预算。冻结 A 在 125% 与 200% 深色窗口的实际包像素回归也通过（`target/canvas-b-final-wasm-flow-*.log`）。fmt、workspace tests/check 与插件宿主定向 77 项再次通过（`target/canvas-b-viewport-*.log`）。这一组合修复仍待双轴复核。
+
+
+## 第二单最终验收
+
+源码最终固定为 `297998d10a2e0084a6bab4450ffbc375253c5c6d`，审查固定点仍为 `561aa5b2...HEAD`。两名只读审查代理最终报告 Standards 硬性问题 0/判断性问题 0、Spec 未解决 0/新增 0。原长行 P1、三项 P2 和追加视口孔洞 P2 全部解决。
+
+`09954722` 宿主再次执行两个独立项目的 `--plugin-package`，Cargo 复用同源 Release 组件；两个 ZIP 与公开 Manager 已实测输入的 SHA-256 完全相同。SDK 为 `64a65b86088906ba33b5195ec9ec325d05ad9d6ba897e3406f048ec37bd79a11`，Rust 1.98.1 / wasm32-wasip2 / Release。后续原生修复没有改变 SDK 或 guest 源码。生产宿主摘要、guest source 摘要及构建提交见固定输入账本。
+
+| 固定输入 | 大小 | SHA-256 |
+| --- | --- | --- |
+| `canvas-flow-1.1.0.zip` | 393460 bytes | `9aaa100f7b2b5af2c96f111a43f67a483dc16af52a4cbb4b5d5717d7af3bdc22` |
+| `canvas-table-1.0.0.zip` | 441905 bytes | `d4567c3b52c2fffd07d820e48639d6ddcc4d95881100de2e585cfc3e8691e105` |
+
+每包仅包含 manifest 和实际 WASM，协议 7，要求 `ui.canvas >=1.8,<2`，权限仅 `ui.panels`。历史 flow 1.0 ZIP 保持原 306702 bytes/SHA `8ada9f8754cca3fb65290b8e6f2b3823f65fbf4eb8d26c89d03f4ffe7d387833`，原账本项未修改，bare historical ID 选择不变。固定验收包不进入市场、宿主发行或 SDK。
+
+| 工单验收项 | 实际证据 |
+| --- | --- |
+| AC1/AC2 | 原生段落、换行/对齐/省略、Unicode/emoji/组合字/RTL/连字样本、原文查询和实际字体环境；64 KiB 长行响应性回归。 |
+| AC3/AC4 | 独立 key down/up/repeat、五项修饰键和 Text，Tab、精确 hit/capture、按键组合及一次 cancel；窗口失活、模态、epoch/来源退休；圆角像素与 hit 一致。 |
+| AC5 | 普通和 90° 路径裁剪的 native EIH 预编辑、缩放/平移与候选几何、连续提交/迟到 ACK/选择、旧端点撤销；真实 OS 中文 IME 与 WASM 往返。 |
+| AC6 | 四项 DocumentSession 文本/选择/IME/原子 Undo 回归；guest 领域 Undo；原生 code alignment 再验证唯一 source entity、IME 和 Undo。 |
+| AC7 | 独立 Windows COM 客户端读取名称/值/角色/真实焦点/行列总数/投影物理边界，执行 SetFocus/SetValue/Invoke；两种孔洞均不暴露不可见语义。 |
+| AC8 | 禁用全部 candidate overrides，从冻结账本默认加载实际 flow/table，完整运行 Chinese IME → Manager → WASM → ACK → UIA SetFocus/SetValue → 新 epoch 重绘。flow 39.82 s、table 55.74 s，均通过。 |
+
+冻结包原生记录为 `target/canvas-b-frozen-wasm-{flow,table}-editable.log`。另外四项旧路径 ignored 测试已显式通过：Canvas 1.4–1.6 文字/列宽像素、source Canvas 不能将旧释放送到替换场景、预编辑/取消后的旧 action 拒绝、code alignment 保持 source entity/IME/Undo（`target/canvas-b-legacy-*.log`）。
+
+阶段门禁、SDK 六项、公开 Manager 实际包、插件定向、四项文档会话及本单原生证据均通过；未运行的 ignored 项仍记为 ignored。实机为现有 Windows/D3D 环境，其他平台未实测。锁定 GPUI 没有提供物理键码/完整按键掩码时保持 None；AccessKit 0.34 没有 Windows GridPattern，类型化行列与本地化原生描述已实测。查询矩形保守包围可见内容，原生目标/语义可见性使用真实填充片段。C/D 的控件/交换、保留更新、隐藏与长期性能组合仍由后续工单负责。

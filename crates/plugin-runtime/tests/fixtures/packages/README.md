@@ -4,6 +4,15 @@
 It covers curved edges, rounded nodes, viewport input and selected-node repaint, plus rejected-scene
 recovery through the public Manager. It is an acceptance fixture, excluded from distribution and SDK.
 
+`canvas-flow-1.1.0.zip` and `canvas-table-1.0.0.zip` independently consume public `ui.canvas 1.8`.
+They exercise original-grapheme edits, guest-owned undo, native target focus/IME, bounded semantic
+trees, and the public Manager's shown-frame/acknowledgement/retirement gates. The table declares six
+visible cells and 100000 logical rows. Native acceptance loads these exact ledger entries and drives
+real Windows Chinese IME plus UI Automation; candidate overrides are optional development inputs.
+The historical flow 1.0 archive and its ledger entry remain first and unchanged. Both newer packages
+were produced with the recorded committed host/SDK; later native geometry fixes retain that same
+SDK and guest source. They are excluded from distribution and SDK and create no marketplace listing.
+
 `markdown-0.18.2-readme-pr.zip` is the isolated source-PR README presentation candidate: paragraph alignment,
 accessible image alt semantics and Primer metrics through public `ui.styles`. The 0.18.0/0.18.1
 local candidates and the first `markdown-0.18.2.zip` remain preserved. `sdk-styles-fixture-1.0.0.zip` is an independent minimal current-SDK

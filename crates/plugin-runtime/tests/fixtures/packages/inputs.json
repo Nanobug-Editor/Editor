@@ -17,6 +17,34 @@
       "scope": "Independent ui.canvas 1.7 acceptance guest rebuilt through the committed curated host --plugin-package entry after resource-budget review fixes; never a marketplace listing."
     },
     {
+      "id": "canvas-flow",
+      "version": "1.1.0",
+      "archive": "canvas-flow-1.1.0.zip",
+      "sha256": "9aaa100f7b2b5af2c96f111a43f67a483dc16af52a4cbb4b5d5717d7af3bdc22",
+      "repository": "Nanobug-Editor/Editor",
+      "source_commit": "099547229fb428eb14aa4881f5d5a41c7cba6d7a",
+      "source_sha256": "8df7b770439cb6190faa15c50d55201af61b561b034fd257e98864fa4346b99a",
+      "host_revision": "099547229fb428eb14aa4881f5d5a41c7cba6d7a",
+      "host_exe_sha256": "276dffecd8118c85ad791dd41449ed9efb10feeb503ce3d93443ac0d017a4d5c",
+      "sdk_sha256": "64a65b86088906ba33b5195ec9ec325d05ad9d6ba897e3406f048ec37bd79a11",
+      "toolchain": "Rust 1.98.1 / wasm32-wasip2 / windows-x86_64 / release",
+      "scope": "Independent public ui.canvas 1.8 editable-flow acceptance package; Manager text/ACK/ABA/backpressure and Windows native IME/UIA consumer. Version 1.0.0 remains immutable and first for bare historical input selection; never a marketplace listing."
+    },
+    {
+      "id": "canvas-table",
+      "version": "1.0.0",
+      "archive": "canvas-table-1.0.0.zip",
+      "sha256": "d4567c3b52c2fffd07d820e48639d6ddcc4d95881100de2e585cfc3e8691e105",
+      "repository": "Nanobug-Editor/Editor",
+      "source_commit": "099547229fb428eb14aa4881f5d5a41c7cba6d7a",
+      "source_sha256": "b8f0c3dd3f50218be0a5528c4b4c381eb9c24f10af838602ddbf7a5195b37b64",
+      "host_revision": "099547229fb428eb14aa4881f5d5a41c7cba6d7a",
+      "host_exe_sha256": "276dffecd8118c85ad791dd41449ed9efb10feeb503ce3d93443ac0d017a4d5c",
+      "sdk_sha256": "64a65b86088906ba33b5195ec9ec325d05ad9d6ba897e3406f048ec37bd79a11",
+      "toolchain": "Rust 1.98.1 / wasm32-wasip2 / windows-x86_64 / release",
+      "scope": "Independent public ui.canvas 1.8 table acceptance package with six visible native editable targets and 100000 logical rows; business cells and domain undo remain guest-owned. Test input only, excluded from distribution and SDK."
+    },
+    {
       "id": "markdown",
       "version": "0.17.2",
       "archive": "markdown-0.17.2.zip",
