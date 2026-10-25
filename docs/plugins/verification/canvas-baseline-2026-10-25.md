@@ -30,3 +30,13 @@
 原生测试 `native_canvas_text_and_columns_reach_pixels` 使用真实 Windows/D3D 窗口与 GPUI 输入路由，检查比例字体实际宽度、拖动前后红色字形覆盖、移动期间不通知访客、释放只通知一次；关闭自有 HWND 后再退出平台。输入通过 `Window.dispatch_event`，不将其称作 OS SendInput 或人工验收。
 
 首次宿主编译暴露旧终端穷举缺少新回执，已按最小范围补齐并重跑通过；新增测试的 Fill 初始化补齐 `extend_to_bottom`。原生支架第一次绘制因 typed Root update 重入而失败，改用 AnyWindowHandle；后续回执和截图证实本地宽度及字形已变化，稀疏逻辑点采样在分数 DPI 下只命中 12 个字形点，故改为遍历新增裁剪区的全部物理像素。最终测试仍要求旧画面该区无红色、拖动后出现字形，以及唯一一次精确完成回执。
+
+## Standards
+
+固定点 `561aa5b2` 到候选 `9fcd56eb` 的独立规范轴初审：硬性违规 0、判断性发现 0。
+
+## Spec
+
+同一比较的独立规格轴初审发现 1 项 P2：Canvas 仅在尺寸变化时取消列宽拖动，布局平移会用新原点解释旧按下锚点，违反列宽规格的外部几何取消要求。
+
+公开 UI 回归 `repositioned_canvas_cancels_its_native_column_gesture` 用固定尺寸 Canvas 和左侧 sibling 从 0 到 80 的宽度改变，保留同一节点、列 epoch 与宽度：未修复时收到错误完成事件，测试确实失败。修复在完整 bounds 改变时取消手势；重新运行 `ui::plugin::` 后 77 passed、0 failed、18 ignored。Windows/D3D 原生原入口再跑 1 passed（1.44 s），`cargo fmt --check`、`cargo check --workspace` 与差异检查通过。该修复不改变已完成的非 UI workspace 和 SDK 源码，复用此前对应检查证据。

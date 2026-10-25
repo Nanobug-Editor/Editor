@@ -343,7 +343,8 @@ impl CanvasView {
     }
     /// Geometry is measured at this layout node, independent of surrounding toolbars and panel edges.
     fn measure(&mut self, bounds: Bounds<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
-        if self.bounds.size != bounds.size && self.columns.dragging() {
+        // The captured anchor uses the old local origin; moving the surface must not reinterpret it.
+        if self.bounds != bounds && self.columns.dragging() {
             self.columns.cancel();
             self.drag = None;
         }
