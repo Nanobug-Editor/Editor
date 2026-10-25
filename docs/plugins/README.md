@@ -1,6 +1,6 @@
 # 插件系统文档目录
 
-- [Canvas 协议扩展](specs/canvas-protocol-extension.md)：四个顺序实施的垂直切片；[工单与依赖](tickets/canvas-protocol-extension/README.md)、[实施验证](verification/canvas-protocol-extension-2026-10-24.md)。1.4–1.6 前置已交付，01 已验收关闭，02 [验收通过待分支交付](verification/canvas-editable-targets-2026-10-25.md)，03–04 待实施；全部完成后统一合并独立分支至 main。
+- [Canvas 协议扩展](specs/canvas-protocol-extension.md)：四个顺序实施的垂直切片；[工单与依赖](tickets/canvas-protocol-extension/README.md)、[实施验证](verification/canvas-protocol-extension-2026-10-24.md)。1.4–1.6 前置已交付，01 已验收关闭，02 [已验收关闭](verification/canvas-editable-targets-2026-10-25.md)，03 实施中、04 待实施；全部完成后统一合并独立分支至 main。
 
 - [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
 

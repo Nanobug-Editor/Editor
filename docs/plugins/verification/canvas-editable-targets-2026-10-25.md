@@ -1,6 +1,6 @@
 # Canvas 可编辑目标与语义实施记录
 
-日期：2026-10-25。最新状态：阶段验收与双轴审查通过，等待分支推送及 #129 关闭；四单完成后统一合回 main。来源：[02 工单](../tickets/canvas-protocol-extension/02-text-input-semantics.md)、[公共契约方案](../specs/canvas-protocol-extension.md)。
+日期：2026-10-25。最新状态：阶段验收与双轴审查通过，已推送并读回 #129 closed/completed；四单完成后统一合回 main。来源：[02 工单](../tickets/canvas-protocol-extension/02-text-input-semantics.md)、[公共契约方案](../specs/canvas-protocol-extension.md)。
 
 前置 #128 已通过双轴审查、实际 WASM 与原生验收，独立分支推送至 `d12c4d2139aaaf8dbb5ab5780d464944b5a22e13` 后读回为 closed/completed。用户要求四单在 `C:/Users/Tmiracle/.codex/worktrees/canvas-prerequisite/Editor` 的 `codex/canvas-protocol-extension` 分支完成，全部完成后统一合回 main；本单不修改或同步主工作区。
 
@@ -122,3 +122,8 @@ Standards 对 `09954722` 复核为 0；Spec 原三项已解决，又在“视口
 冻结包原生记录为 `target/canvas-b-frozen-wasm-{flow,table}-editable.log`。另外四项旧路径 ignored 测试已显式通过：Canvas 1.4–1.6 文字/列宽像素、source Canvas 不能将旧释放送到替换场景、预编辑/取消后的旧 action 拒绝、code alignment 保持 source entity/IME/Undo（`target/canvas-b-legacy-*.log`）。
 
 阶段门禁、SDK 六项、公开 Manager 实际包、插件定向、四项文档会话及本单原生证据均通过；未运行的 ignored 项仍记为 ignored。实机为现有 Windows/D3D 环境，其他平台未实测。锁定 GPUI 没有提供物理键码/完整按键掩码时保持 None；AccessKit 0.34 没有 Windows GridPattern，类型化行列与本地化原生描述已实测。查询矩形保守包围可见内容，原生目标/语义可见性使用真实填充片段。C/D 的控件/交换、保留更新、隐藏与长期性能组合仍由后续工单负责。
+
+
+## 分支交付与议题读回
+
+`966a9a2b05fe8923e1f9077128289b7ae84a36da` 已普通推送至 origin 的 `codex/canvas-protocol-extension`，并以 `ls-remote` 核对同一 SHA。GitHub 连接器写入仍为 403，按仓库既有流程通过现有本地 Git 认证的 REST 更新 #129，随后独立连接器读取状态为 closed/completed（2026-10-25T15:06:50Z）。#128 也重新读回 closed/completed。父 #127 保持开放，未创建 PR/Release，未修改主工作区。接续 #130，再执行 #131，全部完成后统一合回 main。

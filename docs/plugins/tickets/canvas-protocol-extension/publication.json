@@ -5,8 +5,8 @@
   "implementation_base": "561aa5b2006c38668a083482156646a16cd02b3e",
   "parent": {"number":127,"id":6014181625,"url":"https://github.com/Nanobug-Editor/Editor/issues/127","state":"open"},
   "tickets": [
-    {"ordinal":"01","number":128,"id":6014181791,"url":"https://github.com/Nanobug-Editor/Editor/issues/128","state":"open"},
-    {"ordinal":"02","number":129,"id":6014182339,"url":"https://github.com/Nanobug-Editor/Editor/issues/129","state":"open"},
+    {"ordinal":"01","number":128,"id":6014181791,"url":"https://github.com/Nanobug-Editor/Editor/issues/128","state":"closed","state_reason":"completed"},
+    {"ordinal":"02","number":129,"id":6014182339,"url":"https://github.com/Nanobug-Editor/Editor/issues/129","state":"closed","state_reason":"completed","delivery_commit":"966a9a2b05fe8923e1f9077128289b7ae84a36da"},
     {"ordinal":"03","number":130,"id":6014196056,"url":"https://github.com/Nanobug-Editor/Editor/issues/130","state":"open"},
     {"ordinal":"04","number":131,"id":6014197252,"url":"https://github.com/Nanobug-Editor/Editor/issues/131","state":"open"}
   ],

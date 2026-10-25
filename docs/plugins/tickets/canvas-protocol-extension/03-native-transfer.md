@@ -6,7 +6,7 @@
 
 **Blocked by：**[02 / #129 — 可编辑目标与语义](https://github.com/Nanobug-Editor/Editor/issues/129)。
 
-**Status：**ready-for-agent；真实议题 [#130](https://github.com/Nanobug-Editor/Editor/issues/130)，等待前置项。
+**Status：**实施中；真实议题 [#130](https://github.com/Nanobug-Editor/Editor/issues/130)，前置 #129 已读回 closed/completed；沿用已确认的公开协议/管理器、实际 WASM、原生 GPUI 接缝。
 
 **Why separate：**原生控件、菜单锚点及拖放共享 02 的焦点/目标/语义生命周期，但数据交换引入独立协商、授权和系统适配，可以作为独立可交付行为验证。
 
