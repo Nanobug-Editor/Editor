@@ -34,7 +34,7 @@ impl CanvasView {
             .scene_graphics
             .as_ref()?
             .targets
-            .semantic_bounds(&node.id)?;
+            .semantic_bounds_in(&node.id, self.target_content_viewport())?;
         let mut rect = self.project(rect, self.bounds);
         // Native accessibility boxes and keyboard targets must not remain outside the actual viewport.
         let right = (rect.x + rect.w).min(self.bounds.size.width / px(1.));

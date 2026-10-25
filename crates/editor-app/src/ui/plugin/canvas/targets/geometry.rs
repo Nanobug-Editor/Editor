@@ -11,8 +11,10 @@ mod visibility;
 #[derive(Default)]
 pub(in crate::ui::plugin::canvas) struct PreparedTargets {
     regions: Vec<Region>,
+    /// Stable ID lookup prevents quadratic target scans during native focus traversal.
+    target_indices: BTreeMap<String, (u64, usize)>,
     /// Semantic rectangles reuse the admitted target/group clips; no invisible logical dataset is expanded.
-    semantic_bounds: BTreeMap<String, protocol::Rect>,
+    semantic_fills: BTreeMap<String, std::sync::Arc<visibility::VisibleFill>>,
     /// Flat vertices are charged together with visible native tessellation.
     pub vertices: usize,
 }
@@ -24,6 +26,8 @@ struct Region {
     path: path::Path,
     rule: path::FillRule,
     bounds: protocol::Rect,
+    /// Interactive semantics share the admitted convex fragments without copying geometry.
+    visible: std::sync::Arc<visibility::VisibleFill>,
     clips: Vec<std::sync::Arc<FlatClip>>,
 }
 /// Shared flattened ancestor clips are charged once per group space, never copied per target.
@@ -103,11 +107,15 @@ impl PreparedTargets {
             }
             let path = builder.build();
             let mesh = visibility::mesh(&path, rule, &mut output.vertices, limit)?;
-            let Some(bounds) =
-                visibility::bounds(mesh, &clips, &mut output.vertices, limit, &mut work)?
+            let Some(fill) =
+                visibility::fill(mesh, &clips, &mut output.vertices, limit, &mut work)?
             else {
                 continue;
             };
+            output
+                .target_indices
+                .insert(target.id.clone(), (target.epoch, output.regions.len()));
+            let bounds = fill.bounds;
             output.regions.push(Region {
                 pointer_events: target.pointer_events,
                 id: target.id.clone(),
@@ -115,16 +123,18 @@ impl PreparedTargets {
                 path,
                 rule,
                 bounds,
+                visible: std::sync::Arc::new(fill),
                 clips,
             });
         }
         for node in &scene.semantics {
-            let rect = if let Some(id) = &node.target {
+            let fill = if let Some(id) = &node.target {
                 scene
                     .targets
                     .iter()
                     .find(|target| target.id == *id)
-                    .and_then(|target| output.bounds(id, target.epoch))
+                    .and_then(|target| output.region(id, target.epoch))
+                    .map(|region| region.visible.clone())
             } else if let Some(rect) = node.rect {
                 let placement = scene
                     .group_placement(node.space.as_deref())
@@ -152,18 +162,19 @@ impl PreparedTargets {
                     &mut output.vertices,
                     limit,
                 )?;
-                visibility::bounds(
+                visibility::fill(
                     shape.triangles,
                     &spaces[&node.space],
                     &mut output.vertices,
                     limit,
                     &mut work,
                 )?
+                .map(std::sync::Arc::new)
             } else {
                 None
             };
-            if let Some(rect) = rect {
-                output.semantic_bounds.insert(node.id.clone(), rect);
+            if let Some(fill) = fill {
+                output.semantic_fills.insert(node.id.clone(), fill);
             }
         }
         Ok(output)
@@ -194,16 +205,23 @@ impl PreparedTargets {
             })
             .map(|region| (region.id.clone(), region.epoch))
     }
-    /// Projected focus/accessibility boxes conservatively enclose the same exact native hit shape.
-    pub fn bounds(&self, id: &str, epoch: u64) -> Option<protocol::Rect> {
-        self.regions
-            .iter()
-            .find(|region| region.id == id && region.epoch == epoch)
-            .map(|region| region.bounds)
+    /// Identity lookup remains logarithmic for a maximum-sized declared target set.
+    fn region(&self, id: &str, epoch: u64) -> Option<&Region> {
+        let (actual, index) = self.target_indices.get(id)?;
+        (*actual == epoch).then(|| &self.regions[*index])
     }
-    /// The semantic adapter cannot expose a geometry rejected or hidden by the preparation worker.
-    pub fn semantic_bounds(&self, id: &str) -> Option<protocol::Rect> {
-        self.semantic_bounds.get(id).copied()
+    /// Native focus bounds intersect real fragments with the exact content-space viewport.
+    pub fn bounds_in(
+        &self,
+        id: &str,
+        epoch: u64,
+        viewport: protocol::Rect,
+    ) -> Option<protocol::Rect> {
+        self.region(id, epoch)?.visible.in_viewport(viewport)
+    }
+    /// Target-backed and container semantics preserve holes through native viewport projection.
+    pub fn semantic_bounds_in(&self, id: &str, viewport: protocol::Rect) -> Option<protocol::Rect> {
+        self.semantic_fills.get(id)?.in_viewport(viewport)
     }
 }
 /// Compile one transformed clip within the same pre-allocation vertex quota as all target paths.

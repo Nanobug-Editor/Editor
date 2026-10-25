@@ -165,23 +165,25 @@ impl CanvasView {
         let Some(scene) = &self.drawing.scene else {
             return Vec::new();
         };
+        let semantic_targets = scene
+            .semantics
+            .iter()
+            .filter_map(|node| node.target.as_deref())
+            .collect::<std::collections::BTreeSet<_>>();
+        let viewport = self.target_content_viewport();
         scene
             .targets
             .iter()
             .filter_map(|target| {
-                if scene
-                    .semantics
-                    .iter()
-                    .any(|node| node.target.as_deref() == Some(&target.id))
-                {
+                if semantic_targets.contains(target.id.as_str()) {
                     return None;
                 }
                 let handle = self.targets.focus.get(&(target.id.clone(), target.epoch))?;
-                let rect = self
-                    .scene_graphics
-                    .as_ref()?
-                    .targets
-                    .bounds(&target.id, target.epoch)?;
+                let rect = self.scene_graphics.as_ref()?.targets.bounds_in(
+                    &target.id,
+                    target.epoch,
+                    viewport,
+                )?;
                 let rect = self.project(rect, self.bounds);
                 Some(
                     div()
@@ -202,6 +204,21 @@ impl CanvasView {
                 )
             })
             .collect()
+    }
+    /// Native element construction clips the worker's fragments against the current layout viewport.
+    pub(in crate::ui::plugin::canvas) fn target_content_viewport(&self) -> protocol::Rect {
+        frame::content_viewport(
+            self.bounds,
+            self.project(
+                protocol::Rect {
+                    x: 0.,
+                    y: 0.,
+                    w: 1.,
+                    h: 1.,
+                },
+                self.bounds,
+            ),
+        )
     }
     /// Emit only from a target in the exact successfully painted scene, with its original source.
     pub(super) fn emit_target(

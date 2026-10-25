@@ -120,6 +120,7 @@ fn native_canvas_scene_paints_transformed_shapes() {
             }
             let canvas:Canvas=serde_json::from_value(wire).unwrap();
             let mut document=Document::new(ui::Node::new("drawing",Kind::Canvas(canvas)).grow()).revision(1);
+            if !fixture["viewport"].is_null() {document.root.viewport=Some(serde_json::from_value(fixture["viewport"].clone()).unwrap());}
             if let Some(managed)=managed_document {document=managed;}
             if fixture["legacy_rtl_reference"].as_bool().unwrap_or(false) {
                 document.root.layout.height=Some(100.);

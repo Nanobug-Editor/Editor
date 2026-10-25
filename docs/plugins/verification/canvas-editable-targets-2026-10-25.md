@@ -91,3 +91,7 @@ Windows UIA 实测通过（`target/canvas-b-target-semantics-os.log` 1.86 s，�
 圆角现在由 native drawing、generated SVG 与 hit/clip 构形共享逐角短边半径上限。`target-rounded.json` 实际绿色像素和原生按下结果同时验证 `[100,0,0,0]` 的 100×100 目标及同样祖先 clip，两个可见点均命中正确目标（1.50 s）。旋转预编辑回归也通过。
 
 修复后再次执行 fmt、workspace tests、workspace check 和插件宿主定向 77 项，均通过（`target/canvas-b-review-*.log`）。当前独立 SDK 包经 `769dbfe8` 宿主实际 Release 构建，公开 Manager flow/table 分别通过 32.96/37.54 s，冻结 A 的两个场景回归通过 52.73 s。审查修复尚待双轴复核和最终原生包验证。
+
+Standards 对 `09954722` 复核为 0；Spec 原三项已解决，又在“视口完全落在大型孔洞内”组合中发现 1 项 P2。两个新增原生样本 `target-keys-viewport-hole.json` 与 `target-semantics-viewport-hole.json` 均先复现失败：Tab 仍进入包围视口的不可见外环；独立 COM 客户端多读到 hole-target/hole-label 两项。现保留 worker 已接纳的真实凸填充片段，最后再与实际 native viewport 做固定 scratch 相交；Tab 使用原显示帧 basis，元素/语义使用实际布局 viewport。目标与对应语义共享 Arc 片段，稳定 ID 使用有序索引查找，不在 Tab 中重复扫描全部 regions。最终没有展开路径、重新 tessellate 或分配 native clip 片段。两项绿灯通过，OS 树只保留四个可见节点。
+
+此后 13 项原生输入/文字/语义回归全部通过（`target/canvas-b-green-*.log`），覆盖原孔洞、视口孔洞、窗口失活、多键捕获、模态、普通/affine/真实 OS IME、旧帧 wheel、圆角像素/命中与长行预算。冻结 A 在 125% 与 200% 深色窗口的实际包像素回归也通过（`target/canvas-b-final-wasm-flow-*.log`）。fmt、workspace tests/check 与插件宿主定向 77 项再次通过（`target/canvas-b-viewport-*.log`）。这一组合修复仍待双轴复核。

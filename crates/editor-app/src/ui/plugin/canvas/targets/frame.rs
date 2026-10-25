@@ -20,19 +20,30 @@ pub(in crate::ui::plugin::canvas) struct InputFrame {
 impl InputFrame {
     /// Tab visits only targets intersecting this shown viewport, including its original scroll/zoom.
     pub(super) fn target_visible(&self, id: &str, epoch: u64) -> bool {
-        let Some(rect) = self.graphics.targets.bounds(id, epoch) else {
-            return false;
+        self.graphics
+            .targets
+            .bounds_in(id, epoch, content_viewport(self.bounds, self.basis))
+            .is_some()
+    }
+}
+/// Invert the viewport's positive axis-aligned native basis without changing scene affine geometry.
+pub(in crate::ui::plugin::canvas) fn content_viewport(
+    bounds: Bounds<Pixels>,
+    basis: protocol::Rect,
+) -> protocol::Rect {
+    if basis.w <= 0. || basis.h <= 0. {
+        return protocol::Rect {
+            x: 0.,
+            y: 0.,
+            w: 0.,
+            h: 0.,
         };
-        let x = self.basis.x + rect.x * self.basis.w;
-        let y = self.basis.y + rect.y * self.basis.h;
-        let width = rect.w * self.basis.w;
-        let height = rect.h * self.basis.h;
-        width > 0.
-            && height > 0.
-            && x + width > 0.
-            && y + height > 0.
-            && x < self.bounds.size.width / px(1.)
-            && y < self.bounds.size.height / px(1.)
+    }
+    protocol::Rect {
+        x: -basis.x / basis.w,
+        y: -basis.y / basis.h,
+        w: (bounds.size.width / px(1.)) / basis.w,
+        h: (bounds.size.height / px(1.)) / basis.h,
     }
 }
 impl CanvasView {

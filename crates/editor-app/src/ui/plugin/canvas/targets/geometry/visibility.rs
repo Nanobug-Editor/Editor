@@ -9,6 +9,43 @@ use lyon_tessellation::{
 #[derive(Clone, Copy)]
 pub(super) struct Triangle([math::Point; 3]);
 
+/// Worker-admitted convex fragments retain holes until the final native viewport is known.
+pub(super) struct VisibleFill {
+    pub bounds: protocol::Rect,
+    polygons: Vec<Vec<math::Point>>,
+}
+impl VisibleFill {
+    /// Clip precomputed convex fragments without native path expansion, tessellation or allocation.
+    /// All retained corners share the scene vertex quota, bounding native Tab/layout work.
+    pub(super) fn in_viewport(&self, viewport: protocol::Rect) -> Option<protocol::Rect> {
+        let overlap = intersect(self.bounds, viewport);
+        if overlap.w <= 0. || overlap.h <= 0. {
+            return None;
+        }
+        let quad = [
+            math::point(viewport.x, viewport.y),
+            math::point(viewport.x + viewport.w, viewport.y),
+            math::point(viewport.x + viewport.w, viewport.y + viewport.h),
+            math::point(viewport.x, viewport.y + viewport.h),
+        ];
+        let mut result = None;
+        for polygon in &self.polygons {
+            let overlap = intersect(polygon_bounds(polygon), viewport);
+            if overlap.w <= 0. || overlap.h <= 0. {
+                continue;
+            }
+            // At most 51 worker corners plus four viewport edges fit the fixed scratch.
+            // Unexpected geometry failures withdraw authority rather than substituting an AABB.
+            let Some((points, length)) = clipped(polygon, &quad).ok()? else {
+                continue;
+            };
+            let rect = polygon_bounds(&points[..length]);
+            result = Some(result.map_or(rect, |old| union(old, rect)));
+        }
+        result
+    }
+}
+
 /// The native tessellator cannot grow vertex or triangle output past the shared worker allowance.
 struct Mesh<'a> {
     points: Vec<math::Point>,
@@ -75,13 +112,13 @@ pub(super) fn mesh(
 
 /// Intersect real fill triangles with every ancestor, retaining only positive-area visible fragments.
 /// Clipped AABBs remain conservative, but an empty geometric intersection never receives native focus.
-pub(super) fn bounds(
+pub(super) fn fill(
     triangles: Vec<Triangle>,
     clips: &[std::sync::Arc<FlatClip>],
     charged: &mut usize,
     limit: usize,
     work: &mut usize,
-) -> Result<Option<protocol::Rect>, String> {
+) -> Result<Option<VisibleFill>, String> {
     let mut polygons = triangles
         .into_iter()
         .map(|triangle| triangle.0.to_vec())
@@ -104,7 +141,7 @@ pub(super) fn bounds(
                 if overlap.w <= 0. || overlap.h <= 0. {
                     continue;
                 }
-                if let Some((points, length)) = clipped(&polygon, triangle)? {
+                if let Some((points, length)) = clipped(&polygon, &triangle.0)? {
                     if charged.saturating_add(length) > limit {
                         return Err("Canvas visible fragments exceed their vertex budget".into());
                     }
@@ -118,31 +155,28 @@ pub(super) fn bounds(
             return Ok(None);
         }
     }
-    let mut result = None;
-    for polygon in polygons {
-        let rect = polygon_bounds(&polygon);
-        result = Some(match result {
-            None => rect,
-            Some(old) => {
-                let old: protocol::Rect = old;
-                let x = old.x.min(rect.x);
-                let y = old.y.min(rect.y);
-                protocol::Rect {
-                    x,
-                    y,
-                    w: (old.x + old.w).max(rect.x + rect.w) - x,
-                    h: (old.y + old.h).max(rect.y + rect.h) - y,
-                }
-            }
-        });
+    let bounds = polygons
+        .iter()
+        .map(|polygon| polygon_bounds(polygon))
+        .reduce(union);
+    Ok(bounds.map(|bounds| VisibleFill { bounds, polygons }))
+}
+/// Boxes are quick rejections/returned enclosures, never visibility evidence by themselves.
+fn union(left: protocol::Rect, right: protocol::Rect) -> protocol::Rect {
+    let x = left.x.min(right.x);
+    let y = left.y.min(right.y);
+    protocol::Rect {
+        x,
+        y,
+        w: (left.x + left.w).max(right.x + right.w) - x,
+        h: (left.y + left.h).max(right.y + right.h) - y,
     }
-    Ok(result)
 }
 /// A triangle clipped by at most sixteen ancestor triangles needs at most 51 convex corners.
 /// Fixed scratch buffers prevent an adversarial intersection from allocating before admission.
 fn clipped(
     polygon: &[math::Point],
-    triangle: &Triangle,
+    clip: &[math::Point],
 ) -> Result<Option<([math::Point; 64], usize)>, String> {
     let mut input = [math::point(0., 0.); 64];
     let mut length = polygon.len();
@@ -150,10 +184,10 @@ fn clipped(
         return Err("Canvas visible polygon exceeds its corner budget".into());
     }
     input[..length].copy_from_slice(polygon);
-    let direction = cross(triangle.0[0], triangle.0[1], triangle.0[2]).signum();
-    for edge in 0..3 {
-        let a = triangle.0[edge];
-        let b = triangle.0[(edge + 1) % 3];
+    let direction = cross(clip[0], clip[1], clip[2]).signum();
+    for edge in 0..clip.len() {
+        let a = clip[edge];
+        let b = clip[(edge + 1) % clip.len()];
         let mut output = [math::point(0., 0.); 64];
         let mut count = 0;
         let mut previous = input[length - 1];
