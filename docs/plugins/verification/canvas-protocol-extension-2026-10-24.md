@@ -1,8 +1,35 @@
 # Canvas 协议扩展实施记录
 
-最新状态（2026-10-25）：1.4–1.6 前置已独立交付至 `origin/main@56cb99ae`，两轴未解决发现均为 0，见[前置验收](canvas-baseline-2026-10-25.md)。下文较早的 A 阶段结果来自当时整合工作副本；当前正按其保存源码在已提交前置上重新验证，最终包和结果以本次续作记录为准，不能借用包含其他工作区任务的整合门禁。02–04 尚未实施。
+最新状态（2026-10-25）：1.4–1.6 前置已独立交付；01 完成门禁、真实包、原生验收与双轴审查，准备独立分支交付。02–04 尚未实施，四单全部完成后统一合回 main。历史检索未覆盖本次分支调整，以用户当前明确要求和本节记录为准。
 
-## 已提交前置上的 A 阶段复验
+## A 阶段交付验收（2026-10-25）
+
+源码候选 `1a101f34444db576a3366973ff3fd2b68f08c89e` 在独立 target 完成验收；审查固定点仍为 `561aa5b2`。后文保留过程和失败记录，最新交付结果以本节为准。
+
+| 入口 | 最终结果 |
+| --- | --- |
+| `cargo fmt --check`、`git diff --check` | 通过 |
+| `cargo test --workspace --exclude editor-app --offline --locked --jobs 2` | 109 组，535 passed，0 failed，385 ignored，含 doc-tests；跳过项不计通过 |
+| 原生 app 测试程序的 `ui::plugin::`、`sdk_export` | 77 passed / 19 ignored；SDK 6 passed / 0 ignored |
+| `cargo check --workspace --offline --locked --jobs 4`、`cargo build -p editor-app --offline --locked --jobs 4` | exit0 |
+| 实际宿主 `--plugin-package ./crates/plugin-runtime/tests/fixtures/canvas-flow --output ./target/canvas-packages` | exit0，实际 wasm32-wasip2 Release 重建 17.94 s |
+| 固定账本入口 `canvas_scene-3d4ed09e7e072a05.exe --ignored --nocapture --test-threads=1` | 2 passed，0 failed，61.81 s |
+| 原生图形、图片、DPI、裁剪、资源限额及旧 TextBox/列宽 | 既有矩阵通过；资源修复后新增 3 个图片组合通过，并复跑受影响图片、复杂栅格和宿主回归 |
+| 最终固定包的 125% 浅色 / 200% 深色 | 各 1 passed，36.22 s / 30.11 s；包含公开管理器 zoom/pan 与真实像素，不冒充 OS 鼠标输入 |
+
+最终 ZIP 仍为首次交付的 `canvas-flow 1.0.0`，306702 字节，SHA-256 `8ada9f8754cca3fb65290b8e6f2b3823f65fbf4eb8d26c89d03f4ffe7d387833`；内嵌 SDK `b724d24dd1150bc86d470cd8f06a492f86093e08314b5d2bf44eb8c51347b506`。源码和宿主版本均记录实际已提交的 `1a101f34`，工具链为 rustc 1.98.1 / wasm32-wasip2。账本只更新本包条目，其他固定输入保留。
+
+### Standards
+
+首次 2 项 P1、复审新增 1 项 P1 均已修复。最终未解决硬性问题 0，判断性坏味道 0。受控 URI 的安全小样为 `image_nodes=2 distinct_encoded_buffers=1`，不再按放置复制 PNG 编码缓冲。
+
+### Spec
+
+首次 2 项 P1 均已修复，后续两轮复审未解决及新增均为 0。只验收 01 的 AC1–8；02–04 及整批性能门槛没有记作完成。
+
+用户于 2026-10-25 要求四单仅在独立 worktree 的 `codex/canvas-protocol-extension` 分支执行，全部完成后统一合回 main；不再逐单同步或快进主工作区。各单仍按验证、审查、普通提交、推送该分支、核对关闭对应 issue 交付。 当前 main 保留已交付前置 `56cb99ae`，四单尚未合入；最新 ZIP/账本的提交范围在分支推送前另作核对。
+
+## 已提交前置上的 A 阶段历史复验
 
 ### A 候选正式审查与修复（2026-10-25）
 

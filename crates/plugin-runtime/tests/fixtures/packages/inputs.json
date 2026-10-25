@@ -8,13 +8,13 @@
       "id": "canvas-flow",
       "version": "1.0.0",
       "archive": "canvas-flow-1.0.0.zip",
-      "sha256": "cd61d680422c2b5781bc64fcc82b1f356ce3dda7aa4a79d76c51de931033f40e",
+      "sha256": "8ada9f8754cca3fb65290b8e6f2b3823f65fbf4eb8d26c89d03f4ffe7d387833",
       "repository": "Nanobug-Editor/Editor",
-      "source_commit": null,
-      "host_revision": null,
-      "sdk_sha256": "6b78c801f237fc1edb2e7f7e8ea1a153d2d47167cadaa51853695d2036f1bc7a",
+      "source_commit": "1a101f34444db576a3366973ff3fd2b68f08c89e",
+      "host_revision": "1a101f34444db576a3366973ff3fd2b68f08c89e",
+      "sdk_sha256": "b724d24dd1150bc86d470cd8f06a492f86093e08314b5d2bf44eb8c51347b506",
       "toolchain": "Rust 1.98.1 / wasm32-wasip2 / windows-x86_64",
-      "scope": "Independent ui.canvas 1.7 acceptance guest rebuilt through the curated host --plugin-package entry after the 1.4-1.6 prerequisite; scene source still uncommitted at build time; never a marketplace listing."
+      "scope": "Independent ui.canvas 1.7 acceptance guest rebuilt through the committed curated host --plugin-package entry after resource-budget review fixes; never a marketplace listing."
     },
     {
       "id": "markdown",
