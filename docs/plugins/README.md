@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
+
 - [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
 
 - [Vue/TypeScript 旧工单功能核对与关闭](verification/vue-typescript-legacy-closure-2026-10-20.md)：用户补充授权后，64 项旧要求逐项核对完成；#108–#118 已读回 completed，原正文和失败历史保留，父 #107 继续开放。

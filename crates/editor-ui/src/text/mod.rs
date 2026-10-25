@@ -1,5 +1,7 @@
 //! Rich text colors and spacing are resolved from the active editor theme.
 
+pub mod canvas;
+
 use crate::theme::ActiveTheme as _;
 use gpui_base::{TextView, TextViewStyle};
 use gpui_kit::{

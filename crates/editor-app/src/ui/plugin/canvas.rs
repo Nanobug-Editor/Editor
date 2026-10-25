@@ -11,7 +11,12 @@ use plugin_runtime::plugin_protocol::{
     ui::{Canvas, CanvasEvent, GridMetrics, PointerPhase, ScrollChange},
 };
 use std::ops::Range;
+#[cfg(test)]
+mod column_tests;
+#[cfg(test)]
+mod native_columns_tests;
 mod scroll;
+mod text;
 
 pub(crate) struct CanvasView {
     pub(crate) drawing: Canvas,
@@ -27,6 +32,11 @@ pub(crate) struct CanvasView {
     focus: FocusHandle,
     bounds: Bounds<Pixels>,
     measured: Option<CanvasEvent>,
+    /// Reuse bounded native sample widths until the request or its inherited family changes.
+    text_measurements: Option<(Vec<protocol::ui::TextMeasure>, Option<String>)>,
+    /// Column previews belong to native frames; the guest receives only completed widths.
+    columns: editor_ui::column_resize::ColumnResize,
+    column_bindings: Vec<Option<usize>>,
     composition: String,
     selection: Range<usize>,
     drag: Option<MouseButton>,
@@ -38,6 +48,8 @@ pub(crate) struct CanvasView {
     /// Test-only evidence of text actually submitted by the last native paint, including disabled canvases.
     #[cfg(test)]
     painted_text: Vec<String>,
+    #[cfg(test)]
+    painted_boxes: Vec<protocol::Rect>,
     #[cfg(test)]
     paint_revision: u64,
     _subscriptions: Vec<Subscription>,
@@ -73,6 +85,12 @@ impl PluginView {
             "paint_scroll_offset": canvas.drawing.scroll.as_ref().map(|scroll| scroll.offset - canvas.scroll_translation()),
             "paint_revision": canvas.paint_revision,
             "painted_text": canvas.painted_text,
+            "painted_boxes": canvas.painted_boxes,
+            "column_dragging": canvas.columns.dragging(),
+            "column_hover": canvas.enabled && canvas.bounds.contains(&window.mouse_position())
+                && canvas.columns.dividers().any(|x|
+                    ((window.mouse_position().x - canvas.bounds.origin.x) / px(1.) - x).abs() <= 5.),
+            "column_dividers": canvas.columns.dividers().collect::<Vec<_>>(),
             "width": canvas.bounds.size.width / px(1.),
             "height": canvas.bounds.size.height / px(1.),
         }))
@@ -104,12 +122,54 @@ impl PluginView {
 }
 
 impl CanvasView {
-    /// Content replacement retires an unacknowledged scrollbar drag; drawing repaints retain it.
+    /// Content replacement retires native gestures; drawing-only repaints retain their previews.
     pub(super) fn update_drawing(&mut self, drawing: Canvas) {
         if self.drawing.scroll_epoch != drawing.scroll_epoch {
             self.scroll.reset();
         }
         self.drawing = drawing;
+        self.configure_columns();
+    }
+
+    /// Bind validated paint indices once; the drawing and provider's text remain immutable.
+    fn configure_columns(&mut self) {
+        let was_dragging = self.columns.dragging();
+        self.column_bindings = vec![None; self.drawing.paint.len()];
+        if let Some(columns) = &self.drawing.column_resize {
+            self.columns
+                .configure(columns.epoch, columns.x, &columns.widths, &columns.minimum);
+            for binding in &columns.bindings {
+                if let Some(slot) = self.column_bindings.get_mut(binding.paint) {
+                    *slot = Some(binding.column);
+                }
+            }
+        } else {
+            self.columns.reset();
+        }
+        if was_dragging && !self.columns.dragging() {
+            self.drag = None;
+        }
+    }
+    /// Keep the locally painted result until acknowledgement and persist through one completion.
+    fn finish_columns(&mut self, cx: &mut Context<Self>) {
+        if let Some(widths) = self.columns.finish() {
+            if let Some(columns) = &self.drawing.column_resize {
+                self.emit(
+                    CanvasEvent::ColumnsResized {
+                        epoch: columns.epoch,
+                        widths,
+                    },
+                    cx,
+                );
+            }
+        }
+    }
+    /// Stretch one retained text rectangle without copying artwork or calling a worker.
+    fn column_rect(&self, index: usize, mut rect: protocol::Rect) -> protocol::Rect {
+        if let Some(Some(column)) = self.column_bindings.get(index) {
+            (rect.x, rect.w) = self.columns.project(*column, rect.x, rect.w);
+        }
+        rect
     }
 
     /// Opted-in ranges carry content authority independently of the drawing revision.
@@ -185,12 +245,14 @@ impl CanvasView {
                 this.emit(CanvasEvent::Focus { focused: true }, cx)
             }),
             cx.on_blur(&focus, window, |this, _, cx| {
+                this.finish_columns(cx);
+                this.drag = None;
                 this.cancel_composition();
                 this.emit(CanvasEvent::Focus { focused: false }, cx);
                 cx.notify();
             }),
         ];
-        Self {
+        let mut view = Self {
             drawing,
             viewport: None,
             font: Default::default(),
@@ -202,10 +264,15 @@ impl CanvasView {
             #[cfg(test)]
             painted_text: Vec::new(),
             #[cfg(test)]
+            painted_boxes: Vec::new(),
+            #[cfg(test)]
             paint_revision: 0,
             focus,
             bounds: Bounds::default(),
             measured: None,
+            text_measurements: None,
+            columns: Default::default(),
+            column_bindings: Vec::new(),
             composition: String::new(),
             selection: 0..0,
             drag: None,
@@ -214,7 +281,9 @@ impl CanvasView {
             #[cfg(test)]
             key_observer: None,
             _subscriptions: subscriptions,
-        }
+        };
+        view.configure_columns();
+        view
     }
     fn emit(&self, event: CanvasEvent, cx: &mut Context<Self>) {
         if self.enabled {
@@ -242,10 +311,12 @@ impl CanvasView {
     pub(super) fn deactivate(&mut self) {
         self.cancel_composition();
         self.drag = None;
+        self.columns.reset();
     }
     /// A rejected deferred callback or reactivation must retry its current native geometry.
     pub(crate) fn invalidate_measurement(&mut self) {
         self.measured = None;
+        self.text_measurements = None;
     }
     fn pointer(
         &self,
@@ -272,6 +343,10 @@ impl CanvasView {
     }
     /// Geometry is measured at this layout node, independent of surrounding toolbars and panel edges.
     fn measure(&mut self, bounds: Bounds<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        if self.bounds.size != bounds.size && self.columns.dragging() {
+            self.columns.cancel();
+            self.drag = None;
+        }
         self.bounds = bounds;
         self.scroll.update(bounds, self.drawing.scroll.clone());
         if let Some(offset) = self.scroll.take_offset() {
@@ -304,8 +379,17 @@ impl CanvasView {
             self.measured = Some(event.clone());
             self.emit(event, cx);
         }
+        self.measure_text(window, cx);
     }
     fn paint(&mut self, bounds: Bounds<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        // The hit areas own ordinary hover; only a captured gesture overrides other cursor hits.
+        if self.columns.dragging() {
+            window.set_window_cursor_style(gpui_kit::CursorStyle::ResizeColumn);
+        }
+        #[cfg(test)]
+        {
+            self.painted_boxes.clear();
+        }
         #[cfg(test)]
         {
             self.paint_revision = self.revision;
@@ -314,19 +398,21 @@ impl CanvasView {
                 .paint
                 .iter()
                 .filter_map(|operation| {
-                    if let protocol::Paint::Text {
-                        x, y, text, size, ..
-                    } = operation
-                        && !text.is_empty()
-                        && *x >= 0.
-                        && *x < bounds.size.width / px(1.)
-                        && *y + *size > 0.
-                        && *y < bounds.size.height / px(1.)
-                    {
-                        Some(text.clone())
-                    } else {
-                        None
-                    }
+                    let (x, y, text, size) = match operation {
+                        protocol::Paint::Text {
+                            x, y, text, size, ..
+                        } => (*x, *y, text, *size),
+                        protocol::Paint::TextBox {
+                            rect, text, size, ..
+                        } => (rect.x, rect.y, text, *size),
+                        _ => return None,
+                    };
+                    (!text.is_empty()
+                        && x >= 0.
+                        && x < bounds.size.width / px(1.)
+                        && y + size > 0.
+                        && y < bounds.size.height / px(1.))
+                    .then(|| text.clone())
                 })
                 .collect();
         }
@@ -403,6 +489,13 @@ impl CanvasView {
                         cx,
                     );
                 }
+                protocol::Paint::TextBox { rect, .. } => {
+                    #[cfg(test)]
+                    {
+                        self.painted_boxes.push(self.column_rect(index, *rect));
+                    }
+                    text::paint_box(self, index, operation, bounds, window, cx)
+                }
                 protocol::Paint::Svg { .. } => {
                     if let Some(image) = self
                         .images
@@ -459,6 +552,16 @@ impl CanvasView {
                         && this.drag.is_some()
                         && this.drag == event.pressed_button
                     {
+                        if this.columns.dragging() {
+                            if this
+                                .columns
+                                .move_to((event.position.x - this.bounds.origin.x) / px(1.))
+                            {
+                                cx.notify();
+                            }
+                            cx.stop_propagation();
+                            return;
+                        }
                         this.pointer(
                             PointerPhase::Move,
                             event.position,
@@ -481,6 +584,14 @@ impl CanvasView {
                         && this.drag == Some(event.button)
                     {
                         this.drag = None;
+                        if this.columns.dragging() {
+                            this.columns
+                                .move_to((event.position.x - this.bounds.origin.x) / px(1.));
+                            this.finish_columns(cx);
+                            cx.notify();
+                            cx.stop_propagation();
+                            return;
+                        }
                         this.pointer(
                             PointerPhase::Up,
                             event.position,
@@ -608,6 +719,15 @@ impl Render for CanvasView {
                     if this.enabled && this.drawing.focusable {
                         this.focus.focus(window, cx);
                     }
+                    if button == MouseButton::Left
+                        && this
+                            .columns
+                            .begin((event.position.x - this.bounds.origin.x) / px(1.))
+                    {
+                        cx.notify();
+                        cx.stop_propagation();
+                        return;
+                    }
                     this.pointer(
                         PointerPhase::Down,
                         event.position,
@@ -668,6 +788,9 @@ impl Render for CanvasView {
                 )
                 .size_full(),
             );
+        if self.enabled && self.drawing.column_resize.is_some() {
+            element = element.child(self.columns.handles());
+        }
         // The overlay must paint after the guest canvas, which may fill its entire bounds.
         if self.enabled && self.drawing.scroll.is_some() {
             element = element.child(editor_ui::vertical_viewport_scrollbar(&self.scroll, cx));

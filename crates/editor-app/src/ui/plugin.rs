@@ -567,6 +567,7 @@ impl PluginView {
                                 let measurement = matches!(
                                     event,
                                     plugin_runtime::plugin_protocol::ui::CanvasEvent::Resize { .. }
+                                        | plugin_runtime::plugin_protocol::ui::CanvasEvent::TextMeasured { .. }
                                 );
                                 cx.defer(move |cx| {
                                     let accepted = target_window.update(cx, |_, window, cx| {
@@ -578,6 +579,7 @@ impl PluginView {
                                             let action = this
                                                 .document
                                                 .active_node(&id)
+                                                .filter(|_| !matches!(event, ui::CanvasEvent::TextMeasured { .. }))
                                                 .and_then(|node| node.viewport.as_ref())
                                                 .and_then(|viewport| viewport.content)
                                                 .map_or_else(

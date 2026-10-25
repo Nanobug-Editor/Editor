@@ -121,13 +121,16 @@ impl VisualViewport {
             let t = self.transform.unwrap_or_default();
             let content = self.content.unwrap();
             for paint in &canvas.paint {
-                if let crate::Paint::Text { size, .. } = paint {
+                if let crate::Paint::Text { size, .. } | crate::Paint::TextBox { size, .. } = paint
+                {
                     if !(1. ..=128.).contains(&(*size * t.scale)) {
                         return Err("Transformed text exceeds the font-size quota".into());
                     }
                 }
                 let rect = match paint {
-                    crate::Paint::Fill { rect, .. } | crate::Paint::Svg { rect, .. } => *rect,
+                    crate::Paint::Fill { rect, .. }
+                    | crate::Paint::Svg { rect, .. }
+                    | crate::Paint::TextBox { rect, .. } => *rect,
                     crate::Paint::Text { x, y, size, .. } => crate::Rect {
                         x: *x,
                         y: *y,

@@ -10,6 +10,8 @@ SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 
 
 `ui.canvas 1.3` 新增可选 `scroll_buffer`，插件声明已完整绘制的内容区间与上下缓冲。宿主在原生帧中平移现有画面，回包前也可滚动，并把点击坐标映射回对应绘图。缓冲耗尽时等待下一次绘图；不改变文档与滚动内容的权威来源，不适用于 grid/IME 画布或 `VisualViewport` 变换。所有插件均可协商使用。
 
+`ui.canvas 1.4` 增加原生单行 `Paint::TextBox`，`1.5` 增加有界文字样本测量，`1.6` 增加原生列宽拖动与 TextBox 帧内预览；它们不新增权限，使用相应字段必须协商对应版本。接口义务和限制见[TextBox 定义](src/lib.rs)、[测量契约](src/ui/canvas/text_measure.rs)及[列宽契约](src/ui/canvas/columns.rs)。
+
 HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 [http](src/http.rs)、[secrets](src/secrets.rs)、[storage](src/storage.rs)、[timers](src/timers.rs)、[tree](src/tree.rs) 与 [decorations](src/decorations.rs)。工作区文件名颜色和顶部入口分别协商 `explorer.decorations 1.0`、`ui.workspace 1.0`，见 [presentation](src/presentation.rs)；共享层次菜单见 [menus](src/ui/menus.rs)。
 
 通用树的 `ui.tree 1.2` 提供 `tree::update`，原子更新缓存节点的显示和禁用状态，保留已加载页、展开、epoch 及未完成请求；结构变化使用 `refresh`，或另行协商下述 1.4 增量能力。清单须明确声明 1.2 最低版本，完整预算与回调约束见 [树契约](src/tree.rs)。

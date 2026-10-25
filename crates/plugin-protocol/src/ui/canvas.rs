@@ -1,9 +1,16 @@
 //! Optional drawing and input contracts, independent of terminal state and native form geometry.
 use serde::{Deserialize, Serialize};
+mod text_measure;
+pub use text_measure::*;
+mod columns;
+pub use columns::*;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canvas {
+    /// `ui.canvas 1.6`: transparent native column handles and frame-local TextBox resizing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column_resize: Option<ColumnResize>,
     /// Optional typography for custom grids; omitted fields inherit the selected theme role.
     #[serde(default)]
     pub font: crate::FontStyle,
@@ -23,6 +30,11 @@ pub struct Canvas {
     /// Requires a scroll epoch, excludes grid/IME canvases and transformed visual viewports.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scroll_buffer: Option<ScrollBuffer>,
+    /// `ui.canvas` 1.5: bounded sample groups whose widest native text advance is returned as
+    /// [`CanvasEvent::TextMeasured`]. Results use untransformed logical pixels and this scene's
+    /// revision; keep IDs stable only while their text and typography retain the same meaning.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub measure_text: Vec<TextMeasure>,
     pub paint: Vec<crate::Paint>,
     /// Ordinary image surfaces do not claim text focus or IME; interactive canvases explicitly opt in.
     #[serde(default)]
@@ -70,8 +82,18 @@ pub enum PointerPhase {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CanvasEvent {
+    /// `ui.canvas 1.6`: final widths after a native gesture, matched by epoch and fixed total width.
+    ColumnsResized {
+        epoch: u64,
+        widths: Vec<f32>,
+    },
+    /// `ui.canvas` 1.5: one width for every requested sample group, in request order.
+    /// This is an exact-scene geometry reply, never an exception to ordinary revision checks.
+    TextMeasured {
+        widths: Vec<TextWidth>,
+    },
     /// `ui.canvas` 1.2: range movement addressed to one still-current scroll content.
-    /// Only this event can cross a drawing revision; it grants no pointer, key or text authority.
+    /// A matching content epoch can cross a drawing revision; it grants no pointer, key or text authority.
     ScrollInput {
         epoch: u64,
         change: ScrollChange,
@@ -126,6 +148,8 @@ pub enum ScrollChange {
 impl Canvas {
     /// Validate geometry and bound expensive vectors before allocating host rendering resources.
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_measurements()?;
+        self.validate_columns()?;
         if let Some(buffer) = &self.scroll_buffer {
             let valid = self.scroll_epoch.is_some()
                 && !self.grid
@@ -195,6 +219,22 @@ impl Canvas {
                         && coordinate(*y)
                         && (1. ..=128.).contains(size)
                         && text.len() <= 65536
+                        && font
+                            .as_ref()
+                            .is_none_or(|font| !font.is_empty() && font.len() <= 256)
+                }
+                crate::Paint::TextBox {
+                    rect: value,
+                    text,
+                    size,
+                    font,
+                    ..
+                } => {
+                    bytes += text.len();
+                    rect(value)
+                        && (1. ..=128.).contains(size)
+                        && text.len() <= 65536
+                        && !text.contains(['\r', '\n'])
                         && font
                             .as_ref()
                             .is_none_or(|font| !font.is_empty() && font.len() <= 256)

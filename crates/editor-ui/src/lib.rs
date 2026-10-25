@@ -5,6 +5,7 @@ pub mod aligned_pointer;
 pub mod aligned_rows;
 pub mod button;
 pub mod checkbox;
+pub mod column_resize;
 pub mod comparison_header;
 pub mod context_menu;
 pub mod definition_popup;

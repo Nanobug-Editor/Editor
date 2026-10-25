@@ -14,7 +14,14 @@ impl Document {
                 if *epoch != 0 && self.active_node(&event.node).is_some_and(|node|
                     node.viewport.is_none() && matches!(&node.kind, Kind::Canvas(canvas)
                         if canvas.scroll_epoch == Some(*epoch))));
-        if event.revision != self.revision && !current_scroll {
+        let current_columns = event.revision < self.revision
+            && self.dialog.is_none()
+            && self.menu.is_none()
+            && self.editor_action_source(&event.node).is_none()
+            && matches!(&event.action, Action::Canvas(CanvasEvent::ColumnsResized { epoch, widths })
+                if self.active_node(&event.node).is_some_and(|node| node.viewport.is_none()
+                    && matches!(&node.kind, Kind::Canvas(canvas) if canvas.column_resize.as_ref().is_some_and(|columns| columns.accepts(*epoch, widths)))));
+        if event.revision != self.revision && !current_scroll && !current_columns {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
                 "UI document was replaced",
@@ -93,7 +100,8 @@ impl Document {
                 .any(|option| option.id == *id && !option.disabled),
             (Kind::Tabs { tabs, .. }, Action::Select(id)) => tabs.iter().any(|tab| tab.id == *id),
             (Kind::Canvas(canvas), Action::Canvas(event)) => {
-                node.viewport.is_none() && canvas.accepts(event)
+                (node.viewport.is_none() || matches!(event, CanvasEvent::TextMeasured { .. }))
+                    && canvas.accepts(event)
             }
             _ => false,
         };
@@ -113,6 +121,20 @@ impl Canvas {
     fn accepts(&self, event: &CanvasEvent) -> bool {
         let finite = |value: f32| value.is_finite() && value.abs() <= 1_000_000.;
         match event {
+            CanvasEvent::ColumnsResized { epoch, widths } => self
+                .column_resize
+                .as_ref()
+                .is_some_and(|columns| columns.accepts(*epoch, widths)),
+            CanvasEvent::TextMeasured { widths } => {
+                !self.measure_text.is_empty()
+                    && widths.len() == self.measure_text.len()
+                    && widths
+                        .iter()
+                        .zip(&self.measure_text)
+                        .all(|(result, request)| {
+                            result.id == request.id && finite(result.width) && result.width >= 0.
+                        })
+            }
             CanvasEvent::ScrollInput { epoch, change } => {
                 *epoch != 0
                     && self.scroll_epoch == Some(*epoch)

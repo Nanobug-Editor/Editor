@@ -9,6 +9,8 @@ impl TerminalPanel {
         match event {
             // The native terminal owns its viewport directly and does not opt into guest scroll epochs.
             CanvasEvent::ScrollInput { .. } => return,
+            // This grid requests neither sample measurements nor native text-column gestures.
+            CanvasEvent::TextMeasured { .. } | CanvasEvent::ColumnsResized { .. } => return,
             CanvasEvent::Resize {
                 width,
                 height,

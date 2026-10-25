@@ -222,7 +222,8 @@ impl Validator {
         node.layout.margin.validate(10000.)?;
         if let Some(viewport) = &node.viewport {
             viewport.validate(&node.kind)?;
-            if matches!(&node.kind, Kind::Canvas(canvas) if canvas.scroll_buffer.is_some()) {
+            if matches!(&node.kind, Kind::Canvas(canvas) if canvas.scroll_buffer.is_some() || canvas.column_resize.is_some())
+            {
                 return Err("Retained canvas scroll cannot use a visual viewport transform".into());
             }
         }
@@ -372,6 +373,11 @@ impl Validator {
             }
             Kind::Canvas(canvas) => {
                 canvas.validate()?;
+                for request in &canvas.measure_text {
+                    for sample in &request.texts {
+                        self.text(sample)?;
+                    }
+                }
                 // Drawings count toward this whole document, preventing many small canvases bypassing quotas.
                 self.drawings += canvas.paint.len();
                 if self.drawings > 32_000 {
@@ -379,7 +385,9 @@ impl Validator {
                 }
                 for paint in &canvas.paint {
                     match paint {
-                        crate::Paint::Text { text, .. } => self.text(text)?,
+                        crate::Paint::Text { text, .. } | crate::Paint::TextBox { text, .. } => {
+                            self.text(text)?
+                        }
                         crate::Paint::Svg { .. } => {
                             self.vectors += 1;
                             if self.vectors > 16 {

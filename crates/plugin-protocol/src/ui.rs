@@ -14,6 +14,11 @@
 //! painted content interval, including overscan. Native frames translate retained artwork while
 //! guest replies are in flight; pointer coordinates are mapped back to that drawing's offset.
 //! This opt-in excludes grid/IME canvases and visual viewport transforms. See [`ScrollBuffer`].
+//! `ui.canvas` 1.4 adds [`crate::Paint::TextBox`]: a clipped single-line text region whose
+//! native glyph widths determine Start/Center/End alignment and end ellipsis. It uses the same
+//! UTF-8, font and drawing quotas; providers must declare the newer capability when using it.
+//! `ui.canvas` 1.5 adds [`Canvas::measure_text`]: native maximum advances of bounded sample groups
+//! are returned as exact-scene [`CanvasEvent::TextMeasured`] replies for content-sized layouts.
 //!
 //! `ui.windows` 1.0 permits a workspace package to declare `Panel.position = "window"`,
 //! with the ordinary `ui.panels` grant. Publish its `api::View` before requesting visibility
@@ -47,10 +52,14 @@ pub use controls::*;
 mod styles;
 pub use styles::*;
 mod canvas;
+#[cfg(test)]
+mod text_measure_tests;
 pub use canvas::*;
 mod events;
 #[cfg(test)]
 mod scroll_tests;
+#[cfg(test)]
+mod text_box_tests;
 mod visual_viewport;
 pub use visual_viewport::*;
 mod tools;
@@ -168,7 +177,17 @@ impl Document {
                     required.insert("editor.actions", semver::Version::new(1, 0, 0));
                 }
                 Kind::Canvas(canvas) => {
-                    let version = if canvas.scroll_buffer.is_some() {
+                    let version = if canvas.column_resize.is_some() {
+                        semver::Version::new(1, 6, 0)
+                    } else if !canvas.measure_text.is_empty() {
+                        semver::Version::new(1, 5, 0)
+                    } else if canvas
+                        .paint
+                        .iter()
+                        .any(|paint| matches!(paint, crate::Paint::TextBox { .. }))
+                    {
+                        semver::Version::new(1, 4, 0)
+                    } else if canvas.scroll_buffer.is_some() {
                         semver::Version::new(1, 3, 0)
                     } else if canvas.scroll_epoch.is_some() {
                         semver::Version::new(1, 2, 0)

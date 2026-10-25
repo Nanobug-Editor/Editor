@@ -197,6 +197,22 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../plugin-protocol/src/ui/canvas.rs"),
     ),
     (
+        "src/ui/canvas/columns.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/columns.rs"),
+    ),
+    (
+        "src/ui/canvas/text_measure.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/text_measure.rs"),
+    ),
+    (
+        "src/ui/text_measure_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/text_measure_tests.rs"),
+    ),
+    (
+        "src/ui/text_box_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/text_box_tests.rs"),
+    ),
+    (
         "src/ui/visual_viewport.rs",
         include_bytes!("../../plugin-protocol/src/ui/visual_viewport.rs"),
     ),

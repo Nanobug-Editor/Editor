@@ -398,6 +398,25 @@ pub enum Paint {
         #[serde(default)]
         font: Option<String>,
     },
+    /// `ui.canvas` 1.4: shape a single line with native font metrics inside a clipped rectangle.
+    /// Text that exceeds the width is ellipsized by the host before horizontal alignment.
+    TextBox {
+        /// Canvas-local logical pixels; clipping and alignment use the same rectangle.
+        rect: Rect,
+        /// UTF-8 content; the original value remains in the scene while the host shortens its paint.
+        text: String,
+        /// Foreground RGB, independent of the current row's selected background.
+        color: u32,
+        /// Logical font size, subject to the ordinary canvas font-size quota.
+        size: f32,
+        /// Request the bold face before measuring and positioning its actual glyphs.
+        bold: bool,
+        /// Override the canvas family; absent inherits its resolved UI font.
+        #[serde(default)]
+        font: Option<String>,
+        /// Physical left/center/right alignment through Start/Center/End, respectively.
+        align: ui::Alignment,
+    },
 }
 
 #[cfg(test)]
