@@ -8,12 +8,21 @@ use budget::SvgText;
 pub(super) fn encode(
     scene: &CanvasScene,
     photos: &BTreeMap<String, std::sync::Arc<super::super::super::images::Photo>>,
-) -> Result<(String, protocol::Rect), String> {
+) -> Result<
+    (
+        String,
+        protocol::Rect,
+        BTreeMap<String, std::sync::Arc<Vec<u8>>>,
+    ),
+    String,
+> {
     let (defs, body) = SvgText::pair();
     let mut writer = Writer {
         defs,
         body,
         images: BTreeMap::new(),
+        pngs: BTreeMap::new(),
+        image_work: 16 * 1024 * 1024,
         next: 0,
         bounds: None,
     };
@@ -42,6 +51,7 @@ pub(super) fn encode(
             h: height,
             ..bounds
         },
+        writer.pngs,
     ))
 }
 /// Own generated numeric IDs and the union of transformed primitive bounds for one compilation.
@@ -50,6 +60,10 @@ struct Writer {
     body: SvgText,
     /// A decoded source is encoded once; placements only reference generated numeric IDs.
     images: BTreeMap<String, usize>,
+    /// Only generated URIs resolve during parsing; every placement shares its encoded Arc.
+    pngs: BTreeMap<String, std::sync::Arc<Vec<u8>>>,
+    /// Aggregate decode and conservative 2x-density sampling pixels, charged before resvg.
+    image_work: u64,
     next: usize,
     bounds: Option<protocol::Rect>,
 }
@@ -134,28 +148,41 @@ impl Writer {
                 );
             }
             SceneNode::Image { image, rect, .. } => {
-                self.include(geometry_bounds(
+                let bounds = geometry_bounds(
                     &SceneGeometry::Rect {
                         rect: *rect,
                         radii: [0.; 4],
                     },
                     parent,
-                ));
+                );
+                self.include(bounds);
                 let bitmap = photos
                     .get(image)
                     .and_then(|photo| photo.decoded.as_ref().ok()?.as_ref());
                 if let Some(bitmap) = bitmap {
+                    // resvg decodes PNGs per placement even when the encoded Arc is shared.
+                    // Charge decoding plus projected sampling before parsing or raster allocation.
+                    let work = u64::from(bitmap.width) * u64::from(bitmap.height)
+                        + (f64::from(bounds.w) * f64::from(bounds.h) * 4.).ceil() as u64;
+                    self.image_work = self
+                        .image_work
+                        .checked_sub(work)
+                        .ok_or("Canvas images exceed their raster work budget")?;
                     let id = if let Some(id) = self.images.get(image) {
                         *id
                     } else {
                         // Reuse only admitted pixels: original SVG filters must never execute again
-                        // under a different transform. Bound PNG output before base64 expansion.
+                        // under a different transform. PNG stays outside XML: usvg would otherwise
+                        // allocate a new base64 buffer for every <use> placement.
                         let encoded = budget::png(bitmap, self.defs.remaining())?;
+                        self.defs.charge(encoded.len())?;
                         let id = self.next;
                         self.next += 1;
+                        let uri = format!("nanobug-canvas-image:{id}");
+                        self.pngs.insert(uri.clone(), std::sync::Arc::new(encoded));
                         let _ = write!(
                             self.defs,
-                            "<image id=\"i{id}\" width=\"1\" height=\"1\" preserveAspectRatio=\"none\" href=\"data:image/png;base64,{encoded}\"/>"
+                            "<image id=\"i{id}\" width=\"1\" height=\"1\" preserveAspectRatio=\"none\" href=\"{uri}\"/>"
                         );
                         self.defs.check()?;
                         self.images.insert(image.clone(), id);

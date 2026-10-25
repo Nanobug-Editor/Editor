@@ -12,6 +12,10 @@
 
 生成的 SVG 追加与 PNG 压缩输出均在增长前计费，超限不生成部分成功画面。该可信数值/PNG 序列化路径与访客 SVG 的 XML/定义复用限制分开，且不共享解析缓存，不能凭相同摘要绕过访客 SVG 门禁。阶段门禁及修复后的双轴复审正在进行；当前不关闭 #128。
 
+随后 Standards 复审又发现 1 项 P1：锁定 usvg 会为每个 `<use>` 重新解码 data URL，XML 去重仍会复制 PNG 缓冲。安全小样证实 2 次放置产生 2 个不同 Arc；Spec 当轮未解决为 0，不能抵消 Standards 的新发现。最终改用只解析宿主生成 URI 的受控解析器返回同一 PNG Arc，禁用 data 及其他字符串来源；PNG 字节与 XML 共用 4 MiB 预算。另在解析前按每次放置的源像素和保守 2x 投影面积累计最多 16 Mi 像素工作，限制 resvg 按放置重复解码/采样的 CPU 成本。
+
+`image-raster-work.json` 用 200 次放置的有界小样先复现错误地成功呈现，再通过明确失败回执验收（1.57 s）；没有运行 GiB 级攻击输入。共享 URI 路径下 PNG、已解码 SVG 的原生像素与成功回执继续通过（3.00 s / 2.65 s），空图片映射的旋转渐变也通过。最终两轴复审尚待读回。
+
 候选路径 `C:/Users/Tmiracle/.codex/worktrees/canvas-prerequisite/Editor`，独立 target。以保存的 A 验证副本对初始快照的差异合入前置，保留两个已审查的列宽取消修复；未复制主工作区后来出现的 Editor 协议迁移。主工作区的 `cargo fmt --check` 因该并行迁移的格式差异返回 1，原始输出保存在 `C:/Users/Tmiracle/.codex/canvas-main-fmt-20261025.log`；本候选的格式和阶段门禁单独通过。
 
 | 入口 | 实际结果 |

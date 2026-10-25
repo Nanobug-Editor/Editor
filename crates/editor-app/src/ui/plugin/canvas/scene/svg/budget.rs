@@ -1,4 +1,4 @@
-//! SVG expansion is charged before append, including PNG and base64 intermediates.
+//! SVG expansion and retained PNG bytes share a quota charged before growth.
 use super::*;
 use std::{cell::Cell, fmt, io, rc::Rc};
 
@@ -29,6 +29,15 @@ impl SvgText {
     /// Return capacity available to encoding before any temporary output is allocated.
     pub(super) fn remaining(&self) -> usize {
         self.remaining.get()
+    }
+    /// Charge retained image bytes before installing a resolver entry.
+    pub(super) fn charge(&mut self, bytes: usize) -> Result<(), String> {
+        let Some(remaining) = self.remaining.get().checked_sub(bytes) else {
+            self.failed.set(true);
+            return self.check();
+        };
+        self.remaining.set(remaining);
+        self.check()
     }
     /// Retain the convenient string append form while remembering any rejected expansion.
     pub(super) fn push_str(&mut self, value: &str) {
@@ -68,8 +77,7 @@ impl fmt::Display for SvgText {
 pub(super) fn png(
     bitmap: &super::super::super::super::bitmap::Bitmap,
     remaining: usize,
-) -> Result<String, String> {
-    use base64::Engine as _;
+) -> Result<Vec<u8>, String> {
     use image::ImageEncoder as _;
     let bytes = bitmap
         .image
@@ -84,7 +92,7 @@ pub(super) fn png(
     }
     let mut output = PngOutput {
         bytes: Vec::new(),
-        limit: remaining.saturating_sub(1024) / 4 * 3,
+        limit: remaining.saturating_sub(1024),
     };
     image::codecs::png::PngEncoder::new(&mut output)
         .write_image(
@@ -94,7 +102,7 @@ pub(super) fn png(
             image::ExtendedColorType::Rgba8,
         )
         .map_err(|_| "Canvas PNG exceeds its expansion budget or failed to encode")?;
-    Ok(base64::engine::general_purpose::STANDARD.encode(output.bytes))
+    Ok(output.bytes)
 }
 /// PNG compression writes through this cap rather than allocating a complete oversized result first.
 struct PngOutput {

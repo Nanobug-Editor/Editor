@@ -29,12 +29,16 @@ impl PreparedScene {
         owner: &Document,
         photos: BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
         limits: (u64, usize),
-        mut rasterize: impl FnMut(&str, protocol::Rect) -> Option<super::super::images::VectorImage>,
+        mut rasterize: impl FnMut(
+            &str,
+            protocol::Rect,
+            &BTreeMap<String, std::sync::Arc<Vec<u8>>>,
+        ) -> Option<super::super::images::VectorImage>,
     ) -> Self {
         let drawing = source.validate().and_then(|()| {
             SceneDrawing::compile(&source, &photos, limits).or_else(|_| {
-                let (svg, bounds) = svg::encode(&source, &photos)?;
-                let raster = rasterize(&svg, bounds)
+                let (svg, bounds, images) = svg::encode(&source, &photos)?;
+                let raster = rasterize(&svg, bounds, &images)
                     .ok_or("Canvas raster preparation exceeded its budget or failed".to_owned())?;
                 Ok(SceneDrawing {
                     paths: Vec::new(),
