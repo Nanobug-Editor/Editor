@@ -40,3 +40,7 @@
 同一比较的独立规格轴初审发现 1 项 P2：Canvas 仅在尺寸变化时取消列宽拖动，布局平移会用新原点解释旧按下锚点，违反列宽规格的外部几何取消要求。
 
 公开 UI 回归 `repositioned_canvas_cancels_its_native_column_gesture` 用固定尺寸 Canvas 和左侧 sibling 从 0 到 80 的宽度改变，保留同一节点、列 epoch 与宽度：未修复时收到错误完成事件，测试确实失败。修复在完整 bounds 改变时取消手势；重新运行 `ui::plugin::` 后 77 passed、0 failed、18 ignored。Windows/D3D 原生原入口再跑 1 passed（1.44 s），`cargo fmt --check`、`cargo check --workspace` 与差异检查通过。该修复不改变已完成的非 UI workspace 和 SDK 源码，复用此前对应检查证据。
+
+`4fdebb00` 复查确认原 P2 解决，规范轴仍为 0；规格轴又发现 1 项 P2：已有一次未确认释放时，取消第二次拖动会保留第二次未提交宽度。公开本地控件回归 `cancelled_second_gesture_preserves_only_the_submitted_preview` 在原代码下观察到错误的 260 而非已提交 240，确实失败；覆盖确认在取消前、后到达，以及随后新的提供者更新。
+
+修复用独立的待确认宽度快照替代布尔标记，确认回包按已提交结果匹配；取消恢复当前手势起始宽度，再采用已经确认的提供者状态。两个列宽行为测试通过；重跑完整 workspace 为 108 组、527 passed、0 failed、383 ignored，宿主 `ui::plugin::` 为 77 passed、0 failed、18 ignored，原生原入口 1 passed（1.47 s），workspace check、fmt 和差异检查通过。SDK 6 项对应源码未变，复用前述通过证据。该修复仍属同一最小前置，不包含后续 Canvas 扩展。

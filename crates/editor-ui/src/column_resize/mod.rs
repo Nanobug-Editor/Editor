@@ -21,8 +21,8 @@ pub struct ColumnResize {
     edges: Vec<f32>,
     /// Captured separator gesture; its starting widths stay fixed until release.
     drag: Option<Drag>,
-    /// A released preview awaits matching provider widths.
-    pending: bool,
+    /// Latest submitted widths awaiting acknowledgement, independent of a newer uncommitted drag.
+    pending: Option<Vec<f32>>,
 }
 /// A press fixes the adjacent pair and anchor, so reversing a clamped drag remains continuous.
 struct Drag {
@@ -45,18 +45,17 @@ impl ColumnResize {
             || self.minimum != minimum;
         if reset {
             self.drag = None;
-            self.pending = false;
+            self.pending = None;
         }
-        if self.pending
-            && self
-                .widths
+        if self.pending.as_ref().is_some_and(|submitted| {
+            submitted
                 .iter()
                 .zip(widths)
                 .all(|(a, b)| (a - b).abs() < 0.25)
-        {
-            self.pending = false;
+        }) {
+            self.pending = None;
         }
-        if self.drag.is_none() && !self.pending {
+        if self.drag.is_none() && self.pending.is_none() {
             self.widths = widths.to_vec();
         }
         self.epoch = epoch;
@@ -115,16 +114,18 @@ impl ColumnResize {
         if drag.widths == self.widths {
             return None;
         }
-        self.pending = true;
+        self.pending = Some(self.widths.clone());
         Some(self.widths.clone())
     }
     /// Cancel unfinished presentation, leaving an already submitted release intact.
     pub fn cancel(&mut self) {
-        self.drag = None;
-        if !self.pending {
-            self.widths.clone_from(&self.base);
-            self.edges = edges(self.origin, &self.widths);
+        if let Some(drag) = self.drag.take() {
+            self.widths = drag.widths;
         }
+        if self.pending.is_none() {
+            self.widths.clone_from(&self.base);
+        }
+        self.edges = edges(self.origin, &self.widths);
     }
     /// Whether the native surface currently owns the pointer, including outside its original bounds.
     pub fn dragging(&self) -> bool {
@@ -204,5 +205,34 @@ mod tests {
         state.configure(2, 20., &[300., 100., 80., 170.], &[104., 40., 24., 100.]);
         assert!(!state.dragging());
         assert!(!state.move_to(500.));
+    }
+
+    /// Cancelling a newer preview must preserve the older release and still recognize its acknowledgement.
+    #[test]
+    fn cancelled_second_gesture_preserves_only_the_submitted_preview() {
+        for acknowledge_before_cancel in [false, true] {
+            let mut state = ColumnResize::default();
+            state.configure(1, 0., &[200., 200.], &[80., 80.]);
+            assert!(state.begin(200.));
+            assert!(state.move_to(240.));
+            assert_eq!(state.finish().unwrap(), [240., 160.]);
+            assert!(state.begin(240.));
+            assert!(state.move_to(260.));
+            if acknowledge_before_cancel {
+                state.configure(1, 0., &[240., 160.], &[80., 80.]);
+            }
+            state.cancel();
+            assert_eq!(state.dividers().collect::<Vec<_>>(), [240.]);
+            assert!(state.finish().is_none(), "cancelled preview has no release");
+            if !acknowledge_before_cancel {
+                state.configure(1, 0., &[240., 160.], &[80., 80.]);
+            }
+            state.configure(1, 0., &[250., 150.], &[80., 80.]);
+            assert_eq!(
+                state.dividers().collect::<Vec<_>>(),
+                [250.],
+                "acknowledged previews cannot hide subsequent provider updates"
+            );
+        }
     }
 }
