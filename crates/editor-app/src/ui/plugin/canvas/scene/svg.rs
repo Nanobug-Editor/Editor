@@ -1,15 +1,19 @@
 //! Serialize validated complex layers to inert SVG for the existing bounded background rasterizer.
 use super::*;
 use std::fmt::Write as _;
+mod budget;
+use budget::SvgText;
 
 /// Produce one finite SVG and its canvas-space bounds; no user XML or external resource is emitted.
 pub(super) fn encode(
     scene: &CanvasScene,
     photos: &BTreeMap<String, std::sync::Arc<super::super::super::images::Photo>>,
 ) -> Result<(String, protocol::Rect), String> {
+    let (defs, body) = SvgText::pair();
     let mut writer = Writer {
-        defs: String::new(),
-        body: String::new(),
+        defs,
+        body,
+        images: BTreeMap::new(),
         next: 0,
         bounds: None,
     };
@@ -42,8 +46,10 @@ pub(super) fn encode(
 }
 /// Own generated numeric IDs and the union of transformed primitive bounds for one compilation.
 struct Writer {
-    defs: String,
-    body: String,
+    defs: SvgText,
+    body: SvgText,
+    /// A decoded source is encoded once; placements only reference generated numeric IDs.
+    images: BTreeMap<String, usize>,
     next: usize,
     bounds: Option<protocol::Rect>,
 }
@@ -55,6 +61,7 @@ impl Writer {
         parent: SceneTransform,
         photos: &BTreeMap<String, std::sync::Arc<super::super::super::images::Photo>>,
     ) -> Result<(), String> {
+        self.body.check()?;
         match node {
             SceneNode::Group {
                 transform,
@@ -134,28 +141,30 @@ impl Writer {
                     },
                     parent,
                 ));
-                let bytes = photos
+                let bitmap = photos
                     .get(image)
-                    .filter(|photo| matches!(photo.decoded, Ok(Some(_))))
-                    .and_then(|photo| match &photo.resource.state {
-                        plugin_runtime::ImageState::Ready(bytes) => Some(bytes),
-                        _ => None,
-                    });
-                if let Some(bytes) = bytes {
-                    use base64::Engine as _;
-                    let mime = match image::guess_format(bytes) {
-                        Ok(image::ImageFormat::Png) => "image/png",
-                        Ok(image::ImageFormat::Jpeg) => "image/jpeg",
-                        Ok(image::ImageFormat::Gif) => "image/gif",
-                        Ok(image::ImageFormat::WebP) => "image/webp",
-                        _ => "image/svg+xml",
+                    .and_then(|photo| photo.decoded.as_ref().ok()?.as_ref());
+                if let Some(bitmap) = bitmap {
+                    let id = if let Some(id) = self.images.get(image) {
+                        *id
+                    } else {
+                        // Reuse only admitted pixels: original SVG filters must never execute again
+                        // under a different transform. Bound PNG output before base64 expansion.
+                        let encoded = budget::png(bitmap, self.defs.remaining())?;
+                        let id = self.next;
+                        self.next += 1;
+                        let _ = write!(
+                            self.defs,
+                            "<image id=\"i{id}\" width=\"1\" height=\"1\" preserveAspectRatio=\"none\" href=\"data:image/png;base64,{encoded}\"/>"
+                        );
+                        self.defs.check()?;
+                        self.images.insert(image.clone(), id);
+                        id
                     };
-                    let encoded =
-                        base64::engine::general_purpose::STANDARD.encode(bytes.as_slice());
                     let _ = write!(
                         self.body,
-                        "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" href=\"data:{mime};base64,{encoded}\"/>",
-                        rect.x, rect.y, rect.w, rect.h
+                        "<use href=\"#i{id}\" transform=\"matrix({} 0 0 {} {} {})\"/>",
+                        rect.w, rect.h, rect.x, rect.y
                     );
                 } else {
                     let _ = write!(
@@ -166,7 +175,7 @@ impl Writer {
                 }
             }
         }
-        Ok(())
+        self.body.check()
     }
     /// Encode a solid or arbitrary bounded gradient using generated references only.
     fn brush(&mut self, brush: &SceneBrush, attribute: &str, bounds: protocol::Rect) -> String {

@@ -197,6 +197,27 @@ impl Budget {
                 }
                 if let Some(stroke) = stroke {
                     stroke.validate()?;
+                    if !stroke.dash.is_empty() {
+                        // Charge expansion before GPUI/resvg can loop or allocate. f64 accounting
+                        // also catches subnormal periods that cannot advance a large f32 cursor.
+                        let period = stroke
+                            .dash
+                            .iter()
+                            .map(|value| f64::from(*value))
+                            .sum::<f64>();
+                        let work = (geometry.length_bound() / period).ceil()
+                            * stroke.dash.len() as f64
+                            + stroke.dash.len() as f64;
+                        if !work.is_finite() || work > 128_000. {
+                            return Err("Canvas dash expansion exceeds its work budget".into());
+                        }
+                        self.segments += work as usize;
+                        if self.segments > 128_000 {
+                            return Err(
+                                "Canvas dash expansion exceeds its shared segment budget".into()
+                            );
+                        }
+                    }
                     let [a, b, c, d, _, _] = parent.0;
                     let margin = (a.abs() + c.abs()).max(b.abs() + d.abs())
                         * stroke.width

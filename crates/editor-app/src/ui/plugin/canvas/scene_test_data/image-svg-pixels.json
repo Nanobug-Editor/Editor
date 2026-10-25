@@ -1,0 +1,6 @@
+{
+  "image_source":"padded_svg", "image_repetitions":24, "expect_presented":true,
+  "canvas_samples":[{"x":60,"y":60,"rgba":[127,204,255,255]}],
+  "scene":{"identity":32,"revision":1,"roots":[{"kind":"group","id":"isolated","opacity":0.5,
+    "children":[{"kind":"image","id":"picture","image":"pixels","rect":{"x":20,"y":20,"w":80,"h":80}}]}]}
+}

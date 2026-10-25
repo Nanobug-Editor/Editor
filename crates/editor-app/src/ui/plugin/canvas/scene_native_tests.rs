@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 mod dpi;
+mod resources;
 mod wasm;
 
 /// One isolated OS window proves that a transformed public scene reaches native pixels.
@@ -97,6 +98,13 @@ fn native_canvas_scene_paints_transformed_shapes() {
                     {"kind":"image","id":"photo","image":"pixels","rect":{"x":20,"y":20,"w":100,"h":80}}]});
             }
             if case=="custom"&&!fixture["scene"].is_null() {wire["scene"]=fixture["scene"].clone();}
+            if let Some(count)=fixture["image_repetitions"].as_u64() {
+                assert!((1..=32).contains(&count));
+                let original=wire["scene"]["roots"][0]["children"][0].clone();
+                wire["scene"]["roots"][0]["children"]=serde_json::Value::Array((0..count).map(|index|{
+                    let mut image=original.clone();image["id"]=format!("image{index}").into();image
+                }).collect());
+            }
             let canvas:Canvas=serde_json::from_value(wire).unwrap();
             let mut document=Document::new(ui::Node::new("drawing",Kind::Canvas(canvas)).grow()).revision(1);
             if let Some(managed)=managed_document {document=managed;}
@@ -122,6 +130,7 @@ fn native_canvas_scene_paints_transformed_shapes() {
                 resources.insert("ordinary/diagram/image/pixels".into(),Arc::new(plugin_runtime::ImageResource{
                     source:version.into(),uri:"local.png".into(),state:plugin_runtime::ImageState::Ready(Arc::new(encoded.into_inner()))}));
             }
+            resources::attach(&fixture,&mut document,&mut resources);
             document.validate().unwrap();
             let expected_scene=document.active_node("drawing").and_then(|node|if let Kind::Canvas(canvas)=&node.kind {canvas.scene.as_ref()}else{None}).map(|scene|(scene.identity,scene.revision));
             let events=Rc::new(RefCell::new(Vec::new()));let record=events.clone();

@@ -120,7 +120,9 @@ impl VectorRenderer {
                                 photos,
                                 limits,
                                 |source, bounds| {
-                                    self.rasterize_with_budget(source, bounds, bounds, limits.0)
+                                    self.rasterize_with_budget(
+                                        source, bounds, bounds, limits.0, true,
+                                    )
                                 },
                             );
                             self.graphics.insert(key.clone(), Arc::new(prepared));
@@ -297,7 +299,7 @@ impl VectorRenderer {
 
     /// Preserve SVG alpha, block ambient file reads, and allocate only the visible clipped area.
     fn rasterize(&mut self, source: &str, rect: Rect, clip: Rect) -> Option<VectorImage> {
-        self.rasterize_with_budget(source, rect, clip, 64 * 1024 * 1024)
+        self.rasterize_with_budget(source, rect, clip, 64 * 1024 * 1024, false)
     }
 
     /// Scene fallback checks its shared remaining output capacity before native allocation.
@@ -307,10 +309,11 @@ impl VectorRenderer {
         rect: Rect,
         clip: Rect,
         remaining: u64,
+        generated_scene: bool,
     ) -> Option<VectorImage> {
         let target = intersection(rect, clip)?;
         let digest = <[u8; 32]>::from(Sha256::digest(source.as_bytes()));
-        let tree = if let Some(tree) = self.trees.get(&digest) {
+        let tree = if !generated_scene && let Some(tree) = self.trees.get(&digest) {
             tree.clone()
         } else {
             let fonts = self
@@ -326,8 +329,20 @@ impl VectorRenderer {
                 },
                 ..Default::default()
             };
-            let tree = Arc::new(super::svg::parse(source, &options).ok()?);
-            self.trees.insert(digest, tree.clone());
+            // Canvas XML is generated only from validated numeric geometry and bounded PNG
+            // pixels. Guest SVG retains its independent XML/reuse guards; do not put generated
+            // trees into that cache, where a matching guest string could bypass those guards.
+            let tree = Arc::new(if generated_scene {
+                if source.len() > 4 * 1024 * 1024 {
+                    return None;
+                }
+                usvg::Tree::from_str(source, &options).ok()?
+            } else {
+                super::svg::parse(source, &options).ok()?
+            });
+            if !generated_scene {
+                self.trees.insert(digest, tree.clone());
+            }
             tree
         };
         // Two pixels per logical pixel keep normal high-DPI previews sharp; cap one raster at 16 MiB.
