@@ -638,6 +638,9 @@ preview.image_unsupported:
 preview.image_failed:
   en: "Image read, network request or decoding failed"
   zh-CN: "图片读取、网络请求或解码失败"
+preview.canvas_failed:
+  en: "The plugin drawing could not be displayed"
+  zh-CN: "无法显示插件画布"
 plugins.permission_network_images:
   en: "Download preview images through bounded HTTP(S) requests"
   zh-CN: "通过受限 HTTP(S) 请求下载预览图片"

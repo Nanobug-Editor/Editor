@@ -1,0 +1,10 @@
+{
+  "scene":{"identity":45,"revision":1,"roots":[
+    {"kind":"group","id":"rotate","transform":[0,1,-1,0,140,20],"children":[
+      {"kind":"shape","id":"gradient","geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":100,"h":40}},
+       "fill":{"kind":"linear_gradient","angle":90,"stops":[{"offset":0,"rgba":4278190335},{"offset":1,"rgba":65535}]}}
+    ]}
+  ]},
+  "samples":[{"x":120,"y":30,"rgba":[229,0,26,255],"tolerance":4},
+             {"x":120,"y":110,"rgba":[26,0,229,255],"tolerance":4}]
+}

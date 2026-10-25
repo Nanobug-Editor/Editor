@@ -1,5 +1,9 @@
 # Frozen plugin test inputs
 
+`canvas-flow-1.0.0.zip` is the independent public `ui.canvas 1.7` scene consumer in `../canvas-flow`.
+It covers curved edges, rounded nodes, viewport input and selected-node repaint, plus rejected-scene
+recovery through the public Manager. It is an acceptance fixture, excluded from distribution and SDK.
+
 `markdown-0.18.2-readme-pr.zip` is the isolated source-PR README presentation candidate: paragraph alignment,
 accessible image alt semantics and Primer metrics through public `ui.styles`. The 0.18.0/0.18.1
 local candidates and the first `markdown-0.18.2.zip` remain preserved. `sdk-styles-fixture-1.0.0.zip` is an independent minimal current-SDK

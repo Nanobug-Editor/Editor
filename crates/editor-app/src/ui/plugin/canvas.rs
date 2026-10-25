@@ -15,6 +15,9 @@ use std::ops::Range;
 mod column_tests;
 #[cfg(test)]
 mod native_columns_tests;
+pub(super) mod scene;
+#[cfg(all(test, target_os = "windows"))]
+mod scene_native_tests;
 mod scroll;
 mod text;
 
@@ -29,6 +32,10 @@ pub(crate) struct CanvasView {
     action_gesture: Option<action_gestures::ActionGesture>,
     pub(crate) foreground: u32,
     pub(super) images: Option<std::sync::Arc<Vec<Option<super::images::VectorImage>>>>,
+    /// Worker-tessellated artwork must match the complete current public scene before painting.
+    pub(super) scene_graphics: Option<std::sync::Arc<scene::PreparedScene>>,
+    /// Display receipts converge per scene outcome, independently of ordinary native repaints.
+    scene_presented: Option<CanvasEvent>,
     focus: FocusHandle,
     bounds: Bounds<Pixels>,
     measured: Option<CanvasEvent>,
@@ -124,6 +131,15 @@ impl PluginView {
 impl CanvasView {
     /// Content replacement retires native gestures; drawing-only repaints retain their previews.
     pub(super) fn update_drawing(&mut self, drawing: Canvas) {
+        if self.drawing.scene.as_ref().map(|scene| scene.identity)
+            != drawing.scene.as_ref().map(|scene| scene.identity)
+        {
+            self.deactivate();
+        }
+        if self.drawing.scene != drawing.scene {
+            self.scene_graphics = None;
+            self.scene_presented = None;
+        }
         if self.drawing.scroll_epoch != drawing.scroll_epoch {
             self.scroll.reset();
         }
@@ -261,6 +277,8 @@ impl CanvasView {
             action_gesture: None,
             foreground: 0,
             images: None,
+            scene_graphics: None,
+            scene_presented: None,
             #[cfg(test)]
             painted_text: Vec::new(),
             #[cfg(test)]
@@ -286,6 +304,18 @@ impl CanvasView {
         view
     }
     fn emit(&self, event: CanvasEvent, cx: &mut Context<Self>) {
+        if matches!(
+            event,
+            CanvasEvent::Pointer { .. } | CanvasEvent::Wheel { .. }
+        ) {
+            if let Some(scene) = &self.drawing.scene {
+                if !matches!(&self.scene_presented,Some(CanvasEvent::ScenePresented{identity,scene_revision,projection,error:None,..})
+                    if *identity==scene.identity&&*scene_revision==scene.revision&&*projection==self.viewport)
+                {
+                    return;
+                }
+            }
+        }
         if self.enabled {
             (self.sink)(event, self.revision, self.action_gesture, cx);
         }
@@ -315,6 +345,7 @@ impl CanvasView {
     }
     /// A rejected deferred callback or reactivation must retry its current native geometry.
     pub(crate) fn invalidate_measurement(&mut self) {
+        self.scene_presented = None;
         self.measured = None;
         self.text_measurements = None;
     }
@@ -514,6 +545,50 @@ impl CanvasView {
                         );
                     }
                 }
+            }
+        }
+        let presentation = if let Some(prepared) = &self.scene_graphics {
+            if self.drawing.scene.as_ref() == Some(&prepared.source) {
+                let error = match &prepared.drawing {
+                    Ok(drawing) => drawing.paint(self, bounds, window, cx).err(),
+                    Err(error) => Some(error.clone()),
+                };
+                let error = error.map(|error| {
+                    window.paint_quad(fill(bounds, gpui_kit::rgba(0xc0505022)));
+                    paint_text(
+                        &rust_i18n::t!("preview.canvas_failed"),
+                        14.,
+                        font(
+                            self.font
+                                .family
+                                .clone()
+                                .unwrap_or_else(|| "Segoe UI".into()),
+                        ),
+                        rgb(self.foreground).into(),
+                        bounds.origin + point(px(8.), px(8.)),
+                        window,
+                        cx,
+                    );
+                    error.chars().take(256).collect::<String>()
+                });
+                Some(CanvasEvent::ScenePresented {
+                    identity: prepared.source.identity,
+                    scene_revision: prepared.source.revision,
+                    source: prepared.document_source.clone(),
+                    file: prepared.file_source.clone(),
+                    projection: self.viewport.clone(),
+                    error,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        if let Some(presentation) = presentation {
+            if self.enabled && self.scene_presented.as_ref() != Some(&presentation) {
+                self.scene_presented = Some(presentation.clone());
+                self.emit(presentation, cx);
             }
         }
         if !self.composition.is_empty() {

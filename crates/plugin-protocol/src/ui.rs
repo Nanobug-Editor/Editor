@@ -177,7 +177,9 @@ impl Document {
                     required.insert("editor.actions", semver::Version::new(1, 0, 0));
                 }
                 Kind::Canvas(canvas) => {
-                    let version = if canvas.column_resize.is_some() {
+                    let version = if canvas.scene.is_some() {
+                        semver::Version::new(1, 7, 0)
+                    } else if canvas.column_resize.is_some() {
                         semver::Version::new(1, 6, 0)
                     } else if !canvas.measure_text.is_empty() {
                         semver::Version::new(1, 5, 0)
@@ -300,7 +302,33 @@ impl Document {
 
     /// Reject unsupported versions, duplicate identities and unbounded native workloads.
     pub fn validate(&self) -> Result<(), String> {
-        validate::document(self)
+        validate::document(self)?;
+        let mut images = std::collections::BTreeSet::new();
+        let mut references = Vec::new();
+        let mut visit = |node: &Node| match &node.kind {
+            Kind::Image { .. } | Kind::FileImage { .. } => {
+                images.insert(node.id.clone());
+            }
+            Kind::Canvas(canvas) => {
+                if let Some(scene) = &canvas.scene {
+                    references.extend(scene.image_nodes().into_iter().map(str::to_owned));
+                }
+            }
+            _ => {}
+        };
+        self.root.visit(&mut visit);
+        if let Some(toolbar) = &self.editor_toolbar {
+            toolbar.visit(&mut visit);
+        }
+        if let Some(dialog) = &self.dialog {
+            dialog.content.visit(&mut visit);
+        }
+        if references.iter().any(|id| !images.contains(id)) {
+            return Err(
+                "Canvas scene image reference must name an Image/FileImage in this document".into(),
+            );
+        }
+        Ok(())
     }
 
     /// Return the editor reference actually mounted in the active root, excluding disabled/inactive trees.

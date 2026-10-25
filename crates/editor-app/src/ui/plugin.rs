@@ -239,8 +239,24 @@ impl PluginView {
             cx.notify();
         }
         for (id, canvas) in &self.canvases {
+            let graphics = images
+                .graphics
+                .get(&format!("{panel_key}/canvas/{id}"))
+                .cloned();
             let images = images.get(&format!("{panel_key}/canvas/{id}")).cloned();
             canvas.update(cx, |view, cx| {
+                let graphics = graphics.filter(|prepared| {
+                    view.drawing.scene.as_ref() == Some(&prepared.source)
+                        && prepared.belongs_to(&self.document)
+                });
+                if match (&view.scene_graphics, &graphics) {
+                    (Some(old), Some(new)) => !std::sync::Arc::ptr_eq(old, new),
+                    (None, None) => false,
+                    _ => true,
+                } {
+                    view.scene_graphics = graphics;
+                    cx.notify();
+                }
                 if match (&view.images, &images) {
                     (Some(old), Some(new)) => !std::sync::Arc::ptr_eq(old, new),
                     (None, None) => false,
@@ -271,6 +287,11 @@ impl PluginView {
         for canvas in self.canvases.values() {
             if let Some(images) = &canvas.read(cx).images {
                 pixels.extend(images.iter().flatten().map(|image| image.image.clone()));
+            }
+            if let Some(prepared) = &canvas.read(cx).scene_graphics {
+                if let Ok(drawing) = &prepared.drawing {
+                    pixels.extend(drawing.images());
+                }
             }
         }
         for image in self.image_leases.update(pixels, cx) {
@@ -425,6 +446,19 @@ impl PluginView {
         }
         self.virtual_blocks.retain(&document);
         self.document = document;
+        // Source replacement revokes old scene pixels before another background publication arrives.
+        for canvas in self.canvases.values() {
+            canvas.update(cx, |canvas, _| {
+                if canvas
+                    .scene_graphics
+                    .as_ref()
+                    .is_some_and(|scene| !scene.belongs_to(&self.document))
+                {
+                    canvas.scene_graphics = None;
+                    canvas.invalidate_measurement();
+                }
+            });
+        }
         self.environment = environment;
         // Each popup opening owns a fresh dismiss acknowledgement, even when it reuses an ID.
         if menu_changed {

@@ -5,6 +5,18 @@
   "toolchain": "Rust 1.98.1 / wasm32-wasip2 / windows-x86_64",
   "packages": [
     {
+      "id": "canvas-flow",
+      "version": "1.0.0",
+      "archive": "canvas-flow-1.0.0.zip",
+      "sha256": "cd61d680422c2b5781bc64fcc82b1f356ce3dda7aa4a79d76c51de931033f40e",
+      "repository": "Nanobug-Editor/Editor",
+      "source_commit": null,
+      "host_revision": null,
+      "sdk_sha256": "6b78c801f237fc1edb2e7f7e8ea1a153d2d47167cadaa51853695d2036f1bc7a",
+      "toolchain": "Rust 1.98.1 / wasm32-wasip2 / windows-x86_64",
+      "scope": "Independent ui.canvas 1.7 acceptance guest rebuilt through the curated host --plugin-package entry after the 1.4-1.6 prerequisite; scene source still uncommitted at build time; never a marketplace listing."
+    },
+    {
       "id": "markdown",
       "version": "0.17.2",
       "archive": "markdown-0.17.2.zip",

@@ -1,0 +1,7 @@
+{
+  "copies":5,"expect_failed_scene":51,
+  "scene":{"identity":47,"revision":1,"roots":[
+    {"kind":"shape","id":"large","geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":2048,"h":2048}},
+     "fill":{"kind":"linear_gradient","angle":90,"stops":[{"offset":0,"rgba":4278190335},{"offset":0.5,"rgba":16711935},{"offset":1,"rgba":65535}]}}
+  ]}
+}

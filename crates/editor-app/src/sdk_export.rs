@@ -200,6 +200,23 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/canvas/columns.rs",
         include_bytes!("../../plugin-protocol/src/ui/canvas/columns.rs"),
     ),
+    // Scene consumers receive the same bounded value contracts used by host admission.
+    (
+        "src/ui/canvas/scene.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene.rs"),
+    ),
+    (
+        "src/ui/canvas/scene/geometry.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene/geometry.rs"),
+    ),
+    (
+        "src/ui/canvas/scene/style.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene/style.rs"),
+    ),
+    (
+        "src/ui/canvas/scene_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene_tests.rs"),
+    ),
     (
         "src/ui/canvas/text_measure.rs",
         include_bytes!("../../plugin-protocol/src/ui/canvas/text_measure.rs"),

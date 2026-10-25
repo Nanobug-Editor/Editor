@@ -1,0 +1,8 @@
+{
+  "scene":{"identity":46,"revision":1,"roots":[
+    {"kind":"shape","id":"rounded","geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":60},"radii":[20,20,20,20]},
+     "fill":{"kind":"solid","rgba":4278190335}}
+  ]},
+  "samples":[{"x":24,"y":27,"rgba":[255,255,255,255],"tolerance":5},
+             {"x":28,"y":28,"rgba":[255,0,0,255],"tolerance":5}]
+}

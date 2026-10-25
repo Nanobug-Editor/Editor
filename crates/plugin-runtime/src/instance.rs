@@ -32,6 +32,7 @@ mod presentation;
 mod private;
 mod process_calls;
 mod resource_roots;
+mod scene_history;
 mod selected_resources;
 mod service_preparation;
 mod service_replies;
@@ -233,6 +234,10 @@ pub struct Instance {
     bindings: Plugin,
     /// Validated documents keyed by their declared panel; publication is atomic across one reply.
     pub views: std::collections::BTreeMap<String, std::sync::Arc<ui::Document>>,
+    /// Bounded incarnation-local tombstones prevent removed scene identities from acquiring new input.
+    scene_identities: BTreeSet<(String, String, u64)>,
+    /// Last successful native presentation, scoped to this incarnation's panel and canvas node.
+    scene_presentations: std::collections::BTreeMap<(String, String), ui::CanvasEvent>,
     panels: std::collections::BTreeSet<String>,
     pub error: Option<String>,
 }
@@ -552,6 +557,8 @@ impl Instance {
             store,
             bindings,
             views: Default::default(),
+            scene_identities: Default::default(),
+            scene_presentations: Default::default(),
             panels: manifest.panels.iter().map(|p| p.id.clone()).collect(),
             error: None,
         };
@@ -600,6 +607,9 @@ impl Instance {
         });
         self.sample_resources();
         if let Err(error) = &result {
+            // A rejected scene is a typed publication result, not a WASM trap. Keep the
+            // committed owner alive before generic fault handling can revoke its old views.
+            let rejected_scene = self.preserve_rejected_scene(error);
             let principal = &self.store.data().plugin_services.principal;
             let budget = error.downcast_ref::<wasmtime::Trap>().is_some_and(|trap| {
                 matches!(trap, wasmtime::Trap::OutOfFuel | wasmtime::Trap::Interrupt)
@@ -608,6 +618,8 @@ impl Instance {
                 "{}: {error:#}",
                 if budget {
                     "WASM execution budget exceeded"
+                } else if rejected_scene {
+                    "Canvas publication rejected"
                 } else {
                     "WASM operation failed"
                 }
@@ -635,7 +647,7 @@ impl Instance {
             if self.diagnostics.len() > 32 {
                 self.diagnostics.remove(0);
             }
-            if error.downcast_ref::<api::Failure>().is_none() {
+            if error.downcast_ref::<api::Failure>().is_none() && !rejected_scene {
                 // Publish the provider fault before retirement cancels retained invocations.
                 // Otherwise a trap is silently rewritten as a caller-initiated cancellation.
                 let failure = api::Failure::new(
@@ -728,12 +740,14 @@ impl Instance {
                 );
             }
             // Publish only after every document validates; an invalid peer never partly updates the UI.
+            self.remember_scenes(&reply.views);
             for view in &reply.views {
                 self.views.insert(
                     view.panel.clone(),
                     std::sync::Arc::new(view.document.clone()),
                 );
             }
+            self.reconcile_scene_presentations();
             // Revoke against the newly published opt-in, before a second public event can use old slots.
             // Accepted writers pin their payload independently and still deliver the original save receipt.
             self.reconcile_image_inputs();
@@ -906,6 +920,7 @@ impl Instance {
         self.file_sources.clear();
         self.store.data_mut().roots.retire();
         self.views.clear();
+        self.scene_presentations.clear();
         self.store.data_mut().processes.clear();
         self.store.data_mut().process_handles.clear();
         self.store.data_mut().process_display_scopes.clear();

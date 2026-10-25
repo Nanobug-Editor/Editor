@@ -1,0 +1,13 @@
+{
+  "dpi_percent":200,
+  "dark":true,
+  "scene":{"identity":44,"revision":1,"roots":[
+    {"kind":"shape","id":"background","geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":320,"h":240}},"fill":{"kind":"solid","rgba":4294967295}},
+    {"kind":"group","id":"isolated","opacity":0.5,"clip":{"kind":"rect","rect":{"x":20,"y":20,"w":80,"h":80}},"children":[
+      {"kind":"shape","id":"left","geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":80,"h":80}},"fill":{"kind":"solid","rgba":4278190335}},
+      {"kind":"shape","id":"right","geometry":{"kind":"rect","rect":{"x":40,"y":0,"w":80,"h":80}},"fill":{"kind":"solid","rgba":4278190335}}
+    ]}
+  ]},
+  "expect_presented":true,
+  "samples":[{"x":40,"y":50,"rgba":[255,128,128,255]},{"x":70,"y":50,"rgba":[255,128,128,255]},{"x":110,"y":50,"rgba":[255,255,255,255]}]
+}

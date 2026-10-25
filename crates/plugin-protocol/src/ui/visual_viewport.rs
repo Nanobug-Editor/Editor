@@ -120,6 +120,16 @@ impl VisualViewport {
         if let Kind::Canvas(canvas) = kind {
             let t = self.transform.unwrap_or_default();
             let content = self.content.unwrap();
+            if let Some(scene) = &canvas.scene {
+                scene.validate_projection(SceneTransform([
+                    t.scale,
+                    0.,
+                    0.,
+                    t.scale,
+                    t.x - content.width * t.anchor_x * t.scale,
+                    t.y - content.height * t.anchor_y * t.scale,
+                ]))?;
+            }
             for paint in &canvas.paint {
                 if let crate::Paint::Text { size, .. } | crate::Paint::TextBox { size, .. } = paint
                 {

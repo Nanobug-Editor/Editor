@@ -4,6 +4,44 @@ use crate::api::{ErrorCode, Failure};
 
 impl Document {
     pub fn validate_event(&self, event: &UiEvent) -> Result<(), Failure> {
+        let presentation = match &event.action {
+            Action::Canvas(receipt @ CanvasEvent::ScenePresented { .. })
+            | Action::ViewportInput(ViewportInput {
+                event: receipt @ CanvasEvent::ScenePresented { .. },
+                ..
+            }) => Some(receipt),
+            _ => None,
+        };
+        if let Some(CanvasEvent::ScenePresented {
+            source,
+            file,
+            projection,
+            ..
+        }) = presentation
+        {
+            if *source != self.source
+                || *file != self.file
+                || !self
+                    .active_node(&event.node)
+                    .is_some_and(|node| node.viewport == *projection)
+            {
+                return Err(Failure::new(
+                    ErrorCode::StaleRevision,
+                    "Canvas presentation source was replaced",
+                ));
+            }
+        }
+        // Observations carry no input authority. Retain a receipt through unrelated UI painting
+        // only while the exact scene and source remain current and no modal owns input.
+        let current_presentation = event.revision < self.revision
+            && self.dialog.is_none()
+            && self.menu.is_none()
+            && self.editor_action_source(&event.node).is_none()
+            && presentation.is_some_and(|receipt| {
+                self.active_node(&event.node).is_some_and(
+                    |node| matches!(&node.kind,Kind::Canvas(canvas) if canvas.accepts(receipt)),
+                )
+            });
         // An explicit content epoch lets queued range movements survive painting only.
         // Future scenes, modal transitions and editor-source gestures never use this exception.
         let current_scroll = event.revision < self.revision
@@ -21,7 +59,11 @@ impl Document {
             && matches!(&event.action, Action::Canvas(CanvasEvent::ColumnsResized { epoch, widths })
                 if self.active_node(&event.node).is_some_and(|node| node.viewport.is_none()
                     && matches!(&node.kind, Kind::Canvas(canvas) if canvas.column_resize.as_ref().is_some_and(|columns| columns.accepts(*epoch, widths)))));
-        if event.revision != self.revision && !current_scroll && !current_columns {
+        if event.revision != self.revision
+            && !current_scroll
+            && !current_columns
+            && !current_presentation
+        {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
                 "UI document was replaced",
@@ -121,6 +163,16 @@ impl Canvas {
     fn accepts(&self, event: &CanvasEvent) -> bool {
         let finite = |value: f32| value.is_finite() && value.abs() <= 1_000_000.;
         match event {
+            CanvasEvent::ScenePresented {
+                identity,
+                scene_revision,
+                error,
+                ..
+            } => self.scene.as_ref().is_some_and(|scene| {
+                scene.identity == *identity
+                    && scene.revision == *scene_revision
+                    && error.as_ref().is_none_or(|error| error.len() <= 1024)
+            }),
             CanvasEvent::ColumnsResized { epoch, widths } => self
                 .column_resize
                 .as_ref()

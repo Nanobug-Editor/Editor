@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [Canvas 协议扩展](specs/canvas-protocol-extension.md)：四个顺序实施的垂直切片；[工单与依赖](tickets/canvas-protocol-extension/README.md)、[实施验证](verification/canvas-protocol-extension-2026-10-24.md)。1.4–1.6 前置已交付，01 重新验证与审查中，02–04 尚未实施。
+
 - [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
 
 - [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
