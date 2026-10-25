@@ -372,6 +372,10 @@ fn hover_documentation_surface_contrasts_with_text_in_both_themes(cx: &mut TestA
                 "fenced code",
                 "Method signature:\n\n```typescript\ntoUpperCase(): string\n```",
             ),
+            (
+                "structured documentation",
+                "example::editor\n\n```rust\npub struct Alpha;\n```\n\n---\n\nsize = 0, align = 0x1, no Drop\n\nShows type details for the selected symbol. Use `Alpha` to inspect its documentation.\n\n支持中文说明，代码与正文保持清晰的层次。",
+            ),
         ] {
             cx.update(|_, cx| {
                 view.read(cx).editor.clone().update(cx, |state, cx| {
@@ -393,6 +397,12 @@ fn hover_documentation_surface_contrasts_with_text_in_both_themes(cx: &mut TestA
             let card = cx.debug_bounds("editor-definition-card").unwrap();
             let text = cx.debug_bounds("editor-definition-text").unwrap();
             assert!(text.size.width > px(0.) && text.size.height > px(0.));
+            if form == "structured documentation" {
+                assert!(
+                    text.bottom() <= card.bottom() - px(8.),
+                    "short wrapped documentation must fit before the popup's height limit: card={card:?}, text={text:?}"
+                );
+            }
             let (painted, expected_surface, foreground) = cx.update(|window, cx| {
                 let bounds = card.scale(window.scale_factor());
                 let painted = window

@@ -238,7 +238,7 @@ fn declarative_language_plan_needs_no_empty_wasm_and_retires_original_authority(
     assert!(authority.is_live());
     assert_eq!(
         original.capability("language.lsp").unwrap().to_string(),
-        "1.7.0"
+        plugin_runtime::plugin_protocol::language::CAPABILITY_VERSION.to_string()
     );
     exercise_native_snapshot_guard(&mut manager, &original);
     let requests = exercise_native_request_ownership(&mut manager, &original);

@@ -113,7 +113,9 @@ fn anchor_path_width(
                             extent(area, child, frames, None, None, cx).map(|size| size.width)
                         })
                         .or_else(|| preferred_width(area, child, cx))?;
-                    Some(total + width)
+                    // A newly visible column can still carry a hidden zero projection.
+                    // Base paints at least PANEL_MIN_SIZE, which Editor must release now.
+                    Some(total + width.max(gpui_base::PANEL_MIN_SIZE))
                 })
         }
     }
@@ -259,7 +261,8 @@ fn compose(
                     // expanded bounds must not replace the pixels recorded by a completed divider drag.
                     if axis == Axis::Horizontal && Some(index) != editor {
                         if let Some(width) = sizes.get(index).copied().flatten() {
-                            return Some(width);
+                            // Match Base's visible minimum before allocating the elastic sibling.
+                            return Some(width.max(gpui_base::PANEL_MIN_SIZE));
                         }
                     }
                     extent(area, child, frames, None, None, cx)

@@ -277,6 +277,7 @@ impl EditorApp {
                     .on_drag_move(cx.listener(Self::image_drag_move))
             })
             // Register drag listeners before the editor's own selection listeners.
+            .child(self.render_hover_gesture_events(cx))
             .child(self.render_text_drag_events(cx))
             .when(hover_enabled, |source| {
                 source.child(self.render_image_drag_events(cx))

@@ -1,6 +1,7 @@
 //! The message toggle must paint the same persistent selection as other window controls.
 
 use super::*;
+use gpui_base::dock::{DockLayout, DockPlacement, InsertTarget, PanelId};
 use gpui_base::test_support::snapshots;
 
 /// Inspect the actual button fill after moving away, so hover cannot masquerade as selection.
@@ -57,8 +58,30 @@ fn host_messages_button_selection_tracks_panel_visibility(cx: &mut TestAppContex
             click(form, "host-messages-toggle");
             assert_selection(form, true);
             form.update(|window, cx| {
-                app.read(cx).dock_area.clone().update(cx, |area, cx| {
-                    area.toggle_dock(gpui_base::dock::DockPlacement::Right, window, cx);
+                let (dock, message) = {
+                    let app = app.read(cx);
+                    (
+                        app.dock_area.clone(),
+                        PanelId::from(app.messages.entity_id()),
+                    )
+                };
+                dock.update(cx, |area, cx| {
+                    // A saved outer-right placement still supports closing and reopening its dock.
+                    if !area.has_dock(DockPlacement::Right) {
+                        area.set_dock(DockPlacement::Right, DockLayout::tabs(), window, cx);
+                        let node = area.layout(DockPlacement::Right).unwrap().root().id();
+                        area.move_panel(
+                            message,
+                            InsertTarget::Split {
+                                node,
+                                placement: gpui_base::Placement::Right,
+                                size: Some(px(360.)),
+                            },
+                            window,
+                            cx,
+                        );
+                    }
+                    area.toggle_dock(DockPlacement::Right, window, cx);
                 });
             });
             assert_selection(form, false);

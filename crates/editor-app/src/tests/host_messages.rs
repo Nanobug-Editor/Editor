@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 mod button;
 mod policy;
+mod severity;
 
 /// Keep the temporary workspace alive while a scenario exercises the actual shell and document routes.
 fn with_messages(
@@ -229,7 +230,10 @@ fn host_messages_clear_resets_disclosure_and_keeps_later_receipts(cx: &mut TestA
         );
         assert!(form.debug_bounds(row(543)).is_some());
         assert!(form.debug_bounds("host-messages-more").is_some());
-        assert!(form.debug_bounds("host-messages-dot").is_none());
+        assert!(
+            form.debug_bounds("host-messages-dot").is_some(),
+            "information received after clearing raises a fresh blue reminder"
+        );
         let clear = form.debug_bounds("host-messages-clear").unwrap();
         form.simulate_click(clear.center(), Default::default());
         form.update(|_, cx| {

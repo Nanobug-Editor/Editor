@@ -5,6 +5,7 @@ use gpui_base::test_support::{ElementSnapshot, snapshots};
 use gpui_kit::{ElementId, Role};
 
 mod edge_drop;
+pub(super) mod replacement;
 
 /// This workflow requires a test candidate declaring staging exclusive; user installations stay untouched.
 pub(super) fn requested() -> bool {
@@ -16,6 +17,10 @@ pub(super) fn requested() -> bool {
 #[ignore = "requires Windows/D3D11, exclusive Git candidate/output and NANOBUG_GIT_NATIVE_EXCLUSIVE"]
 fn git_native_exclusive_dock_replaces_and_restores_peers() {
     assert!(requested());
+    assert!(
+        !replacement::requested(),
+        "use the full-replacement workflow for ordinary staging"
+    );
     for case in [
         Case::SMOKE,
         Case::ALL
@@ -55,7 +60,7 @@ fn check(h: &Harness, exclusive: bool, window: &Window, cx: &App) -> anyhow::Res
         }
     }
     let nodes = snapshots(window);
-    for id in ["explorer-hide", "outline-hide"] {
+    for id in ["explorer-title", "outline-hide"] {
         if named(&nodes, id).is_some() == exclusive {
             return Ok(false);
         }
@@ -100,7 +105,7 @@ fn left_frame(window: &Window, exclusive: bool) -> anyhow::Result<Bounds<Pixels>
     let anchor = if exclusive {
         input::field(window, "commit-message")?
     } else {
-        named(&nodes, "explorer-hide")
+        named(&nodes, "explorer-title")
             .context("Explorer title missing")?
             .clone()
     };
@@ -162,6 +167,9 @@ async fn check_right_width(h: &Harness, exclusive: bool, cx: &mut AsyncApp) -> a
 
 /// Open, switch to the ordinary combination, reopen and close through production client pointer dispatch.
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
+    if replacement::requested() {
+        return replacement::exercise(h, cx).await;
+    }
     h.activate(cx).await?;
     h.main.update(cx, |_, _, cx| {
         let app = h.app.read(cx);

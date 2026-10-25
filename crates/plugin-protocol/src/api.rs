@@ -664,6 +664,20 @@ pub enum EditorOperation {
     OpenDocument {
         resource: ResourceIdentity,
     },
+    /// editor.documents 1.2: borrow a workspace text session without revealing a file tab.
+    /// Requires editor.read + workspace.read; returns DocumentOpened with native edits preserved.
+    /// Clean reused sessions reconcile current disk bytes before returning; unsaved input wins.
+    /// Pair with ReleaseDocumentSource after comparison admission or cancellation. Unattached
+    /// preparations expire after 60s; live comparisons retain their source until closed.
+    OpenDocumentSource {
+        path: String,
+    },
+    /// Release this instance's preparation, identified by document ID/path (revision may advance).
+    /// Existing visible tabs and sources held by comparisons survive. Dirty orphan sources become
+    /// ordinary tabs, preserving unsaved edits. Retirement also releases the instance's preparations.
+    ReleaseDocumentSource {
+        document: DocumentVersion,
+    },
     /// Create readonly instance-owned content; requires editor.virtual and editor.read.
     OpenVirtualDocument {
         title: String,

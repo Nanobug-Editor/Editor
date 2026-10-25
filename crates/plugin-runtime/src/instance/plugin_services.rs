@@ -344,6 +344,11 @@ impl State {
             ));
         }
         let permission = match operation {
+            // An owned metadata token reveals no descriptor or file contents. Process-only methods
+            // may reject stale cached metadata without borrowing the provider's read permissions.
+            api::Operation::LanguageContexts {
+                operation: plugin_protocol::language_context::Operation::Check { .. },
+            } => return Ok(()),
             // Context metadata keeps this provider's authority; no private namespace transfers.
             api::Operation::LanguageContexts { .. } => "workspace.read",
             // A genuine native command may persist its own scoped intent under its declared

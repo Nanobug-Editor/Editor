@@ -22,6 +22,9 @@ pub(super) struct Saved {
     pub(super) next_id: u64,
     pub(super) tab_width: f32,
     pub(super) sessions: Vec<SavedSession>,
+    /// Optional terminal-only leaves; old version-1 snapshots retain the single-pane default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) panes: Option<panes::PaneLayout>,
 }
 
 pub(super) fn directory(workspace: &Path) -> PathBuf {
@@ -54,6 +57,7 @@ impl TerminalPanel {
         let mut next_id = self.next_id;
         let mut active = self.active;
         let mut tab_width = self.tab_width;
+        let mut panes = None;
         let path = self.storage.join("state.json");
         if path.exists() {
             anyhow::ensure!(
@@ -80,6 +84,24 @@ impl TerminalPanel {
                 t!("terminal.invalid_snapshot")
             );
             next_id = saved.next_id;
+            if let Some(mut layout) = saved.panes {
+                let unique = layout
+                    .sessions
+                    .iter()
+                    .copied()
+                    .collect::<std::collections::BTreeSet<_>>();
+                anyhow::ensure!(
+                    (2..=32).contains(&layout.sessions.len())
+                        && unique.len() == layout.sessions.len()
+                        && unique.is_subset(&ids),
+                    t!("terminal.invalid_snapshot")
+                );
+                layout.focused = saved
+                    .active
+                    .filter(|id| unique.contains(id))
+                    .unwrap_or(layout.sessions[0]);
+                panes = Some(layout);
+            }
             active = saved
                 .active
                 .filter(|id| ids.contains(id))
@@ -131,6 +153,7 @@ impl TerminalPanel {
         self.next_id = next_id;
         self.active = active;
         self.tab_width = tab_width;
+        self.panes = panes;
         Ok(())
     }
 
@@ -141,6 +164,7 @@ impl TerminalPanel {
         }
         anyhow::ensure!(!self.persistence_blocked, t!("terminal.invalid_snapshot"));
         let mut saved = Saved {
+            panes: self.panes.clone(),
             version: 1,
             settings: self.settings.clone(),
             active: self.active,

@@ -369,6 +369,24 @@ pub(super) fn left_sidebar_target(area: &DockArea, cx: &App) -> Option<(NodeId, 
     Some((band.id(), height))
 }
 
+/// Join a default right contribution to an existing center-local right band above Bottom.
+pub(super) fn center_right_target(area: &DockArea, cx: &App) -> Option<NodeId> {
+    let tree = area.layout(DockPlacement::Center)?;
+    let anchor = tree.panels().find(|id| {
+        area.panel(*id)
+            .is_some_and(|view| view.panel_name(cx) == "Editor")
+    })?;
+    tree.panels().filter(|id| *id != anchor).find_map(|id| {
+        let band = region_band(
+            tree,
+            DockPlacement::Center,
+            tree.find_panel_node(id)?,
+            Some(anchor),
+        )?;
+        (band.side == Placement::Right).then_some(band.root.id())
+    })
+}
+
 /// A migrated custom outer column stays separate; new peers join the column nearest Editor.
 fn inner_band(node: &PaneNode) -> &PaneNode {
     match node.kind() {

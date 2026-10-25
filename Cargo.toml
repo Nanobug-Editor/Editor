@@ -2,6 +2,7 @@
 members = [
     "crates/editor-app",
     "crates/editor-ui",
+    "crates/editor-terminal",
     "crates/editor-core",
     "crates/editor-history",
     "crates/platform-windows",

@@ -6,6 +6,14 @@ use editor_history::{LegacyQuery, Query, Scope};
 use gpui_base::input::InputState;
 
 impl EditorApp {
+    /// Navigation chrome returns focus to the mounted history filter instead of a hidden source.
+    pub(crate) fn history_focus_handle(&self, cx: &App) -> Option<FocusHandle> {
+        self.history
+            .panel
+            .as_ref()
+            .map(|panel| panel.filter.focus_handle(cx))
+    }
+
     /// File-tree/tab entry follows the file's persistent identity across all recorded path changes.
     pub(crate) fn open_file_history(
         &mut self,

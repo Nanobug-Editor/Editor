@@ -379,7 +379,12 @@ fn combine_details(hover: Option<Hover>, preview: Option<String>) -> Option<Hove
 /// Convert legacy LSP hover payloads before composing the definition preview.
 fn hover_markdown(contents: HoverContents) -> String {
     match contents {
-        HoverContents::Markup(markup) => markup.value,
+        HoverContents::Markup(markup) => match markup.kind {
+            // The composed result is Markdown; preserve a plain-text response
+            // before adding the existing definition excerpt and separator.
+            MarkupKind::PlainText => editor_ui::text::plain_markdown(&markup.value),
+            MarkupKind::Markdown => markup.value,
+        },
         HoverContents::Scalar(MarkedString::String(text)) => text,
         HoverContents::Scalar(MarkedString::LanguageString(item)) => {
             format!("```{}\n{}\n```", item.language, item.value)

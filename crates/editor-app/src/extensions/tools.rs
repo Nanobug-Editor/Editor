@@ -1,7 +1,11 @@
 //! Two native toolbar groups route captured targets; all plugin functions and artwork stay in packages.
 use super::*;
+use crate::app::editor_preferences::TabPlacement;
 use crate::outline::ToggleOutline;
 use editor_ui::menu::{MenuStyle, PopupMenu};
+
+mod order;
+mod render;
 
 /// Native toolbar focus retains this context; reopening a file or replacing a window invalidates it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,6 +21,10 @@ enum Action {
     Terminal,
     /// The built-in outline uses the same window controls and overflow behavior as other panels.
     Outline,
+    /// File navigation uses the same native window controls when its global placement is docked.
+    OpenFiles,
+    /// Host messages share the same order and overflow path as every other window.
+    Messages,
     Window {
         key: String,
         epoch: u64,
@@ -124,7 +132,8 @@ impl EditorApp {
         self.function_context = file;
     }
 
-    /// Built-in panel toggles precede independent plugin windows in the window control group.
+    /// Host order is Explorer, optional Open Files, Outline, Messages, Terminal, then installed plugins.
+    /// A saved user arrangement overrides this projection without changing panel ownership.
     fn window_entries(&self, explorer: Icon, cx: &App) -> Vec<Entry> {
         let mut windows = self
             .extensions
@@ -138,9 +147,13 @@ impl EditorApp {
                     .panels
                     .iter()
                     .filter(|panel| panel.position != "editor" && panel.show_in_window_controls)
-                    .map(|panel| {
+                    .enumerate()
+                    .map(|(index, panel)| {
                         (
+                            entry.install_sequence,
+                            entry.manifest.id.clone(),
                             panel.status_order.unwrap_or(1000),
+                            index,
                             format!("{}/{}", entry.manifest.id, panel.id),
                         )
                     })
@@ -161,15 +174,27 @@ impl EditorApp {
             disabled: false,
             action: Action::Explorer,
         }];
-        result.push(Entry {
-            id: "terminal-toggle".into(),
-            label: t!("terminal.title").to_string(),
-            tooltip: t!("terminal.title").to_string(),
-            icon: Some(crate::terminal::icon(cx)),
-            selected: self.terminal_visible(cx),
-            disabled: false,
-            action: Action::Terminal,
-        });
+        if self.tab_placement == TabPlacement::ToolWindow {
+            let visible = local_dock::panel_visible(
+                self.dock_area.read(cx),
+                gpui_base::dock::PanelId::from(self.open_files_panel.entity_id()),
+                cx,
+            );
+            result.push(Entry {
+                id: "open-files-toggle".into(),
+                label: t!("open_files.title").to_string(),
+                tooltip: t!(if visible {
+                    "open_files.hide"
+                } else {
+                    "open_files.show"
+                })
+                .to_string(),
+                icon: Some(Icon::new(IconName::Files)),
+                selected: visible,
+                disabled: false,
+                action: Action::OpenFiles,
+            });
+        }
         // Every host control reflects actual regional display, including closed and exclusive docks.
         let outline_visible = local_dock::panel_visible(
             self.dock_area.read(cx),
@@ -190,7 +215,30 @@ impl EditorApp {
             disabled: false,
             action: Action::Outline,
         });
-        for (_, key) in windows {
+        result.push(Entry {
+            id: "host-messages-toggle".into(),
+            label: t!(if self.messages.read(cx).has_pending_alert() {
+                "messages.unread"
+            } else {
+                "messages.title"
+            })
+            .to_string(),
+            tooltip: t!("messages.title").to_string(),
+            icon: Some(editor_ui::message_panel::notification_icon()),
+            selected: self.messages_visible(cx),
+            disabled: false,
+            action: Action::Messages,
+        });
+        result.push(Entry {
+            id: "terminal-toggle".into(),
+            label: t!("terminal.title").to_string(),
+            tooltip: t!("terminal.title").to_string(),
+            icon: Some(crate::terminal::icon(cx)),
+            selected: self.terminal_visible(cx),
+            disabled: false,
+            action: Action::Terminal,
+        });
+        for (_, _, _, _, key) in windows {
             let Some(panel) = self.plugin_panels.get(&key) else {
                 continue;
             };
@@ -208,6 +256,13 @@ impl EditorApp {
                 },
             });
         }
+        result.sort_by_key(|entry| {
+            self.session_state
+                .window_button_order
+                .iter()
+                .position(|id| id == &entry.id)
+                .unwrap_or(usize::MAX)
+        });
         result
     }
 
@@ -290,6 +345,8 @@ impl EditorApp {
             Action::Explorer => self.toggle_explorer(window, cx),
             Action::Terminal => self.toggle_terminal(window, cx),
             Action::Outline => self.toggle_outline(&ToggleOutline, window, cx),
+            Action::OpenFiles => self.toggle_open_files(window, cx),
+            Action::Messages => self.toggle_messages(window, cx),
             Action::Window { key, epoch } => {
                 let Some(panel) = self.plugin_panels.get(key).cloned() else {
                     return;
@@ -371,15 +428,15 @@ impl EditorApp {
     fn open_group_overflow(
         &mut self,
         entries: Vec<Entry>,
+        reorderable: bool,
         position: Point<Pixels>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let items = entries
             .iter()
-            .enumerate()
-            .map(|(index, entry)| protocol::ui::MenuItem {
-                id: index.to_string(),
+            .map(|entry| protocol::ui::MenuItem {
+                id: entry.id.clone(),
                 label: if entry.selected {
                     format!("✓ {}", entry.label)
                 } else {
@@ -390,18 +447,17 @@ impl EditorApp {
             })
             .collect();
         let parent = cx.entity().downgrade();
+        let reorder_owner = parent.clone();
+        let snapshot: Vec<_> = entries.iter().map(|entry| entry.id.clone()).collect();
         self.tool_overflow = Some(cx.new(|cx| {
-            PopupMenu::new(
+            let menu = PopupMenu::new(
                 items,
                 MenuStyle::current(cx),
                 position,
                 move |action, window, cx| {
                     let _ = parent.update(cx, |app, cx| {
-                        if let protocol::ui::Action::Select(index) = action
-                            && let Some(entry) = index
-                                .parse::<usize>()
-                                .ok()
-                                .and_then(|index| entries.get(index))
+                        if let protocol::ui::Action::Select(id) = action
+                            && let Some(entry) = entries.iter().find(|entry| entry.id == id)
                         {
                             app.activate_bar_entry(entry, window, cx);
                         }
@@ -411,135 +467,24 @@ impl EditorApp {
                 },
                 window,
                 cx,
-            )
+            );
+            if reorderable {
+                menu.reorderable(move |event, _, cx| {
+                    reorder_owner
+                        .update(cx, |app, cx| {
+                            // This popup contains every window. A newly added contribution also
+                            // invalidates its captured list; reopening projects the latest members.
+                            if app.window_entries(Icon::default(), cx).len() != snapshot.len() {
+                                return false;
+                            }
+                            app.reorder_window_buttons(event, &snapshot, cx)
+                        })
+                        .unwrap_or(false)
+                })
+            } else {
+                menu
+            }
         }));
         cx.notify();
-    }
-
-    /// Direct and overflow buttons share Base activation and the project's status-control appearance.
-    fn render_bar_group(
-        &self,
-        entries: Vec<Entry>,
-        slots: usize,
-        group: &'static str,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let selected_style = component_styles(cx, ThemeComponent::PanelToggle).selected;
-        let visible = if entries.len() <= slots {
-            entries.len()
-        } else {
-            slots.saturating_sub(1)
-        };
-        let mut row = h_flex()
-            // Native verification and accessibility tooling can distinguish the two contribution groups.
-            .debug_selector(move || format!("plugin-{group}-group").into())
-            .tab_group()
-            .items_center()
-            .gap_1()
-            .flex_shrink_0();
-        for entry in entries.iter().take(visible) {
-            let id = entry.id.clone();
-            let button = Button::new(SharedString::from(id.clone()))
-                .small()
-                .compact()
-                .ghost()
-                .w(px(24.))
-                .h(px(24.))
-                .accessibility_label(entry.label.clone())
-                .tooltip(entry.tooltip.clone())
-                .disabled(entry.disabled)
-                .when(entry.selected, |button| {
-                    button
-                        .bg(selected_style.background.unwrap_or(cx.theme().list_active))
-                        .text_color(selected_style.foreground.unwrap_or(cx.theme().foreground))
-                });
-            let button = if let Some(icon) = &entry.icon {
-                button.icon(icon.clone())
-            } else {
-                button.label("□")
-            };
-            let action = entry.clone();
-            row = row.child(div().debug_selector(move || id.clone().into()).child(
-                button.on_click(cx.listener(move |app, _, window, cx| {
-                    app.activate_bar_entry(&action, window, cx)
-                })),
-            ));
-        }
-        if visible < entries.len() {
-            let hidden = entries[visible..].to_vec();
-            let id = format!("plugin-{group}-overflow");
-            let label = if group == "windows" {
-                t!("toolbar.more_windows")
-            } else {
-                t!("toolbar.more_tools")
-            }
-            .to_string();
-            row = row.child(
-                div().debug_selector(move || id.clone().into()).child(
-                    Button::new(SharedString::from(format!("more-{group}")))
-                        .label("⋯")
-                        .small()
-                        .compact()
-                        .ghost()
-                        .w(px(24.))
-                        .h(px(24.))
-                        .accessibility_label(label.clone())
-                        .tooltip(label)
-                        .on_click(cx.listener(
-                            move |app, event: &gpui_kit::ClickEvent, window, cx| {
-                                app.open_group_overflow(
-                                    hidden.clone(),
-                                    event.position(),
-                                    window,
-                                    cx,
-                                )
-                            },
-                        )),
-                ),
-            );
-        }
-        // Keep the host message button inside the window group and outside plugin overflow,
-        // so its red dot remains reachable even when the available width hides plugin windows.
-        if group == "windows" {
-            row = row.child(self.render_messages_button(cx));
-        }
-        row.into_any_element()
-    }
-
-    /// Reserve bounded single-line slots for each group; their overflow menus remain separate.
-    pub(crate) fn render_plugin_toolbar(
-        &mut self,
-        explorer: Icon,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        self.update_function_context(window, cx);
-        let windows = self.window_entries(explorer, cx);
-        let functions = self.function_entries(cx);
-        let slots = (((window.viewport_size().width / px(1.) - 220.).max(84.) / 28.).floor()
-            as usize)
-            .min(64)
-            // Reserve a fixed slot for the host message window before dividing plugin slots.
-            .saturating_sub(1);
-        let window_slots = windows.len().min((slots / 2).max(1));
-        let tool_slots = slots.saturating_sub(window_slots).max(1);
-        let mut bar = h_flex()
-            .items_center()
-            .flex_shrink_0()
-            .track_focus(&self.toolbar_focus)
-            .child(self.render_bar_group(windows, window_slots, "windows", cx));
-        if !functions.is_empty() {
-            bar = bar
-                .child(
-                    div()
-                        .debug_selector(|| "plugin-tool-group-separator".into())
-                        .w(px(1.))
-                        .h(px(14.))
-                        .mx(px(4.))
-                        .bg(cx.theme().border),
-                )
-                .child(self.render_bar_group(functions, tool_slots, "tools", cx));
-        }
-        bar.into_any_element()
     }
 }

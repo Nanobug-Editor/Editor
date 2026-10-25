@@ -280,6 +280,7 @@ impl Manager {
                     replaced_by: None,
                     manifest: manifest.clone(),
                     digest: prepared.package.digest.clone(),
+                    install_sequence: self.installation_sequence(&id)?,
                     grants: prepared.grants.clone(),
                     enabled: prepared.enable_requested || enabled,
                     project_enabled,

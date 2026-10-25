@@ -3,33 +3,15 @@
 use crate::*;
 use editor_ui::scroll::{ScrollAxis, ScrollableElement as _, SmoothScrollable as _};
 
-#[derive(Clone)]
-/// Carries a tab's identity while it is dragged in the tab strip.
-struct EditorTabDrag {
-    path: PathBuf,
-    label: String,
-}
-
-impl Render for EditorTabDrag {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let style = component_styles(cx, ThemeComponent::EditorTabDragPreview).base;
-        div()
-            .px(px(style.padding_x_px.unwrap_or(8.)))
-            .py(px(style.padding_y_px.unwrap_or(4.)))
-            .rounded(px(style.radius_px.unwrap_or(4.)))
-            .text_size(px(style.font_size_px.unwrap_or(12.)))
-            .bg(style.background.unwrap_or(cx.theme().primary))
-            .text_color(style.foreground.unwrap_or(cx.theme().primary_foreground))
-            .child(self.label.clone())
-    }
-}
-
 impl EditorApp {
     pub(crate) fn render_file_tree(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
         let tree_style = component_styles(cx, ThemeComponent::ExplorerTree).base;
         let row_styles = component_styles(cx, ThemeComponent::ExplorerRow);
         let tree_scroll = self.tree_state.read(cx).scroll_handle().clone();
+        // All visible rows belong to this render's theme. Resolve and clone its
+        // definition once, rather than repeating catalog locks and cloning per row.
+        let icon_theme = theme::active_theme(self.dark_theme);
         let tree = gpui_base::Tree::new(&self.tree_state)
             .item(move |index, entry, entry_state, _window, cx| {
                 let selected = entry_state.is_selected();
@@ -52,15 +34,16 @@ impl EditorApp {
                     } else {
                         row_style.background.unwrap_or(cx.theme().background)
                     };
-                    let is_folder = Path::new(item.id.as_str()).is_dir();
                     let row_path = PathBuf::from(item.id.as_str());
+                    // Classification shares the displayed tree's scan generation, including empty folders.
+                    let is_folder = app.workspace_directories.contains(row_path.as_path());
                     let decoration = app.explorer_file_decoration(&row_path, is_folder, cx);
                     let drop_target = app.explorer_drag.target() == Some(row_path.as_path());
                     let icon = file_icon(
                         &app.providers,
                         Path::new(item.id.as_str()),
                         is_folder,
-                        &theme::active_theme(app.dark_theme),
+                        &icon_theme,
                     )
                     // Slightly enlarge explorer icons without changing tab-strip icon sizing.
                     .size(px(16.));
@@ -324,310 +307,13 @@ impl EditorApp {
             )
     }
 
-    fn render_tabs(&self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let tab_styles = component_styles(cx, ThemeComponent::EditorTab);
-        let close_styles = component_styles(cx, ThemeComponent::EditorTabClose);
-        let visible_count = self
-            .tabs
-            .iter()
-            .filter(|tab| {
-                tab.virtual_document
-                    .as_ref()
-                    .is_none_or(|source| !source.hidden)
-            })
-            .count();
-        let total_count = visible_count + self.comparison_views.len();
-        let tabs = self
-            .tabs
-            .iter()
-            .enumerate()
-            .filter(|(_, tab)| {
-                tab.virtual_document
-                    .as_ref()
-                    .is_none_or(|source| !source.hidden)
-            })
-            .map(|(index, tab)| {
-                let path = tab.path().to_path_buf();
-                let is_active =
-                    self.active_comparison.is_none() && self.active_path.as_ref() == Some(&path);
-                let is_external = !path.starts_with(self.workspace.root());
-                let is_dirty = tab.is_dirty();
-                let disk_state = tab
-                    .text
-                    .as_ref()
-                    .map_or(DiskState::Synced, |text| text.disk_state);
-                let name = if tab.virtual_document.is_some() {
-                    format!("{} · {}", tab.title(), t!("editor.readonly_label"))
-                } else {
-                    tab.title()
-                };
-                let icon = file_icon(
-                    &self.providers,
-                    &path,
-                    false,
-                    &theme::active_theme(self.dark_theme),
-                );
-                let activate_path = path.clone();
-                let context_path = path.clone();
-                let close_path = path.clone();
-                let middle_close_path = path.clone();
-                let drop_path = path.clone();
-                let drag_payload = EditorTabDrag {
-                    path: path.clone(),
-                    label: name.clone(),
-                };
-                // Keep the full document path in the tooltip even when the tab label is truncated.
-                let tooltip_path = editor_core::display_path(&path).to_string();
-                // Both project and external files use the theme's selected underline color.
-                let selected_color = tab_styles.selected.border.unwrap_or(cx.theme().primary);
-                let separator_color = tab_styles.base.border.unwrap_or(cx.theme().border);
-                let external_background = gpui_kit::rgb(0xfff4c2);
-                editor_ui::file_tab(
-                    format!("editor-tab:{}", path.to_string_lossy()),
-                    name.clone(),
-                    is_active,
-                    index,
-                    total_count,
-                )
-                .debug_selector(move || format!("editor-tab-{index}").into())
-                .relative()
-                .h_full()
-                .gap_2()
-                .px(px(tab_styles.base.padding_x_px.unwrap_or(8.)))
-                .text_size(px(if is_active {
-                    tab_styles
-                        .selected
-                        .font_size_px
-                        .or(tab_styles.base.font_size_px)
-                } else {
-                    tab_styles.base.font_size_px
-                }
-                .unwrap_or(14.)))
-                .border_r_1()
-                .border_color(separator_color)
-                .when(is_active, |style| {
-                    // Remove the right border before coloring the bottom border blue.
-                    style.border_r_0().border_b_1().border_color(selected_color)
-                })
-                .bg(if is_external {
-                    external_background.into()
-                } else if is_active {
-                    tab_styles
-                        .selected
-                        .background
-                        .unwrap_or(cx.theme().background)
-                } else {
-                    tab_styles.base.background.unwrap_or(cx.theme().tab_bar)
-                })
-                .text_color(if is_external {
-                    cx.theme().muted_foreground
-                } else if is_active {
-                    selected_color
-                } else {
-                    tab_styles
-                        .base
-                        .foreground
-                        .unwrap_or(cx.theme().tab_foreground)
-                })
-                .hover(|style| {
-                    style
-                        .bg(if is_external {
-                            external_background.into()
-                        } else {
-                            tab_styles.hover.background.unwrap_or(if is_active {
-                                tab_styles
-                                    .selected
-                                    .background
-                                    .unwrap_or(cx.theme().background)
-                            } else {
-                                tab_styles.base.background.unwrap_or(cx.theme().tab_bar)
-                            })
-                        })
-                        .text_color(if is_external {
-                            cx.theme().muted_foreground
-                        } else if is_active {
-                            selected_color
-                        } else {
-                            tab_styles.hover.foreground.unwrap_or(cx.theme().foreground)
-                        })
-                })
-                .tooltip(move |window, cx| Tooltip::new(tooltip_path.clone()).build(window, cx))
-                .tooltip_show_delay(Duration::from_millis(1_200))
-                .child(div().size(px(16.)).flex_shrink_0().child(icon))
-                // Draw the right separator independently so it never inherits blue.
-                .when(is_active, |this| {
-                    this.child(
-                        div()
-                            .absolute()
-                            .right_0()
-                            .top_0()
-                            .bottom(px(1.))
-                            .w(px(1.))
-                            .bg(separator_color),
-                    )
-                })
-                .child(
-                    div()
-                        .id(format!("editor-tab-title-{index}"))
-                        .debug_selector(move || format!("editor-tab-title-{index}").into())
-                        .min_w(px(0.))
-                        .truncate()
-                        .text_sm()
-                        .when(is_external, |style| style.italic())
-                        .child(format!(
-                            "{}{}{}",
-                            name,
-                            if is_dirty { " ●" } else { "" },
-                            match disk_state {
-                                DiskState::Synced => "",
-                                DiskState::Conflict => " ⚠",
-                                DiskState::Deleted => " ×",
-                            }
-                        )),
-                )
-                .when(tab.preview, |this| {
-                    this.child(editor_ui::preview_tab_badge(cx))
-                })
-                .child(
-                    div()
-                        .id(format!("close-editor-tab:{}", path.to_string_lossy()))
-                        .debug_selector(move || format!("editor-tab-close-{index}").into())
-                        .flex_shrink_0()
-                        .rounded(px(close_styles.base.radius_px.unwrap_or(3.)))
-                        .p_1()
-                        .hover(|style| {
-                            style.bg(close_styles
-                                .hover
-                                .background
-                                .unwrap_or(cx.theme().list_hover))
-                        })
-                        .child(Icon::new(IconName::Close).xsmall())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.close_tab(close_path.clone(), window, cx);
-                        })),
-                )
-                .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                    // A tab click activates existing content and follows the explorer preference.
-                    if let Some(index) =
-                        this.tabs.iter().position(|tab| tab.path() == activate_path)
-                    {
-                        if event.click_count() == 2 {
-                            this.keep_tab(index);
-                        }
-                        this.activate_tab(index, window, cx);
-                    }
-                }))
-                .on_drag(drag_payload, |drag, _, _, cx| cx.new(|_| drag.clone()))
-                .on_mouse_down(
-                    MouseButton::Right,
-                    cx.listener(move |app, event: &MouseDownEvent, window, cx| {
-                        cx.stop_propagation();
-                        if let Some(index) =
-                            app.tabs.iter().position(|tab| tab.path() == context_path)
-                        {
-                            app.activate_tab(index, window, cx);
-                            app.open_file_provider_menu(event.position, window, cx);
-                        }
-                    }),
-                )
-                .on_drop(cx.listener(move |this, drag: &EditorTabDrag, _, cx| {
-                    this.move_tab_before(&drag.path, &drop_path, cx);
-                }))
-                .on_mouse_down(
-                    MouseButton::Middle,
-                    cx.listener(move |this, _, window, cx| {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        this.close_tab(middle_close_path.clone(), window, cx);
-                    }),
-                )
-            });
-
-        div()
-            .id("editor-tabs-container")
-            .debug_selector(|| "editor-tabs-container".into())
-            .relative()
-            .w_full()
-            .h(px(PANEL_HEADER_HEIGHT))
-            .border_b_1()
-            .border_color(
-                component_styles(cx, ThemeComponent::EditorTabs)
-                    .base
-                    .border
-                    .unwrap_or(cx.theme().border),
-            )
-            .bg(component_styles(cx, ThemeComponent::EditorTabs)
-                .base
-                .background
-                .unwrap_or(cx.theme().tab_bar))
-            .child(
-                div()
-                    .id("editor-tabs-scroll")
-                    .w_full()
-                    .h_full()
-                    .flex()
-                    .flex_row()
-                    .track_scroll(&self.tabs_scroll)
-                    .overflow_x_scroll()
-                    // Direct children let GPUI reveal each tab using its measured bounds.
-                    .children(tabs)
-                    .children(
-                        self.comparison_views
-                            .iter()
-                            .enumerate()
-                            .map(|(index, view)| {
-                                let activate = cx.entity().downgrade();
-                                let close = activate.clone();
-                                let activate_id = view.id.clone();
-                                let close_id = view.id.clone();
-                                editor_ui::comparison_tab(
-                                    view.id.clone(),
-                                    view.title.clone(),
-                                    self.active_comparison.as_ref() == Some(&view.id),
-                                    view.preview,
-                                    visible_count + index,
-                                    total_count,
-                                    move |pin, window, cx| {
-                                        let _ = activate.update(cx, |app, cx| {
-                                            app.activate_comparison_view(
-                                                &activate_id,
-                                                pin,
-                                                window,
-                                                cx,
-                                            )
-                                        });
-                                    },
-                                    move |window, cx| {
-                                        let _ = close.update(cx, |app, cx| {
-                                            app.close_comparison_view(&close_id, window, cx)
-                                        });
-                                    },
-                                    cx,
-                                )
-                            }),
-                    )
-                    .smooth_scroll(&self.tabs_scroll, ScrollAxis::Horizontal),
-            )
-            // The shared overlay retains native dragging and contracts vertically at idle.
-            .child(
-                editor_ui::vertical_scrollbar(&self.tabs_scroll, cx)
-                    .axis(gpui_base::ScrollbarAxis::Horizontal),
-            )
-    }
-
     pub(crate) fn render_editor_panel(
         &self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         if self.history.panel.is_some() {
-            return v_flex()
-                .size_full()
-                .min_h_0()
-                .child(self.render_tabs(window, cx))
-                .child(self.render_history_panel(cx))
-                .into_any_element();
+            return self.render_editor_with_tabs(self.render_history_panel(cx), window, cx);
         }
         let style = component_styles(cx, ThemeComponent::Editor).base;
         // No document means no input handler, gutter, tab strip or drop caret.
@@ -729,13 +415,7 @@ impl EditorApp {
                     )
                     .into_any_element()
             };
-            return v_flex()
-                .debug_selector(|| "editor-panel-content".into())
-                .size_full()
-                .min_h_0()
-                .child(self.render_tabs(window, cx))
-                .child(body)
-                .into_any_element();
+            return self.render_editor_with_tabs(body, window, cx);
         }
         let body = if let Some(comparison) = self.render_document_comparison(window, cx) {
             comparison
@@ -744,15 +424,13 @@ impl EditorApp {
         } else {
             self.render_native_editor(window, cx)
         };
-        v_flex()
-            // Expose the editor extent for layout regression checks when docks disappear.
-            .debug_selector(|| "editor-panel-content".into())
+        let body = v_flex()
             .size_full()
+            .min_w_0()
             .min_h_0()
-            .child(self.render_tabs(window, cx))
             // Keep the editor's flexible height when the body is either a source pane or a split.
             .child(self.render_history_recovery_notice(cx))
-            .child(v_flex().flex_1().min_h_0().child(body))
-            .into_any_element()
+            .child(v_flex().flex_1().min_w_0().min_h_0().child(body));
+        self.render_editor_with_tabs(body, window, cx)
     }
 }

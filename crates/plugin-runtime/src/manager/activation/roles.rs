@@ -48,6 +48,8 @@ pub(super) enum Ready {
 }
 pub(super) struct PreparedRole {
     key: Key,
+    /// Failed hooks retain the same registered input as successful native plans.
+    selected_context: Option<crate::language_contexts::RegisteredContext>,
     fingerprint: language::Fingerprint,
     value: Result<Ready, api::Failure>,
 }
@@ -87,7 +89,10 @@ impl DemandPreparation {
             &self.environment.workspace,
             &Ok(self.configuration.clone()),
             &self.host_resources.sdk,
-        );
+        )
+        .with_discovery_revision(self.existing_owner.as_deref().map_or(0, |owner| {
+            self.host_resources.contexts.discovery_revision(owner)
+        }));
         roles.retain_mut(|role| {
             if role.value.is_ok() {
                 return false;
@@ -123,10 +128,27 @@ impl DemandPreparation {
             &self.environment.workspace,
             &Ok(settings.clone()),
             &self.host_resources.sdk,
+        )
+        .with_discovery_revision(
+            self.existing_owner
+                .as_deref()
+                .or_else(|| owner.as_deref().and_then(Instance::instance_id))
+                .map_or(0, |owner| {
+                    self.host_resources.contexts.discovery_revision(owner)
+                }),
         );
         requested
             .into_iter()
             .map(|key| {
+                let selected_context = if key.kind == Kind::Native {
+                    key.provider
+                        .strip_prefix(&format!("{}/", self.entry.manifest.id))
+                        .and_then(|id| {
+                            self.selected_role_context(id, key.document.as_ref(), owner.as_deref())
+                        })
+                } else {
+                    None
+                };
                 let result = (|| -> anyhow::Result<Ready> {
                     self.check()?;
                     let id = key
@@ -219,6 +241,7 @@ impl DemandPreparation {
                 .map_err(lease::failure);
                 PreparedRole {
                     key,
+                    selected_context,
                     fingerprint: fingerprint.clone(),
                     value: result,
                 }
@@ -326,6 +349,14 @@ impl Manager {
     }
     pub(super) fn publish_demanded_roles(&mut self, prepared: Vec<PreparedRole>) {
         for role in prepared {
+            // A replaced selection cannot publish either an old success or an old failure.
+            if role
+                .selected_context
+                .as_ref()
+                .is_some_and(|context| !context.is_live())
+            {
+                continue;
+            }
             let error = role.value.as_ref().err().map(ToString::to_string);
             match (role.key.kind, role.value) {
                 (Kind::Native, value) => {
@@ -338,7 +369,12 @@ impl Manager {
                         );
                         continue;
                     }
-                    let mut context = None;
+                    let mut context = role.selected_context.as_ref().map(|selected| {
+                        plugin_protocol::language::ProjectContext {
+                            key: selected.reference.descriptor.key.clone(),
+                            generation: selected.reference.descriptor.generation,
+                        }
+                    });
                     let service = value
                         .map(|ready| {
                             let Ready::Native(service, project) = ready else {

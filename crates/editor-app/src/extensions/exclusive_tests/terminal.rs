@@ -1,4 +1,5 @@
-//! Native terminal activation shares real regions with ordinary and exclusive plugin peers.
+//! An explicitly ordinary terminal exercises generic shared-region and exclusive-peer restoration.
+//! Product-default exclusivity is covered by the native drag/default regression suite.
 
 use super::*;
 use gpui_kit::{MouseButton, point};
@@ -39,6 +40,7 @@ fn setup(
         Root::new(app, window, cx)
     });
     let app = slot.borrow_mut().take().unwrap();
+    ordinary_terminal(&app, visual);
     visual.simulate_resize(size(px(1280.), px(900.)));
     let manifest: protocol::Manifest = serde_json::from_value(serde_json::json!({
         "id":"region-fixture", "name":"Regional panels", "version":"1.0.0", "protocol":7,
@@ -95,6 +97,16 @@ fn panels(app: &Entity<EditorApp>, visual: &mut VisualTestContext) -> [PanelId; 
             PanelId::from(app.plugin_panels["region-fixture/exclusive"].entity_id()),
         ]
     })
+}
+
+/// Keep shared-region fixtures independent of Terminal's new exclusive product default.
+fn ordinary_terminal(app: &Entity<EditorApp>, visual: &mut VisualTestContext) {
+    visual.update(|_, cx| {
+        app.update(cx, |app, _| {
+            app.dock_presentation
+                .set_exclusive(PanelId::from(app.terminal.entity_id()), false);
+        });
+    });
 }
 
 /// Activate a currently painted footer control and discard stale bounds from the preceding frame.

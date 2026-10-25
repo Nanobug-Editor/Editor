@@ -43,6 +43,15 @@ fn redraw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| window.draw(cx).clear(cx));
 }
 
+/// Give the native Explorer tree focus so its title actions can be exercised by pointer tests.
+fn focus_tree(app: &Entity<EditorApp>, visual: &mut VisualTestContext) {
+    visual.update(|window, cx| {
+        let tree = app.read(cx).tree_state.clone();
+        tree.update(cx, |state, cx| state.focus(window, cx));
+    });
+    redraw(visual);
+}
+
 /// The test platform's normal click helper always emits count one.
 fn double_click(cx: &mut VisualTestContext, position: Point<Pixels>) {
     cx.simulate_event(MouseDownEvent {
@@ -192,6 +201,7 @@ fn header_expansion_actions_include_hidden_and_empty_directories(cx: &mut TestAp
     let root = workspace.root().to_path_buf();
     let active = root.join("nested/deep/active.txt");
     let (app, visual) = mount(cx, workspace, active.clone());
+    focus_tree(&app, visual);
     for dark in [false, true] {
         visual.update(|_, cx| apply_theme(builtin_theme(dark), cx));
         redraw(visual);
@@ -228,6 +238,51 @@ fn header_expansion_actions_include_hidden_and_empty_directories(cx: &mut TestAp
     }
 }
 
+/// The group fades over 140 ms when tree focus leaves and reverses when focus returns.
+#[gpui::test]
+fn explorer_title_actions_fade_with_panel_focus(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Workspace::open(directory.path()).unwrap();
+    let (app, visual) = mount(cx, workspace, None);
+    visual.update(|_, cx| cx.set_reduce_motion(false));
+    redraw(visual);
+    let hidden_slot = visual.debug_bounds("explorer-actions").unwrap();
+    assert_eq!(hidden_slot.size.width, px(96.));
+    assert!(visual.debug_bounds("explorer-collapse-all").is_none());
+
+    focus_tree(&app, visual);
+    visual.executor().advance_clock(Duration::from_millis(70));
+    redraw(visual);
+    assert!(visual.debug_bounds("explorer-collapse-all").is_some());
+    assert_eq!(
+        visual.debug_bounds("explorer-actions").unwrap(),
+        hidden_slot
+    );
+
+    visual.update(|window, cx| {
+        app.read(cx).editor.focus_handle(cx).focus(window, cx);
+    });
+    redraw(visual);
+    assert!(visual.debug_bounds("explorer-collapse-all").is_some());
+    visual.executor().advance_clock(Duration::from_millis(150));
+    redraw(visual);
+    assert!(visual.debug_bounds("explorer-collapse-all").is_none());
+    assert_eq!(
+        visual.debug_bounds("explorer-actions").unwrap(),
+        hidden_slot
+    );
+
+    // The OS accessibility preference settles immediately without losing the reserved slot.
+    visual.update(|_, cx| cx.set_reduce_motion(true));
+    focus_tree(&app, visual);
+    assert!(visual.debug_bounds("explorer-collapse-all").is_some());
+    visual.update(|window, cx| {
+        app.read(cx).editor.focus_handle(cx).focus(window, cx);
+    });
+    redraw(visual);
+    assert!(visual.debug_bounds("explorer-collapse-all").is_none());
+}
+
 #[gpui::test]
 fn collapsed_project_root_survives_restart(cx: &mut TestAppContext) {
     assert_collapsed_tree_survives_restart(cx, true);
@@ -242,6 +297,7 @@ fn reveal_header_button_expands_and_selects_active_file(cx: &mut TestAppContext)
     let root = workspace.root().to_path_buf();
     let active = root.join("a-dir/b-sub/child.txt");
     let (app, visual) = mount(cx, workspace, active.clone());
+    focus_tree(&app, visual);
     for dark in [false, true] {
         visual.update(|_, cx| {
             apply_theme(builtin_theme(dark), cx);
@@ -292,6 +348,7 @@ fn reveal_external_file_shows_nonmodal_notification(cx: &mut TestAppContext) {
         app.update(cx, |app, cx| app.open_file(external.clone(), window, cx));
     });
     redraw(visual);
+    focus_tree(&app, visual);
     let before = visual.update(|_, cx| expansion_state(app.read(cx), cx));
     let button = visual
         .debug_bounds("explorer-reveal-active-file")

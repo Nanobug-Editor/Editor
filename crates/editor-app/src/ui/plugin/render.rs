@@ -308,9 +308,15 @@ impl PluginView {
                         ui::Alignment::End => gpui_kit::TextAlign::Right,
                     })
                 })
-                .bg(colors.background)
+                // The shared Button owns its fill, outline and disabled wash. A second role-colored
+                // wrapper would turn outlined actions solid and apply disabled opacity twice.
+                .when(!matches!(node.kind, Kind::Button { .. }), |view| {
+                    view.bg(colors.background)
+                })
                 .text_color(colors.foreground)
-                .when(disabled, |v| v.opacity(0.5))
+                .when(disabled && !matches!(node.kind, Kind::Button { .. }), |v| {
+                    v.opacity(0.5)
+                })
                 .child(content)
                 .when(
                     self.document.link_events

@@ -110,6 +110,7 @@ fn reopen_hidden_peers<'a>(
         Root::new(app, window, cx)
     });
     let app = slot.borrow_mut().take().unwrap();
+    ordinary_terminal(&app, visual);
     visual.simulate_resize(size(px(1877.), px(900.)));
     publish(&app, manifest, visual);
     visual.update(|window, cx| {

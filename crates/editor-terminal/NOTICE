@@ -1,0 +1,28 @@
+editor-terminal includes terminal screen algorithms adapted from Alacritty.
+
+Upstream project: https://github.com/alacritty/alacritty
+Source package: alacritty_terminal 0.26.0
+Source commit: 94e7c8874e526b1e67b349d9ba30ddf81669119e
+Published archive SHA-256:
+bda177466b9524d59f1b12f0dd30b68696788e9992a7e959021c4a0ed96fcf59
+Original package authors: Christian Duerr, Joe Wilm, and Alacritty contributors.
+These portions retain Apache-2.0; the full license is LICENSE-ALACRITTY.
+
+Integrated portions: typed cell coordinates; styled cells; screen and scrollback
+storage/reflow; ANSI/VT screen operations; selection; wrapped Unicode regex search;
+Vi cursor motion; and the associated algorithm and recorded-stream regressions.
+
+Nanobug modifications:
+- Integrate these algorithms into editor-terminal's private screen, grid,
+  coordinates, selection and vi modules under its single Engine owner.
+- Separate the ANSI handler, test support and regressions by responsibility.
+- Keep snapshot serialization unconditional and retain the existing serialized
+  cell fields, anonymous hyperlink identifiers and DA2 compatibility response.
+- Return host effects through editor-terminal's events model; do not import the
+  upstream PTY, process/event loop, thread, synchronization or platform code.
+- Reduce the view projection to cursor/selection values needed by native drawing;
+  process shutdown remains with the host rather than an upstream terminal entry point.
+
+The upstream package, Cargo manifests, feature matrix, release documentation and
+separate library entry point are not included. Nanobug does not depend on or
+re-export alacritty_terminal. Focused VT byte decoding uses the vte dependency.

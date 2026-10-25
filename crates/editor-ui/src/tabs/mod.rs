@@ -1,5 +1,13 @@
 //! Editor-owned underline tabs; gpui-base supplies pointer and accessibility semantics.
 //! Compound keyboard navigation stays here so callers cannot activate disabled placeholders.
+mod dragging;
+#[cfg(all(test, target_os = "windows"))]
+mod tests;
+mod title;
+
+pub use dragging::{FileTabDragState, FileTabMove, FileTabPreview, FileTabStrip};
+pub use title::FileTabTitle;
+
 use super::StatusIcon;
 use std::rc::Rc;
 
@@ -7,17 +15,22 @@ use crate::Tooltip;
 use crate::theme::ActiveTheme as _;
 use gpui_base::{Tab, Tabs};
 use gpui_kit::{
-    App, ElementId, FocusHandle, InteractiveElement, IntoElement, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
+    App, Axis, ElementId, FocusHandle, InteractiveElement, IntoElement, ParentElement,
+    SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder as _, px,
+    relative,
 };
 
 /// Document tabs keep local appearance while Base owns pointer activation and tab accessibility.
 /// Content determines width up to 400 logical pixels; the title may shrink while controls stay visible.
+/// Native font descenders need a full text line inside the caller's clipped title element.
 pub fn file_tab(id: String, title: String, selected: bool, index: usize, count: usize) -> Tab {
     Tab::new(ElementId::Name(id.into()))
         .selected(selected)
+        // Base's neutral one-em line box clips underscores and descenders when titles truncate.
+        .line_height(relative(1.5))
         .accessibility_label(title)
         .set_position(index + 1, count)
+        .items_center()
         .justify_start()
         .w_auto()
         .max_w(px(400.))
@@ -26,27 +39,39 @@ pub fn file_tab(id: String, title: String, selected: bool, index: usize, count: 
 
 /// A derived document view shares local file-tab appearance and Base activation semantics.
 /// Closing it affects only that presentation; callbacks retain the source session's identity.
+/// `axis` matches its owning strip; vertical rows fill the viewport at `PANEL_HEADER_HEIGHT`.
+/// The returned Base tab lets owners place its selected edge for their surrounding layout.
 pub fn comparison_tab(
     id: String,
     title: String,
     selected: bool,
+    axis: Axis,
     preview: bool,
     index: usize,
     count: usize,
     activate: impl Fn(bool, &mut Window, &mut App) + 'static,
     close: impl Fn(&mut Window, &mut App) + 'static,
     cx: &App,
-) -> gpui_kit::AnyElement {
+) -> Tab {
     let styles = crate::theme::component_styles(cx, plugin_schema::ThemeComponent::EditorTab);
     let accent = styles.selected.border.unwrap_or(cx.theme().primary);
     file_tab(id.clone(), title.clone(), selected, index, count)
         .debug_selector(move || format!("comparison-tab-{index}").into())
         .h_full()
+        .when(axis == Axis::Vertical, |tab| {
+            tab.w_full()
+                .min_w(px(0.))
+                .max_w(relative(1.))
+                .h(px(crate::PANEL_HEADER_HEIGHT))
+        })
         .px_2()
         .gap_2()
         .border_r_1()
         .border_color(cx.theme().border)
-        .when(selected, |tab| tab.border_b_1().border_color(accent))
+        .when(selected, |tab| {
+            tab.when(axis == Axis::Horizontal, |tab| tab.border_b_1())
+                .border_color(accent)
+        })
         .bg(if selected {
             styles.selected.background.unwrap_or(cx.theme().background)
         } else {
@@ -58,9 +83,13 @@ pub fn comparison_tab(
             styles.base.foreground.unwrap_or(cx.theme().foreground)
         })
         .hover(|style| style.bg(styles.hover.background.unwrap_or(cx.theme().list_hover)))
-        .child(div().min_w(px(0.)).truncate().child(title))
-        .when(preview, |tab| tab.child(preview_tab_badge(cx)))
         .child(
+            FileTabTitle::new(format!("comparison-tab-title-{index}"), title)
+                .debug_selector(move || format!("comparison-tab-title-{index}").into())
+                .when(axis == Axis::Vertical, |title| title.flex_1()),
+        )
+        .child(file_tab_actions(
+            preview,
             super::Button::new(format!("close-{id}"))
                 .compact()
                 .icon(super::Icon::new(gpui_kit::assets::IconName::Close))
@@ -69,21 +98,40 @@ pub fn comparison_tab(
                     cx.stop_propagation();
                     close(window, cx);
                 }),
-        )
+            cx,
+        ))
         .on_click(move |event, window, cx| activate(event.click_count() == 2, window, cx))
-        .into_any_element()
 }
 
-/// A localized muted label distinguishes replaceable previews from external-file italic titles.
-/// Both themes use the local palette; the surrounding Base tab remains the interaction target.
+/// A muted eye marks replaceable previews in tabs and drag cards; `cx` supplies palette and locale.
+/// The returned icon keeps a localized tooltip and accessible label while the tab owns activation.
 pub fn preview_tab_badge(cx: &App) -> impl IntoElement {
+    let label = rust_i18n::t!("editor.preview_label").to_string();
     div()
         .id("editor-preview-badge")
         .debug_selector(|| "editor-preview-badge".into())
+        .flex()
+        .items_center()
+        .justify_center()
+        .size(px(14.))
         .flex_shrink_0()
-        .text_size(px(10.))
-        .text_color(cx.theme().muted_foreground)
-        .child(rust_i18n::t!("editor.preview_label").to_string())
+        .text_color(cx.theme().muted_foreground.opacity(0.6))
+        .role(gpui_kit::Role::Image)
+        .aria_label(label.clone())
+        .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
+        .child(super::Icon::new(gpui_kit::assets::IconName::Eye).small())
+}
+
+/// Group the optional `preview` indicator and caller-owned `close` control with a compact gap.
+/// `cx` supplies the preview palette and locale; the returned row keeps both controls centered.
+pub fn file_tab_actions(preview: bool, close: impl IntoElement, cx: &App) -> impl IntoElement {
+    div()
+        .flex()
+        .items_center()
+        .flex_shrink_0()
+        .gap(px(2.))
+        .when(preview, |row| row.child(preview_tab_badge(cx)))
+        .child(close)
 }
 
 /// Render a controlled strip of localized labels and disabled flags.

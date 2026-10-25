@@ -3,6 +3,9 @@ use super::*;
 use gpui_base::test_support::{ElementSnapshot, snapshots};
 use gpui_kit::Role;
 
+mod appearance;
+mod stability;
+
 /// Isolate both palettes/locales and fractional scaling using the ordinary native child runner.
 #[test]
 #[ignore = "requires Windows desktop, Git ZIP and NANOBUG_GIT_NATIVE_COMMIT_PANEL"]
@@ -35,7 +38,10 @@ fn checkbox(window: &Window, label: &str) -> anyhow::Result<ElementSnapshot> {
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
     h.activate(cx).await?;
     h.settle(cx).await?;
+    check_unversioned_selection(h, cx).await?;
     check_locked_directory(h, cx).await?;
+    rapid_tracked_reversal(h, cx).await?;
+    appearance::exercise(h, cx).await?;
     h.capture(h.main, "commit-default.png", cx)?;
     h.click_button(h.main, "commit-expand", cx).await?;
     h.select_file(h.main, "staging", "a-review.txt", cx).await?;
@@ -97,9 +103,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     )
     .await?;
     h.settle(cx).await?;
-    h.main.update(cx, |_, window, cx| {
-        input::click(window, &checkbox(window, "a-review.txt")?, cx)
-    })??;
+    stability::click(h, "a-review.txt", cx).await?;
     let reviewed = h.fixture.review.clone();
     h.until_repository(
         "checking stages remaining worktree changes",
@@ -135,9 +139,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     h.click_button(h.main, "commit-collapse", cx).await?;
     h.click_button(h.main, "commit-expand", cx).await?;
     h.settle(cx).await?;
-    h.main.update(cx, |_, window, cx| {
-        input::click(window, &checkbox(window, "a-review.txt")?, cx)
-    })??;
+    stability::click(h, "a-review.txt", cx).await?;
     h.until_repository(
         "unchecking restores only the index",
         |root| {
@@ -185,115 +187,112 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     Ok(())
 }
 
-/// Exercise real group gestures under a fixture-owned lock, then verify full recovery and compact feedback.
+/// Unversioned selection is local even under a competing lock; the index and panel documents stay intact.
+async fn check_unversioned_selection(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
+    let index = fs::read(h.fixture.workspace.join(".git/index"))?;
+    let revisions = {
+        let state = h.worker.state.lock().unwrap();
+        (
+            state.views["git/staging"].revision,
+            state.views["git/history"].revision,
+        )
+    };
+    let label = h.case.label("未进行版本管理的文件", "Unversioned Files");
+    let lock = h.fixture.workspace.join(".git/index.lock");
+    fs::write(&lock, b"native local selection owns this lock")?;
+    stability::click(h, label, cx).await?;
+    h.settle(cx).await?;
+    ensure!(fs::read(h.fixture.workspace.join(".git/index"))? == index);
+    ensure!(
+        fixture::git_text(
+            &h.fixture.workspace,
+            &["ls-files", "--others", "--exclude-standard"]
+        )?
+        .lines()
+        .count()
+            == 28
+    );
+    {
+        let state = h.worker.state.lock().unwrap();
+        ensure!(
+            (
+                state.views["git/staging"].revision,
+                state.views["git/history"].revision
+            ) == revisions,
+            "local selection replaced a panel scene"
+        );
+        ensure!(state.processes.get("git").copied().unwrap_or(0) == 0);
+        for id in ["commit-summary", "commit-feedback", "status"] {
+            ensure!(
+                state.views["git/staging"].active_node(id).is_none(),
+                "removed feedback returned"
+            );
+        }
+    }
+    h.capture(h.main, "commit-unversioned-selected.png", cx)?;
+    stability::click(h, label, cx).await?;
+    ensure!(fs::read(&lock)? == b"native local selection owns this lock");
+    fs::remove_file(lock)?;
+    h.record(
+        "unversioned_selection_preserves_index_and_scenes",
+        true.into(),
+    );
+    Ok(())
+}
+
+/// Exercise real tracked group gestures under a fixture-owned lock, then verify rollback and recovery.
 async fn check_locked_directory(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
     let before = h.main.update(cx, |_, window, _| {
         Ok::<_, anyhow::Error>(input::tree(window, "staging")?.bounds().size.height)
     })??;
     let lock = h.fixture.workspace.join(".git/index.lock");
     fs::write(&lock, b"native fixture owns this lock")?;
-    h.main.update(cx, |_, window, cx| {
-        input::click(
-            window,
-            &checkbox(
-                window,
-                h.case.label("未进行版本管理的文件", "Unversioned Files"),
-            )?,
-            cx,
-        )
-    })??;
+    stability::click(h, h.case.label("更改", "Changes"), cx).await?;
+    h.settle(cx).await?;
+    ensure!(fs::read(&lock)? == b"native fixture owns this lock");
     h.until(
         h.main,
-        "compact index-lock feedback",
-        |window, _| {
-            Ok(input::button(window, "status").is_ok_and(|button| {
-                button.label() == Some(h.case.label("查看操作详情", "Show operation details"))
-            }))
-        },
+        "failed check rolls back its native marker",
+        |window, _| Ok(checkbox(window, h.case.label("更改", "Changes"))?.checked() == Some(false)),
         cx,
     )
     .await?;
-    h.settle(cx).await?;
-    ensure!(fs::read(&lock)? == b"native fixture owns this lock");
     {
         let state = h.worker.state.lock().unwrap();
-        ensure!(state.views["git/staging"].active_node("status").is_some_and(|node| {
-            matches!(
-                &node.kind,
-                plugin_runtime::plugin_protocol::ui::Kind::Button { label }
-                    if label == h.case.label("索引被占用 · 查看详情", "Index busy · Details")
-            )
-        }), "lock feedback caption missing");
+        ensure!(
+            state.views["git/staging"].active_node("status").is_none(),
+            "removed status returned"
+        );
     }
     ensure!(
         fixture::git_text(&h.fixture.workspace, &["diff", "--cached", "--name-only"])?.is_empty()
     );
     h.main.update(cx, |_, window, _| {
         ensure!(
-            (input::tree(window, "staging")?.bounds().size.height - before).abs() < px(48.),
+            (input::tree(window, "staging")?.bounds().size.height - before).abs() < px(1.),
             "lock error expanded the composer"
         );
         Ok::<_, anyhow::Error>(())
     })??;
     h.capture(h.main, "commit-lock.png", cx)?;
-    h.click_button(h.main, "status", cx).await?;
-    h.capture(h.main, "commit-lock-details.png", cx)?;
-    h.click_button(h.main, "commit-status-close", cx).await?;
     // The fixture, never the plugin, releases the competing operation's lock.
     fs::remove_file(&lock)?;
-    h.main.update(cx, |_, window, cx| {
-        input::click(
-            window,
-            &checkbox(
-                window,
-                h.case.label("未进行版本管理的文件", "Unversioned Files"),
-            )?,
-            cx,
-        )
-    })??;
+    stability::click(h, h.case.label("更改", "Changes"), cx).await?;
     h.until_repository(
-        "all unversioned descendants staged",
+        "tracked group staged after lock release",
         |root| {
             Ok(
                 fixture::git_text(root, &["diff", "--cached", "--name-only"])?
                     .lines()
                     .count()
-                    == 28,
+                    == 1,
             )
         },
         cx,
     )
     .await?;
     h.settle(cx).await?;
-    // The mixed Changes group also contains the unstaged review file: check completes it, then uncheck all.
-    h.main.update(cx, |_, window, cx| {
-        input::click(
-            window,
-            &checkbox(window, h.case.label("更改", "Changes"))?,
-            cx,
-        )
-    })??;
-    h.until_repository(
-        "mixed group selects every descendant",
-        |root| {
-            Ok(
-                fixture::git_text(root, &["diff", "--cached", "--name-only"])?
-                    .lines()
-                    .count()
-                    == 29,
-            )
-        },
-        cx,
-    )
-    .await?;
-    h.settle(cx).await?;
-    h.main.update(cx, |_, window, cx| {
-        input::click(
-            window,
-            &checkbox(window, h.case.label("更改", "Changes"))?,
-            cx,
-        )
-    })??;
+    stability::click(h, h.case.label("更改", "Changes"), cx).await?;
     h.until_repository(
         "group uncheck clears every descendant",
         |root| Ok(fixture::git_text(root, &["diff", "--cached", "--name-only"])?.is_empty()),
@@ -302,8 +301,39 @@ async fn check_locked_directory(h: &Harness, cx: &mut AsyncApp) -> anyhow::Resul
     .await?;
     h.settle(cx).await?;
     h.record(
-        "directory_lock_recovery_and_compact_feedback",
+        "tracked_directory_lock_rollback_and_recovery",
         serde_json::json!(true),
     );
+    Ok(())
+}
+
+/// Reverse a real tracked group before its first Git write settles; the second click must survive.
+async fn rapid_tracked_reversal(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
+    let label = h.case.label("更改", "Changes");
+    for selected in [true, false] {
+        h.main.update(cx, |_, window, cx| {
+            input::click(window, &checkbox(window, label)?, cx)
+        })??;
+        h.until(
+            h.main,
+            "rapid tracked marker responds",
+            |window, _| Ok(checkbox(window, label)?.checked() == Some(selected)),
+            cx,
+        )
+        .await?;
+    }
+    h.until_repository(
+        "rapid reversal restores the index",
+        |root| Ok(fixture::git_text(root, &["diff", "--cached", "--name-only"])?.is_empty()),
+        cx,
+    )
+    .await?;
+    h.settle(cx).await?;
+    // Wait through both serialized operations before concluding from an initially empty index.
+    h.main.update(cx, |_, window, _| {
+        ensure!(checkbox(window, label)?.checked() == Some(false));
+        Ok::<_, anyhow::Error>(())
+    })??;
+    h.record("rapid_native_tracked_reversal", true.into());
     Ok(())
 }

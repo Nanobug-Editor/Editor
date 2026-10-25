@@ -55,6 +55,7 @@ fn prepare_builtin_upgrade_acceptance_profile() {
     registry.insert(
         "terminal".into(),
         Installed {
+            install_sequence: 0,
             replaced_by: None,
             manifest: manifest.clone(),
             digest: "retired-user-fixture".into(),

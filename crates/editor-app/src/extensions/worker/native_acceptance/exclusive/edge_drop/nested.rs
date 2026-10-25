@@ -4,7 +4,7 @@ use super::*;
 /// Resolve the four visible dock allocations without assuming Explorer remains beside Editor.
 /// Editor is the sole titleless dock leaf; the remaining titled leaf is the actual Git viewer.
 pub(super) fn frames(window: &Window) -> anyhow::Result<[Bounds<Pixels>; 4]> {
-    let explorer = host_frame(window, "explorer-hide")?;
+    let explorer = host_frame(window, "explorer-title")?;
     let outline = host_frame(window, "outline-hide")?;
     let nodes = snapshots(window);
     let groups = nodes.iter().filter(|node| node.visible()

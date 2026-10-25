@@ -12,6 +12,8 @@ mod language_preparation;
 mod lease;
 mod package;
 mod preparation;
+#[cfg(test)]
+mod reservation_tests;
 mod roles;
 mod types;
 pub use preparation::{DemandPreparation, PreparedDemand};

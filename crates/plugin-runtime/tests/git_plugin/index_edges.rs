@@ -2,6 +2,10 @@
 use super::*;
 #[path = "index_edges/commit_panel.rs"]
 mod commit_panel;
+#[path = "index_edges/commit_selection.rs"]
+mod commit_selection;
+#[path = "index_edges/commit_submit.rs"]
+mod commit_submit;
 
 /// Load the independently packaged candidate without rebuilding a host or embedding guest sources.
 fn candidate() -> Package {
@@ -60,6 +64,7 @@ fn idle_with_documents(manager: &mut Manager, documents: &[api::DocumentInfo]) -
     let mut lists = 0;
     loop {
         manager.poll();
+        assert_commit_tree_present(manager);
         for (_, request) in manager.take_editor_requests() {
             match request.operation() {
                 api::EditorOperation::ListDocuments => {
@@ -83,6 +88,9 @@ fn idle_with_documents(manager: &mut Manager, documents: &[api::DocumentInfo]) -
             }
         }
         manager.poll();
+        // Inspect every process/document receipt, including the transient guarded-write phase.
+        // Waiting only for the final index would miss a tree-wide disabled/re-enabled flash.
+        assert_commit_tree_present(manager);
         settled = if manager.live["git"].process_count() == 0 {
             settled + 1
         } else {
@@ -93,6 +101,30 @@ fn idle_with_documents(manager: &mut Manager, documents: &[api::DocumentInfo]) -
         }
         assert!(Instant::now() < deadline, "index action did not settle");
         std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+/// A modal temporarily blocks root interaction without removing or disabling the underlying tree.
+/// Keep checking root admission when no modal exists, and visible root metadata when one does.
+fn assert_commit_tree_present(manager: &Manager) {
+    let document = &manager.live["git"].views["staging"];
+    if document.dialog.is_none() {
+        assert!(
+            document.active_node("staging").is_some(),
+            "index operation withdrew the whole commit tree"
+        );
+    } else {
+        let mut tree_present = false;
+        document.root.visit(&mut |node| {
+            if node.id == "staging" && !node.disabled && matches!(node.kind, ui::Kind::Tree { .. })
+            {
+                tree_present = true;
+            }
+        });
+        assert!(
+            tree_present,
+            "submission modal removed or disabled the retained tree"
+        );
     }
 }
 

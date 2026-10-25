@@ -49,6 +49,9 @@ pub struct SessionState {
     /// New and older workspaces without this field hide Outline; an explicit saved choice still restores.
     #[serde(default)]
     pub outline_visible: bool,
+    /// Tool-window navigation starts visible; inline tab placements retain this local choice unused.
+    #[serde(default = "default_true")]
+    pub open_files_visible: bool,
     /// Cursor tracking may be disabled without disabling tree updates or explicit navigation.
     #[serde(default = "default_true")]
     pub outline_follow_cursor: bool,
@@ -77,6 +80,10 @@ pub struct SessionState {
     pub plugin_dock_sizes: std::collections::BTreeMap<String, f32>,
     #[serde(default)]
     pub plugin_panel_visibility: std::collections::BTreeMap<String, bool>,
+    /// Stable window-button identities in user order; absent entries append in default/install order.
+    /// Keep temporarily disabled plugin slots so re-enabling does not discard the user's arrangement.
+    #[serde(default)]
+    pub window_button_order: Vec<String>,
     /// Legacy records default to zero; successful sidebar restoration acknowledges this migration once.
     /// Version 2 also preserves editor-local columns above the bottom dock instead of promoting them.
     #[serde(default)]
@@ -109,6 +116,9 @@ pub struct SessionState {
     /// Stable selected panel names restore exclusive/shared regional presentation without a second layout.
     #[serde(default)]
     pub dock_active_panels: Vec<String>,
+    /// Stable whole-region drop selections preserve ordinary replacements across fresh entity binding.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dock_replacement_panels: Vec<String>,
     pub open_tabs: Vec<String>,
     pub active_file: Option<String>,
     pub expanded_directories: Vec<String>,
@@ -162,6 +172,7 @@ impl SessionState {
             explorer_width: 280.,
             explorer_visible: true,
             outline_visible: false,
+            open_files_visible: true,
             outline_follow_cursor: true,
             messages_visible: false,
             problems_visible: false,
@@ -172,12 +183,14 @@ impl SessionState {
             native_terminal_visible: false,
             plugin_dock_sizes: Default::default(),
             plugin_panel_visibility: Default::default(),
+            window_button_order: Vec::new(),
             plugin_sidebar_layout_version: DOCK_LAYOUT_VERSION,
             legacy_preview_modes: Default::default(),
             legacy_preview_sync: Default::default(),
             legacy_preview_toolbar: Default::default(),
             dock_layout: None,
             dock_active_panels: Vec::new(),
+            dock_replacement_panels: Vec::new(),
             open_tabs: Vec::new(),
             active_file: None,
             expanded_directories: Vec::new(),

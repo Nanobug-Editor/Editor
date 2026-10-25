@@ -71,6 +71,8 @@ struct State {
     tree_action_menus_1_6: bool,
     /// Checkboxes, inline counts and disclosure requests require an explicit 1.7 floor.
     tree_checks_1_7: bool,
+    /// Secondary primary labels opt in independently of the older status-color vocabulary.
+    tree_muted_1_8: bool,
     /// Immutable metadata never becomes a preopened directory or guest-controlled file root.
     host_resources: crate::HostResources,
     native_diagnostics: crate::faults::NativeDiagnostics,
@@ -434,6 +436,7 @@ impl Instance {
             tree_interaction_1_5: trees::requires_interaction_floor(manifest.api.as_ref()),
             tree_action_menus_1_6: trees::requires_action_menu_floor(manifest.api.as_ref()),
             tree_checks_1_7: trees::requires_check_floor(manifest.api.as_ref()),
+            tree_muted_1_8: trees::requires_muted_floor(manifest.api.as_ref()),
             decorations: Default::default(),
             preference_subscriptions: Default::default(),
             declared_panels: manifest

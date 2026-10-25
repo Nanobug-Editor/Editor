@@ -20,7 +20,7 @@ pub struct Descriptor {
     pub generation: u64,
     /// Empty denotes the workspace root. This path is never itself a resource handle.
     pub project_root: String,
-    /// At most 4 KiB of inert provider data, interpreted only by its readonly startup hook.
+    /// At most 32 KiB under language.lsp 1.9 (4 KiB before it), interpreted by the readonly hook.
     #[serde(default)]
     pub data: serde_json::Value,
 }
@@ -45,7 +45,7 @@ impl Descriptor {
                 }
                 .validate()
                 .is_ok())
-            && serde_json::to_vec(&self.data).is_ok_and(|bytes| bytes.len() <= 4096)
+            && serde_json::to_vec(&self.data).is_ok_and(|bytes| bytes.len() <= 32768)
     }
 }
 
@@ -65,6 +65,18 @@ pub struct Reference {
 pub enum Operation {
     Register {
         contexts: Vec<Descriptor>,
+    },
+    /// language.lsp 1.8: retain the sealed original caller chain as well as the provider lifetime.
+    /// Completing the service call preserves the context; retiring any participant revokes it.
+    RegisterBorrowed {
+        contexts: Vec<Descriptor>,
+    },
+    /// language.lsp 1.9: retire this instance's language discovery inputs and borrowed contexts.
+    /// Subsequent discovery uses a new epoch; completing an older call cannot revive old plans.
+    Invalidate,
+    /// language.lsp 1.9: check an owned metadata token's lifetime without reading files or text.
+    Check {
+        context: String,
     },
     Describe {
         context: String,
@@ -92,6 +104,55 @@ pub fn register(contexts: Vec<Descriptor>) -> Result<Vec<Reference>, api::Failur
         _ => Err(api::Failure::new(
             api::ErrorCode::InvalidState,
             "Unexpected context registration result",
+        )),
+    }
+}
+
+#[cfg(feature = "guest")]
+/// Register caller-scoped project metadata under language.lsp 1.8 and the existing read grants.
+/// The host supplies the lifetime chain; descriptors cannot name or revive another caller.
+/// Returns owned references, or a typed capability, permission, quota or stale-generation failure.
+pub fn register_borrowed(contexts: Vec<Descriptor>) -> Result<Vec<Reference>, api::Failure> {
+    match api::guest::request(api::Operation::LanguageContexts {
+        operation: Operation::RegisterBorrowed { contexts },
+    })? {
+        api::Value::LanguageContexts(references) => Ok(references),
+        _ => Err(api::Failure::new(
+            api::ErrorCode::InvalidState,
+            "Unexpected borrowed context registration result",
+        )),
+    }
+}
+
+#[cfg(feature = "guest")]
+/// Invalidate language discovery after domain inputs change, without changing user settings.
+/// Requires language.lsp 1.9 and the existing workspace read grants; returns a typed gate failure.
+pub fn invalidate() -> Result<(), api::Failure> {
+    match api::guest::request(api::Operation::LanguageContexts {
+        operation: Operation::Invalidate,
+    })? {
+        api::Value::Unit => Ok(()),
+        _ => Err(api::Failure::new(
+            api::ErrorCode::InvalidState,
+            "Unexpected language invalidation result",
+        )),
+    }
+}
+
+#[cfg(feature = "guest")]
+/// Check only ownership, scope and metadata lifetime. This grants no file or editor authority and
+/// can be used by a process-only service before consuming metadata already held in its own memory.
+/// Requires language.lsp 1.9; foreign, replaced or retired tokens return InvalidHandle.
+pub fn check(context: impl Into<String>) -> Result<(), api::Failure> {
+    match api::guest::request(api::Operation::LanguageContexts {
+        operation: Operation::Check {
+            context: context.into(),
+        },
+    })? {
+        api::Value::Unit => Ok(()),
+        _ => Err(api::Failure::new(
+            api::ErrorCode::InvalidState,
+            "Unexpected context lifetime result",
         )),
     }
 }

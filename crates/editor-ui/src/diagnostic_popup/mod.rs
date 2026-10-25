@@ -3,19 +3,20 @@
 use crate::scroll::ScrollableElement as _;
 use crate::theme::ActiveTheme as _;
 use gpui_base::input::{DiagnosticEntry, DiagnosticSeverity};
-use gpui_base::v_flex;
 use gpui_kit::{
-    App, Bounds, FocusHandle, InteractiveElement, IntoElement, ParentElement, Pixels, Styled, div,
-    px,
+    App, Bounds, FocusHandle, FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels,
+    Styled, div, prelude::FluentBuilder as _, px,
 };
 use rust_i18n::t;
 
-/// Present the complete error and source location without clipping long messages.
+/// Present the complete error at `anchor`; report painted bounds so the owner can retain card gestures.
+/// `focus` and `dismiss` share the source's lifecycle; `on_bounds` receives window-local geometry.
 pub fn diagnostic_popup(
     anchor: Bounds<Pixels>,
     diagnostic: &DiagnosticEntry,
     focus: &FocusHandle,
     dismiss: impl Fn(&mut App) + 'static,
+    on_bounds: impl Fn(Bounds<Pixels>) + 'static,
     cx: &App,
 ) -> impl IntoElement {
     // Semantic diagnostics keep their server severity, source, and error code.
@@ -31,37 +32,30 @@ pub fn diagnostic_popup(
         column = diagnostic.diagnostic.range.start.character + 1
     )
     .to_string();
-    let mut source = diagnostic
+    let source = diagnostic
         .source
         .as_ref()
         .map(|source| format!("{source} · {location}"))
         .unwrap_or(location);
-    if let Some(code) = &diagnostic.code {
-        source.push_str(&format!(" · {code}"));
-    }
-    // Escape grammar tokens before Markdown parsing: punctuation in an error
-    // message is content and must never become a link or HTML element.
-    let mut message = String::new();
-    for character in diagnostic.message.chars() {
-        if "\\`*_{}[]<>()#+-.!|".contains(character) {
-            message.push('\\');
+    let mut message = crate::text::plain_markdown(&diagnostic.message);
+    if let Some(related) = &diagnostic.related_information {
+        for information in related {
+            if !information.message.trim().is_empty() {
+                // Related explanations remain selectable and literal; no URI is activated implicitly.
+                message.push_str("\n\n> ");
+                message.push_str(
+                    &crate::text::plain_markdown(&information.message).replace('\n', "\n> "),
+                );
+            }
         }
-        message.push(character);
     }
-    let content = v_flex()
-        .id("editor-diagnostic-card")
-        .debug_selector(|| "editor-diagnostic-card".into())
-        .occlude()
+    let content = super::definition_popup::details_card("editor-diagnostic-card", cx)
         .track_focus(focus)
-        .min_w(px(240.))
+        .flex()
+        .flex_col()
+        .min_w(px(260.))
         .flex_1()
         .min_h_0()
-        .p_3()
-        .gap_2()
-        .border_1()
-        .border_color(color)
-        .bg(cx.theme().popover)
-        .text_color(cx.theme().popover_foreground)
         .on_mouse_move(|event, _, cx| {
             // Keep text selection usable without forwarding hover to the editor.
             if event.pressed_button.is_none() {
@@ -75,24 +69,60 @@ pub fn diagnostic_popup(
                 cx.stop_propagation();
             }
         })
-        .child(div().text_color(color).child(title.to_string()))
         .child(
             div()
-                .text_color(cx.theme().muted_foreground)
-                .text_sm()
-                .child(source),
+                .flex()
+                .items_center()
+                .gap_2()
+                .px_3()
+                .pt_3()
+                .pb_2()
+                .text_size(crate::typography::font_size(cx) * 0.9)
+                .child(div().size(px(6.)).rounded_full().bg(color).flex_shrink_0())
+                .child(
+                    div()
+                        .text_color(color)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(title.to_string()),
+                )
+                .when_some(diagnostic.code.clone(), |header, code| {
+                    header.child(
+                        div()
+                            .px_1()
+                            .rounded(px(3.))
+                            .bg(color.opacity(0.08))
+                            .font_family(cx.theme().mono_font_family.clone())
+                            .text_color(cx.theme().muted_foreground)
+                            .child(code),
+                    )
+                }),
         )
         .child(
             div()
                 .id("editor-diagnostic-message")
+                .debug_selector(|| "editor-diagnostic-message".into())
+                .flex_1()
                 .min_h_0()
+                .px_3()
+                .pb_3()
                 .overflow_y_scrollbar()
-                .child(super::markdown_view(
+                .child(crate::text::hover_markdown_view(
                     "editor-diagnostic-details",
                     message,
-                    crate::typography::editor_font_size(cx),
                     cx,
                 )),
+        )
+        .child(
+            div()
+                .debug_selector(|| "editor-diagnostic-metadata".into())
+                .flex_shrink_0()
+                .px_3()
+                .py_2()
+                .border_t_1()
+                .border_color(cx.theme().border.opacity(0.45))
+                .text_size(crate::typography::font_size(cx) * 0.85)
+                .text_color(cx.theme().muted_foreground)
+                .child(source),
         );
-    super::definition_popup(anchor, content.into_any_element())
+    super::definition_popup(anchor, content.into_any_element(), on_bounds)
 }

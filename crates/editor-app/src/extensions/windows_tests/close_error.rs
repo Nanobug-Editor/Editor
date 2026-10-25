@@ -19,6 +19,7 @@ fn failed_work_window_native_close_hides_the_surface_and_parent_stays_usable(
             owner.update(cx, |owner, cx| {
                 let mut state = owner.worker.state.lock().unwrap();
                 state.entries = vec![Installed {
+                    install_sequence: 0,
                     grants: manifest.permissions.clone(), manifest, digest: "failed-window".into(),
                     enabled: true, project_enabled: Default::default(), replaced_by: None,
                     global_enabled: None, retired_ui_contract: false, error: Some("timeout".into()),

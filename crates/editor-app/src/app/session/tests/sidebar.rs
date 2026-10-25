@@ -194,6 +194,7 @@ fn sidebar_contributions() -> Installed {
     customized.id = "custom-right".into();
     manifest.panels.push(customized);
     Installed {
+        install_sequence: 0,
         replaced_by: None,
         grants: manifest.permissions.clone(),
         manifest,

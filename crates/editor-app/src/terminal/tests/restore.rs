@@ -96,7 +96,7 @@ fn native_terminal_reopen_preserves_history_and_resize(cx: &mut TestAppContext) 
             .read(cx)
             .terminal
             .read(cx)
-            .canvas
+            .grid
             .as_ref()
             .unwrap()
             .read(cx)

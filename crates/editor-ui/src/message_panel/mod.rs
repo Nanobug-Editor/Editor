@@ -5,7 +5,7 @@ use gpui_base::dock::PanelEvent;
 use gpui_base::{h_flex, v_flex};
 use gpui_kit::assets::IconName;
 use gpui_kit::{
-    App, Context, EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
+    App, Context, EventEmitter, FocusHandle, Focusable, Hsla, InteractiveElement as _, IntoElement,
     ParentElement, Render, ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled,
     WeakEntity, Window, div, prelude::FluentBuilder as _,
 };
@@ -13,11 +13,26 @@ use rust_i18n::t;
 use std::collections::VecDeque;
 
 /// Severity of one caller-published receipt, independent of its translated wording.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MessageLevel {
+    /// An informational receipt uses the least urgent, blue reminder.
     Info,
+    /// A warning takes priority over information and uses an orange reminder.
     Warning,
+    /// A dangerous or failed result takes priority over all other receipts and uses red.
     Error,
+}
+
+impl MessageLevel {
+    /// Resolve this reminder's blue/orange/red meaning against the active light or dark palette in `cx`.
+    pub fn reminder_color(self, cx: &App) -> Hsla {
+        let dark = cx.theme().is_dark();
+        match self {
+            Self::Info => gpui_kit::rgb(if dark { 0x60a5fa } else { 0x2563eb }).into(),
+            Self::Warning => gpui_kit::rgb(if dark { 0xfb923c } else { 0xea580c }).into(),
+            Self::Error => cx.theme().danger,
+        }
+    }
 }
 
 /// Current-run capacity and progressive disclosure have distinct responsibilities.
@@ -43,8 +58,8 @@ pub struct MessagePanel {
     visible: bool,
     focus: FocusHandle,
     records: VecDeque<Message>,
-    /// A receipt raises this flag; only an explicit open or clear acknowledges it, never painting or eviction.
-    pending_alert: bool,
+    /// Highest unacknowledged severity; only an explicit open or clear resets it, never painting or eviction.
+    pending_alert: Option<MessageLevel>,
     next_id: u64,
     display_limit: usize,
     scroll: ScrollHandle,
@@ -59,7 +74,7 @@ impl MessagePanel {
             visible,
             focus: cx.focus_handle(),
             records: VecDeque::new(),
-            pending_alert: false,
+            pending_alert: None,
             next_id: 0,
             display_limit: DISPLAY_BATCH,
             scroll: ScrollHandle::new(),
@@ -69,9 +84,8 @@ impl MessagePanel {
 
     /// Append a user-facing host result, evicting only the oldest receipt above the global cap.
     pub fn push(&mut self, level: MessageLevel, text: String, cx: &mut Context<Self>) {
-        if matches!(level, MessageLevel::Warning | MessageLevel::Error) {
-            self.pending_alert = true;
-        }
+        // Retain the highest receipt even after history eviction; lower levels cannot acknowledge it.
+        self.pending_alert = self.pending_alert.max(Some(level));
         self.next_id = self
             .next_id
             .checked_add(1)
@@ -94,12 +108,17 @@ impl MessagePanel {
 
     /// The status button reads only reminder state, independently of how many rows are disclosed.
     pub fn has_pending_alert(&self) -> bool {
+        self.pending_alert.is_some()
+    }
+
+    /// Return the highest severity received since opening or clearing, or None after acknowledgement.
+    pub fn pending_level(&self) -> Option<MessageLevel> {
         self.pending_alert
     }
 
-    /// Synchronous acknowledgement cannot later erase a warning arriving after this user action.
+    /// Synchronous acknowledgement cannot later erase a receipt arriving after this user action.
     pub fn acknowledge(&mut self, cx: &mut Context<Self>) {
-        self.pending_alert = false;
+        self.pending_alert = None;
         cx.notify();
     }
 
@@ -109,7 +128,7 @@ impl MessagePanel {
         self.records.clear();
         self.display_limit = DISPLAY_BATCH;
         self.scroll.set_offset(Default::default());
-        self.pending_alert = false;
+        self.pending_alert = None;
         cx.notify();
     }
 

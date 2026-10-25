@@ -17,7 +17,13 @@ fn tree_interaction_options_require_explicit_floor_and_preserve_owned_lifecycle(
         std::fs::write(path, bytes).unwrap();
     }
     let engine = Instance::engine().unwrap();
-    for (range, allowed) in [("^1", false), (">=1.4,<2", false), (">=1.5,<2", true)] {
+    for (range, allowed) in [
+        ("^1", false),
+        (">=1.4,<2", false),
+        (">=1.5,<2", true),
+        (">=1.7,<2", true),
+        (">=1.8,<2", true),
+    ] {
         let mut manifest = package.manifest.clone();
         manifest
             .api
@@ -66,6 +72,49 @@ fn tree_interaction_options_require_explicit_floor_and_preserve_owned_lifecycle(
             panic!("owned native tree")
         };
         let resource = state.owned_tree(&handle).unwrap();
+        let secondary_allowed = range == ">=1.8,<2";
+        let proportional = state.tree_request(tree::Operation::CreateWithOptions {
+            options: tree::Options {
+                proportional_labels: true,
+                ..Default::default()
+            },
+        });
+        if secondary_allowed {
+            let Value::Resource(proportional) = proportional.unwrap() else {
+                panic!("proportional tree")
+            };
+            assert!(
+                state
+                    .owned_tree(&proportional)
+                    .unwrap()
+                    .proportional_labels()
+            );
+        } else {
+            assert_eq!(
+                proportional.unwrap_err().code,
+                ErrorCode::CapabilityUnavailable
+            );
+        }
+        let request = resource.request(None, false).unwrap().unwrap();
+        let mut total = tree::Node::new("total", "25 files", true);
+        total.muted = true;
+        let reply = state.tree_request(tree::Operation::Reply {
+            request: request.clone(),
+            result: Ok(tree::Page {
+                nodes: vec![total],
+                next: None,
+            }),
+        });
+        if secondary_allowed {
+            reply.unwrap();
+            assert!(resource.snapshot().nodes["total"].muted);
+        } else {
+            assert_eq!(reply.unwrap_err().code, ErrorCode::CapabilityUnavailable);
+            assert!(
+                resource.snapshot().nodes.is_empty(),
+                "rejection leaves the owned tree unchanged"
+            );
+        }
         assert_eq!(
             resource.selection_gesture(),
             tree::SelectionGesture::DoubleClick

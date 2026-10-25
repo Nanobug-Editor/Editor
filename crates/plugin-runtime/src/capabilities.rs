@@ -4,7 +4,7 @@ use plugin_protocol::{Manifest, api};
 use semver::Version;
 
 /// One inventory value also governs language declaration floors as additive minors evolve.
-pub(crate) const LANGUAGE_LSP_VERSION: Version = Version::new(1, 7, 0);
+pub(crate) const LANGUAGE_LSP_VERSION: Version = plugin_protocol::language::CAPABILITY_VERSION;
 /// File refactors add explicit workspace authority to the earlier native-source edit contract.
 pub(crate) const LANGUAGE_EDITING_VERSION: Version = Version::new(1, 3, 0);
 
@@ -195,7 +195,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         .ok_or_else(|| anyhow::anyhow!("Missing API requirements"))?;
     let available = [
         ("package.assets".into(), Version::new(1, 0, 0)),
-        ("ui.native".into(), Version::new(1, 1, 0)),
+        ("ui.native".into(), Version::new(1, 2, 0)),
         ("ui.windows".into(), Version::new(1, 0, 0)),
         ("ui.visibility".into(), Version::new(1, 0, 0)),
         ("ui.code_editor".into(), Version::new(1, 1, 0)),
@@ -222,7 +222,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("editor.files".into(), Version::new(1, 0, 0)),
         ("ui.canvas".into(), Version::new(1, 6, 0)),
         ("ui.collections".into(), Version::new(1, 0, 0)),
-        ("ui.tree".into(), Version::new(1, 7, 0)),
+        ("ui.tree".into(), Version::new(1, 8, 0)),
         ("ui.workspace".into(), Version::new(1, 0, 0)),
         ("explorer.decorations".into(), Version::new(1, 0, 0)),
         ("ui.grid".into(), Version::new(1, 0, 0)),
@@ -232,7 +232,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("storage.private".into(), Version::new(1, 2, 0)),
         ("storage.editor".into(), Version::new(1, 0, 0)),
         ("storage.migration".into(), Version::new(1, 0, 0)),
-        ("editor.documents".into(), Version::new(1, 1, 0)),
+        ("editor.documents".into(), Version::new(1, 2, 0)),
         ("editor.virtual".into(), Version::new(1, 1, 0)),
         ("editor.diff".into(), Version::new(1, 4, 0)),
         ("editor.decorations".into(), Version::new(1, 0, 0)),

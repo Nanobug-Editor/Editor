@@ -1,5 +1,7 @@
 //! Declarative packages and native status-bar input exercise the shared runtime-log viewing boundary.
 mod host_messages;
+mod readiness;
+mod services;
 
 use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
@@ -418,7 +420,7 @@ fn status_popover_does_not_route_uninstalled_plugin_history(cx: &mut TestAppCont
     });
 }
 
-/// Normal LSP loading remains visible and restores the loading entry after an anomaly round is viewed.
+/// Native-service startup has its own footer and popup, independently from plugin anomaly reminders.
 #[gpui::test]
 fn status_popover_preserves_language_loading_and_keyboard_dismissal(cx: &mut TestAppContext) {
     use crate::app::language_servers::ServiceLoadState;
@@ -436,7 +438,8 @@ fn status_popover_preserves_language_loading_and_keyboard_dismissal(cx: &mut Tes
             app.update(cx, |app, cx| app.open_file(path, window, cx));
         });
         draw(form);
-        assert!(form.debug_bounds("plugin-loading-indicator").is_some());
+        assert!(form.debug_bounds("service-starting-indicator").is_some());
+        assert!(form.debug_bounds("plugin-loading-indicator").is_none());
         // Replay the recorded native request through public Manager admission. Only the native
         // handshake is left pending, so this UI test never launches the fixture executable.
         let server = crate::extensions::lsp_tests::publish_with(
@@ -466,17 +469,28 @@ fn status_popover_preserves_language_loading_and_keyboard_dismissal(cx: &mut Tes
                 .any(|record| record.source == "lsp/analysis"),
             "this callback test must not start a native process"
         );
-        click(form, "plugin-loading-indicator");
-        assert!(form.debug_bounds("plugin-status-popup").is_some());
+        click(form, "service-starting-indicator");
+        assert!(form.debug_bounds("service-status-popup").is_some());
+        assert!(form.debug_bounds("plugin-status-popup").is_none());
         form.update(|_, cx| {
             app.update(cx, |app, cx| {
                 app.finish_server_loading("fixture", &server, Ok(()), cx)
             })
         });
         draw(form);
-        assert!(form.debug_bounds("plugin-loading-indicator").is_none());
-        assert!(form.debug_bounds("plugin-status-popup").is_none());
+        assert!(form.debug_bounds("service-starting-indicator").is_none());
+        assert!(form.debug_bounds("service-status-popup").is_none());
         assert!(form.update(|_, cx| app.read(cx).plugin_popup_snapshot.is_none()));
+        // A second document renews the public demand but reuses the already completed native startup.
+        let second = workspace.join("second.fixture");
+        std::fs::write(&second, "second fixture").unwrap();
+        form.update(|window, cx| app.update(cx, |app, cx| app.open_file(second, window, cx)));
+        crate::extensions::lsp_tests::publish(app, manager, form);
+        draw(form);
+        assert!(
+            form.debug_bounds("service-starting-indicator").is_none(),
+            "a new document must not restore startup for a retained ready adapter"
+        );
         form.update(|_, cx| {
             app.update(cx, |app, cx| {
                 app.language_service_states
@@ -494,8 +508,10 @@ fn status_popover_preserves_language_loading_and_keyboard_dismissal(cx: &mut Tes
         publish(form, app);
         assert!(form.debug_bounds("plugin-warning-indicator").is_some());
         assert!(form.debug_bounds("plugin-loading-indicator").is_none());
+        assert!(form.debug_bounds("service-starting-indicator").is_some());
         click(form, "plugin-warning-indicator");
-        assert!(form.debug_bounds("plugin-loading-indicator").is_some());
+        assert!(form.debug_bounds("plugin-loading-indicator").is_none());
+        assert!(form.debug_bounds("service-starting-indicator").is_some());
         assert!(form.update(|window, cx| {
             app.read(cx)
                 .plugin_popup_snapshot
@@ -509,7 +525,7 @@ fn status_popover_preserves_language_loading_and_keyboard_dismissal(cx: &mut Tes
         form.simulate_keystrokes("tab escape");
         draw(form);
         assert!(form.debug_bounds("plugin-status-popup").is_none());
-        assert!(form.debug_bounds("plugin-loading-indicator").is_some());
+        assert!(form.debug_bounds("service-starting-indicator").is_some());
         assert_eq!(logs.unread_severity("status-00"), None);
     });
 }

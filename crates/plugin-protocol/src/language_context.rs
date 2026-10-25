@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 mod registry;
 pub use registry::{Descriptor, Operation, Reference};
 #[cfg(feature = "guest")]
-pub use registry::{control, describe, register};
+pub use registry::{check, control, describe, invalidate, register, register_borrowed};
 
 /// One query page fits the bounded control channel; hosts also enforce its serialized byte budget.
 pub const MAX_CANDIDATES: usize = 128;

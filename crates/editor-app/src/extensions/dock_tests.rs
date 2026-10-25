@@ -75,6 +75,7 @@ fn left_native_panels_share_explorer_outline_sidebar_without_extra_column(cx: &m
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 manifest: manifest.clone(),
                 digest: "sidebar-fixture".into(),
@@ -218,6 +219,7 @@ fn native_dock_drag_preserves_canvas_viewport_and_saved_size(cx: &mut TestAppCon
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 manifest: manifest.clone(),
                 digest: "fixture".into(),

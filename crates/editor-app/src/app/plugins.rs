@@ -6,13 +6,19 @@ use editor_ui::{Spinner, StatusIcon};
 use gpui_base::PopoverState;
 use plugin_runtime::logs::{LogLevel, LogRecord};
 use std::collections::BTreeMap;
+mod loading;
 mod status_popup;
 
-/// One status-bar entry presents the highest pending anomaly, then normal loading.
+/// Independent plugin and external-startup entries share one native status popover lifecycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PluginPopupKind {
+    /// Plugin restoration and contributed syntax resources are still being loaded.
     Loading,
+    /// External language or project engines have not completed preparation and initialization.
+    Services,
+    /// The plugin log contains an unconfirmed warning reminder.
     Warning,
+    /// The plugin log or package manager contains an unconfirmed error reminder.
     Error,
 }
 
@@ -45,7 +51,7 @@ struct PluginSummary {
     record: LogRecord,
 }
 
-/// Live loading is grouped by ownership without interpreting localized messages or plugin IDs.
+/// A live loading row retains its optional owner, visible name and current preparation details.
 struct PluginLoadingSummary {
     plugin: Option<String>,
     name: String,
@@ -87,6 +93,7 @@ impl EditorApp {
     pub(crate) fn plugin_count(&self, kind: PluginPopupKind, cx: &App) -> usize {
         match kind {
             PluginPopupKind::Loading => self.plugin_loading_groups(cx).len(),
+            PluginPopupKind::Services => self.external_service_loading_groups(cx).len(),
             PluginPopupKind::Warning | PluginPopupKind::Error => {
                 self.extensions
                     .read(cx)
@@ -136,9 +143,17 @@ impl EditorApp {
     }
 
     /// Remember actual rendered absence, even when a later arrival recreates an entry of the same severity.
-    pub(crate) fn track_plugin_indicator_frame(&mut self, indicator: Option<PluginPopupKind>) {
+    pub(crate) fn track_plugin_indicator_frame(
+        &mut self,
+        indicator: Option<PluginPopupKind>,
+        services_loading: bool,
+    ) {
         if let Some(snapshot) = &mut self.plugin_popup_snapshot {
-            snapshot.trigger_removed |= indicator != Some(snapshot.trigger);
+            snapshot.trigger_removed |= if snapshot.trigger == PluginPopupKind::Services {
+                !services_loading
+            } else {
+                indicator != Some(snapshot.trigger)
+            };
         }
     }
 
@@ -156,10 +171,22 @@ impl EditorApp {
             return;
         }
         let panel = self.extensions.read(cx);
-        let manager_error = self.unowned_manager_error(cx).map(str::to_owned);
-        panel.confirm_unowned_manager_error();
+        let services = kind == PluginPopupKind::Services;
+        let manager_error = if services {
+            None
+        } else {
+            let error = self.unowned_manager_error(cx).map(str::to_owned);
+            panel.confirm_unowned_manager_error();
+            error
+        };
         let logs = panel.runtime_logs();
-        let (checkpoint, records) = logs.reminder_snapshot();
+        // Inspecting external startup must not confirm or read an unrelated plugin warning.
+        let (checkpoint, records) = if services {
+            (None, Vec::new())
+        } else {
+            let (checkpoint, records) = logs.reminder_snapshot();
+            (Some(checkpoint), records)
+        };
         let summaries: Vec<_> = records
             .into_iter()
             .map(|record| {
@@ -227,7 +254,9 @@ impl EditorApp {
             trigger_removed: false,
             row_focus: BTreeMap::new(),
         });
-        logs.confirm_reminders(&checkpoint);
+        if let Some(checkpoint) = checkpoint {
+            logs.confirm_reminders(&checkpoint);
+        }
         state.update(cx, |state, cx| state.show(window, cx));
         cx.notify();
     }
@@ -245,108 +274,17 @@ impl EditorApp {
                 .state
                 .update(cx, |state, cx| state.dismiss(window, cx));
             // A matching new kind cannot revive a trigger removed in an earlier frame.
-            if focused
-                && (snapshot.trigger_removed || self.plugin_indicator(cx) != Some(snapshot.trigger))
-            {
+            let trigger_present = if snapshot.trigger == PluginPopupKind::Services {
+                self.plugin_count(PluginPopupKind::Services, cx) > 0
+            } else {
+                self.plugin_indicator(cx) == Some(snapshot.trigger)
+            };
+            if focused && (snapshot.trigger_removed || !trigger_present) {
                 self.editor
                     .update(cx, |editor, cx| editor.focus(window, cx));
             }
         }
         cx.notify();
-    }
-
-    /// Merge startup, grammar and LSP tasks by validated ownership; unknown service state cannot route to a plugin.
-    fn plugin_loading_groups(&self, cx: &App) -> BTreeMap<String, PluginLoadingSummary> {
-        use crate::app::language_servers::ServiceLoadState;
-        let panel = self.extensions.read(cx);
-        let mut groups = BTreeMap::<String, PluginLoadingSummary>::new();
-        let mut add = |plugin: Option<String>, fallback: String, detail: String| {
-            let name = plugin
-                .as_ref()
-                .and_then(|id| panel.entries.iter().find(|entry| entry.manifest.id == *id))
-                .map_or_else(|| fallback.clone(), |entry| entry.manifest.name.clone());
-            let key = plugin
-                .clone()
-                .unwrap_or_else(|| format!("service:{fallback}"));
-            groups
-                .entry(key)
-                .or_insert_with(|| PluginLoadingSummary {
-                    plugin,
-                    name,
-                    details: Vec::new(),
-                })
-                .details
-                .push(detail);
-        };
-        for (id, name) in &panel.startup {
-            add(
-                Some(id.clone()),
-                name.clone(),
-                t!("plugins.status_starting").to_string(),
-            );
-        }
-        for (provider, state) in &self.dynamic_languages.entries {
-            if matches!(state, Ok(false)) {
-                add(
-                    Some(provider.owner.clone()),
-                    provider.owner.clone(),
-                    t!(
-                        "plugins.status_highlight_loading",
-                        language = &provider.declaration.language
-                    )
-                    .to_string(),
-                );
-            }
-        }
-        let available = panel.language_services();
-        let selected = self.providers.language_servers();
-        for (language, state) in &self.language_service_states {
-            if *state != ServiceLoadState::Loading {
-                continue;
-            }
-            let owned = self.language_context_status_owner(language).or_else(|| {
-                self.language_servers
-                    .get(language)
-                    .and_then(|server| {
-                        available.iter().find_map(|(key, plan)| {
-                            plan.as_ref()
-                                .ok()
-                                .filter(|plan| server.uses_service(plan))
-                                .map(|plan| (plan.owner.clone(), key.clone()))
-                        })
-                    })
-                    .or_else(|| {
-                        selected
-                            .get(language)
-                            .and_then(|key| key.as_ref())
-                            .and_then(|key| {
-                                panel
-                                    .entries
-                                    .iter()
-                                    .find(|entry| {
-                                        entry.manifest.language_servers.iter().any(|provider| {
-                                            format!("{}/{}", entry.manifest.id, provider.id) == *key
-                                        })
-                                    })
-                                    .map(|entry| (entry.manifest.id.clone(), key.clone()))
-                            })
-                    })
-            });
-            let (plugin, service) = owned.map_or((None, language.clone()), |(plugin, service)| {
-                (Some(plugin), service)
-            });
-            add(
-                plugin,
-                language.clone(),
-                t!(
-                    "plugins.status_service_loading",
-                    language = language,
-                    service = service
-                )
-                .to_string(),
-            );
-        }
-        groups
     }
 }
 

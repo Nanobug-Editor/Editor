@@ -58,6 +58,10 @@ use scopes::ParkedWorkspace;
 pub struct Installed {
     pub manifest: Manifest,
     pub digest: String,
+    /// First successful installation order, preserved by updates and enablement changes.
+    /// Zero denotes legacy records with unknown history; consumers use package ID as their stable fallback.
+    #[serde(default)]
+    pub install_sequence: u64,
     pub grants: BTreeSet<String>,
     pub enabled: bool,
     /// Workspace paths whose plugin instance may run despite the global default.
@@ -384,6 +388,7 @@ impl Manager {
         package.extract(&version)?;
         self.prepare_dependencies(package, None, control)?;
         let (enabled, project_enabled) = self.installation_scope(&package.manifest, control);
+        let install_sequence = self.installation_sequence(&id)?;
         control.check()?;
         let previous = self.installed.insert(
             id.clone(),
@@ -391,6 +396,7 @@ impl Manager {
                 replaced_by: None,
                 manifest: package.manifest.clone(),
                 digest: package.digest.clone(),
+                install_sequence,
                 grants,
                 enabled,
                 project_enabled,
@@ -929,6 +935,7 @@ mod icon_tests {
                 storage_limit: 1024,
             },
             digest,
+            install_sequence: 0,
             grants: BTreeSet::new(),
             enabled: true,
             project_enabled: BTreeSet::new(),
@@ -1005,6 +1012,7 @@ mod scope_tests {
             replaced_by: None,
             manifest,
             digest,
+            install_sequence: 0,
             grants: BTreeSet::new(),
             enabled: false,
             project_enabled: BTreeSet::from(["project-a".into()]),

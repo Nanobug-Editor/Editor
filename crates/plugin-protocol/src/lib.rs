@@ -241,7 +241,8 @@ pub struct Panel {
         skip_serializing_if = "panel_control_is_default"
     )]
     pub show_in_window_controls: bool,
-    /// Optional status-bar position among plugin panels; lower values appear first.
+    /// Default status-bar order within this package; lower values appear first (absent = 1000).
+    /// Packages follow installation order after host controls; a saved user order takes precedence.
     #[serde(default)]
     pub status_order: Option<i32>,
     /// Optional package-relative SVG used when the editor has a light theme.

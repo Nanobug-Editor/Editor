@@ -204,6 +204,7 @@ mod tests {
             Installed {
                 manifest: original,
                 digest: "original".into(),
+                install_sequence: 0,
                 grants: Default::default(),
                 enabled: false,
                 project_enabled: [project.display().to_string()].into(),

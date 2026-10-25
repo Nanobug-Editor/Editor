@@ -212,6 +212,11 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/text_box_tests.rs",
         include_bytes!("../../plugin-protocol/src/ui/text_box_tests.rs"),
     ),
+    // Keep native presentation contract tests available to independently compiled SDK consumers.
+    (
+        "src/ui/textarea_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/textarea_tests.rs"),
+    ),
     (
         "src/ui/visual_viewport.rs",
         include_bytes!("../../plugin-protocol/src/ui/visual_viewport.rs"),

@@ -113,6 +113,17 @@ impl SettingsOwner {
         self.refresh(cx);
         window.refresh();
     }
+    /// Save the selected tab `placement` for this owner's user profile; settings display any error.
+    pub(super) fn set_tab_placement(
+        &self,
+        placement: app::editor_preferences::TabPlacement,
+        cx: &mut App,
+    ) {
+        if let Ok(profile) = self.profile(cx) {
+            let _ = app::editor_preferences::set_placement(&profile, placement, cx);
+        }
+        self.refresh(cx);
+    }
     pub(super) fn dialog_window(&self, cx: &App) -> Option<WindowHandle<Root>> {
         match self {
             Self::Project(view) => view.read(cx).dialog_window,

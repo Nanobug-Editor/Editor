@@ -10,6 +10,8 @@ pub(super) struct Harness {
     pub app: Entity<EditorApp>,
     pub worker: Arc<Worker>,
     evidence: RefCell<serde_json::Value>,
+    /// Negative probes admit only individually observed receipts, never an entire error category.
+    expected_errors: RefCell<BTreeMap<u64, (String, String)>>,
     /// Logging is rate limited independently from readiness and never schedules synthetic frames.
     last_frame_log: Cell<Option<Instant>>,
 }
@@ -27,6 +29,7 @@ impl Harness {
             main,
             app,
             worker,
+            expected_errors: RefCell::new(BTreeMap::new()),
             last_frame_log: Cell::new(None),
             evidence: RefCell::new(serde_json::json!({
                 "case": case.name,
@@ -34,6 +37,8 @@ impl Harness {
                     "commit-panel-only"
                 } else if workspace_presentation::requested() {
                     "workspace-presentation-only"
+                } else if exclusive::replacement::requested() {
+                    "exclusive-full-replacement-only"
                 } else if exclusive::requested() {
                     "exclusive-dock-only"
                 } else if sidebar::requested() {
@@ -42,8 +47,10 @@ impl Harness {
                     "caption-controls-loaded-commit"
                 } else if std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some() {
                     "idle-refresh-state-only"
+                } else if std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_some() {
+                    "comparison-only"
                 } else if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
-                    "history-keyboard-only"
+                    if history_files::requested() { "history-files-only" } else { "history-keyboard-only" }
                 } else {
                     "complete-workbench"
                 },
@@ -70,6 +77,22 @@ impl Harness {
         self.save_evidence(false)
     }
 
+    /// Retain an already asserted negative receipt's exact ID/source/message for the final audit.
+    pub fn expect_error_log(&self, record: &plugin_runtime::logs::LogRecord) {
+        self.expected_errors
+            .borrow_mut()
+            .insert(record.id, (record.source.clone(), record.message.clone()));
+        let expected = self
+            .expected_errors
+            .borrow()
+            .iter()
+            .map(|(id, (source, message))| {
+                serde_json::json!({"id": id, "source": source, "message": message})
+            })
+            .collect::<Vec<_>>();
+        self.record("expected_error_logs", serde_json::json!(expected));
+    }
+
     /// The image and metadata come from one current D3D target after the same native scene draw.
     pub fn capture(
         &self,
@@ -93,8 +116,9 @@ impl Harness {
 
     /// Only the native child writes this receipt after every resource owner acknowledges shutdown.
     pub fn finish_evidence(&self) -> anyhow::Result<()> {
-        // This scenario deliberately exercises successful UI flows. A functional outcome must not
-        // conceal an error reminder left by cold observations or a rejected host operation.
+        // Successful flows must not conceal an error reminder. Negative probes may account for
+        // one previously asserted receipt by exact immutable identity, source and message only.
+        let expected = self.expected_errors.borrow();
         let errors = self
             .worker
             .state
@@ -104,6 +128,11 @@ impl Harness {
             .records("git")
             .into_iter()
             .filter(|record| record.level == plugin_runtime::logs::LogLevel::Error)
+            .filter(|record| {
+                expected.get(&record.id).is_none_or(|(source, message)| {
+                    source != &record.source || message != &record.message
+                })
+            })
             .map(|record| format!("{}: {}", record.source, record.message))
             .collect::<Vec<_>>();
         self.checkpoint("unexpected_error_logs", serde_json::json!(errors))?;
@@ -280,10 +309,23 @@ impl Harness {
         &self,
         target: AnyWindowHandle,
         label: &str,
+        predicate: impl FnMut(&mut Window, &mut App) -> anyhow::Result<bool>,
+        cx: &mut AsyncApp,
+    ) -> anyhow::Result<()> {
+        self.until_for(target, label, Duration::from_secs(45), predicate, cx)
+            .await
+    }
+
+    /// Cold WASM preparation may need a larger observation budget without replaying its input.
+    pub async fn until_for(
+        &self,
+        target: AnyWindowHandle,
+        label: &str,
+        timeout: Duration,
         mut predicate: impl FnMut(&mut Window, &mut App) -> anyhow::Result<bool>,
         cx: &mut AsyncApp,
     ) -> anyhow::Result<()> {
-        let deadline = Instant::now() + Duration::from_secs(45);
+        let deadline = Instant::now() + timeout;
         let mut last_progress = Instant::now();
         eprintln!("native {}: wait {label}", self.case.name);
         loop {

@@ -57,7 +57,7 @@ fn legacy_upgrade_restores_native_shell_then_resizes_without_replaying_tasks(
     let native = persistence::directory(workspace.root());
     let mut settings = Settings::default();
     settings.history = 50;
-    settings.tab_position = protocol::ui::SideTabsPosition::Left;
+    settings.tab_position = editor_terminal::TabPosition::Left;
     let cwd = workspace.root().display().to_string();
     let prompt = shell::default_prompt(&settings.profiles[0], &cwd).unwrap_or_else(|| "$ ".into());
     let manifest: protocol::Manifest = serde_json::from_value(json!({
@@ -67,6 +67,7 @@ fn legacy_upgrade_restores_native_shell_then_resizes_without_replaying_tasks(
     }))
     .unwrap();
     let installed = Installed {
+        install_sequence: 0,
         replaced_by: None,
         manifest: manifest.clone(),
         digest: "retired".into(),
@@ -117,7 +118,7 @@ fn legacy_upgrade_restores_native_shell_then_resizes_without_replaying_tasks(
         assert_eq!(panel.tab_width, 222.);
         assert_eq!(
             panel.settings.tab_position,
-            protocol::ui::SideTabsPosition::Left
+            editor_terminal::TabPosition::Left
         );
     });
     let output = visual.debug_bounds("native-terminal-output").unwrap();
@@ -141,8 +142,8 @@ fn legacy_upgrade_restores_native_shell_then_resizes_without_replaying_tasks(
                 .flatten()
                 .filter(|cell| {
                     !cell.flags.intersects(
-                        alacritty_terminal::term::cell::Flags::WIDE_CHAR_SPACER
-                            | alacritty_terminal::term::cell::Flags::LEADING_WIDE_CHAR_SPACER,
+                        engine::CellFlags::WIDE_CHAR_SPACER
+                            | engine::CellFlags::LEADING_WIDE_CHAR_SPACER,
                     )
                 })
                 .map(|cell| cell.c)

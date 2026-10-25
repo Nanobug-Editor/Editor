@@ -5,7 +5,10 @@ impl EditorApp {
     /// Drain this worker's bounded per-owner receipts outside its mutex before saving the session.
     pub(in crate::extensions) fn finish_preference_imports(&mut self, cx: &App) {
         let worker = &self.extensions.read(cx).worker;
-        let receipts = std::mem::take(&mut worker.state.lock().unwrap().preference_imports);
+        let receipts = {
+            let mut published = worker.state.lock().unwrap();
+            std::mem::take(&mut published.preference_imports)
+        };
         let mut changed = false;
         for receipt in receipts {
             if receipt.succeeded && receipt.workspace == self.session_state.workspace {

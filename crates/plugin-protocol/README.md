@@ -1,8 +1,12 @@
 # Plugin SDK
 
+`ui.canvas 1.6` 提供[原生列宽声明](src/ui/canvas/columns.rs)：透明边界、系统调整光标及绑定文本区域由原生帧更新；完成后发送带身份校验的最终宽度，提供者自行保存。移动不依赖插件回包，也不扩大权限。
+
 公开契约的用途、权限、错误、限额、兼容与释放义务维护在 [Rust 源码注释](src/lib.rs)，供宿主和独立访客使用。多来源诊断见 [diagnostics](src/diagnostics.rs)，实验直接语言结果见 [direct](src/direct.rs)，标准 LSP 的实际能力边界见 [language](src/language.rs)，预览修复与只读源前提见 [workspace](src/workspace.rs)。
 
 SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 或其他仓库读者资料。
+
+`ui.native 1.2` 的 `Node::textarea_rows(min, max)` 为所有插件提供按原生可视行数自动增长的多行输入框（`1 <= min <= max <= 64`）。超过最大行数在原输入框内滚动，保留草稿 revision、IME、选择与 Undo；不得与固定像素高度并用。普通／主操作按钮复用本地公共 `Button`，主操作与插件管理安装按钮使用相同的 primary outline 样式，显式颜色和字体角色覆盖仍有效。详见[原生 UI](src/ui.rs)。
 
 `workspace.files 1.4` 的 `Plan.conditions` 为预览和提交附加只读文档版本条件；它不授予读取权限，也不将辅助输入加入分组撤销。跨文件重命名与选中时解析的补全使用既有原生文档会话；主补全和附加导入共同校验、一次应用。契约和限额见 [workspace](src/workspace.rs) 与 [language](src/language.rs)。
 
@@ -11,6 +15,10 @@ SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 
 `ui.canvas 1.3` 新增可选 `scroll_buffer`，插件声明已完整绘制的内容区间与上下缓冲。宿主在原生帧中平移现有画面，回包前也可滚动，并把点击坐标映射回对应绘图。缓冲耗尽时等待下一次绘图；不改变文档与滚动内容的权威来源，不适用于 grid/IME 画布或 `VisualViewport` 变换。所有插件均可协商使用。
 
 `ui.canvas 1.4` 增加原生单行 `Paint::TextBox`，`1.5` 增加有界文字样本测量，`1.6` 增加原生列宽拖动与 TextBox 帧内预览；它们不新增权限，使用相应字段必须协商对应版本。接口义务和限制见[TextBox 定义](src/lib.rs)、[测量契约](src/ui/canvas/text_measure.rs)及[列宽契约](src/ui/canvas/columns.rs)。
+
+`ui.canvas 1.4` 新增通用 `Paint::TextBox`：单行 UTF-8 文本在指定逻辑矩形内按实际原生字形左对齐、居中或右对齐，超宽时由宿主省略并裁剪。继承画布字体、可覆盖字体及粗体，沿用字体／文本／绘图预算并支持现有视口投影；使用该绘图项须声明 1.4。点定位的 `Paint::Text` 语义保留，所有插件使用同一接口。
+
+`ui.canvas 1.5` 新增 `Canvas.measure_text`：提交带唯一 ID、字体、字号和粗细的单行样本组，宿主通过 `CanvasEvent::TextMeasured` 返回每组最宽样本的原生字宽，单位为变换前的逻辑像素。相同请求及字体在原生重绘间复用；结果仍受节点、模态和精确场景 revision 校验，不能沿滚动 epoch 越过旧场景。每画布最多 16 组、总计 256 个样本、64 KiB 文本，每样本最多 4096 字节；样本文本同时计入整份 UI 的文本预算。插件可据此安排紧凑列宽，主动覆盖的列宽仍由插件保留；宿主不解释样本的业务含义。
 
 HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 [http](src/http.rs)、[secrets](src/secrets.rs)、[storage](src/storage.rs)、[timers](src/timers.rs)、[tree](src/tree.rs) 与 [decorations](src/decorations.rs)。工作区文件名颜色和顶部入口分别协商 `explorer.decorations 1.0`、`ui.workspace 1.0`，见 [presentation](src/presentation.rs)；共享层次菜单见 [menus](src/ui/menus.rs)。
 
@@ -30,6 +38,8 @@ HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 
 
 主编辑区的持续比较标签见 [文档与比较契约](src/api/documents.rs)：`editor.diff 1.1` 提供双源标签，`1.2` 允许 `OpenDocumentComparison.third` 加入第三个只读来源；第三源采用相同的归属、精确版本及撤销边界。`1.3` 的可选 `navigation` 为前后项箭头提供所属实例声明的类型化命令，参数固定于标签，并在发布时校验结构、执行时校验原始实例生命周期；详情见 [比较导航契约](src/api/comparisons.rs)。
 
+`editor.documents 1.2` 的 `OpenDocumentSource` 可在不显示普通文件标签的情况下准备工作区原生比较源，`ReleaseDocumentSource` 释放调用方的准备。原有可见标签、未保存文本和 Undo 始终复用原会话；视图保留、32 源上限、60 秒未挂载宽限及实例撤销的清理规则见同一文档契约。
+
 `editor.diff 1.4` 的可选 `folding` 提供双／三源无差异区段折叠。插件声明包内的折叠／展开深浅主题 SVG 和 1–20 行上下文，运行时复用 `ui.icons`／`assets.read` 的归属、64 KiB 与 SVG 校验。宿主仅折叠完全一致的显示行，保留源文本、原行号和 Undo；支持全部折叠、全部展开、单段展开与隐藏目标揭示。
 
 默认按命令、语言、视图或服务需求启动，后台用途须明确声明，见 [activation](src/activation.rs)。结构化配置、变化通知、适用的热应用与密钥引用见 [settings](src/settings.rs)；宿主版本下限、稳定同 major 演进、实验能力及迁移义务见 [lib](src/lib.rs)。包版本、传输协议、能力版本和宿主版本分别处理。
@@ -45,6 +55,16 @@ HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 
 关联快照同时要求提供者和原始调用链具有 `workspace.read`，方法的较弱权限声明不能代替该授权。原生控制失败只有在匹配 JSON-RPC 响应携带严格的 `error.data={"version":1,"imports":"released"}` 回执时，才释放本次新增模块使用；已有成功使用及其他进行中的使用仍有效。回执表示没有仍存活的受管 worker 保留本次新增导入，不承诺代码从未执行或外部副作用已经回滚。普通错误、取消和超时无法证明释放，宿主继续保守保留可能已加载代码的授权。
 
 `language.lsp 1.7` 允许准备钩子显式设置 `Proposal.expand_dependencies`，在依赖准备完成后解析初始化选项和配置中的完整依赖路径字符串。仅处理 `${dependency:id}/relative/path`，路径必须存在且位于本方案持有租约的依赖中；普通字符串和键保持字面含义。清单 required 必须排除 1.6 及更早版本，详见 [Proposal](src/language.rs)。
+
+`language.lsp 1.8` 的 [register_borrowed](src/language_context/registry.rs) 注册调用方作用域的项目上下文。宿主保留提供者和原始服务调用链的实例生命周期；调用完成仍可分析，任一参与方停用、更新或撤销信任即撤销注册，旧引用和语言绑定不能继续使用。调用方应使用独立逻辑 key；同一活跃 key 不能更换到另一条调用链。普通 `register` 仍由提供者独立拥有。两者沿用既有读取权限，不增加进程或文件授权。
+
+`language.lsp 1.9` 的 [invalidate](src/language_context/registry.rs) 在领域输入变化时撤销本实例的语言发现缓存、注册上下文及经过本实例借出的上下文。下一次发现使用新的代次，即使文档和用户设置未改变也不会复用旧计划。失效不执行领域工具，不修改文本或设置。借用元数据跟随实例、工作区和集合授权；原生准备请求的临时进程根单独清理，成功完成准备不会撤销持久元数据。
+
+原生宿主可通过 `Manager::language_discovery_revisions` 读取当前作用域的语言实例代次，并据此替换尚未完成或失败的原文档意图。插件在成功发布新模型时也应失效一次，使等待导入期间的暂时错误不会成为新模型的缓存结果。借用方退休会同步撤销已交给原生消费者的上下文标记。
+
+同版的 `check` 仅校验已拥有元数据 token 的作用域和存活状态，既不返回描述符也不进行文件读取。仅获进程权限的服务可据此拒绝已失效的本地缓存；它不会继承提供者的文件或编辑器读取权限。实际使用项目路径时仍经过对应能力的路径与授权检查。
+
+1.9 同时允许单个描述符携带最多 32 KiB 的惰性元数据；较早协商版本仍限制为 4 KiB。整批注册仍限 64 KiB、128 项，并保留每实例与宿主总量限制。较大数据不会增加读取权限，也不能作为原生可执行文件或文件授权。
 
 `tools.inspect 1.0` 提供只读工具分发元数据，详见 [process](src/process.rs)。调用需执行授权，声明服务还需对应服务授权；可读取可执行文件目录或上一级目录内的有界 UTF-8 文件，不执行版本探测、不下载、不创建文件句柄。受管依赖通过原服务声明取得租约；其他插件私有目录和越界路径均拒绝。
 

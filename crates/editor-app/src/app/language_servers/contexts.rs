@@ -299,7 +299,13 @@ impl EditorApp {
                 }
                 wanted.insert(
                     tab.path().to_path_buf(),
-                    (provider.clone(), source, document, availability),
+                    (
+                        provider.clone(),
+                        source,
+                        document,
+                        availability,
+                        panel.language_discovery_revision(provider),
+                    ),
                 );
             }
         }
@@ -320,13 +326,14 @@ impl EditorApp {
                         .as_ref()
                         .is_some_and(|server| !server.is_active())
                     || !wanted.get(*path).is_some_and(
-                        |(provider, source, document, availability)| {
+                        |(provider, source, document, availability, discovery_revision)| {
                             provider == &record.provider
                                 && source.id == record.incarnation
                                 && (record.error.is_none()
                                     || source.revision == record.source_revision)
                                 && document == &record.document
                                 && availability == &record.availability
+                                && *discovery_revision == record.discovery_revision
                         },
                     )
             })
@@ -339,7 +346,7 @@ impl EditorApp {
                 Self::close_server_document(server, &path, None, cx);
             }
         }
-        for (path, (provider, source, document, availability)) in wanted {
+        for (path, (provider, source, document, availability, discovery_revision)) in wanted {
             if !self.language_server_demands.contexts.contains_key(&path) {
                 let lease = self.acquire_language_document_lease(&provider, &document, cx);
                 let result = self
@@ -365,6 +372,7 @@ impl EditorApp {
                         incarnation: source.id,
                         source_revision: source.revision,
                         availability,
+                        discovery_revision,
                         pending,
                         error,
                         published_failure: false,

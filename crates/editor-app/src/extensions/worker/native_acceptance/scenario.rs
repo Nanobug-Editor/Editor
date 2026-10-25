@@ -30,7 +30,14 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     if std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some() {
         return idle_retention::exercise(h, cx).await;
     }
+    if std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_some() {
+        h.activate(cx).await?;
+        return review(h, cx).await;
+    }
     if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
+        if history_files::requested() {
+            return history_files::exercise(h, cx).await;
+        }
         // The diagnostic skips unrelated editor/branch flows while retaining the same real
         // pointer, wheel, End and single Enter against the installed guest and native canvas.
         let root = h.fixture.workspace.clone();
@@ -62,6 +69,15 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
 
 /// Tree disclosure/selection and the main split comparison retain the file's sole original native session.
 async fn review(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
+    let visible_before = cx.update(|cx| {
+        h.app
+            .read(cx)
+            .tabs
+            .iter()
+            .filter(|tab| tab.is_visible())
+            .map(|tab| tab.file_id)
+            .collect::<Vec<_>>()
+    });
     h.expand(h.main, "staging", h.case.label("更改", "Changes"), cx)
         .await?;
     h.expand(h.main, "staging", "src", cx).await?;
@@ -78,6 +94,30 @@ async fn review(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
         cx,
     )
     .await?;
+    cx.update(|cx| {
+        let app = h.app.read(cx);
+        let visible_after = app
+            .tabs
+            .iter()
+            .filter(|tab| tab.is_visible())
+            .map(|tab| tab.file_id)
+            .collect::<Vec<_>>();
+        ensure!(
+            visible_after == visible_before,
+            "comparison revealed an extra ordinary file tab"
+        );
+        ensure!(
+            app.comparison_views
+                .iter()
+                .any(|view| Some(&view.id) == app.active_comparison.as_ref() && view.preview),
+            "file selection did not open a comparison preview"
+        );
+        h.record(
+            "comparison_preview_without_file_tab",
+            serde_json::json!({"visible_file_ids":visible_after}),
+        );
+        Ok::<_, anyhow::Error>(())
+    })?;
     let original = cx.update(|cx| h.app.read(cx).editor.clone());
     h.main.update(cx, |_, window, cx| {
         let app = h.app.read(cx);

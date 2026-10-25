@@ -15,12 +15,22 @@ pub struct PanelPresentation(Arc<RwLock<PresentationState>>);
 struct PresentationState {
     /// Declared exclusive leaves, independent of their current placement and visibility intent.
     exclusive: HashSet<PanelId>,
+    /// Whole-region drops select one ordinary leaf without changing its manifest declaration.
+    replacements: HashSet<PanelId>,
     /// Explicit reveals win over earlier reveals; registration alone never changes selection.
     activated: HashMap<PanelId, u64>,
     /// Monotonic order is local to this editor and has no wall-clock dependency.
     sequence: u64,
     /// Temporary display filtering; underlying panels retain their saved show/hide preferences.
     suppressed: HashSet<PanelId>,
+}
+
+impl PresentationState {
+    /// One monotonic rank orders explicit reveals, restored selections and committed drops alike.
+    fn select(&mut self, panel: PanelId) {
+        self.sequence += 1;
+        self.activated.insert(panel, self.sequence);
+    }
 }
 
 impl PanelPresentation {
@@ -45,18 +55,18 @@ impl PanelPresentation {
         }
     }
 
-    /// Make an explicitly revealed `panel` the most recent selection in its current region.
+    /// Explicitly reveal `panel` using its declared policy, clearing its temporary drop selection.
     pub fn activate(&self, panel: PanelId) {
         let mut state = self.0.write().unwrap();
-        state.sequence += 1;
-        let sequence = state.sequence;
-        state.activated.insert(panel, sequence);
+        state.replacements.remove(&panel);
+        state.select(panel);
     }
 
     /// Withdraw metadata for a removed `panel` so hot replacement retains no stale entity IDs.
     pub fn forget(&self, panel: PanelId) {
         let mut state = self.0.write().unwrap();
         state.exclusive.remove(&panel);
+        state.replacements.remove(&panel);
         state.activated.remove(&panel);
         state.suppressed.remove(&panel);
     }
@@ -74,10 +84,35 @@ impl PanelPresentation {
                     .panel(id)
                     .is_some_and(|panel| names.contains(&panel.dump(cx).panel_name))
                 {
-                    self.activate(id);
+                    // Restoring a saved choice preserves its separately rebound drop intent.
+                    self.0.write().unwrap().select(id);
                 }
             }
         }
+    }
+
+    /// Save whole-region drop intent by live stable names, never by transient entity IDs.
+    pub fn replacement_names(&self, area: &DockArea, cx: &App) -> Vec<String> {
+        let replacements = self.0.read().unwrap().replacements.clone();
+        regions(area, cx)
+            .into_iter()
+            .flatten()
+            .filter(|id| replacements.contains(id))
+            .filter_map(|id| area.panel(id).map(|panel| panel.dump(cx).panel_name))
+            .collect()
+    }
+
+    /// Rebind saved replacement names before restoring activation order; absent panels are ignored.
+    pub fn restore_replacements(&self, area: &DockArea, names: &[String], cx: &App) {
+        let replacements = regions(area, cx)
+            .into_iter()
+            .flatten()
+            .filter(|id| {
+                area.panel(*id)
+                    .is_some_and(|panel| names.contains(&panel.dump(cx).panel_name))
+            })
+            .collect();
+        self.0.write().unwrap().replacements = replacements;
     }
 
     /// Recompute display from the live layout and raw visibility; return stable regional selections.
@@ -100,14 +135,22 @@ impl PanelPresentation {
             let selected = ids.iter().copied().max_by_key(|id| {
                 (
                     state.activated.get(id).copied().unwrap_or(0),
-                    state.exclusive.contains(id),
+                    state.exclusive.contains(id) || state.replacements.contains(id),
                 )
             });
             let Some(selected) = selected else { continue };
             if let Some(panel) = area.panel(selected) {
                 selected_names.push(panel.dump(cx).panel_name);
             }
-            let exclusive = state.exclusive.contains(&selected);
+            let exclusive =
+                state.exclusive.contains(&selected) || state.replacements.contains(&selected);
+            if !exclusive {
+                // An explicit ordinary selection returns the entire band to its original combination.
+                // A past replacement is a layout selection, not a permanent new plugin property.
+                for id in &ids {
+                    state.replacements.remove(id);
+                }
+            }
             for id in ids {
                 if (exclusive && id != selected) || (!exclusive && state.exclusive.contains(&id)) {
                     state.suppressed.insert(id);
@@ -243,17 +286,48 @@ impl PanelView for PresentedPanel {
     }
 }
 
-/// Read a wrapped leaf's declared mode without treating last frame's suppression as its intent.
+/// Read a declared or drop-selected exclusive mode without confusing suppression with raw intent.
 pub(super) fn is_exclusive(panel: &Arc<dyn PanelView>, cx: &App) -> bool {
     panel
         .as_any()
         .downcast_ref::<PresentedPanel>()
         .is_some_and(|view| {
-            view.presentation
-                .0
-                .read()
-                .unwrap()
-                .exclusive
-                .contains(&view.panel_id(cx))
+            let state = view.presentation.0.read().unwrap();
+            let id = view.panel_id(cx);
+            state.exclusive.contains(&id) || state.replacements.contains(&id)
         })
+}
+
+/// Return the live side's identities; the editor itself is never a regional replacement target.
+pub(super) fn region_panels(area: &DockArea, panel: PanelId, cx: &App) -> Option<Vec<PanelId>> {
+    regions(area, cx)
+        .into_iter()
+        .find(|ids| ids.contains(&panel))
+}
+
+/// Reconcile both sides after the Base edit, before an empty-source cleanup can remove retained peers.
+/// `replacement` selects only the incoming leaf; ordinary moves just restore the live regional policy.
+pub(super) fn commit_drop(
+    source: &Arc<dyn PanelView>,
+    target: &Arc<dyn PanelView>,
+    replacement: bool,
+    area: &DockArea,
+    cx: &App,
+) {
+    let Some(view) = source
+        .as_any()
+        .downcast_ref::<PresentedPanel>()
+        .or_else(|| target.as_any().downcast_ref::<PresentedPanel>())
+    else {
+        return;
+    };
+    if replacement {
+        let id = source.panel_id(cx);
+        {
+            let mut state = view.presentation.0.write().unwrap();
+            state.replacements.insert(id);
+            state.select(id);
+        }
+    }
+    view.presentation.synchronize(area, cx);
 }

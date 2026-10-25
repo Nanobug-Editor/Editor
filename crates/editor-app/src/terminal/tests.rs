@@ -3,8 +3,11 @@
 use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use std::cell::RefCell;
+mod features;
 mod fullscreen;
 mod lifecycle;
+mod native_profile;
+mod native_search;
 mod restore;
 #[cfg(windows)]
 mod tasks;
@@ -15,7 +18,7 @@ pub(crate) fn painted(app: &Entity<EditorApp>, visual: &mut VisualTestContext) -
     visual.update(|_, cx| {
         let terminal = app.read(cx).terminal.read(cx);
         terminal
-            .canvas
+            .grid
             .as_ref()
             .map(|canvas| {
                 canvas
@@ -24,7 +27,7 @@ pub(crate) fn painted(app: &Entity<EditorApp>, visual: &mut VisualTestContext) -
                     .paint
                     .iter()
                     .filter_map(|paint| {
-                        if let protocol::Paint::Text { text, .. } = paint {
+                        if let GridPaint::Text { text, .. } = paint {
                             Some(text.as_str())
                         } else {
                             None
@@ -136,7 +139,7 @@ fn native_shell_tabs_input_output_clear_and_trust(cx: &mut TestAppContext) {
     let (row, cell_width, cell_height) = visual.update(|_, cx| {
         let terminal = app.read(cx).terminal.read(cx);
         let row = terminal
-            .canvas
+            .grid
             .as_ref()
             .unwrap()
             .read(cx)
@@ -144,7 +147,7 @@ fn native_shell_tabs_input_output_clear_and_trust(cx: &mut TestAppContext) {
             .paint
             .iter()
             .filter_map(|paint| {
-                if let protocol::Paint::Text { x, y, text, .. } = paint
+                if let GridPaint::Text { x, y, text, .. } = paint
                     && *x == 8.
                     && text == "n"
                 {

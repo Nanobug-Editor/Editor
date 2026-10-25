@@ -150,6 +150,7 @@ impl Manager {
         let record = Installed {
             manifest: package.manifest.clone(),
             digest: package.digest.clone(),
+            install_sequence: self.installation_sequence(id)?,
             grants,
             enabled,
             project_enabled,

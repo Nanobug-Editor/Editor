@@ -38,6 +38,7 @@ fn surface(app: &Entity<EditorApp>, cx: &mut App) -> Entity<ExtensionPanel> {
     .unwrap();
     let descriptor = manifest.panels[0].clone();
     let entries = vec![Installed {
+        install_sequence: 0,
         grants: manifest.permissions.clone(),
         manifest,
         digest: "cold-observation".into(),

@@ -1,6 +1,7 @@
 //! User theme tokens override bounded plugin content defaults and generic native chrome.
 use super::*;
 use crate::ui::theme::ActiveTheme as _;
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{FontWeight, Hsla, Styled};
 use gpui_kit::{px, rgb};
 
@@ -20,6 +21,61 @@ pub(super) struct Colors {
 }
 
 impl PluginView {
+    /// Style `button` for `node` using the active theme in `cx`; explicit guest/user tokens override defaults.
+    /// Primary actions share plugin management's outlined primary button, including hover and focus.
+    pub(super) fn button_appearance(
+        &self,
+        button: editor_ui::Button,
+        node: &ui::Node,
+        cx: &App,
+    ) -> editor_ui::Button {
+        let role = node.theme_role();
+        let button = match role {
+            "primary_button" => button.primary().outline(),
+            "toolbar_button" => button.ghost(),
+            _ => button,
+        };
+        let custom = !matches!(role, "button" | "primary_button" | "toolbar_button")
+            || [
+                "background",
+                "foreground",
+                "hover_background",
+                "active_background",
+            ]
+            .iter()
+            .any(|key| {
+                self.environment
+                    .color(&self.plugin, &format!("ui.{role}.{key}"))
+                    .is_some()
+                    || self
+                        .document
+                        .content_colors
+                        .contains_key(&format!("{role}.{key}"))
+            });
+        let button = button.when(custom, |button| {
+            let colors = self.colors(role, cx);
+            button.custom(
+                editor_ui::ButtonCustomVariant::new(cx)
+                    .color(colors.background)
+                    .foreground(colors.foreground)
+                    .hover(colors.hover)
+                    .active(colors.active),
+            )
+        });
+        // Ordinary buttons inherit exactly the shared component's font and sizing. Explicit role
+        // typography still follows the public override contract instead of a second button preset.
+        if self
+            .environment
+            .theme_text_styles
+            .contains_key(&format!("{}.{role}", self.plugin))
+            || self.document.content_styles.contains_key(role)
+        {
+            self.font(button, role)
+        } else {
+            button
+        }
+    }
+
     pub(super) fn colors(&self, role: &str, cx: &App) -> Colors {
         let palette = cx.theme();
         // User theme tokens override the current plugin's bounded document defaults.

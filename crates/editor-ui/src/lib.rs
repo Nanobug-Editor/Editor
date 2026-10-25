@@ -27,6 +27,7 @@ pub mod overlay;
 pub mod popover;
 pub mod problems;
 pub mod project_dialog;
+pub mod reorder_group;
 pub mod row_backgrounds;
 pub mod scroll;
 pub mod scrollbar;
@@ -40,6 +41,7 @@ pub mod status_bar;
 pub mod status_icon;
 pub mod tabs;
 pub mod text;
+pub mod text_grid;
 pub mod textarea;
 pub mod tooltip;
 pub mod tree;
@@ -73,6 +75,7 @@ pub use icon::Icon;
 pub use input::Input;
 pub use notification::Notification;
 pub use popover::popover;
+pub use reorder_group::{ReorderEvent, ReorderGroup, ReorderGroupState};
 pub use scrollbar::{
     install_scrollbar_theme, native_editor as native_editor_scrollbars, vertical_scrollbar,
     vertical_viewport_scrollbar,
@@ -86,7 +89,9 @@ pub use spinner::Spinner;
 pub use split::split_container;
 pub use status_bar::StatusBar;
 pub use status_icon::StatusIcon;
-pub use tabs::{comparison_tab, file_tab, preview_tab_badge, tab_strip};
+pub use tabs::{
+    FileTabTitle, comparison_tab, file_tab, file_tab_actions, preview_tab_badge, tab_strip,
+};
 pub use text::{RichTextColors, markdown_view, rich_text_view, untrusted_markdown_view};
 pub use textarea::Textarea;
 pub use tooltip::Tooltip;

@@ -94,6 +94,7 @@ fn publish(
         Installed {
             manifest: manifest.clone(),
             digest: package.digest.clone(),
+            install_sequence: 0,
             grants: manifest.permissions.clone(),
             enabled: true,
             project_enabled: BTreeSet::new(),

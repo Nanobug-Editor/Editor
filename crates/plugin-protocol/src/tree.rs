@@ -22,6 +22,7 @@
 //! `ui.tree >=1.7,<2` adds provider-owned three-state checkboxes, inline secondary labels and
 //! `set_expanded` for explicit disclosure of cached directories. Checking emits `Event::Checked`
 //! without selecting or expanding a row; providers decide its business effect and publish the result.
+//! `ui.tree >=1.8,<2` adds `Node::muted` for totals and `Options::proportional_labels` for compact UI text.
 //! `ui.tree >=1.1,<2` adds disabled/separated items and raises the per-node menu from 8 to 32.
 //! Declare that explicit minimum when publishing these features; disabled commands reject invocation.
 //! `ui.tree >=1.2,<2` adds `update` for cached presentation/action availability changes without
@@ -83,6 +84,9 @@ pub struct Options {
     /// Single pointer presses toggle directories without changing leaf selection; requires ui.tree 1.6.
     #[serde(default, skip_serializing_if = "is_false")]
     pub single_click_expand: bool,
+    /// Use the UI font with compact explorer geometry; omitted keeps monospace labels. Requires 1.8.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub proportional_labels: bool,
 }
 
 /// A declared typed command in the publishing package; arguments obey that command's schema.
@@ -156,6 +160,9 @@ pub struct Node {
     /// Optional semantic text color, resolved by the native theme; requires explicit ui.tree 1.3.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tone: Option<Tone>,
+    /// Use the theme's secondary foreground, taking precedence over tone; requires ui.tree 1.8.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub muted: bool,
     /// Optional provider-owned checkbox; absent keeps the ordinary row. Requires ui.tree 1.7.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checked: Option<CheckState>,
@@ -185,6 +192,7 @@ impl Node {
             branch,
             disabled: false,
             tone: None,
+            muted: false,
             checked: None,
             suffix: String::new(),
             icon: None,

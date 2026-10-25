@@ -65,6 +65,23 @@ impl State {
             }
         }
         validate_comparison_request(&operation, &self.api)?;
+        // Silent local-source preparation is additive; an older negotiated document contract
+        // must not accidentally grant a new presentation or lifetime operation.
+        if matches!(
+            operation,
+            EditorOperation::OpenDocumentSource { .. }
+                | EditorOperation::ReleaseDocumentSource { .. }
+        ) && self
+            .api
+            .capabilities
+            .get("editor.documents")
+            .is_none_or(|version| *version < semver::Version::new(1, 2, 0))
+        {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Document source operations require editor.documents 1.2",
+            ));
+        }
         validate_comparison_navigation(&operation, &self.api, &self.plugin_services.commands)?;
         let mut comparison_icons = BTreeMap::new();
         if let EditorOperation::OpenDocumentComparison {
@@ -160,7 +177,8 @@ impl State {
             } => ("editor.virtual", "editor.read"),
             EditorOperation::OpenDocument {
                 resource: api::ResourceIdentity::Local { path },
-            } => {
+            }
+            | EditorOperation::OpenDocumentSource { path } => {
                 api::ResourceIdentity::Local { path: path.clone() }.validate()?;
                 if !self.permissions.contains("workspace.read") {
                     return Err(Failure::new(
@@ -170,6 +188,7 @@ impl State {
                 }
                 ("editor.documents", "editor.read")
             }
+            EditorOperation::ReleaseDocumentSource { .. } => ("editor.documents", "editor.read"),
             EditorOperation::LocateDocument { .. } => ("editor.documents", "editor.read"),
             EditorOperation::ListDocuments | EditorOperation::ReadDocument { .. } => {
                 ("editor.documents", "editor.read")

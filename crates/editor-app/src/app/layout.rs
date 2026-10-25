@@ -40,6 +40,7 @@ impl EditorApp {
             match name.as_str() {
                 "Explorer" => session.explorer_visible = false,
                 "Outline" => session.outline_visible = false,
+                "OpenFiles" => session.open_files_visible = false,
                 "HostMessages" => session.messages_visible = false,
                 "NativeTerminal" => session.native_terminal_visible = false,
                 "Problems" => session.problems_visible = false,
@@ -62,6 +63,9 @@ impl EditorApp {
             .dock_presentation
             .synchronize(self.dock_area.read(cx), cx)
             .0;
+        self.session_state.dock_replacement_panels = self
+            .dock_presentation
+            .replacement_names(self.dock_area.read(cx), cx);
         let layout = self.dock_ui.dump(self.dock_area.read(cx), cx);
         for (name, dock) in [
             ("left", &layout.left_dock),
@@ -89,6 +93,7 @@ impl EditorApp {
         }
         let Some(mut layout) = self.session_state.dock_layout.clone() else {
             self.pending_dock_restore = false;
+            self.ensure_open_files_dock(window, cx);
             return;
         };
         // Construction happens before plugin viewers exist, even when cached startup is fast.
@@ -120,6 +125,7 @@ impl EditorApp {
             "Editor".to_owned(),
             "HostMessages".to_owned(),
             "Outline".to_owned(),
+            "OpenFiles".to_owned(),
             "NativeTerminal".to_owned(),
             "Problems".to_owned(),
         ]);
@@ -132,6 +138,12 @@ impl EditorApp {
         );
         bind_panel("Editor", &self.editor_panel, &self.dock_presentation, cx);
         bind_panel("Outline", &self.outline_panel, &self.dock_presentation, cx);
+        bind_panel(
+            "OpenFiles",
+            &self.open_files_panel,
+            &self.dock_presentation,
+            cx,
+        );
         bind_panel("HostMessages", &self.messages, &self.dock_presentation, cx);
         bind_panel(
             "NativeTerminal",
@@ -157,6 +169,7 @@ impl EditorApp {
         // Disabled or uninstalled contributions must not create blank placeholder panels.
         prune_unavailable(&mut layout, &names);
         let selection = self.session_state.dock_active_panels.clone();
+        let replacements = self.session_state.dock_replacement_panels.clone();
         if self.session_state.plugin_sidebar_layout_version == 1 {
             sidebar::separate_left(&mut layout, px(self.session_state.explorer_width));
         }
@@ -207,6 +220,7 @@ impl EditorApp {
         }
         self.ensure_terminal_dock(window, cx);
         self.ensure_problems_dock(window, cx);
+        self.ensure_open_files_dock(window, cx);
         // An older saved layout has no outline. Add one beside its surviving Explorer without
         // replacing the user's other split sizes or keeping a second persisted layout tree.
         let outline = self
@@ -269,7 +283,10 @@ impl EditorApp {
                     .max(session_state::DOCK_LAYOUT_VERSION);
             }
             self.dock_presentation
+                .restore_replacements(self.dock_area.read(cx), &replacements, cx);
+            self.dock_presentation
                 .restore(self.dock_area.read(cx), &selection, cx);
+            self.restore_open_files_dock_visibility(window, cx);
             self.capture_dock_layout(cx);
             self.persist_session();
         }

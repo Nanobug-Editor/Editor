@@ -5,6 +5,8 @@ use gpui_kit::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+mod resizing;
+
 /// A source-only host exercises the same local frame used by the editor application.
 struct SourceHost {
     /// Sole source editing and Undo authority mounted by this fixture.

@@ -255,6 +255,12 @@ impl EditorApp {
             Op::OpenDocument { resource } => {
                 self.open_plugin_resource(resource, &request, window, cx)
             }
+            Op::OpenDocumentSource { path } => {
+                self.open_plugin_document_source(path, &request, window, cx)
+            }
+            Op::ReleaseDocumentSource { document } => {
+                self.release_plugin_document_source(document, &request, window, cx)
+            }
             Op::OpenVirtualDocument {
                 title,
                 language,

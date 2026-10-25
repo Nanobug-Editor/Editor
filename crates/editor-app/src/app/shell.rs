@@ -100,6 +100,8 @@ pub(crate) struct EditorDockPanel {
     kind: EditorDockPanelKind,
     explorer_visible: Rc<Cell<bool>>,
     focus_handle: FocusHandle,
+    /// Retain native focus observers so the Explorer title repaints on entry and exit.
+    focus_subscriptions: Vec<Subscription>,
 }
 
 impl EditorDockPanel {
@@ -114,7 +116,22 @@ impl EditorDockPanel {
             kind,
             explorer_visible,
             focus_handle: cx.focus_handle(),
+            focus_subscriptions: Vec::new(),
         }
+    }
+
+    /// Watch this panel's focus scope once and retain both repaint subscriptions.
+    fn observe_explorer_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.focus_subscriptions.is_empty() {
+            return;
+        }
+        self.focus_subscriptions
+            .push(cx.on_focus_in(&self.focus_handle, window, |_, _, cx| cx.notify()));
+        self.focus_subscriptions.push(cx.on_focus_out(
+            &self.focus_handle,
+            window,
+            |_, _, _, cx| cx.notify(),
+        ));
     }
 }
 
@@ -159,24 +176,47 @@ impl DockPanel for EditorDockPanel {
         })
     }
 
-    fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn title(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match self.kind {
             // Order explorer actions as locate, collapse all, expand all, then minimize.
-            EditorDockPanelKind::Explorer => h_flex()
-                .w_full()
-                .items_center()
-                .justify_between()
-                .font_normal()
-                .child(
-                    h_flex()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .items_center()
-                        .gap_2()
-                        .child(explorer_panel_icon(cx).small())
-                        .child(div().truncate().child(t!("panel.explorer").to_string())),
-                )
-                .child(
+            EditorDockPanelKind::Explorer => {
+                self.observe_explorer_focus(window, cx);
+                let focused = self.focus_handle.contains_focused(window, cx);
+                // Base samples the current opacity, so a focus reversal resumes from the
+                // visible fraction instead of restarting or flashing the whole button group.
+                let opacity = gpui_base::motion::transition(
+                    "explorer-title-actions-opacity",
+                    if focused { 1. } else { 0. },
+                    gpui_base::motion::Transition::new(Duration::from_millis(140)),
+                    window,
+                    cx,
+                );
+                h_flex()
+                    .w_full()
+                    .items_center()
+                    .justify_between()
+                    .font_normal()
+                    .child(
+                        h_flex()
+                            .id("explorer-title")
+                            .debug_selector(|| "explorer-title".into())
+                            .flex_1()
+                            .min_w(px(0.))
+                            .items_center()
+                            .gap_2()
+                            .child(explorer_panel_icon(cx).small())
+                            .child(div().truncate().child(t!("panel.explorer").to_string())),
+                    )
+                    .child(
+                        h_flex()
+                            .id("explorer-actions")
+                            .debug_selector(|| "explorer-actions".into())
+                            // Reserve four compact slots and their height so focus changes never move the title.
+                            .w(px(96.))
+                            .h(px(24.))
+                            .opacity(opacity)
+                            .when(opacity > 0., |actions| {
+                                actions.child(
                     div()
                         .id("explorer-reveal-active-file")
                         .debug_selector(|| "explorer-reveal-active-file".into())
@@ -257,7 +297,10 @@ impl DockPanel for EditorDockPanel {
                             });
                         })),
                 )
-                .into_any_element(),
+                            }),
+                    )
+                    .into_any_element()
+            }
             EditorDockPanelKind::Editor => div()
                 .child(t!("panel.editor").to_string())
                 .into_any_element(),
@@ -283,7 +326,34 @@ impl Render for EditorDockPanel {
     }
 }
 
-impl EditorApp {}
+impl EditorApp {
+    /// Apply `window`'s latest size to layout immediately, then persist after resize input settles.
+    /// The quiet period only batches disk I/O; GPUI retains the display-driven paint cadence.
+    /// Pure moves need no saved size change. Close already flushes the latest in-memory session.
+    fn update_window_geometry(&mut self, window: &Window, cx: &mut Context<Self>) {
+        let size = window.bounds().size;
+        let width = size.width / px(1.);
+        let height = size.height / px(1.);
+        if self.session_state.window_width == width && self.session_state.window_height == height {
+            return;
+        }
+        self.session_state.window_width = width;
+        self.session_state.window_height = height;
+        // Prepare editor-local column pixels on the next native frame without waiting for I/O.
+        cx.notify();
+        self.pending_window_geometry_save = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(200))
+                .await;
+            let _ = this.update(cx, |this, _| {
+                if !this.shutting_down {
+                    // Read current state after settling, never a stale snapshot captured mid-drag.
+                    this.session_state.save();
+                }
+            });
+        }));
+    }
+}
 
 impl Render for EditorApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -298,12 +368,7 @@ impl Render for EditorApp {
         if self._bounds_subscription.is_none() {
             self._bounds_subscription =
                 Some(cx.observe_window_bounds(window, |this, window, cx| {
-                    let bounds = window.bounds();
-                    this.session_state.window_width = bounds.size.width / px(1.);
-                    this.session_state.window_height = bounds.size.height / px(1.);
-                    this.session_state.save();
-                    // Prepare editor-local column pixels before Base rescales the new viewport.
-                    cx.notify();
+                    this.update_window_geometry(window, cx);
                 }));
         }
         // Open plugin-owned settings through the normal editor document path.
@@ -333,11 +398,29 @@ impl Render for EditorApp {
         let status_style = component_styles(cx, ThemeComponent::StatusBar).base;
         // Observe the exact entry chosen for this frame before confirmation can rebuild the same severity later.
         let plugin_indicator = self.plugin_indicator(cx);
-        self.track_plugin_indicator_frame(plugin_indicator);
+        let services_loading = self.plugin_count(PluginPopupKind::Services, cx) > 0;
+        if !services_loading
+            && self
+                .plugin_popup
+                .is_some_and(|(kind, _)| kind == PluginPopupKind::Services)
+        {
+            // Ready, failed, cancelled or withdrawn engines leave no stale blocking popup behind.
+            self.close_plugin_popup(window, cx);
+        }
+        self.track_plugin_indicator_frame(plugin_indicator, services_loading);
         v_flex()
             .id("editor-shell")
             .debug_selector(|| "editor-shell".into())
             .key_context("EditorShell")
+            // Escape must reach the gesture even while the document, tree, or a popup owns focus.
+            .capture_key_down(
+                cx.listener(|app, event: &gpui_kit::KeyDownEvent, window, cx| {
+                    if event.keystroke.key == "escape" && app.tabs_drag.active() {
+                        app.tabs_drag.cancel(window, cx);
+                        cx.stop_propagation();
+                    }
+                }),
+            )
             .capture_key_down(cx.listener(Self::cancel_pending_language_feature))
             .relative()
             .on_mouse_down(
@@ -506,7 +589,12 @@ impl Render for EditorApp {
                             .when_some(self.render_syntax_error_indicator(cx), |bar, indicator| {
                                 bar.right(indicator)
                             })
-                            // Keep plugin indicators immediately before the cursor position.
+                            // External startup sits immediately left of the independent plugin status.
+                            .when(services_loading, |bar| {
+                                bar.right(
+                                    self.render_plugin_indicator(PluginPopupKind::Services, cx),
+                                )
+                            })
                             .when_some(plugin_indicator, |bar, kind| {
                                 bar.right(self.render_plugin_indicator(kind, cx))
                             })

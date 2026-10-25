@@ -49,7 +49,9 @@ pub(crate) fn tree_icon(
     }
 }
 
-fn project_icon_path(
+/// Resolve the immutable asset path shared by a file control and its native drag preview.
+/// `providers`, `path`, folder status and `theme` use the same priority rules as `file_icon`.
+pub(crate) fn project_icon_path(
     providers: &crate::language::providers::Providers,
     path: &Path,
     is_folder: bool,
@@ -63,7 +65,7 @@ fn project_icon_path(
         if let Some(icon) = config
             .icons
             .iter()
-            .find(|icon| matches_icon(icon, path, is_folder))
+            .find(|icon| matches_icon(icon, path, is_folder, Path::is_file))
         {
             return prefixed_asset_path(&root, if dark { &icon.dark } else { &icon.light });
         }
@@ -82,43 +84,47 @@ fn icon_path(path: &Path, is_folder: bool, theme: &ThemeDefinition) -> String {
     .to_owned()
 }
 
-/// Matches a rule by folder, exact name or extension, with path suffixes for nested config files.
-fn matches_icon(rule: &FileIconRule, path: &Path, is_folder: bool) -> bool {
-    // Scoped rules let language plugins recognize project configuration files.
-    if !rule.project_markers.is_empty()
-        && !path.ancestors().skip(1).any(|directory| {
-            rule.project_markers
-                .iter()
-                .any(|marker| directory.join(marker).is_file())
-        })
-    {
-        return false;
-    }
-    if is_folder && rule.folders {
-        return true;
-    }
-
+/// Matches folder/name/extension selectors and probes project markers through `is_file`.
+/// The filesystem probe stays explicit so redraw tests can account for synchronous metadata work.
+fn matches_icon(
+    rule: &FileIconRule,
+    path: &Path,
+    is_folder: bool,
+    mut is_file: impl FnMut(&Path) -> bool,
+) -> bool {
     let name = path
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
-    if rule.files.iter().any(|selector| {
-        name.eq_ignore_ascii_case(selector)
-            || path
-                .to_string_lossy()
-                .replace('\\', "/")
-                .to_ascii_lowercase()
-                .ends_with(&format!("/{}", selector.to_ascii_lowercase()))
-    }) {
-        return true;
+    let selected = (is_folder && rule.folders)
+        || rule.files.iter().any(|selector| {
+            name.eq_ignore_ascii_case(selector)
+                || path
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    .to_ascii_lowercase()
+                    .ends_with(&format!("/{}", selector.to_ascii_lowercase()))
+        })
+        || path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                rule.extensions
+                    .iter()
+                    .any(|candidate| extension.eq_ignore_ascii_case(candidate))
+            });
+    if !selected {
+        // Every visible row visits these rules while drawing. An unrelated name,
+        // extension or folder cannot use the icon, so it must not trigger disk I/O.
+        return false;
     }
 
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            rule.extensions
+    // Matching selectors retain the original ancestor/marker order and live disk semantics.
+    rule.project_markers.is_empty()
+        || path.ancestors().skip(1).any(|directory| {
+            rule.project_markers
                 .iter()
-                .any(|candidate| extension.eq_ignore_ascii_case(candidate))
+                .any(|marker| is_file(&directory.join(marker)))
         })
 }
 
@@ -215,6 +221,126 @@ mod tests {
     use crate::assets::file_icon;
     use gpui_kit::{Image, ImageFormat, SvgRenderer};
     use std::{collections::BTreeSet, sync::Arc};
+
+    /// Unrelated visible rows must not query disk for a scoped icon they cannot select.
+    #[test]
+    fn unrelated_files_and_directories_skip_project_marker_io() {
+        let rule = FileIconRule {
+            extensions: vec!["toml".into()],
+            files: Vec::new(),
+            folders: false,
+            project_markers: vec!["Cargo.toml".into()],
+            light: "rust.svg".into(),
+            dark: "rust-dark.svg".into(),
+        };
+        for (path, folder) in [("workspace/src/main.rs", false), ("workspace/src", true)] {
+            let mut probes = 0;
+            let matched = matches_icon(&rule, Path::new(path), folder, |_| {
+                probes += 1;
+                true
+            });
+            assert!(!matched, "an unrelated selector must not choose the icon");
+            assert_eq!(probes, 0, "unrelated row {path} queried project markers");
+        }
+    }
+
+    /// Selecting a name or extension does not bypass a rule's project scope.
+    #[test]
+    fn matching_selector_requires_a_project_marker() {
+        let rule = FileIconRule {
+            extensions: vec!["toml".into()],
+            files: Vec::new(),
+            folders: false,
+            project_markers: vec!["Cargo.toml".into()],
+            light: "rust.svg".into(),
+            dark: "rust-dark.svg".into(),
+        };
+        let mut probes = 0;
+        assert!(!matches_icon(
+            &rule,
+            Path::new("workspace/member/settings.toml"),
+            false,
+            |_| {
+                probes += 1;
+                false
+            },
+        ));
+        assert!(probes > 0, "a matching scoped rule must check its markers");
+    }
+
+    /// A marker in an enclosing project remains valid for deeply nested entries.
+    #[test]
+    fn matching_selector_finds_project_markers_in_nested_ancestors() {
+        let rule = FileIconRule {
+            extensions: vec!["toml".into()],
+            files: Vec::new(),
+            folders: false,
+            project_markers: vec!["missing.marker".into(), "Cargo.toml".into()],
+            light: "rust.svg".into(),
+            dark: "rust-dark.svg".into(),
+        };
+        let mut checked = Vec::new();
+        assert!(matches_icon(
+            &rule,
+            Path::new("workspace/member/deep/settings.TOML"),
+            false,
+            |candidate| {
+                checked.push(candidate.to_path_buf());
+                candidate == Path::new("workspace/Cargo.toml")
+            },
+        ));
+        assert_eq!(
+            checked,
+            [
+                "workspace/member/deep/missing.marker",
+                "workspace/member/deep/Cargo.toml",
+                "workspace/member/missing.marker",
+                "workspace/member/Cargo.toml",
+                "workspace/missing.marker",
+                "workspace/Cargo.toml",
+            ]
+            .map(std::path::PathBuf::from),
+            "nearer ancestors and declared marker order must retain priority",
+        );
+    }
+
+    /// Unscoped rules retain case-insensitive names, path suffixes and extension matching.
+    #[test]
+    fn unscoped_selectors_keep_existing_matching_without_marker_io() {
+        let mut rule = FileIconRule {
+            extensions: vec!["toml".into()],
+            files: vec!["License".into(), ".cargo/config".into()],
+            folders: false,
+            project_markers: Vec::new(),
+            light: "config.svg".into(),
+            dark: "config-dark.svg".into(),
+        };
+        for (path, folder, expected) in [
+            ("workspace/LICENSE", false, true),
+            ("workspace/member/.CaRgO/CONFIG", false, true),
+            ("workspace/settings.ToMl", false, true),
+            ("workspace/directory.toml", true, true),
+            ("workspace/member/not.cargo/config", false, false),
+            ("workspace/member/readme.md", false, false),
+            ("workspace/member/src", true, false),
+        ] {
+            assert_eq!(
+                matches_icon(&rule, Path::new(path), folder, |_| {
+                    panic!("an unscoped rule must not query project markers")
+                }),
+                expected,
+                "selector result changed for {path}",
+            );
+        }
+
+        rule.folders = true;
+        assert!(matches_icon(
+            &rule,
+            Path::new("workspace/member/src"),
+            true,
+            |_| panic!("an unscoped folder rule must not query project markers"),
+        ));
+    }
 
     #[test]
     fn unrecognized_files_use_generic_artwork_without_language_fallbacks() {

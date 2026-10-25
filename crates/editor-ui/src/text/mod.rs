@@ -16,6 +16,55 @@ pub fn markdown_view(id: &'static str, markdown: String, font_size: Pixels, cx: 
         .selectable(true)
 }
 
+/// Compact selectable documentation on a popover, with UI prose and source-font code blocks.
+pub fn hover_markdown_view(id: &'static str, markdown: String, cx: &App) -> TextView {
+    let font_size = crate::typography::font_size(cx);
+    let theme = cx.theme();
+    let code_font = theme.mono_font_family.clone();
+    let style = rich_text_style(font_size, cx)
+        .with_foreground(theme.popover_foreground)
+        .with_border(theme.border.opacity(0.55))
+        .with_dark(theme.is_dark())
+        .with_paragraph_gap(rems(0.35))
+        .with_heading(move |_| {
+            StyleRefinement::default()
+                .text_size(font_size)
+                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+        })
+        .with_code_block(
+            StyleRefinement::default()
+                .font_family(code_font)
+                .bg(theme.transparent)
+                .p_0()
+                .border_0()
+                .text_size(font_size)
+                .line_height(gpui_kit::relative(1.45)),
+        );
+    TextView::markdown(id, markdown)
+        .style(style)
+        .selectable(true)
+        // Compact signatures already carry their context in the server text;
+        // the public actions slot also suppresses Base's language corner label.
+        .code_block_actions(|_, _, _| gpui_kit::Empty)
+}
+
+/// Preserve literal server text, including meaningful newlines, through the Markdown renderer.
+pub fn plain_markdown(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            let mut escaped = String::new();
+            for character in line.chars() {
+                if "\\`*_{}[]<>()#+-.!|".contains(character) {
+                    escaped.push('\\');
+                }
+                escaped.push(character);
+            }
+            escaped
+        })
+        .collect::<Vec<_>>()
+        .join("  \n")
+}
+
 /// Display untrusted marketplace snapshots without fetching images or activating embedded links.
 pub fn untrusted_markdown_view(
     id: &'static str,

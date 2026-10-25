@@ -13,6 +13,7 @@ fn surface(app: &Entity<EditorApp>, position: &str, cx: &mut App) -> Entity<Exte
     })).unwrap();
     let descriptor = manifest.panels[0].clone();
     let entries = vec![Installed {
+        install_sequence: 0,
         grants: manifest.permissions.clone(),
         manifest,
         digest: "window-focus".into(),

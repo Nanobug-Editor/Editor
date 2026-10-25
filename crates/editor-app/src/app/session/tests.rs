@@ -160,8 +160,14 @@ fn expected_legacy_outline_migration(mut layout: DockAreaState) -> DockAreaState
                 children: vec![PanelState::new("Outline")],
                 info: PanelInfo::tabs(0),
             },
+            // Current startup also registers the hidden Open Files leaf without resizing old peers.
+            PanelState {
+                panel_name: "TabPanel".into(),
+                children: vec![PanelState::new("OpenFiles")],
+                info: PanelInfo::tabs(0),
+            },
         ],
-        info: PanelInfo::stack(vec![height / 2.; 2], Axis::Vertical),
+        info: PanelInfo::stack(vec![height / 2., height / 2., px(100.)], Axis::Vertical),
     };
     let width = layout.center.info.sizes().unwrap()[0];
     layout.center = layout.center.children.remove(1);
@@ -283,6 +289,7 @@ fn plugin_dock_layout_survives_delayed_startup(cx: &mut TestAppContext) {
     second_panel.id = "tasks".into();
     manifest.panels.push(second_panel);
     let installed = Installed {
+        install_sequence: 0,
         replaced_by: None,
         grants: manifest.permissions.clone(),
         manifest,
@@ -414,7 +421,13 @@ fn plugin_dock_layout_survives_delayed_startup(cx: &mut TestAppContext) {
             expected_legacy_outline_migration(expected),
         );
         let right = app.dock_area.read(cx).layout(DockPlacement::Right).unwrap();
-        assert_eq!(right.panels().count(), 2);
+        // Current startup retains Problems beside the old plugin and Messages leaves.
+        assert_eq!(right.panels().count(), 3);
+        assert!(
+            right
+                .panels()
+                .any(|id| id == PanelId::from(app.problems.panel.entity_id()))
+        );
         assert!(
             right
                 .panels()

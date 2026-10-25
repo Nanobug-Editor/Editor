@@ -7,6 +7,7 @@ use plugin_runtime::{
     plugin_protocol::api::{self, EditorOperation as Op, EditorValue as Value, ErrorCode, Failure},
 };
 mod content;
+mod sources;
 
 impl EditorApp {
     /// Global edit/save commands use actual pane focus and reject provider-owned readonly sessions.
@@ -201,6 +202,7 @@ impl EditorApp {
         );
         self.tabs.push(OpenTab {
             preview: false,
+            source_only: None,
             path,
             file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             file_revision: 0,
@@ -264,6 +266,9 @@ impl EditorApp {
             tab.editor
                 .update(cx, |editor, cx| editor.set_value(text, window, cx));
             tab.capability_revision = tab.capability_revision.saturating_add(1);
+            // Publish one stable version for this silent refresh before its observer runs.
+            tab.capability_content =
+                super::native_text::NativeTextIdentity::new(tab.editor.read(cx).text());
             tab.session.accept_disk_reload();
             let info = self.plugin_document_info(index, cx)?;
             self.tabs[index]
@@ -298,6 +303,7 @@ impl EditorApp {
         for (index, path) in revoked.into_iter().rev() {
             self.remove_tab(index, path, window, cx);
         }
+        self.sync_prepared_document_sources(window, cx);
     }
 
     /// Strict UTF-16 conversion rejects split surrogate positions before changing native selection.

@@ -59,7 +59,7 @@ impl Manager {
                 project.key == selected.reference.descriptor.key
                     && project.generation == selected.reference.descriptor.generation
             })
-            && prepared.service.as_ref().is_ok_and(|service| {
+            && prepared.service.as_ref().map_or(true, |service| {
                 service.provider.id == selected.reference.descriptor.provider
                     && service.root == selected.root
             })

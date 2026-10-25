@@ -1,4 +1,5 @@
 //! The production actor keeps dispatching old instances while a separate thread prepares a candidate.
+use super::command_epochs::ManagerPublication;
 use super::preparation::BackgroundPreparation;
 use super::*;
 use rust_i18n::t;
@@ -1156,6 +1157,7 @@ impl Worker {
                     .collect::<BTreeMap<_, _>>();
                 let language_services = manager.language_services();
                 let language_document_bindings = manager.language_document_bindings();
+                let language_discovery_revisions = manager.language_discovery_revisions();
                 let structure_providers = manager.structure_providers();
                 let direct_language_providers = manager.direct_language_providers();
                 for service in language_services
@@ -1165,15 +1167,65 @@ impl Worker {
                     *processes.entry(service.owner.clone()).or_default() += service.process_count();
                 }
                 let plugin_service_choices = manager.service_choices();
+                // Prepare filesystem-backed availability and nested service snapshots before the
+                // UI-readable mutex. The shared Manager guard stays held through the atomic apply.
+                let debug_availability = manager.debug_availability();
+                let debug_abilities = manager.debug_service_abilities();
+                let debug_provider_abilities = manager.all_debug_abilities();
+                // Launch identity joins each answer to its request, never another window's session.
+                let host_executions = manager
+                    .executions()
+                    .into_iter()
+                    .map(|session| {
+                        let id = session.id();
+                        let snapshot = session.snapshot();
+                        let (config, request_id) =
+                            run_requests.get(&id).cloned().unwrap_or_default();
+                        HostRunSnapshot {
+                            id,
+                            config,
+                            request_id,
+                            plugin: snapshot.plugin,
+                            state: snapshot.state,
+                            provider_session: snapshot.provider_session,
+                            failure: snapshot.failure.map(|failure| failure.message),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if lifecycle
+                    .as_ref()
+                    .is_some_and(|operation| development_install.as_ref() == Some(&operation.id))
+                {
+                    let id = development_install.take().unwrap();
+                    // Record the outcome before capture writes its development checkpoint; neither
+                    // report storage nor terminal output may extend the UI publication's lock hold.
+                    crate::plugin_development::report::candidate(result.is_ok());
+                    match &result {
+                        Ok(()) => println!("Development plugin activated: {id}"),
+                        Err(error) => eprintln!(
+                            "Development activation failed; previous version retained: {error:#}"
+                        ),
+                    }
+                }
+                let manager_publication = ManagerPublication::capture(&mut manager);
+                let diagnostics = manager
+                    .installed
+                    .keys()
+                    .map(|id| (id.clone(), manager.diagnostics(id)))
+                    .collect();
                 let mut published = output.lock().unwrap();
                 if published.language_document_bindings != language_document_bindings {
                     published.language_document_bindings = language_document_bindings;
                     published.configuration_revision += 1;
                 }
+                if published.language_discovery_revisions != language_discovery_revisions {
+                    published.language_discovery_revisions = language_discovery_revisions;
+                    published.configuration_revision += 1;
+                }
                 // Top-level Debug and the configuration page both follow the current actual registry.
-                published.debug_availability = Some(manager.debug_availability());
-                published.debug_abilities = manager.debug_service_abilities();
-                published.debug_provider_abilities = manager.all_debug_abilities();
+                published.debug_availability = Some(debug_availability);
+                published.debug_abilities = debug_abilities;
+                published.debug_provider_abilities = debug_provider_abilities;
                 if published.plugin_service_choices != plugin_service_choices {
                     published.plugin_service_choices = plugin_service_choices;
                     published.configuration_revision += 1;
@@ -1265,27 +1317,6 @@ impl Worker {
                     published.direct_language_providers = direct_language_providers;
                     published.configuration_revision += 1;
                 }
-                // Host executions are published as views; the launch identity joins each answer to
-                // the request that produced it, so another window's session is never adopted here.
-                let host_executions = manager
-                    .executions()
-                    .into_iter()
-                    .map(|session| {
-                        let id = session.id();
-                        let snapshot = session.snapshot();
-                        let (config, request_id) =
-                            run_requests.get(&id).cloned().unwrap_or_default();
-                        HostRunSnapshot {
-                            id,
-                            config,
-                            request_id,
-                            plugin: snapshot.plugin,
-                            state: snapshot.state,
-                            provider_session: snapshot.provider_session,
-                            failure: snapshot.failure.map(|failure| failure.message),
-                        }
-                    })
-                    .collect::<Vec<_>>();
                 if published.host_executions != host_executions {
                     published.host_executions = host_executions;
                     published.configuration_revision += 1;
@@ -1383,30 +1414,13 @@ impl Worker {
                         t!("plugins.log_operation_complete").to_string(),
                     );
                 }
-                if lifecycle
-                    .as_ref()
-                    .is_some_and(|operation| development_install.as_ref() == Some(&operation.id))
-                {
-                    let id = development_install.take().unwrap();
-                    crate::plugin_development::report::candidate(result.is_ok());
-                    match &result {
-                        Ok(()) => println!("Development plugin activated: {id}"),
-                        Err(error) => eprintln!(
-                            "Development activation failed; previous version retained: {error:#}"
-                        ),
-                    }
-                }
                 if lifecycle.is_some() {
                     published.progress = None;
                 }
                 // Recovery also changes ownership when installation returns Err; the same
                 // real-instance publication is used by application-level Manager fixtures.
-                published.publish_manager(&mut manager);
-                published.diagnostics = manager
-                    .installed
-                    .keys()
-                    .map(|id| (id.clone(), manager.diagnostics(id)))
-                    .collect();
+                published.apply_manager_publication(manager_publication);
+                published.diagnostics = diagnostics;
                 published.views = views;
                 published.images = images;
                 published.trees = trees;

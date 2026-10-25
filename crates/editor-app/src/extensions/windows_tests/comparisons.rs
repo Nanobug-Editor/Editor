@@ -1,5 +1,6 @@
 //! Real package comparisons retain native source edits and hide immutable snapshot tabs.
 use super::*;
+mod source_tabs;
 
 /// Both native actions remain present and expose their independent availability after tab activation.
 fn assert_fold_action(visual: &mut VisualTestContext, any_hidden: bool) {
@@ -108,6 +109,9 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
         )
         .unwrap();
         flush(&mut manager, &app, visual);
+        // A user-opened file remains a visible tab when the plugin borrows its native session.
+        visual
+            .update(|window, cx| app.update(cx, |app, cx| app.open_file(file.clone(), window, cx)));
         manager
             .invoke_command("git", "diff", json!({"path":"diff.txt"}))
             .unwrap();

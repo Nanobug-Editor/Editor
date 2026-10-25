@@ -13,6 +13,9 @@ use plugin_runtime::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Initial right-column width in logical pixels when the workspace has no saved preference.
+pub(crate) const DEFAULT_PROBLEMS_WIDTH: f32 = 360.;
+
 /// One workspace's interaction state shares a dock leaf, without copying diagnostic or text truth.
 pub(crate) struct ProblemsState {
     pub(crate) panel: Entity<ProblemsPanel>,
@@ -69,25 +72,25 @@ impl ProblemsState {
 }
 
 impl EditorApp {
-    /// Add the default bottom leaf only when absent, including migration of older saved layouts.
+    /// Add a missing Problems leaf to the right region without replacing a saved placement.
     pub(crate) fn ensure_problems_dock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let panel = self
             .dock_presentation
             .panel_handle(self.problems.panel.clone());
         let id = gpui_base::dock::PanelId::from(self.problems.panel.entity_id());
-        let height = px(self
+        let width = px(self
             .session_state
             .plugin_dock_sizes
-            .get("bottom")
+            .get("right")
             .copied()
-            .unwrap_or(260.));
+            .unwrap_or(DEFAULT_PROBLEMS_WIDTH));
         self.dock_area.update(cx, |area, cx| {
             if area.panel(id).is_none() {
                 local_dock::add_panel_view(
                     area,
                     panel,
-                    gpui_base::dock::DockPlacement::Bottom,
-                    Some(height),
+                    gpui_base::dock::DockPlacement::Right,
+                    Some(width),
                     window,
                     cx,
                 );

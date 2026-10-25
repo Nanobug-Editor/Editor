@@ -23,6 +23,7 @@ fn project_shutdown_render_does_not_recreate_plugin_work_windows(cx: &mut TestAp
             owner.update(cx, |owner, cx| {
                 let mut state = owner.worker.state.lock().unwrap();
                 state.entries = vec![Installed {
+                    install_sequence: 0,
                     grants: manifest.permissions.clone(),
                     manifest,
                     digest: "shutdown-window".into(),

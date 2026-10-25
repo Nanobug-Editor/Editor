@@ -56,6 +56,7 @@ fn terminal_exclusive_migration_preserves_unequal_widths_after_restart(cx: &mut 
             Root::new(app, window, cx)
         });
         let reopened = slot.borrow_mut().take().unwrap();
+        ordinary_terminal(&reopened, visual);
         visual.simulate_resize(size(px(1280.), px(900.)));
         publish(&reopened, &manifest, visual);
         visual.update(|window, cx| {

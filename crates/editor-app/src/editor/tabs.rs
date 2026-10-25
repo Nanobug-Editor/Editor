@@ -1,4 +1,9 @@
 //! File identities and optional native text sessions shared by document lifecycle operations.
+mod panel;
+mod view;
+
+pub(crate) use panel::OpenFilesPanel;
+
 use editor_core::DocumentSession;
 use gpui_base::input::{EditorState, TextDecorationCollection};
 use gpui_kit::{Entity, Subscription};
@@ -14,18 +19,26 @@ pub(crate) static NEXT_FILE_ID: std::sync::atomic::AtomicU64 = std::sync::atomic
 pub(crate) struct OpenTab {
     /// Only one unedited explorer preview may be replaced; saving and Undo never restore this flag.
     pub(crate) preview: bool,
+    /// A comparison-only local source shares this native session without a file-tab presentation.
+    pub(crate) source_only: Option<PreparedSource>,
     /// Virtual identities carry revocable ownership and never represent a backing disk file.
     pub(crate) virtual_document: Option<VirtualTab>,
     pub(crate) path: PathBuf,
     pub(crate) file_id: u64,
     pub(crate) file_revision: u64,
-    /// Background checks started before this incarnation opened cannot reload it.
+    /// Background checks predating this incarnation or its latest explicit disk read cannot reload it.
     pub(crate) opened_at: Instant,
     /// The watcher retains a hash rather than a second mutable copy of image bytes.
     pub(crate) file_digest: Option<[u8; 32]>,
     pub(crate) text: Option<TextTab>,
     /// File failures retain the tab and its retry target, including unavailable viewer authority.
     pub(crate) file_error: Option<String>,
+}
+
+/// Pending source requests have bounded lifetimes; retained comparison views separately borrow text.
+pub(crate) struct PreparedSource {
+    pub(crate) owners: Vec<plugin_runtime::EditorAuthority>,
+    pub(crate) expires_at: Instant,
 }
 
 /// Explicit navigation keeps a document; explorer browsing reuses the single preview slot.
@@ -36,6 +49,14 @@ pub(super) enum FileOpenMode {
 }
 
 impl OpenTab {
+    /// All tab presentations and navigation use the same source visibility rule.
+    pub(crate) fn is_visible(&self) -> bool {
+        self.source_only.is_none()
+            && self
+                .virtual_document
+                .as_ref()
+                .is_none_or(|source| !source.hidden)
+    }
     /// Native presentation uses the provider's title independently of the opaque resource URI.
     pub(crate) fn title(&self) -> String {
         self.virtual_document

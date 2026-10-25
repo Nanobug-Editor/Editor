@@ -31,6 +31,7 @@ impl EditorApp {
         self.insert_file_tab(
             OpenTab {
                 preview: false,
+                source_only: None,
                 virtual_document: None,
                 path,
                 file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),

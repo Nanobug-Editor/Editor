@@ -13,6 +13,7 @@ fn publish(app: &Entity<EditorApp>, manifest: &protocol::Manifest, visual: &mut 
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 manifest: manifest.clone(),
                 digest: "exclusive-fixture".into(),

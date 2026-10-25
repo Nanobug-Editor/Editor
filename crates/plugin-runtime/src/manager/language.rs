@@ -37,6 +37,27 @@ impl Drop for Prepared {
     }
 }
 impl Manager {
+    /// Read live instances' domain discovery revisions for native consumers, without preparing tools.
+    /// Zero is the initial epoch. This metadata grants no resource authority; hosts use changes to
+    /// replace pending/failed source intents independently from package and settings generations.
+    pub fn language_discovery_revisions(&self) -> BTreeMap<String, u64> {
+        self.live
+            .iter()
+            .filter(|(plugin, _)| {
+                self.installed
+                    .get(*plugin)
+                    .is_some_and(|entry| !entry.manifest.language_servers.is_empty())
+            })
+            .filter_map(|(plugin, instance)| {
+                let owner = instance.instance_id()?;
+                Some((
+                    plugin.clone(),
+                    self.host_resources.contexts.discovery_revision(owner),
+                ))
+            })
+            .collect()
+    }
+
     /// Read previously demanded leases only; catalog publication never compiles or runs a guest.
     /// Explicit preparation failures remain visible under their original provider key.
     pub fn language_services(&mut self) -> BTreeMap<String, Result<Arc<LanguageService>, String>> {
@@ -91,6 +112,14 @@ impl Manager {
             &self.environment.workspace,
             values,
             &self.host_resources.sdk,
+        )
+        .with_discovery_revision(
+            self.live
+                .get(&entry.manifest.id)
+                .and_then(Instance::instance_id)
+                .map_or(0, |owner| {
+                    self.host_resources.contexts.discovery_revision(owner)
+                }),
         )
     }
 

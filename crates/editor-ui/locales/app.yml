@@ -335,6 +335,51 @@ plugins.install_progress.enable:
 terminal.title:
   en: "Terminal"
   zh-CN: "终端"
+terminal.find:
+  en: Find in terminal (Ctrl+Shift+F)
+  zh-CN: 搜索终端（Ctrl+Shift+F）
+terminal.regex:
+  en: Regular expression
+  zh-CN: 正则表达式
+terminal.invalid_regex:
+  en: Invalid expression
+  zh-CN: 表达式无效
+terminal.match_found:
+  en: Match found
+  zh-CN: 已定位匹配
+terminal.no_match:
+  en: No match
+  zh-CN: 无匹配
+terminal.vi:
+  en: Vi navigation (Ctrl+Shift+Space; i to leave)
+  zh-CN: Vi 导航（Ctrl+Shift+空格；i 退出）
+terminal.open_link:
+  en: Open link or file
+  zh-CN: 打开链接或文件
+terminal.split_columns:
+  en: Split terminal into columns
+  zh-CN: 终端左右分屏
+terminal.split_rows:
+  en: Split terminal into rows
+  zh-CN: 终端上下分屏
+terminal.unsplit:
+  en: Show only selected terminal
+  zh-CN: 仅显示选中终端
+terminal.invalid_scroll_multiplier:
+  en: Scroll multiplier must be between 0.1 and 20
+  zh-CN: 滚动倍率必须在 0.1 到 20 之间
+terminal.invalid_environment:
+  en: Terminal environment contains invalid names, values or too many entries
+  zh-CN: 终端环境变量名称、值或数量无效
+terminal.invalid_line_height:
+  en: Terminal line height must be between 1 and 3
+  zh-CN: 终端行高倍率必须在 1 到 3 之间
+terminal.unsafe_path_paste:
+  en: These paths cannot be quoted safely for this shell
+  zh-CN: 无法为此 Shell 安全引用这些路径
+terminal.bell:
+  en: Bell
+  zh-CN: 响铃
 terminal.error.restore:
   en: "Could not restore terminal data: %{details}"
   zh-CN: "恢复终端数据失败：%{details}"
@@ -474,8 +519,8 @@ messages.title:
   en: "Messages"
   zh-CN: "消息"
 messages.unread:
-  en: "Messages: new warning or error"
-  zh-CN: "消息：有新的警告或错误"
+  en: "Messages: new messages"
+  zh-CN: "消息：有新消息"
 messages.hide:
   en: "Hide messages"
   zh-CN: "收起消息窗口"
@@ -1301,6 +1346,21 @@ status.cursor_empty:
 plugins.loading:
   en: "Loading plugins"
   zh-CN: "插件加载中"
+services.loading:
+  en: "Starting services"
+  zh-CN: "外部服务启动中"
+services.status_title:
+  en: "Starting external services"
+  zh-CN: "正在启动的外部服务"
+services.status_close:
+  en: "Close service status"
+  zh-CN: "关闭外部服务状态"
+services.status_owner:
+  en: "Plugin · %{plugin}"
+  zh-CN: "所属插件 · %{plugin}"
+services.status_context_starting:
+  en: "Preparing and starting the project language service."
+  zh-CN: "正在准备并启动项目语言服务。"
 plugins.error:
   en: "Plugin errors"
   zh-CN: "插件错误"
@@ -1487,6 +1547,39 @@ settings.font_size:
 settings.font_size_value:
   en: "%{size} px"
   zh-CN: "%{size} px"
+settings.tab_placement:
+  en: "Open file tabs"
+  zh-CN: "文件标签显示方式"
+settings.tabs_top:
+  en: "Top strip"
+  zh-CN: "上方横栏"
+settings.tabs_bottom:
+  en: "Bottom strip"
+  zh-CN: "下方横栏"
+settings.tabs_left:
+  en: "Left list"
+  zh-CN: "左侧列表"
+settings.tabs_right:
+  en: "Right list"
+  zh-CN: "右侧列表"
+settings.tabs_tool_window:
+  en: "Tool window list"
+  zh-CN: "工具窗口列表"
+settings.tab_placement_hint:
+  en: "Applies to all projects. Tool window mode moves the list into the dockable Open Files window."
+  zh-CN: "适用于所有项目。工具窗口模式将标签列表放入可停靠的“已打开文件”窗口。"
+settings.editor_error:
+  en: "Could not read or save editor settings: %{details}"
+  zh-CN: "无法读取或保存编辑器设置：%{details}"
+open_files.title:
+  en: "Open Files"
+  zh-CN: "已打开文件"
+open_files.hide:
+  en: "Hide Open Files"
+  zh-CN: "隐藏已打开文件"
+open_files.show:
+  en: "Show Open Files"
+  zh-CN: "显示已打开文件"
 settings.layout:
   en: "Layout"
   zh-CN: "布局"
@@ -1508,6 +1601,9 @@ settings.hidden:
 toolbar.more_windows:
   en: "More windows"
   zh-CN: "更多窗口"
+toolbar.reorder_hint:
+  en: "Press and hold to reorder"
+  zh-CN: "长按拖动调整顺序"
 toolbar.more_tools:
   en: "More plugin tools"
   zh-CN: "更多插件工具"

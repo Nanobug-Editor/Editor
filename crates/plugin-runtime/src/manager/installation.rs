@@ -2,6 +2,22 @@
 use super::*;
 
 impl Manager {
+    /// Return `id`'s original position or the next committed position for a newly installed package.
+    /// Legacy zero positions remain unknown; allocation is persisted only by the caller's successful commit.
+    /// Exhaustion rejects installation instead of duplicating a position or changing existing metadata.
+    pub(super) fn installation_sequence(&self, id: &str) -> anyhow::Result<u64> {
+        if let Some(previous) = self.installed.get(id) {
+            return Ok(previous.install_sequence);
+        }
+        self.installed
+            .values()
+            .map(|entry| entry.install_sequence)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("Plugin installation sequence exhausted"))
+    }
+
     /// Check current trust/scope, grants, cancellation and immutable package compatibility.
     /// This is the shared metadata prefix for executable and resource-only installation; it does
     /// not prepare downloads, execute guests, extract files or change an installed record. A

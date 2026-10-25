@@ -1,0 +1,14 @@
+{
+  "recorded_at": "2026-10-23",
+  "component": "Apache Maven",
+  "version": "3.10.0",
+  "archive_url": "https://dlcdn.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.zip",
+  "official_sha512_url": "https://downloads.apache.org/maven/maven-3/3.10.0/binaries/apache-maven-3.10.0-bin.zip.sha512",
+  "sha512": "22d31676d5b92ed53308c19ecded3245d0efd0cddfec51ec7bab62f4f13ad70ddddceff8e62940e0e8e2421f3cde8106737f4becec0aa034ffeff2a754e88337",
+  "sha256": "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff",
+  "verification": "Downloaded archive SHA-512 matched the publisher's checksum before extraction. Subsequent real package import, build and debug verification is recorded in ../verification/maven-plugin-2026-10-23.md.",
+  "model_api": "https://github.com/apache/maven/blob/maven-3.10.0/maven-core/src/main/java/org/apache/maven/project/DefaultProjectDependenciesResolver.java",
+  "compiler_expression_api": "https://github.com/apache/maven/blob/maven-3.10.0/maven-core/src/main/java/org/apache/maven/plugin/PluginParameterExpressionEvaluator.java",
+  "java_uri_mapping": "https://github.com/eclipse-jdtls/eclipse.jdt.ls/blob/v1.62.0/org.eclipse.jdt.ls.core/src/org/eclipse/jdt/ls/core/internal/JDTUtils.java",
+  "license": "Apache-2.0; preserve the distribution LICENSE and NOTICE when packaging."
+}

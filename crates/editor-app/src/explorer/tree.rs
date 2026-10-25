@@ -1,8 +1,30 @@
 //! Builds and locates entries in the workspace explorer tree.
 
+use editor_core::WorkspaceSnapshot;
 use gpui_base::{TreeItem, TreeState};
 use pinyin::ToPinyin;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
+
+/// Classify directories once per workspace snapshot without consulting the filesystem.
+/// The root and empty folders remain directories; file ancestors match `tree_items`' inferred nodes.
+/// Entries outside `root` are ignored, just as they are when building the displayed hierarchy.
+pub(crate) fn directory_index(root: &Path, snapshot: &WorkspaceSnapshot) -> HashSet<PathBuf> {
+    let mut directories = HashSet::from([root.to_path_buf()]);
+    for path in snapshot.directories.iter().map(PathBuf::as_path).chain(
+        snapshot
+            .files
+            .iter()
+            .filter_map(|file| file.absolute_path.parent()),
+    ) {
+        for directory in path.ancestors().take_while(|path| path.starts_with(root)) {
+            directories.insert(directory.to_path_buf());
+        }
+    }
+    directories
+}
 
 /// Recover the owned hierarchy from the tree's visible flattened entries.
 pub(crate) fn root_items(state: &TreeState) -> Vec<TreeItem> {
@@ -135,6 +157,71 @@ fn tree_sort_key(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Classification must work from snapshot data even when none of its paths exist on disk.
+    #[test]
+    fn directory_index_preserves_empty_folders_root_and_inferred_ancestors() {
+        let root = Path::new("snapshot-only-workspace");
+        let snapshot = WorkspaceSnapshot {
+            files: vec![
+                editor_core::WorkspaceFile {
+                    absolute_path: root.join("src/nested/main.rs"),
+                    relative_path: "src/nested/main.rs".into(),
+                },
+                editor_core::WorkspaceFile {
+                    absolute_path: "outside/file.rs".into(),
+                    relative_path: "file.rs".into(),
+                },
+            ],
+            directories: vec![root.join("empty/child"), "outside/empty".into()],
+        };
+        assert_eq!(
+            directory_index(root, &snapshot),
+            HashSet::from([
+                root.to_path_buf(),
+                root.join("empty"),
+                root.join("empty/child"),
+                root.join("src"),
+                root.join("src/nested"),
+            ]),
+        );
+    }
+
+    /// A new scan replaces the whole generation, so renamed or removed directories cannot linger.
+    #[test]
+    fn directory_index_replaces_renamed_removed_and_retyped_entries() {
+        let root = Path::new("snapshot-only-workspace");
+        let previous = WorkspaceSnapshot {
+            files: Vec::new(),
+            directories: vec![
+                root.join("before"),
+                root.join("removed"),
+                root.join("retyped"),
+            ],
+        };
+        let mut directories = directory_index(root, &previous);
+        assert!(directories.contains(&root.join("before")));
+        assert!(directories.contains(&root.join("removed")));
+        assert!(directories.contains(&root.join("retyped")));
+
+        let refreshed = WorkspaceSnapshot {
+            files: vec![editor_core::WorkspaceFile {
+                absolute_path: root.join("retyped"),
+                relative_path: "retyped".into(),
+            }],
+            directories: vec![root.join("after")],
+        };
+        directories = directory_index(root, &refreshed);
+        assert_eq!(
+            directories,
+            HashSet::from([root.to_path_buf(), root.join("after")])
+        );
+        assert_eq!(
+            directory_index(root, &WorkspaceSnapshot::default()),
+            HashSet::from([root.to_path_buf()]),
+            "an empty workspace still renders its root as a directory",
+        );
+    }
 
     #[test]
     fn empty_directory_is_present_in_tree() {

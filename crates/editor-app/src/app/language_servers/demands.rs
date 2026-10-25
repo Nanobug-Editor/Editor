@@ -46,6 +46,8 @@ pub(super) struct ContextRecord {
     pub(super) incarnation: String,
     pub(super) source_revision: u64,
     pub(super) availability: Availability,
+    /// A domain refresh is a new source intent even when the document and settings stay equal.
+    pub(super) discovery_revision: u64,
     pub(super) pending: Option<DemandWait>,
     pub(super) error: Option<String>,
     /// A real published preparation Err may be retried after its collection inputs change.
@@ -170,9 +172,15 @@ impl EditorApp {
         wanted
     }
 
-    /// Report cold preparation independently from an existing adapter's LSP handshake state.
+    /// Report cold preparation only when no adapter survived current-plan reconciliation.
+    /// A new document renews its demand guard without restarting the retained adapter's handshake.
     pub(super) fn publish_language_demand_states(&mut self) {
         for (language, record) in &self.language_server_demands.records {
+            if self.language_servers.contains_key(language) {
+                // The active adapter owns Ready/Failed; it will not emit another startup completion
+                // merely because the open-document set changed while reusing the same runtime plan.
+                continue;
+            }
             if let Some(error) = &record.error {
                 self.language_service_states
                     .insert(language.clone(), ServiceLoadState::Failed(error.clone()));

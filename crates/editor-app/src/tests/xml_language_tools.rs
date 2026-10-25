@@ -250,11 +250,8 @@ fn xml_language_tools_svg_combination_and_workspace_restore(cx: &mut TestAppCont
         restored_visual.debug_bounds("outline-empty").is_some()
             || restored_visual.debug_bounds("outline-tree").is_some()
     );
-    assert!(
-        restored_visual
-            .debug_bounds("explorer-reveal-active-file")
-            .is_some()
-    );
+    // The title remains a stable restore anchor while its actions follow focus.
+    assert!(restored_visual.debug_bounds("explorer-title").is_some());
 }
 
 /// Compare persisted split ratios across viewport reconciliation; all other fields remain exact.

@@ -169,6 +169,23 @@ fn key(handle: &ResourceHandle) -> (String, String, u64) {
 #[derive(Clone, Debug, Default)]
 pub struct PreparationRegistry(Arc<Mutex<BTreeMap<usize, Weak<Mutex<NativeWork>>>>>);
 impl PreparationRegistry {
+    /// Persistent metadata retains participant lifetimes, independently from a completed native wait.
+    /// Only host-registered preparation roots are removed; instance, scope and collection seals stay.
+    pub(crate) fn persistent_lifetimes(
+        &self,
+        lifetimes: &[Arc<AtomicBool>],
+    ) -> Vec<Arc<AtomicBool>> {
+        let entries = self.0.lock().unwrap();
+        lifetimes
+            .iter()
+            .filter(|root| {
+                !entries
+                    .get(&(Arc::as_ptr(root) as usize))
+                    .is_some_and(|work| work.strong_count() > 0)
+            })
+            .cloned()
+            .collect()
+    }
     /// Presentation inherits the invocation's host identity, while resource ownership stays unchanged.
     pub(crate) fn terminal_owner(
         &self,

@@ -2,6 +2,32 @@
 
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
+- [提交面板顶部高度分割条](verification/commit-panel-split-resize-2026-10-24.md)：隐藏槽位导致的可见邻居索引错误、即时尺寸更新与释放后保存。
+
+- [Hover 内容层级与统一外观](verification/editor-hover-appearance-2026-10-24.md)：定义与诊断卡片的圆角、柔和外框、级别提示，以及正文／代码／来源的排版。
+
+- [Hover 与边框拖动的交互边界](verification/editor-hover-gestures-2026-10-24.md)：分隔条拖动误弹、晚到请求取消、弹框手势保留，以及真实 Windows/D3D 验收。
+
+- [消息按钮三色提醒](verification/message-severity-2026-10-24.md)：普通信息蓝点、警告橙点、危险／错误红点，保留最高未查看等级及溢出入口一致性；实际检查见记录。
+
+- [内部布局横向拖动与实时换行测量](verification/internal-resize-performance-2026-10-23.md)：保存单帧 CPU 对照及原生交互历史；本地 Base 补丁已撤回，性能优化仍待公开接口范围内重新处理。
+
+- [分层菜单方向图标](verification/action-menu-icons-2026-10-23.md)：Git 顶部分支菜单等通用分层菜单复用目录树的方向图标，验证范围与结果见记录。
+
+- [编辑器文件标签浮起留位拖动](verification/editor-tab-drag-2026-10-23.md)：浮层、等宽空槽、相邻标签让位、松手提交及取消；实际验证与限制见记录。
+
+- [编辑器标签显示方式](verification/editor-tab-placement-2026-10-23.md)：编辑区四边与“已打开文件”停靠窗口、用户级设置、两轴拖动及文件页图标；实际验证见记录。
+
+- [文件标签文字下缘裁切修复](verification/editor-tab-text-2026-10-24.md)：原生字体行高与标题裁切框不匹配造成的下划线缺失，以及 DirectWrite 回归检查。
+
+- [标签字形与图标的视觉对齐](verification/editor-tab-optical-alignment-2026-10-24.md)：以原生字形像素重心校正标题基线，替代仅核对布局框居中的旧验收。
+
+- [底栏窗口按钮顺序与长按拖动](verification/window-toolbar-order-2026-10-23.md)：默认前三窗口、插件安装顺序、按工作区保存的拖动排列及溢出菜单，实际检查状态见记录。
+
+- [窗口拖动优化历程](verification/window-drag-optimization-summary-2026-10-23.md)：从最初约 60 次/秒到用户反馈明显更顺畅，逐步解释保存合并、图标规则、树行成本和发布锁竞争修复，以及每轮实测与剩余验收。
+
+- [窗口与内部布局拖动刷新检查](verification/window-drag-refresh-2026-10-23.md)：上述优化的详细证据，包含控件夹具、运行产物核对、真实坐标／绘制采样、共享锁时序及普通 Release 复测边界。
+
 - [通用平滑滚动](verification/smooth-scroll-2026-10-21.md)：统一接入编辑器、文件树、列表与标签；后续[惯性与原生高刷](verification/inertial-scroll-2026-10-21.md)复用上游物理求解器，跟随显示器刷新节奏，记录真实帧率与性能边界。
 
 - [比较视图的有界原生布局](verification/comparison-viewport-scroll-2026-10-21.md)：进一步限制可见副本与原始输入层的源布局，保留原生编辑、中文 IME 和屏幕外定位；原生测量、回归及剩余完整布局边界见记录。
@@ -48,10 +74,12 @@
 
 - [资源管理器预览标签](verification/explorer-preview-tabs.md)：单击共用预览，双击或实际编辑后固定；包含焦点、会话恢复、PNG、IME、无变化输入、双轴审查及原生验证记录。
 
+- [资源管理器标题按钮的焦点淡入淡出](verification/explorer-title-actions-fade-2026-10-24.md)：四个按钮随面板焦点以约 140 ms 淡入淡出，固定标题槽位，并核对减少动画与现有按钮交互。
+
 - [项目下拉与空启动](specs/project-menu-startup.md)：当前方案，移除独立启动页，将项目管理合并至编辑器左上角下拉；允许空启动，保留全局设置与插件管理，关闭项目关闭窗口，再次启动激活最后使用的窗口；[实施验收](verification/project-menu-startup-2026-10-14.md)记录 40 项项目交互测试、真实包验证、双轴增量审查和 Windows 原生结果，以及完整 UI 的既有失败。
 - [独立欢迎窗口重新设计（历史）](verification/welcome-window-redesign-2026-10-14.md)：保留当时原生截图和验收证据；产品行为已由项目下拉与空启动方案替代。
 
-- [底部问题面板](verification/problems-dock-panel.md)：原生停靠面板按文件分组，支持折叠及文件类型图标，状态栏隐藏零计数；包含定位、滚动、拖动、布局恢复及快速修复的验证记录。
+- [问题面板默认右侧与首次布局](verification/problems-right-default-2026-10-24.md)：无保存布局时右侧宽度约 360px，左侧全高，底部横跨其余区域；[底部默认方案的历史验收](verification/problems-dock-panel.md)记录文件分组、定位、拖动、布局恢复及快速修复。
 
 - [标题栏应用菜单调整](verification/application-menu.md)：左上角菜单入口及项目操作、快捷键、退出三组菜单的实现与验证记录。
 - [项目标题与项目切换菜单](verification/project-switcher.md)：项目名下拉、独立窗口切换、最近项目及菜单入口更名；相关测试、双轴增量审查与 Windows 原生验收通过，完整 UI 保留 7 个既有基线失败。

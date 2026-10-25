@@ -14,6 +14,7 @@ mod commit_panel;
 mod exclusive;
 mod exit_tests;
 mod fixture;
+mod history_files;
 mod idle_retention;
 mod input;
 mod lifecycle;
@@ -97,6 +98,10 @@ pub(super) fn probe_key_result(
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_workbench_smoke() {
     assert!(
+        std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_none(),
+        "full acceptance refuses comparison-only workflow"
+    );
+    assert!(
         !workspace_presentation::requested(),
         "full acceptance refuses presentation-only workflow"
     );
@@ -131,10 +136,35 @@ fn git_native_history_keyboard_probe() {
     matrix::run(Case::SMOKE).unwrap();
 }
 
+/// Compact history navigation uses real Windows frames in both palettes and one fractional scale.
+#[test]
+#[ignore = "requires Windows desktop, candidate/output, HISTORY_ONLY and HISTORY_FILES"]
+fn git_native_history_files_probe() {
+    assert!(history_files::requested());
+    assert!(std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some());
+    for case in [Case::SMOKE, Case::ALL[7]] {
+        matrix::run(case).unwrap();
+    }
+}
+
+/// A focused real desktop workflow verifies preview-only file selection, native input and scrolling.
+#[test]
+#[ignore = "requires Windows desktop, candidate/output and NANOBUG_GIT_NATIVE_COMPARISON_ONLY"]
+fn git_native_comparison_probe() {
+    assert!(std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_some());
+    for case in [Case::SMOKE, Case::ALL[7]] {
+        matrix::run(case).unwrap();
+    }
+}
+
 /// Range input uses the current inline preview, without the retired detail-window workflow.
 #[test]
 #[ignore = "requires Windows desktop, candidate/output and NANOBUG_GIT_NATIVE_SCROLL_ONLY"]
 fn git_native_history_scroll_probe() {
+    let _cursor = std::env::var_os("NANOBUG_GIT_NATIVE_COLUMN_DRAG")
+        .map(|_| super::native_close_tests::caption_mouse::CursorRestore::capture())
+        .transpose()
+        .unwrap();
     assert!(std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some());
     assert!(std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_some());
     // Cover both palettes and a fractional native scale for the same range input path.
@@ -156,6 +186,10 @@ fn git_native_history_keyboard_phase_probe() {
 #[test]
 #[ignore = "requires Windows desktop/D3D11, NANOBUG_GIT_CANDIDATE and NANOBUG_GIT_NATIVE_OUTPUT"]
 fn git_native_visual_matrix() {
+    assert!(
+        std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_none(),
+        "full acceptance refuses comparison-only workflow"
+    );
     assert!(
         !workspace_presentation::requested(),
         "full acceptance refuses presentation-only workflow"

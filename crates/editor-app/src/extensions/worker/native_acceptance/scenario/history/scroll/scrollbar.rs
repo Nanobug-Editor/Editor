@@ -3,7 +3,7 @@ use super::*;
 use gpui_kit::MouseMoveEvent;
 
 /// Observe the current native canvas bounds, independent of guest business state and tree guesses.
-fn viewport(h: &Harness, window: &Window, cx: &App) -> anyhow::Result<Bounds<Pixels>> {
+pub(super) fn viewport(h: &Harness, window: &Window, cx: &App) -> anyhow::Result<Bounds<Pixels>> {
     let snapshot = h.app.read(cx).plugin_panels["git/history"]
         .read(cx)
         .native_ui

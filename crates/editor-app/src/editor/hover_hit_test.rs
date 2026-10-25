@@ -11,6 +11,13 @@ use std::{cell::Cell, cell::RefCell, rc::Rc};
 #[path = "hover_keyboard_tests.rs"]
 mod keyboard;
 
+#[path = "hover_gesture_tests.rs"]
+mod gestures;
+
+#[cfg(windows)]
+#[path = "hover_native_tests.rs"]
+mod native;
+
 struct ReadyHover(Rc<Cell<usize>>);
 
 impl gpui_base::input::HoverProvider for ReadyHover {

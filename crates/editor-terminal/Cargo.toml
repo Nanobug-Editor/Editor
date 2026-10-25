@@ -1,0 +1,27 @@
+[package]
+name = "editor-terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# Local host code is MIT; adopted VT/grid algorithms retain their Apache-2.0 license.
+license = "MIT AND Apache-2.0"
+
+[dependencies]
+anyhow.workspace = true
+base64 = "0.22"
+bitflags = { version = "2.4.1", features = ["serde"] }
+editor-ui = { path = "../editor-ui" }
+gpui-kit.workspace = true
+gpui-base = "=0.8.0"
+log = "0.4"
+regex = "1"
+regex-automata = "0.4.3"
+rust-i18n.workspace = true
+serde = { workspace = true, features = ["rc"] }
+serde_json.workspace = true
+unicode-width = "0.2"
+# Byte decoding remains a focused dependency; screen, history and selection are implemented here.
+vte = { version = "=0.15.0", default-features = false, features = ["std", "ansi", "serde"] }
+
+[dev-dependencies]
+tempfile.workspace = true

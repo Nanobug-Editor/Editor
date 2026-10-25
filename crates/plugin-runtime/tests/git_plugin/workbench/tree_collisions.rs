@@ -304,7 +304,15 @@ fn git_package_history_tree_distinguishes_a_deleted_file_from_its_replacement_di
     );
     let resource = resource(&manager, "history", "files");
     let tree_snapshot = page(&mut manager, "history", "files", &resource, None);
-    let (directory, file) = collision_nodes(&tree_snapshot, None);
+    let total = tree_snapshot.branches[&None].children[0].clone();
+    let tree_snapshot = page(
+        &mut manager,
+        "history",
+        "files",
+        &resource,
+        Some(total.clone()),
+    );
+    let (directory, file) = collision_nodes(&tree_snapshot, Some(total));
     assert_directory_only(&mut manager, "history", "files", &resource, &directory);
     select(&mut manager, "history", "files", &resource, &file);
     // Observe the actual immutable base request before rejecting native rendering explicitly.

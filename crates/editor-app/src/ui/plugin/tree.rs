@@ -428,6 +428,11 @@ impl Render for TreeView {
         let snapshot = self.snapshot.clone();
         let popup_node = self.popup_node.clone();
         let rows_owner = owner.clone();
+        let appearance = if self.resource.proportional_labels() {
+            TreeRowAppearance::Compact
+        } else {
+            TreeRowAppearance::Explorer
+        };
         let gesture = self.action_gesture;
         let workspace = std::path::Path::new(&self.environment.workspace).to_path_buf();
         let providers = crate::language::providers::Providers::for_workspace(&workspace);
@@ -590,7 +595,7 @@ impl Render for TreeView {
                                 context_menu: popup_node.as_ref() == Some(&id),
                             },
                             id.starts_with("@retry/"),
-                            TreeRowAppearance::Explorer,
+                            appearance,
                             editor_ui::TreeRowExtras {
                                 leading,
                                 suffix: data.map(|node| node.suffix.clone()).unwrap_or_default(),
@@ -602,6 +607,9 @@ impl Render for TreeView {
                         )
                         .when_some(data.and_then(|node| node.tone), |row, tone| {
                             row.text_color(presentation::text_color(tone, cx))
+                        })
+                        .when(data.is_some_and(|node| node.muted), |row| {
+                            row.text_color(cx.theme().muted_foreground)
                         })
                         .debug_selector(move || format!("plugin-tree-row-{id}").into())
                         .on_mouse_down(MouseButton::Left, move |event, window, cx| {

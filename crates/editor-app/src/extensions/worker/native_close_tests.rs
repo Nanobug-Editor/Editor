@@ -140,6 +140,7 @@ fn failed_window_caption_child() {
             })).unwrap();
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 grants: manifest.permissions.clone(), manifest, digest:"caption-error".into(), enabled:true,
                 project_enabled:Default::default(), replaced_by:None, global_enabled:None,
                 retired_ui_contract:false, error:Some("timeout".into()),

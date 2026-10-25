@@ -241,6 +241,7 @@ fn editor_left_drop_keeps_bottom_across_both_columns(cx: &mut TestAppContext) {
     // This ordinary bottom leaf uses the same regional geometry as a plugin's Git window.
     session.problems_visible = true;
     let (app, visual) = open(cx, workspace, session);
+    ordinary_bottom(&app, visual);
     let [explorer, _, editor] = panels(&app, visual);
     let bottom = visual.update(|_, cx| PanelId::from(app.read(cx).problems.panel.entity_id()));
     let target = native_panel_bounds(&app, editor, visual);
@@ -319,6 +320,76 @@ fn editor_left_drop_keeps_bottom_across_both_columns(cx: &mut TestAppContext) {
     );
 }
 
+/// These generic gesture fixtures require an ordinary Bottom peer regardless of the product's
+/// current default Problems placement. Use Base's public move seam and retain the native Terminal.
+fn ordinary_bottom(app: &Entity<EditorApp>, visual: &mut VisualTestContext) {
+    visual.update(|window, cx| {
+        app.update(cx, |app, cx| {
+            app.ensure_terminal_dock(window, cx);
+            let id = PanelId::from(app.problems.panel.entity_id());
+            let terminal = PanelId::from(app.terminal.entity_id());
+            let terminal_view = app.dock_presentation.panel_handle(app.terminal.clone());
+            let editor_view = app.dock_presentation.panel_handle(app.editor_panel.clone());
+            let messages_view = app.dock_presentation.panel_handle(app.messages.clone());
+            app.dock_area.update(cx, |area, cx| {
+                // A new hidden Terminal has no native region yet. Register its retained view
+                // before moving the ordinary fixture into that destination.
+                if area.layout(DockPlacement::Bottom).is_none() {
+                    area.set_dock(
+                        DockPlacement::Bottom,
+                        gpui_base::dock::DockLayout::tabs().panel_view(terminal_view, cx),
+                        window,
+                        cx,
+                    );
+                    area.set_dock_size(DockPlacement::Bottom, px(260.), window, cx);
+                }
+                if area
+                    .layout(DockPlacement::Bottom)
+                    .unwrap()
+                    .find_panel_node(id)
+                    .is_none()
+                {
+                    let node = area
+                        .layout(DockPlacement::Bottom)
+                        .unwrap()
+                        .find_panel_node(terminal)
+                        .unwrap();
+                    area.move_panel(
+                        id,
+                        gpui_base::dock::InsertTarget::Split {
+                            node,
+                            placement: gpui_base::Placement::Right,
+                            size: None,
+                        },
+                        window,
+                        cx,
+                    );
+                }
+                local_dock::reveal_panel(area, id, window, cx);
+                // The same fixtures expect Messages in native Right and Editor alone in Center.
+                // Install the destination first so the original hidden entity stays registered.
+                area.set_dock(
+                    DockPlacement::Right,
+                    gpui_base::dock::DockLayout::tabs().panel_view(messages_view, cx),
+                    window,
+                    cx,
+                );
+                area.set_dock_size(DockPlacement::Right, px(320.), window, cx);
+                area.set_center(
+                    gpui_base::dock::DockLayout::tabs().panel_view(editor_view, cx),
+                    window,
+                    cx,
+                );
+                if area.is_empty(DockPlacement::Right, cx)
+                    && area.is_dock_open(DockPlacement::Right)
+                {
+                    area.toggle_dock(DockPlacement::Right, window, cx);
+                }
+            });
+        });
+    });
+}
+
 /// Read the actual upper row and bottom allocation for the requested Explorer, Editor and bottom IDs.
 fn row_geometry(
     app: &Entity<EditorApp>,
@@ -331,6 +402,7 @@ fn row_geometry(
         "the moved panel must end at Editor's row: Explorer={moved:?}, Editor={editor:?}, bottom={bottom:?}"
     );
     assert!((bottom.left() - moved.left()).abs() < px(2.));
+    // This fixture keeps Editor rightmost in Center, so both edges must match without overflow.
     assert!((bottom.right() - editor.right()).abs() < px(2.));
     assert!(moved.bottom() <= bottom.top());
     [moved, editor, bottom]

@@ -63,6 +63,10 @@ impl CompletionPopupState {
 /// Retain the visible card through focus transfer into its selectable content.
 pub(crate) struct DefinitionPopupFocus {
     handle: FocusHandle,
+    /// Last painted card in physical window coordinates, including its resize edges.
+    pub(super) bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    /// A press inside the card owns selection/resizing even after leaving its rectangle.
+    pub(super) pointer_gesture: Cell<bool>,
     hover: Rc<std::cell::RefCell<Option<gpui_base::input::HoverPopoverState>>>,
     /// Diagnostic text uses the same focus boundary as type documentation.
     diagnostic: Rc<std::cell::RefCell<Option<gpui_base::input::DiagnosticEntry>>>,
@@ -121,6 +125,8 @@ impl DefinitionPopupFocus {
         });
         Self {
             handle,
+            bounds: Rc::new(Cell::new(None)),
+            pointer_gesture: Cell::new(false),
             hover,
             diagnostic,
             generation,
@@ -130,6 +136,8 @@ impl DefinitionPopupFocus {
 
     /// Release both presentations and cancel restoration from an earlier focus event.
     pub(crate) fn clear(&self) {
+        self.bounds.set(None);
+        self.pointer_gesture.set(false);
         self.generation.set(self.generation.get().wrapping_add(1));
         self.hover.borrow_mut().take();
         self.diagnostic.borrow_mut().take();
@@ -162,6 +170,8 @@ pub(super) fn render(
     window: &mut Window,
     cx: &mut Context<EditorApp>,
 ) -> Option<AnyElement> {
+    // Only a card painted in this frame may keep an outside editor gesture alive.
+    hover_focus.bounds.set(None);
     let (completion, hover, diagnostic) = {
         let state = editor.read(cx);
         // Search and code actions retain their native controls and action routing.
@@ -214,6 +224,10 @@ pub(super) fn render(
                     hover_focus.track_diagnostic(diagnostic),
                     move |cx| {
                         let _ = host.update(cx, |app, cx| app.dismiss_pointer_hover(cx));
+                    },
+                    {
+                        let bounds = hover_focus.bounds.clone();
+                        move |painted| bounds.set(Some(painted))
                     },
                     cx,
                 )
@@ -575,15 +589,16 @@ fn render_hover(
         bounds
     };
     let markdown = hover_markdown(&hover.hover.contents);
+    let painted_bounds = hover_focus.bounds.clone();
     let host_for_key = cx.entity().downgrade();
     Some(
         editor_ui::definition_popup(
             bounds,
-            card(cx, "editor-definition-card")
+            editor_ui::definition_popup::details_card("editor-definition-card", cx)
                 // The card and Markdown share one focus boundary; entering it
                 // restores the presentation cleared by the editor's blur.
                 .track_focus(hover_focus.track(hover))
-                .p_4()
+                .p_3()
                 // The popup frame owns natural limits and user-selected size.
                 // Let this card shrink, grow, and wrap within that frame.
                 .flex_grow_1()
@@ -591,7 +606,6 @@ fn render_hover(
                 .min_w_0()
                 .min_h_0()
                 .overflow_y_scrollbar()
-                .font_family(cx.theme().mono_font_family.clone())
                 .text_size(typography::editor_font_size(cx))
                 // Opaque hit testing protects the editor while the window's
                 // selection layer receives mouse down, move, and drag events.
@@ -613,9 +627,14 @@ fn render_hover(
                 .child(
                     div()
                         .debug_selector(|| "editor-definition-text".into())
-                        .child(markdown_view("editor-definition-details", markdown, cx)),
+                        .child(editor_ui::text::hover_markdown_view(
+                            "editor-definition-details",
+                            markdown,
+                            cx,
+                        )),
                 )
                 .into_any_element(),
+            move |bounds| painted_bounds.set(Some(bounds)),
         )
         .into_any_element(),
     )
@@ -671,7 +690,10 @@ fn card(cx: &App, id: &'static str) -> gpui_kit::Stateful<gpui_kit::Div> {
 /// Normalize LSP hover formats before the project renderer parses Markdown.
 fn hover_markdown(contents: &HoverContents) -> String {
     match contents {
-        HoverContents::Markup(markup) => markup.value.clone(),
+        HoverContents::Markup(markup) => match markup.kind {
+            lsp_types::MarkupKind::PlainText => editor_ui::text::plain_markdown(&markup.value),
+            lsp_types::MarkupKind::Markdown => markup.value.clone(),
+        },
         HoverContents::Scalar(MarkedString::String(text)) => text.clone(),
         HoverContents::Scalar(MarkedString::LanguageString(item)) => {
             format!("```{}\n{}\n```", item.language, item.value)

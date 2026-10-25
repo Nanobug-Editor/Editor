@@ -316,14 +316,20 @@ fn cold_commands_are_discoverable_without_starting_the_guest() {
 fn cold_command_first_birth_preserves_its_original_command_epoch() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("plugins");
+    // Both fixture installation and the production actor must select the same open project;
+    // an empty workspace only manages application metadata and cannot consume this command.
+    let environment = Environment {
+        workspace: directory.path().display().to_string(),
+        ..Default::default()
+    };
     // Preserve the current consumer's actual command callback and original cold epoch.
     let package = crate::test_packages::package("capability-example-0.19.1");
-    let mut manager = Manager::open(root.clone(), Environment::default()).unwrap();
+    let mut manager = Manager::open(root.clone(), environment.clone()).unwrap();
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
     drop(manager);
-    let worker = Worker::start_background(root, Environment::default(), true);
+    let worker = Worker::start_background(root, environment, true);
     wait_for(&worker, |state| state.ready);
     let original = worker
         .state

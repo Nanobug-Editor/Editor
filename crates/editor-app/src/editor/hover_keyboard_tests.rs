@@ -5,7 +5,7 @@ use gpui_kit::VisualTestContext;
 
 /// Hold the actual provider task until the test releases a reply after native key dispatch.
 /// Unlike a timer, this proves Escape happened while the response was still unavailable.
-struct HeldHover(Rc<RefCell<Vec<futures::channel::oneshot::Sender<Hover>>>>);
+pub(super) struct HeldHover(pub(super) Rc<RefCell<Vec<futures::channel::oneshot::Sender<Hover>>>>);
 
 impl gpui_base::input::HoverProvider for HeldHover {
     fn hover(

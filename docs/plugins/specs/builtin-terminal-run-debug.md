@@ -4,6 +4,8 @@
 
 稳定标识：`builtin-terminal-run-debug`
 
+2026-10-24 至 25 日后续要求：终端实现独立为 `editor-terminal`，通用原生文字网格放入 `editor-ui`，终端不再使用插件 `CanvasView`、画布事件或序列化绘图模型。Alacritty 中实际使用的屏幕算法直接融入库内实现，不保留整包源码、独立 `alacritty_terminal` 依赖或 `vendor` 分支。此要求替代本文关于“直接使用上游发布依赖”的旧方案，其余任务、信任、迁移与兼容原则保留。参考与差异见[固定 Zed 调研](terminal-zed-reference-2026-10-24.md)，本轮实际验证另记，不继承历史验收结论。
+
 状态：2026-10-09 四张工单已按用户授权逐步实施与验收；终端内置、统一运行/调试面板及旧用户迁移的实际结果见 [最终验收](../verification/builtin-terminal-04-2026-10-09.md)。Windows 原生操作及系统输入法已验证，其他平台与历史测试夹具限制另有记录；未发布软件版本，父规格议题保持不变。
 
 目标跟踪器：T-miracle/Nanobug GitHub Issues。发布完整规格及[四张实施工单与测试安排](../tickets/builtin-terminal-run-debug/README.md)，应用 `ready-for-agent`；按直接依赖顺序实施、验收与交付。

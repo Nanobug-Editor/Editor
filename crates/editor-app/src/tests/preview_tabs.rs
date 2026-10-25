@@ -1,5 +1,9 @@
 //! Explorer preview behavior through real pointer, native input and session restoration boundaries.
 
+#[cfg(target_os = "windows")]
+mod optical_alignment;
+mod text_clipping;
+
 use crate::*;
 use gpui_kit::{ClipboardItem, EntityInputHandler as _, TestAppContext, VisualTestContext, gpui};
 use std::cell::RefCell;

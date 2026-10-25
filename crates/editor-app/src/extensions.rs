@@ -401,6 +401,18 @@ impl ExtensionPanel {
         }
         self.worker.state.lock().unwrap().language_services.clone()
     }
+    /// Read the provider instance's published domain epoch without activating tools or granting IO.
+    pub(crate) fn language_discovery_revision(&self, provider: &str) -> u64 {
+        self.worker
+            .state
+            .lock()
+            .unwrap()
+            .language_discovery_revisions
+            .get(provider.split('/').next().unwrap_or(provider))
+            .copied()
+            .unwrap_or(0)
+    }
+
     /// Request one native document context without activating unrelated language providers.
     pub(crate) fn demand_language_document(
         &self,
@@ -441,9 +453,9 @@ impl ExtensionPanel {
             .and_then(|entry| entry.manifest.api.as_ref())
             .and_then(|api| api.required.get("language.lsp"))
             .is_some_and(|requirement| {
-                (requirement.matches(&semver::Version::new(1, 5, 0))
-                    || requirement.matches(&semver::Version::new(1, 6, 0)))
-                    && !requirement.matches(&semver::Version::new(1, 4, 0))
+                requirement.matches(&protocol::language::CAPABILITY_VERSION)
+                    && !(0..5)
+                        .any(|minor| requirement.matches(&semver::Version::new(1, minor, u64::MAX)))
             })
     }
 
@@ -1929,6 +1941,7 @@ impl EditorApp {
 
     /// Register and remove native panels directly from installed manifest contributions.
     pub(crate) fn sync_plugin_panels(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_open_files_visibility(cx);
         self.outline_panel.update(cx, |panel, _| {
             panel.set_visible(self.session_state.outline_visible)
         });
@@ -2121,6 +2134,8 @@ impl EditorApp {
                 && self.dock_area.read(cx).is_empty(placement, cx)
             {
                 let message_id = gpui_base::dock::PanelId::from(self.messages.entity_id());
+                let open_files_id =
+                    gpui_base::dock::PanelId::from(self.open_files_panel.entity_id());
                 let sidebar_ids = [
                     gpui_base::dock::PanelId::from(self.explorer_panel.entity_id()),
                     gpui_base::dock::PanelId::from(self.outline_panel.entity_id()),
@@ -2129,12 +2144,13 @@ impl EditorApp {
                     if area.layout(placement).is_some_and(|tree| {
                         tree.panels().any(|panel| {
                             panel == message_id
+                                || panel == open_files_id
                                 || (placement != gpui_base::dock::DockPlacement::Bottom
                                     && sidebar_ids.contains(&panel))
                         })
                     }) {
-                        // Hidden side hosts retain their saved split and peers. In particular,
-                        // moving Explorer must not erase a hidden Outline's position.
+                        // Hidden host leaves retain their saved split and peers. Moving Explorer
+                        // must not erase Outline, and switching tab placement must not erase Open Files.
                         // Closing the region releases its width without removing the panel identity.
                         area.set_dock_collapsible(placement, true, window, cx);
                         if area.is_dock_open(placement) {

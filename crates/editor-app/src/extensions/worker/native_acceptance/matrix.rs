@@ -88,6 +88,7 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
         caption_controls::requested(),
         std::env::var_os("NANOBUG_GIT_NATIVE_IDLE_RETENTION").is_some(),
         std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some(),
+        std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_some(),
     ];
     ensure!(
         narrow.into_iter().filter(|active| *active).count() <= 1,
@@ -99,6 +100,13 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
         "history phases require the history-only workflow"
     );
     let candidate = std::env::var_os("NANOBUG_GIT_CANDIDATE").context("candidate required")?;
+    ensure!(
+        !history_files::requested()
+            || (std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some()
+                && std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_none()
+                && std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_PHASES").is_none()),
+        "history files require their own history-only receipt"
+    );
     let output = PathBuf::from(
         std::env::var_os("NANOBUG_GIT_NATIVE_OUTPUT").context("native output required")?,
     )
@@ -210,6 +218,20 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
             "presentation-overflow.png",
             "presentation-withdrawn.png",
         ]
+    } else if exclusive::replacement::requested() {
+        ensure!(
+            evidence["workflow"] == "exclusive-full-replacement-only"
+                && evidence["observations"]["exclusive_full_replacement_complete"] == true,
+            "full replacement workflow incomplete or wrong receipt scope"
+        );
+        &[
+            "replacement-defaults.png",
+            "replacement-ordinary-preview.png",
+            "replacement-ordinary-dropped.png",
+            "replacement-terminal-preview.png",
+            "replacement-terminal-dropped.png",
+            "replacement-restored.png",
+        ]
     } else if exclusive::requested() {
         ensure!(
             evidence["workflow"] == "exclusive-dock-only",
@@ -258,6 +280,40 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
             "idle-state-after.png",
             "idle-menu-before.png",
             "idle-menu-after.png",
+        ]
+    } else if std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_some() {
+        ensure!(
+            evidence["workflow"] == "comparison-only",
+            "comparison receipt has wrong scope"
+        );
+        ensure!(
+            evidence["observations"]["comparison_preview_without_file_tab"].is_object(),
+            "preview-only tab observation missing"
+        );
+        ensure!(
+            evidence["observations"]["saved_and_refreshed_before_staging"] == true,
+            "native comparison review did not finish"
+        );
+        &["workbench.png", "workbench-ime.png"]
+    } else if history_files::requested() {
+        let receipt = &evidence["observations"]["history_files"];
+        ensure!(
+            evidence["workflow"] == "history-files-only",
+            "history file receipt has wrong scope"
+        );
+        ensure!(
+            receipt["total"] == case.label("33 个文件", "33 files")
+                && receipt["count_includes_unloaded_files"] == true
+                && receipt["keyboard_disclosure"] == true
+                && receipt["collapsed_root_retained"] == true
+                && receipt["selection_retained"] == true
+                && receipt["scroll_retained"] == true,
+            "counted history tree workflow incomplete"
+        );
+        &[
+            "history-files-expanded.png",
+            "history-files-exact-source.png",
+            "history-files-refreshed.png",
         ]
     } else if std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_some() {
         &["history-scroll.png"]

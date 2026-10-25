@@ -16,6 +16,7 @@ fn legacy(runtime: &Path, workspace: &Path) -> std::path::PathBuf {
     let manifest:protocol::Manifest=serde_json::from_value(json!({"id":"terminal","name":"Terminal","version":"0.12.2","protocol":7,
         "api":{"base":"^1"},"storage_limit":8388608,"component":"terminal.wasm","permissions":[],"panels":[{"id":"terminal","title":"Terminal","position":"bottom"}]})).unwrap();
     let entry = Installed {
+        install_sequence: 0,
         replaced_by: None,
         manifest: manifest.clone(),
         digest: "old-release".into(),

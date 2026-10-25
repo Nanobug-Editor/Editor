@@ -97,32 +97,26 @@ impl TerminalPanel {
 
     /// Native child entities retain focus, IME, drag and rename state across output redraws.
     fn reconcile(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.canvas.is_none() {
-            let owner = cx.entity().downgrade();
-            self.canvas = Some(cx.new(|cx| {
-                ui::plugin::CanvasView::new(
-                    protocol::ui::Canvas {
-                        focusable: true,
-                        grid: true,
-                        ..Default::default()
-                    },
-                    move |event, _, cx| {
-                        let _ = owner.update(cx, |panel, cx| panel.canvas_event(event, cx));
-                    },
-                    window,
-                    cx,
-                )
-            }));
-        }
-        let canvas = self.canvas.as_ref().unwrap().clone();
+        self.reconcile_panes(window, cx);
         if std::mem::take(&mut self.focus_pending) {
-            canvas.read(cx).focus_handle().focus(window, cx);
+            let active = self.active;
+            // The cached dock body renders after its toolbar. Defer focus so a Vi/new-tab click
+            // cannot register the toolbar and grid as focused in the same accessibility frame.
+            cx.defer_in(window, move |panel, window, cx| {
+                if panel.visible && panel.active == active {
+                    if let Some(grid) = &panel.grid {
+                        grid.read(cx).focus_handle().focus(window, cx);
+                    }
+                }
+            });
         }
         if std::mem::take(&mut self.measure_pending) {
-            canvas.update(cx, |canvas, cx| {
-                canvas.invalidate_measurement();
-                cx.notify();
-            });
+            for canvas in self.grids.values() {
+                canvas.update(cx, |canvas, cx| {
+                    canvas.invalidate_measurement();
+                    cx.notify();
+                });
+            }
         }
         let model = self.tabs();
         let colors = self.colors(cx);
@@ -171,7 +165,7 @@ impl TerminalPanel {
         } else {
             let owner = cx.entity().downgrade();
             let redraw = owner.clone();
-            let focus = canvas.read(cx).focus_handle();
+            let focus = self.focus.clone();
             let preview = self.preview_width.clone();
             self.sidebar = Some(cx.new(|cx| {
                 SideTabBar::new(
@@ -193,33 +187,12 @@ impl TerminalPanel {
         let content_style = styles.get("terminal.content");
         let family = content_style
             .and_then(|style| style.family.as_deref())
-            .unwrap_or(&self.settings.font_family);
+            .unwrap_or(&self.settings.font_family)
+            .to_owned();
         let font_size = content_style
             .and_then(|style| style.size_px)
             .unwrap_or(self.settings.font_size);
-        let drawing = self
-            .active_index()
-            .map(|index| {
-                self.sessions[index].engine.drawing(
-                    self.width,
-                    self.height,
-                    self.cell_width,
-                    self.cell_height,
-                    family,
-                    font_size,
-                    &colors,
-                )
-            })
-            .unwrap_or_default();
-        let font = drawing.font.clone();
-        canvas.update(cx, |canvas, cx| {
-            if canvas.drawing != drawing || canvas.font != font {
-                canvas.drawing = drawing;
-                canvas.font = font;
-                canvas.foreground = colors.foreground;
-                cx.notify();
-            }
-        });
+        self.draw_panes(&family, font_size, &colors, cx);
         if let Some(output_menu) = self.requested_menu.take() {
             let owner = cx.entity().downgrade();
             let items = self.menu_items(output_menu);
@@ -250,12 +223,13 @@ impl TerminalPanel {
             .h_full()
             .flex_1()
             .min_h_0()
+            .children(self.search_bar(window, cx))
             .child(
                 div()
                     .debug_selector(|| "native-terminal-output".into())
                     .flex_1()
                     .min_h_0()
-                    .child(self.canvas.as_ref().unwrap().clone()),
+                    .child(self.pane_content(cx)),
             )
             .when_some(inspection, |body, view| {
                 body.child(
@@ -272,12 +246,18 @@ impl TerminalPanel {
             .flex_shrink_0()
             .h_full()
             .child(self.sidebar.as_ref().unwrap().clone());
-        let body = if self.settings.tab_position == protocol::ui::SideTabsPosition::Left {
+        let body = if self.settings.tab_position == editor_terminal::TabPosition::Left {
             h_flex().size_full().child(sidebar).child(canvas)
         } else {
             h_flex().size_full().child(canvas).child(sidebar)
         };
         v_flex()
+            .capture_key_down(
+                cx.listener(|panel, event, window, cx| panel.navigation_key(event, window, cx)),
+            )
+            .capture_any_mouse_down(
+                cx.listener(|panel, event, window, cx| panel.navigation_pointer(event, window, cx)),
+            )
             .relative()
             .size_full()
             .min_h_0()
@@ -354,6 +334,38 @@ impl DockPanel for TerminalPanel {
                     .gap_1()
                     .when_some(self.task_toolbar(cx), |row, controls| row.child(controls))
                     .child(
+                        Button::new("native-terminal-find")
+                            .debug_selector(|| "native-terminal-find".into())
+                            .icon(Icon::new(IconName::Search).small())
+                            .small()
+                            .compact()
+                            .ghost()
+                            .tooltip(t!("terminal.find").to_string())
+                            .on_click(cx.listener(|panel, _, _, cx| panel.open_search(cx))),
+                    )
+                    .child(
+                        Button::new("native-terminal-vi")
+                            .debug_selector(|| "native-terminal-vi".into())
+                            .label("Vi")
+                            .small()
+                            .compact()
+                            .ghost()
+                            .selected(self.active_index().is_some_and(|index| {
+                                self.sessions[index]
+                                    .engine
+                                    .mode()
+                                    .contains(engine::TerminalMode::VI)
+                            }))
+                            .tooltip(t!("terminal.vi").to_string())
+                            .on_click(cx.listener(|panel, _, _, cx| {
+                                if let Some(index) = panel.active_index() {
+                                    panel.sessions[index].engine.toggle_vi();
+                                }
+                                panel.focus_pending = true;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
                         Button::new("native-terminal-new")
                             .debug_selector(|| "native-terminal-new".into())
                             .icon(Icon::new(IconName::Plus).small())
@@ -368,6 +380,7 @@ impl DockPanel for TerminalPanel {
                     )
                     .child(
                         Button::new("native-terminal-menu")
+                            .debug_selector(|| "native-terminal-menu".into())
                             .icon(Icon::new(IconName::ChevronDown).small())
                             .small()
                             .compact()

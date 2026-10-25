@@ -62,7 +62,7 @@ use rust_i18n::t;
 use sha2::{Digest, Sha256};
 use std::{
     cell::Cell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     rc::Rc,
     sync::Arc,
@@ -127,6 +127,8 @@ struct EditorApp {
     /// Native events and fallback scans send immutable disk snapshots to the UI thread.
     file_watch: FileWatch,
     workspace_snapshot: Option<WorkspaceSnapshot>,
+    /// Directory classification from the same snapshot generation; tree rows never probe disk.
+    workspace_directories: HashSet<PathBuf>,
     language_servers: HashMap<String, Arc<language_navigation::LanguageServer>>,
     /// Formatting jobs and linked ranges retain identities; EditorState remains the sole text/undo owner.
     language_edits: editor::language_edits::State,
@@ -166,6 +168,8 @@ struct EditorApp {
     /// The active document's readonly structure and native tree interaction state.
     outline: outline::OutlineState,
     outline_panel: Entity<outline::OutlinePanel>,
+    /// An alternative dock presentation borrows the same open documents and tab gesture state.
+    open_files_panel: Entity<editor::tabs::OpenFilesPanel>,
     /// Local paint measurements prepare flexible editor rows; DockArea owns all persistent layout state.
     dock_ui: LocalDock,
     dock_area: Entity<DockArea>,
@@ -201,6 +205,12 @@ struct EditorApp {
     explorer_visible: bool,
     explorer_visibility: Rc<Cell<bool>>,
     tabs_scroll: ScrollHandle,
+    /// File-tab gestures retain only measured positions; document order changes on a valid release.
+    tabs_drag: editor_ui::tabs::FileTabDragState,
+    /// The user-profile preference selects exactly one mounted tab presentation.
+    tab_placement: app::editor_preferences::TabPlacement,
+    /// Propagates successful user preference writes to every window in this profile.
+    _tab_preferences_observer: Subscription,
     titlebar_should_move: bool,
     dialog: Option<Entity<app_dialog::AppDialog>>,
     /// The shortcut lookup stays inside this window and captures its original focus target.
@@ -294,6 +304,8 @@ struct EditorApp {
     toolbar_focus: FocusHandle,
     /// Each group opens its own captured overflow list through the same native popup behavior.
     tool_overflow: Option<Entity<editor_ui::menu::PopupMenu>>,
+    /// Transient gesture state; lasting window-button order belongs to the workspace session.
+    window_button_drag: editor_ui::reorder_group::ReorderGroupState,
     /// An immutable summary boundary separates reminder confirmation from visible-record reading.
     plugin_popup_snapshot: Option<PluginPopupSnapshot>,
     /// Native prompts retain the runtime gate and are discarded once their owner retires.
@@ -333,6 +345,8 @@ struct EditorApp {
     _tree_subscription: Subscription,
     _dock_subscription: Subscription,
     _bounds_subscription: Option<Subscription>,
+    /// Coalesce resize persistence; dropping the editor cancels any pending quiet-period save.
+    pending_window_geometry_save: Option<gpui_kit::Task<()>>,
     _activation_subscription: Option<Subscription>,
 }
 
@@ -408,6 +422,15 @@ impl EditorApp {
             .and_then(SessionState::file_path)
             .or_else(|| SessionState::for_workspace(workspace.root()).file_path())
             .and_then(|path| path.parent().map(Path::to_owned));
+        if let Some(profile) = resource_profile.as_deref() {
+            // A malformed preference remains visible in settings; startup keeps its safe default.
+            let _ = app::editor_preferences::ensure_profile(profile, cx);
+        }
+        let tab_placement = resource_profile
+            .as_deref()
+            .map_or(app::editor_preferences::TabPlacement::Top, |profile| {
+                app::editor_preferences::placement(profile, cx)
+            });
         let terminal_upgrade_error = resource_profile
             .as_deref()
             .ok_or_else(|| anyhow::anyhow!("Profile directory unavailable"))
@@ -426,6 +449,10 @@ impl EditorApp {
         // Capture before layout/document persistence during setup; only first-open uses a fallback file.
         let restore_empty_documents =
             session_state.document_session_loaded && session_state.open_tabs.is_empty();
+        // Restoring a dock can persist layout before documents are mounted. Keep the pending
+        // document identities and active path independent of those intermediate session writes.
+        let saved_tabs = session_state.open_tabs.clone();
+        let desired_active = session_state.active_file.clone();
         // Plugin configurations are host-local per workspace; project settings do not supply run data.
         // A malformed local store is reported rather than silently replaced.
         let mut run_controls = run::RunControls::load_plugin_configurations(
@@ -480,6 +507,14 @@ impl EditorApp {
         outline_panel.update(cx, |panel, _| {
             panel.set_visible(session_state.outline_visible)
         });
+        let open_files_panel = cx.new(|cx| {
+            editor::tabs::OpenFilesPanel::new(
+                parent.clone(),
+                tab_placement == app::editor_preferences::TabPlacement::ToolWindow
+                    && session_state.open_files_visible,
+                cx,
+            )
+        });
         let explorer_visibility = Rc::new(Cell::new(session_state.explorer_visible));
         let extension_visibility = Rc::new(Cell::new(false));
         let explorer_panel = cx.new(|cx| {
@@ -513,6 +548,28 @@ impl EditorApp {
             app.refresh_dialog(cx);
             cx.notify();
         });
+        let preferences_profile = resource_profile.clone();
+        let tab_preferences_observer = cx
+            .observe_global::<app::editor_preferences::EditorPreferences>(move |app, cx| {
+                let Some(profile) = preferences_profile.as_deref() else {
+                    return;
+                };
+                let placement = app::editor_preferences::placement(profile, cx);
+                if placement == app.tab_placement {
+                    return;
+                }
+                // Settings lives in a different native window; cancel gestures and update docks
+                // only after returning to this editor's actual owning window.
+                let owner = app.owner_window;
+                let weak = cx.entity().downgrade();
+                cx.defer(move |cx| {
+                    let _ = owner.update(cx, |_, window, cx| {
+                        let _ = weak.update(cx, |app, cx| {
+                            app.apply_tab_placement(placement, window, cx);
+                        });
+                    });
+                });
+            });
         let extensions = cx.new(|cx| {
             extensions::ExtensionPanel::new(
                 parent.clone(),
@@ -537,6 +594,8 @@ impl EditorApp {
                 cx,
             )
         });
+        // Native Terminal uses the same regional policy as an exclusive plugin panel.
+        dock_presentation.set_exclusive(gpui_base::dock::PanelId::from(terminal.entity_id()), true);
         terminal.update(cx, |panel, cx| {
             if let Some(error) = terminal_upgrade_error.clone() {
                 panel.upgrade_failed(error);
@@ -544,13 +603,38 @@ impl EditorApp {
             panel.restore_visible(session_state.native_terminal_visible, cx)
         });
         dock_area.update(cx, |area, cx| {
-            // Fixed side docks keep their widths when the opposite side opens; only Editor flexes.
-            area.set_center(
-                DockLayout::tabs()
-                    .panel_view(dock_presentation.panel_handle(editor_panel.clone()), cx),
-                window,
-                cx,
-            );
+            // Left and the initial right column retain their widths; Editor takes remaining space.
+            let editor = DockLayout::tabs()
+                .panel_view(dock_presentation.panel_handle(editor_panel.clone()), cx);
+            if session_state.dock_layout.is_none() {
+                // The initial right column is inside Center, so Bottom spans it while Left
+                // keeps the full height. Restored trees retain their own regional geometry.
+                let right = DockLayout::v_split()
+                    .child(
+                        DockLayout::tabs()
+                            .panel_view(dock_presentation.panel_handle(messages.clone()), cx),
+                        None,
+                    )
+                    .child(
+                        DockLayout::tabs()
+                            .panel_view(dock_presentation.panel_handle(problems.panel.clone()), cx),
+                        None,
+                    );
+                let width = session_state
+                    .plugin_dock_sizes
+                    .get("right")
+                    .copied()
+                    .unwrap_or(editor::diagnostics::problems::DEFAULT_PROBLEMS_WIDTH);
+                area.set_center(
+                    DockLayout::h_split()
+                        .child(editor, None)
+                        .child(right, Some(px(width))),
+                    window,
+                    cx,
+                );
+            } else {
+                area.set_center(editor, window, cx);
+            }
             area.set_dock(
                 gpui_base::dock::DockPlacement::Left,
                 DockLayout::v_split()
@@ -573,18 +657,20 @@ impl EditorApp {
                 window,
                 cx,
             );
-            local_dock::add_panel_view(
-                area,
-                dock_presentation.panel_handle(messages.clone()),
-                gpui_base::dock::DockPlacement::Right,
-                Some(px(session_state
-                    .plugin_dock_sizes
-                    .get("right")
-                    .copied()
-                    .unwrap_or(320.))),
-                window,
-                cx,
-            );
+            if session_state.dock_layout.is_some() {
+                local_dock::add_panel_view(
+                    area,
+                    dock_presentation.panel_handle(messages.clone()),
+                    gpui_base::dock::DockPlacement::Right,
+                    Some(px(session_state
+                        .plugin_dock_sizes
+                        .get("right")
+                        .copied()
+                        .unwrap_or(320.))),
+                    window,
+                    cx,
+                );
+            }
         });
         let messages_subscription = cx.subscribe(&messages, |this, _, _: &PanelEvent, cx| {
             this.session_state.messages_visible = this.messages.read(cx).is_visible();
@@ -601,7 +687,8 @@ impl EditorApp {
             cx.notify();
         });
         let dock_subscription = cx.subscribe(&dock_area, |this, _, event, cx| {
-            if matches!(event, DockEvent::LayoutChanged) {
+            if matches!(event, DockEvent::LayoutChanged) && !this.dock_ui.is_dragging() {
+                // Intermediate split sizes paint immediately; persist only the completed gesture.
                 this.capture_dock_layout(cx);
                 this.persist_session();
             }
@@ -612,6 +699,7 @@ impl EditorApp {
             workspace,
             file_watch,
             workspace_snapshot: None,
+            workspace_directories: HashSet::new(),
             language_servers: HashMap::new(),
             language_edits: Default::default(),
             language_features: Default::default(),
@@ -635,6 +723,7 @@ impl EditorApp {
             tree_state,
             outline,
             outline_panel,
+            open_files_panel,
             dock_ui,
             dock_area,
             dock_presentation,
@@ -656,6 +745,9 @@ impl EditorApp {
             explorer_visible: session_state.explorer_visible,
             explorer_visibility,
             tabs_scroll: ScrollHandle::new(),
+            tabs_drag: Default::default(),
+            tab_placement,
+            _tab_preferences_observer: tab_preferences_observer,
             titlebar_should_move: false,
             dialog: None,
             shortcut_panel: None,
@@ -707,6 +799,7 @@ impl EditorApp {
             function_context: None,
             toolbar_focus: cx.focus_handle(),
             tool_overflow: None,
+            window_button_drag: Default::default(),
             plugin_popup_snapshot: None,
             plugin_interactions: Vec::new(),
             workspace_changes: Default::default(),
@@ -729,15 +822,15 @@ impl EditorApp {
             _tree_subscription: tree_subscription,
             _dock_subscription: dock_subscription,
             _bounds_subscription: None,
+            pending_window_geometry_save: None,
             _activation_subscription: None,
         };
         this.restore_dock_layout(window, cx);
         this.ensure_terminal_dock(window, cx);
         this.ensure_problems_dock(window, cx);
+        this.ensure_open_files_dock(window, cx);
         this.refresh_files(cx);
 
-        let saved_tabs = this.session_state.open_tabs.clone();
-        let desired_active = this.session_state.active_file.clone();
         let mut restored_any = false;
         for path in saved_tabs
             .into_iter()

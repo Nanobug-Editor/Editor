@@ -15,6 +15,7 @@ fn publish_panels(app: &Entity<EditorApp>, panels: serde_json::Value, cx: &mut A
     owner.update(cx, |owner, cx| {
         let mut state = owner.worker.state.lock().unwrap();
         state.entries = vec![Installed {
+            install_sequence: 0,
             grants: manifest.permissions.clone(),
             manifest,
             digest: "visibility".into(),

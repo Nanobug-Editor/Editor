@@ -297,14 +297,16 @@ impl Manager {
             ancestry: vec![],
             lifetimes: vec![self.host_alive.clone(), alive.clone()],
         };
-        // First birth includes bounded WASM compilation/activation. Large independent providers
-        // need the same cold budget as preparation; already active metadata calls stay short.
-        let mut completion =
-            Completion::new(if method == "prepare" || reference.owner().is_none() {
+        // Validation can compose another cold provider even when this contributor is already live.
+        // Give that compilation the same bounded budget as preparation; ordinary hot form/catalog
+        // calls retain their shorter deadline. No callback can renew its original completion.
+        let mut completion = Completion::new(
+            if matches!(method, "prepare" | "validate") || reference.owner().is_none() {
                 120_000
             } else {
                 30_000
-            });
+            },
+        );
         completion.lifetimes = origin.lifetimes.clone();
         let owner = reference.provider.clone();
         let mut call = host_method_call(

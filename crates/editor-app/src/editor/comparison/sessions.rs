@@ -29,6 +29,40 @@ impl ComparisonView {
     }
 }
 impl EditorApp {
+    /// Source reclamation follows all retained panes, including hidden/inactive comparisons.
+    pub(crate) fn comparison_holds_source(&self, id: &str) -> bool {
+        self.comparison_views
+            .iter()
+            .any(|view| view.authority.is_live() && view.sources().any(|source| source.id == id))
+            || self.document_comparison.as_ref().is_some_and(|view| {
+                view.authority.is_live()
+                    && (view.left.id == id
+                        || view.right.id == id
+                        || view
+                            .third
+                            .as_ref()
+                            .is_some_and(|third| third.version.id == id))
+            })
+            || self.plugin_window_mounts.contains_key(id)
+    }
+    /// The unified view replaces both source panes, so navigation must focus its readonly editor.
+    pub(crate) fn unified_comparison_focus_handle(&self, cx: &App) -> Option<FocusHandle> {
+        let id = self.active_comparison.as_ref()?;
+        let comparison = self.document_comparison.as_ref()?;
+        if comparison.third.is_some()
+            || !self
+                .comparison_views
+                .iter()
+                .any(|view| &view.id == id && view.unified)
+        {
+            return None;
+        }
+        comparison
+            .unified_editor
+            .as_ref()
+            .map(|editor| editor.focus_handle(cx))
+    }
+
     /// Resolve the same incarnation at its current revision. No path can substitute a reopened ID.
     fn current_comparison_source(
         &self,
@@ -148,15 +182,7 @@ impl EditorApp {
             self.prepare_unified_comparison(window, cx);
         }
         self.release_comparison_sources(retired, window, cx);
-        let count = self
-            .tabs
-            .iter()
-            .filter(|tab| {
-                tab.virtual_document
-                    .as_ref()
-                    .is_none_or(|source| !source.hidden)
-            })
-            .count();
+        let count = self.tabs.iter().filter(|tab| tab.is_visible()).count();
         // Reused previews can sit before the last tab; reveal the active view's measured bounds.
         if let Some(index) = self
             .comparison_views
@@ -300,11 +326,7 @@ impl EditorApp {
         if self.active_comparison.as_deref() == Some(id) {
             self.active_comparison = None;
             self.close_document_comparison(cx);
-            if let Some(index) = self.tabs.iter().rposition(|tab| {
-                tab.virtual_document
-                    .as_ref()
-                    .is_none_or(|source| !source.hidden)
-            }) {
+            if let Some(index) = self.tabs.iter().rposition(|tab| tab.is_visible()) {
                 self.activate_tab(index, window, cx);
             } else {
                 self.active_path = None;
@@ -314,7 +336,8 @@ impl EditorApp {
         cx.notify();
     }
     /// Only snapshots belonging to a retired view are eligible. A just-created hidden source must
-    /// survive the interval before its comparison is opened, and local documents always survive.
+    /// survive the interval before its comparison is opened. Prepared local sources follow their
+    /// bounded lease; user-visible local documents always survive.
     fn release_comparison_sources(
         &mut self,
         retired: Vec<api::DocumentVersion>,
@@ -350,6 +373,7 @@ impl EditorApp {
                 self.close_tab(self.tabs[index].path().to_path_buf(), window, cx);
             }
         }
+        self.sync_prepared_document_sources(window, cx);
     }
     /// Retiring a caller or either source revokes the view before any next native mount.
     pub(super) fn sync_comparison_views(&mut self, window: &mut Window, cx: &mut Context<Self>) {

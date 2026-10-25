@@ -1,5 +1,43 @@
 # 插件系统文档目录
 
+- [共享 UI 路线图](specs/shared-ui-roadmap.md)、[S0/S1 契约](specs/shared-ui-s0-s1.md)与[本地实施工单](tickets/shared-ui-foundation/README.md)：设计文档已整理，功能实施及统一 Editor 迁移不属于本次主分支整合。
+
+- [Git 提交范围与即时勾选响应](verification/git-commit-ranges-2026-10-25.md)：Git 0.1.44 两类文件统一本地选择，点击提交后校验并仅提交所选文件；旧暂存策略由本轮明确替换，测量与实际包验证状态见记录。
+
+- [Zed 终端固定参考与差异盘点](specs/terminal-zed-reference-2026-10-24.md)：记录原实现差异、许可证及核心已有能力；本轮增强采用独立 `editor-terminal` 和原生文字网格，并将选用的 Alacritty 算法融入库内实现，实际结果见[验证记录](verification/terminal-enhancements-2026-10-24.md)。
+
+- [提交按钮响应与提交并推送](verification/git-commit-submit-2026-10-24.md)：Git 0.1.43 将常规 Windows 仓库暂存后的九次串行进程缩减为两次，增加成功后才推送的提交按钮；实际耗时、失败恢复、门禁及安装状态见记录。
+
+- [多文档复用服务后的启动状态修复](verification/service-readiness-retained-adapter-2026-10-24.md)：Rust 已能返回结果却持续显示启动中的通用状态回退；真实 stdio 回归、26 项针对性检查、工作区门禁和 Windows 增减文档复验通过，当前进程需重新构建运行后使用修复。
+
+- [插件状态与外部服务启动分离](specs/plugin-service-status.md)、[2026-10-24 验收记录](verification/plugin-service-status-2026-10-24.md)：底栏插件入口仅保留插件加载和异常，左侧独立显示外部服务启动数量与可点击列表；多服务计数、提醒互不确认、就绪自动收起及 Windows 原生交互已验证，未提交或发布。
+
+- [Git 历史列边界光标与拖动响应](verification/git-column-drag-2026-10-24.md)：透明边界使用原生调整光标，通用画布列宽在原生帧中预览，松手后提交最终宽度；包含 0.1.38 未更新的运行来源复查、实际更新至 0.1.42 和原生文字耗时，验证范围及限制见记录。
+
+- [Git 历史改动文件树](verification/git-history-files-2026-10-24.md)：总数根节点、目录完整计数、紧凑路径及通用树文字样式；实际包、回归和原生验收状态见记录。
+
+- [提交文件仅差异预览与行尾比较](verification/git-preview-diff-2026-10-24.md)：通用比较源准备／释放、保留原生编辑会话、LF/CRLF 比较修复；实际验证与交付状态见记录。
+
+- [Git 历史自动续页与最早提交](verification/git-history-origin-2026-10-24.md)：滚动和视口增高自动按 128 条续页，保留位置、选择和草稿；真实根提交、刷新及失败重试的验证状态见记录。
+
+- [Git 当前分支与紧凑列](verification/git-branch-compact-2026-10-24.md)：当前分支同层置顶和深浅主题黄色标记；通用原生样本字宽收紧后三列，作者左对齐，保留拖列宽与滚动隔离。实际检查与交付状态见记录。
+
+- [Git 提交窗口选择与表单修复](verification/git-commit-panel-2026-10-24.md)：未跟踪文件仅本地选择、勾选即时反馈及串行合并，移除反馈区，2～4 行输入框与公共按钮；实际测试及原生验收状态见记录。
+
+- [Git 提交列表文字对齐](verification/git-history-alignment-2026-10-23.md)：通用 `ui.canvas 1.4` 原生文本区域修复标签右对齐、提交者居中与时间左对齐，实际验证和配套宿主交付状态见记录。
+
+- [底栏窗口安装顺序与用户重排](../ui/verification/window-toolbar-order-2026-10-23.md)：插件窗口按首次安装顺序追加，升级保留位置；用户长按排序、溢出菜单及工作区恢复的实际检查状态见记录。
+
+- [Git 提交复选框刷新修复](verification/git-commit-checkbox-refresh-2026-10-23.md)：0.1.33 保留勾选期间的提交树显示和浏览，固定反馈区高度，避免整区闪动与布局跳变；实际包、原生逐帧验收与门禁状态见记录。
+
+- [Git 拓扑图颜色设置](verification/git-topology-settings-2026-10-23.md)：0.1.32 使用通用热配置在设置中提供深浅主题各八个颜色，支持校验与恢复默认；实际验证状态见记录。
+
+- [Maven 插件实施方案](specs/maven-plugin.md)：2026-10-23 的 Maven 0.1.18／Java 0.1.34 已完成本轮范围，13 项实际包测试、原生 GPUI 多模块刷新后重绑及 workspace 门禁通过，覆盖工程模型、模块语义、真实构建运行调试与生命周期；需配套更新后的公开语言能力宿主，尚未发布。详见[实施记录](verification/maven-plugin-2026-10-23.md)及[固定来源](specs/maven-sources-2026-10-23.json)。
+
+- [Git 拓扑图分支配色](verification/git-topology-colors-2026-10-23.md)：Git 0.1.31 使用深浅主题调色板区分轨道，线条与节点同色，普通提交实心、合并提交空心；分页、轨道压缩与滚动保持既有颜色，实际验证状态见记录。
+
+- [Git 提交列表列宽与排版](verification/git-history-columns-2026-10-22.md)：Git 0.1.30 的紧凑元数据列、三条透明拖动边界、加粗提交者及标准时间格式；沿用通用画布接口，实际验证状态见记录。
+
 - [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
 
 - [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
@@ -77,6 +115,8 @@
 - [Git 面板图标与底栏入口](verification/git-panel-icons-2026-10-18.md)：独立 0.1.10 使用用户指定 SVG，底栏只保留暂存提交与 Git 两个入口。通用入口开关、实际图标绘制、101 项访客测试及当时规定检查有据；长时原生闲置的前台焦点限制、后续并行改动和已保存的宿主／包身份见记录。
 
 - [内部窗口单独占据](specs/exclusive-dock-panels.md)：公开 `exclusive` 面板属性及区域切换语义；[实现与验证](verification/exclusive-dock-panels-2026-10-18.md)。
+
+- [独占窗口拖放的整区替换](specs/exclusive-drop-replacement.md)：双向完整遮罩、放下后单窗替换、隐藏同伴保留与会话恢复；Git 主窗口及原生终端默认独占，提交窗口保持普通组合。[实际验证与候选身份](verification/exclusive-drop-replacement-2026-10-24.md)。
 
 - [四侧组合拖放与单侧唯一占用](../ui/verification/dock-group-fallback-2026-10-19.md)：宿主与插件共用本侧整组联动、空侧单窗口、四侧占用及局部分栏；[前一阶段验证](../ui/verification/dock-single-side-2026-10-19.md)保留历史结果。
 - [通用窗口标记预览拖放](../ui/verification/marked-dock-placement-2026-10-19.md)：保留原布局并以黄色来源和蓝色目标预览，松手后提交；`editor-ui` 提取在拖放完成后进行。

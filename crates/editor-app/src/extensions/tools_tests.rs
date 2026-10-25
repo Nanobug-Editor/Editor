@@ -4,6 +4,8 @@ use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use plugin_runtime::Manager;
 
+mod order;
+
 /// A real package can hide contextual entries without losing its native work windows.
 #[gpui::test]
 #[ignore = "requires frozen tools-example package; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
@@ -190,6 +192,14 @@ fn real_plugin_tools_preserve_context_shared_intent_and_separate_overflow(cx: &m
             .install(&package, package.manifest.permissions.clone())
             .unwrap();
     }
+    // Installation stays cold; this scenario needs the auxiliary guest's live tool contribution
+    // before it can verify the native toolbar route alongside the selected layout provider.
+    demand(
+        &mut manager,
+        "tools-example",
+        plugin_runtime::DemandReason::View("auxiliary".into()),
+    )
+    .unwrap();
     let workspace = Workspace::open(directory.path()).unwrap();
     let slot = Rc::new(RefCell::new(None));
     let capture = slot.clone();
@@ -395,7 +405,7 @@ fn real_plugin_tools_preserve_context_shared_intent_and_separate_overflow(cx: &m
             .items
             .clone()
     });
-    // Native Explorer/Terminal/Outline belong to the same window group. Selection adds a
+    // Native Explorer/Outline/Messages/Terminal belong to the same window group. Selection adds a
     // checkmark; the popup must retain all five plugin windows and exclude function actions.
     let labels: Vec<_> = items
         .iter()
@@ -405,6 +415,8 @@ fn real_plugin_tools_preserve_context_shared_intent_and_separate_overflow(cx: &m
         t!("panel.explorer").to_string(),
         t!("terminal.title").to_string(),
         t!("panel.outline").to_string(),
+        t!("messages.title").to_string(),
+        t!("messages.unread").to_string(),
     ];
     assert_eq!(
         labels

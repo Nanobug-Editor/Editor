@@ -24,6 +24,8 @@ pub struct TreeRowExtras {
 /// Select the compact Explorer theme contract without changing configuration-tree presentation.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TreeRowAppearance {
+    /// Compact explorer geometry with ordinary UI typography for navigation and grouped summaries.
+    Compact,
     Standard,
     Explorer,
 }
@@ -97,7 +99,11 @@ impl TreeRowAppearance {
                     .map(px)
                     .unwrap_or(typography::font_size(cx)),
             )
-            .font_family(cx.theme().mono_font_family.clone())
+            .font_family(if self == Self::Compact {
+                cx.theme().font_family.clone()
+            } else {
+                cx.theme().mono_font_family.clone()
+            })
     }
 }
 
@@ -159,7 +165,7 @@ pub fn tree_row(
             div()
                 .id("disclosure")
                 // Explorer centers its 12px disclosure glyph in a 16px slot beside the icon.
-                .size(px(if appearance == TreeRowAppearance::Explorer {
+                .size(px(if appearance != TreeRowAppearance::Standard {
                     16.
                 } else {
                     12.

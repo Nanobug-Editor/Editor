@@ -22,6 +22,11 @@ impl EditorApp {
                     .small()
                     .into_any_element(),
             ),
+            PluginPopupKind::Services => (
+                "service-starting-indicator",
+                t!("services.loading"),
+                Spinner::new().small().into_any_element(),
+            ),
             PluginPopupKind::Warning => (
                 "plugin-warning-indicator",
                 t!("plugins.warning"),
@@ -80,20 +85,30 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let Some((_, position)) = self.plugin_popup else {
+        let Some((kind, position)) = self.plugin_popup else {
             // Existing grammar/LSP/worker completion clears the legacy tuple. Release Base state as well.
             if self.plugin_popup_snapshot.is_some() {
                 self.close_plugin_popup(window, cx);
             }
             return div().into_any_element();
         };
-        let mut loading = self.plugin_loading_groups(cx);
+        let services = kind == PluginPopupKind::Services;
+        let mut loading = if services {
+            self.external_service_loading_groups(cx)
+        } else {
+            self.plugin_loading_groups(cx)
+        };
         let mut row_plugins: Vec<_> = self
             .plugin_popup_snapshot
             .as_ref()
             .into_iter()
             .flat_map(|snapshot| &snapshot.summaries)
-            .map(|summary| Some(summary.record.plugin.clone()))
+            .map(|summary| {
+                (
+                    summary.record.plugin.clone(),
+                    Some(summary.record.plugin.clone()),
+                )
+            })
             .collect();
         if self
             .plugin_popup_snapshot
@@ -101,14 +116,16 @@ impl EditorApp {
             .is_some_and(|snapshot| snapshot.manager_error.is_some())
         {
             // The noninteractive error occupies a real scroll item before the focusable log rows.
-            row_plugins.insert(0, None);
+            row_plugins.insert(0, (String::new(), None));
         }
         for (key, group) in &loading {
-            if !row_plugins
-                .iter()
-                .any(|plugin| plugin.as_deref() == Some(key.as_str()))
-            {
-                row_plugins.push(group.plugin.clone());
+            if !row_plugins.iter().any(|(row, _)| row == key) {
+                let row = if services {
+                    format!("service:{key}")
+                } else {
+                    key.clone()
+                };
+                row_plugins.push((row, group.plugin.clone()));
             }
         }
         self.sync_plugin_popup_row_focus(&row_plugins, window, cx);
@@ -144,7 +161,7 @@ impl EditorApp {
         rows.extend(
             loading
                 .into_values()
-                .map(|loading| self.render_loading_summary(loading, cx)),
+                .map(|loading| self.render_loading_summary(loading, services, cx)),
         );
         let width = px(440.).min((window.viewport_size().width - px(16.)).max(px(0.)));
         let height = px(420.).min((window.viewport_size().height - px(64.)).max(px(0.)));
@@ -161,10 +178,24 @@ impl EditorApp {
                 .track_scroll(&snapshot.scroll)
                 .child(editor_ui::vertical_scrollbar(&snapshot.scroll, cx));
         }
+        let (popup_id, title, close_label) = if services {
+            (
+                "service-status-popup",
+                t!("services.status_title"),
+                t!("services.status_close"),
+            )
+        } else {
+            (
+                "plugin-status-popup",
+                t!("plugins.status_title"),
+                t!("plugins.status_close"),
+            )
+        };
         let mut card = v_flex()
-            .id("plugin-status-popup")
-            .debug_selector(|| "plugin-status-popup".into())
+            .id(popup_id)
+            .debug_selector(move || popup_id.into())
             .role(gpui_kit::Role::Dialog)
+            .aria_label(title.to_string())
             .tab_group()
             .key_context("Popover")
             .w(width)
@@ -192,19 +223,15 @@ impl EditorApp {
                     .py_2()
                     .border_b_1()
                     .border_color(cx.theme().border)
-                    .child(
-                        div()
-                            .font_semibold()
-                            .child(t!("plugins.status_title").to_string()),
-                    )
+                    .child(div().font_semibold().child(title.to_string()))
                     .child(
                         Button::new("plugin-status-close")
                             .ghost()
                             .small()
                             .compact()
                             .icon(IconName::Close)
-                            .accessibility_label(t!("plugins.status_close").to_string())
-                            .tooltip(t!("plugins.status_close").to_string())
+                            .accessibility_label(close_label.to_string())
+                            .tooltip(close_label.to_string())
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.close_plugin_popup(window, cx)
                             })),
@@ -237,7 +264,7 @@ impl EditorApp {
     /// Observe Base focus without replacing its keyboard behavior; current row indices drive minimal scrolling.
     fn sync_plugin_popup_row_focus(
         &mut self,
-        plugins: &[Option<String>],
+        plugins: &[(String, Option<String>)],
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -245,7 +272,7 @@ impl EditorApp {
         let rows: BTreeMap<_, _> = plugins
             .iter()
             .enumerate()
-            .filter_map(|(index, plugin)| {
+            .filter_map(|(index, (row, plugin))| {
                 plugin
                     .as_ref()
                     .filter(|plugin| {
@@ -253,7 +280,7 @@ impl EditorApp {
                             .iter()
                             .any(|entry| entry.manifest.id == plugin.as_str())
                     })
-                    .map(|plugin| (plugin.clone(), index))
+                    .map(|_| (row.clone(), index))
             })
             .collect();
         let Some(snapshot) = &mut self.plugin_popup_snapshot else {
@@ -375,16 +402,28 @@ impl EditorApp {
                 row.child(self.loading_details(&loading.details, cx))
             })
             .into_any_element();
-        self.plugin_summary_entry(Some(&record.plugin), &summary.name, content, cx)
+        self.plugin_summary_entry(
+            &record.plugin,
+            Some(&record.plugin),
+            &summary.name,
+            content,
+            cx,
+        )
     }
 
-    /// Normal history stays out of this card; only current work is merged beneath its plugin name.
+    /// Show only current work beneath the plugin or service identity; ordinary history stays in the log.
     fn render_loading_summary(
         &self,
         loading: PluginLoadingSummary,
+        services: bool,
         cx: &Context<Self>,
     ) -> AnyElement {
+        let service_name = loading.name.clone();
         let content = v_flex()
+            .id(format!("status-loading-row-{}", loading.name))
+            .when(services, |row| {
+                row.debug_selector(move || format!("service-starting-row-{service_name}").into())
+            })
             .flex_shrink_0()
             .w_full()
             .min_w_0()
@@ -398,7 +437,15 @@ impl EditorApp {
             .child(div().font_semibold().child(loading.name.clone()))
             .child(self.loading_details(&loading.details, cx))
             .into_any_element();
-        self.plugin_summary_entry(loading.plugin.as_deref(), &loading.name, content, cx)
+        let key = if services {
+            format!("service:{}", loading.name)
+        } else {
+            loading
+                .plugin
+                .clone()
+                .unwrap_or_else(|| loading.name.clone())
+        };
+        self.plugin_summary_entry(&key, loading.plugin.as_deref(), &loading.name, content, cx)
     }
 
     /// Loading icons retain their native animation while detail text remains readable in either palette.
@@ -429,8 +476,10 @@ impl EditorApp {
     }
 
     /// The entire card is one Base-backed target; unresolved/uninstalled history keeps full text contrast and no route.
+    /// `key` identifies the focusable row independently of `plugin`, so sibling services retain distinct targets.
     fn plugin_summary_entry(
         &self,
+        key: &str,
         plugin: Option<&str>,
         name: &str,
         content: AnyElement,
@@ -446,7 +495,7 @@ impl EditorApp {
             .iter()
             .any(|entry| entry.manifest.id == plugin);
         let plugin = plugin.to_owned();
-        let selector = format!("plugin-summary-open-{plugin}");
+        let selector = format!("plugin-summary-open-{key}");
         let wrapper = v_flex()
             .flex_shrink_0()
             .w_full()
@@ -466,7 +515,7 @@ impl EditorApp {
         }
         wrapper
             .child(
-                Button::new(format!("plugin-summary-action-{plugin}"))
+                Button::new(format!("plugin-summary-action-{key}"))
                     .ghost()
                     .content_full_width()
                     .h_auto()
@@ -479,7 +528,7 @@ impl EditorApp {
                     .when_some(
                         self.plugin_popup_snapshot
                             .as_ref()
-                            .and_then(|snapshot| snapshot.row_focus.get(&plugin)),
+                            .and_then(|snapshot| snapshot.row_focus.get(key)),
                         |button, row| button.track_focus(&row.handle),
                     )
                     .accessibility_label(format!("{} · {name}", t!("plugins.status_view_log")))

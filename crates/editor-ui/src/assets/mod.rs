@@ -3,10 +3,12 @@
 use gpui_kit::{AssetSource, Result, SharedString, assets::Assets};
 use std::borrow::Cow;
 
-// The default bundle omits these menu, configuration, shortcut and message actions; embed their catalog SVGs.
+// Embed catalog SVGs for local actions and the open-files/preview indicators.
 gpui_kit::assets::icon_assets!(
     SupplementalIcons,
-    [Menu, Lock, SquarePen, Keyboard, RotateCcw, Broom]
+    [
+        Menu, Lock, SquarePen, Keyboard, RotateCcw, Broom, Files, Eye
+    ]
 );
 
 macro_rules! file_icons {
@@ -134,6 +136,8 @@ mod tests {
             gpui_kit::assets::IconName::Keyboard,
             gpui_kit::assets::IconName::RotateCcw,
             gpui_kit::assets::IconName::Broom,
+            gpui_kit::assets::IconName::Files,
+            gpui_kit::assets::IconName::Eye,
         ] {
             let path = icon.path();
             assert!(UiAssets.load(&path).unwrap().is_some());

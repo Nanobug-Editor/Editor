@@ -1,7 +1,7 @@
 //! Data-only conversion of the retired guest snapshot; upstream Alacritty creates native logical cells.
 use crate::terminal::{
     config::{Profile, Settings},
-    engine::{Engine, GridSize, SavedGrid},
+    engine::{self, Engine, GridSize, SavedGrid},
     persistence::{Saved, SavedSession, bounded_bytes},
     shell, tasks,
 };
@@ -121,6 +121,7 @@ pub(super) fn convert(bytes: &[u8], external: Option<&[u8]>) -> anyhow::Result<V
         });
     }
     bounded_bytes(&mut Saved {
+        panes: None,
         version: 1,
         settings,
         active,
@@ -201,15 +202,10 @@ fn restore_grid(tab: &GuestTab, history: usize) -> anyhow::Result<SavedGrid> {
 
 /// Version zero alone may have an empty gap between identical, unwrapped default PowerShell prompts.
 fn repair_generated_gap(grid: &mut SavedGrid, prompt: &str) {
-    use alacritty_terminal::term::cell::Flags;
+    use engine::CellFlags as Flags;
     let cursor = grid.lines.len() - grid.rows + grid.cursor.0 as usize;
-    let text = |line: &Vec<alacritty_terminal::term::cell::Cell>| {
-        line.iter().map(|cell| cell.c).collect::<String>()
-    };
-    let empty = |line: &Vec<alacritty_terminal::term::cell::Cell>| {
-        line.iter()
-            .all(|cell| cell == &alacritty_terminal::term::cell::Cell::default())
-    };
+    let text = |line: &Vec<engine::Cell>| line.iter().map(|cell| cell.c).collect::<String>();
+    let empty = |line: &Vec<engine::Cell>| line.iter().all(|cell| cell == &engine::Cell::default());
     if text(&grid.lines[cursor]).trim_end() != prompt.trim_end()
         || grid.lines[cursor]
             .iter()

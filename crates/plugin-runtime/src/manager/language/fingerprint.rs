@@ -7,6 +7,7 @@ use super::*;
 pub(in crate::manager) struct Fingerprint {
     source: Vec<u8>,
     configuration: Vec<u8>,
+    discovery: u64,
 }
 impl Fingerprint {
     /// Capture admitted inputs without exposing settings or inferring authority from a matching name.
@@ -19,11 +20,18 @@ impl Fingerprint {
         Self {
             source: serde_json::to_vec(&(&entry.digest, &entry.grants, workspace, sdk)).unwrap(),
             configuration: serde_json::to_vec(values).unwrap(),
+            discovery: 0,
         }
+    }
+
+    /// Domain inputs can change independently from package bytes or user configuration.
+    pub(in crate::manager) fn with_discovery_revision(mut self, revision: u64) -> Self {
+        self.discovery = revision;
+        self
     }
 
     /// This comparison permits retaining resources, never publishing a plan or admitting old intent.
     pub(in crate::manager) fn same_source(&self, other: &Self) -> bool {
-        self.source == other.source
+        self.source == other.source && self.discovery == other.discovery
     }
 }

@@ -14,6 +14,7 @@ fn installed() -> Installed {
         grants: manifest.permissions.clone(),
         manifest,
         digest: String::new(),
+        install_sequence: 0,
         enabled: true,
         project_enabled: Default::default(),
         replaced_by: None,

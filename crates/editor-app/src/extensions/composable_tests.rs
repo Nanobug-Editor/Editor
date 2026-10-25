@@ -67,6 +67,7 @@ fn native_input_and_canvas_route_text_to_their_own_nodes_and_hide_reclaims_targe
             .unwrap();
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 grants: manifest.permissions.clone(),
                 manifest,
@@ -90,6 +91,8 @@ fn native_input_and_canvas_route_text_to_their_own_nodes_and_hide_reclaims_targe
     cx.run_until_parked();
     let viewport = cx.debug_bounds("plugin-ui-viewport").unwrap();
     let input = cx.debug_bounds("plugin-ui-caption").unwrap();
+    // Reflow must reserve the newly visible column before native input hit-testing.
+    assert!(input.right() <= px(1200.) && viewport.right() <= px(1200.));
     assert!(viewport.size.width > px(0.) && viewport.size.height > px(0.));
     assert!(viewport.top() >= input.bottom());
     let initial = events(&app, cx);

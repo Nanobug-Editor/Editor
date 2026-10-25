@@ -38,6 +38,9 @@
 //! it does not retire the shared server or spend its finite transport-retry budget. Request timeout,
 //! process supervision and bounded transport remain the existing controlled stdio service behavior.
 use serde::{Deserialize, Serialize};
+
+/// Current public language.lsp capability revision; hosts share it with native routing policy.
+pub const CAPABILITY_VERSION: semver::Version = semver::Version::new(1, 9, 0);
 use serde_json::Value;
 use std::collections::BTreeMap;
 

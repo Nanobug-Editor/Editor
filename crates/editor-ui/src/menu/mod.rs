@@ -11,6 +11,7 @@ use plugin_runtime::plugin_protocol::ui::{Action, MenuItem};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 mod action_menu;
+mod reorder;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -147,6 +148,8 @@ pub struct PopupMenu {
     source_items: Vec<MenuItem>,
     /// Secondary actions do not select their containing row or dismiss the popup.
     row_actions: BTreeMap<String, MenuItem>,
+    /// Optional local row reordering shares the button group's long-press gesture.
+    reorder: Option<reorder::ReorderRows>,
 }
 impl PopupMenu {
     /// Align a dropdown with the trigger's lower-right corner in window coordinates.
@@ -193,6 +196,7 @@ impl PopupMenu {
             search_subscription: None,
             source_items: Vec::new(),
             row_actions: BTreeMap::new(),
+            reorder: None,
         }
     }
     fn finish(&mut self, action: Action, window: &mut Window, cx: &mut Context<Self>) {
@@ -200,6 +204,9 @@ impl PopupMenu {
             return;
         }
         self.closed = true;
+        if let Some(reorder) = &self.reorder {
+            reorder.state.cancel(window, cx);
+        }
         if let Some(focus) = self.previous.take() {
             focus.focus(window, cx);
         }

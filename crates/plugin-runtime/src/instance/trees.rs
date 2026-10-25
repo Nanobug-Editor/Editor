@@ -41,6 +41,9 @@ impl State {
                 Ok(Value::Unit)
             }
             tree::Operation::CreateWithOptions { options } => {
+                if options.proportional_labels {
+                    self.validate_tree_secondary_labels()?;
+                }
                 if options.single_click_expand {
                     self.validate_tree_action_menus()?;
                 }
@@ -173,6 +176,9 @@ impl State {
             if node.tone.is_some() {
                 self.validate_tree_presentation()?;
             }
+            if node.muted {
+                self.validate_tree_secondary_labels()?;
+            }
             if (node.menu.len() > 8
                 || node
                     .activation
@@ -225,6 +231,23 @@ impl State {
         }
         Ok(icons)
     }
+    /// Inventory alone must not silently opt older providers into new tree presentation semantics.
+    fn validate_tree_secondary_labels(&self) -> Result<(), Failure> {
+        if !self.tree_muted_1_8
+            || !self
+                .api
+                .capabilities
+                .get("ui.tree")
+                .is_some_and(|version| version >= &semver::Version::new(1, 8, 0))
+        {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Secondary tree labels require explicit ui.tree >=1.8",
+            ));
+        }
+        Ok(())
+    }
+
     /// Inventory alone must not silently opt older providers into new tree presentation semantics.
     fn validate_tree_presentation(&self) -> Result<(), Failure> {
         if !self.tree_presentation_1_3
@@ -346,12 +369,17 @@ pub(super) fn requires_check_floor(requirements: Option<&api::Requirements>) -> 
     requires_tree_floor(requirements, 7)
 }
 
+/// Secondary primary labels are additive presentation, never silently granted to older guests.
+pub(super) fn requires_muted_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 8)
+}
+
 /// Resolve each feature against the current inventory while rejecting every older minor tail.
 fn requires_tree_floor(requirements: Option<&api::Requirements>, minor: u64) -> bool {
     requirements
         .and_then(|requirements| requirements.required.get("ui.tree"))
         .is_some_and(|range| {
-            range.matches(&semver::Version::new(1, 7, 0))
+            range.matches(&semver::Version::new(1, 8, 0))
                 && (0..minor).all(|old| !range.matches(&semver::Version::new(1, old, u64::MAX)))
         })
 }
@@ -359,6 +387,29 @@ fn requires_tree_floor(requirements: Option<&api::Requirements>, minor: u64) -> 
 #[cfg(test)]
 mod update_tests {
     use super::*;
+
+    /// An older provider cannot acquire muted rows merely from a newer host inventory.
+    #[test]
+    fn tree_secondary_label_floor_requires_explicit_minor() {
+        for (range, expected) in [
+            ("^1", false),
+            (">=1.7,<2", false),
+            (">=1.7.999,<2", false),
+            (">=1.8,<2", true),
+        ] {
+            let requirements = api::Requirements {
+                base: "^1".parse().unwrap(),
+                required: [("ui.tree".into(), range.parse().unwrap())].into(),
+                optional: Default::default(),
+            };
+            assert_eq!(
+                requires_muted_floor(Some(&requirements)),
+                expected,
+                "{range}"
+            );
+            assert!(requires_check_floor(Some(&requirements)) || !expected);
+        }
+    }
 
     /// New host inventory retains prior floors but cannot grant checkboxes to broad or optional ranges.
     #[test]

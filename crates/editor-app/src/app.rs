@@ -5,6 +5,8 @@ pub(crate) const APP_NAME: &str = "Nanobug";
 
 pub(crate) mod dialog;
 pub(crate) mod distribution;
+/// Profile-wide editor presentation preferences shared by all project windows.
+pub(crate) mod editor_preferences;
 pub(crate) mod language_servers;
 pub(crate) mod languages;
 mod layout;

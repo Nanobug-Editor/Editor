@@ -13,6 +13,8 @@ mod installation_progress;
 mod java_package_tests;
 mod marketplace;
 #[cfg(all(test, windows))]
+mod maven_package_tests;
+#[cfg(all(test, windows))]
 mod native_acceptance;
 #[cfg(all(test, windows))]
 mod native_close_tests;
@@ -451,6 +453,8 @@ pub(super) struct Published {
     pub language_services: BTreeMap<String, Result<Arc<plugin_runtime::LanguageService>, String>>,
     /// Original native document intents resolve to opaque actor-owned analysis slots.
     pub language_document_bindings: BTreeMap<(String, language::DocumentContext), String>,
+    /// Domain input epochs retire pending and failed native intents without changing user settings.
+    pub language_discovery_revisions: BTreeMap<String, u64>,
     /// Readonly structure workers publish independently of native language-service availability.
     pub structure_providers:
         BTreeMap<String, Result<Arc<plugin_runtime::StructureProvider>, String>>,

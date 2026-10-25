@@ -117,6 +117,7 @@ fn plugin_hide_requests_are_scoped_and_reclaim_the_empty_dock(cx: &mut TestAppCo
                 let mut manifest = manifest.clone();
                 manifest.id = plugin.into();
                 state.entries.push(Installed {
+                    install_sequence: 0,
                     replaced_by: None,
                     grants: manifest.permissions.clone(),
                     manifest,
@@ -221,6 +222,7 @@ fn native_panel_clicks_are_scoped_to_the_declared_surface(cx: &mut TestAppContex
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 manifest,
                 digest: "fixture".into(),
@@ -244,6 +246,8 @@ fn native_panel_clicks_are_scoped_to_the_declared_surface(cx: &mut TestAppContex
     let bounds = cx
         .debug_bounds("plugin-ui-increment")
         .expect("native protocol rendered in a dock panel");
+    // A newly admitted right-side contribution must be clickable inside the native viewport.
+    cx.update(|window, _| assert!(bounds.right() <= window.viewport_size().width));
     cx.simulate_click(bounds.center(), Default::default());
     cx.run_until_parked();
     cx.update(|_, cx| {
@@ -314,6 +318,7 @@ fn canvas_controls_sidebar_routes_ui_without_canvas_pointer_events(cx: &mut Test
         owner.update(cx, |owner, cx| {
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 manifest,
                 digest: "fixture".into(),

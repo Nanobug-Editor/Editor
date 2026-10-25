@@ -109,6 +109,11 @@ impl TreeResource {
     pub fn single_click_expand(&self) -> bool {
         self.options.single_click_expand
     }
+
+    /// The provider's admitted immutable font preference does not alter tree state or input authority.
+    pub fn proportional_labels(&self) -> bool {
+        self.options.proportional_labels
+    }
     /// Task completion does not revoke a tree; owner or delegated caller retirement does.
     pub fn is_live(&self) -> bool {
         self.authority.is_live() && !self.revoked.load(Ordering::Acquire)

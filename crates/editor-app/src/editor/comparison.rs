@@ -254,7 +254,8 @@ impl EditorApp {
         }
         self.close_plugin_document_menu(window, cx);
         self.close_document_comparison(cx);
-        self.activate_tab(ri, window, cx);
+        // Mount the right native session without turning a comparison-only source into a file tab.
+        self.activate_tab_with_navigation(ri, false, true, window, cx);
         // Activating a tab can settle linked input. Never attach a pre-activation diff
         // if that settlement advanced either source's capability revision.
         if self.plugin_document_version(li)? != *left
@@ -633,6 +634,15 @@ mod diff {
         pub right: Range<usize>,
     }
 
+    /// Ignore platform line separators while keeping a missing final newline significant.
+    /// Only comparison keys are normalized; hunk offsets still use the original UTF-8 strings.
+    fn line_key(line: &str) -> (&str, bool) {
+        match line.strip_suffix('\n') {
+            Some(content) => (content.strip_suffix('\r').unwrap_or(content), true),
+            None => (line, false),
+        }
+    }
+
     /// Reject excessive input before allocating the bounded LCS matrix.
     pub(super) fn compare(left: &str, right: &str) -> Result<Vec<Hunk>, ()> {
         if left.len() > 1024 * 1024 || right.len() > 1024 * 1024 {
@@ -646,6 +656,8 @@ mod diff {
         }
         let a = left.split_inclusive('\n').collect::<Vec<_>>();
         let b = right.split_inclusive('\n').collect::<Vec<_>>();
+        let a_keys = a.iter().map(|line| line_key(line)).collect::<Vec<_>>();
+        let b_keys = b.iter().map(|line| line_key(line)).collect::<Vec<_>>();
         if a.len() > 2000 || b.len() > 2000 || a.len() * b.len() > 4_000_000 {
             return Err(());
         }
@@ -660,7 +672,7 @@ mod diff {
         };
         for i in (0..a.len()).rev() {
             for j in (0..b.len()).rev() {
-                table[i * b.len() + j] = if a[i] == b[j] {
+                table[i * b.len() + j] = if a_keys[i] == b_keys[j] {
                     1 + cell(&table, i + 1, j + 1)
                 } else {
                     cell(&table, i + 1, j).max(cell(&table, i, j + 1))
@@ -670,7 +682,7 @@ mod diff {
         let (mut i, mut j, mut left_offset, mut right_offset) = (0, 0, 0, 0);
         let mut hunks = Vec::new();
         while i < a.len() || j < b.len() {
-            if i < a.len() && j < b.len() && a[i] == b[j] {
+            if i < a.len() && j < b.len() && a_keys[i] == b_keys[j] {
                 left_offset += a[i].len();
                 right_offset += b[j].len();
                 i += 1;
@@ -679,7 +691,7 @@ mod diff {
             }
             let (start_left, start_right) = (left_offset, right_offset);
             while i < a.len() || j < b.len() {
-                if i < a.len() && j < b.len() && a[i] == b[j] {
+                if i < a.len() && j < b.len() && a_keys[i] == b_keys[j] {
                     break;
                 }
                 if i < a.len() && (j == b.len() || cell(&table, i + 1, j) >= cell(&table, i, j + 1))
@@ -746,6 +758,26 @@ mod diff {
                     right: 2..4
                 }]
             );
+        }
+
+        /// Git blobs use LF while a Windows worktree may use CRLF; offsets stay source-native.
+        #[test]
+        fn mixed_line_endings_do_not_turn_unchanged_context_into_changes() {
+            assert!(
+                compare("same\nlast\n", "same\r\nlast\r\n")
+                    .unwrap()
+                    .is_empty()
+            );
+            assert_eq!(
+                compare("same\nold\nlast\n", "same\r\nnew\r\nlast\r\n").unwrap(),
+                vec![Hunk {
+                    left: 5..9,
+                    right: 6..11
+                }]
+            );
+            // The absence of a final newline is a real content change.
+            assert!(!compare("same\n", "same").unwrap().is_empty());
+            assert!(!compare("same\r", "same").unwrap().is_empty());
         }
     }
 }

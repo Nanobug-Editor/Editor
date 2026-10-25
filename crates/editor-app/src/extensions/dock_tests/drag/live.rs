@@ -1,10 +1,12 @@
 //! Native input verifies marker-only dragging and one final placement with actual pre-drag dimensions.
 use super::*;
 
+mod exclusive;
 mod grouped;
 mod nested;
 mod one_side;
 mod regions;
+mod resize;
 
 /// An isolated real editor starts with the illustrated left group and an ordinary bottom window.
 fn setup(
@@ -27,7 +29,37 @@ fn setup(
     session.messages_visible = false;
     session.problems_visible = true;
     let (app, visual) = open(cx, workspace, session);
+    ordinary_bottom(&app, visual);
+    ordinary_right(&app, visual);
     (directory, app, visual)
+}
+
+/// Keep the regional drag fixture's Messages in a native Right dock after the product default
+/// has placed that hidden panel in the center's right column.
+fn ordinary_right(app: &Entity<EditorApp>, visual: &mut VisualTestContext) {
+    visual.update(|window, cx| {
+        app.update(cx, |app, cx| {
+            let editor = app.dock_presentation.panel_handle(app.editor_panel.clone());
+            let messages = app.dock_presentation.panel_handle(app.messages.clone());
+            app.dock_area.update(cx, |area, cx| {
+                area.set_center(
+                    gpui_base::dock::DockLayout::tabs().panel_view(editor, cx),
+                    window,
+                    cx,
+                );
+                area.set_dock(
+                    DockPlacement::Right,
+                    gpui_base::dock::DockLayout::tabs().panel_view(messages, cx),
+                    window,
+                    cx,
+                );
+                area.set_dock_size(DockPlacement::Right, px(360.), window, cx);
+                if area.is_dock_open(DockPlacement::Right) {
+                    area.toggle_dock(DockPlacement::Right, window, cx);
+                }
+            });
+        });
+    });
 }
 
 /// Resolve the current title and start Base's actual drag payload through native input.

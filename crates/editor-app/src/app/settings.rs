@@ -381,14 +381,14 @@ fn render_keymap(cx: &mut App) -> AnyElement {
         .into_any_element()
 }
 
-/// Renders the shared interface and editor font size control.
+/// Renders shared font sizing and profile-wide tab placement, including empty startup windows.
 fn render_editor(view: &SettingsOwner, cx: &mut App) -> AnyElement {
     let font_size = typography::font_size(cx) / px(1.);
     let decrease_view = view.clone();
     let increase_view = view.clone();
 
     v_flex()
-        .gap_3()
+        .gap_5()
         .child(
             h_flex()
                 .debug_selector(|| "settings-font-size".into())
@@ -423,5 +423,68 @@ fn render_editor(view: &SettingsOwner, cx: &mut App) -> AnyElement {
                         ),
                 ),
         )
+        .child(render_tab_placement(view, cx))
+        .into_any_element()
+}
+
+/// Five mutually exclusive local buttons edit `view`'s profile without requiring an open workspace.
+fn render_tab_placement(view: &SettingsOwner, cx: &mut App) -> AnyElement {
+    use app::editor_preferences::{self, TabPlacement};
+    let profile = match view.profile(cx) {
+        Ok(profile) => profile,
+        Err(error) => return tab_placement_error(error.to_string(), cx),
+    };
+    let _ = editor_preferences::ensure_profile(&profile, cx);
+    let selected = editor_preferences::placement(&profile, cx);
+    let error = editor_preferences::error(&profile, cx);
+    let choices = [
+        (TabPlacement::Top, "top", "settings.tabs_top"),
+        (TabPlacement::Bottom, "bottom", "settings.tabs_bottom"),
+        (TabPlacement::Left, "left", "settings.tabs_left"),
+        (TabPlacement::Right, "right", "settings.tabs_right"),
+        (
+            TabPlacement::ToolWindow,
+            "tool-window",
+            "settings.tabs_tool_window",
+        ),
+    ];
+    v_flex()
+        .debug_selector(|| "settings-tab-placement".into())
+        .gap_3()
+        .child(
+            div()
+                .font_semibold()
+                .child(t!("settings.tab_placement").to_string()),
+        )
+        .child(
+            h_flex()
+                .flex_wrap()
+                .gap_2()
+                .children(choices.into_iter().map(|(placement, id, label)| {
+                    let owner = view.clone();
+                    Button::new(format!("settings-tabs-{id}"))
+                        .debug_selector(move || format!("settings-tabs-{id}"))
+                        .label(t!(label).to_string())
+                        .selected(placement == selected)
+                        .on_click(move |_, _, cx| owner.set_tab_placement(placement, cx))
+                })),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(cx.theme().muted_foreground)
+                .child(t!("settings.tab_placement_hint").to_string()),
+        )
+        .children(error.map(|error| tab_placement_error(error, cx)))
+        .into_any_element()
+}
+
+/// Keep `details` visible on the settings page using the active error color from `cx`.
+fn tab_placement_error(details: String, cx: &App) -> AnyElement {
+    div()
+        .debug_selector(|| "settings-tab-placement-error".into())
+        .text_xs()
+        .text_color(cx.theme().danger)
+        .child(t!("settings.editor_error", details = details).to_string())
         .into_any_element()
 }

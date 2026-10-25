@@ -38,6 +38,26 @@ pub(super) fn validate_document(
 }
 
 impl DemandPreparation {
+    /// Capture one original registered selection for both a successful plan and a failed hook.
+    /// Errors must keep this identity so native waiters finish without adopting a later selection.
+    pub(super) fn selected_role_context(
+        &self,
+        provider: &str,
+        document: Option<&plugin_protocol::language::DocumentContext>,
+        owner: Option<&Instance>,
+    ) -> Option<crate::language_contexts::RegisteredContext> {
+        let document = document?;
+        let instance = self
+            .existing_owner
+            .as_deref()
+            .or_else(|| owner.and_then(Instance::instance_id))?;
+        self.host_resources.contexts.selected(
+            instance,
+            self.token.scope(),
+            provider,
+            &document.path,
+        )
+    }
     /// The guest may select an approved plan; paths and executable overrides remain host-validated.
     pub(super) fn prepare_language_service(
         &self,
@@ -59,18 +79,7 @@ impl DemandPreparation {
         }
         // A readonly hook receives only an already registered, exact live owner's selection.
         // Its isolated worker identity must never replace the owning business instance.
-        let selected = document.and_then(|document| {
-            let instance = self
-                .existing_owner
-                .as_deref()
-                .or_else(|| owner.as_ref().and_then(|owner| owner.instance_id()))?;
-            self.host_resources.contexts.selected(
-                instance,
-                self.token.scope(),
-                &provider.id,
-                &document.path,
-            )
-        });
+        let selected = self.selected_role_context(&provider.id, document, owner.as_deref());
         let candidates = std::iter::once(&provider.service)
             .chain(&provider.alternatives)
             .map(|id| {
@@ -117,8 +126,14 @@ impl DemandPreparation {
                     .api
                     .as_ref()
                     .and_then(|requirements| requirements.required.get("language.lsp"))
-                    .is_some_and(|range| range.matches(&semver::Version::new(1, 7, 0))
-                        && !range.matches(&semver::Version::new(1, 6, 0))),
+                    .is_some_and(
+                        |range| range.matches(&crate::capabilities::LANGUAGE_LSP_VERSION)
+                            && (0..7).all(|old| !range.matches(&semver::Version::new(
+                                1,
+                                old,
+                                u64::MAX
+                            )))
+                    ),
                 "Dependency configuration requires language.lsp >=1.7,<2"
             );
         }

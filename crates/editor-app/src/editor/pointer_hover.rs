@@ -1,10 +1,56 @@
 //! Resolve editor hover through one app-owned pointer path for every viewport position.
 
 use crate::*;
-use gpui_kit::MouseMoveEvent;
+use gpui_kit::{MouseMoveEvent, canvas};
 use std::ops::Range;
 
 impl EditorApp {
+    /// Observe presses throughout this window, including sibling dock handles outside the source.
+    /// Card selection and resize retain ownership until release; all other presses retire late replies.
+    pub(super) fn render_hover_gesture_events(&self, cx: &Context<Self>) -> impl IntoElement {
+        let app = cx.entity().downgrade();
+        canvas(
+            |_, _, _| (),
+            move |_, (), window, _| {
+                let pressed = app.clone();
+                window.on_mouse_event(move |event: &MouseDownEvent, phase, _, cx| {
+                    if phase.capture() {
+                        let _ = pressed.update(cx, |app, cx| {
+                            let in_card = app
+                                .definition_popup_focus
+                                .bounds
+                                .get()
+                                .is_some_and(|bounds| bounds.contains(&event.position));
+                            app.definition_popup_focus.pointer_gesture.set(in_card);
+                            if !in_card && event.modifiers.secondary() {
+                                // Native handlers must consume this press before its cached definition
+                                // is retired; capture-time dismissal otherwise breaks Ctrl+click.
+                                let owner = cx.entity().downgrade();
+                                cx.defer(move |cx| {
+                                    let _ =
+                                        owner.update(cx, |app, cx| app.dismiss_pointer_hover(cx));
+                                });
+                            } else if !in_card {
+                                // Ordinary presses must retire pending hover before a drag can move it.
+                                app.dismiss_pointer_hover(cx);
+                            }
+                        });
+                    }
+                });
+                let released = app.clone();
+                window.on_mouse_event(move |_: &MouseUpEvent, phase, _, cx| {
+                    if phase.capture() {
+                        let _ = released.update(cx, |app, _| {
+                            app.definition_popup_focus.pointer_gesture.set(false);
+                        });
+                    }
+                });
+            },
+        )
+        .absolute()
+        .size_full()
+    }
+
     /// Watch this editor window before shortcut actions consume their keystrokes.
     pub(crate) fn install_hover_keyboard_dismissal(
         window: &Window,
@@ -49,11 +95,16 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        // A drag from the selectable details card must not dismiss it when
-        // mouse movement propagates through the editor panel.
-        if event.pressed_button.is_some() {
+        // Base has already handled this move. Only a gesture originating in
+        // the card may retain it; dock, scrollbar and source drags retire both
+        // Base's newly published diagnostic and any delayed language response.
+        if event.pressed_button.is_some() || cx.has_active_drag() {
+            if !self.definition_popup_focus.pointer_gesture.get() || cx.has_active_drag() {
+                self.dismiss_pointer_hover(cx);
+            }
             return;
         }
+        self.definition_popup_focus.pointer_gesture.set(false);
         let context = (self.active_path.clone(), self.active_text_revision());
         if self.pointer_hover_context.as_ref() != Some(&context) {
             // A tab switch or edit invalidates both the cached card and the

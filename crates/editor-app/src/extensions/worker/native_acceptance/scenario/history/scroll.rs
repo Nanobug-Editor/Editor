@@ -2,6 +2,10 @@
 use super::*;
 use gpui_base::test_support::snapshots;
 use std::sync::Arc;
+mod colors;
+mod columns;
+mod pagination;
+mod palette;
 mod scrollbar;
 
 /// Read vector pixels actually supplied to this canvas, without modifying the renderer.
@@ -36,6 +40,16 @@ pub(in crate::extensions::worker::native_acceptance::scenario) async fn exercise
     cx: &mut AsyncApp,
 ) -> anyhow::Result<()> {
     h.settle(cx).await?;
+    if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_PAGINATION").is_some() {
+        return pagination::exercise(h, cx).await;
+    }
+    columns::exercise(h, cx).await?;
+    if std::env::var_os("NANOBUG_GIT_NATIVE_GRAPH_COLORS").is_some() {
+        colors::exercise(h, cx)?;
+    }
+    if std::env::var_os("NANOBUG_GIT_NATIVE_GRAPH_SETTINGS").is_some() {
+        palette::exercise(h, cx).await?;
+    }
     let at = h.main.update(cx, |_, window, _| -> anyhow::Result<Point<Pixels>> {
         // Canvas surfaces need not expose a labelled node; use the adjacent painted tree/dock.
         let tree = input::tree(window, "branches")?;

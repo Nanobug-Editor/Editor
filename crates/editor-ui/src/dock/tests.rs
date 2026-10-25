@@ -5,10 +5,11 @@ use gpui_base::Placement;
 use gpui_base::dock::{DockPlacement, PaneRef, Panel, PanelEvent, PanelId};
 use gpui_kit::{EventEmitter, FocusHandle, Focusable, Render, TestAppContext, gpui};
 
+mod resize;
 mod reveal;
 
 /// Minimal content exercises real DockArea registration without a plugin worker.
-struct TestPanel(FocusHandle);
+struct TestPanel(FocusHandle, &'static str);
 
 impl EventEmitter<PanelEvent> for TestPanel {}
 
@@ -28,8 +29,8 @@ impl Render for TestPanel {
 
 impl Panel for TestPanel {
     fn panel_name(&self) -> &'static str {
-        // Instances deliberately share a type name; entity IDs identify panels.
-        "LocalDockTestPanel"
+        // Most fixtures share a type name; the initial-column case marks its elastic anchor.
+        self.1
     }
 }
 
@@ -66,7 +67,7 @@ fn panels_stay_in_independent_slots(cx: &mut TestAppContext) {
             ] {
                 let mut ids = Vec::new();
                 for _ in 0..3 {
-                    let panel = cx.new(|cx| TestPanel(cx.focus_handle()));
+                    let panel = cx.new(|cx| TestPanel(cx.focus_handle(), "LocalDockTestPanel"));
                     ids.push(PanelId::from(panel.entity_id()));
                     add_panel_view(
                         area,
@@ -95,6 +96,73 @@ fn panels_stay_in_independent_slots(cx: &mut TestAppContext) {
         });
     });
 }
+
+/// A new right contribution joins the existing column so the bottom dock keeps its full span.
+#[gpui::test]
+fn initial_right_contribution_joins_center_column(cx: &mut TestAppContext) {
+    use gpui_base::dock::DockLayout;
+
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        crate::typography::init(cx);
+        crate::theme::apply_theme(crate::theme::builtin_theme(false), cx);
+    });
+    cx.add_window_view(|window, cx| {
+        let editor = cx.new(|cx| TestPanel(cx.focus_handle(), "Editor"));
+        let problems = cx.new(|cx| TestPanel(cx.focus_handle(), "Problems"));
+        let bottom = cx.new(|cx| TestPanel(cx.focus_handle(), "Bottom"));
+        let plugin = cx.new(|cx| TestPanel(cx.focus_handle(), "Plugin"));
+        let editor_id = PanelId::from(editor.entity_id());
+        let problems_id = PanelId::from(problems.entity_id());
+        let bottom_id = PanelId::from(bottom.entity_id());
+        let plugin_id = PanelId::from(plugin.entity_id());
+        let area = LocalDock::new(28.)
+            .with_elastic_panel(editor_id)
+            .create_area("initial-right-contribution", None, window, cx);
+        area.update(cx, |area, cx| {
+            area.set_center(
+                DockLayout::h_split()
+                    .child(DockLayout::tabs().panel(editor), None)
+                    .child(DockLayout::tabs().panel(problems), Some(px(360.))),
+                window,
+                cx,
+            );
+            area.set_dock(
+                DockPlacement::Bottom,
+                DockLayout::tabs().panel(bottom),
+                window,
+                cx,
+            );
+            add_panel_view(
+                area,
+                Arc::new(plugin),
+                DockPlacement::Right,
+                Some(px(180.)),
+                window,
+                cx,
+            );
+            assert!(!area.has_dock(DockPlacement::Right));
+            assert!(
+                area.layout(DockPlacement::Bottom)
+                    .unwrap()
+                    .find_panel_node(bottom_id)
+                    .is_some()
+            );
+            let center = area.layout(DockPlacement::Center).unwrap();
+            let band = |id| {
+                let node = center.find_panel_node(id).unwrap();
+                placement::region_band(center, DockPlacement::Center, node, Some(editor_id))
+                    .unwrap()
+                    .drag_group(node)
+                    .unwrap()
+                    .id()
+            };
+            assert_eq!(band(problems_id), band(plugin_id));
+        });
+        gpui_base::Root::new(area, window, cx)
+    });
+}
+
 /// Real mouse events must move panels across docks without allowing central merges.
 fn exercise_native_split_drag(
     cx: &mut TestAppContext,
@@ -119,8 +187,8 @@ fn exercise_native_split_drag(
     cx.simulate_resize(size(px(1000.), px(700.)));
     let (source_id, target_id, source_node, target_node) = cx.update(|window, cx| {
         area.update(cx, |area, cx| {
-            let source = cx.new(|cx| TestPanel(cx.focus_handle()));
-            let target = cx.new(|cx| TestPanel(cx.focus_handle()));
+            let source = cx.new(|cx| TestPanel(cx.focus_handle(), "LocalDockTestPanel"));
+            let target = cx.new(|cx| TestPanel(cx.focus_handle(), "LocalDockTestPanel"));
             let source_id = PanelId::from(source.entity_id());
             let target_id = PanelId::from(target.entity_id());
             add_panel_view(
@@ -336,7 +404,7 @@ fn nested_split_layouts_keep_their_axes(cx: &mut TestAppContext) {
         let area = LocalDock::new(28.).create_area("nested-layout", None, window, cx);
         area.update(cx, |area, cx| {
             let panels = (0..3)
-                .map(|_| cx.new(|cx| TestPanel(cx.focus_handle())))
+                .map(|_| cx.new(|cx| TestPanel(cx.focus_handle(), "LocalDockTestPanel")))
                 .collect::<Vec<_>>();
             area.set_center(
                 DockLayout::h_split()
@@ -385,8 +453,8 @@ fn exclusive_editor_edge_keeps_its_regional_allocation(cx: &mut TestAppContext) 
         let slot = Rc::new(RefCell::new(None));
         let capture = slot.clone();
         let (_, visual) = cx.add_window_view(move |window, cx| {
-            let editor = cx.new(|cx| TestPanel(cx.focus_handle()));
-            let exclusive = cx.new(|cx| TestPanel(cx.focus_handle()));
+            let editor = cx.new(|cx| TestPanel(cx.focus_handle(), "LocalDockTestPanel"));
+            let exclusive = cx.new(|cx| TestPanel(cx.focus_handle(), "LocalDockTestPanel"));
             let editor_id = PanelId::from(editor.entity_id());
             let exclusive_id = PanelId::from(exclusive.entity_id());
             let presentation = PanelPresentation::default();

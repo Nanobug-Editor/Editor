@@ -180,3 +180,6 @@ pub fn title_bar_window_control(
 
 // Retain the persisted action name while the host supplies close consent and resource retirement.
 gpui_kit::actions!(projects, [CloseWindow]);
+
+#[cfg(all(test, windows))]
+mod tests;

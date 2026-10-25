@@ -49,9 +49,68 @@ struct Insertion<'a> {
     bounds: Bounds<Pixels>,
     /// Only the moved band's first level adopts this axis; nested layouts keep their own orientation.
     stacking: Axis,
+    /// Replacement adds a zero-share alternative, retaining the old target's logical slot.
+    mode: DropMode,
+}
+
+/// Containers may be rebuilt without changing a gesture's owner, but changed sides, ordering,
+/// axes or active tabs must not be overwritten from the original snapshot on release.
+fn same_relationships(original: &PaneNode, live: &PaneNode) -> bool {
+    match (original.kind(), live.kind()) {
+        (
+            PaneRef::Tabs {
+                panels: before,
+                active_ix: before_active,
+            },
+            PaneRef::Tabs {
+                panels: after,
+                active_ix: after_active,
+            },
+        ) => before == after && before_active == after_active,
+        (
+            PaneRef::Split {
+                axis: before_axis,
+                children: before,
+                ..
+            },
+            PaneRef::Split {
+                axis: after_axis,
+                children: after,
+                ..
+            },
+        ) => {
+            before_axis == after_axis
+                && before.len() == after.len()
+                && before
+                    .iter()
+                    .zip(after)
+                    .all(|(before, after)| same_relationships(before, after))
+        }
+        _ => false,
+    }
 }
 
 impl Snapshot {
+    /// Reject stale membership, visibility, side or topology before replaying this frozen gesture.
+    /// Paint-time sizes may change with the viewport, so ownership compares relationships only.
+    pub fn owns_layout(&self, area: &DockArea, cx: &App) -> bool {
+        let live_regions = REGIONS
+            .into_iter()
+            .filter(|placement| area.layout(*placement).is_some())
+            .count();
+        live_regions == self.regions.len()
+            && self.regions.iter().all(|region| {
+                area.is_dock_open(region.placement) == region.open
+                    && area
+                        .layout(region.placement)
+                        .is_some_and(|tree| same_relationships(region.tree.root(), tree.root()))
+            })
+            && self.views.keys().all(|id| {
+                area.panel(*id)
+                    .is_some_and(|panel| panel.visible(cx) == self.visible.contains(id))
+            })
+    }
+
     /// Capture live handles and actual allocations without modifying the Base area.
     pub fn capture(area: &DockArea, frames: &PaintedFrames, cx: &App) -> Self {
         let mut views = HashMap::new();
@@ -136,6 +195,28 @@ impl Snapshot {
         self.frames.get(&node).copied()
     }
 
+    /// Whole-region previews use live painted peers on the target side, excluding the moved leaf.
+    /// Hidden original peers stay registered but never enlarge the drop mask.
+    pub fn replacement_bounds(
+        &self,
+        area: &DockArea,
+        target: PanelId,
+        source: PanelId,
+        frames: &HashMap<NodeId, Bounds<Pixels>>,
+        cx: &App,
+    ) -> Option<Bounds<Pixels>> {
+        super::super::presentation::region_panels(area, target, cx)?
+            .into_iter()
+            .filter(|id| *id != source && self.visible.contains(id))
+            .filter_map(|id| {
+                REGIONS.into_iter().find_map(|region| {
+                    let node = area.layout(region)?.find_panel_node(id)?;
+                    frames.get(&node).copied()
+                })
+            })
+            .reduce(union)
+    }
+
     /// Measure visible original leaves; invisible exclusive peers and hidden panels occupy no pixels.
     pub fn bounds(&self, node: &PaneNode, cx: &App) -> Option<Bounds<Pixels>> {
         match node.kind() {
@@ -212,6 +293,7 @@ impl Snapshot {
             thickness,
             bounds,
             stacking: target.stacking,
+            mode: target.mode,
         };
         let layout = self
             .layout(target_tree.root(), Some(&insertion), None, cx)
@@ -223,6 +305,21 @@ impl Snapshot {
                 .layout(source_tree.root(), None, None, cx)
                 .unwrap_or_else(DockLayout::tabs);
             self.install(origin, layout, area, window, cx);
+        }
+        // A moved exclusive surface was suppressing its old peers. Restore their actual display
+        // before asking Base whether the old region is empty; otherwise remove_dock loses them.
+        if let (Some(source), Some(destination)) =
+            (self.views.get(&source), self.views.get(&target.panel))
+        {
+            super::super::presentation::commit_drop(
+                source,
+                destination,
+                target.mode == DropMode::Replace,
+                area,
+                cx,
+            );
+        }
+        if origin.placement != destination.placement {
             release_empty(area, origin.placement, window, cx);
             // A nested child leaving a column must keep the region's original width. Only legacy
             // parallel columns can release an entire column's width; content overflow is not a resize.
@@ -316,6 +413,11 @@ impl Snapshot {
             let axis = insert.placement.axis();
             let available = if axis == Axis::Horizontal { insert.bounds.size.width } else { insert.bounds.size.height };
             let mut split = if axis == Axis::Horizontal { DockLayout::h_split() } else { DockLayout::v_split() };
+            if insert.mode == DropMode::Replace {
+                // The old window keeps its slot, entity and content. Only the incoming alternative
+                // is selected on commit; zero retained share cannot redistribute ordinary peers.
+                return Some(split.child(layout, Some(available)).child(group, Some(px(0.))));
+            }
             // Base clamps each pane to its minimum. Subtract that same committed size so a half-size
             // below 100px cannot make the two children larger than their containing cell.
             let minimum = gpui_base::PANEL_MIN_SIZE;

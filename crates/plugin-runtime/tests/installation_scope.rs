@@ -182,6 +182,7 @@ fn wasm_install_respects_global_opt_in() {
             .unwrap();
         let saved = Manager::read_registry(profile.path()).unwrap();
         let entry = &saved[&package.manifest.id];
+        assert_eq!(entry.install_sequence, 1);
         assert_eq!(entry.enabled, global);
         assert_eq!(entry.project_enabled.contains(&workspace), !global);
         assert!(manager.availability(&package.manifest.id).is_ok());

@@ -2,6 +2,10 @@
 //! Protocol 7 composes canvases with native controls through independently negotiated capabilities.
 //! No GPUI objects cross this interface.
 //!
+//! `ui.native` 1.2 adds [`Node::textarea_rows`]: a Textarea can grow between bounded native
+//! visual-row counts while keeping its original draft, IME, selection, Undo and internal scrolling.
+//! Omitted row bounds retain the default policy; fixed pixel heights cannot be combined with them.
+//!
 //! `ui.canvas` 1.2 adds [`Canvas::scroll_epoch`] and [`CanvasEvent::ScrollInput`].
 //! Give each replacement of a canvas's ordered content a fresh nonzero epoch, including a
 //! return to previously displayed content. Preserve it through painting, theme and size updates.
@@ -60,6 +64,8 @@ mod events;
 mod scroll_tests;
 #[cfg(test)]
 mod text_box_tests;
+#[cfg(test)]
+mod textarea_tests;
 mod visual_viewport;
 pub use visual_viewport::*;
 mod tools;
@@ -168,7 +174,9 @@ impl Document {
             }
             match &node.kind {
                 Kind::Textarea(_) => {
-                    required.insert("ui.native", semver::Version::new(1, 1, 0));
+                    let version = if node.textarea_rows.is_some() { 2 } else { 1 };
+                    let native = required.get_mut("ui.native").unwrap();
+                    *native = native.clone().max(semver::Version::new(1, version, 0));
                 }
                 Kind::ReadonlyCode { .. } => {
                     required.insert("ui.code_editor", semver::Version::new(1, 0, 0));
@@ -417,6 +425,10 @@ pub struct Node {
     /// The runtime rejects scripts, external resources, text, CSS and XML entities before publication.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub button_icon: Option<String>,
+    /// Native visual-row bounds for a Textarea, requiring `ui.native >=1.2`.
+    /// Omitted fields keep the host's default; explicit pixel height cannot be combined with rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub textarea_rows: Option<TextareaRows>,
     /// Resolves `plugins[plugin_id].ui[role]` colors and `typography[role]` fonts.
     /// If empty, the host uses the node kind (e.g. `button`) as the role.
     #[serde(default)]
@@ -632,6 +644,17 @@ pub struct Input {
     pub placeholder: String,
 }
 
+/// Auto-grow bounds measured in native visual lines, including soft wrapping at the current width.
+/// Border and padding surround these rows; content exceeding `max` scrolls inside the same editor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TextareaRows {
+    /// Minimum visible lines; validation requires `1 <= min <= max`.
+    pub min: u16,
+    /// Maximum visible lines; validation caps this at 64.
+    pub max: u16,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct OptionItem {
     pub id: String,
@@ -722,6 +745,7 @@ impl Node {
             source_range: None,
             tooltip: None,
             button_icon: None,
+            textarea_rows: None,
             role: String::new(),
             disabled: false,
             layout: Layout::default(),
@@ -821,6 +845,13 @@ impl Node {
     /// selection, composition and undo across acknowledgements; bump it for explicit resets.
     pub fn textarea(id: impl Into<String>, input: Input) -> Self {
         Self::new(id, Kind::Textarea(input))
+    }
+
+    /// Auto-grow a Textarea between `min` and `max` native visual lines (`1..=64`).
+    /// The returned node requires `ui.native 1.2`; invalid ranges or fixed heights fail validation.
+    pub fn textarea_rows(mut self, min: u16, max: u16) -> Self {
+        self.textarea_rows = Some(TextareaRows { min, max });
+        self
     }
     pub fn checkbox(id: impl Into<String>, label: impl Into<String>, checked: bool) -> Self {
         Self::new(

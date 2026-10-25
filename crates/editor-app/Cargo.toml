@@ -8,9 +8,9 @@ license.workspace = true
 [dependencies]
 raw-window-handle = "0.6.2"
 anyhow.workspace = true
-# The native terminal uses the upstream core, independent of guest WASM restrictions.
-alacritty_terminal = "=0.26.0"
-# Decode bounded nonprinting working-directory metadata from optional shell integration.
+# Native terminal implementation; the maintained Alacritty dependency belongs to this library.
+editor-terminal = { path = "../editor-terminal" }
+# Shared vector-scene encoding also uses the already-locked base64 implementation.
 base64 = "0.22"
 # Use the already-locked date library to render receipt dates in the user's system timezone.
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }

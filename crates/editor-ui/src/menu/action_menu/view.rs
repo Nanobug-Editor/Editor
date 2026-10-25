@@ -1,6 +1,7 @@
 //! Native action-menu columns use the same local row and surface contract as ordinary popups.
 use super::*;
-use crate::scroll::ScrollableElement as _;
+use crate::{Icon, scroll::ScrollableElement as _};
+use gpui_kit::assets::IconName;
 
 impl ActionMenu {
     /// Draw one bounded column; cards consume pointer input before the outside-dismiss layer.
@@ -77,15 +78,22 @@ impl ActionMenu {
                             .gap_1()
                             .child(
                                 div()
+                                    .flex()
+                                    .items_center()
                                     .w(px(row.depth as f32 * 14. + 14.))
                                     .flex_shrink_0()
-                                    .child(if group {
-                                        if expanded { "⌄" } else { "›" }
-                                    } else if item.checked {
-                                        "✓"
-                                    } else {
-                                        ""
-                                    }),
+                                    // SVG chevrons share tree sizing and inherit the row's theme color.
+                                    .when(group, |slot| {
+                                        slot.child(
+                                            Icon::new(if expanded {
+                                                IconName::ChevronDown
+                                            } else {
+                                                IconName::ChevronRight
+                                            })
+                                            .xsmall(),
+                                        )
+                                    })
+                                    .when(!group && item.checked, |slot| slot.child("✓")),
                             )
                             .children(icon)
                             .child(
@@ -103,7 +111,9 @@ impl ActionMenu {
                                     .truncate()
                                     .child(detail.for_locale(&self.locale).to_owned())
                             }))
-                            .when(submenu, |row| row.child("›")),
+                            .when(submenu, |row| {
+                                row.child(Icon::new(IconName::ChevronRight).xsmall())
+                            }),
                     ),
             );
         }

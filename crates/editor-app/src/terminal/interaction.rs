@@ -1,17 +1,15 @@
 //! Native keyboard, pointer and menu policy; terminal bytes never pass through a WASM dispatcher.
 
 use super::*;
-use alacritty_terminal::term::TermMode;
-use protocol::ui::{MenuItem, PointerPhase};
+use editor_ui::text_grid::GridPointerPhase as PointerPhase;
+use engine::TerminalMode;
+use protocol::ui::MenuItem;
 
 impl TerminalPanel {
-    pub(super) fn canvas_event(&mut self, event: CanvasEvent, cx: &mut Context<Self>) {
+    pub(super) fn grid_event(&mut self, event: GridEvent, cx: &mut Context<Self>) {
         match event {
-            // The native terminal owns its viewport directly and does not opt into guest scroll epochs.
-            CanvasEvent::ScrollInput { .. } => return,
-            // This grid requests neither sample measurements nor native text-column gestures.
-            CanvasEvent::TextMeasured { .. } | CanvasEvent::ColumnsResized { .. } => return,
-            CanvasEvent::Resize {
+            GridEvent::Files { paths } => self.paste_paths(&paths, cx),
+            GridEvent::Resize {
                 width,
                 height,
                 grid,
@@ -33,8 +31,17 @@ impl TerminalPanel {
                 }
                 self.launch_active(false);
             }
-            CanvasEvent::Text { text } => self.write(text.into_bytes(), cx),
-            CanvasEvent::Key {
+            GridEvent::Text { text } => {
+                if !self.active_index().is_some_and(|index| {
+                    self.sessions[index]
+                        .engine
+                        .mode()
+                        .contains(TerminalMode::VI)
+                }) {
+                    self.write(text.into_bytes(), cx);
+                }
+            }
+            GridEvent::Key {
                 key,
                 ctrl,
                 alt,
@@ -53,18 +60,29 @@ impl TerminalPanel {
                 } else if let Some(index) = self.active_index() {
                     let mode = self.sessions[index].engine.mode();
                     let page = self.grid_size().rows as i32;
-                    if shift && key == "pageup" {
+                    if shift && key == "home" {
+                        let history = self.sessions[index].engine.history();
+                        self.sessions[index].engine.set_offset(history);
+                    } else if shift && key == "end" {
+                        self.sessions[index].engine.set_offset(0);
+                    } else if shift && key == "pageup" {
                         self.sessions[index].engine.scroll(page);
                     } else if shift && key == "pagedown" {
                         self.sessions[index].engine.scroll(-page);
-                    } else if let Some(bytes) =
-                        input::key(&key, ctrl, alt, shift, mode.contains(TermMode::APP_CURSOR))
-                    {
+                    } else if shift && key == "enter" && self.settings.shift_enter_newline {
+                        self.write(vec![10], cx);
+                    } else if let Some(bytes) = input::key(
+                        &key,
+                        ctrl,
+                        alt,
+                        shift,
+                        mode.contains(TerminalMode::APP_CURSOR),
+                    ) {
                         self.write(bytes, cx);
                     }
                 }
             }
-            CanvasEvent::Scroll { offset } => {
+            GridEvent::Scroll { offset } => {
                 if let Some(index) = self.active_index() {
                     let history = self.sessions[index].engine.history();
                     self.sessions[index].engine.set_offset(
@@ -72,48 +90,76 @@ impl TerminalPanel {
                     );
                 }
             }
-            CanvasEvent::Wheel {
+            GridEvent::Wheel {
                 delta_y,
                 shift,
                 x,
                 y,
+                modifiers,
                 ..
             } => {
+                self.pointer_modifiers.set(modifiers);
                 if let Some(index) = self.active_index() {
-                    if !shift
-                        && self.sessions[index]
-                            .engine
-                            .mode()
-                            .intersects(TermMode::MOUSE_MODE)
+                    if delta_y == 0. {
+                        return;
+                    }
+                    self.wheel_remainder +=
+                        delta_y / self.cell_height * self.settings.scroll_multiplier;
+                    let lines = self.wheel_remainder.trunc().clamp(-100., 100.) as i32;
+                    self.wheel_remainder -= lines as f32;
+                    let mode = self.sessions[index].engine.mode();
+                    if !shift && mode.intersects(TerminalMode::MOUSE_MODE) {
+                        for _ in 0..lines.unsigned_abs() {
+                            self.report_mouse(if lines > 0 { 64 } else { 65 }, x, y, false, cx);
+                        }
+                    } else if !shift
+                        && mode.contains(TerminalMode::ALT_SCREEN | TerminalMode::ALTERNATE_SCROLL)
+                        && !mode.contains(TerminalMode::VI)
                     {
-                        self.report_mouse(if delta_y > 0. { 64 } else { 65 }, x, y, false, cx);
+                        if let Some(bytes) = input::key(
+                            if lines > 0 { "up" } else { "down" },
+                            false,
+                            false,
+                            false,
+                            mode.contains(TerminalMode::APP_CURSOR),
+                        ) {
+                            self.write(bytes.repeat(lines.unsigned_abs() as usize), cx);
+                        }
                     } else {
-                        self.sessions[index]
-                            .engine
-                            .scroll(if delta_y > 0. { 3 } else { -3 });
+                        self.sessions[index].engine.scroll(lines);
                     }
                 }
             }
-            CanvasEvent::Pointer {
+            GridEvent::Pointer {
                 phase,
                 x,
                 y,
                 button,
                 clicks,
                 shift,
+                modifiers,
             } => {
+                self.pointer_modifiers.set(modifiers);
                 if let Some(index) = self.active_index() {
+                    if phase == PointerPhase::Down && x >= 8. && y >= 8. {
+                        self.link = self.sessions[index].engine.link_at(
+                            ((y - 8.) / self.cell_height) as usize,
+                            ((x - 8.) / self.cell_width) as usize,
+                        );
+                    }
                     let mouse = self.sessions[index]
                         .engine
                         .mode()
-                        .intersects(TermMode::MOUSE_MODE);
+                        .intersects(TerminalMode::MOUSE_MODE);
+                    if phase == PointerPhase::Move && button == 3 && !mouse {
+                        return;
+                    }
                     if mouse && !shift {
                         let moving = phase == PointerPhase::Move;
+                        let mode = self.sessions[index].engine.mode();
                         if !moving
-                            || self.sessions[index]
-                                .engine
-                                .mode()
-                                .intersects(TermMode::MOUSE_DRAG | TermMode::MOUSE_MOTION)
+                            || mode.contains(TerminalMode::MOUSE_MOTION)
+                            || (button != 3 && mode.contains(TerminalMode::MOUSE_DRAG))
                         {
                             self.report_mouse(
                                 button as u8 + if moving { 32 } else { 0 },
@@ -125,9 +171,18 @@ impl TerminalPanel {
                         }
                     } else if button == 2 && phase == PointerPhase::Down {
                         self.requested_menu = Some(true);
-                    } else if button == 0 && x >= 8. && y >= 8. {
-                        let row = ((y - 8.) / self.cell_height).floor() as usize;
-                        let column = ((x - 8.) / self.cell_width).floor() as usize;
+                    } else if button == 0 {
+                        if phase == PointerPhase::Move {
+                            if y < 8. {
+                                self.sessions[index].engine.scroll(1);
+                            } else if y >= self.height - 8. {
+                                self.sessions[index].engine.scroll(-1);
+                            }
+                        }
+                        let row = (((y - 8.) / self.cell_height).floor().max(0.) as usize)
+                            .min(self.grid_size().rows - 1);
+                        let column = (((x - 8.) / self.cell_width).floor().max(0.) as usize)
+                            .min(self.grid_size().columns - 1);
                         if row < self.grid_size().rows
                             && column < self.grid_size().columns
                             && phase != PointerPhase::Up
@@ -138,25 +193,43 @@ impl TerminalPanel {
                                 phase == PointerPhase::Down,
                                 clicks,
                             );
+                            if phase == PointerPhase::Down && self.pointer_modifiers.get().alt {
+                                self.sessions[index].engine.block_selection();
+                            }
+                        }
+                        if phase == PointerPhase::Up && self.settings.copy_on_select {
+                            self.copy(cx);
                         }
                     }
                 }
             }
-            CanvasEvent::Focus { focused } => {
+            GridEvent::Focus { focused } => {
+                self.cursor_blink = Instant::now();
+                if let Some(index) = self.active_index() {
+                    self.sessions[index].engine.cursor_visible = true;
+                    self.sessions[index].engine.set_focused(focused);
+                }
                 if self.active_index().is_some_and(|index| {
                     self.sessions[index]
                         .engine
                         .mode()
-                        .contains(TermMode::FOCUS_IN_OUT)
+                        .contains(TerminalMode::FOCUS_IN_OUT)
                 }) {
-                    self.write(
-                        if focused {
-                            b"\x1b[I".to_vec()
-                        } else {
-                            b"\x1b[O".to_vec()
-                        },
-                        cx,
-                    );
+                    // Focus reporting neither starts a restored Shell nor changes its scroll position.
+                    if let Some(index) = self.active_index() {
+                        let session = &self.sessions[index];
+                        if session.launched && !session.exited {
+                            self.send_input(
+                                session.id,
+                                if focused {
+                                    b"\x1b[I".to_vec()
+                                } else {
+                                    b"\x1b[O".to_vec()
+                                },
+                                cx,
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -181,26 +254,23 @@ impl TerminalPanel {
         }
         let (row, column) = (row + 1, column + 1);
         let id = session.id;
-        let sgr = self.sessions[index]
-            .engine
-            .mode()
-            .contains(TermMode::SGR_MOUSE);
-        let bytes = if sgr {
-            format!(
-                "\x1b[<{button};{column};{row}{}",
-                if release { 'm' } else { 'M' }
-            )
-            .into_bytes()
-        } else if column <= 223 && row <= 223 {
-            vec![
-                27,
-                b'[',
-                b'M',
-                32 + if release { 3 } else { button },
-                32 + column as u8,
-                32 + row as u8,
-            ]
-        } else {
+        let mode = self.sessions[index].engine.mode();
+        let modifiers = self.pointer_modifiers.get();
+        let flags = 8 * u8::from(modifiers.alt) + 16 * u8::from(modifiers.control);
+        let motion = (id, button | flags, column, row);
+        if (32..64).contains(&button) && self.last_mouse == Some(motion) {
+            return;
+        }
+        self.last_mouse = Some(motion);
+        let Some(bytes) = input::mouse(
+            button,
+            column,
+            row,
+            release,
+            mode.contains(TerminalMode::SGR_MOUSE),
+            mode.contains(TerminalMode::UTF8_MOUSE),
+            flags,
+        ) else {
             return;
         };
         // Mouse input must not scroll the viewport like explicit typing; that would move the
@@ -208,24 +278,88 @@ impl TerminalPanel {
         self.send_input(id, bytes, cx);
     }
 
-    fn copy(&self, cx: &mut App) {
+    pub(super) fn copy(&mut self, cx: &mut App) {
         if let Some(text) = self
             .active_index()
             .and_then(|index| self.sessions[index].engine.selected_text())
         {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
+            if !self.settings.keep_selection_on_copy
+                && let Some(index) = self.active_index()
+            {
+                self.sessions[index].engine.clear_selection();
+            }
         }
     }
     fn paste(&mut self, cx: &mut App) {
-        if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+        let Some(item) = cx.read_from_clipboard() else {
+            return;
+        };
+        let paths = item
+            .entries()
+            .iter()
+            .filter_map(|entry| {
+                if let gpui_kit::ClipboardEntry::ExternalPaths(paths) = entry {
+                    Some(paths.paths().iter().cloned())
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        if !paths.is_empty() {
+            self.paste_paths(&paths, cx);
+            return;
+        }
+        if self.settings.forward_image_paste
+            && item
+                .entries()
+                .iter()
+                .any(|entry| matches!(entry, gpui_kit::ClipboardEntry::Image(_)))
+        {
+            self.write(vec![22], cx);
+            return;
+        }
+        if let Some(text) = item.text() {
+            if let Some(index) = self.active_index()
+                && self.sessions[index]
+                    .engine
+                    .mode()
+                    .contains(TerminalMode::VI)
+            {
+                self.sessions[index].engine.toggle_vi();
+            }
             let bracketed = self.active_index().is_some_and(|index| {
                 self.sessions[index]
                     .engine
                     .mode()
-                    .contains(TermMode::BRACKETED_PASTE)
+                    .contains(TerminalMode::BRACKETED_PASTE)
             });
             self.write(input::paste(&text, bracketed), cx);
         }
+    }
+
+    /// User-selected file paths are quoted for the selected Shell and pasted without a newline.
+    fn paste_paths(&mut self, paths: &[PathBuf], cx: &mut App) {
+        let Some(index) = self.active_index() else {
+            return;
+        };
+        if self.sessions[index]
+            .engine
+            .mode()
+            .contains(TerminalMode::VI)
+        {
+            self.sessions[index].engine.toggle_vi();
+        }
+        let Some(text) = shell::quote_paths(&self.sessions[index].profile, paths) else {
+            self.error = Some(t!("terminal.unsafe_path_paste").to_string());
+            return;
+        };
+        let bracketed = self.sessions[index]
+            .engine
+            .mode()
+            .contains(TerminalMode::BRACKETED_PASTE);
+        self.write(input::paste(&text, bracketed), cx);
     }
 
     pub(super) fn menu_items(&self, output: bool) -> Vec<MenuItem> {
@@ -254,6 +388,24 @@ impl TerminalPanel {
             },
         ];
         if !output {
+            for (id, key) in [
+                ("split-columns", "terminal.split_columns"),
+                ("split-rows", "terminal.split_rows"),
+                ("unsplit", "terminal.unsplit"),
+            ] {
+                items.push(MenuItem {
+                    id: id.into(),
+                    label: t!(key).to_string(),
+                    disabled: self.active.is_none() || (id == "unsplit" && self.panes.is_none()),
+                    separator_before: id == "split-columns",
+                });
+            }
+            items.push(MenuItem {
+                id: "find".into(),
+                label: t!("terminal.find").to_string(),
+                disabled: self.active.is_none(),
+                separator_before: true,
+            });
             items.push(MenuItem {
                 id: "interrupt".into(),
                 label: t!("terminal.interrupt").to_string(),
@@ -275,6 +427,17 @@ impl TerminalPanel {
                 });
             }
         }
+        if output && self.link.is_some() {
+            items.insert(
+                0,
+                MenuItem {
+                    id: "open-link".into(),
+                    label: t!("terminal.open_link").to_string(),
+                    disabled: false,
+                    separator_before: false,
+                },
+            );
+        }
         items
     }
 
@@ -287,6 +450,13 @@ impl TerminalPanel {
         self.popup = None;
         if let Action::Select(id) = action {
             match id.as_str() {
+                "split-columns" => self.split_shell(false, cx),
+                "split-rows" => self.split_shell(true, cx),
+                "unsplit" => self.unsplit(cx),
+                "find" => self.open_search(cx),
+                "open-link" => {
+                    self.open_link(window, cx);
+                }
                 "copy" => self.copy(cx),
                 "paste" => self.paste(cx),
                 "clear" => {

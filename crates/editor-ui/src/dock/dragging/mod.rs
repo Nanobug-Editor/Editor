@@ -23,6 +23,17 @@ struct Target {
     bounds: Bounds<Pixels>,
     /// Members of a moved band stack along the destination region's permitted axis.
     stacking: Axis,
+    /// Split ordinary peers, or select the whole actual side when either window is exclusive.
+    mode: DropMode,
+}
+
+/// Preview and commit carry the same explicit placement meaning through the gesture.
+#[derive(Clone, Copy, PartialEq)]
+enum DropMode {
+    /// Existing ordinary edge placement leaves both windows displayed.
+    Split,
+    /// One incoming window fills the target region while retained peers are temporarily hidden.
+    Replace,
 }
 
 /// Read-only pre-drag data sizes markers and supplies one final Base edit.
@@ -195,7 +206,7 @@ impl LiveDrag {
         let Some(session) = self.0.borrow_mut().take() else {
             return;
         };
-        if commit && !area.is_locked() && session.owns_layout(area, cx) {
+        if commit && !area.is_locked() && session.original.owns_layout(area, cx) {
             if let Some(target) = session.target {
                 session.original.place(
                     session.source,
@@ -237,9 +248,12 @@ impl LiveDrag {
         let Some(session) = state.as_mut() else {
             return;
         };
-        if area.is_locked() || !session.owns_layout(area, cx) {
+        if area.is_locked() || !session.original.owns_layout(area, cx) {
             drop(state);
             self.finish(false, area, window, cx);
+            // Retire Base's payload too: leaving it alive would let its fallback drop listener
+            // place the source after our stale transaction and markers have already been cancelled.
+            cx.stop_active_drag(window);
             return;
         }
         // MouseUp rechecks current occupancy even at an unchanged pointer: a newly revealed
@@ -260,22 +274,6 @@ impl LiveDrag {
 }
 
 impl Session {
-    /// Membership or visibility changes invalidate the frozen transaction rather than replaying it
-    /// over newly shown peers, restored hidden preferences, or removed plugin instances.
-    fn owns_layout(&self, area: &DockArea, cx: &App) -> bool {
-        let ids: std::collections::HashSet<_> = REGIONS
-            .into_iter()
-            .filter_map(|placement| area.layout(placement))
-            .flat_map(|tree| tree.panels())
-            .collect();
-        ids.len() == self.original.views.len()
-            && self.original.views.keys().all(|id| {
-                ids.contains(id)
-                    && area.panel(*id).is_some_and(|panel| {
-                        panel.visible(cx) == self.original.visible.contains(id)
-                    })
-            })
-    }
     /// Resolve edges against real painted windows, excluding the grabbed leaf and central merge zone.
     fn hit(
         &self,
@@ -314,6 +312,31 @@ impl Session {
                             cx,
                         )
                     };
+                    if Some(id) != self.anchor
+                        && [self.source, id].into_iter().any(|panel| {
+                            area.panel(panel)
+                                .is_some_and(|view| super::presentation::is_exclusive(view, cx))
+                        })
+                    {
+                        let bounds =
+                            self.original
+                                .replacement_bounds(area, id, self.source, frames, cx)?;
+                        let stacking = axis.unwrap_or(Axis::Horizontal);
+                        return Some((
+                            Target {
+                                panel: id,
+                                placement: if stacking == Axis::Horizontal {
+                                    Placement::Right
+                                } else {
+                                    Placement::Bottom
+                                },
+                                bounds,
+                                stacking,
+                                mode: DropMode::Replace,
+                            },
+                            vec![self.source],
+                        ));
+                    }
                     let placement = placement::edge_at(bounds, pointer, axis)?;
                     let members = if Some(id) == self.anchor {
                         self.editor_members(area, id, placement, cx)?
@@ -332,6 +355,7 @@ impl Session {
                                     Axis::Horizontal
                                 }
                             }),
+                            mode: DropMode::Split,
                         },
                         members,
                     ));
@@ -389,6 +413,9 @@ impl Session {
     /// Return the blue group's allocation inside the unchanged target window.
     fn destination(&self, cx: &App) -> Option<Bounds<Pixels>> {
         let target = self.target?;
+        if target.mode == DropMode::Replace {
+            return Some(target.bounds);
+        }
         let thickness = self.thickness(target, cx);
         let mut bounds = target.bounds;
         match target.placement {

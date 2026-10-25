@@ -2,6 +2,10 @@
 use super::*;
 use plugin_runtime::plugin_protocol::tree;
 use std::{io::Write as _, process::Stdio};
+#[path = "history/files.rs"]
+mod files;
+#[path = "history/pagination.rs"]
+mod pagination;
 #[path = "history/performance.rs"]
 mod performance;
 
@@ -168,7 +172,17 @@ fn preview_files(manager: &mut Manager) -> Vec<String> {
         );
     }
     let snapshot = resource.snapshot();
-    let root = &snapshot.branches[&None];
+    let total = snapshot.branches[&None].children[0].clone();
+    if let Some(request) = resource.request(Some(total.clone()), false).unwrap() {
+        send(
+            manager,
+            "history",
+            "files",
+            ui::Action::Tree(tree::Event::Request(request)),
+        );
+    }
+    let snapshot = resource.snapshot();
+    let root = &snapshot.branches[&Some(total)];
     assert!(root.loaded && !root.loading && root.error.is_none());
     let mut files = root
         .children

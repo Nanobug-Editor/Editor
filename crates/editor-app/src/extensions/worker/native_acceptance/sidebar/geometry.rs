@@ -21,6 +21,14 @@ fn named(node: &ElementSnapshot, id: &str) -> bool {
     matches!(node.path().last(), Some(ElementId::Name(name)) if name.as_ref() == id)
 }
 
+/// Explorer's title stays painted when its focus-sensitive action buttons fade away.
+fn explorer_title(window: &Window) -> anyhow::Result<ElementSnapshot> {
+    snapshots(window)
+        .into_iter()
+        .find(|node| node.visible() && named(node, "explorer-title"))
+        .context("Explorer title missing")
+}
+
 /// Base observes each group and content frame independently around the project's local renderer.
 fn frame(window: &Window, anchor: &ElementSnapshot) -> anyhow::Result<Frame> {
     let nodes = snapshots(window);
@@ -106,7 +114,7 @@ pub(super) fn record_default(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         let staging_node = tree.find_panel_node(PanelId::from(app.plugin_panels["git/staging"].entity_id())).context("staging is outside Left")?;
         ensure!(explorer_node != staging_node, "default peers merged into tabs");
         let staging = frame(window, &input::field(window, "commit-message")?)?;
-        let explorer = frame(window, &toolbar_button(window, "explorer-hide")?)?;
+        let explorer = frame(window, &explorer_title(window)?)?;
         ensure!((staging.outer.left() - explorer.outer.left()).abs() <= px(2.) && (staging.outer.size.width - explorer.outer.size.width).abs() <= px(2.), "default peers occupy multiple columns");
         ensure!(staging.outer.bottom() <= explorer.outer.top() + px(2.) || explorer.outer.bottom() <= staging.outer.top() + px(2.), "default peer frames overlap");
         let clip = staging_controls(h, window, cx)?;
@@ -147,7 +155,7 @@ pub(super) fn sample(h: &Harness, window: &Window, cx: &App) -> anyhow::Result<G
         "editor left Center"
     );
     let staging = frame(window, &input::field(window, "commit-message")?)?;
-    let explorer = frame(window, &toolbar_button(window, "explorer-hide")?)?;
+    let explorer = frame(window, &explorer_title(window)?)?;
     let outline = frame(window, &toolbar_button(window, "outline-hide")?)?;
     let mut peers = [staging.outer, explorer.outer, outline.outer];
     for peer in peers {

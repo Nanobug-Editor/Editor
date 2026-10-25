@@ -10,7 +10,7 @@ Nanobug is a native desktop code editor built with Rust and GPUI, with Windows a
 
 The editor, reviewed marketplace and official plugins are maintained in the [Nanobug organization](https://github.com/Nanobug-Editor). The editor repository is named `Editor`; plugin repositories use their language or feature names.
 
-The built-in terminal uses upstream Alacritty and shares one bottom panel with build, run and debug sessions; no terminal plugin installation is required. Independent plugins provide language support, Markdown and image previews, build rules and debuggers. Official and third-party plugins use the same public interfaces. Fresh installations contain no plugins or automatic recommendations: plain-text editing, the native terminal and the default theme are available immediately.
+The built-in terminal uses the independent `editor-terminal` library, with selected Alacritty screen algorithms [integrated into its implementation](crates/editor-terminal/NOTICE). Its native text, IME and input surface shares one bottom panel with build, run and debug sessions; no terminal plugin installation is required. Independent plugins provide language support, Markdown and image previews, build rules and debuggers. Official and third-party plugins use the same public interfaces. Fresh installations contain no plugins or automatic recommendations: plain-text editing, the native terminal and the default theme are available immediately.
 
 The XML plugin provides schema assistance, completion, formatting, paired tag editing, and a document outline. HTML and JavaScript provide independent native language services. New workspaces start with the outline hidden; open it from the bottom window controls.
 

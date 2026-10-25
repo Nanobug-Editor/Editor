@@ -1,14 +1,14 @@
 //! Built-in terminal sessions: native UI and upstream VT state, independent of installed packages.
 
-mod config;
 pub(crate) mod configurations;
-mod engine;
-mod input;
+mod host;
 mod interaction;
 mod io;
+mod navigation;
+mod panes;
 mod persistence;
 mod presentations;
-mod shell;
+mod search;
 pub(crate) mod task_view;
 mod tasks;
 #[cfg(test)]
@@ -18,6 +18,8 @@ mod view;
 
 use crate::*;
 use config::{Profile, Settings};
+use editor_terminal::{config, engine, input, shell};
+use editor_ui::text_grid::{GridDrawing, GridEvent, GridPaint, GridPointerPhase, TextGrid};
 use engine::{Engine, GridSize};
 use gpui_kit::ClipboardItem;
 use plugin_runtime::{
@@ -25,7 +27,7 @@ use plugin_runtime::{
     plugin_protocol::{
         self as protocol,
         process::{Transport, Update},
-        ui::{Action, CanvasEvent, SideTab, SideTabs},
+        ui::{Action, SideTab, SideTabs},
     },
 };
 use serde::{Deserialize, Serialize};
@@ -39,20 +41,8 @@ enum FailureKind {
     Process,
 }
 
-/// A session identity survives repaint and rename but never identifies another native process.
-struct Session {
-    id: u64,
-    name: String,
-    profile: Profile,
-    cwd: String,
-    engine: Engine,
-    launched: bool,
-    exited: bool,
-    /// Restored shells answer ConPTY's cursor handshake from the restored logical grid.
-    restored: bool,
-    /// Tasks retain view identity while each accepted round owns distinct execution resources.
-    task: Option<tasks::Task>,
-}
+/// The library owns terminal state; this adapter supplies only host Run/Debug metadata.
+type Session = editor_terminal::Session<tasks::Task>;
 
 /// This window owns terminal policy; the process supervisor owns only controlled system resources.
 pub(crate) struct TerminalPanel {
@@ -71,7 +61,7 @@ pub(crate) struct TerminalPanel {
     _focus_subscription: Subscription,
     group: Option<WeakEntity<gpui_base::dock::TabGroup>>,
     supervisor: NativeProcessGroup,
-    canvas: Option<Entity<ui::plugin::CanvasView>>,
+    grid: Option<Entity<TextGrid>>,
     /// Inspection entities are presentation only; hiding/switching a tab keeps their focus/scroll state.
     inspections: BTreeMap<String, Entity<crate::run::ui::panel::InspectionView>>,
     sidebar: Option<Entity<editor_ui::side_tabs::SideTabBar>>,
@@ -95,6 +85,26 @@ pub(crate) struct TerminalPanel {
     pending_close: Option<u64>,
     /// A delayed public Locate cannot resurrect a task whose view the user already closed.
     closed_tasks: std::collections::BTreeSet<String>,
+    /// One native find input follows the selected session without borrowing its terminal text.
+    search_view: Option<Entity<editor_terminal::SearchBar>>,
+    search_open: bool,
+    search_focus_pending: bool,
+    /// Last pointer candidate makes keyboard-accessible context-menu navigation possible.
+    link: Option<engine::Link>,
+    /// Fractional wheel motion is retained instead of turning every event into three lines.
+    wheel_remainder: f32,
+    /// Each leaf retains its own sub-line wheel remainder, even when scrolling without taking focus.
+    wheel_remainders: BTreeMap<u64, f32>,
+    cursor_blink: Instant,
+    /// Native pointer modifiers supplement the deliberately smaller portable GridEvent.
+    pointer_modifiers: Rc<Cell<gpui_kit::Modifiers>>,
+    /// Terminal-only split layout; every leaf is an existing session with its own owned PTY.
+    panes: Option<panes::PaneLayout>,
+    /// Retained per-session input entities prevent cross-pane IME and selection ownership.
+    grids: BTreeMap<u64, Entity<TextGrid>>,
+    geometry: BTreeMap<u64, panes::Geometry>,
+    /// Suppress repeated motion reports within one native screen cell, without suppressing clicks.
+    last_mouse: Option<(u64, u8, usize, usize)>,
 }
 
 impl TerminalPanel {
@@ -128,7 +138,7 @@ impl TerminalPanel {
         let focus = cx.focus_handle();
         // A dock can retain the pre-render handle; entering it must still land on the current input canvas.
         let focus_subscription = cx.on_focus(&focus, window, |panel, window, cx| {
-            if let Some(canvas) = &panel.canvas {
+            if let Some(canvas) = &panel.grid {
                 canvas.read(cx).focus_handle().focus(window, cx);
             } else {
                 panel.focus_pending = true;
@@ -150,7 +160,7 @@ impl TerminalPanel {
             _focus_subscription: focus_subscription,
             group: None,
             supervisor: NativeProcessGroup::new(trusted),
-            canvas: None,
+            grid: None,
             inspections: Default::default(),
             sidebar: None,
             width: 640.,
@@ -170,6 +180,18 @@ impl TerminalPanel {
             persistence_blocked: false,
             pending_close: None,
             closed_tasks: Default::default(),
+            search_view: None,
+            search_open: false,
+            search_focus_pending: false,
+            link: None,
+            wheel_remainder: 0.,
+            wheel_remainders: Default::default(),
+            cursor_blink: Instant::now(),
+            pointer_modifiers: Default::default(),
+            panes: None,
+            grids: Default::default(),
+            geometry: Default::default(),
+            last_mouse: None,
         };
         if let Err(error) = panel.restore() {
             panel.report_error(FailureKind::Restore, format!("{error:#}"));
@@ -284,11 +306,18 @@ impl TerminalPanel {
             .to_string_lossy()
             .into_owned();
         let size = self.grid_size();
+        let cwd = if self.settings.inherit_working_directory {
+            self.active_index()
+                .map(|index| self.sessions[index].cwd.clone())
+        } else {
+            None
+        }
+        .unwrap_or_else(|| self.workspace.to_string_lossy().into_owned());
         self.sessions.push(Session {
             id: self.next_id,
             name,
             profile,
-            cwd: self.workspace.to_string_lossy().into_owned(),
+            cwd,
             engine: Engine::new(size, self.settings.history),
             launched: false,
             exited: false,
@@ -326,7 +355,7 @@ impl TerminalPanel {
             program: session.profile.program.clone(),
             args: shell::arguments(&session.profile),
             cwd: session.cwd.clone(),
-            env: BTreeMap::new(),
+            env: self.settings.env.clone(),
             transport: Transport::Pty {
                 columns: size.columns as u16,
                 rows: size.rows as u16,
@@ -350,8 +379,11 @@ impl TerminalPanel {
         // Sending text or a terminal key is an explicit request to use this retained Shell.
         // Restoring layout, selecting history, focus and resize alone never start a program.
         self.launch_active(true);
+        self.cursor_blink = Instant::now();
         if let Some(index) = self.active_index() {
             let session = &mut self.sessions[index];
+            session.engine.cursor_visible = true;
+            session.engine.bell = false;
             if session.exited || !session.launched {
                 return;
             }
@@ -376,6 +408,15 @@ impl TerminalPanel {
             self.inspections.remove(&task.key);
         }
         self.sessions.remove(index);
+        self.grids.remove(&id);
+        self.geometry.remove(&id);
+        self.wheel_remainders.remove(&id);
+        if let Some(layout) = &mut self.panes {
+            layout.sessions.retain(|session| *session != id);
+            if layout.sessions.len() < 2 {
+                self.panes = None;
+            }
+        }
         if self.pending_close == Some(id) {
             self.pending_close = None;
         }
@@ -398,7 +439,10 @@ impl TerminalPanel {
     fn tabs(&self) -> SideTabs {
         SideTabs {
             id: "native-terminal-sessions".into(),
-            position: self.settings.tab_position,
+            position: match self.settings.tab_position {
+                editor_terminal::TabPosition::Left => protocol::ui::SideTabsPosition::Left,
+                editor_terminal::TabPosition::Right => protocol::ui::SideTabsPosition::Right,
+            },
             width: self.tab_width,
             min_width: 112.,
             max_width: 480.,
@@ -408,7 +452,15 @@ impl TerminalPanel {
                 .map(|session| SideTab {
                     id: session.id.to_string(),
                     label: session.name.clone(),
-                    status: session.exited.then(|| t!("terminal.exited").to_string()),
+                    status: if session.exited {
+                        Some(t!("terminal.exited").to_string())
+                    } else if self.settings.visual_bell && session.engine.bell {
+                        Some(t!("terminal.bell").to_string())
+                    } else if self.settings.show_titles {
+                        session.engine.title.clone()
+                    } else {
+                        None
+                    },
                     disabled: false,
                     closable: true,
                 })
@@ -421,6 +473,8 @@ impl TerminalPanel {
     fn tab_action(&mut self, action: Action, cx: &mut Context<Self>) {
         match action {
             Action::Select(id) => {
+                self.link = None;
+                self.wheel_remainder = 0.;
                 self.active = id
                     .parse()
                     .ok()
@@ -476,7 +530,7 @@ impl Drop for TerminalPanel {
 impl EventEmitter<PanelEvent> for TerminalPanel {}
 impl Focusable for TerminalPanel {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.canvas
+        self.grid
             .as_ref()
             .map(|canvas| canvas.read(cx).focus_handle())
             .unwrap_or_else(|| self.focus.clone())
@@ -516,54 +570,4 @@ pub(crate) fn icon(cx: &App) -> Icon {
         include_bytes!("icon_light.svg")
     };
     Icon::default().data(bytes).small()
-}
-
-impl EditorApp {
-    /// Restore the leaf after loading an older dock tree, keeping unrelated peers and their sizes.
-    pub(crate) fn ensure_terminal_dock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let panel = self.dock_presentation.panel_handle(self.terminal.clone());
-        let id = gpui_base::dock::PanelId::from(self.terminal.entity_id());
-        let height = px(self
-            .session_state
-            .plugin_dock_sizes
-            .get("bottom")
-            .copied()
-            .unwrap_or(260.));
-        self.dock_area.update(cx, |area, cx| {
-            if area.panel(id).is_none() {
-                local_dock::add_panel_view(
-                    area,
-                    panel,
-                    gpui_base::dock::DockPlacement::Bottom,
-                    Some(height),
-                    window,
-                    cx,
-                );
-            }
-        });
-    }
-
-    /// Dock-level hiding also affects the footer, without changing whether Shell resources are alive.
-    pub(crate) fn terminal_visible(&self, cx: &App) -> bool {
-        local_dock::panel_visible(
-            self.dock_area.read(cx),
-            gpui_base::dock::PanelId::from(self.terminal.entity_id()),
-            cx,
-        )
-    }
-
-    /// Reveal the native dock leaf; opening it never depends on installed package contributions.
-    pub(crate) fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let visible = !self.terminal_visible(cx);
-        let trusted = self.extensions.read(cx).workspace_trusted();
-        self.terminal.update(cx, |panel, cx| {
-            panel.set_trusted(trusted, cx);
-            panel.set_visible(visible, cx);
-        });
-        if visible {
-            self.reveal_terminal(window, cx);
-        }
-        self.dock_area.update(cx, |_, cx| cx.notify());
-        cx.notify();
-    }
 }

@@ -51,6 +51,8 @@ pub struct LocalDock {
     dragging: dragging::LiveDrag,
     /// Only temporarily hidden slot preferences live outside Base's visible size projection.
     hidden_sizes: hidden_sizes::HiddenSizes,
+    /// Correct visible-neighbor resizing through Base's public size edit when slots are hidden.
+    split_resize: split_resize::SplitResize,
 }
 
 impl LocalDock {
@@ -61,6 +63,7 @@ impl LocalDock {
             frames: Default::default(),
             dragging: Default::default(),
             hidden_sizes: Default::default(),
+            split_resize: Default::default(),
         }
     }
 
@@ -88,14 +91,15 @@ impl LocalDock {
                 area: cx.entity().downgrade(),
                 frames: self.frames.clone(),
                 dragging: self.dragging.clone(),
+                split_resize: self.split_resize.clone(),
             });
             DockArea::new(id, version, window, cx).with_renderer(renderer)
         })
     }
 
-    /// Persistence and regional reconciliation resume after the gesture's final placement.
+    /// Persistence and regional reconciliation resume after a move or resize gesture ends.
     pub fn is_dragging(&self) -> bool {
-        self.dragging.active()
+        self.dragging.active() || self.split_resize.active()
     }
 
     /// Save Base's current tree, restoring hidden slot preferences into its existing size fields.
@@ -151,6 +155,7 @@ struct LocalDockRenderer {
     area: WeakEntity<DockArea>,
     frames: PaintedFrames,
     dragging: dragging::LiveDrag,
+    split_resize: split_resize::SplitResize,
 }
 
 impl DockAreaRenderer for LocalDockRenderer {
@@ -170,7 +175,27 @@ impl DockAreaRenderer for LocalDockRenderer {
                 .surface(self.area.clone(), self.frames.clone()),
         );
         let frame = frame.child(gpui_kit::deferred(self.dragging.markers(cx)).with_priority(10));
-        self.dragging.capture_escape(frame, self.area.clone())
+        let frame = frame.child(self.split_resize.tracker(self.area.clone()));
+        let frame = self.dragging.capture_escape(frame, self.area.clone());
+        self.split_resize.capture_escape(frame, self.area.clone())
+    }
+
+    /// Hidden slots stay in Base's saved tree, while their visible neighbors share one handle.
+    fn split_frame(
+        &self,
+        node: NodeId,
+        _: gpui_kit::Axis,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Stateful<Div> {
+        div()
+            .id(("dock-split-frame", node.as_u64()))
+            .relative()
+            .child(gpui_kit::deferred(self.split_resize.surface(
+                node,
+                self.area.clone(),
+                self.frames.clone(),
+            )))
     }
     /// Compose project-owned dock chrome over Base's public resize behavior.
     fn render_dock(
@@ -388,6 +413,27 @@ pub fn add_panel_view(
         }
         return;
     }
+    // The initial host right band is center-local so Bottom can span beneath it. New right
+    // contributions join that band rather than create a full-height outer right dock.
+    if placement == DockPlacement::Right && !area.has_dock(placement) {
+        if let Some(node) = placement::center_right_target(area, cx) {
+            area.add_panel_view(panel, DockPlacement::Center, None, window, cx);
+            area.move_panel(
+                id,
+                InsertTarget::Split {
+                    node,
+                    placement: Placement::Bottom,
+                    size: exclusive.then_some(px(0.)),
+                },
+                window,
+                cx,
+            );
+            if visible {
+                reveal_panel(area, id, window, cx);
+            }
+            return;
+        }
+    }
     let neighbor = area.layout(placement).and_then(|tree| {
         // Hidden alternatives have no ordinary share to divide. Prefer a displayed member
         // so a new ordinary leaf cannot inherit an exclusive leaf's zero-sized placeholder.
@@ -541,6 +587,7 @@ pub use panel::{
 mod placement;
 mod presentation;
 mod resize;
+mod split_resize;
 pub use placement::stack_axis;
 pub use presentation::PanelPresentation;
 pub use presentation::has_visible_region;

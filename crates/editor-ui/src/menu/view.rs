@@ -50,6 +50,7 @@ impl Render for PopupMenu {
                 .max(0.)))
             .overflow_y_scrollbar_with(&self.scroll);
         let mut footer = div().flex().flex_col().flex_shrink_0();
+        let mut reorder = self.reorder_group(cx);
         for (index, item) in self.items.iter().enumerate() {
             let id = item.id.clone();
             let debug = format!("native-menu-{}", id);
@@ -207,10 +208,17 @@ impl Render for PopupMenu {
                 row.into_any_element()
             };
             if index < split {
-                rows = rows.child(row);
+                if let Some(group) = reorder.take() {
+                    reorder = Some(group.item(item.id.clone(), item.label.clone(), row));
+                } else {
+                    rows = rows.child(row);
+                }
             } else {
                 footer = footer.child(row);
             }
+        }
+        if let Some(group) = reorder {
+            rows = rows.child(group);
         }
         let card = self
             .style

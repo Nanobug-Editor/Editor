@@ -210,6 +210,14 @@ impl Manager {
         token: &Availability,
         waiter: Waiter,
     ) -> Result<(), api::Failure> {
+        // A domain epoch can withdraw an unstarted source reservation while its owned job waits.
+        // Rejoining must reserve current inputs again before another hook can retain this waiter.
+        if let DemandReason::LanguageDocument {
+            provider, document, ..
+        } = &waiter.reason
+        {
+            self.admit_language_document_intent(provider, document)?;
+        }
         if let Some(flight) = self.activation.flights.get_mut(token) {
             if flight.running && flight.waiters.lock().unwrap().is_empty() {
                 // Never add a renewed purpose to the cancelled worker's authority. The old job

@@ -1,7 +1,7 @@
 //! Native leaf controls draw without retaining the recursive container/editor renderer on the stack.
 use super::*;
 use editor_ui::scroll::ScrollableElement as _;
-use editor_ui::{Button, ButtonCustomVariant, Input, Tooltip};
+use editor_ui::{Button, Input, Tooltip};
 use gpui_base::{Checkbox, CheckboxState, Progress, Radio, RadioGroup};
 use gpui_kit::{
     AnyElement, InteractiveElement, ParentElement, SharedString, StatefulInteractiveElement,
@@ -229,7 +229,7 @@ impl PluginView {
                     .into_any_element()
             }
             Kind::Button { label } => self
-                .font(
+                .button_appearance(
                     Button::new(action_gestures::native_id(native_id.clone(), gesture))
                         .when_some(
                             self.action_gestures
@@ -263,20 +263,13 @@ impl PluginView {
                         })
                         // A waiting latest draft blocks activations, not editing authority.
                         .disabled(disabled || self.form_activation_blocked())
-                        .border_color(colors.border)
-                        .custom(
-                            ButtonCustomVariant::new(cx)
-                                .color(colors.background)
-                                .foreground(colors.foreground)
-                                .hover(colors.hover)
-                                .active(colors.active),
-                        )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             if this.action_gesture_current(&id, gesture) {
                                 this.emit_in(&id, Action::Click, window, cx);
                             }
                         })),
-                    node.theme_role(),
+                    node,
+                    cx,
                 )
                 .into_any_element(),
             Kind::Input(_) => self

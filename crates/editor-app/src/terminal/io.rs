@@ -6,26 +6,27 @@ impl TerminalPanel {
     /// Alacritty parses once for both Shell and tasks, and replies follow the same resource that produced output.
     pub(super) fn apply_update(&mut self, id: u64, update: Update, cx: &mut Context<Self>) {
         let colors = self.colors(cx);
-        let size = alacritty_terminal::event::WindowSize {
-            num_lines: self.grid_size().rows as u16,
-            num_cols: self.grid_size().columns as u16,
-            cell_width: self.cell_width as u16,
-            cell_height: self.cell_height as u16,
-        };
+        let geometry = self.geometry.get(&id).copied();
         let Some(session) = self.sessions.iter_mut().find(|session| session.id == id) else {
             return;
+        };
+        let size = engine::WindowSize {
+            num_lines: session.engine.size().rows as u16,
+            num_cols: session.engine.size().columns as u16,
+            cell_width: geometry.map_or(self.cell_width, |geometry| geometry.cell_width) as u16,
+            cell_height: geometry.map_or(self.cell_height, |geometry| geometry.cell_height) as u16,
         };
         let mut replies = vec![];
         match update {
             Update::Output { bytes, .. } => {
                 for event in session.engine.process(&bytes) {
-                    use alacritty_terminal::event::Event;
+                    use engine::Event;
                     match event {
                         Event::PtyWrite(text) => replies.push(text.into_bytes()),
                         Event::ColorRequest(index, format) => {
                             let color = session.engine.color_index(index, &colors);
                             replies.push(
-                                format(alacritty_terminal::vte::ansi::Rgb {
+                                format(engine::Rgb {
                                     r: (color >> 16) as u8,
                                     g: (color >> 8) as u8,
                                     b: color as u8,
@@ -67,6 +68,15 @@ impl TerminalPanel {
     pub(super) fn poll(&mut self, cx: &mut Context<Self>) {
         let events = self.supervisor.poll();
         let mut changed = !events.is_empty();
+        if self.visible && self.cursor_blink.elapsed() >= Duration::from_millis(500) {
+            self.cursor_blink = Instant::now();
+            for session in &mut self.sessions {
+                if session.engine.cursor_blinks() && !cx.reduce_motion() {
+                    session.engine.cursor_visible = !session.engine.cursor_visible;
+                    changed = true;
+                }
+            }
+        }
         for event in events {
             match event {
                 NativeProcessEvent::Started { .. } => {}
@@ -87,6 +97,29 @@ impl TerminalPanel {
                     self.apply_update(session, update, cx)
                 }
             }
+        }
+        let expired = self
+            .sessions
+            .iter_mut()
+            .filter_map(|session| {
+                session
+                    .engine
+                    .expire_sync(Instant::now())
+                    .then_some(session.id)
+            })
+            .collect::<Vec<_>>();
+        for id in expired {
+            // This empty native update drains replies from the same owned stream after VT timeout.
+            // It cannot introduce guest authority, start a process or alter another pane's output.
+            self.apply_update(
+                id,
+                Update::Output {
+                    stream: protocol::process::Stream::Pty,
+                    bytes: vec![],
+                },
+                cx,
+            );
+            changed = true;
         }
         if self.dirty && self.last_save.elapsed() >= Duration::from_secs(2) {
             if let Err(error) = self.save() {

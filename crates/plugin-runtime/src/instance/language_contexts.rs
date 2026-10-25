@@ -32,9 +32,55 @@ impl State {
                 "Project contexts require an active authorized workspace",
             ));
         }
+        let borrowed = matches!(&operation, Operation::RegisterBorrowed { .. });
+        if borrowed
+            && self
+                .api
+                .capabilities
+                .get("language.lsp")
+                .is_none_or(|version| *version < semver::Version::new(1, 8, 0))
+        {
+            return Err(Failure::new(
+                ErrorCode::CapabilityUnavailable,
+                "Borrowed contexts require language.lsp 1.8",
+            ));
+        }
         let principal = &self.plugin_services.principal;
         match operation {
-            Operation::Register { contexts } => {
+            Operation::Check { context } => {
+                if self
+                    .api
+                    .capabilities
+                    .get("language.lsp")
+                    .is_none_or(|version| *version < semver::Version::new(1, 9, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "Context lifetime checks require language.lsp 1.9",
+                    ));
+                }
+                self.host_resources.contexts.check(
+                    &context,
+                    &principal.instance,
+                    &principal.scope,
+                )?;
+                Ok(Value::Unit)
+            }
+            Operation::Register { contexts } | Operation::RegisterBorrowed { contexts } => {
+                if self
+                    .api
+                    .capabilities
+                    .get("language.lsp")
+                    .is_none_or(|version| *version < semver::Version::new(1, 9, 0))
+                    && contexts.iter().any(|context| {
+                        serde_json::to_vec(&context.data).map_or(true, |bytes| bytes.len() > 4096)
+                    })
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "Context metadata above 4 KiB requires language.lsp 1.9",
+                    ));
+                }
                 if contexts
                     .iter()
                     .any(|context| !self.language_providers.contains_key(&context.provider))
@@ -44,10 +90,36 @@ impl State {
                         "Project context provider is not owned by this instance",
                     ));
                 }
-                // Persistent domain metadata is owned by this provider, not by its first consumer.
-                // Each later control still intersects its own complete original caller authority.
-                let authority =
-                    crate::EditorAuthority::new(self.plugin_services.alive.clone(), None);
+                // Ordinary registration remains provider-owned. Borrowed metadata additionally
+                // retains the runtime-sealed caller chain, independently from this request's wait.
+                let mut persistent = if borrowed {
+                    self.plugin_services.context.clone()
+                } else {
+                    None
+                };
+                if let Some(context) = &mut persistent {
+                    context.lifetimes = self
+                        .host_resources
+                        .preparations
+                        .persistent_lifetimes(&context.lifetimes);
+                }
+                let authority = crate::EditorAuthority::new(
+                    self.plugin_services.alive.clone(),
+                    persistent.as_ref(),
+                );
+                let authority = if borrowed {
+                    let mut participants = self
+                        .plugin_services
+                        .context
+                        .as_ref()
+                        .map_or_else(Vec::new, |context| context.ancestry.clone());
+                    participants.push(principal.instance.clone());
+                    self.host_resources
+                        .contexts
+                        .borrow_discovery(authority, &participants)?
+                } else {
+                    authority
+                };
                 self.host_resources
                     .contexts
                     .register(
@@ -58,6 +130,23 @@ impl State {
                         authority,
                     )
                     .map(Value::LanguageContexts)
+            }
+            Operation::Invalidate => {
+                if self
+                    .api
+                    .capabilities
+                    .get("language.lsp")
+                    .is_none_or(|version| *version < semver::Version::new(1, 9, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "Language invalidation requires language.lsp 1.9",
+                    ));
+                }
+                self.host_resources
+                    .contexts
+                    .invalidate(&principal.instance)?;
+                Ok(Value::Unit)
             }
             Operation::Describe { context } => self
                 .host_resources

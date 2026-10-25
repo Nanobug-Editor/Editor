@@ -24,7 +24,7 @@ fn host_frame(window: &Window, id: &str) -> anyhow::Result<Bounds<Pixels>> {
 
 /// Sample Explorer, Outline and the painted Editor next to them; the right dock is sampled separately.
 fn geometry(window: &Window) -> anyhow::Result<[Bounds<Pixels>; 3]> {
-    let explorer = host_frame(window, "explorer-hide")?;
+    let explorer = host_frame(window, "explorer-title")?;
     let outline = if named(&snapshots(window), "outline-hide").is_some() {
         host_frame(window, "outline-hide")?
     } else {
@@ -49,7 +49,7 @@ fn geometry(window: &Window) -> anyhow::Result<[Bounds<Pixels>; 3]> {
 fn bottom_frame(window: &Window, editor: Bounds<Pixels>) -> anyhow::Result<Bounds<Pixels>> {
     let nodes = snapshots(window);
     let hosts = [
-        named(&nodes, "explorer-hide"),
+        named(&nodes, "explorer-title"),
         named(&nodes, "outline-hide"),
     ];
     // A left child can align with Editor's bottom after returning to its group. Position alone
@@ -80,7 +80,11 @@ fn check_row(frames: [Bounds<Pixels>; 3], bottom: Bounds<Pixels>) -> anyhow::Res
 }
 
 /// Start a title gesture on `source` through production pointer dispatch and await its active payload.
-async fn begin_drag(h: &Harness, source: Bounds<Pixels>, cx: &mut AsyncApp) -> anyhow::Result<()> {
+pub(super) async fn begin_drag(
+    h: &Harness,
+    source: Bounds<Pixels>,
+    cx: &mut AsyncApp,
+) -> anyhow::Result<()> {
     let start = point(
         source.center().x,
         source.top() + px(PANEL_HEADER_HEIGHT / 2.),
@@ -120,7 +124,7 @@ async fn begin_drag(h: &Harness, source: Bounds<Pixels>, cx: &mut AsyncApp) -> a
 
 /// Sample injected input and its D3D draw together after the platform frame has drained native events.
 /// This keeps unrelated physical mouse motion from replacing the intended test coordinate before assertion.
-fn sample_drag(
+pub(super) fn sample_drag(
     h: &Harness,
     pointer: Point<Pixels>,
     name: &str,

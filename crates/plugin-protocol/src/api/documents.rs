@@ -55,6 +55,17 @@
 //!
 //! # Persistent comparisons (`editor.virtual` / `editor.diff` 1.1)
 //!
+//! With `editor.documents >=1.2,<2`, `OpenDocumentSource { path }` returns the current workspace
+//! session without revealing an ordinary tab or replacing an explorer preview. Existing sessions,
+//! unsaved text, selection and Undo are reused. It needs `editor.read` and `workspace.read`.
+//! Clean reused sessions reconcile current disk bytes before returning, independently of watcher
+//! debounce; unsaved native input is never overwritten. Older watcher reads cannot revert this read.
+//! Call `ReleaseDocumentSource { document }` after comparison admission or cancellation; release
+//! matches ID/path, allowing native edits to advance the revision. Visible tabs remain visible.
+//! At most 32 hidden local sources can be prepared. Unattached preparations expire after 60s or
+//! issuer retirement; a retained view keeps its source. Closing the last view reclaims a clean
+//! unprepared source and reveals a dirty source as an ordinary tab instead of discarding edits.
+//!
 //! `OpenVirtualSource` has the same ownership and size limits as a virtual document but keeps
 //! the readonly snapshot out of the ordinary file tab strip. `OpenDocumentComparison` opens
 //! a file-bound comparison under an instance-local key. Reusing a key replaces that descriptor;

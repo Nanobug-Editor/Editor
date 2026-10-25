@@ -6,6 +6,7 @@ use std::{
 };
 
 mod isolation_tests;
+mod topology;
 
 pub(super) const REVIEW_PATH: &str = "src/a-review.txt";
 pub(super) const CONFLICT_PATH: &str = "conflicts/merge.txt";
@@ -96,6 +97,19 @@ impl Fixture {
         )?;
         git(&workspace, &["commit", "-am", "Local native changes"])?;
         history(&workspace)?;
+        if std::env::var_os("NANOBUG_GIT_NATIVE_GRAPH_COLORS").is_some() {
+            topology::prepare(&workspace)?;
+        }
+        if std::env::var_os("NANOBUG_GIT_NATIVE_BRANCH_COMPACT").is_some() {
+            // Sibling directories sort before ordinary leaves, so the current marker must explicitly
+            // lead this real lazy page. All refs share HEAD and preserve the fixture's source tree.
+            for branch in ["aa-folder/a-first", "aa-folder/z-topic", "z-last"] {
+                git(
+                    &workspace,
+                    &["update-ref", &format!("refs/heads/{branch}"), "HEAD"],
+                )?;
+            }
+        }
         // A private remote-tracking ref exercises grouping without a URL, transport or fetch.
         // The common helper removes caller-selected Git directories and indexes for every command.
         git(
@@ -166,7 +180,13 @@ impl Fixture {
 fn history(root: &Path) -> anyhow::Result<()> {
     let parent = git_text(root, &["rev-parse", "HEAD"])?;
     let mut input = String::new();
-    for index in 0..36 {
+    // Only the pagination diagnostic needs several complete 128-row pages; keep other fixtures small.
+    let count = if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_PAGINATION").is_some() {
+        385
+    } else {
+        36
+    };
+    for index in 0..count {
         let title = format!("Review history {index:02}");
         input.push_str(&format!("commit refs/heads/main\ncommitter Native acceptance <native@example.invalid> {} +0000\ndata {}\n{title}\n", 1_800_000_000 + index, title.len()));
         if index == 0 {

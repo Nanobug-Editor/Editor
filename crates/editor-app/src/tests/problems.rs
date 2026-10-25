@@ -4,6 +4,54 @@ use super::shortcuts::{click, draw, second_editor_window};
 use gpui_base::dock::{DockPlacement, PanelId};
 use gpui_kit::{Focusable as _, MouseButton, TestAppContext, gpui, point, px, size};
 
+/// A fresh workspace gives Left the full height, Bottom the remaining width, and Problems the right column above it.
+#[gpui::test]
+fn native_problems_initial_right_column_and_region_priority(cx: &mut TestAppContext) {
+    super::with_shortcut_editor(cx, false, Vec::new(), |visual, app, _| {
+        visual.simulate_resize(size(px(1280.), px(820.)));
+        visual.update(|window, cx| {
+            app.update(cx, |app, cx| {
+                app.show_problems(window, cx);
+                app.toggle_terminal(window, cx);
+            });
+        });
+        draw(visual);
+        let (explorer, editor, problems, terminal) = visual.update(|_, cx| {
+            let app = app.read(cx);
+            let area = app.dock_area.read(cx);
+            let node = |placement, id| {
+                area.layout(placement)
+                    .unwrap()
+                    .find_panel_node(PanelId::from(id))
+                    .unwrap()
+            };
+            (
+                node(DockPlacement::Left, app.explorer_panel.entity_id()),
+                node(DockPlacement::Center, app.editor_panel.entity_id()),
+                node(DockPlacement::Center, app.problems.panel.entity_id()),
+                node(DockPlacement::Bottom, app.terminal.entity_id()),
+            )
+        });
+        let mut bounds = |node: gpui_base::dock::NodeId| {
+            let selector =
+                Box::leak(format!("local-dock-content-{}", node.as_u64()).into_boxed_str());
+            visual.debug_bounds(selector).unwrap()
+        };
+        let (left, center, right, bottom) = (
+            bounds(explorer),
+            bounds(editor),
+            bounds(problems),
+            bounds(terminal),
+        );
+        assert!((right.size.width - px(360.)).abs() < px(8.));
+        assert!((left.right() - bottom.left()).abs() < px(8.));
+        assert!((center.right() - right.left()).abs() < px(8.));
+        assert!((bottom.right() - right.right()).abs() < px(8.));
+        assert!(left.bottom() > bottom.bottom() - px(36.));
+        assert!(right.bottom() <= bottom.top() + px(36.));
+    });
+}
+
 /// Even an empty projection exposes named controls and returns keyboard focus on Escape.
 #[gpui::test]
 fn native_problems_heading_controls_and_escape_restore_focus(cx: &mut TestAppContext) {
@@ -93,7 +141,7 @@ fn native_problems_drag_resize_and_saved_layout(cx: &mut TestAppContext) {
             let area = app.dock_area.read(cx);
             (
                 id,
-                area.layout(DockPlacement::Bottom)
+                area.layout(DockPlacement::Center)
                     .unwrap()
                     .find_panel_node(id)
                     .unwrap(),
@@ -109,21 +157,21 @@ fn native_problems_drag_resize_and_saved_layout(cx: &mut TestAppContext) {
             Box::leak(format!("local-dock-content-{}", editor_node.as_u64()).into_boxed_str());
         let title = visual.debug_bounds(title_selector).unwrap();
         let initial = visual.debug_bounds("native-problems-panel").unwrap();
-        // The local dock uses Base's inside leading edge; the hit region starts within the title.
-        let divider = point(initial.center().x, title.top() + px(2.));
+        // The initial right column has a native split handle just inside its leading edge.
+        let divider = point(title.left() + px(2.), initial.center().y);
         visual.simulate_mouse_down(divider, MouseButton::Left, Default::default());
         visual.simulate_mouse_move(
-            divider - point(px(0.), px(20.)),
+            divider - point(px(20.), px(0.)),
             MouseButton::Left,
             Default::default(),
         );
         visual.simulate_mouse_move(
-            divider - point(px(0.), px(80.)),
+            divider - point(px(80.), px(0.)),
             MouseButton::Left,
             Default::default(),
         );
         visual.simulate_mouse_up(
-            divider - point(px(0.), px(80.)),
+            divider - point(px(80.), px(0.)),
             MouseButton::Left,
             Default::default(),
         );
@@ -133,14 +181,14 @@ fn native_problems_drag_resize_and_saved_layout(cx: &mut TestAppContext) {
                 .debug_bounds("native-problems-panel")
                 .unwrap()
                 .size
-                .height
-                > initial.size.height + px(50.),
-            "Dragging the bottom divider must resize the native list"
+                .width
+                > initial.size.width + px(50.),
+            "Dragging the right divider must resize the native list"
         );
 
         let title = visual.debug_bounds(title_selector).unwrap();
         let editor = visual.debug_bounds(editor_selector).unwrap();
-        let destination = point(editor.right() - px(10.), editor.center().y);
+        let destination = point(editor.center().x, editor.bottom() - px(10.));
         visual.simulate_mouse_down(title.center(), MouseButton::Left, Default::default());
         visual.simulate_mouse_move(
             title.center() + point(px(12.), px(0.)),

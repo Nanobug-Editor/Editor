@@ -2,6 +2,8 @@
 
 日期：2026-10-07
 
+2026-10-24 更新：用户确认消息按钮按等级显示蓝／橙／红提示点，替代原先仅警告和错误亮红点的要求；新行为与实际检查见[三色提醒验收](../verification/message-severity-2026-10-24.md)。既有工单与历史验收保留当时记录。
+
 稳定标识：`ui-host-messages-window`
 
 状态：原始两张实施工单已交付并核对关闭，父规格 #84 保持开放。2026-10-07 用户根据运行截图进一步修正消息范围、清空图标和窗口按钮位置；本文按该修正更新产品要求，自动及原生行为证据见 [运行反馈验收](../verification/host-messages-feedback.md)，不改写原工单验收历史。
@@ -20,11 +22,11 @@
 
 参考 IDEA 通知管理的用途，只收录宿主警告、错误和重要操作结果。打开、关闭、保存文件，文件树操作成功，刷新、切换主题、普通运行配置保存成功均不记录；这些操作的警告和失败仍记录。重要信息可以包括异常目标修复完成，以及已有或后续宿主 Git 提交、推送等必要操作的结果；不为消息窗口新增 Git 功能。
 
-消息按钮使用用户提供的“通知.svg”图标。宿主警告或错误到达时，在按钮图标上显示红色圆点；普通消息不触发红点，不使用计数徽标替代圆点。消息到达不自动展开窗口或抢焦点。打开消息窗口会清除已有红点，之后收到新的警告或错误可以再次触发红点。
+消息按钮使用用户提供的“通知.svg”图标。普通信息、警告、危险／错误分别显示蓝、橙、红圆点，以最高未查看等级为准，不使用计数徽标替代圆点。消息到达不自动展开窗口或抢焦点。打开消息窗口会清除已有提醒，之后收到任何等级的新消息都可以再次触发对应颜色。
 
 窗口使用不分组的消息列表，最新消息在上。初始最多展示 20 条，存在尚未展示的历史时显示“查看更多...”文本按钮，每次追加展开 20 条更早的消息，最后不足 20 条时展示剩余记录。
 
-本次运行最多保留最近 500 条消息，超过上限移除最早记录。收起窗口不清空消息；关闭编辑器后不保留消息历史。标题栏提供小扫帚图标按钮，悬浮提示和无障碍名称为“清空消息”，一次清除所有宿主消息和红点。
+本次运行最多保留最近 500 条消息，超过上限移除最早记录。收起窗口不清空消息；关闭编辑器后不保留消息历史。标题栏提供小扫帚图标按钮，悬浮提示和无障碍名称为“清空消息”，一次清除所有宿主消息和提示点。
 
 ## User Stories
 
@@ -50,11 +52,11 @@
 20. As an editor user, I want a button in the lower-left window tool group to reopen it, so that the window remains accessible while hidden.
 21. As an editor user, I want the provided notification icon on that button, so that I can recognize the intended entry point.
 22. As an editor user, I want layout, width and visibility restored, so that the window follows my last arrangement.
-23. As an editor user, I want a red dot for a new warning or error, so that I can notice important host messages.
-24. As an editor user, I want important information to avoid raising that dot, so that only warnings and errors demand attention.
+23. As an editor user, I want a blue dot for information, an orange dot for warnings and a red dot for dangerous errors, so that I can distinguish their urgency.
+24. As an editor user, I want the highest unacknowledged severity to determine the dot, so that later information cannot hide an earlier warning or error.
 25. As an editor user, I want new messages to leave my focus and window visibility unchanged, so that I can continue editing.
 26. As an editor user, I want opening the window to dismiss the existing dot, so that I do not need to acknowledge messages individually.
-27. As an editor user, I want later warnings and errors to raise the dot again, so that opening the window once does not suppress future reminders.
+27. As an editor user, I want later messages of any level to raise their colored dot again, so that opening the window once does not suppress future reminders.
 28. As an editor user, I want a compact broom clear-all button that also clears the dot, so that I can start observing from an empty history.
 29. As an editor user, I want clearing host messages to leave plugin logs untouched, so that independent diagnostic history is preserved.
 30. As an editor user, I want controls and messages usable in Chinese and English and in both themes, so that the window follows the editor's existing presentation settings.
@@ -77,7 +79,7 @@
 - 光标位置、实时进度等高频状态及内部调试日志不进入消息历史。操作状态字符串可继续用于内部流程，但不再绘制为底部文字提示。
 - 仅在当前编辑器运行期间保留消息，容量统一为 500 条，所有等级共同计数。第 501 条到达时移除最早一条，以此类推。
 - 容量上限与单次展示数量独立：保留最多 500 条，不等于一次渲染全部记录，也不沿用插件日志的 512 条上限。
-- 消息历史不写入持久化会话；可持久化的是窗口布局、宽度和显隐状态。重新启动后不恢复上一次运行的消息及红点。
+- 消息历史不写入持久化会话；可持久化的是窗口布局、宽度和显隐状态。重新启动后不恢复上一次运行的消息及提示点。
 - 隐藏、重新打开或调整窗口大小不删除消息。明确清空操作才清除全部宿主记录。
 
 ### 列表与展开
@@ -93,22 +95,23 @@
 
 - 首次使用默认关闭，手动打开后位于主窗口右侧；之后遵循已保存的布局、宽度和显隐选择。旧会话缺少显隐设置时同样默认关闭；旧布局没有该面板时，需要补入新面板而不覆盖用户已有面板布局。
 - 收起窗口回收对应空间，底部消息按钮保留；通过按钮重新打开窗口。
-- 左下角窗口工具组内的按钮采用用户指定的通知图标，红色圆点叠加于该图标；插件窗口溢出时仍保留消息按钮，不加入数量徽标或自动弹窗。
+- 左下角窗口工具组内的按钮采用用户指定的通知图标，等级提示点叠加于该图标；消息按钮排入“更多窗口”时，溢出入口显示同一等级和颜色，不加入数量徽标或自动弹窗。
 - 消息窗口可见时，消息按钮保持与其他窗口按钮一致的选中外观，并随主题切换；窗口收起或所在停靠区关闭时取消选中。
-- 普通消息不触发红点；新警告或错误触发红点，不自动展开或抢焦点。
-- 打开窗口只确认当时已经到达的提醒。确认之后到达的新警告或错误仍可以显示红点，不能被先前打开操作的延迟回调误清除。
-- 红点清除不要求逐条点击、滚动到所有记录或展开全部历史，也不等于删除消息。列表重绘本身不自动清除后续提醒。
-- 小扫帚图标按钮一次清除全部宿主消息与已有红点，不显示常驻“清空消息”文字，保留中英文悬浮提示和无障碍名称；不改动插件日志，清空之后到达的消息属于新的历史与提醒。
+- 普通信息显示蓝点，警告显示橙点，危险／错误信息显示红点，不自动展开或抢焦点。多个未查看消息以最高严重程度为准：红色优先于橙色，橙色优先于蓝色。
+- 后续低等级消息、重绘及历史容量淘汰均不降低已有提醒等级；即使原始警告或错误被挤出 500 条历史，提醒仍保留到确认。
+- 打开窗口只确认当时已经到达的提醒。确认之后到达的任何等级的新消息仍显示对应提示点，不能被先前打开操作的延迟回调误清除。
+- 提示点清除不要求逐条点击、滚动到所有记录或展开全部历史，也不等于删除消息。列表重绘本身不自动清除后续提醒。
+- 小扫帚图标按钮一次清除全部宿主消息与已有提示点，不显示常驻“清空消息”文字，保留中英文悬浮提示和无障碍名称；不改动插件日志，清空之后到达的消息属于新的历史与提醒。
 
 ## Testing Decisions
 
 ### 主要测试接缝（已确认）
 
-优先采用一条现有应用级纵向路径：**宿主操作产生消息 → EditorApp 主窗口集成 → 原生消息按钮与面板交互 → 可见列表、红点和布局结果**。
+优先采用一条现有应用级纵向路径：**宿主操作产生消息 → EditorApp 主窗口集成 → 原生消息按钮与面板交互 → 可见列表、等级提示点和布局结果**。
 
 - 复用现有 GPUI TestAppContext / VisualTestContext、隔离临时工作区、应用窗口构造与真实鼠标、键盘、滚动和尺寸变化输入。
 - 消息来源集成至少覆盖真实宿主操作的成功与失败路径；容量和批量展开场景可通过同一生产消息发布入口送入可控记录，不逐条依赖外部失败，也不为测试创建第二套消息存储或插件专用入口。
-- 主测试只断言用户可观察行为：实际可见文本及顺序、条数、按钮状态、红点、焦点和窗口占位，不把私有集合形状、内部方法调用次数或字段命名作为验收依据。
+- 主测试只断言用户可观察行为：实际可见文本及顺序、条数、按钮状态、提示点的实际颜色、焦点和窗口占位，不把私有集合形状、内部方法调用次数或字段命名作为验收依据。
 - 必要的容量或顺序边界测试只能补充这条应用级路径，不能替代真实按钮、消息来源和布局验证。
 - 沿用现有插件管理器及日志入口做隔离回归，验证插件日志和宿主消息互不读取、清空或触发对方提醒。
 
@@ -125,20 +128,20 @@
 | --- | --- | --- |
 | M01 | 无保存布局时启动 | 消息窗口默认关闭，点击状态栏入口后在右侧打开；无需安装插件 |
 | M02 | 日常操作、重要宿主结果、警告与失败 | 日常成功不记录；重要结果及警告、错误进入宿主列表；底部无操作结果文字 |
-| M03 | 插件产生消息或错误 | 保留在插件日志入口，不进入宿主列表，也不触发宿主消息红点 |
+| M03 | 插件产生消息或错误 | 保留在插件日志入口，不进入宿主列表，也不触发宿主消息提示点 |
 | M04 | 0、1、20、21、40、41 条消息 | 初始最多 20 条；每次展开最多 20 条；余数正确且无更多记录时不显示展开按钮 |
 | M05 | 多条消息连续到达 | 最新在上，同时间接收也有稳定顺序，无重复记录 |
 | M06 | 达到 500 条并继续接收 | 仅保留最近 500 条，普通消息与警告、错误共同遵守上限 |
 | M07 | 已展开历史时继续收消息或发生淘汰 | 展开结果无重复或已淘汰记录，查看更多仍遵守保留边界 |
 | M08 | 收起与重新打开 | 消息仍在；编辑空间回收；左下角窗口工具组内的按钮能够恢复窗口 |
-| M09 | 调整宽度、显隐后重启 | 恢复保存布局、宽度与显隐；不恢复历史消息及红点 |
+| M09 | 调整宽度、显隐后重启 | 恢复保存布局、宽度与显隐；不恢复历史消息及提示点 |
 | M10 | 加载没有消息面板的旧布局 | 补入消息面板，不覆盖或丢失已有宿主与插件面板布局 |
-| M11 | 必要的信息消息到达 | 不出现新的红点，不改变焦点或自动展开 |
-| M12 | 警告或错误到达 | 通知图标显示红色圆点，不显示数量；不抢焦点或自动展开 |
-| M13 | 打开有红点的窗口 | 已有红点消失，记录保留；不要求展开全部历史或逐条点击 |
-| M14 | 打开确认后收到新警告或错误 | 再次显示红点，旧确认与普通重绘不能抹掉新提醒 |
-| M15 | 小扫帚按钮清空含消息和红点的窗口 | 无常驻文字且悬浮名称可读；宿主列表为空且红点消失；插件日志不变；新到消息仍正常接收 |
-| M16 | 深浅主题、中英文、键盘与滚动、缩放 | 指定图标、红点、按钮及文本可辨识；操作可达；列表滚动与编辑焦点正常 |
+| M11 | 必要的信息消息到达 | 无更高未查看等级时显示蓝点，不改变焦点或自动展开 |
+| M12 | 警告或错误到达 | 警告显示橙点、危险／错误显示红点；最高未查看等级优先，不被低等级信息或淘汰降级；不抢焦点或自动展开 |
+| M13 | 打开有提示点的窗口 | 已有提示点消失，记录保留；不要求展开全部历史或逐条点击 |
+| M14 | 打开确认后收到任何等级的新消息 | 再次显示对应颜色，旧确认与普通重绘不能抹掉新提醒 |
+| M15 | 小扫帚按钮清空含消息和提示点的窗口 | 无常驻文字且悬浮名称可读；宿主列表为空且提示点消失；插件日志不变；新到消息仍正常接收 |
+| M16 | 深浅主题、中英文、键盘与滚动、缩放 | 指定图标、三色提示点、按钮及文本可辨识；溢出入口保留相同颜色；操作可达；列表滚动与编辑焦点正常 |
 | M17 | 受限工作区 | 宿主消息组件可用，不因查看消息启动插件或语言工具 |
 
 实施时按仓库约定执行 Rust 格式检查、非 UI workspace 测试、workspace 编译检查，以及相关 editor-app 针对性测试和 Windows 原生交互验收。实际命令、结果和未验证项见 [实施验收记录](../verification/host-messages.md)。

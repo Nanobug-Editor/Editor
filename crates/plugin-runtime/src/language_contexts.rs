@@ -1,5 +1,7 @@
 //! Registered project references seal opaque provider choices to native scope and owner lifetimes.
 use crate::EditorAuthority;
+mod discovery;
+use discovery::Discovery;
 use plugin_protocol::{
     api::{ErrorCode, Failure},
     language_context::{Descriptor, Reference},
@@ -39,6 +41,8 @@ impl RegisteredContext {
 pub struct LanguageContexts(Arc<Mutex<State>>);
 #[derive(Default)]
 struct State {
+    /// Instance IDs already identify a single scope. Epoch guards survive completed service calls.
+    discovery: BTreeMap<String, Discovery>,
     references: BTreeMap<String, RegisteredContext>,
     selected: BTreeMap<(String, String, String, String), SourceSelection>,
     /// Native navigation lends one current source context to the next exact target preparation.
@@ -59,6 +63,22 @@ impl std::fmt::Debug for LanguageContexts {
 }
 
 impl LanguageContexts {
+    /// Metadata liveness is independent from filesystem observation; paths are checked again on use.
+    pub(crate) fn check(&self, token: &str, owner: &str, scope: &str) -> Result<(), Failure> {
+        let mut state = self.0.lock().unwrap();
+        state.sweep();
+        state
+            .references
+            .get(token)
+            .filter(|entry| entry.owner == owner && entry.scope == scope)
+            .map(|_| ())
+            .ok_or_else(|| {
+                Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Unknown, foreign or retired project context",
+                )
+            })
+    }
     /// Fully validate a batch before replacing any generation. A malformed tail publishes no prefix.
     pub(crate) fn register(
         &self,
@@ -130,6 +150,20 @@ impl LanguageContexts {
         }
         // Reject regressing generations before mutating even one existing registration.
         for (descriptor, _) in &prepared {
+            // A caller-scoped logical key cannot silently borrow another live chain's lifetime.
+            // Consumers namespace their keys; retired chains are removed by sweep before reuse.
+            if state.references.values().any(|entry| {
+                entry.owner == owner
+                    && entry.scope == scope
+                    && entry.reference.descriptor.provider == descriptor.provider
+                    && entry.reference.descriptor.key == descriptor.key
+                    && !entry.authority.same_owner(&authority)
+            }) {
+                return Err(Failure::new(
+                    ErrorCode::InvalidHandle,
+                    "Project context key belongs to another live caller chain",
+                ));
+            }
             if state.references.values().any(|entry| {
                 entry.owner == owner
                     && entry.scope == scope
@@ -472,6 +506,11 @@ impl LanguageContexts {
     /// Settings/cutover revoke registered generations before callbacks can issue another native request.
     pub(crate) fn revoke_owner(&self, owner: &str) {
         let mut state = self.0.lock().unwrap();
+        if let Some(epoch) = state.discovery.remove(owner)
+            && let Some(alive) = epoch.alive
+        {
+            alive.store(false, Ordering::Release);
+        }
         for entry in state
             .references
             .values()
@@ -504,7 +543,15 @@ impl State {
     }
 
     fn sweep(&mut self) {
-        self.references.retain(|_, context| context.is_live());
+        self.references.retain(|_, context| {
+            let live = context.is_live();
+            // Native requests may already hold only this seal. Removing borrowed metadata must
+            // revoke those holders too, even when the retiring participant is a different owner.
+            if !live {
+                context.seal.store(false, Ordering::Release);
+            }
+            live
+        });
         self.selected.retain(|_, selected| {
             let live = self.references.contains_key(&selected.token);
             if !live {
@@ -548,6 +595,47 @@ fn validate_source(workspace: &Path, path: &str) -> Result<(), Failure> {
 mod tests {
     //! Source selection affects transient handoffs, independently from registered process metadata.
     use super::*;
+
+    /// Existing native holders observe a supplier's domain retirement through their retained seal.
+    #[test]
+    fn borrowed_context_revocation_seals_retained_native_guards() {
+        let workspace = tempfile::tempdir().unwrap();
+        let registry = LanguageContexts::default();
+        let authority = registry
+            .borrow_discovery(
+                EditorAuthority::new(Arc::new(AtomicBool::new(true)), None),
+                &["supplier".into(), "engine".into()],
+            )
+            .unwrap();
+        let reference = registry
+            .register(
+                "engine",
+                "scope",
+                workspace.path(),
+                vec![Descriptor {
+                    provider: "analysis".into(),
+                    key: "project".into(),
+                    generation: 1,
+                    project_root: String::new(),
+                    data: serde_json::Value::Null,
+                }],
+                authority,
+            )
+            .unwrap()
+            .pop()
+            .unwrap();
+        let retained = registry
+            .resolve(&reference.token, "engine", "scope")
+            .unwrap();
+        let guard = retained.guard();
+        assert!(guard.load(Ordering::Acquire));
+        registry.invalidate("supplier").unwrap();
+        assert!(!retained.is_live());
+        assert!(
+            !guard.load(Ordering::Acquire),
+            "Revoking a borrowed context must cancel native holders that already retained its seal"
+        );
+    }
 
     /// A→B→A cannot revive an old wait; selecting or closing another document remains independent.
     #[test]

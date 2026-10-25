@@ -7,3 +7,5 @@ plugins/javascript/licenses/native/typescript-ThirdPartyNoticeText.txt -text -wh
 # Copied upstream notices and generated bundles retain upstream whitespace; authored source stays checked.
 plugins/html/licenses/native/* -whitespace
 plugins/javascript/licenses/native/* -whitespace
+# Terminal replay streams contain meaningful CR/LF, spaces and escape sequences.
+crates/editor-terminal/tests/data/screen/**/*.recording binary -whitespace

@@ -220,6 +220,18 @@ impl Validator {
     }
     fn node(&mut self, node: &Node, depth: usize) -> Result<(), String> {
         node.layout.margin.validate(10000.)?;
+        if let Some(rows) = node.textarea_rows {
+            if !matches!(node.kind, Kind::Textarea(_))
+                || node.layout.height.is_some()
+                || rows.min == 0
+                || rows.min > rows.max
+                || rows.max > 64
+            {
+                return Err(
+                    "Textarea rows require 1 <= min <= max <= 64 without a fixed height".into(),
+                );
+            }
+        }
         if let Some(viewport) = &node.viewport {
             viewport.validate(&node.kind)?;
             if matches!(&node.kind, Kind::Canvas(canvas) if canvas.scroll_buffer.is_some() || canvas.column_resize.is_some())

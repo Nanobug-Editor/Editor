@@ -32,6 +32,7 @@ impl EditorApp {
             return;
         }
         let root = self.workspace.root().to_path_buf();
+        let directories = explorer_tree::directory_index(&root, &snapshot);
         let items = restore_expanded(
             tree_items(
                 &root,
@@ -66,6 +67,8 @@ impl EditorApp {
             state.set_items(items, cx);
             state.set_selected_item(selected_item.as_ref(), cx);
         });
+        // Publish classification with these tree items, replacing stale rename/removal entries.
+        self.workspace_directories = directories;
         self.workspace_snapshot = Some(snapshot);
         cx.notify();
     }
@@ -233,6 +236,10 @@ impl EditorApp {
                     tab.suppress_change = false;
                     // Silent disk reloads still invalidate plugin snapshots and notify subscriptions.
                     tab.capability_revision = tab.capability_revision.saturating_add(1);
+                    // Seal this same native value now; a delayed Notify must not invalidate the
+                    // exact revision returned to an explicit comparison-source request.
+                    tab.capability_content =
+                        super::native_text::NativeTextIdentity::new(tab.editor.read(cx).text());
                     tab.disk_digest = digest;
                     // set_value is silent and keeps the clean revision, so refresh its preview explicitly.
                     preview_reloaded |= self.active_path.as_ref() == Some(&path);
@@ -281,7 +288,7 @@ impl EditorApp {
     }
 
     /// A parent directory is watched for each document outside the workspace.
-    fn sync_watched_documents(&self) {
+    pub(super) fn sync_watched_documents(&self) {
         self.file_watch.set_documents(
             self.tabs
                 .iter()
@@ -299,7 +306,7 @@ impl EditorApp {
         self.session_state.open_tabs = self
             .tabs
             .iter()
-            .filter(|tab| tab.virtual_document.is_none() && !tab.preview)
+            .filter(|tab| tab.virtual_document.is_none() && tab.is_visible() && !tab.preview)
             .map(|tab| tab.path().to_string_lossy().into_owned())
             .collect();
         self.session_state.active_file = self
@@ -307,7 +314,10 @@ impl EditorApp {
             .as_ref()
             .filter(|path| {
                 self.tabs.iter().any(|tab| {
-                    tab.path() == path.as_path() && tab.virtual_document.is_none() && !tab.preview
+                    tab.path() == path.as_path()
+                        && tab.virtual_document.is_none()
+                        && tab.is_visible()
+                        && !tab.preview
                 })
             })
             .map(|path| path.to_string_lossy().into_owned());
@@ -431,6 +441,7 @@ impl EditorApp {
         let index = self.insert_file_tab(
             OpenTab {
                 preview: false,
+                source_only: None,
                 virtual_document: None,
                 path,
                 file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -467,6 +478,7 @@ impl EditorApp {
             return;
         }
         if let Some(index) = self.tabs.iter().position(|tab| tab.path() == path) {
+            self.tabs[index].source_only = None;
             if mode == FileOpenMode::Fixed {
                 self.keep_tab(index);
             }
@@ -478,6 +490,7 @@ impl EditorApp {
             let index = self.insert_file_tab(
                 OpenTab {
                     preview: mode == FileOpenMode::Preview,
+                    source_only: None,
                     virtual_document: None,
                     path,
                     file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -506,6 +519,7 @@ impl EditorApp {
                 let index = self.insert_file_tab(
                     OpenTab {
                         preview: mode == FileOpenMode::Preview,
+                        source_only: None,
                         virtual_document: None,
                         path: document_path,
                         file_id: NEXT_FILE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -541,6 +555,7 @@ impl EditorApp {
                     let index = self.insert_file_tab(
                         OpenTab {
                             preview: mode == FileOpenMode::Preview,
+                            source_only: None,
                             virtual_document: None,
                             path,
                             file_id: NEXT_FILE_ID
@@ -852,6 +867,10 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Ordinary navigation reveals a source that previously belonged only to a comparison.
+        if let Some(tab) = self.tabs.get_mut(index) {
+            tab.source_only = None;
+        }
         // Ordinary switches follow the saved preference; explicit navigation supplies its own policy.
         self.activate_tab_with_navigation(
             index,
@@ -863,7 +882,7 @@ impl EditorApp {
     }
 
     /// Activate document content while keeping explorer reveal and keyboard focus caller choices.
-    fn activate_tab_with_navigation(
+    pub(super) fn activate_tab_with_navigation(
         &mut self,
         index: usize,
         reveal: bool,
@@ -952,11 +971,7 @@ impl EditorApp {
         // Resolve the visible index after filtering hidden comparison sources; GPUI measures widths.
         let visible_index = self.tabs[..index]
             .iter()
-            .filter(|tab| {
-                tab.virtual_document
-                    .as_ref()
-                    .is_none_or(|source| !source.hidden)
-            })
+            .filter(|tab| tab.is_visible())
             .count();
         self.tabs_scroll.scroll_to_item(visible_index);
         // Debugger source updates preserve inspection focus; explicit navigation focuses editing.
@@ -1038,6 +1053,8 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Closing the last tab unmounts the strip, so retire its native drag before that happens.
+        self.tabs_drag.cancel(window, cx);
         let was_active = self.active_path.as_ref() == Some(&path);
         self.release_tab(index, cx);
         self.sync_watched_documents();
@@ -1049,8 +1066,16 @@ impl EditorApp {
         }
 
         self.active_path = None;
-        if !self.tabs.is_empty() {
-            self.activate_tab(index.min(self.tabs.len() - 1), window, cx);
+        let next_visible = self
+            .tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, tab)| tab.is_visible())
+            .min_by_key(|(candidate, _)| candidate.abs_diff(index))
+            .map(|(candidate, _)| candidate);
+        if let Some(next) = next_visible {
+            // Hidden comparison sources must never become ordinary tabs as a close fallback.
+            self.activate_tab(next, window, cx);
         } else {
             // Retire document interactions before mounting the non-editable empty canvas.
             self.cancel_text_drag(cx);
@@ -1089,24 +1114,54 @@ impl EditorApp {
         self.tabs.remove(index);
     }
 
-    pub(crate) fn move_tab_before(&mut self, source: &Path, target: &Path, cx: &mut Context<Self>) {
-        let Some(source_index) = self.tabs.iter().position(|tab| tab.path() == source) else {
-            return;
-        };
-        let Some(tab) = self.tabs.get(source_index) else {
-            return;
-        };
-        if tab.path() == target {
-            return;
-        }
-
-        let tab = self.tabs.remove(source_index);
-        let target_index = self
+    /// Commit a released drag by live file identity; `before: None` means the visible strip's end.
+    /// Stale, hidden and unchanged targets leave persistence untouched; `cx` redraws actual moves.
+    pub(crate) fn reorder_file_tab(
+        &mut self,
+        source: u64,
+        before: Option<u64>,
+        cx: &mut Context<Self>,
+    ) {
+        let visible = self
             .tabs
             .iter()
-            .position(|tab| tab.path() == target)
-            .unwrap_or(self.tabs.len());
-        self.tabs.insert(target_index, tab);
+            .enumerate()
+            .filter(|(_, tab)| tab.is_visible())
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        let Some(source_position) = visible
+            .iter()
+            .position(|&index| self.tabs[index].file_id == source)
+        else {
+            return;
+        };
+        let target_position = match before {
+            Some(target) => {
+                let Some(position) = visible
+                    .iter()
+                    .position(|&index| self.tabs[index].file_id == target)
+                else {
+                    return;
+                };
+                position
+            }
+            None => visible.len(),
+        };
+        // Compare visible positions before touching hidden comparison sources or saving the session.
+        if target_position - usize::from(source_position < target_position) == source_position {
+            return;
+        }
+        let source_index = visible[source_position];
+        let insertion_index = visible
+            .get(target_position)
+            .copied()
+            .unwrap_or_else(|| visible[visible.len() - 1] + 1);
+        let tab = self.tabs.remove(source_index);
+        // Moving the existing owner preserves native text, Undo, preview and active-document identity.
+        self.tabs.insert(
+            insertion_index - usize::from(source_index < insertion_index),
+            tab,
+        );
         self.persist_session();
         cx.notify();
     }

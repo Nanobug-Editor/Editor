@@ -7,6 +7,9 @@ use gpui_kit::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+mod surface;
+pub use surface::details_card;
+
 /// Details sit above ordinary dock popovers and below popup menus (priority 20).
 const DEFINITION_POPUP_PRIORITY: usize = 10;
 
@@ -15,16 +18,23 @@ pub struct DefinitionPopup {
     anchor: Bounds<Pixels>,
     content: Option<AnyElement>,
     handles: Option<AnyElement>,
+    /// Observe the actual outer frame after placement, independent from content padding and scroll.
+    on_bounds: Option<Box<dyn FnOnce(Bounds<Pixels>)>>,
 }
 
-/// Place content using the text anchor's window-local coordinate space.
-pub fn definition_popup(anchor: Bounds<Pixels>, content: AnyElement) -> impl IntoElement {
+/// Place `content` beside `anchor`, reporting its final window-local outer bounds to `on_bounds`.
+pub fn definition_popup(
+    anchor: Bounds<Pixels>,
+    content: AnyElement,
+    on_bounds: impl FnOnce(Bounds<Pixels>) + 'static,
+) -> impl IntoElement {
     // Defer both hit testing and painting so sibling panels and dock clipping
     // cannot cover a card positioned in the window's coordinate space.
     deferred(DefinitionPopup {
         anchor,
         content: Some(content),
         handles: None,
+        on_bounds: Some(Box::new(on_bounds)),
     })
     .with_priority(DEFINITION_POPUP_PRIORITY)
 }
@@ -251,8 +261,16 @@ impl Element for DefinitionPopup {
             .into_any_element();
         // Measure preferred content within the frame's limits; min-content
         // would collapse a shrinkable Markdown child to its padding alone.
-        let size = frame.layout_as_root(
+        let preferred = frame.layout_as_root(
             size(AvailableSpace::MaxContent, AvailableSpace::MaxContent),
+            window,
+            cx,
+        );
+        // Max-content chooses a width, but prose can wrap at that width during
+        // its final layout. Recompute height under the same definite width so
+        // the card includes those extra lines before applying its height cap.
+        let size = frame.layout_as_root(
+            size(preferred.width.into(), AvailableSpace::MaxContent),
             window,
             cx,
         );
@@ -319,7 +337,11 @@ impl Element for DefinitionPopup {
         cx: &mut App,
     ) {
         // The content uses window coordinates, independent of the editor's scroll frame.
-        layout.resize.borrow_mut().bounds = Bounds::new(layout.origin, layout.size);
+        let bounds = Bounds::new(layout.origin, layout.size);
+        layout.resize.borrow_mut().bounds = bounds;
+        if let Some(on_bounds) = self.on_bounds.take() {
+            on_bounds(bounds);
+        }
         self.content
             .as_mut()
             .unwrap()
@@ -392,6 +414,7 @@ mod tests {
                     .flex_shrink_1()
                     .occlude()
                     .into_any_element(),
+                |_| {},
             )
         }
     }
@@ -468,6 +491,7 @@ mod tests {
                                     cx.stop_propagation();
                                 })
                                 .into_any_element(),
+                            |_| {},
                         )),
                 )
                 .child(deferred(

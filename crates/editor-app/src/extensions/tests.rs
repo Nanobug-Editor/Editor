@@ -199,6 +199,7 @@ fn second_local_import_shows_visible_consent(cx: &mut TestAppContext) {
             .unwrap();
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 manifest: first_manifest.clone(),
                 digest: "first".into(),
@@ -476,6 +477,7 @@ fn uninstall_dialog_offers_both_data_choices(cx: &mut TestAppContext) {
             }];
             let mut state = owner.worker.state.lock().unwrap();
             state.entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 manifest: manifest.clone(),
                 digest: "fixture".into(),
@@ -657,6 +659,7 @@ fn incompatible_plugin_details_keep_preferences_and_update_uninstall_actions(
                 source: Some("sdk-repack.zip".into()),
             }];
             owner.worker.state.lock().unwrap().entries = vec![Installed {
+                install_sequence: 0,
                 replaced_by: None,
                 grants: old.permissions.clone(),
                 manifest: old,
