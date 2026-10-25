@@ -373,6 +373,21 @@ impl Validator {
             }
             Kind::Canvas(canvas) => {
                 canvas.validate()?;
+                if let Some(scene) = &canvas.scene {
+                    let mut text_error = None;
+                    for root in &scene.roots {
+                        root.visit(&mut |node| {
+                            if let SceneNode::Paragraph { text, .. } = node {
+                                if let Err(error) = self.text(text) {
+                                    text_error = Some(error);
+                                }
+                            }
+                        });
+                    }
+                    if let Some(error) = text_error {
+                        return Err(error);
+                    }
+                }
                 for request in &canvas.measure_text {
                     for sample in &request.texts {
                         self.text(sample)?;

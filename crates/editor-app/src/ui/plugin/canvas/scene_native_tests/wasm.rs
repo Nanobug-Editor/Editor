@@ -1,5 +1,6 @@
 //! Actual independent guest output supplies native acceptance pixels, not a host-built substitute.
 use super::*;
+pub(super) mod editable;
 #[path = "../../../../../../plugin-runtime/tests/support/packages.rs"]
 mod test_packages;
 
@@ -8,7 +9,10 @@ pub(super) struct InstalledFlow {
     /// Immutable public document after the guest's own zoom and pan commands.
     pub document: Document,
     /// Retained owner is retired before the disposable profile and workspace are removed.
-    _manager: plugin_runtime::Manager,
+    manager: plugin_runtime::Manager,
+    /// Ordinary package/panel identifiers used only by this fixture driver.
+    plugin: String,
+    panel: String,
     _profile: tempfile::TempDir,
     _workspace: tempfile::TempDir,
 }
@@ -16,6 +20,53 @@ pub(super) struct InstalledFlow {
 /// Install through the public manager with only the permissions declared by this ordinary guest.
 pub(super) fn install() -> InstalledFlow {
     let package = test_packages::package("canvas-flow-1.0.0");
+    let mut installed = open(package, "canvas-flow", "diagram");
+    // These declared noncoordinate buttons need no fabricated presentation receipt.
+    for node in ["zoom", "pan"] {
+        let revision = installed.document.revision;
+        installed
+            .manager
+            .event(
+                "canvas-flow",
+                Some("diagram".into()),
+                protocol::api::Notification::Ui(ui::UiEvent {
+                    revision,
+                    node: node.into(),
+                    action: ui::Action::Click,
+                }),
+            )
+            .unwrap();
+        installed.document = installed.manager.live["canvas-flow"].views["diagram"]
+            .as_ref()
+            .clone();
+    }
+    installed
+}
+/// Load independent B packages through their normal package reader, including candidate overrides.
+pub(super) fn install_editable(kind: &str) -> InstalledFlow {
+    let (id, version, panel, variable) = match kind {
+        "flow" => (
+            "canvas-flow",
+            "1.1.0",
+            "diagram",
+            "NANOBUG_CANVAS_EDITABLE_PACKAGE",
+        ),
+        "table" => (
+            "canvas-table",
+            "1.0.0",
+            "table",
+            "NANOBUG_CANVAS_TABLE_PACKAGE",
+        ),
+        _ => panic!("unknown native editable fixture"),
+    };
+    let package = std::env::var_os(variable).map_or_else(
+        || test_packages::package(&format!("{id}-{version}")),
+        |path| plugin_runtime::Package::read(std::path::Path::new(&path)).unwrap(),
+    );
+    open(package, id, panel)
+}
+/// Activate a real ordinary WASM view before opening its isolated native acceptance window.
+fn open(package: plugin_runtime::Package, plugin: &str, panel: &str) -> InstalledFlow {
     let profile = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
     let mut manager = plugin_runtime::Manager::open(
@@ -29,11 +80,11 @@ pub(super) fn install() -> InstalledFlow {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
-    let availability = manager.availability("canvas-flow").unwrap();
+    let availability = manager.availability(plugin).unwrap();
     let demand = manager
         .begin_demand(
             &availability,
-            plugin_runtime::DemandReason::View("diagram".into()),
+            plugin_runtime::DemandReason::View(panel.into()),
             60_000,
         )
         .unwrap();
@@ -50,29 +101,29 @@ pub(super) fn install() -> InstalledFlow {
         );
         std::thread::sleep(Duration::from_millis(10));
     }
-    // These declared noncoordinate buttons need no fabricated presentation receipt.
-    // The native test renders the resulting guest projection and checks its actual pixels.
-    for node in ["zoom", "pan"] {
-        let revision = manager.live["canvas-flow"].views["diagram"].revision;
-        manager
-            .event(
-                "canvas-flow",
-                Some("diagram".into()),
-                protocol::api::Notification::Ui(ui::UiEvent {
-                    revision,
-                    node: node.into(),
-                    action: ui::Action::Click,
-                }),
-            )
-            .unwrap();
-    }
-    let document = manager.live["canvas-flow"].views["diagram"]
-        .as_ref()
-        .clone();
+    let document = manager.live[plugin].views[panel].as_ref().clone();
     InstalledFlow {
         document,
-        _manager: manager,
+        manager,
+        plugin: plugin.into(),
+        panel: panel.into(),
         _profile: profile,
         _workspace: workspace,
+    }
+}
+impl InstalledFlow {
+    /// Forward original native envelopes to public Manager admission and observe guest publication.
+    pub(super) fn deliver(&mut self, events: &[ui::UiEvent]) -> anyhow::Result<()> {
+        for event in events {
+            self.manager.event(
+                &self.plugin,
+                Some(self.panel.clone()),
+                protocol::api::Notification::Ui(event.clone()),
+            )?;
+        }
+        self.document = self.manager.live[&self.plugin].views[&self.panel]
+            .as_ref()
+            .clone();
+        Ok(())
     }
 }

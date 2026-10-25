@@ -1,0 +1,11 @@
+{
+  "expect_presented": true, "target_edit_keys_script": true,
+  "scene": {"identity": 55, "revision": 1, "roots": [
+    {"kind":"paragraph","id":"label","layout_key":"edit-1","text":"é 👩‍💻",
+      "rect":{"x":20,"y":20,"w":240,"h":100},"style":{"font":{"family":"Segoe UI","size_px":18},"line_height":27}}
+  ], "targets": [
+    {"id":"edit","epoch":1,"focusable":true,"tab_index":0,"cursor":"text",
+      "geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":240,"h":100}},
+      "text_input":{"paragraph":"label","layout_key":"edit-1","text_revision":1,"selection":{"start":15,"end":15},"editing_keys":true}}
+  ]}
+}

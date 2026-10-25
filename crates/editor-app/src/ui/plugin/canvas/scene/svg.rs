@@ -1,4 +1,5 @@
 //! Serialize validated complex layers to inert SVG for the existing bounded background rasterizer.
+use super::bounds::geometry_bounds;
 use super::*;
 use std::fmt::Write as _;
 mod budget;
@@ -8,6 +9,9 @@ use budget::SvgText;
 pub(super) fn encode(
     scene: &CanvasScene,
     photos: &BTreeMap<String, std::sync::Arc<super::super::super::images::Photo>>,
+    typography: &Typography,
+    pixel_budget: u64,
+    draft: Option<&paragraph::NativeDraft>,
 ) -> Result<
     (
         String,
@@ -25,6 +29,9 @@ pub(super) fn encode(
         image_work: 16 * 1024 * 1024,
         next: 0,
         bounds: None,
+        typography: typography.clone(),
+        pixel_budget,
+        draft,
     };
     for root in &scene.roots {
         writer.node(root, SceneTransform::default(), photos)?;
@@ -55,7 +62,9 @@ pub(super) fn encode(
     ))
 }
 /// Own generated numeric IDs and the union of transformed primitive bounds for one compilation.
-struct Writer {
+struct Writer<'a> {
+    typography: Typography,
+    pixel_budget: u64,
     defs: SvgText,
     body: SvgText,
     /// A decoded source is encoded once; placements only reference generated numeric IDs.
@@ -66,8 +75,10 @@ struct Writer {
     image_work: u64,
     next: usize,
     bounds: Option<protocol::Rect>,
+    /// Only this admitted paragraph's native text/decoration may differ from committed source.
+    draft: Option<&'a paragraph::NativeDraft>,
 }
-impl Writer {
+impl Writer<'_> {
     /// Encode one validated node, preserving true group opacity and local clip coordinates.
     fn node(
         &mut self,
@@ -114,8 +125,8 @@ impl Writer {
                 stroke,
                 ..
             } => {
-                let local = geometry_bounds(geometry, SceneTransform::default());
-                let mut bounds = geometry_bounds(geometry, parent);
+                let local = geometry_bounds(geometry, SceneTransform::default(), 1.);
+                let mut bounds = geometry_bounds(geometry, parent, 1.);
                 if let Some(stroke) = stroke {
                     let [a, b, c, d, _, _] = parent.0;
                     // Row sums conservatively bound each projected axis, including shear.
@@ -154,6 +165,7 @@ impl Writer {
                         radii: [0.; 4],
                     },
                     parent,
+                    1.,
                 );
                 self.include(bounds);
                 let bitmap = photos
@@ -200,6 +212,77 @@ impl Writer {
                         rect.x, rect.y, rect.w, rect.h
                     );
                 }
+            }
+            SceneNode::Paragraph {
+                id: paragraph,
+                layout_key,
+                text,
+                rect,
+                style,
+            } => {
+                let draft = self.draft.filter(|draft| {
+                    draft.paragraph == *paragraph && draft.layout_key == *layout_key
+                });
+                let mut style = style.clone();
+                if draft.is_some_and(|draft| draft.presentation.transient) {
+                    style.runs.clear();
+                }
+                let font_style = style.font.clone().over(self.typography.font.clone());
+                let mut face = font(font_style.family.unwrap_or_else(|| "Segoe UI".into()));
+                if font_style.bold.unwrap_or(false) {
+                    face = face.bold();
+                }
+                let context = editor_ui::text::paragraph::CanvasTextLayout {
+                    font: face,
+                    font_size: px(font_style.size_px.unwrap_or(14.)),
+                    color: rgb(self.typography.foreground).into(),
+                    bounds: Bounds::new(point(px(0.), px(0.)), size(px(rect.w), px(rect.h))),
+                    style: style.clone(),
+                    projection: None,
+                };
+                let [a, b, c, d, _, _] = parent.0;
+                let density = (2. * (a.abs() + c.abs()).max(b.abs() + d.abs())).clamp(0.25, 4.);
+                let pixels = if let Some(draft) = draft {
+                    editor_ui::text::paragraph::rasterize_native_draft(
+                        &draft.presentation,
+                        &context,
+                        density,
+                        self.pixel_budget,
+                        &mut self.image_work,
+                    )?
+                } else {
+                    editor_ui::text::paragraph::rasterize_native_paragraph(
+                        text.clone().into(),
+                        &context,
+                        density,
+                        self.pixel_budget,
+                        &mut self.image_work,
+                    )?
+                };
+                let png = budget::png_rgba(
+                    &pixels.rgba,
+                    pixels.width,
+                    pixels.height,
+                    self.defs.remaining(),
+                )?;
+                self.defs.charge(png.len())?;
+                let id = self.next;
+                self.next += 1;
+                let uri = format!("native-paragraph-{id}.png");
+                self.pngs.insert(uri.clone(), std::sync::Arc::new(png));
+                self.include(geometry_bounds(
+                    &SceneGeometry::Rect {
+                        rect: *rect,
+                        radii: [0.; 4],
+                    },
+                    parent,
+                    1.,
+                ));
+                let _ = write!(
+                    self.body,
+                    "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" href=\"{}\"/>",
+                    rect.x, rect.y, rect.w, rect.h, uri
+                );
             }
         }
         self.body.check()
@@ -316,53 +399,5 @@ fn rule(geometry: &SceneGeometry) -> &'static str {
             ..
         } => "evenodd",
         _ => "nonzero",
-    }
-}
-/// Control-point hull bounds conservatively enclose Bézier curves under an affine transform.
-fn geometry_bounds(geometry: &SceneGeometry, transform: SceneTransform) -> protocol::Rect {
-    let mut points = Vec::new();
-    match geometry {
-        SceneGeometry::Rect { rect, .. } => points.extend([
-            (rect.x, rect.y),
-            (rect.x + rect.w, rect.y),
-            (rect.x, rect.y + rect.h),
-            (rect.x + rect.w, rect.y + rect.h),
-        ]),
-        SceneGeometry::Path { segments, .. } => {
-            for segment in segments {
-                match *segment {
-                    ScenePathSegment::Move { x, y } | ScenePathSegment::Line { x, y } => {
-                        points.push((x, y))
-                    }
-                    ScenePathSegment::Quadratic { cx, cy, x, y } => {
-                        points.extend([(cx, cy), (x, y)])
-                    }
-                    ScenePathSegment::Cubic {
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        x,
-                        y,
-                    } => points.extend([(x1, y1), (x2, y2), (x, y)]),
-                    ScenePathSegment::Close => {}
-                }
-            }
-        }
-    }
-    let mut min = (f32::INFINITY, f32::INFINITY);
-    let mut max = (f32::NEG_INFINITY, f32::NEG_INFINITY);
-    for (x, y) in points {
-        let (x, y) = transform.point(x, y);
-        min.0 = min.0.min(x);
-        min.1 = min.1.min(y);
-        max.0 = max.0.max(x);
-        max.1 = max.1.max(y);
-    }
-    protocol::Rect {
-        x: min.0,
-        y: min.1,
-        w: (max.0 - min.0).max(1.),
-        h: (max.1 - min.1).max(1.),
     }
 }

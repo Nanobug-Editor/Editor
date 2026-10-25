@@ -6,12 +6,33 @@ mod columns;
 pub use columns::*;
 mod scene;
 pub use scene::*;
+mod paragraph;
+pub use paragraph::*;
+mod text_layout;
+pub use text_layout::*;
+mod targets;
+pub use targets::*;
+mod text_index;
+pub use text_index::*;
+mod pointer;
+pub use pointer::*;
+mod text_input;
+pub use text_input::*;
+mod semantics;
+pub use semantics::*;
+mod placement;
+pub use placement::*;
+#[cfg(test)]
+mod paragraph_tests;
 #[cfg(test)]
 mod scene_tests;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canvas {
+    /// `ui.canvas 1.8`: bounded native point queries for named paragraphs in this exact scene.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub text_queries: Vec<CanvasTextQuery>,
     /// `ui.canvas 1.7`: structured artwork; mutually exclusive with nonempty legacy `paint`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scene: Option<CanvasScene>,
@@ -89,6 +110,28 @@ pub enum PointerPhase {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CanvasEvent {
+    /// `ui.canvas 1.8`: stable target input bound to an actual native presentation.
+    Input {
+        input: CanvasInput,
+    },
+    /// Native point-query results from successfully painted artwork; ordinary exact UI revision applies.
+    TextLayout {
+        /// Scene identity and drawing version actually queried.
+        identity: u64,
+        /// Exact scene revision, independent of the enclosing UI revision.
+        scene_revision: u64,
+        /// Original text authority; never borrowed from a replacement source.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<crate::api::DocumentVersion>,
+        /// Original binary authority when the view is file-bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file: Option<crate::api::FileVersion>,
+        /// The visual viewport used by the native layout.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        projection: Option<super::VisualViewport>,
+        /// One ordered result per declared query, with a native font binding or explicit error.
+        results: Vec<CanvasTextResult>,
+    },
     /// `ui.canvas 1.7`: the native paint reached this exact scene; an error reports failed preparation.
     ScenePresented {
         /// Current nonzero scene identity, never a replacement or retired owner.
@@ -183,6 +226,7 @@ impl Canvas {
             scene.validate()?;
         }
         self.validate_measurements()?;
+        self.validate_text_queries()?;
         self.validate_columns()?;
         if let Some(buffer) = &self.scroll_buffer {
             let valid = self.scroll_epoch.is_some()

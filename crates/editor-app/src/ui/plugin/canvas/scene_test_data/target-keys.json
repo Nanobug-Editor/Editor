@@ -1,0 +1,7 @@
+{
+  "expect_presented":true,"target_key_script":true,
+  "scene":{"identity":47,"revision":1,"roots":[],"targets":[
+    {"id":"cell-a","epoch":1,"focusable":true,"tab_index":0,"geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":40}}},
+    {"id":"cell-b","epoch":1,"focusable":true,"tab_index":1,"geometry":{"kind":"rect","rect":{"x":140,"y":20,"w":100,"h":40}}}
+  ]}
+}

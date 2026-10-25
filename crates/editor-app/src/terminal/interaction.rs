@@ -12,7 +12,9 @@ impl TerminalPanel {
             // This grid requests neither sample measurements nor native text-column gestures.
             CanvasEvent::TextMeasured { .. } | CanvasEvent::ColumnsResized { .. } => return,
             // The terminal uses legacy grid paint and never publishes a structured scene.
-            CanvasEvent::ScenePresented { .. } => return,
+            CanvasEvent::ScenePresented { .. }
+            | CanvasEvent::TextLayout { .. }
+            | CanvasEvent::Input { .. } => return,
             CanvasEvent::Resize {
                 width,
                 height,

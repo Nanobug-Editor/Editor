@@ -1,0 +1,9 @@
+{
+ "expect_presented":true,"prepare_worker":true,"native_color_glyph_minimum":60,
+ "scene":{"identity":63,"revision":1,"roots":[
+  {"kind":"group","id":"sheared","transform":[1,0.15,0,1,20,20],"children":[
+   {"kind":"paragraph","id":"label","layout_key":"emoji-affine-1","text":"👩‍💻 中文 é","rect":{"x":0,"y":0,"w":200,"h":60},
+    "style":{"font":{"family":"Segoe UI","size_px":30}}}
+  ]}
+ ]}
+}

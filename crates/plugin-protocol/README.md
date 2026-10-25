@@ -14,6 +14,8 @@ SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 
 
 `ui.canvas 1.7` 增加互斥于旧 paint 的结构化场景，提供路径、RGBA/渐变、层级变换/裁剪、受控图片引用和实际显示回执。来源、配额及显示身份义务见[场景契约](src/ui/canvas/scene.rs)与[Canvas 事件](src/ui/canvas.rs)。
 
+`ui.canvas 1.8` 增加宿主原生多行 Paragraph、原文位置查询、稳定目标输入/预编辑和有界语义树。原文偏移始终使用 UTF-8 扩展字素边界；OS 的 UTF-16 转换、原生临时草稿与累积确认不引入编辑器文档或领域 Undo。目标换代、完整确认、原生编辑键的显式启用和回执义务见[文字会话](src/ui/canvas/text_input.rs)、[目标输入](src/ui/canvas/targets.rs)、[位置查询](src/ui/canvas/text_layout.rs)与[语义树](src/ui/canvas/semantics.rs)。真实编辑器文本继续使用既有文档会话。
+
 HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 [http](src/http.rs)、[secrets](src/secrets.rs)、[storage](src/storage.rs)、[timers](src/timers.rs)、[tree](src/tree.rs) 与 [decorations](src/decorations.rs)。工作区文件名颜色和顶部入口分别协商 `explorer.decorations 1.0`、`ui.workspace 1.0`，见 [presentation](src/presentation.rs)；共享层次菜单见 [menus](src/ui/menus.rs)。
 
 通用树的 `ui.tree 1.2` 提供 `tree::update`，原子更新缓存节点的显示和禁用状态，保留已加载页、展开、epoch 及未完成请求；结构变化使用 `refresh`，或另行协商下述 1.4 增量能力。清单须明确声明 1.2 最低版本，完整预算与回调约束见 [树契约](src/tree.rs)。

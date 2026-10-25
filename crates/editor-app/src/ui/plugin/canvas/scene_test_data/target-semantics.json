@@ -1,0 +1,19 @@
+{
+ "expect_presented":true,"semantic_probe":true,
+ "scene":{"identity":60,"revision":1,"roots":[
+  {"kind":"group","id":"cells","transform":[1.5,0,0,1.5,20,20],"clip":{"kind":"rect","rect":{"x":0,"y":0,"w":100,"h":55}},"children":[
+   {"kind":"paragraph","id":"a","layout_key":"a-1","text":"Alpha","rect":{"x":0,"y":0,"w":70,"h":25},"style":{"font":{"size_px":14}}},
+   {"kind":"paragraph","id":"b","layout_key":"b-1","text":"Beta","rect":{"x":0,"y":30,"w":70,"h":25},"style":{"font":{"size_px":14}}}
+  ]}
+ ],"targets":[
+  {"id":"a","epoch":1,"space":"cells","focusable":true,"tab_index":0,"geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":70,"h":25}}},
+  {"id":"b","epoch":1,"space":"cells","focusable":true,"tab_index":1,"geometry":{"kind":"rect","rect":{"x":0,"y":30,"w":70,"h":25}}},
+  {"id":"hidden","epoch":1,"space":"cells","focusable":true,"tab_index":2,"geometry":{"kind":"rect","rect":{"x":0,"y":60,"w":70,"h":25}}}
+ ],"semantics":[
+  {"id":"grid","role":"grid","name":{"en":"Data grid","zh_cn":"数据表格"},"rect":{"x":0,"y":0,"w":100,"h":55},"space":"cells","row_count":100000,"column_count":4},
+  {"id":"rowA","parent":"grid","role":"row","name":{"en":"Row one","zh_cn":"第一行"},"rect":{"x":0,"y":0,"w":100,"h":25},"space":"cells","row":1},
+  {"id":"cellA","parent":"rowA","role":"grid_cell","target":"a","name":{"en":"A1","zh_cn":"甲一"},"description":{"en":"First cell","zh_cn":"首个单元格"},"value":"Alpha","row":1,"column":1,"read_only":true,"actions":["focus","activate"]},
+  {"id":"cellB","parent":"grid","role":"text_input","target":"b","name":{"en":"A2","zh_cn":"甲二"},"value":"Beta","row":2,"column":1,"actions":["focus","set_value"]},
+  {"id":"hidden","parent":"grid","role":"grid_cell","target":"hidden","name":{"en":"Hidden","zh_cn":"隐藏单元格"},"row":3,"column":1,"actions":["focus"]}
+ ]}
+}

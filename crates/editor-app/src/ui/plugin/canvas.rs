@@ -2,9 +2,9 @@
 use super::*;
 use gpui_kit::{
     Bounds, ElementInputHandler, EntityInputHandler, FontWeight, InteractiveElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point,
-    ScrollWheelEvent, Styled, Subscription, TextRun, UTF16Selection, canvas, div, fill, font,
-    point, px, rgb, size,
+    KeyUpEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels,
+    Point, ScrollWheelEvent, StatefulInteractiveElement, Styled, Subscription, TextRun,
+    UTF16Selection, canvas, div, fill, font, point, px, rgb, size,
 };
 use plugin_runtime::plugin_protocol::{
     self as protocol,
@@ -19,9 +19,16 @@ pub(super) mod scene;
 #[cfg(all(test, target_os = "windows"))]
 mod scene_native_tests;
 mod scroll;
+mod semantics;
+mod targets;
 mod text;
+mod text_layout;
 
 pub(crate) struct CanvasView {
+    /// Names resolve against the same host locale as ordinary native plugin controls.
+    pub(super) locale: String,
+    /// Target identities retain native focus independently of the legacy Canvas opt-in.
+    targets: targets::Targets,
     pub(crate) drawing: Canvas,
     /// Optional guest-supplied visual projection; ordinary canvases retain their existing coordinates.
     pub(super) viewport: Option<protocol::ui::VisualViewport>,
@@ -36,6 +43,8 @@ pub(crate) struct CanvasView {
     pub(super) scene_graphics: Option<std::sync::Arc<scene::PreparedScene>>,
     /// Display receipts converge per scene outcome, independently of ordinary native repaints.
     scene_presented: Option<CanvasEvent>,
+    /// Query observations retain their exact drawing, source, projection and native font binding.
+    text_layout_result: Option<(u64, CanvasEvent)>,
     focus: FocusHandle,
     bounds: Bounds<Pixels>,
     measured: Option<CanvasEvent>,
@@ -131,6 +140,9 @@ impl PluginView {
 impl CanvasView {
     /// Content replacement retires native gestures; drawing-only repaints retain their previews.
     pub(super) fn update_drawing(&mut self, drawing: Canvas) {
+        if self.drawing.text_queries != drawing.text_queries {
+            self.text_layout_result = None;
+        }
         if self.drawing.scene.as_ref().map(|scene| scene.identity)
             != drawing.scene.as_ref().map(|scene| scene.identity)
         {
@@ -139,6 +151,7 @@ impl CanvasView {
         if self.drawing.scene != drawing.scene {
             self.scene_graphics = None;
             self.scene_presented = None;
+            self.text_layout_result = None;
         }
         if self.drawing.scroll_epoch != drawing.scroll_epoch {
             self.scroll.reset();
@@ -255,6 +268,8 @@ impl CanvasView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        targets::init(cx);
+        Self::install_draft_retirement(window, cx);
         let focus = cx.focus_handle();
         let subscriptions = vec![
             cx.on_focus(&focus, window, |this, _, cx| {
@@ -267,8 +282,13 @@ impl CanvasView {
                 this.emit(CanvasEvent::Focus { focused: false }, cx);
                 cx.notify();
             }),
+            cx.observe_window_activation(window, |this, window, cx| {
+                this.reconcile_target_activation(window, cx);
+            }),
         ];
         let mut view = Self {
+            locale: String::new(),
+            targets: targets::Targets::new(cx),
             drawing,
             viewport: None,
             font: Default::default(),
@@ -279,6 +299,7 @@ impl CanvasView {
             images: None,
             scene_graphics: None,
             scene_presented: None,
+            text_layout_result: None,
             #[cfg(test)]
             painted_text: Vec::new(),
             #[cfg(test)]
@@ -339,6 +360,9 @@ impl CanvasView {
     }
     /// Deactivation revokes all input ownership; a non-focusable but active image keeps its drag.
     pub(super) fn deactivate(&mut self) {
+        self.targets.clear();
+        self.scene_presented = None;
+        self.text_layout_result = None;
         self.cancel_composition();
         self.drag = None;
         self.columns.reset();
@@ -346,6 +370,7 @@ impl CanvasView {
     /// A rejected deferred callback or reactivation must retry its current native geometry.
     pub(crate) fn invalidate_measurement(&mut self) {
         self.scene_presented = None;
+        self.text_layout_result = None;
         self.measured = None;
         self.text_measurements = None;
     }
@@ -449,6 +474,7 @@ impl CanvasView {
                 .collect();
         }
         self.capture_pointer(window, cx);
+        self.capture_target_pointer(window, cx);
         if self.enabled && self.drawing.focusable && self.focus.is_focused(window) {
             window.handle_input(
                 &self.focus,
@@ -586,11 +612,14 @@ impl CanvasView {
             None
         };
         if let Some(presentation) = presentation {
+            self.record_target_frame(&presentation, bounds, window, cx);
             if self.enabled && self.scene_presented.as_ref() != Some(&presentation) {
                 self.scene_presented = Some(presentation.clone());
                 self.emit(presentation, cx);
             }
         }
+        self.measure_paragraph_layouts(window, cx);
+        self.install_target_text_input(window, cx);
         if !self.composition.is_empty() {
             let anchor = self.project(self.drawing.caret.unwrap_or_default(), bounds);
             paint_text(
@@ -687,9 +716,11 @@ impl CanvasView {
 /// The portable pointer numbering stays independent of GPUI's enum representation.
 fn button_index(button: MouseButton) -> u8 {
     match button {
+        MouseButton::Left => 0,
         MouseButton::Middle => 1,
         MouseButton::Right => 2,
-        _ => 0,
+        MouseButton::Navigate(gpui_kit::NavigationDirection::Back) => 3,
+        MouseButton::Navigate(gpui_kit::NavigationDirection::Forward) => 4,
     }
 }
 
@@ -729,7 +760,9 @@ fn rect_bounds(rect: protocol::Rect, origin: Point<Pixels>) -> Bounds<Pixels> {
 }
 
 impl Render for CanvasView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_targets(window, cx);
+        self.sync_native_draft(window, cx);
         let gesture = self.action_gesture;
         #[cfg(test)]
         let callback_revision = self.revision;
@@ -741,6 +774,39 @@ impl Render for CanvasView {
             .relative()
             .overflow_hidden()
             .track_focus(&self.focus)
+            .cursor(self.target_cursor())
+            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
+                if this.target_pointer_move(event, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .on_hover(cx.listener(|this, over: &bool, window, cx| {
+                if !*over {
+                    this.leave_targets(window.mouse_position(), window.modifiers(), cx);
+                }
+            }))
+            .capture_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                if this.action_gesture == gesture
+                    && this.enabled
+                    && this.target_key(
+                        &event.keystroke,
+                        protocol::ui::CanvasKeyPhase::Down,
+                        event.is_held,
+                        window,
+                        cx,
+                    )
+                {
+                    let key = &event.keystroke;
+                    if !event.prefer_character_input
+                        && (key.modifiers.control
+                            || key.modifiers.alt
+                            || key.modifiers.platform
+                            || (key.key.chars().count() > 1 && key.key != "space"))
+                    {
+                        cx.stop_propagation();
+                    }
+                }
+            }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                 #[cfg(test)]
                 if let Some(observe) = &this.key_observer {
@@ -778,47 +844,92 @@ impl Render for CanvasView {
                 {
                     cx.stop_propagation();
                 }
+            }))
+            .capture_key_up(cx.listener(move |this, event: &KeyUpEvent, window, cx| {
+                if this.action_gesture == gesture
+                    && this.enabled
+                    && this.target_key(
+                        &event.keystroke,
+                        protocol::ui::CanvasKeyPhase::Up,
+                        false,
+                        window,
+                        cx,
+                    )
+                {
+                    cx.stop_propagation();
+                }
             }));
         // Each pointer button retains its identity; canvas clients decide its meaning.
         for (button, index) in [
             (MouseButton::Left, 0),
             (MouseButton::Middle, 1),
             (MouseButton::Right, 2),
+            (
+                MouseButton::Navigate(gpui_kit::NavigationDirection::Back),
+                3,
+            ),
+            (
+                MouseButton::Navigate(gpui_kit::NavigationDirection::Forward),
+                4,
+            ),
         ] {
-            element = element.on_mouse_down(
-                button,
-                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                    if this.action_gesture != gesture || !this.enabled {
-                        return;
-                    }
-                    this.drag = Some(button);
-                    if this.enabled && this.drawing.focusable {
-                        this.focus.focus(window, cx);
-                    }
-                    if button == MouseButton::Left
-                        && this
-                            .columns
-                            .begin((event.position.x - this.bounds.origin.x) / px(1.))
-                    {
-                        cx.notify();
+            element = element
+                .on_mouse_down(
+                    button,
+                    cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                        if this.action_gesture != gesture || !this.enabled {
+                            return;
+                        }
+                        if this.target_pointer_down(event, window, cx) {
+                            cx.stop_propagation();
+                            return;
+                        }
+                        if matches!(button, MouseButton::Navigate(_)) {
+                            return;
+                        }
+                        this.drag = Some(button);
+                        if this.enabled && this.drawing.focusable {
+                            this.focus.focus(window, cx);
+                        }
+                        if button == MouseButton::Left
+                            && this
+                                .columns
+                                .begin((event.position.x - this.bounds.origin.x) / px(1.))
+                        {
+                            cx.notify();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        this.pointer(
+                            PointerPhase::Down,
+                            event.position,
+                            index,
+                            event.click_count as u8,
+                            event.modifiers.shift,
+                            cx,
+                        );
                         cx.stop_propagation();
-                        return;
-                    }
-                    this.pointer(
-                        PointerPhase::Down,
-                        event.position,
-                        index,
-                        event.click_count as u8,
-                        event.modifiers.shift,
-                        cx,
-                    );
-                    cx.stop_propagation();
-                }),
-            );
+                    }),
+                )
+                .on_mouse_up(
+                    button,
+                    cx.listener(move |this, event: &MouseUpEvent, _, cx| {
+                        if this.action_gesture == gesture
+                            && this.enabled
+                            && this.target_pointer_up(event, cx)
+                        {
+                            cx.stop_propagation();
+                        }
+                    }),
+                );
         }
         element = element
             .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
                 if this.action_gesture != gesture {
+                    return;
+                }
+                if this.target_wheel(event, cx) {
+                    cx.stop_propagation();
                     return;
                 }
                 // Line wheels on a grid use measured rows, not the smaller font point size.
@@ -867,6 +978,9 @@ impl Render for CanvasView {
         if self.enabled && self.drawing.column_resize.is_some() {
             element = element.child(self.columns.handles());
         }
+        element = element
+            .children(self.target_elements())
+            .children(self.semantic_elements(cx));
         // The overlay must paint after the guest canvas, which may fill its entire bounds.
         if self.enabled && self.drawing.scroll.is_some() {
             element = element.child(editor_ui::vertical_viewport_scrollbar(&self.scroll, cx));

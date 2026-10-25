@@ -6,7 +6,7 @@
 
 **Blocked by：**[01 / #128 — 场景图形与空间操作](https://github.com/Nanobug-Editor/Editor/issues/128)。
 
-**Status：**ready-for-agent；真实议题 [#129](https://github.com/Nanobug-Editor/Editor/issues/129)，等待前置项。
+**Status：**实施中；真实议题 [#129](https://github.com/Nanobug-Editor/Editor/issues/129)，前置 #128 已关闭。仅在独立 worktree 的 `codex/canvas-protocol-extension` 分支实现，四单完成后统一合回 main；[本单记录](../../verification/canvas-editable-targets-2026-10-25.md)。
 
 **Why separate：**依赖 01 的场景身份和坐标；文字塑形、目标输入和辅助功能共同构成一套可编辑目标，必须一并验收才能作为 03 的稳定接缝。
 

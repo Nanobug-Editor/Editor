@@ -414,6 +414,33 @@ impl PluginView {
         if self.document == document && self.environment == environment {
             return;
         }
+        // Withdraw target ownership while the old frame/gesture still exists. Deferred cleanup
+        // keeps only that original scope and is separately checked against Manager's native leases.
+        for (id, canvas) in &self.canvases {
+            let next = document
+                .active_node(id)
+                .filter(|node| !node.disabled)
+                .and_then(|node| {
+                    if let Kind::Canvas(canvas) = &node.kind {
+                        Some(canvas)
+                    } else {
+                        None
+                    }
+                });
+            let current = self.document.source == document.source
+                && self.document.file == document.file
+                && (self.document == document || self.document.editor_action_source(id).is_none());
+            let reason = if document.dialog.is_some() || document.menu.is_some() {
+                ui::CanvasCancelReason::Modal
+            } else if !current {
+                ui::CanvasCancelReason::SceneReplaced
+            } else {
+                ui::CanvasCancelReason::TargetRemoved
+            };
+            canvas.update(cx, |view, cx| {
+                view.reconcile_target_lifetimes(next, current, reason, window, cx)
+            });
+        }
         if self.document != document {
             self.invalidate_action_gestures(cx);
             self.invalidate_code_highlighting(cx);
@@ -455,6 +482,7 @@ impl PluginView {
                     .is_some_and(|scene| !scene.belongs_to(&self.document))
                 {
                     canvas.scene_graphics = None;
+                    canvas.deactivate();
                     canvas.invalidate_measurement();
                 }
             });
@@ -606,14 +634,14 @@ impl PluginView {
                                 cx.defer(move |cx| {
                                     let accepted = target_window.update(cx, |_, window, cx| {
                                         owner.update(cx, |this, cx| {
-                                            if !this.action_gesture_current(&id, gesture) {
+                                            if !this.action_gesture_current(&id, gesture)&&!canvas_cleanup_event(&event) {
                                                 return false;
                                             }
                                             // Canvas and image viewports use the same input envelope, without host zoom state.
                                             let action = this
                                                 .document
                                                 .active_node(&id)
-                                                .filter(|_| !matches!(event, ui::CanvasEvent::TextMeasured { .. }))
+                                                .filter(|_| !matches!(event, ui::CanvasEvent::TextMeasured { .. }|ui::CanvasEvent::Input{..}))
                                                 .and_then(|node| node.viewport.as_ref())
                                                 .and_then(|viewport| viewport.content)
                                                 .map_or_else(
@@ -642,7 +670,7 @@ impl PluginView {
                     });
                     self.canvases.insert(node.id.clone(), view);
                 }
-                let active = self.document.active_node(&node.id).is_some();
+                let active = !node.disabled && self.document.active_node(&node.id).is_some();
                 let font = drawing.font.clone().over(self.environment.font_style(
                     &self.plugin,
                     node.theme_role(),
@@ -658,6 +686,7 @@ impl PluginView {
                         view.invalidate_measurement();
                     }
                     view.viewport = node.viewport.clone();
+                    view.locale = self.environment.locale.clone();
                     view.font = font;
                     if active && !view.enabled {
                         view.invalidate_measurement();
@@ -791,7 +820,7 @@ impl PluginView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.event_source_current_in(id, window, cx) {
+        if !canvas_cleanup_action(&action) && !self.event_source_current_in(id, window, cx) {
             return false;
         }
         self.forward_version(id, revision, action, cx)
@@ -827,6 +856,20 @@ impl PluginView {
         }
         (self.sink)(event, cx);
         true
+    }
+}
+
+/// Original-scoped cleanup is an observation, never a way to dispatch a replaced source action.
+fn canvas_cleanup_event(event: &ui::CanvasEvent) -> bool {
+    matches!(event,ui::CanvasEvent::Input{input} if input.cleanup_kind().is_some())
+}
+/// Both native Canvas envelopes retain the same narrow cleanup classification.
+fn canvas_cleanup_action(action: &Action) -> bool {
+    match action {
+        Action::Canvas(event) | Action::ViewportInput(ui::ViewportInput { event, .. }) => {
+            canvas_cleanup_event(event)
+        }
+        _ => false,
     }
 }
 

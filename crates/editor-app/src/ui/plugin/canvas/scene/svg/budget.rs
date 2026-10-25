@@ -78,7 +78,6 @@ pub(super) fn png(
     bitmap: &super::super::super::super::bitmap::Bitmap,
     remaining: usize,
 ) -> Result<Vec<u8>, String> {
-    use image::ImageEncoder as _;
     let bytes = bitmap
         .image
         .as_bytes(0)
@@ -90,17 +89,27 @@ pub(super) fn png(
     for pixel in pixels.chunks_exact_mut(4) {
         pixel.swap(0, 2);
     }
+    png_rgba(&pixels, bitmap.width, bitmap.height, remaining)
+}
+/// Native paragraph glyph pixels use the same write-before-grow PNG cap as admitted source images.
+pub(super) fn png_rgba(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    remaining: usize,
+) -> Result<Vec<u8>, String> {
+    use image::ImageEncoder as _;
+    if pixels.len() > 64 * 1024 * 1024
+        || u64::from(width) * u64::from(height) * 4 != pixels.len() as u64
+    {
+        return Err("Canvas native pixels exceed their encode budget".into());
+    }
     let mut output = PngOutput {
         bytes: Vec::new(),
         limit: remaining.saturating_sub(1024),
     };
     image::codecs::png::PngEncoder::new(&mut output)
-        .write_image(
-            &pixels,
-            bitmap.width,
-            bitmap.height,
-            image::ExtendedColorType::Rgba8,
-        )
+        .write_image(pixels, width, height, image::ExtendedColorType::Rgba8)
         .map_err(|_| "Canvas PNG exceeds its expansion budget or failed to encode")?;
     Ok(output.bytes)
 }

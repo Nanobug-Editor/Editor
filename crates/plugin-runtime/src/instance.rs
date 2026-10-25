@@ -32,7 +32,9 @@ mod presentation;
 mod private;
 mod process_calls;
 mod resource_roots;
+mod scene_frames;
 mod scene_history;
+mod scene_input;
 mod selected_resources;
 mod service_preparation;
 mod service_replies;
@@ -236,8 +238,10 @@ pub struct Instance {
     pub views: std::collections::BTreeMap<String, std::sync::Arc<ui::Document>>,
     /// Bounded incarnation-local tombstones prevent removed scene identities from acquiring new input.
     scene_identities: BTreeSet<(String, String, u64)>,
-    /// Last successful native presentation, scoped to this incarnation's panel and canvas node.
-    scene_presentations: std::collections::BTreeMap<(String, String), ui::CanvasEvent>,
+    /// Native shown frames/order/cleanup proofs are independent of accepted drawing publications.
+    scene_frames: scene_frames::Frames,
+    /// Target tombstones and pending native text belong to this exact isolated incarnation.
+    scene_inputs: scene_input::InputHistory,
     panels: std::collections::BTreeSet<String>,
     pub error: Option<String>,
 }
@@ -558,7 +562,8 @@ impl Instance {
             bindings,
             views: Default::default(),
             scene_identities: Default::default(),
-            scene_presentations: Default::default(),
+            scene_frames: Default::default(),
+            scene_inputs: Default::default(),
             panels: manifest.panels.iter().map(|p| p.id.clone()).collect(),
             error: None,
         };
@@ -920,7 +925,8 @@ impl Instance {
         self.file_sources.clear();
         self.store.data_mut().roots.retire();
         self.views.clear();
-        self.scene_presentations.clear();
+        self.scene_frames = Default::default();
+        self.scene_inputs = Default::default();
         self.store.data_mut().processes.clear();
         self.store.data_mut().process_handles.clear();
         self.store.data_mut().process_display_scopes.clear();

@@ -1,0 +1,9 @@
+{
+ "expect_presented":true,"target_os_ime_script":true,"semantic_editable_target":"canvas:61:editing",
+ "scene":{"identity":61,"revision":1,"roots":[
+  {"kind":"paragraph","id":"label","layout_key":"ime-1","text":"é 👩‍💻","rect":{"x":20,"y":20,"w":240,"h":100},"style":{"font":{"family":"Segoe UI","size_px":18},"line_height":27}}
+ ],"targets":[
+  {"id":"edit","epoch":1,"focusable":true,"tab_index":0,"cursor":"text","geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":240,"h":100}},
+   "text_input":{"paragraph":"label","layout_key":"ime-1","text_revision":1,"selection":{"start":4,"end":15}}}
+ ],"semantics":[{"id":"editing","target":"edit","role":"text_input","name":{"en":"Editing","zh_cn":"编辑"},"value":"é 👩‍💻","actions":["focus","set_value"]}]}
+}

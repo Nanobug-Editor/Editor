@@ -177,8 +177,8 @@ impl Document {
                     required.insert("editor.actions", semver::Version::new(1, 0, 0));
                 }
                 Kind::Canvas(canvas) => {
-                    let version = if canvas.scene.is_some() {
-                        semver::Version::new(1, 7, 0)
+                    let version = if let Some(scene) = &canvas.scene {
+                        scene.minimum_canvas_version()
                     } else if canvas.column_resize.is_some() {
                         semver::Version::new(1, 6, 0)
                     } else if !canvas.measure_text.is_empty() {

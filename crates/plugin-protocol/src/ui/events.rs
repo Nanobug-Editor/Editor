@@ -4,6 +4,67 @@ use crate::api::{ErrorCode, Failure};
 
 impl Document {
     pub fn validate_event(&self, event: &UiEvent) -> Result<(), Failure> {
+        let target_input = match &event.action {
+            Action::Canvas(CanvasEvent::Input { input })
+            | Action::ViewportInput(ViewportInput {
+                event: CanvasEvent::Input { input },
+                ..
+            }) => Some(input),
+            _ => None,
+        };
+        // This narrow admission carries no action/source authority. Manager separately consumes
+        // an active focus/preedit/pointer lease from the exact old native frame, even after a modal,
+        // source or target replacement. Ordinary old Text/Key/A11y remains rejected below.
+        if event.revision <= self.revision
+            && target_input.is_some_and(|input| input.cleanup_kind().is_some())
+        {
+            return Ok(());
+        }
+        if target_input.is_some_and(|input| {
+            input.source != self.source
+                || input.file != self.file
+                || input.projection.as_ref().is_some_and(|projection| {
+                    projection
+                        .validate(&Kind::Canvas(Canvas::default()))
+                        .is_err()
+                })
+        }) {
+            return Err(Failure::new(
+                ErrorCode::StaleRevision,
+                "Native target source or projection was replaced",
+            ));
+        }
+        let layout = match &event.action {
+            Action::Canvas(CanvasEvent::TextLayout {
+                source,
+                file,
+                projection,
+                ..
+            })
+            | Action::ViewportInput(ViewportInput {
+                event:
+                    CanvasEvent::TextLayout {
+                        source,
+                        file,
+                        projection,
+                        ..
+                    },
+                ..
+            }) => Some((source, file, projection)),
+            _ => None,
+        };
+        if layout.is_some_and(|(source, file, projection)| {
+            *source != self.source
+                || *file != self.file
+                || !self
+                    .active_node(&event.node)
+                    .is_some_and(|node| node.viewport == *projection)
+        }) {
+            return Err(Failure::new(
+                ErrorCode::StaleRevision,
+                "Native text layout source was replaced",
+            ));
+        }
         let presentation = match &event.action {
             Action::Canvas(receipt @ CanvasEvent::ScenePresented { .. })
             | Action::ViewportInput(ViewportInput {
@@ -59,10 +120,17 @@ impl Document {
             && matches!(&event.action, Action::Canvas(CanvasEvent::ColumnsResized { epoch, widths })
                 if self.active_node(&event.node).is_some_and(|node| node.viewport.is_none()
                     && matches!(&node.kind, Kind::Canvas(canvas) if canvas.column_resize.as_ref().is_some_and(|columns| columns.accepts(*epoch, widths)))));
+        // Target input identifies its actual displayed frame separately. Manager must still match
+        // that frame's native receipt; this gate only retains the currently live source/target epoch.
+        let current_target=event.revision<self.revision&&self.dialog.is_none()&&self.menu.is_none()
+            &&self.editor_action_source(&event.node).is_none()
+            &&target_input.is_some_and(|input|self.active_node(&event.node).is_some_and(|node|
+                matches!(&node.kind,Kind::Canvas(canvas) if canvas.scene.as_ref().is_some_and(|scene|scene.accepts_input(input)))));
         if event.revision != self.revision
             && !current_scroll
             && !current_columns
             && !current_presentation
+            && !current_target
         {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
@@ -142,7 +210,11 @@ impl Document {
                 .any(|option| option.id == *id && !option.disabled),
             (Kind::Tabs { tabs, .. }, Action::Select(id)) => tabs.iter().any(|tab| tab.id == *id),
             (Kind::Canvas(canvas), Action::Canvas(event)) => {
-                (node.viewport.is_none() || matches!(event, CanvasEvent::TextMeasured { .. }))
+                (node.viewport.is_none()
+                    || matches!(
+                        event,
+                        CanvasEvent::TextMeasured { .. } | CanvasEvent::Input { .. }
+                    ))
                     && canvas.accepts(event)
             }
             _ => false,
@@ -163,6 +235,16 @@ impl Canvas {
     fn accepts(&self, event: &CanvasEvent) -> bool {
         let finite = |value: f32| value.is_finite() && value.abs() <= 1_000_000.;
         match event {
+            CanvasEvent::Input { input } => self
+                .scene
+                .as_ref()
+                .is_some_and(|scene| scene.accepts_input(input)),
+            CanvasEvent::TextLayout {
+                identity,
+                scene_revision,
+                results,
+                ..
+            } => self.accepts_text_layout(*identity, *scene_revision, results),
             CanvasEvent::ScenePresented {
                 identity,
                 scene_revision,

@@ -1,0 +1,10 @@
+{
+  "expect_presented":true,
+  "visible_colors":[{"rgba":[0,0,0,255],"minimum":120}],
+  "scene":{"identity":41,"revision":1,"roots":[{
+    "kind":"paragraph","id":"label","layout_key":"native-label-1",
+    "text":"Native multiline\n中文标签 office",
+    "rect":{"x":20,"y":20,"w":180,"h":100},
+    "style":{"font":{"family":"Segoe UI","size_px":18},"wrap":true}
+  }]}
+}

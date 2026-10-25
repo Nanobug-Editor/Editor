@@ -1,0 +1,9 @@
+{
+  "expect_presented":true,"target_key_script":true,
+  "scene":{"identity":47,"revision":1,"roots":[{"kind":"group","id":"hidden","opacity":0,"children":[]}],"targets":[
+    {"id":"cell-a","epoch":1,"focusable":true,"tab_index":0,"geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":40}}},
+    {"id":"ghost","epoch":1,"space":"hidden","focusable":true,"tab_index":1,"geometry":{"kind":"rect","rect":{"x":20,"y":80,"w":100,"h":40}}},
+    {"id":"offscreen","epoch":1,"focusable":true,"tab_index":1,"geometry":{"kind":"rect","rect":{"x":1000,"y":20,"w":100,"h":40}}},
+    {"id":"cell-b","epoch":1,"focusable":true,"tab_index":2,"geometry":{"kind":"rect","rect":{"x":140,"y":20,"w":100,"h":40}}}
+  ]}
+}

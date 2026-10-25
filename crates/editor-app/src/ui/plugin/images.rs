@@ -72,6 +72,8 @@ pub(crate) struct Photo {
 /// Font discovery and parsing are cached while the worker owns the currently published scenes.
 #[derive(Default)]
 pub(crate) struct VectorRenderer {
+    /// Host-owned theme context, shared with ordinary native plugin controls.
+    environment: plugin_runtime::plugin_protocol::Environment,
     /// Equal structured scenes retain tessellation across unrelated native-tree revisions.
     graphics: BTreeMap<String, Arc<super::canvas::scene::PreparedScene>>,
     /// Derived canvas surfaces retain their identities while the owning native document stays unchanged.
@@ -89,6 +91,19 @@ pub(crate) struct VectorRenderer {
 }
 
 impl VectorRenderer {
+    /// Rasterize host-generated numeric SVG with only admitted PNG references and bounded output.
+    pub(super) fn rasterize_generated(
+        source: &str,
+        rect: Rect,
+        images: &BTreeMap<String, Arc<Vec<u8>>>,
+        budget: u64,
+    ) -> Option<VectorImage> {
+        Self::default().rasterize_with_budget(source, rect, rect, budget, Some(images))
+    }
+    /// Font/color updates invalidate only prepared identities that actually change on the next pass.
+    pub fn set_environment(&mut self, environment: plugin_runtime::plugin_protocol::Environment) {
+        self.environment = environment;
+    }
     /// Repaint only changed scene vectors, retaining native image IDs across idle worker polls.
     pub fn prepare(&mut self, documents: &BTreeMap<String, Arc<Document>>) -> SceneImages {
         let mut surfaces = BTreeMap::new();
@@ -103,22 +118,30 @@ impl VectorRenderer {
                     let key = format!("{key}/canvas/{}", node.id);
                     nested_keys.insert(key.clone());
                     if let Some(scene) = &drawing.scene {
+                        let plugin = key.split('/').next().unwrap_or_default();
+                        let typography = super::canvas::scene::Typography {
+                            font: drawing.font.clone().over(self.environment.font_style(
+                                plugin,
+                                node.theme_role(),
+                                drawing.grid,
+                            )),
+                            foreground: self.environment.foreground,
+                        };
                         let photos=scene.image_nodes().into_iter().filter_map(|id|{
                             self.photos.get(&format!("{image_prefix}{id}"))
                                 .filter(|photo|document.source.as_ref().is_some_and(|source|photo.resource.source==*source)||document.file.as_ref().is_some_and(|file|photo.resource.source==plugin_runtime::plugin_protocol::api::ContentVersion::File(file.clone())))
                                 .map(|photo|(id.to_owned(),photo.clone()))
                         }).collect::<BTreeMap<_,_>>();
                         let limits = (scene_pixels, scene_vertices);
-                        if self
-                            .graphics
-                            .get(&key)
-                            .is_none_or(|old| !old.current(scene, document, &photos, limits))
-                        {
+                        if self.graphics.get(&key).is_none_or(|old| {
+                            !old.current(scene, document, &photos, limits, &typography)
+                        }) {
                             let prepared = super::canvas::scene::PreparedScene::new(
                                 scene.clone(),
                                 document,
                                 photos,
                                 limits,
+                                typography,
                                 |source, bounds, images| {
                                     self.rasterize_with_budget(
                                         source,
@@ -322,10 +345,13 @@ impl VectorRenderer {
         {
             tree.clone()
         } else {
-            let fonts = self
-                .fonts
-                .get_or_insert_with(|| super::svg::fonts())
-                .clone();
+            let fonts = if scene_images.is_some() {
+                Arc::new(usvg::fontdb::Database::new())
+            } else {
+                self.fonts
+                    .get_or_insert_with(|| super::svg::fonts())
+                    .clone()
+            };
             let options = usvg::Options {
                 fontdb: fonts,
                 image_href_resolver: if let Some(images) = scene_images {

@@ -5,10 +5,21 @@ use protocol::ui::{
     CanvasScene, SceneBrush, SceneFillRule, SceneGeometry, SceneLineCap, SceneLineJoin, SceneNode,
     ScenePathSegment, SceneStroke, SceneTransform,
 };
+mod bounds;
+pub(super) mod paragraph;
 mod svg;
+
+/// Scene preparation resolves the same inherited native face/color as the live Canvas adapter.
+#[derive(Clone, PartialEq)]
+pub(in crate::ui::plugin) struct Typography {
+    pub font: protocol::FontStyle,
+    pub foreground: u32,
+}
 
 /// Worker result retains its exact source so late preparation cannot paint a replacement scene.
 pub(in crate::ui::plugin) struct PreparedScene {
+    /// Flat hit geometry is prepared beside drawing and cannot outlive this source snapshot.
+    pub(super) targets: super::targets::geometry::PreparedTargets,
     /// Complete public source identity, including geometry and resource references.
     pub source: CanvasScene,
     /// Bounded tessellation or an explicit preparation failure; never partial successful artwork.
@@ -21,6 +32,8 @@ pub(in crate::ui::plugin) struct PreparedScene {
     photos: BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
     /// Failed bounded preparations may retry when another scene releases resident capacity.
     limits: (u64, usize),
+    /// Inherited fonts/colors participate in prepared native glyph pixel identity.
+    typography: Typography,
 }
 impl PreparedScene {
     /// Tessellate `source` outside native UI callbacks and retain its admission/preparation result.
@@ -29,15 +42,24 @@ impl PreparedScene {
         owner: &Document,
         photos: BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
         limits: (u64, usize),
+        typography: Typography,
         mut rasterize: impl FnMut(
             &str,
             protocol::Rect,
             &BTreeMap<String, std::sync::Arc<Vec<u8>>>,
         ) -> Option<super::super::images::VectorImage>,
     ) -> Self {
+        let mut targets = super::targets::geometry::PreparedTargets::default();
         let drawing = source.validate().and_then(|()| {
-            SceneDrawing::compile(&source, &photos, limits).or_else(|_| {
-                let (svg, bounds, images) = svg::encode(&source, &photos)?;
+            targets = super::targets::geometry::PreparedTargets::new(&source, limits.1)?;
+            let mut drawing = SceneDrawing::compile(
+                &source,
+                &photos,
+                (limits.0, limits.1.saturating_sub(targets.vertices)),
+            )
+            .or_else(|_| -> Result<SceneDrawing, String> {
+                let (svg, bounds, images) =
+                    svg::encode(&source, &photos, &typography, limits.0, None)?;
                 let raster = rasterize(&svg, bounds, &images)
                     .ok_or("Canvas raster preparation exceeded its budget or failed".to_owned())?;
                 Ok(SceneDrawing {
@@ -46,15 +68,22 @@ impl PreparedScene {
                     bitmaps: BTreeMap::new(),
                     vertices: 0,
                 })
-            })
+            })?;
+            drawing.vertices += targets.vertices;
+            Ok(drawing)
         });
+        if drawing.is_err() {
+            targets = Default::default();
+        }
         Self {
+            targets,
             source,
             drawing,
             document_source: owner.source.clone(),
             file_source: owner.file.clone(),
             photos,
             limits,
+            typography,
         }
     }
     /// Geometry caches may survive UI revisions, never resource completion or source replacement.
@@ -64,8 +93,10 @@ impl PreparedScene {
         owner: &Document,
         photos: &BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
         limits: (u64, usize),
+        typography: &Typography,
     ) -> bool {
         self.source == *source
+            && self.typography == *typography
             && self.belongs_to(owner)
             && self.photos.len() == photos.len()
             && self.photos.iter().all(|(id, old)| {
@@ -84,6 +115,23 @@ impl PreparedScene {
     pub fn belongs_to(&self, owner: &Document) -> bool {
         self.document_source == owner.source && self.file_source == owner.file
     }
+    /// Complex layers substitute one sealed native presentation on the bounded image worker.
+    /// Public scene identity/targets/resources stay immutable and are checked again before display.
+    pub(in crate::ui::plugin::canvas) fn prepare_draft(
+        &self,
+        draft: &paragraph::NativeDraft,
+        budget: u64,
+    ) -> Result<super::super::images::VectorImage, String> {
+        let (svg, bounds, images) = svg::encode(
+            &self.source,
+            &self.photos,
+            &self.typography,
+            budget,
+            Some(draft),
+        )?;
+        super::super::images::VectorRenderer::rasterize_generated(&svg, bounds, &images, budget)
+            .ok_or_else(|| "Native text raster preparation failed or exhausted its budget".into())
+    }
 }
 
 /// Prepared native paths contain no guest callback or mutable domain state.
@@ -96,6 +144,11 @@ pub(in crate::ui::plugin) struct SceneDrawing {
 }
 /// One tessellated primitive and its native solid/gradient brush.
 enum ScenePrimitive {
+    /// Native paragraphs share the same ordered clips and projected bounds as artwork.
+    Paragraph {
+        drawing: paragraph::ParagraphDrawing,
+        clip: Option<protocol::Rect>,
+    },
     /// A tessellated local path in final canvas coordinates.
     Path {
         path: Path<Pixels>,
@@ -111,6 +164,10 @@ enum ScenePrimitive {
     },
 }
 impl SceneDrawing {
+    /// Only complex layers need a private raster; ordinary paragraphs paint their native draft directly.
+    pub(in crate::ui::plugin::canvas) fn uses_raster(&self) -> bool {
+        self.raster.is_some()
+    }
     /// Build one atomic drawing, charging aggregate vertices before publishing it to the UI.
     fn compile(
         source: &CanvasScene,
@@ -224,6 +281,20 @@ impl SceneDrawing {
                     clip,
                 });
             }
+            SceneNode::Paragraph {
+                id,
+                layout_key,
+                text,
+                rect,
+                style,
+            } => {
+                self.paths.push(ScenePrimitive::Paragraph {
+                    drawing: paragraph::ParagraphDrawing::new(
+                        id, layout_key, text, *rect, style, transform,
+                    )?,
+                    clip,
+                });
+            }
         }
         Ok(())
     }
@@ -270,6 +341,9 @@ impl SceneDrawing {
         _cx: &mut App,
     ) -> Result<(), String> {
         if let Some(raster) = &self.raster {
+            if view.paint_native_draft(bounds, window)? {
+                return Ok(());
+            }
             window
                 .paint_image(
                     bounds,
@@ -283,7 +357,9 @@ impl SceneDrawing {
         }
         for item in &self.paths {
             let clip = match item {
-                ScenePrimitive::Path { clip, .. } | ScenePrimitive::Image { clip, .. } => clip,
+                ScenePrimitive::Path { clip, .. }
+                | ScenePrimitive::Image { clip, .. }
+                | ScenePrimitive::Paragraph { clip, .. } => clip,
             };
             window.with_content_mask(
                 clip.map(|clip| gpui_kit::ContentMask {
@@ -303,6 +379,9 @@ impl SceneDrawing {
         cx: &mut App,
     ) -> Result<(), String> {
         let ScenePrimitive::Path { path, brush, .. } = item else {
+            if let ScenePrimitive::Paragraph { drawing, .. } = item {
+                return drawing.paint(view, bounds, window, cx);
+            }
             if let ScenePrimitive::Image {
                 rect,
                 image,

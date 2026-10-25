@@ -200,6 +200,43 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/canvas/columns.rs",
         include_bytes!("../../plugin-protocol/src/ui/canvas/columns.rs"),
     ),
+    // Native paragraph declarations and their public admission regression travel with the SDK.
+    (
+        "src/ui/canvas/text_input.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/text_input.rs"),
+    ),
+    (
+        "src/ui/canvas/semantics.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/semantics.rs"),
+    ),
+    (
+        "src/ui/canvas/placement.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/placement.rs"),
+    ),
+    (
+        "src/ui/canvas/pointer.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/pointer.rs"),
+    ),
+    (
+        "src/ui/canvas/text_index.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/text_index.rs"),
+    ),
+    (
+        "src/ui/canvas/targets.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/targets.rs"),
+    ),
+    (
+        "src/ui/canvas/text_layout.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/text_layout.rs"),
+    ),
+    (
+        "src/ui/canvas/paragraph.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/paragraph.rs"),
+    ),
+    (
+        "src/ui/canvas/paragraph_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/paragraph_tests.rs"),
+    ),
     // Scene consumers receive the same bounded value contracts used by host admission.
     (
         "src/ui/canvas/scene.rs",

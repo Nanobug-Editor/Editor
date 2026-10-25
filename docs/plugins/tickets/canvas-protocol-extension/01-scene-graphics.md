@@ -6,7 +6,7 @@
 
 **Blocked by：**无，可开始。
 
-**Status：**已通过验收与双轴审查；真实议题 [#128](https://github.com/Nanobug-Editor/Editor/issues/128)，待推送独立分支后核对关闭。四单全部完成后统一合回 main。
+**Status：**已验收并推送独立分支 `d12c4d21`；真实议题 [#128](https://github.com/Nanobug-Editor/Editor/issues/128) 已读回确认为 closed/completed。四单全部完成后统一合回 main。
 
 **Why separate：**稳定场景身份、几何与资源校验是后续编辑、原生混排及局部更新的真实前置；本单自身可用普通只读流程图和旧 Canvas 消费者端到端验证。
 

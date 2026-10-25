@@ -64,6 +64,8 @@ fn canvas_scene_document_budget_is_shared_across_canvases() {
     let canvases = (1..=5)
         .map(|identity| {
             let scene = CanvasScene {
+                semantics: Vec::new(),
+                targets: Vec::new(),
                 identity,
                 revision: 1,
                 roots: (0..6500)

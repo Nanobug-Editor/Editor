@@ -1,0 +1,5 @@
+{
+ "target_pointer_script":true,"target_pointer_cancel":"modal",
+ "scene":{"identity":48,"revision":1,"roots":[{"kind":"shape","id":"triangle","geometry":{"kind":"path","segments":[{"op":"move","x":20,"y":20},{"op":"line","x":120,"y":20},{"op":"line","x":20,"y":100},{"op":"close"}]},"fill":{"kind":"solid","rgba":863633407}}],
+ "targets":[{"id":"drag","epoch":1,"focusable":true,"tab_index":0,"capture_on_down":true,"cursor":"crosshair","geometry":{"kind":"path","segments":[{"op":"move","x":20,"y":20},{"op":"line","x":120,"y":20},{"op":"line","x":20,"y":100},{"op":"close"}]}}]}
+}

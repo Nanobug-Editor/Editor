@@ -6,7 +6,10 @@ use std::{
     time::{Duration, Instant},
 };
 mod dpi;
+mod ime;
+mod input;
 mod resources;
+mod uia;
 mod wasm;
 
 /// One isolated OS window proves that a transformed public scene reaches native pixels.
@@ -69,15 +72,23 @@ fn native_canvas_scene_paints_transformed_shapes() {
     } else {
         serde_json::Value::Null
     };
-    let installed = fixture["wasm_flow"]
-        .as_bool()
-        .unwrap_or(false)
-        .then(wasm::install);
+    let installed = fixture["wasm_editable"]
+        .as_str()
+        .map(wasm::install_editable)
+        .or_else(|| {
+            fixture["wasm_flow"]
+                .as_bool()
+                .unwrap_or(false)
+                .then(wasm::install)
+        });
     let managed_document = installed.as_ref().map(|owner| owner.document.clone());
     let result = Rc::new(RefCell::new(None));
     let output = result.clone();
-    gpui_kit::application().with_assets(gpui_kit::assets::Assets)
+    let platform = gpui_kit::platform::current_platform(false);
+    let fonts = platform.text_system();
+    gpui_kit::Application::with_platform(platform).with_assets(gpui_kit::assets::Assets)
         .with_quit_mode(gpui_kit::QuitMode::Explicit).run(move |cx| {
+            editor_ui::text::paragraph::install_native_raster_fonts(fonts,cx).unwrap();
             gpui_kit::init(cx);editor_ui::typography::init(cx);
             editor_ui::theme::apply_theme(editor_ui::theme::builtin_theme(fixture["dark"].as_bool().unwrap_or(false)),cx);
             let mut wire=serde_json::to_value(Canvas::default()).unwrap();
@@ -98,6 +109,7 @@ fn native_canvas_scene_paints_transformed_shapes() {
                     {"kind":"image","id":"photo","image":"pixels","rect":{"x":20,"y":20,"w":100,"h":80}}]});
             }
             if case=="custom"&&!fixture["scene"].is_null() {wire["scene"]=fixture["scene"].clone();}
+            if !fixture["text_queries"].is_null() {wire["text_queries"]=fixture["text_queries"].clone();}
             if let Some(count)=fixture["image_repetitions"].as_u64() {
                 assert!((1..=32).contains(&count));
                 let original=wire["scene"]["roots"][0]["children"][0].clone();
@@ -108,6 +120,14 @@ fn native_canvas_scene_paints_transformed_shapes() {
             let canvas:Canvas=serde_json::from_value(wire).unwrap();
             let mut document=Document::new(ui::Node::new("drawing",Kind::Canvas(canvas)).grow()).revision(1);
             if let Some(managed)=managed_document {document=managed;}
+            if fixture["legacy_rtl_reference"].as_bool().unwrap_or(false) {
+                document.root.layout.height=Some(100.);
+                let mut reference=ui::Node::new("reference",Kind::Canvas(Canvas{paint:vec![protocol::Paint::Text{
+                    x:20.,y:20.,text:"גבא".into(),color:0,size:18.,bold:false,font:Some("Segoe UI".into())
+                }],..Default::default()}));
+                reference.layout.height=Some(100.);
+                document.root=ui::Node::column("root",vec![document.root,reference]).grow();
+            }
             if let Some(copies)=fixture["copies"].as_u64() {
                 assert!((1..=8).contains(&copies),"native scene fixture copies exceed their budget");
                 let children=(0..copies).map(|index| {
@@ -135,7 +155,10 @@ fn native_canvas_scene_paints_transformed_shapes() {
             let expected_scene=document.active_node("drawing").and_then(|node|if let Kind::Canvas(canvas)=&node.kind {canvas.scene.as_ref()}else{None}).map(|scene|(scene.identity,scene.revision));
             let events=Rc::new(RefCell::new(Vec::new()));let record=events.clone();
             let mut renderer=super::super::images::VectorRenderer::default();
-            let images=renderer.prepare_resources(&BTreeMap::from([("ordinary/diagram".into(),Arc::new(document.clone()))]),&resources);
+            let documents=BTreeMap::from([("ordinary/diagram".into(),Arc::new(document.clone()))]);
+            let deferred=fixture["prepare_worker"].as_bool().unwrap_or(false);
+            let images=if deferred {super::super::images::SceneImages::default()}else{renderer.prepare_resources(&documents,&resources)};
+            let preparation=deferred.then_some((renderer,documents,resources));
             let retained=Rc::new(RefCell::new(None));let saved=retained.clone();
             let window=cx.open_window(gpui_kit::WindowOptions {
                 window_bounds:Some(gpui_kit::WindowBounds::Windowed(Bounds::new(point(px(100.),px(100.)),size(px(320.),px(240.))))),
@@ -146,9 +169,18 @@ fn native_canvas_scene_paints_transformed_shapes() {
                 view.update(cx,|view,cx|view.update_images("ordinary/diagram",&images,window,cx));
                 cx.new(|cx|gpui_base::Root::new(view,window,cx))
             }).unwrap();
+            // Native dispatch may draw Root; do not retain a typed Root update while dispatching.
+            let window:gpui_kit::AnyWindowHandle=window.into();
             cx.spawn(async move |cx| {
                 // Retain the real incarnation and its isolated workspace until native retirement.
-                let _owner=installed;
+                let mut owner=installed;
+                if let Some((mut renderer,documents,resources))=preparation {
+                    let images=cx.background_executor().spawn(async move {renderer.prepare_resources(&documents,&resources)}).await;
+                    window.update(cx,|_,window,cx| {
+                        retained.borrow().as_ref().unwrap().update(cx,|view,cx|view.update_images("ordinary/diagram",&images,window,cx));
+                        window.draw(cx).clear(cx);
+                    }).unwrap();
+                }
                 cx.background_executor().timer(Duration::from_millis(800)).await;
                 let requested_dpi=fixture["dpi_percent"].as_u64().map(|value|value as u32);
                 if let Some(percent)=requested_dpi {
@@ -158,10 +190,107 @@ fn native_canvas_scene_paints_transformed_shapes() {
                         cx.background_executor().timer(Duration::from_millis(200)).await;
                     }
                 }
+                if fixture["target_key_script"].as_bool().unwrap_or(false) {
+                    window.update(cx,|_,window,cx| {
+                        let snapshot=retained.borrow().as_ref().unwrap().read(cx).native_canvas_input_snapshot("drawing",window,cx).unwrap();
+                        input::keys(&snapshot,window,cx)
+                    }).unwrap().unwrap();
+                    cx.background_executor().timer(Duration::from_millis(50)).await;
+                }
+                if fixture["target_button_chord_script"].as_bool().unwrap_or(false) {
+                    window.update(cx,|_,window,cx| {
+                        let snapshot=retained.borrow().as_ref().unwrap().read(cx).native_canvas_input_snapshot("drawing",window,cx).unwrap();
+                        input::chords::run(&snapshot,window,cx)
+                    }).unwrap();
+                }
+                if fixture["target_pointer_script"].as_bool().unwrap_or(false) {
+                    let mut activation_peer=None;
+                    for phase in 0..3 {
+                        if phase==1&&fixture["target_pointer_cancel"]=="window" {
+                            activation_peer=Some(cx.update(input::deactivation::open).unwrap());
+                            cx.background_executor().timer(Duration::from_millis(150)).await;
+                            window.update(cx,|_,window,_|{anyhow::ensure!(!window.is_window_active(),"owned activation peer must deactivate the Canvas window");Ok(())}).unwrap().unwrap();
+                            continue;
+                        }
+                        if phase==2 {
+                            if let Some(peer)=activation_peer.take() {peer.update(cx,|_,window,_|window.remove_window()).unwrap();}
+                        }
+                        window.update(cx,|_,window,cx| {
+                            if phase==1 {
+                                if let Some(cancel)=fixture["target_pointer_cancel"].as_str() {
+                                    super::targets::native_text_tests::redraw(retained.borrow().as_ref().unwrap(),|document| {
+                                        if cancel=="modal" {document.dialog=Some(ui::Dialog::new("modal","Modal / 模态",ui::Node::button("close","关闭 / Close")));}
+                                        else if let Kind::Canvas(canvas)=&mut document.root.kind {canvas.scene.as_mut().unwrap().targets[0].epoch=2;}
+                                    },window,cx)?;
+                                    return Ok(());
+                                }
+                            }
+                            let snapshot=retained.borrow().as_ref().unwrap().read(cx).native_canvas_input_snapshot("drawing",window,cx).unwrap();
+                            input::pointer(&snapshot,phase,window,cx)
+                        }).unwrap().unwrap();
+                        cx.background_executor().timer(Duration::from_millis(50)).await;
+                    }
+                }
+                if fixture["target_ime_script"].as_bool().unwrap_or(false) {
+                    let mut evidence=super::targets::native_text_tests::Evidence::default();
+                    for phase in 0..9 {
+                        window.update(cx,|_,window,cx|super::targets::native_text_tests::phase(
+                            retained.borrow().as_ref().unwrap(),&events.borrow(),&mut evidence,phase,window,cx)).unwrap().unwrap();
+                        cx.background_executor().timer(Duration::from_millis(60)).await;
+                    }
+                }
+                let semantic_result=if fixture["semantic_probe"].as_bool().unwrap_or(false) {
+                    let handle=window.update(cx,|_,window,_|uia::owned_handle(window)).unwrap().unwrap();
+                    Some(cx.background_executor().spawn(async move {uia::probe(handle)}).await)
+                }else{None};
+                let mut interaction_error=None;
+                if let Some(kind)=fixture["wasm_editable"].as_str() {
+                    let view=retained.borrow().as_ref().unwrap().clone();
+                    if let Err(error)=wasm::editable::run(kind,owner.as_mut().unwrap(),&view,&events,window,cx).await {interaction_error=Some(error);}
+                }
+                if fixture["target_affine_ime_script"].as_bool().unwrap_or(false) {
+                    let mut evidence=input::draft::Evidence::default();
+                    for phase in 0..3 {
+                        if let Err(error)=window.update(cx,|_,window,cx|input::draft::phase(retained.borrow().as_ref().unwrap(),&mut evidence,phase,window,cx)).and_then(|result|result) {interaction_error=Some(error);break;}
+                        cx.background_executor().timer(Duration::from_millis(500)).await;
+                    }
+                }
+                if fixture["target_edit_keys_script"].as_bool().unwrap_or(false) {
+                    if let Err(error)=window.update(cx,|_,window,cx|input::editing::run(retained.borrow().as_ref().unwrap(),window,cx)).and_then(|result|result) {interaction_error=Some(error);}
+                }
+                if fixture["target_os_ime_script"].as_bool().unwrap_or(false) {
+                    let mut evidence=ime::Evidence::default();
+                    for phase in 0..6 {
+                        if let Err(error)=window.update(cx,|_,window,cx|ime::phase(retained.borrow().as_ref().unwrap(),&mut evidence,phase,window,cx)).and_then(|result|result) {
+                            interaction_error=Some(error);break;
+                        }
+                        cx.background_executor().timer(Duration::from_millis(450)).await;
+                    }
+                }
+                if let Some(target)=fixture["semantic_editable_target"].as_str() {
+                    let handle=window.update(cx,|_,window,_|uia::owned_handle(window)).unwrap().unwrap();
+                    let target=target.to_owned();
+                    match cx.background_executor().spawn(async move {wasm::editable::uia::probe(handle,&target,false)}).await {
+                        Ok(result)=> {eprintln!("OS IME semantic focus isolation: {result}");if result["focus"]!=true {interaction_error=Some(anyhow::anyhow!("OS IME native semantic focus: {result}"));}},
+                        Err(error)=>interaction_error=Some(error),
+                    }
+                }
                 let mut observed=window.update(cx,|_,window,cx|->anyhow::Result<()> {
+                    if let Some(error)=&interaction_error {anyhow::bail!("OS interaction: {error:#}");}
                     let image=window.render_to_image()?;let scale=window.scale_factor();
                     image.save(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target").join(format!("canvas-scene-{case}.png")))?;
                     if case=="custom" {
+                        if let Some(result)=&semantic_result {uia::verify(result.as_ref().map_err(|error|anyhow::anyhow!("{error:#}"))?,&events.borrow(),scale)?;}
+                        if fixture["target_os_ime_script"].as_bool().unwrap_or(false) {ime::verify(&events.borrow())?;}
+                        if fixture["target_key_script"].as_bool().unwrap_or(false) {input::verify_keys(&events.borrow())?;}
+                        if fixture["target_button_chord_script"].as_bool().unwrap_or(false) {input::chords::verify(&events.borrow())?;}
+                        if fixture["target_edit_keys_script"].as_bool().unwrap_or(false) {input::editing::verify(&events.borrow())?;}
+                        if fixture["target_pointer_script"].as_bool().unwrap_or(false) {
+                            let reason=match fixture["target_pointer_cancel"].as_str() {Some("epoch")=>protocol::ui::CanvasCancelReason::EpochReplaced,
+                                Some("modal")=>protocol::ui::CanvasCancelReason::Modal,_=>protocol::ui::CanvasCancelReason::FocusLost};
+                            input::verify_pointer(&events.borrow(),reason)?;
+                        }
+                        if fixture["target_ime_script"].as_bool().unwrap_or(false) {super::targets::native_text_tests::verify(&events.borrow())?;}
                         if let Some(percent)=requested_dpi {anyhow::ensure!((scale-percent as f32/100.).abs()<0.01,"native DPI change did not apply: requested {percent}, observed scale {scale}");}
                         if let Some(samples)=fixture["samples"].as_array() {for sample in samples {
                             let (x,y)=(sample["x"].as_f64().unwrap() as f32,sample["y"].as_f64().unwrap() as f32);
@@ -184,15 +313,104 @@ fn native_canvas_scene_paints_transformed_shapes() {
                         if let Some(colors)=fixture["visible_colors"].as_array() {for color in colors {
                             let expected=color["rgba"].as_array().unwrap();
                             let count=image.pixels().filter(|pixel|pixel.0.into_iter().zip(expected).all(|(a,e)|(i64::from(a)-e.as_i64().unwrap()).abs()<=4)).count();
-                            anyhow::ensure!(count>=color["minimum"].as_u64().unwrap() as usize,"actual WASM scene color {expected:?} missing: {count} pixels");
+                            anyhow::ensure!(count>=color["minimum"].as_u64().unwrap() as usize,"native scene color {expected:?} missing: {count} pixels");
                         }}
-                        if fixture["expect_presented"].as_bool().unwrap_or(false) {
+                        if let Some(minimum)=fixture["native_color_glyph_minimum"].as_u64() {
+                            let count=image.pixels().filter(|pixel|pixel.0[..3].iter().max().unwrap()-pixel.0[..3].iter().min().unwrap()>32).count();
+                            anyhow::ensure!(count>=minimum as usize,"worker-prepared native color emoji became monochrome: {count} pixels");
+                        }
+                        if fixture["expect_presented"].as_bool().unwrap_or(false)&&!fixture["target_ime_script"].as_bool().unwrap_or(false)&&!fixture["target_os_ime_script"].as_bool().unwrap_or(false) {
                             let receipts=events.borrow().iter().filter_map(|event|match &event.action {
                                 ui::Action::Canvas(CanvasEvent::ScenePresented{identity,scene_revision,error,..})
                                 |ui::Action::ViewportInput(ui::ViewportInput{event:CanvasEvent::ScenePresented{identity,scene_revision,error,..},..})=>Some((*identity,*scene_revision,error.clone())),_=>None
                             }).collect::<Vec<_>>();
                             let expected=expected_scene.expect("receipt acceptance requires a published scene");
                             anyhow::ensure!(receipts==vec![(expected.0,expected.1,None)],"expected one exact native presentation receipt, observed {receipts:?}");
+                        }
+                        if fixture["expected_text_hits"].is_array()||fixture["allowed_text_boundaries"].is_array() {
+                            let reports=events.borrow().iter().filter_map(|event| {
+                                let wire=serde_json::to_value(&event.action).unwrap();
+                                (wire["type"]=="canvas"&&wire["value"]["type"]=="text_layout").then(||wire["value"].clone())
+                            }).collect::<Vec<_>>();
+                            anyhow::ensure!(reports.len()==1,"expected one addressed native text layout result, observed {reports:?}");
+                            let report=&reports[0];
+                            let scene=expected_scene.expect("text queries require a scene");
+                            anyhow::ensure!(report["identity"]==scene.0&&report["scene_revision"]==scene.1
+                                &&report["results"][0]["font_environment"].as_u64().is_some_and(|key|key!=0),
+                                "native text positions must retain original UTF-8 offsets and actual font binding: {report:?}");
+                            if let Some(expected)=fixture["expected_text_hits"].as_array() {
+                                anyhow::ensure!(report["results"][0]["hits"]==serde_json::Value::Array(expected.clone()),"native original text offsets differ: {report:?}");
+                            }
+                            if let Some(allowed)=fixture["allowed_text_boundaries"].as_array() {
+                                let hits=report["results"][0]["hits"].as_array().expect("native hit list");
+                                anyhow::ensure!(hits.len()==fixture["text_queries"][0]["points"].as_array().unwrap().len()
+                                    &&hits.iter().all(|hit|allowed.contains(hit))&&hits.iter().any(|hit|hit.as_u64().unwrap()>=23),
+                                    "native carets must stay on whole graphemes across combining marks, emoji, RTL and CRLF: {hits:?}");
+                            }
+                            if fixture["expected_affine_text_geometry"].as_bool().unwrap_or(false) {
+                                let rect=&report["results"][0]["positions"][0]["rect"];
+                                for (field,expected) in [("x",171.),("y",20.),("w",29.),("h",1.)] {
+                                    anyhow::ensure!((rect[field].as_f64().unwrap()-expected).abs()<0.01,"affine native caret {field} differs: {rect}");
+                                }
+                                anyhow::ensure!(report["results"][0]["positions"][2]["rect"].is_null(),"a caret beyond the rotated group clip must remain hidden: {report}");
+                            }
+                            if fixture["expected_text_geometry"].as_bool().unwrap_or(false) {
+                                let result=&report["results"][0];
+                                let carets=result["positions"].as_array().expect("native caret rectangles");
+                                anyhow::ensure!(carets.len()==2&&carets[0]["byte"]==0&&carets[1]["byte"]==17,
+                                    "caret rectangles must address original bytes: {result:?}");
+                                for (caret,y) in carets.iter().zip([20.,44.]) {
+                                    let rect=&caret["rect"];
+                                    anyhow::ensure!((rect["x"].as_f64().unwrap()-20.).abs()<0.01
+                                        &&(rect["y"].as_f64().unwrap()-y).abs()<0.01
+                                        &&(rect["h"].as_f64().unwrap()-24.).abs()<0.01,"native line geometry differs: {caret:?}");
+                                }
+                                let rects=result["selections"][0]["rects"].as_array().expect("native selection fragments");
+                                anyhow::ensure!(rects.len()==2&&rects[0]["y"]==20.
+                                    &&rects[0]["w"].as_f64().unwrap()>1.
+                                    &&rects[1]["y"]==44.&&rects[1]["x"]==20.
+                                    &&(rects[1]["w"].as_f64().unwrap()-36.).abs()<2.
+                                    &&rects[1]["h"]==24.,"native multiline selection must cover the final Latin glyph and two full-width Chinese glyphs: {rects:?}");
+                            }
+                            if fixture["expected_rtl_carets"].as_bool().unwrap_or(false) {
+                                let carets=report["results"][0]["positions"].as_array().expect("native bidi carets");
+                                anyhow::ensure!(carets.len()==4&&carets.windows(2).all(|pair|
+                                    pair[0]["rect"]["x"].as_f64().unwrap()>pair[1]["rect"]["x"].as_f64().unwrap()),
+                                    "logical Hebrew positions must move right to left: {carets:?}");
+                                let retained=retained.borrow();let view=retained.as_ref().unwrap().read(cx);
+                                let top=view.native_canvas_input_snapshot("drawing",window,cx).unwrap();
+                                let reference=view.native_canvas_input_snapshot("reference",window,cx).unwrap();
+                                let mut ink=0usize;let mut changed=0usize;
+                                for dy in 0..(50.*scale) as u32 {for dx in 0..(100.*scale) as u32 {
+                                    let dark=|snapshot:&serde_json::Value| {
+                                        let x=((snapshot["origin_x"].as_f64().unwrap()+20.)*f64::from(scale)) as u32+dx;
+                                        let y=((snapshot["origin_y"].as_f64().unwrap()+20.)*f64::from(scale)) as u32+dy;
+                                        let pixel=image.get_pixel(x,y).0;pixel[0]<100&&pixel[1]<100&&pixel[2]<100
+                                    };
+                                    let actual=dark(&top);let expected=dark(&reference);
+                                    ink+=usize::from(actual||expected);changed+=usize::from(actual!=expected);
+                                }}
+                                anyhow::ensure!(ink>60&&changed*100<=ink*8+300,
+                                    "RTL pixels must match the independent legacy unjoined-glyph reference: changed={changed}, ink={ink}");
+                            }
+                            if fixture["expected_formatted_rows"].as_bool().unwrap_or(false) {
+                                let result=&report["results"][0];
+                                let lines=result["lines"].as_array().expect("native source rows");
+                                anyhow::ensure!(lines.len()==2&&lines[0]["range"]==serde_json::json!({"start":0,"end":2})
+                                    &&lines[1]["range"]==serde_json::json!({"start":3,"end":9})
+                                    &&lines[1]["ellipsis"]==true&&result["positions"][1]["rect"].is_null(),
+                                    "native ellipsis must preserve visible original ranges and hide later source carets: {result:?}");
+                                for line in lines {
+                                    let rect=&line["rect"];
+                                    anyhow::ensure!((rect["x"].as_f64().unwrap()+rect["w"].as_f64().unwrap()/2.-100.).abs()<0.01,
+                                        "each native row must be centered independently: {line:?}");
+                                }
+                                let center=&report["results"][1]["lines"][0];
+                                anyhow::ensure!(center["rect"]["y"]==128.&&center["rect"]["h"]==24.,
+                                    "the complete one-row block must be vertically centered: {center:?}");
+                                let red=image.pixels().filter(|pixel|pixel[0]>180&&pixel[1]<80&&pixel[2]<80).count();
+                                anyhow::ensure!(red>40,"native style-run red glyphs missing: {red}");
+                            }
                         }
                         if let Some(failed)=fixture["expect_failed_scene"].as_u64() {
                             let receipts=events.borrow().iter().filter_map(|event|match &event.action {

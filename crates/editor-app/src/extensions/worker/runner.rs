@@ -73,6 +73,7 @@ impl Worker {
             let mut development = crate::plugin_development::instance::Loader::default();
             let mut development_install = None::<String>;
             let mut vectors = super::super::images::VectorRenderer::default();
+            vectors.set_environment(environment.clone());
             let mut preparation: Option<BackgroundPreparation> = None;
             let mut deferred = VecDeque::new();
             // A coalesced geometry burst retains its first input/lifecycle boundary verbatim.
@@ -771,6 +772,9 @@ impl Worker {
                                 .copied()
                                 .unwrap_or(0);
                             if epoch == current {
+                                if let api::Notification::Theme(environment) = &event {
+                                    vectors.set_environment(environment.clone());
+                                }
                                 let source_callback = matches!(
                                     &event,
                                     api::Notification::Preview { .. }

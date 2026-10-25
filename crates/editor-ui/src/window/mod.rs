@@ -62,6 +62,29 @@ pub fn restore_editor_geometry(
     window.resize(size);
 }
 
+/// Honor an explicit accessibility focus request on `window` using the native owned-surface adapter.
+/// On Windows, a surface already holding real OS focus may need activation resynchronization for
+/// the locked accessibility backend. Otherwise use GPUI's ordinary activation behavior; errors do
+/// not grant focus to any other surface or change global keyboard/input-method configuration.
+pub fn focus_accessible_surface(window: &Window) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(handle) = HasWindowHandle::window_handle(window)
+            && let RawWindowHandle::Win32(native) = handle.as_raw()
+        {
+            if !platform_windows::window::reconcile_active_window(native.hwnd.get())? {
+                window.activate_window();
+            }
+            return Ok(());
+        }
+    }
+    if !window.is_window_active() {
+        window.activate_window();
+    }
+    Ok(())
+}
+
 /// The same editor caption appearance is used before and after a workspace is selected.
 pub fn editor_title_bar(cx: &App) -> Stateful<Div> {
     let style =
