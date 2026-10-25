@@ -9,6 +9,11 @@ mod bounds;
 pub(super) mod paragraph;
 mod svg;
 
+/// Drawing, generated vectors and interactive clips share the same independent corner limits.
+pub(super) fn corner_radii(rect: protocol::Rect, radii: [f32; 4]) -> [f32; 4] {
+    radii.map(|radius| radius.min(rect.w.min(rect.h) * 0.5))
+}
+
 /// Scene preparation resolves the same inherited native face/color as the live Canvas adapter.
 #[derive(Clone, PartialEq)]
 pub(in crate::ui::plugin) struct Typography {
@@ -526,7 +531,7 @@ fn build_path(
     };
     match geometry {
         SceneGeometry::Rect { rect, radii } => {
-            let [a, b, c, d] = radii.map(|radius| radius.min(rect.w.min(rect.h) * 0.5));
+            let [a, b, c, d] = corner_radii(*rect, *radii);
             let (x, y, r, bottom) = (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
             builder.move_to(point(px(x + a), px(y)));
             builder.line_to(point(px(r - b), px(y)));

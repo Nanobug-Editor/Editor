@@ -296,14 +296,19 @@ impl CanvasView {
             return false;
         };
         let (x, y) = self.target_point(event.position);
-        let basis = self.project(
-            protocol::Rect {
-                x: 0.,
-                y: 0.,
-                w: 1.,
-                h: 1.,
+        let basis = self.targets.frame.as_ref().map_or_else(
+            || {
+                self.project(
+                    protocol::Rect {
+                        x: 0.,
+                        y: 0.,
+                        w: 1.,
+                        h: 1.,
+                    },
+                    self.bounds,
+                )
             },
-            self.bounds,
+            |frame| frame.basis,
         );
         let (delta_x, delta_y, unit) = match event.delta {
             gpui_kit::ScrollDelta::Pixels(delta) => (

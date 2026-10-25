@@ -5,6 +5,8 @@ pub(super) mod chords;
 pub(super) mod deactivation;
 pub(super) mod draft;
 pub(super) mod editing;
+pub(super) mod hits;
+pub(super) mod wheel;
 
 /// Click the first visible cell, repeat a modified native key, then navigate with Tab.
 pub(super) fn keys(

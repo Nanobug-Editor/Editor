@@ -1730,6 +1730,7 @@ dependencies = [
  "image",
  "lsp-types",
  "lyon_algorithms",
+ "lyon_tessellation",
  "notify",
  "pinyin",
  "platform-windows",

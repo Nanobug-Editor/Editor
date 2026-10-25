@@ -77,3 +77,17 @@ Windows UIA 实测通过（`target/canvas-b-target-semantics-os.log` 1.86 s，�
 本次阶段门禁已通过：`cargo fmt --check`；`cargo test --workspace --exclude editor-app --offline --locked --jobs 2` 共 546 passed、387 ignored（112 组结果，ignored 未作为通过）；`cargo check --workspace --offline --locked --jobs 2`。实际 metadata 再确认 workspace 和 Cargo 输出都位于本 worktree。受影响 `ui::plugin::` 共 77 passed、21 ignored；公开文档会话 IME/相邻 typing 的原子 Undo/双范围 Undo/远距离 viewport 的文本选择焦点 Undo 四项分别显式运行通过；SDK 导出六项通过。原生十二项显式回归及追加 Tab 视口样本均通过。最终记录在 `target/canvas-b-final-*.log`；已有警告保留，无本次测试失败。
 
 最终源码审查、SDK/包摘要固定仍未完成；本记录保持实施中，不能据此关闭整单。
+
+## 第二单审查修复循环
+
+固定点 `561aa5b2...769dbfe8` 的首次双轴审查：Standards 发现 1 项 P1（原生字形位置平方扫描），Spec 发现 3 项 P2（旧显示帧滚轮增量、路径孔洞可见性、圆角策略）。均保持未关闭，直到修复和复核。
+
+`paragraph-budget.json` 在实际 Windows native font 接缝复现合法 64 KiB 单行布局 6.406 s，超过 2 s 响应性回归边界。现单次建立与锁定 GPUI `x_for_index` 完全相同的 first-match 原文字节位置表，按 source 索引查行内 glyph；软换行只复制自身的既有 UAX #9 embedding levels 再应用 L1，不重新解释跨行 embedding，也不重复扫描整条长行。相同原生用例通过 129.8 ms，原文查询仍正确；Unicode、RTL 和格式/省略样本复跑通过。
+
+`target-wheel-projection.json` 经普通 UI 发布 scale=2、尚未绘制时派发滚轮，先复现旧投影配新 delta 比例；现位置与像素 delta 共用原显示帧的 basis，通过。`target-keys-visible.json` 再加入 even-odd clip 孔内目标，先复现 Tab 进入不可见目标，再以真实填充交集通过。原生 UIA 样本同时加入孔内交互目标与非交互 label，两者都不进入实际 OS 树，原有四个可见语义节点/物理边界和动作仍通过。
+
+填充交集复用已锁定 `lyon_tessellation 1.0.22`，只增加依赖边；先有界展平，再通过可拒绝的 geometry builder 限制顶点和三角形输出。每个目标依次与共享祖先 clip 的填充三角形相交，空交集不保留焦点/语义范围。中间凸多边形固定 64 点 scratch，扩展片段分配前计入共享 128000 顶点，全部目标共用 1600 万 intersection work 预算。全部工作在原有 worker，不移入输入回调。
+
+圆角现在由 native drawing、generated SVG 与 hit/clip 构形共享逐角短边半径上限。`target-rounded.json` 实际绿色像素和原生按下结果同时验证 `[100,0,0,0]` 的 100×100 目标及同样祖先 clip，两个可见点均命中正确目标（1.50 s）。旋转预编辑回归也通过。
+
+修复后再次执行 fmt、workspace tests、workspace check 和插件宿主定向 77 项，均通过（`target/canvas-b-review-*.log`）。当前独立 SDK 包经 `769dbfe8` 宿主实际 Release 构建，公开 Manager flow/table 分别通过 32.96/37.54 s，冻结 A 的两个场景回归通过 52.73 s。审查修复尚待双轴复核和最终原生包验证。

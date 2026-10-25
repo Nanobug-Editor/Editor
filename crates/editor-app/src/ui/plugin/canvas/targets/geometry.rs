@@ -5,6 +5,7 @@ use lyon_algorithms::{
     path::{self, builder::BorderRadii, iterator::PathIterator as _},
 };
 use protocol::ui::{CanvasScene, SceneFillRule, ScenePathSegment};
+mod visibility;
 
 /// Prepared paths share scene retirement and its aggregate native vertex allowance.
 #[derive(Default)]
@@ -30,12 +31,15 @@ struct FlatClip {
     path: path::Path,
     rule: path::FillRule,
     bounds: protocol::Rect,
+    /// Actual filled triangles resolve path holes once, shared by all descendants in this space.
+    triangles: Vec<visibility::Triangle>,
 }
 impl PreparedTargets {
     /// Flatten admitted source shapes within both the scene and remaining worker vertex budgets.
     pub fn new(scene: &CanvasScene, limit: usize) -> Result<Self, String> {
         let mut output = Self::default();
         let limit = limit.min(128_000);
+        let mut work = 16_000_000usize;
         let mut spaces: BTreeMap<Option<String>, Vec<std::sync::Arc<FlatClip>>> = BTreeMap::new();
         for target in &scene.targets {
             let placement = scene
@@ -97,11 +101,18 @@ impl PreparedTargets {
             if bounds.w <= 0. || bounds.h <= 0. {
                 continue;
             }
+            let path = builder.build();
+            let mesh = visibility::mesh(&path, rule, &mut output.vertices, limit)?;
+            let Some(bounds) =
+                visibility::bounds(mesh, &clips, &mut output.vertices, limit, &mut work)?
+            else {
+                continue;
+            };
             output.regions.push(Region {
                 pointer_events: target.pointer_events,
                 id: target.id.clone(),
                 epoch: target.epoch,
-                path: builder.build(),
+                path,
                 rule,
                 bounds,
                 clips,
@@ -132,24 +143,22 @@ impl PreparedTargets {
                         .collect::<Result<Vec<_>, _>>()?;
                     spaces.insert(node.space.clone(), clips);
                 }
-                let points = [
-                    placement.transform.point(rect.x, rect.y),
-                    placement.transform.point(rect.x + rect.w, rect.y),
-                    placement.transform.point(rect.x, rect.y + rect.h),
-                    placement.transform.point(rect.x + rect.w, rect.y + rect.h),
-                ];
-                let x = points.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
-                let y = points.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
-                let mut rect = protocol::Rect {
-                    x,
-                    y,
-                    w: points.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max) - x,
-                    h: points.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max) - y,
-                };
-                for clip in &spaces[&node.space] {
-                    rect = intersect(rect, clip.bounds);
-                }
-                (rect.w > 0. && rect.h > 0.).then_some(rect)
+                let shape = flat_clip(
+                    &SceneGeometry::Rect {
+                        rect,
+                        radii: [0.; 4],
+                    },
+                    placement.transform,
+                    &mut output.vertices,
+                    limit,
+                )?;
+                visibility::bounds(
+                    shape.triangles,
+                    &spaces[&node.space],
+                    &mut output.vertices,
+                    limit,
+                    &mut work,
+                )?
             } else {
                 None
             };
@@ -236,9 +245,12 @@ fn flat_clip(
     } else {
         path::FillRule::NonZero
     };
+    let path = builder.build();
+    let triangles = visibility::mesh(&path, rule, vertices, limit)?;
     Ok(FlatClip {
-        path: builder.build(),
+        path,
         rule,
+        triangles,
         bounds: protocol::Rect {
             x: bounds.min.x,
             y: bounds.min.y,
@@ -262,19 +274,22 @@ fn intersect(left: protocol::Rect, right: protocol::Rect) -> protocol::Rect {
 fn source_path(geometry: &SceneGeometry) -> path::Path {
     let mut builder = path::Path::builder();
     match geometry {
-        SceneGeometry::Rect { rect, radii } => builder.add_rounded_rectangle(
-            &math::Box2D::new(
-                math::point(rect.x, rect.y),
-                math::point(rect.x + rect.w, rect.y + rect.h),
-            ),
-            &BorderRadii {
-                top_left: radii[0],
-                top_right: radii[1],
-                bottom_right: radii[2],
-                bottom_left: radii[3],
-            },
-            path::Winding::Positive,
-        ),
+        SceneGeometry::Rect { rect, radii } => {
+            let radii = super::super::scene::corner_radii(*rect, *radii);
+            builder.add_rounded_rectangle(
+                &math::Box2D::new(
+                    math::point(rect.x, rect.y),
+                    math::point(rect.x + rect.w, rect.y + rect.h),
+                ),
+                &BorderRadii {
+                    top_left: radii[0],
+                    top_right: radii[1],
+                    bottom_right: radii[2],
+                    bottom_left: radii[3],
+                },
+                path::Winding::Positive,
+            )
+        }
         SceneGeometry::Path { segments, .. } => {
             let mut open = false;
             for segment in segments {

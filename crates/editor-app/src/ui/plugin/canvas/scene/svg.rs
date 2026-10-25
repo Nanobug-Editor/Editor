@@ -345,7 +345,7 @@ fn path(geometry: &SceneGeometry) -> String {
     let mut out = String::new();
     match geometry {
         SceneGeometry::Rect { rect, radii } => {
-            let [a, b, c, d] = radii.map(|radius| radius.min(rect.w.min(rect.h) * 0.5));
+            let [a, b, c, d] = super::corner_radii(*rect, *radii);
             let (x, y, r, bottom) = (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
             // Circular arcs share the native PathBuilder radius policy, including zero-radius corners.
             let _ = write!(

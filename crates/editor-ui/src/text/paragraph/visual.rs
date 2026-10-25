@@ -6,6 +6,7 @@ use plugin_runtime::plugin_protocol::ui::{
 };
 use std::{collections::BTreeMap, ops::Range};
 use unicode_bidi::{BidiInfo, Level};
+mod positions;
 mod raster;
 
 /// One Windows native paragraph's visual rows, original-byte edges and shaped glyphs.
@@ -115,11 +116,8 @@ impl VisualParagraph {
         };
         let mut row_index = 0;
         'paragraph: for line in lines {
-            let bidi = BidiInfo::new(&line.text, None);
-            let base_rtl = bidi
-                .paragraphs
-                .first()
-                .is_some_and(|paragraph| paragraph.level.is_rtl());
+            let indexed = positions::IndexedLine::new(line);
+            let base_rtl = indexed.base_rtl();
             let mut start = 0;
             let ends = line
                 .wrap_boundaries
@@ -130,12 +128,10 @@ impl VisualParagraph {
                 if row_index >= visible {
                     break 'paragraph;
                 }
-                let mut starts = line
-                    .runs()
+                let row_glyphs = indexed.glyphs(start..end);
+                let mut starts = row_glyphs
                     .iter()
-                    .flat_map(|run| &run.glyphs)
-                    .filter(|glyph| glyph.index >= start && glyph.index < end)
-                    .map(|glyph| {
+                    .map(|(_, glyph)| {
                         floor(source + glyph.index)
                             .saturating_sub(source)
                             .max(start)
@@ -147,8 +143,8 @@ impl VisualParagraph {
                 let mut work = starts
                     .windows(2)
                     .map(|pair| {
-                        let a = line.unwrapped_layout.x_for_index(pair[0]);
-                        let b = line.unwrapped_layout.x_for_index(pair[1]);
+                        let a = indexed.x(pair[0]);
+                        let b = indexed.x(pair[1]);
                         Work {
                             source: pair[0]..pair[1],
                             x: a.min(b),
@@ -157,15 +153,13 @@ impl VisualParagraph {
                         }
                     })
                     .collect::<Vec<_>>();
-                for run in line.runs() {
-                    for glyph in &run.glyphs {
-                        if glyph.index >= start && glyph.index < end && !work.is_empty() {
-                            let index = starts
-                                .partition_point(|boundary| *boundary <= glyph.index)
-                                .saturating_sub(1)
-                                .min(work.len() - 1);
-                            work[index].glyphs.push((run.font_id, glyph.clone()));
-                        }
+                for (font_id, glyph) in row_glyphs {
+                    if !work.is_empty() {
+                        let index = starts
+                            .partition_point(|boundary| *boundary <= glyph.index)
+                            .saturating_sub(1)
+                            .min(work.len() - 1);
+                        work[index].glyphs.push((*font_id, (*glyph).clone()));
                     }
                 }
                 let mut width = work
@@ -203,17 +197,12 @@ impl VisualParagraph {
                     ),
                     ellipsis: truncated,
                 };
-                let levels = bidi
-                    .paragraphs
-                    .iter()
-                    .find(|paragraph| paragraph.range.start <= start && paragraph.range.end >= end)
-                    .map(|paragraph| bidi.reordered_levels(paragraph, start..end))
-                    .unwrap_or_else(|| bidi.levels.clone());
+                let levels = indexed.levels(start..end);
                 let cluster_levels = work
                     .iter()
                     .map(|cluster| {
                         levels
-                            .get(cluster.source.start)
+                            .get(cluster.source.start - start)
                             .copied()
                             .unwrap_or_else(Level::ltr)
                     })

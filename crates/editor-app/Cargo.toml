@@ -50,6 +50,8 @@ sha2 = "0.10"
 resvg = "=0.45.1"
 # Native target hit paths use the already-locked geometry algorithms, flattened on the worker.
 lyon_algorithms = "=1.0.21"
+# Exact clipped target visibility reuses GPUI's locked fill tessellator under explicit output budgets.
+lyon_tessellation = "=1.0.22"
 svgtypes = "=0.15.3"
 # Explicitly retain the documented bitmap formats; native images are decoded under host quotas.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }

@@ -8,6 +8,7 @@ use std::{
 mod dpi;
 mod ime;
 mod input;
+mod layout;
 mod resources;
 mod uia;
 mod wasm;
@@ -244,6 +245,17 @@ fn native_canvas_scene_paints_transformed_shapes() {
                     Some(cx.background_executor().spawn(async move {uia::probe(handle)}).await)
                 }else{None};
                 let mut interaction_error=None;
+                if fixture["rounded_hit_script"].as_bool().unwrap_or(false) {
+                    if let Err(error)=window.update(cx,|_,window,cx|input::hits::run(retained.borrow().as_ref().unwrap(),window,cx)).and_then(|result|result) {interaction_error=Some(error);}
+                    if interaction_error.is_none() {if let Err(error)=input::hits::verify(&events.borrow()) {interaction_error=Some(error);}}
+                }
+                if fixture["pending_viewport_wheel"].as_bool().unwrap_or(false) {
+                    if let Err(error)=window.update(cx,|_,window,cx|input::wheel::run(retained.borrow().as_ref().unwrap(),window,cx)).and_then(|result|result) {interaction_error=Some(error);}
+                    if interaction_error.is_none() {if let Err(error)=input::wheel::verify(&events.borrow()) {interaction_error=Some(error);}}
+                }
+                if fixture["native_layout_stress"].as_bool().unwrap_or(false) {
+                    if let Err(error)=window.update(cx,|_,window,_|layout::stress(window)).and_then(|result|result) {interaction_error=Some(error);}
+                }
                 if let Some(kind)=fixture["wasm_editable"].as_str() {
                     let view=retained.borrow().as_ref().unwrap().clone();
                     if let Err(error)=wasm::editable::run(kind,owner.as_mut().unwrap(),&view,&events,window,cx).await {interaction_error=Some(error);}
