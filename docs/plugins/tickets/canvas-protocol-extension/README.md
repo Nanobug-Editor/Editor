@@ -1,6 +1,6 @@
 # Canvas 协议扩展实施工单
 
-日期：2026-10-24。状态：用户已确认四单拆分、依赖、测试接缝和审查基点；方案 [#127](https://github.com/Nanobug-Editor/Editor/issues/127) 与四单 [#128](https://github.com/Nanobug-Editor/Editor/issues/128)–[#131](https://github.com/Nanobug-Editor/Editor/issues/131) 已发布，原生父子与阻塞关系已读回核对。01 已验收关闭，02 已验收关闭，03 已验收、待分支交付，04 未开始；真实 ID 见[发布记录](publication.json)。
+日期：2026-10-24。状态：用户已确认四单拆分、依赖、测试接缝和审查基点；方案 [#127](https://github.com/Nanobug-Editor/Editor/issues/127) 与四单 [#128](https://github.com/Nanobug-Editor/Editor/issues/128)–[#131](https://github.com/Nanobug-Editor/Editor/issues/131) 已发布，原生父子与阻塞关系已读回核对。01、02、03 已验收关闭，04 开始实施；真实 ID 见[发布记录](publication.json)。
 
 来源：[通用 Canvas 协议扩展方案](../../specs/canvas-protocol-extension.md)。采用原方案的四个端到端垂直切片，不再按协议、运行时、宿主和测试拆单。执行方式为顺序 `implement`：这些切片共享画布声明、发布校验和原生视图，线性实施能够保持同一工作区的交互与回归证据。
 

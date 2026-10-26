@@ -6,7 +6,7 @@
 
 **Blocked by：**[02 / #129 — 可编辑目标与语义](https://github.com/Nanobug-Editor/Editor/issues/129)。
 
-**Status：**AC1–AC6 已验收，等待普通提交、推送与 [#130](https://github.com/Nanobug-Editor/Editor/issues/130) 关闭读回；[最终证据与冻结输入](../../verification/canvas-native-transfer-2026-10-26.md)。前置 #129 已读回 closed/completed；未合并 main。
+**Status：**已验收交付；[最终证据与冻结输入](../../verification/canvas-native-transfer-2026-10-26.md)。`6df7f964` 已推送并核对 origin，[#130](https://github.com/Nanobug-Editor/Editor/issues/130) 已读回 closed/completed；未合并 main。
 
 **Why separate：**原生控件、菜单锚点及拖放共享 02 的焦点/目标/语义生命周期，但数据交换引入独立协商、授权和系统适配，可以作为独立可交付行为验证。
 

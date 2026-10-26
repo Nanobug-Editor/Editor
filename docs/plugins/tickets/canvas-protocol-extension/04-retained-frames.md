@@ -6,7 +6,7 @@
 
 **Blocked by：**[01 / #128 — 场景图形与空间操作](https://github.com/Nanobug-Editor/Editor/issues/128)。代码开始不以 02/03 为阻塞；整批关闭前必须完成 02/03 并通过下面的组合验收。当前顺序执行使其在 03 后实施。
 
-**Status：**ready-for-agent；真实议题 [#131](https://github.com/Nanobug-Editor/Editor/issues/131)，等待前置项。
+**Status：**实施中；真实议题 [#131](https://github.com/Nanobug-Editor/Editor/issues/131)。01/02/03 均已读回 closed/completed；同一独立分支顺序实施，完成整批验收后再合并 main。
 
 **Why separate：**补丁、帧和资源保留基于同一场景身份，有独立的性能及队列风险；此单是整批集成交付责任单，不另拆纯验证工单。
 

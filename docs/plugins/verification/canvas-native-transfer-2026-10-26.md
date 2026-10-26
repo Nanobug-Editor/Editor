@@ -1,6 +1,6 @@
 # Canvas 03：原生混排与数据交换验收记录
 
-状态：AC1–AC6 行为验收完成，等待普通提交、分支推送及 [#130](https://github.com/Nanobug-Editor/Editor/issues/130) 关闭状态读回。依据为 [工单 03](../tickets/canvas-protocol-extension/03-native-transfer.md) 及 [Canvas 扩展方案](../specs/canvas-protocol-extension.md)。前半部分保留实施中的红绿检查点，最终固定输入与结果见文末。
+状态：AC1–AC6 已验收交付，[#130](https://github.com/Nanobug-Editor/Editor/issues/130) 已读回 closed/completed。依据为 [工单 03](../tickets/canvas-protocol-extension/03-native-transfer.md) 及 [Canvas 扩展方案](../specs/canvas-protocol-extension.md)。前半部分保留实施中的红绿检查点，最终固定输入与结果见文末。
 
 ## 执行位置与恢复检查点
 
@@ -130,4 +130,8 @@ Canvas 命中红/绿为 `target/canvas-c-native-drop-canvas-{red,green}.log`。�
 
 16 项最终原生用例全部通过，日志为 `target/canvas-c-frozen-native-*.log`。系统剪贴板首次选择读取遇到 `OpenClipboard` 临时占用 `0x80070005`，原失败记录保留；同一快照重跑 `target/canvas-c-frozen-native-clipboard-retry.log` 通过（1.44 秒），没有修改生产代码或放宽断言。图片定向日志为 `target/canvas-c-frozen-image-regressions.log`。Manager、表格和原生耗时均为实测过程时间，不作为第四单性能指标。
 
-已实测 Windows；其他平台未实测。原生叠放只支持轴对齐等比缩放及矩形祖先裁剪，不支持的几何在发布前明确拒绝；图形场景仍支持其既有复杂裁剪。保留场景、显示帧、双轴滚动、热更新与长期性能组合由 #131 验收。本单尚待本次记录的普通提交、origin 推送校验与 issue 读回，未合并 main，父 #127 保持开放。
+已实测 Windows；其他平台未实测。原生叠放只支持轴对齐等比缩放及矩形祖先裁剪，不支持的几何在发布前明确拒绝；图形场景仍支持其既有复杂裁剪。保留场景、显示帧、双轴滚动、热更新与长期性能组合由 #131 验收，未合并 main，父 #127 保持开放。
+
+## 分支交付与议题读回
+
+`6df7f964529756b11e4a27623afe138846da2211` 已普通推送至 origin 的 `codex/canvas-protocol-extension`，`ls-remote` 核对 SHA 一致。GitHub 连接器写入仍为 403；按仓库既有流程通过当前 Git 认证的 REST 更新 #130，再由独立连接器读回 closed/completed，关闭时间 `2026-10-26T11:42:19Z`。源码、冻结输入及最终文档均完成双轴审查，未修改主工作区。接续 #131，四单全部验收后统一合回 main。
