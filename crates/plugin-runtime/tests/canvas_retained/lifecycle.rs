@@ -10,7 +10,7 @@ use std::sync::{
 /// Read the same explicit candidate as the parent suite; frozen fixture archives remain immutable.
 fn package() -> Package {
     std::env::var_os("NANOBUG_CANVAS_TIMELINE_PACKAGE").map_or_else(
-        || test_packages::package("canvas-timeline-1.0.0"),
+        || test_packages::package("canvas-timeline-1.0.1"),
         |path| Package::read(std::path::Path::new(&path)).unwrap(),
     )
 }
@@ -19,7 +19,7 @@ fn package() -> Package {
 fn update_package() -> Package {
     let mut files = package().files;
     let mut manifest: Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
-    manifest["version"] = json!("1.0.1");
+    manifest["version"] = json!("1.0.2");
     files.insert(
         "manifest.json".into(),
         serde_json::to_vec(&manifest).unwrap(),

@@ -2,11 +2,26 @@
 use gpui_base::ScrollbarHandle;
 use gpui_kit::{Bounds, Pixels, Point, Size, point, px, size};
 use plugin_runtime::plugin_protocol::ui::{SceneOffset, SceneScroll2D};
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::VecDeque,
+    rc::Rc,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 /// Native motion is presentation-only; committed scene data stays in the public declaration.
-#[derive(Clone, Default)]
-pub(super) struct CanvasScroll2D(Rc<RefCell<State>>);
+#[derive(Clone)]
+pub(super) struct CanvasScroll2D(Rc<RefCell<State>>, u64);
+
+impl Default for CanvasScroll2D {
+    fn default() -> Self {
+        // A retired handle can outlive its owner through a kinetic callback. A monotonic native
+        // incarnation also prevents a recycled allocation from adopting old keyed motion state.
+        static NEXT_INCARNATION: AtomicU64 = AtomicU64::new(1);
+        let incarnation = NEXT_INCARNATION.fetch_add(1, Ordering::Relaxed);
+        Self(Rc::new(RefCell::new(State::default())), incarnation)
+    }
+}
 
 #[derive(Default)]
 struct State {
@@ -22,6 +37,11 @@ struct State {
 }
 
 impl CanvasScroll2D {
+    /// Stable across artwork and press-ticket revisions, replaced only with this native endpoint.
+    pub(super) fn incarnation(&self) -> u64 {
+        self.1
+    }
+
     /// A replacement incarnation cannot inherit kinetic motion or acknowledgements.
     pub(super) fn reset(&mut self) {
         // Existing kinetic callbacks keep only the old Rc and cannot retarget a replacement owner.
@@ -199,6 +219,9 @@ impl ScrollbarHandle for CanvasScroll2D {
         }
     }
 }
+
+#[cfg(test)]
+mod motion_tests;
 
 #[cfg(test)]
 mod tests {

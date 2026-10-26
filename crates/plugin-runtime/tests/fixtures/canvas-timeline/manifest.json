@@ -1,5 +1,5 @@
 {
-  "id":"canvas-timeline","name":"Retained timeline acceptance","version":"1.0.0","protocol":7,
+  "id":"canvas-timeline","name":"Retained timeline acceptance","version":"1.0.1","protocol":7,
   "api":{"base":"^1","required":{"ui.native":"^1","ui.panels":"^1","ui.canvas":">=1.10,<2","ui.viewport":"^1","ui.visibility":"^1","lifecycle.timers":"^1"}},
   "scope":"workspace","component":"canvas_timeline.wasm","permissions":["ui.panels"],
   "commands":[

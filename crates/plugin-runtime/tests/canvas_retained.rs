@@ -19,7 +19,7 @@ impl Harness {
     /// Install and activate the real independent guest through its ordinary panel demand.
     fn open() -> Self {
         let package = std::env::var_os("NANOBUG_CANVAS_TIMELINE_PACKAGE").map_or_else(
-            || test_packages::package("canvas-timeline-1.0.0"),
+            || test_packages::package("canvas-timeline-1.0.1"),
             |path| Package::read(std::path::Path::new(&path)).unwrap(),
         );
         let profile = tempfile::tempdir().unwrap();
@@ -253,4 +253,165 @@ fn timeline_snapshot(manager: &mut Manager) -> serde_json::Value {
         .snapshot()
         .unwrap();
     serde_json::from_str(&snapshot.data).unwrap()
+}
+
+/// The public proof keeps the original target/scene generation while later artwork is accepted.
+#[test]
+#[ignore = "executes independent timeline 1.0.1 through public Package/Manager; build fixture first"]
+fn retained_target_wheel_reuses_shown_target_across_paint_only_changes() {
+    let mut harness = Harness::open();
+    let manager = &mut harness.manager;
+    let shown = manager.live["canvas-timeline"].views["timeline"].clone();
+    let ui::Kind::Canvas(canvas) = &shown.root.kind else {
+        panic!("ordinary Canvas");
+    };
+    let scene = canvas.scene.as_ref().unwrap();
+    let target = scene
+        .targets
+        .iter()
+        .find(|target| target.id == "timeline-surface")
+        .expect("timeline must declare its stable surface target");
+    assert_eq!(target.epoch, 1);
+    assert!(
+        scene
+            .semantics
+            .iter()
+            .any(|semantic| semantic.id == "timeline-grid"
+                && semantic.target.as_deref() == Some("timeline-surface"))
+    );
+    manager
+        .event(
+            "canvas-timeline",
+            Some("timeline".into()),
+            api::Notification::Ui(ui::UiEvent {
+                revision: shown.revision,
+                node: "drawing".into(),
+                action: ui::Action::ViewportInput(ui::ViewportInput {
+                    content: shown.root.viewport.as_ref().unwrap().content.unwrap(),
+                    event: ui::CanvasEvent::ScenePresented {
+                        identity: scene.identity,
+                        scene_revision: scene.revision,
+                        source: shown.source.clone(),
+                        file: shown.file.clone(),
+                        projection: shown.root.viewport.clone(),
+                        error: None,
+                    },
+                }),
+            }),
+        )
+        .unwrap();
+    manager
+        .invoke_command("canvas-timeline", "mutate", serde_json::json!({"index":0}))
+        .unwrap();
+    let accepted = manager.live["canvas-timeline"].views["timeline"].clone();
+    assert!(accepted.revision > shown.revision);
+    let before = timeline_snapshot(manager);
+    manager
+        .event(
+            "canvas-timeline",
+            Some("timeline".into()),
+            api::Notification::Ui(timeline_boundary_wheel(&shown, 1)),
+        )
+        .unwrap();
+    let after = timeline_snapshot(manager);
+    assert_eq!(
+        after["offset"], before["offset"],
+        "a boundary observation cannot scroll twice"
+    );
+    assert_eq!(
+        after["revision"], before["revision"],
+        "typed observation cannot dirty idle artwork"
+    );
+    assert!(std::sync::Arc::ptr_eq(
+        &accepted,
+        &manager.live["canvas-timeline"].views["timeline"]
+    ));
+
+    let legacy = ui::UiEvent {
+        revision: shown.revision,
+        node: "drawing".into(),
+        action: ui::Action::ViewportInput(ui::ViewportInput {
+            content: shown.root.viewport.as_ref().unwrap().content.unwrap(),
+            event: ui::CanvasEvent::Wheel {
+                x: 300.,
+                y: 140.,
+                delta_x: -480.,
+                delta_y: 0.,
+                shift: false,
+            },
+        }),
+    };
+    let error = manager
+        .event(
+            "canvas-timeline",
+            Some("timeline".into()),
+            api::Notification::Ui(legacy),
+        )
+        .unwrap_err();
+    assert_eq!(
+        error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<api::Failure>())
+            .unwrap()
+            .code,
+        api::ErrorCode::StaleRevision,
+        "legacy coordinates retain their strict gate: {error:#}"
+    );
+    manager
+        .invoke_command("canvas-timeline", "new-scene", serde_json::Value::Null)
+        .unwrap();
+    let replacement = manager.live["canvas-timeline"].views["timeline"].clone();
+    // A fresh sequence isolates identity revocation from ordinary replay rejection.
+    let error = manager
+        .event(
+            "canvas-timeline",
+            Some("timeline".into()),
+            api::Notification::Ui(timeline_boundary_wheel(&shown, 2)),
+        )
+        .unwrap_err();
+    assert_eq!(
+        error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<api::Failure>())
+            .unwrap()
+            .code,
+        api::ErrorCode::StaleRevision,
+        "a replacement cannot inherit an old surface proof: {error:#}"
+    );
+    assert!(std::sync::Arc::ptr_eq(
+        &replacement,
+        &manager.live["canvas-timeline"].views["timeline"]
+    ));
+}
+
+/// Carry exactly the declared shown-frame fields; never retarget input to the accepted drawing.
+fn timeline_boundary_wheel(shown: &ui::Document, sequence: u64) -> ui::UiEvent {
+    let ui::Kind::Canvas(canvas) = &shown.root.kind else {
+        panic!("ordinary Canvas");
+    };
+    let scene = canvas.scene.as_ref().unwrap();
+    ui::UiEvent {
+        revision: shown.revision,
+        node: "drawing".into(),
+        action: ui::Action::Canvas(ui::CanvasEvent::Input {
+            input: ui::CanvasInput {
+                identity: scene.identity,
+                presented_revision: scene.revision,
+                target: "timeline-surface".into(),
+                epoch: 1,
+                sequence,
+                source: shown.source.clone(),
+                file: shown.file.clone(),
+                projection: shown.root.viewport.clone(),
+                kind: ui::CanvasInputKind::Wheel(ui::CanvasWheelInput {
+                    x: 300.,
+                    y: 140.,
+                    delta_x: -480.,
+                    delta_y: 0.,
+                    unit: ui::CanvasWheelUnit::Lines,
+                    modifiers: ui::CanvasModifiers::default(),
+                }),
+            },
+        }),
+    }
 }

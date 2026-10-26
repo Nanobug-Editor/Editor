@@ -59,7 +59,7 @@ impl Actor {
     /// Compile/activate the actual package before opening the measured window, using its declared grants.
     pub fn start() -> anyhow::Result<Self> {
         let package = std::env::var_os("NANOBUG_CANVAS_TIMELINE_PACKAGE").map_or_else(
-            || Ok(test_packages::package("canvas-timeline-1.0.0")),
+            || Ok(test_packages::package("canvas-timeline-1.0.1")),
             |path| plugin_runtime::Package::read(std::path::Path::new(&path)),
         )?;
         let mut owner = super::open(package, "canvas-timeline", "timeline");

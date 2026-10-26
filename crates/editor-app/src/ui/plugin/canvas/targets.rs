@@ -54,6 +54,8 @@ pub(super) fn init(cx: &mut App) {
 /// Native focus handles outlive ordinary scene repaints but never a target epoch replacement.
 #[derive(Default)]
 pub(super) struct Targets {
+    /// Target listeners survive paint-only press-ticket changes but never a cleared native owner.
+    lifetime: u64,
     /// Private complex-layer drafts are coalesced separately from ordered native text observations.
     raster: raster::State,
     /// Only focused or still-unacknowledged plugin-domain text needs a temporary native draft.
@@ -76,6 +78,16 @@ pub(super) struct Targets {
     sequence: Rc<Cell<u64>>,
 }
 impl Targets {
+    /// A rendered target listener keeps this token until the complete native owner is withdrawn.
+    pub(super) fn lifetime(&self) -> u64 {
+        self.lifetime
+    }
+    /// Rebind a same-owner visibility ticket without inventing a new displayed revision.
+    pub(super) fn rebind_gesture(&mut self, gesture: Option<action_gestures::ActionGesture>) {
+        if let Some(frame) = &mut self.frame {
+            frame.gesture = gesture;
+        }
+    }
     /// New widgets reuse the App's native order so recreation cannot replay an earlier Canvas sequence.
     pub(super) fn new(cx: &App) -> Self {
         Self {
@@ -85,6 +97,10 @@ impl Targets {
     }
     /// Drop native ownership on a Canvas/source retirement without retaining committed plugin text.
     pub(super) fn clear(&mut self) {
+        self.lifetime = self
+            .lifetime
+            .checked_add(1)
+            .expect("Canvas target lifetime exhausted");
         self.raster.retire();
         self.focus.clear();
         self.focused.clear();

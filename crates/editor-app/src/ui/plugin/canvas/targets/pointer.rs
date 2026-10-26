@@ -237,11 +237,11 @@ impl CanvasView {
         cx: &Context<Self>,
     ) {
         let owner = cx.entity().downgrade();
-        let gesture = self.action_gesture;
+        let target_lifetime = self.targets.lifetime;
         window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
             if phase.capture() {
                 let _ = owner.update(cx, |this, cx| {
-                    if this.action_gesture != gesture
+                    if this.targets.lifetime != target_lifetime
                         || !this.enabled
                         || this.targets.captured.is_none()
                     {
@@ -259,7 +259,7 @@ impl CanvasView {
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
             if phase.capture() {
                 let _ = owner.update(cx, |this, cx| {
-                    if this.action_gesture != gesture || !this.enabled {
+                    if this.targets.lifetime != target_lifetime || !this.enabled {
                         return;
                     }
                     let Some((target, _, buttons)) = this.targets.captured.clone() else {
@@ -284,7 +284,7 @@ impl CanvasView {
         window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
             if phase.capture() {
                 let _ = owner.update(cx, |this, cx| {
-                    if this.action_gesture != gesture || !this.enabled {
+                    if this.targets.lifetime != target_lifetime || !this.enabled {
                         return;
                     }
                     let Some((target, _, buttons)) = this.targets.captured.clone() else {

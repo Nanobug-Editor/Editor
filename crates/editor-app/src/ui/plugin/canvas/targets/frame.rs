@@ -1,5 +1,7 @@
 //! Native input retains the last actually painted frame independently of a newly accepted drawing.
 use super::*;
+#[cfg(test)]
+mod tests;
 
 /// Immutable hit/source/projection evidence for exactly one successful native display.
 pub(in crate::ui::plugin::canvas) struct InputFrame {
@@ -138,7 +140,9 @@ impl CanvasView {
             .targets
             .frame
             .as_ref()
-            .filter(|frame| frame.receipt == *receipt && frame.gesture == self.action_gesture)
+            // Identical receipts are not republished. Keep their proven outer UI revision
+            // while rebinding the current press credential; real withdrawal clears this frame.
+            .filter(|frame| frame.receipt == *receipt)
             .map_or(self.revision, |frame| frame.revision);
         self.targets.frame = Some(InputFrame {
             font: self.font.clone(),

@@ -218,13 +218,11 @@ impl Manager {
                 )
                 .into());
             }
-            let document = self
-                .live
-                .get(id)
-                .and_then(|instance| instance.views.get(panel.as_ref().expect("validated panel")))
-                .ok_or_else(|| {
-                    api::Failure::new(api::ErrorCode::InvalidHandle, "UI panel is unavailable")
-                })?;
+            let instance = self.live.get(id).ok_or_else(|| {
+                api::Failure::new(api::ErrorCode::InvalidHandle, "UI panel is unavailable")
+            })?;
+            let document =
+                instance.ui_event_document(panel.as_ref().expect("validated panel"), event)?;
             // Reject stale host callbacks before calling WASM; they are not plugin crashes.
             if let Err(failure) = document.validate_event(event) {
                 if failure.code == api::ErrorCode::StaleRevision

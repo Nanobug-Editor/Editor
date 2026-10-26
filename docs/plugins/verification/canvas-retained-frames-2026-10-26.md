@@ -60,3 +60,19 @@
 本机只读 CIM 查询：AMD Ryzen 9 9950X3D（16 核 / 32 逻辑处理器），NVIDIA GeForce RTX 5080，显示驱动 `32.0.16.1088`；Windows 11 专业版 `10.0.26200`，可见内存 64545140 KiB；显示模式为 3840×2160、144 Hz。实际窗口 DPI 和每帧刷新间隔由原生采样记录，不能把方案的 60 Hz 建议条件写成本机实测条件。
 
 同机 full / patch 比较使用相同保留缓存、相同普通时间轴包、种子与真实双轴 SendInput 往返轨迹；full 指现行宿主上的全量视口发布对照，不冒称历史旧二进制。每秒记录工作集、private commit、当前/仍存活派生像素、资源、累计字节、塑形/栅格工作及有界 fixture ingress；该 ingress 不是生产 WorkSender 邮箱。每帧保存 GPUI 实际 draw/present trace，HDR 输入延迟只涵盖窗口派发至绘制，未包含硬件输入延迟。观察器也参与资源开销，两轮使用相同设置；原生 GPU atlas 内存未直接测量。
+
+## 第一次源码与固定包
+
+普通源码提交 `a8bf1974e34dc08a19a93ae3fce8984cc7913df8` 与最终补审 tree `8f37ea4eb7b6ae8140408731cc4d351f1abf9528` 相同；两轴未解决项均为 0。生产宿主 SHA-256 为 `7e19f8e23c5be1d3db43f47c5e26c50add2cbe55ed75f36706e6eea828b092fe`；提交后同一 Cargo 入口确认通过。SDK 为 `24727749b6873d0323751868262e106b7e8446582f1d0db826cfdea45e7096b5`，92 个源码/清单/WIT/JSON 输入、无 Markdown。三个独立 guest 都核对了 metadata workspace_root/target_directory，并通过该宿主 `--plugin-cargo`、各自输出目录直接构建。
+
+固定 Flow 1.3.0、Table 1.2.0 的最终 Release 实际包回归：`canvas-d-frozen-hybrid.log` 4 通过（29.90 秒）、`canvas-d-frozen-editable.log` 1 通过（6.90 秒）、`canvas-d-frozen-table.log` 5 通过（28.05 秒，排除另用历史包验证的 B 六格先验）、`canvas-d-frozen-transfer.log` 12 通过（95.81 秒）。`canvas-d-frozen-native-*.log` 的 8 项均通过，包含实际 D 包 125% 深色流程图、200% 表格的中文 IME/UIA，段落缓存、双轴坐标、系统剪贴板及基本/透明图层/图片像素。
+
+Timeline 1.0.0 的首个固定输入保留为历史故障样本：`canvas-d-baseline-full-30s.log` 在 5.624 秒因边界 legacy Wheel 与动画版本竞争失败，没有完成 30 秒，不作为性能通过。随后 Timeline 升为 1.0.1，声明稳定 `timeline-surface` 目标并关联 Grid 语义，typed 输入不重复执行原生滚动。`canvas-d-v101-target-wheel.log` 的真实 Manager 回归 1 通过（3.99 秒），旧 shown-target 在纯绘制推进后仍可接纳、旧 legacy 仍拒绝、identity 换代撤销旧 proof。
+
+初次 1.0.1 验证还修正了两个测试/声明错误：Grid 关联 target 后移除互斥 rect；Manager 原生 ScenePresented 使用与真实 PluginView 一致的 ViewportInput 外壳。对应失败日志保留。`canvas-d-v101-fixed-smoke.log` 实际原生通过（6.31 秒）；`canvas-d-v101-retained.log` 原有生命周期/三包/补丁/帧的 5 项通过，新增目标用例修正外壳后单独通过。
+
+`canvas-d-v101-baseline-full-30s.log` 又在 5.617 秒捕获迟到 ScenePresented（UI 392）与已接纳 UI 393 的竞争，不能作为 30 秒基线。已保存完整原始采样，正在补充通用有界已接纳/已呈现版本处理；不得忽略 StaleRevision、合成呈现证明或扩大 legacy 输入例外。十分钟采样仍未完成，#131 保持开放。
+
+回执竞争的公开 Manager RED 为 `canvas-d-late-presented-red.log`（3.51 秒，真实复现 `UI document was replaced`）。运行时新增全实例最多四份旧 Document Arc，仅成功 ScenePresented 可按原快照校验并登记原目标；source/file/modal/overlay lineage/identity 撤销时永久裁剪历史资格。没有历史、已淘汰、未来、伪造投影和旧失败回执均拒绝，旧失败不能撤销较新已显示证明。`canvas-d-late-presented-final-green.log` 为 2 通过（7.83 秒）；`canvas-d-history-lifetimes-unit.log` 为 5 通过，直接覆盖 source/file/modal/overlay ABA 与旧失败隔离。补审 `cf2098a1` 的 Standards / Spec 新增发现均为 0。
+
+`canvas-d-history-functional-full-30s.log` 已实际跑完 30.011 秒且没有上述 Manager 版本错误，但实际双轴往返检查失败（两轴增加/减少均 false），因此仍不计性能通过。诊断确认隐藏后的按钮 Visibility 凭据会随普通 UI 重绘更新；此前把滚动 Rc 和 kinetic ID 绑定它，导致每个动画更新重置运动。正在分离纯绘制与真正场景/来源/可见性撤销的寿命；原始 30 秒采样保留，不能因帧耗时较低而跳过实际移动门槛。

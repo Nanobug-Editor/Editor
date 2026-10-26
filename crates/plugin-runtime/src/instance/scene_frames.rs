@@ -2,12 +2,23 @@
 use super::*;
 use plugin_protocol::ui::{CanvasCleanupKind as Cleanup, CanvasInputKind as Kind};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+#[cfg(test)]
+mod lifetimes_tests;
 
 /// One incarnation's displayed frames and monotonic input order, never source document authority.
 #[derive(Default)]
 pub(super) struct Frames {
     shown: BTreeMap<(String, String), VecDeque<Frame>>,
     sequence: BTreeMap<(String, String), u64>,
+    /// Four quota-validated immutable documents across the instance, never four per Canvas/panel.
+    /// Arc retention avoids copying or re-encoding complete artwork on every small scene patch.
+    accepted: VecDeque<Accepted>,
+}
+/// A historical document can lose individual Canvas lifetimes permanently while siblings remain live.
+struct Accepted {
+    panel: String,
+    document: std::sync::Arc<ui::Document>,
+    canvases: BTreeSet<String>,
 }
 /// Original source, projection and target membership cannot be reinterpreted by later publications.
 struct Frame {
@@ -37,6 +48,73 @@ impl Frame {
     }
 }
 impl Frames {
+    /// Preserve the immediately preceding accepted document before atomic publication replaces it.
+    /// The existing 32 MiB reply quota bounds every retained document; at most four are kept total.
+    pub(super) fn remember(
+        &mut self,
+        views: &[api::View],
+        current: &BTreeMap<String, std::sync::Arc<ui::Document>>,
+    ) {
+        for view in views {
+            let Some(document) = current
+                .get(&view.panel)
+                .filter(|old| old.revision != view.document.revision)
+            else {
+                continue;
+            };
+            let mut canvases = BTreeSet::new();
+            super::scene_history::visit(document, |node| {
+                // Ordinary UI nodes need no Canvas history. Avoid rescanning their whole
+                // document for lineage on every publication of a large native list/form.
+                if matches!(&node.kind, ui::Kind::Canvas(canvas) if canvas.scene.is_some())
+                    && same_lifetime(document, document, &node.id)
+                {
+                    canvases.insert(node.id.clone());
+                }
+            });
+            if !canvases.is_empty() {
+                self.accepted.push_back(Accepted {
+                    panel: view.panel.clone(),
+                    document: document.clone(),
+                    canvases,
+                });
+                while self.accepted.len() > 4 {
+                    self.accepted.pop_front();
+                }
+            }
+        }
+    }
+    /// Only successful truthful receipts may consult history. Old failures must not retire a newer
+    /// successful proof; all input, legacy coordinates and failed receipts retain their current gate.
+    pub(super) fn accepted_document(
+        &self,
+        panel: &str,
+        event: &ui::UiEvent,
+        current: &ui::Document,
+    ) -> Option<std::sync::Arc<ui::Document>> {
+        if event.revision >= current.revision
+            || !matches!(
+                &event.action,
+                ui::Action::Canvas(ui::CanvasEvent::ScenePresented { error: None, .. })
+                    | ui::Action::ViewportInput(ui::ViewportInput {
+                        event: ui::CanvasEvent::ScenePresented { error: None, .. },
+                        ..
+                    })
+            )
+        {
+            return None;
+        }
+        self.accepted
+            .iter()
+            .rev()
+            .find(|accepted| {
+                accepted.panel == panel
+                    && accepted.document.revision == event.revision
+                    && accepted.canvases.contains(&event.node)
+                    && same_lifetime(&accepted.document, current, &event.node)
+            })
+            .map(|accepted| accepted.document.clone())
+    }
     /// Native drag uses the latest actually shown target membership, independently of accepted artwork.
     pub(super) fn transfer_current(
         &self,
@@ -235,6 +313,16 @@ impl Frames {
     }
     /// Ordinary drawing updates retain proofs; source/modal/scene retirement retains only active cleanup.
     pub fn reconcile(&mut self, views: &BTreeMap<String, std::sync::Arc<ui::Document>>) {
+        // Prune on every accepted transition. Returning to an old source/modal/overlay identity
+        // cannot reinsert an ID into this historical snapshot and revive its old authority.
+        self.accepted.retain_mut(|accepted| {
+            accepted.canvases.retain(|id| {
+                views
+                    .get(&accepted.panel)
+                    .is_some_and(|current| same_lifetime(&accepted.document, current, id))
+            });
+            !accepted.canvases.is_empty()
+        });
         self.shown.retain(|(panel,id),frames| {
             let document=views.get(panel);
             for frame in frames.iter_mut() {
@@ -247,6 +335,29 @@ impl Frames {
             frames.retain(|frame|!frame.retired||!frame.cleanup.is_empty());!frames.is_empty()
         });
     }
+}
+/// Drawing revision/projection may advance, while source, foreground ownership and scene incarnation
+/// must still be exactly the same. Historical document validation checks its original projection.
+fn same_lifetime(before: &ui::Document, current: &ui::Document, id: &str) -> bool {
+    if before.source != current.source
+        || before.file != current.file
+        || before.dialog.is_some()
+        || before.menu.is_some()
+        || current.dialog.is_some()
+        || current.menu.is_some()
+        || before.editor_action_source(id).is_some()
+        || current.editor_action_source(id).is_some()
+        || crate::ui_owners::lineage(before, id) != crate::ui_owners::lineage(current, id)
+    {
+        return false;
+    }
+    let (Some(old), Some(new)) = (before.active_node(id), current.active_node(id)) else {
+        return false;
+    };
+    !old.disabled
+        && !new.disabled
+        && matches!((&old.kind,&new.kind),(ui::Kind::Canvas(a),ui::Kind::Canvas(b))
+        if a.scene.as_ref().zip(b.scene.as_ref()).is_some_and(|(a,b)|a.identity==b.identity))
 }
 /// Retired proofs discard all unneeded geometry membership while keeping bounded cancellation evidence.
 fn retire(frame: &mut Frame) {

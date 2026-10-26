@@ -159,6 +159,9 @@ impl PluginView {
     pub(crate) fn retire_code_panes(&mut self, cx: &mut Context<Self>) {
         self.pause_canvas_frames(cx);
         self.invalidate_action_gestures(cx);
+        for canvas in self.canvases.values() {
+            canvas.update(cx, |canvas, _| canvas.deactivate());
+        }
         self.code_sync.cancel(cx);
     }
 
@@ -173,7 +176,10 @@ impl PluginView {
             self.suspend_overlay_controls(cx);
             self.suspend_popup(cx);
             for canvas in self.canvases.values() {
-                canvas.update(cx, |canvas, _| canvas.discard_anchor_geometry());
+                canvas.update(cx, |canvas, _| {
+                    canvas.discard_anchor_geometry();
+                    canvas.deactivate();
+                });
             }
             for tree in self.trees.values() {
                 tree.read(cx).resource.suspend();
@@ -455,8 +461,9 @@ impl PluginView {
                         None
                     }
                 });
-            let current = self.document.source == document.source
-                && self.document.file == document.file
+            let same_source =
+                self.document.source == document.source && self.document.file == document.file;
+            let current = same_source
                 && (self.document == document || self.document.editor_action_source(id).is_none());
             let reason = if document.dialog.is_some() || document.menu.is_some() {
                 ui::CanvasCancelReason::Modal
@@ -466,7 +473,12 @@ impl PluginView {
                 ui::CanvasCancelReason::TargetRemoved
             };
             canvas.update(cx, |view, cx| {
-                view.reconcile_target_lifetimes(next, current, reason, window, cx)
+                view.reconcile_target_lifetimes(next, current, reason, window, cx);
+                // Source/modal/disabled/removal withdrawal retires the native scroll endpoint.
+                // Artwork revisions still revoke their press tickets without losing motion.
+                if !same_source || next.is_none() {
+                    view.deactivate();
+                }
             });
         }
         if self.document != document {

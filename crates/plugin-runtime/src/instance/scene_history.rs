@@ -44,6 +44,40 @@ pub(super) fn visit(document: &ui::Document, mut visitor: impl FnMut(&ui::Node))
 }
 
 impl Instance {
+    /// Select an exact accepted snapshot only for a late successful native presentation receipt.
+    /// Every other notification validates against the current publication as before.
+    pub(crate) fn ui_event_document(
+        &self,
+        panel: &str,
+        event: &ui::UiEvent,
+    ) -> Result<std::sync::Arc<ui::Document>, Failure> {
+        let current = self
+            .views
+            .get(panel)
+            .ok_or_else(|| Failure::new(ErrorCode::InvalidHandle, "UI panel is unavailable"))?;
+        let presentation = matches!(
+            &event.action,
+            ui::Action::Canvas(ui::CanvasEvent::ScenePresented { .. })
+                | ui::Action::ViewportInput(ui::ViewportInput {
+                    event: ui::CanvasEvent::ScenePresented { .. },
+                    ..
+                })
+        );
+        if presentation && event.revision < current.revision {
+            // Do not fall back to the protocol's unchanged-scene observation exception after
+            // history eviction or retirement: that would revive a pruned source/modal ABA proof.
+            return self
+                .scene_frames
+                .accepted_document(panel, event, current)
+                .ok_or_else(|| {
+                    Failure::new(
+                        ErrorCode::StaleRevision,
+                        "Native Canvas presentation has no retained accepted snapshot",
+                    )
+                });
+        }
+        Ok(current.clone())
+    }
     /// Gate shown-frame input before any guest call, retaining a narrow cleanup path after retirement.
     pub(crate) fn accept_scene_event(
         &mut self,
@@ -91,9 +125,7 @@ impl Instance {
             self.scene_frames.commit(panel, event, input);
             return Ok(true);
         }
-        let Some(document) = self.views.get(panel) else {
-            return Ok(true);
-        };
+        let document = self.ui_event_document(panel, event)?;
         let Some(node) = document.active_node(&event.node) else {
             return Ok(true);
         };
@@ -105,11 +137,11 @@ impl Instance {
         };
         if matches!(action, ui::CanvasEvent::ScenePresented { .. }) {
             self.scene_frames
-                .present(panel, event, action, scene, document)?;
+                .present(panel, event, action, scene, &document)?;
         } else if matches!(
             action,
             ui::CanvasEvent::Pointer { .. } | ui::CanvasEvent::Wheel { .. }
-        ) && !self.scene_frames.current(panel, node, document)
+        ) && !self.scene_frames.current(panel, node, &document)
         {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
@@ -208,6 +240,7 @@ impl Instance {
 
     /// Commit tombstones only after every peer document and declared panel has passed validation.
     pub(super) fn remember_scenes(&mut self, views: &[api::View]) {
+        self.scene_frames.remember(views, &self.views);
         self.scene_inputs.remember(views, &self.views);
         for view in views {
             visit(&view.document, |node| {

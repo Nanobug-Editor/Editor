@@ -436,7 +436,8 @@ impl CanvasView {
             (self.sink)(event, self.revision, self.action_gesture, cx);
         }
     }
-    /// Revoke only source-owned gesture state; ordinary guest repaints keep their captured drag.
+    /// Revoke captured presses without retiring the independent native scroll endpoint.
+    /// Visibility credentials can change on every artwork publication after a view was hidden.
     pub(super) fn set_action_gesture(
         &mut self,
         gesture: Option<action_gestures::ActionGesture>,
@@ -444,7 +445,23 @@ impl CanvasView {
         if self.action_gesture == gesture {
             return false;
         }
-        self.deactivate();
+        if matches!(
+            (self.action_gesture, gesture),
+            (
+                Some(action_gestures::ActionGesture::Visibility { .. }),
+                Some(action_gestures::ActionGesture::Visibility { .. })
+            )
+        ) {
+            // A publication replaces legacy press credentials, not target focus/drafts or
+            // the last displayed proof. Actual withdrawal calls deactivate separately.
+            // No draw is required before a held key/pointer can complete against its
+            // original proof. Deferred dispatch still checks the current strict ticket.
+            self.targets.rebind_gesture(gesture);
+            self.drag = None;
+            self.columns.reset();
+        } else {
+            self.deactivate();
+        }
         self.action_gesture = gesture;
         true
     }
@@ -458,6 +475,10 @@ impl CanvasView {
         // Epochs are local to an owner/scene lifetime. Old kinetic callbacks keep their old Rc
         // across identity replacement, source withdrawal, disabled input and retirement.
         self.scroll_2d.reset();
+        self.deactivate_input();
+    }
+    /// Press tickets and native composition follow input admission, not kinetic motion identity.
+    fn deactivate_input(&mut self) {
         self.pending_overlay_focus = None;
         self.targets.clear();
         self.scene_presented = None;
@@ -920,6 +941,7 @@ impl Render for CanvasView {
         self.sync_targets(window, cx);
         self.sync_native_draft(window, cx);
         let gesture = self.action_gesture;
+        let target_lifetime = self.targets.lifetime();
         #[cfg(test)]
         let callback_revision = self.revision;
         let measure = cx.entity().downgrade();
@@ -931,18 +953,19 @@ impl Render for CanvasView {
             .overflow_hidden()
             .track_focus(&self.focus)
             .cursor(self.target_cursor())
-            .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, cx| {
-                if this.target_pointer_move(event, cx) {
+            .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
+                if this.targets.lifetime() == target_lifetime && this.target_pointer_move(event, cx)
+                {
                     cx.stop_propagation();
                 }
             }))
-            .on_hover(cx.listener(|this, over: &bool, window, cx| {
-                if !*over {
+            .on_hover(cx.listener(move |this, over: &bool, window, cx| {
+                if this.targets.lifetime() == target_lifetime && !*over {
                     this.leave_targets(window.mouse_position(), window.modifiers(), cx);
                 }
             }))
             .capture_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
-                if this.action_gesture == gesture
+                if this.targets.lifetime() == target_lifetime
                     && this.enabled
                     && this.target_key(
                         &event.keystroke,
@@ -1002,7 +1025,7 @@ impl Render for CanvasView {
                 }
             }))
             .capture_key_up(cx.listener(move |this, event: &KeyUpEvent, window, cx| {
-                if this.action_gesture == gesture
+                if this.targets.lifetime() == target_lifetime
                     && this.enabled
                     && this.target_key(
                         &event.keystroke,
@@ -1033,11 +1056,16 @@ impl Render for CanvasView {
                 .on_mouse_down(
                     button,
                     cx.listener(move |this, event: &MouseDownEvent, window, cx| {
-                        if this.action_gesture != gesture || !this.enabled {
+                        if !this.enabled {
                             return;
                         }
-                        if this.target_pointer_down(event, window, cx) {
+                        if this.targets.lifetime() == target_lifetime
+                            && this.target_pointer_down(event, window, cx)
+                        {
                             cx.stop_propagation();
+                            return;
+                        }
+                        if this.action_gesture != gesture {
                             return;
                         }
                         if matches!(button, MouseButton::Navigate(_)) {
@@ -1070,7 +1098,7 @@ impl Render for CanvasView {
                 .on_mouse_up(
                     button,
                     cx.listener(move |this, event: &MouseUpEvent, _, cx| {
-                        if this.action_gesture == gesture
+                        if this.targets.lifetime() == target_lifetime
                             && this.enabled
                             && this.target_pointer_up(event, cx)
                         {
@@ -1081,11 +1109,11 @@ impl Render for CanvasView {
         }
         element = element
             .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
-                if this.action_gesture != gesture {
+                if this.targets.lifetime() == target_lifetime && this.target_wheel(event, cx) {
+                    cx.stop_propagation();
                     return;
                 }
-                if this.target_wheel(event, cx) {
-                    cx.stop_propagation();
+                if this.action_gesture != gesture {
                     return;
                 }
                 // Line wheels on a grid use measured rows, not the smaller font point size.
@@ -1159,18 +1187,14 @@ impl Render for CanvasView {
         if self.enabled
             && let Some(scroll) = &self.drawing.scroll_2d
         {
-            let motion_id = action_gestures::native_id(
-                gpui_kit::SharedString::from(format!(
-                    "canvas-wheel-2d:{:?}:{}:{}",
-                    cx.entity_id(),
-                    self.drawing
-                        .scene
-                        .as_ref()
-                        .map_or(0, |scene| scene.identity),
-                    scroll.epoch
-                )),
-                gesture,
-            );
+            // Click credentials deliberately change on ordinary publications. Motion instead
+            // follows the native handle retired by scene/source/visibility/content withdrawal.
+            let motion_id = gpui_kit::SharedString::from(format!(
+                "canvas-wheel-2d:{:?}:{}:{}",
+                cx.entity_id(),
+                self.scroll_2d.incarnation(),
+                scroll.epoch
+            ));
             return editor_ui::scroll::SmoothScroll::new(
                 motion_id,
                 &self.scroll_2d,

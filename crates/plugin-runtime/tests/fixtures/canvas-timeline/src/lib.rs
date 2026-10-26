@@ -165,9 +165,14 @@ impl State {
                     "style":{"font":{"size_px":11},"wrap":false}})).unwrap());
             }
         }
-        let mut semantics=vec![serde_json::from_value(json!({"id":"timeline-grid","role":"grid",
+        let mut semantics = vec![
+            serde_json::from_value(
+                json!({"id":"timeline-grid","target":"timeline-surface","role":"grid",
             "name":{"en":"Timeline events","zh_cn":"时间轴事件"},"value":"100000 logical events",
-            "rect":{"x":0,"y":0,"w":12000,"h":24000},"row_count":1000,"column_count":100,"read_only":true})).unwrap()];
+            "row_count":1000,"column_count":100,"read_only":true}),
+            )
+            .unwrap(),
+        ];
         let rows = visible
             .iter()
             .map(|index| index / 100)
@@ -185,7 +190,10 @@ impl State {
                     .unwrap(),
                 self.playhead_node(),
             ],
-            targets: Vec::new(),
+            // One stable content target retains shown-frame input across playhead-only revisions.
+            // Epoch 1 stays within this incarnation; a new scene identity seals replacement.
+            targets: vec![serde_json::from_value(json!({"id":"timeline-surface","epoch":1,
+                "focusable":true,"geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":12000,"h":24000}}})).unwrap()],
             semantics,
         };
         let mut document = ui::Document::new(
@@ -455,6 +463,9 @@ impl State {
             _ => return Ok(Default::default()),
         };
         match event {
+            // SmoothScroll owns movement. A wheel left at a content boundary is an inert typed
+            // observation; applying its delta again here would duplicate native scrolling.
+            ui::CanvasEvent::Input { .. } => return Ok(Default::default()),
             ui::CanvasEvent::Resize { width, height, .. }
                 if width > 0.
                     && height > 0.
