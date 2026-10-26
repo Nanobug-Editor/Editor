@@ -1,6 +1,6 @@
 # Canvas 03：原生混排与数据交换验收记录
 
-状态：实施中，尚未交付或关闭 [#130](https://github.com/Nanobug-Editor/Editor/issues/130)。依据为 [工单 03](../tickets/canvas-protocol-extension/03-native-transfer.md) 及 [Canvas 扩展方案](../specs/canvas-protocol-extension.md)。
+状态：AC1–AC6 行为验收完成，等待普通提交、分支推送及 [#130](https://github.com/Nanobug-Editor/Editor/issues/130) 关闭状态读回。依据为 [工单 03](../tickets/canvas-protocol-extension/03-native-transfer.md) 及 [Canvas 扩展方案](../specs/canvas-protocol-extension.md)。前半部分保留实施中的红绿检查点，最终固定输入与结果见文末。
 
 ## 执行位置与恢复检查点
 
@@ -97,3 +97,37 @@ Canvas 命中红/绿为 `target/canvas-c-native-drop-canvas-{red,green}.log`。�
 3. 原生叠放没有应用祖先组裁剪。现在求所有轴对齐矩形裁剪的交集，同时约束像素和点击；圆角、路径或非轴对齐裁剪在公开文档校验时明确拒绝。`target/canvas-c-review-native-overlay-group-clip.log` 为 1 通过（1.72 秒），同快照缩放和 Tab 各 1 通过；不支持裁剪的协议红绿测试通过。
 
 复测同时捕获普通拖入目标被无关 UI revision 推进误判失效。新增公开 `begin_transfer_snapshot` 校验实际显示的声明，不能借旧显示回执接收已替换声明；实际管理器测试为 1 通过（70.04 秒）。`target/canvas-c-review-native-transfer-file-import.log` 为 1 通过（72.64 秒）：真实 OS 文件进入实际 WASM 包，关闭 offer 后释放只读文件句柄，临时目录可删除。初审后所有改动须补审；最终 SDK 与 ZIP 尚待冻结，不能把候选包记录当作已交付账本。
+
+## 最终源码、SDK 与固定输入
+
+源码提交为 `04681e9f52519f46f4326b30ca7d955a96a58983`，提交树与双轴补审的不可变树 `2861a49b6855f4c7fc5ac82881bc4c1303ca3a96` 完全相同。Standards 原两项 P2、Spec 裁剪 P2 均解决，两轴最终源码未解决项均为 0。
+
+补审还覆盖显式关闭枚举请求的入口：在途及原生已完成但未向 guest 交付两种状态，都必须释放隐藏 offer；正常成功交付和失败 Read 保留已有 offer。`target/canvas-c-clipboard-close-red.log` 先复现旧租约仍有效（70.15 秒），`target/canvas-c-clipboard-close-green.log` 为 1 通过（70.81 秒），含连续 20 次交替关闭后再次正常枚举。
+
+从此已提交源码执行 `cargo build -p editor-app --offline --locked -j 4`，生产宿主 EXE SHA-256 为 `5fe527558fa9ba2a61d8477b09206078240ef34285a550e3792e544d6a3c5c1d`。内嵌 SDK 摘要为 `05cf4494e8e3fd6f6596e858e88674ca41a8a55f37b1afc461a9a432ae117220`，导出 86 个源码/清单/WIT/JSON 资源，无 Markdown；供 Cargo 使用的缓存另外生成一个 `host-cargo.toml`，共 87 个文件。独立项目通过 `cargo metadata --no-deps --format-version 1` 核对 workspace_root 及各自 `CARGO_TARGET_DIR`，再使用该宿主的 `--plugin-cargo <Cargo.toml> build --release --target wasm32-wasip2 --offline`，日志为 `target/canvas-c-committed-{flow,table}-{metadata.json,build.log}`。
+
+| 固定输入 | 大小 | SHA-256 |
+| --- | --- | --- |
+| `canvas-flow-1.2.0.zip` | 758874 bytes | `bca46c0d39bc9a6e462fa4620092ac25c75ea817b155395477db26043bb073b3` |
+| `canvas-table-1.1.0.zip` | 651044 bytes | `4c3e014de368e1dfaba101de1d626206e8d0afd535a76c4a22a821f0992278f5` |
+
+每包仅有 manifest 和真实 WASM；协议 7，要求 `ui.canvas >=1.9,<2`、`ui.clipboard >=1.1,<2` 及 `ui.transfer ^1`。权限为 `ui.panels`、`clipboard`、`ui.transfer`，不含工作区文件权限。源码和宿主提交、EXE/SDK/source 摘要见固定输入账本；原 A/B 包及所有历史账本项逐项比较未变。两个只读审查轴另核对产物树 `9d820e750fbfc695520cd52389c6d319bfb55762`，各报告 0 项发现。
+
+最终源码门禁日志 `target/canvas-c-producer-*.log`：fmt 通过，workspace（排除 editor-app）561 通过、404 ignored，workspace check 通过；插件 UI 77 通过、32 ignored；SDK 六项通过。以上 ignored 不算通过。关闭 candidate override 后从新账本默认选择的显式实际 WASM 测试：`target/canvas-c-frozen-manager-suite.log` 为 12 通过（444.39 秒，4 个测试线程），`target/canvas-c-frozen-table-suite.log` 为 5 通过（275.20 秒，2 个测试线程；历史 B 文本用例不在此计数）。
+
+## 最终行为验收
+
+最终原生快照使用上述冻结 ZIP。静态场景和协议边界用例使用同一源码快照的宿主适配；实际包用例经公开 Package/Manager 加载，C 中文输入用例显式指向冻结 C 包，不替换 B 默认输入。本节的原生用例均为真实 Windows/D3D 窗口，使用实际键鼠、IME、UIA 或 OLE，不将内部消息注入计为 OS 拖动。
+
+| AC | 完成证据 |
+| --- | --- |
+| AC1 | 原生锚点保持控件实体及预编辑；目标换代/隐藏撤销、焦点返回、Tab、缩放、遮挡、视口与祖先矩形裁剪均有红绿回归。最终 `native-overlay-group-clip`、`native-overlay-scale`、`native-overlay-tab` 分别 1 通过（1.77/1.95/1.95 秒）。 |
+| AC2 | 原有菜单及 Tooltip 的移动、窗口夹持与目标撤销通过；最终 `native-anchor`、`native-anchor-modal` 各 1 通过（2.01/2.03 秒），模态关闭不依赖旧锚点再绘制。 |
+| AC3 | 系统四格式往返、普通 GPUI 纯文本入口、旧序号拒绝；公开 Manager 的元数据/优先级/实例隔离及失败回收；实际表格 TSV/HTML、整批一次 Undo、混合表头和引号/换行边界通过。 |
+| AC4 | 最终 Canvas 系统拖出及表格行拖出各 1 通过（82.39/67.41 秒）；完成通知后有限延迟读取正确，提前释放的旧手势不能复活（86.11 秒）；Manager 覆盖原目标 Enter/Move/Leave/Drop/取消及当前显示帧。 |
+| AC5 | 实际包经 OS 导入只读文件，客体只获有界条目/读取，不含原生路径；关闭 offer 后文件句柄释放（81.25 秒）。外实例/越界/阻塞取消通过；超额 PNG 原生读取拒绝（85.24 秒）；HTML 始终作为惰性字节而非可执行内容。 |
+| AC6 | 冻结流程图 125% 深色与表格 200% 的真实中文提交、原生 ACK、UIA SetValue/行列元数据均通过（115.38/95.36 秒）。旧 GPUI 文件入口对照与新注册入口各通过（1.97/2.01 秒），Canvas 前景遮挡通过（2.11 秒）；图片定向回归 11 通过、23 ignored，普通查找输入及焦点返回沿用本单已通过的原生记录。 |
+
+16 项最终原生用例全部通过，日志为 `target/canvas-c-frozen-native-*.log`。系统剪贴板首次选择读取遇到 `OpenClipboard` 临时占用 `0x80070005`，原失败记录保留；同一快照重跑 `target/canvas-c-frozen-native-clipboard-retry.log` 通过（1.44 秒），没有修改生产代码或放宽断言。图片定向日志为 `target/canvas-c-frozen-image-regressions.log`。Manager、表格和原生耗时均为实测过程时间，不作为第四单性能指标。
+
+已实测 Windows；其他平台未实测。原生叠放只支持轴对齐等比缩放及矩形祖先裁剪，不支持的几何在发布前明确拒绝；图形场景仍支持其既有复杂裁剪。保留场景、显示帧、双轴滚动、热更新与长期性能组合由 #131 验收。本单尚待本次记录的普通提交、origin 推送校验与 issue 读回，未合并 main，父 #127 保持开放。
