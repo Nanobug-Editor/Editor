@@ -89,10 +89,15 @@ impl Engine {
     /// Fill unused viewport rows with retained history while keeping the current native screen and
     /// caret visible. This changes only presentation offset, never the coordinates ConPTY redraws.
     pub(super) fn reveal_native_screen(&mut self) {
-        if !self.conpty_screen
-            || !self.follow_screen
-            || self.term.mode().contains(TerminalMode::ALT_SCREEN)
-        {
+        if self.conpty_screen {
+            self.reveal_history();
+        }
+    }
+
+    /// Reflow may move a restored first row into history despite spare space below the cursor.
+    /// Fill that space while following; explicit history scrolling and alternate screens stay put.
+    pub(super) fn reveal_history(&mut self) {
+        if !self.follow_screen || self.term.mode().contains(TerminalMode::ALT_SCREEN) {
             return;
         }
         let grid = self.term.grid();

@@ -472,13 +472,10 @@ impl EditorApp {
                 .any(|view| &view.id == id && view.unified)
         }) {
             if let Some(editor) = &comparison.unified_editor {
-                let body = editor_ui::readonly_editor(
-                    "unified-diff",
-                    t!("editor.diff_unified").to_string(),
-                    editor,
-                    window,
-                    cx,
-                );
+                let body = editor_ui::source_editor::Editor::new(editor)
+                    .identity("unified-diff", Some(t!("editor.diff_unified").to_string()))
+                    .tools(false)
+                    .into_any_element();
                 return Some(
                     div()
                         .flex()
@@ -503,13 +500,10 @@ impl EditorApp {
         let right_label = format!("{} · {}", t!("editor.diff_right"), right_title);
         let alignment = self.comparison_alignment()?;
         let left_input = alignment.pane(0).unwrap_or_else(|| {
-            editor_ui::readonly_editor(
-                "document-diff-left-input",
-                left_label.clone(),
-                &left,
-                window,
-                cx,
-            )
+            editor_ui::source_editor::Editor::new(&left)
+                .identity("document-diff-left-input", Some(left_label.clone()))
+                .tools(false)
+                .into_any_element()
         });
         let right = self.render_native_editor_aligned(alignment, 1, window, cx);
         let menu_target = self.plugin_document_menu_target(&comparison.left);

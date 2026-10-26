@@ -369,7 +369,7 @@ fn independent_viewport_without_tools_adds_no_host_functions(cx: &mut TestAppCon
     manifest["id"] = json!("independent-viewport");
     manifest["scope"] = json!("workspace");
     manifest["api"]["required"] = json!({"package.assets":"^1", "ui.native":"^1", "ui.richtext":"^1",
-        "editor.viewport":"^1", "editor.documents":"^1", "editor.layout":"^1", "configuration":"^1"});
+        "editor.viewport":"^1", "editor.documents":"^1", "editor.layout":"^2", "ui.code_editor":"^2", "configuration":"^1"});
     manifest["api"]["optional"] = json!({});
     manifest["permissions"] = json!(["assets.read", "editor.read"]);
     manifest["settings_hook"] = json!(false);
@@ -386,13 +386,13 @@ fn independent_viewport_without_tools_adds_no_host_functions(cx: &mut TestAppCon
         vec![
             protocol::ui::Node::new(
                 "editor",
-                protocol::ui::Kind::NativeEditor {
-                    document: protocol::api::DocumentVersion {
+                protocol::ui::Kind::Editor(protocol::ui::Editor::document(
+                    protocol::api::DocumentVersion {
                         id: "template".into(),
                         path: "notes.sample".into(),
                         revision: 0,
                     },
-                },
+                )),
             )
             .grow(),
             document.root.grow(),

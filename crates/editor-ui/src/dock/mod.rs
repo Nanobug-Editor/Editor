@@ -325,16 +325,27 @@ impl TabGroupRenderer for LocalTabGroupRenderer {
         h_flex()
             .id("local-dock-title-bar")
             .debug_selector(move || format!("local-dock-title-{}", node.as_u64()))
+            .relative()
             .w_full()
             .h(px(self.title_height))
             .flex_shrink_0()
             .items_center()
             .px(px(style.padding_x_px.unwrap_or(8.)))
             .text_size(px(style.font_size_px.unwrap_or(14.)))
-            .border_b_1()
-            .border_color(style.border.unwrap_or(cx.theme().border))
+            // A bottom-only border quad also antialiases its zero-width top edge. Paint a
+            // solid strip instead, keeping its original layout inset and the caption seam thin.
+            .pb(px(1.))
             .bg(style.background.unwrap_or(cx.theme().tab_bar))
             .text_color(style.foreground.unwrap_or(cx.theme().foreground))
+            .child(
+                div()
+                    .absolute()
+                    .bottom_0()
+                    .left_0()
+                    .w_full()
+                    .h(px(1.))
+                    .bg(style.border.unwrap_or(cx.theme().border)),
+            )
             .child(Self::panel_title(&panel, window, cx))
             .when_some(
                 drag.filter(|_| {

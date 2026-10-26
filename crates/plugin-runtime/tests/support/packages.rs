@@ -50,6 +50,25 @@ fn inputs() -> &'static Inputs {
 
 /// Exact archive names select historical inputs; bare IDs select the current frozen package.
 fn input(id: &str) -> &'static Input {
+    // Independent migrations validate newly built archives before freezing their bytes in the
+    // repository ledger. Overrides remain explicit hash-checked test inputs, never host policy.
+    static CANDIDATES: OnceLock<Vec<Input>> = OnceLock::new();
+    let candidates = CANDIDATES.get_or_init(|| {
+        std::env::var_os("NANOBUG_TEST_PACKAGE_INPUTS").map_or_else(Vec::new, |path| {
+            let document: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+            serde_json::from_value(document["packages"].clone()).unwrap()
+        })
+    });
+    if let Some(candidate) = candidates.iter().find(|candidate| {
+        candidate.id == id
+            || Path::new(&candidate.archive)
+                .file_stem()
+                .and_then(|name| name.to_str())
+                == Some(id)
+    }) {
+        return candidate;
+    }
     inputs()
         .packages
         .iter()

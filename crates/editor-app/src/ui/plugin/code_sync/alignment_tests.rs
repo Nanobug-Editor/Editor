@@ -50,11 +50,11 @@ fn default_document(version: &DocumentVersion) -> Document {
     let literal = |id: &str, side| {
         ui::Node::new(
             id,
-            Kind::ReadonlyCode {
-                text: content(side),
+            Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor {
                 changes: Vec::new(),
                 sync_group: Some("comparison".into()),
-            },
+                ..plugin_runtime::plugin_protocol::ui::Editor::snapshot(content(side))
+            }),
         )
         .width(340.)
         .height(210.)
@@ -66,15 +66,17 @@ fn default_document(version: &DocumentVersion) -> Document {
                 literal("left", 0),
                 ui::Node::new(
                     "source",
-                    Kind::EditorWithActions {
-                        document: version.clone(),
-                        left: vec![ui::EditorAction {
-                            offset: content(1).find("row02").unwrap(),
-                            content: Box::new(ui::Node::button("rail-action", "Apply")),
-                        }],
-                        right: Vec::new(),
+                    Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor {
+                        line_actions: Some(plugin_runtime::plugin_protocol::ui::EditorActions {
+                            left: vec![ui::EditorAction {
+                                offset: content(1).find("row02").unwrap(),
+                                content: Box::new(ui::Node::button("rail-action", "Apply")),
+                            }],
+                            right: Vec::new(),
+                        }),
                         sync_group: Some("comparison".into()),
-                    },
+                        ..plugin_runtime::plugin_protocol::ui::Editor::document(version.clone())
+                    }),
                 )
                 .width(340.)
                 .height(210.),
@@ -164,14 +166,23 @@ fn mount_with_document(
                 let body = alignment
                     .as_ref()
                     .and_then(|(group, index)| group.pane(*index));
-                let source = controls::window_editor_body(&editor, body, cx);
+                let source = editor_ui::source_editor::Editor::new(&editor)
+                    .identity("work-window-document", None)
+                    .document_commands(true)
+                    .tools(false)
+                    .presentation(body)
+                    .into_any_element();
                 Some(if let Some(actions) = actions {
                     let projection = alignment.map(|(group, index)| {
                         Rc::new(move |offset, cx: &App| {
                             group.project_range(index, offset..offset, cx)
                         }) as controls::EditorActionProjection
                     });
-                    controls::with_projected_editor_actions(source, &editor, actions, projection)
+                    editor_ui::source_editor::Editor::new(&editor)
+                        .tools(false)
+                        .presentation(Some(source))
+                        .edge_controls(actions, projection)
+                        .into_any_element()
                 } else {
                     source
                 })
@@ -254,9 +265,9 @@ fn assert_visible_alignment(mounted: &Mounted, ui: &mut VisualTestContext) {
         let alignment = group(mounted, cx);
         let view = mounted.view.read(cx);
         let editors = [
-            view.readonly_code["left"].editor.clone(),
+            view.snapshots["left"].editor.clone(),
             mounted.source.clone(),
-            view.readonly_code["right"].editor.clone(),
+            view.snapshots["right"].editor.clone(),
         ];
         let text = editors
             .each_ref()
@@ -411,11 +422,11 @@ fn native_code_alignment_keeps_the_source_entity_and_geometry_through_edit_ime_a
         assert!(mounted.source.focus_handle(cx).is_focused(window));
         let view = mounted.view.read(cx);
         assert_eq!(
-            view.readonly_code["left"].editor.read(cx).value().as_ref(),
+            view.snapshots["left"].editor.read(cx).value().as_ref(),
             content(0)
         );
         assert_eq!(
-            view.readonly_code["right"].editor.read(cx).value().as_ref(),
+            view.snapshots["right"].editor.read(cx).value().as_ref(),
             content(2)
         );
     });

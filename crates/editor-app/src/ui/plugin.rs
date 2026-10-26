@@ -11,6 +11,7 @@ mod containers;
 #[cfg(test)]
 mod content_styles_tests;
 pub(crate) mod controls;
+mod editor_sources;
 mod file_image;
 mod form_delivery;
 pub(crate) use form_delivery::{FormChangeSink, FormReceipt};
@@ -24,7 +25,6 @@ mod leaf;
 #[cfg(test)]
 mod link_tests;
 mod links;
-mod readonly_code;
 mod render;
 #[cfg(test)]
 mod scrollbar_tests;
@@ -99,7 +99,9 @@ pub(crate) struct PluginView {
     /// Only undelivered ordinary form drafts wait for their exact native/guest incarnation.
     forms: form_delivery::Forms,
     textareas: BTreeMap<String, textareas::NativeTextarea>,
-    readonly_code: BTreeMap<String, readonly_code::Snapshot>,
+    snapshots: BTreeMap<String, editor_sources::Snapshot>,
+    /// A mounted readonly document restricts input only for this surface's retained lifetime.
+    readonly_mount: Option<(gpui_kit::EntityId, editor_ui::source_editor::ReadOnlyLease)>,
     /// Native pane synchronization owns derived byte maps and cancellable scroll locations only.
     code_sync: code_sync::CodeSync,
     scrolls: BTreeMap<String, ScrollHandle>,
@@ -161,6 +163,8 @@ impl PluginView {
             }
         }
         if !current {
+            // Paint retention does not retain a withdrawn surface's input restriction.
+            self.readonly_mount = None;
             // Accepted requests may still await the next layout. Losing source authority
             // withdraws their effects too, without undoing an already applied Base offset.
             self.scene_layout.cancel_reveal();
@@ -178,6 +182,7 @@ impl PluginView {
             cx.notify();
         }
         if current {
+            self.sync_editor_access(cx);
             self.schedule_form_delivery(cx);
         }
     }
@@ -239,8 +244,24 @@ impl PluginView {
             cx.notify();
         }
         for (id, canvas) in &self.canvases {
+            let graphics = images
+                .graphics
+                .get(&format!("{panel_key}/canvas/{id}"))
+                .cloned();
             let images = images.get(&format!("{panel_key}/canvas/{id}")).cloned();
             canvas.update(cx, |view, cx| {
+                let graphics = graphics.filter(|prepared| {
+                    view.drawing.scene.as_ref() == Some(&prepared.source)
+                        && prepared.belongs_to(&self.document)
+                });
+                if match (&view.scene_graphics, &graphics) {
+                    (Some(old), Some(new)) => !std::sync::Arc::ptr_eq(old, new),
+                    (None, None) => false,
+                    _ => true,
+                } {
+                    view.scene_graphics = graphics;
+                    cx.notify();
+                }
                 if match (&view.images, &images) {
                     (Some(old), Some(new)) => !std::sync::Arc::ptr_eq(old, new),
                     (None, None) => false,
@@ -271,6 +292,11 @@ impl PluginView {
         for canvas in self.canvases.values() {
             if let Some(images) = &canvas.read(cx).images {
                 pixels.extend(images.iter().flatten().map(|image| image.image.clone()));
+            }
+            if let Some(prepared) = &canvas.read(cx).scene_graphics {
+                if let Ok(drawing) = &prepared.drawing {
+                    pixels.extend(drawing.images());
+                }
             }
         }
         for image in self.image_leases.update(pixels, cx) {
@@ -328,7 +354,8 @@ impl PluginView {
             inputs: BTreeMap::new(),
             forms: Default::default(),
             textareas: BTreeMap::new(),
-            readonly_code: BTreeMap::new(),
+            snapshots: BTreeMap::new(),
+            readonly_mount: None,
             code_sync: Default::default(),
             scrolls: BTreeMap::new(),
             scene_layout: Default::default(),
@@ -425,6 +452,19 @@ impl PluginView {
         }
         self.virtual_blocks.retain(&document);
         self.document = document;
+        // Source replacement revokes old scene pixels before another background publication arrives.
+        for canvas in self.canvases.values() {
+            canvas.update(cx, |canvas, _| {
+                if canvas
+                    .scene_graphics
+                    .as_ref()
+                    .is_some_and(|scene| !scene.belongs_to(&self.document))
+                {
+                    canvas.scene_graphics = None;
+                    canvas.invalidate_measurement();
+                }
+            });
+        }
         self.environment = environment;
         // Each popup opening owns a fresh dismiss acknowledgement, even when it reuses an ID.
         if menu_changed {
@@ -504,8 +544,8 @@ impl PluginView {
         }
         self.editor_action_nodes.clear();
         for node in &nodes {
-            if let Kind::EditorWithActions { left, right, .. } = &node.kind {
-                for action in left.iter().chain(right) {
+            if let Kind::Editor(editor) = &node.kind {
+                for action in editor.left_actions().iter().chain(editor.right_actions()) {
                     action.content.visit(&mut |child| {
                         self.editor_action_nodes.insert(child.id.clone());
                     });
@@ -519,7 +559,7 @@ impl PluginView {
             .collect();
         self.inputs.retain(|id, _| input_ids.contains(id));
         self.sync_textareas(&nodes, window, cx);
-        self.sync_readonly_code(&nodes, window, cx);
+        self.sync_editor_sources(&nodes, window, cx);
         let scroll_ids: BTreeSet<_> = nodes
             .iter()
             .filter(|n| matches!(n.kind, Kind::Scroll { .. }))

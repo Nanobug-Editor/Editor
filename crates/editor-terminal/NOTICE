@@ -22,6 +22,10 @@ Nanobug modifications:
   upstream PTY, process/event loop, thread, synchronization or platform code.
 - Reduce the view projection to cursor/selection values needed by native drawing;
   process shutdown remains with the host rather than an upstream terminal entry point.
+- Clearing an empty viewport adds no synthetic history row; occupied rows and styled
+  spaces still retain their original scrollback behavior.
+- Followed viewports reuse spare rows after logical reflow so restored first-line
+  content remains visible without moving manually scrolled or alternate screens.
 
 The upstream package, Cargo manifests, feature matrix, release documentation and
 separate library entry point are not included. Nanobug does not depend on or

@@ -2545,8 +2545,7 @@ dependencies = [
 [[package]]
 name = "gpui-base"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5cd7de73d5b2d3d18b94a928abf343922091fa77bc472f77b7d2e7e8b1823a7"
+source = "git+https://github.com/T-miracle/gpui-kit.git?rev=4db6da3927224d2d856b5f3c21b9aa5103eac083#4db6da3927224d2d856b5f3c21b9aa5103eac083"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2668,8 +2667,7 @@ dependencies = [
 [[package]]
 name = "gpui-kit"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cdcb78553bef8785669e572e79759b0eab47fdd9d318fe0cce1def798189432"
+source = "git+https://github.com/T-miracle/gpui-kit.git?rev=4db6da3927224d2d856b5f3c21b9aa5103eac083#4db6da3927224d2d856b5f3c21b9aa5103eac083"
 dependencies = [
  "gpui-base",
  "gpui-kit-assets",
@@ -2682,8 +2680,7 @@ dependencies = [
 [[package]]
 name = "gpui-kit-assets"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b037e2fa43d53a567a8aa5be6b1a8931f416cbd010ceee8d4a3727a71e9b1d05"
+source = "git+https://github.com/T-miracle/gpui-kit.git?rev=4db6da3927224d2d856b5f3c21b9aa5103eac083#4db6da3927224d2d856b5f3c21b9aa5103eac083"
 dependencies = [
  "anyhow",
  "gpui-pre",

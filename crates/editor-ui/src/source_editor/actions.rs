@@ -1,4 +1,4 @@
-//! Line-edge controls use Base's actual laid-out source geometry, without a second editor mount.
+//! Optional Editor edge controls follow the original source geometry without another input mount.
 use gpui_base::input::{EditorState, RopeExt as _};
 use gpui_kit::{
     AnyElement, App, AvailableSpace, Bounds, Entity, IntoElement, ParentElement, Pixels, Styled,
@@ -26,7 +26,7 @@ impl EditorActionElements {
 
 /// Use the same local rails over either ordinary or aligned source geometry. The projection must
 /// return `None` for stale/offscreen offsets; controls never guess positions during remeasurement.
-pub fn with_projected_editor_actions(
+pub(super) fn with_projected_editor_actions(
     source: AnyElement,
     editor: &Entity<EditorState>,
     actions: EditorActionElements,

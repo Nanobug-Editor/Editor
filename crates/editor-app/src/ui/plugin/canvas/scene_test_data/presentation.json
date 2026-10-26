@@ -1,0 +1,9 @@
+{
+  "scene": {
+    "identity": 41,
+    "revision": 2,
+    "roots": [{"kind":"shape","id":"blue","geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":80}},"fill":{"kind":"solid","rgba":10092543}}]
+  },
+  "expect_presented": true,
+  "samples": [{"x":60,"y":60,"rgba":[0,153,255,255]}]
+}

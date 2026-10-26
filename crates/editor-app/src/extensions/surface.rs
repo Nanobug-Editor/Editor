@@ -169,19 +169,23 @@ impl ExtensionPanel {
                     let body = alignment
                         .as_ref()
                         .and_then(|(group, index)| group.pane(*index));
-                    let source = editor_ui::window_editor_body(&binding.editor, body, cx);
+                    let source = editor_ui::source_editor::Editor::new(&binding.editor)
+                        .identity("work-window-document", None)
+                        .document_commands(true)
+                        .tools(false)
+                        .presentation(body)
+                        .into_any_element();
                     return Some(if let Some(actions) = actions {
                         let projection = alignment.map(|(group, index)| {
                             Rc::new(move |offset, cx: &App| {
                                 group.project_range(index, offset..offset, cx)
                             }) as editor_ui::EditorActionProjection
                         });
-                        editor_ui::with_projected_editor_actions(
-                            source,
-                            &binding.editor,
-                            actions,
-                            projection,
-                        )
+                        editor_ui::source_editor::Editor::new(&binding.editor)
+                            .tools(false)
+                            .presentation(Some(source))
+                            .edge_controls(actions, projection)
+                            .into_any_element()
                     } else {
                         source
                     });
@@ -213,12 +217,11 @@ impl ExtensionPanel {
                                 })
                                     as editor_ui::EditorActionProjection
                             });
-                            editor_ui::with_projected_editor_actions(
-                                source,
-                                &app.editor,
-                                actions,
-                                projection,
-                            )
+                            editor_ui::source_editor::Editor::new(&app.editor)
+                                .tools(false)
+                                .presentation(Some(source))
+                                .edge_controls(actions, projection)
+                                .into_any_element()
                         } else {
                             source
                         };

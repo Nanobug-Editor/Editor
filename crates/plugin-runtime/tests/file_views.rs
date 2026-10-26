@@ -1,4 +1,6 @@
 //! Real Image packages exercise file-only authority through the public manager.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
@@ -30,6 +32,11 @@ fn visual_viewport_requires_negotiation_for_every_provider() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    demand_support::ready(
+        &mut manager,
+        "unnegotiated-viewer",
+        plugin_runtime::DemandReason::View("preview".into()),
+    );
     let error = manager
         .event(
             "unnegotiated-viewer",
@@ -123,6 +130,11 @@ fn image_file_resources_follow_public_file_context_and_permissions() {
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();
+        demand_support::ready(
+            &mut manager,
+            id,
+            plugin_runtime::DemandReason::View("preview".into()),
+        );
         let file = api::FileContext {
             version: api::FileVersion {
                 id: "opened-file".into(),

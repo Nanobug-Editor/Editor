@@ -1,0 +1,12 @@
+{
+  "id": "canvas-flow",
+  "name": "Canvas flow acceptance",
+  "version": "1.0.0",
+  "protocol": 7,
+  "api": {"base":"^1", "required":{"ui.native":"^1", "ui.panels":"^1", "ui.canvas":">=1.7,<2", "ui.viewport":"^1"}},
+  "scope": "workspace",
+  "component": "canvas_flow.wasm",
+  "permissions": ["ui.panels"],
+  "panels": [{"id":"diagram", "title":"流程图 / Flow", "position":"right"}],
+  "storage_limit": 1024
+}

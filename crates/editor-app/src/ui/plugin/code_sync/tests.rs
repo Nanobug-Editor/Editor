@@ -5,17 +5,53 @@ use gpui_kit::{Focusable as _, TestAppContext, VisualTestContext};
 use gpui_kit::{gpui, point, px, size};
 use std::cell::RefCell;
 
+/// Readonly plugin configuration restricts the original document only while its source is mounted.
+#[gpui::test]
+fn configurable_editor_readonly_scene_withdrawal_preserves_native_undo(cx: &mut TestAppContext) {
+    let (view, source, visual) = mount(cx);
+    let original = visual.update(|_, cx| source.read(cx).text().to_string());
+    visual.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            let mut document = view.document.clone();
+            let Kind::Row { children } = &mut document.root.kind else {
+                unreachable!()
+            };
+            let Kind::Editor(editor) = &mut children[1].kind else {
+                unreachable!()
+            };
+            editor.read_only = true;
+            document.revision += 1;
+            view.update_document(document, view.environment.clone(), window, cx);
+            view.sync_editor_access(cx);
+        })
+    });
+    settle(visual);
+    visual.update(|window, cx| source.update(cx, |state, cx| state.focus(window, cx)));
+    visual.simulate_input("blocked");
+    settle(visual);
+    visual.update(|_, cx| assert_eq!(source.read(cx).text().to_string(), original));
+    visual.update(|_, cx| view.update(cx, |view, cx| view.set_scene_current(false, cx)));
+    settle(visual);
+    visual.update(|_, cx| assert!(source.read(cx).is_editable()));
+    visual.simulate_input("allowed");
+    settle(visual);
+    visual.update(|_, cx| assert_ne!(source.read(cx).text().to_string(), original));
+    visual.simulate_keystrokes("ctrl-z");
+    settle(visual);
+    visual.update(|_, cx| assert_eq!(source.read(cx).text().to_string(), original));
+}
+
 /// Source order is arbitrary; only the selected tab and enabled parents contribute pane identities.
 #[test]
 fn native_code_sync_collects_only_enabled_active_panes() {
     let literal = |id: &str| {
         ui::Node::new(
             id,
-            Kind::ReadonlyCode {
-                text: "sample".into(),
+            Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor {
                 changes: Vec::new(),
                 sync_group: Some("comparison".into()),
-            },
+                ..plugin_runtime::plugin_protocol::ui::Editor::snapshot("sample")
+            }),
         )
     };
     let mut disabled = literal("disabled");
@@ -49,7 +85,15 @@ fn native_code_sync_collects_only_enabled_active_panes() {
     active_nodes(&root, &mut nodes);
     let codes = nodes
         .iter()
-        .filter(|node| matches!(node.kind, Kind::ReadonlyCode { .. }))
+        .filter(|node| {
+            matches!(
+                &node.kind,
+                Kind::Editor(ui::Editor {
+                    source: ui::EditorSource::Snapshot { .. },
+                    ..
+                })
+            )
+        })
         .map(|node| node.id.as_str())
         .collect::<Vec<_>>();
     assert_eq!(codes, vec!["shown-code", "second"]);
@@ -63,9 +107,9 @@ fn native_code_sync_wheel_maps_three_panes_and_scene_withdrawal_cancels(cx: &mut
     let snapshots = cx.update(|_, cx| {
         let view = view.read(cx);
         [
-            view.readonly_code["left"].editor.clone(),
+            view.snapshots["left"].editor.clone(),
             source.clone(),
-            view.readonly_code["right"].editor.clone(),
+            view.snapshots["right"].editor.clone(),
         ]
     });
     let original = cx.update(|window, cx| {
@@ -137,9 +181,9 @@ fn native_code_sync_owner_borrow_during_paint_preserves_exact_authority(cx: &mut
         (
             owner,
             [
-                view.readonly_code["left"].editor.clone(),
+                view.snapshots["left"].editor.clone(),
                 source.clone(),
-                view.readonly_code["right"].editor.clone(),
+                view.snapshots["right"].editor.clone(),
             ],
         )
     });
@@ -215,11 +259,11 @@ fn mount(
     let code = |id: &str, text| {
         ui::Node::new(
             id,
-            Kind::ReadonlyCode {
-                text,
+            Kind::Editor(ui::Editor {
                 changes: Vec::new(),
                 sync_group: Some("comparison".into()),
-            },
+                ..ui::Editor::snapshot(text)
+            }),
         )
         .width(220.)
         .height(180.)
@@ -231,12 +275,14 @@ fn mount(
                 code("left", text),
                 ui::Node::new(
                     "source",
-                    Kind::EditorWithActions {
-                        document: version.clone(),
-                        left: Vec::new(),
-                        right: Vec::new(),
+                    Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor {
+                        line_actions: Some(plugin_runtime::plugin_protocol::ui::EditorActions {
+                            left: Vec::new(),
+                            right: Vec::new(),
+                        }),
                         sync_group: Some("comparison".into()),
-                    },
+                        ..plugin_runtime::plugin_protocol::ui::Editor::document(version.clone())
+                    }),
                 )
                 .width(220.)
                 .height(180.),
@@ -270,7 +316,13 @@ fn mount(
             let target = source.clone();
             let expected = version.clone();
             view.native_editor = Some(Rc::new(move |version, _, _, _, cx| {
-                (version == &expected).then(|| editor_ui::window_editor(&target, cx))
+                (version == &expected).then(|| {
+                    editor_ui::source_editor::Editor::new(&target)
+                        .identity("work-window-document", None)
+                        .document_commands(true)
+                        .tools(false)
+                        .into_any_element()
+                })
             }));
             view.action_source_current = Some(Rc::new(move |source, _| source == &version));
             view

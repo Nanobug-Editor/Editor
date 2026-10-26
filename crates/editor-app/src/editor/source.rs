@@ -200,7 +200,7 @@ impl EditorApp {
             // Match the ordinary SourceFrame switch: styled InputOverlays would replace the host's
             // completion action handler with one belonging to its hidden native completion menu.
             if custom_popovers {
-                return editor_ui::native_editor_scrollbars(editor);
+                return Editor::new(editor).tools(false).into_any_element();
             }
             let menu = native_menu.clone();
             Editor::new(editor)

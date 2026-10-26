@@ -7,10 +7,10 @@ fn action_document(version: &DocumentVersion, action: ui::Node) -> Document {
     let Kind::Row { children } = &mut document.root.kind else {
         unreachable!("the fixed comparison fixture is a row");
     };
-    let Kind::EditorWithActions { left, .. } = &mut children[1].kind else {
+    let Kind::Editor(editor) = &mut children[1].kind else {
         unreachable!("the fixed middle pane borrows the original native source");
     };
-    left[0].content = Box::new(action);
+    editor.line_actions.as_mut().unwrap().left[0].content = Box::new(action);
     document
 }
 

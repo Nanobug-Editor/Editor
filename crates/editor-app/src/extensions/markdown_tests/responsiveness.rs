@@ -97,11 +97,17 @@ fn delivered_markdown_source_only_typing_suspends_preview(cx: &mut TestAppContex
     );
     fixture.settle(ui);
     let after = &fixture.manager.live["markdown"].views["preview"].root;
-    // NativeEditor must track the live document revision even while derived content is suspended.
+    // The document Editor must track the live document revision even while derived content is suspended.
     // Require the exact same source-only tree after normalizing only that mandatory authority.
     if let (
-        protocol::ui::Kind::NativeEditor { document: previous },
-        protocol::ui::Kind::NativeEditor { document: current },
+        protocol::ui::Kind::Editor(protocol::ui::Editor {
+            source: protocol::ui::EditorSource::Document { document: previous },
+            ..
+        }),
+        protocol::ui::Kind::Editor(protocol::ui::Editor {
+            source: protocol::ui::EditorSource::Document { document: current },
+            ..
+        }),
     ) = (&mut before.kind, &after.kind)
     {
         assert_eq!(previous.id, current.id);

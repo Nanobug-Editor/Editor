@@ -1,0 +1,11 @@
+{
+  "dpi_percent":400,
+  "scene":{"identity":53,"revision":1,"roots":[
+    {"kind":"group","id":"skewed","transform":[2,0,2,1,50,50],"opacity":0.5,"children":[
+      {"kind":"shape","id":"miter","geometry":{"kind":"path","segments":[
+        {"op":"move","x":106.138,"y":70.806},{"op":"line","x":20,"y":20},{"op":"line","x":70.806,"y":106.138}
+      ]},"stroke":{"brush":{"kind":"solid","rgba":4278190335},"width":4,"miter_limit":4.01}}
+    ]}
+  ]},
+  "samples":[{"x":111.5,"y":65.25,"rgba":[255,128,128,255],"tolerance":60}]
+}

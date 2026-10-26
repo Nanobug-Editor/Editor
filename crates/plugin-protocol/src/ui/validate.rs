@@ -168,6 +168,71 @@ struct Validator {
     sync_groups: std::collections::BTreeMap<String, usize>,
 }
 impl Validator {
+    /// Resolve provenance before recursively admitting edge controls; no literal can acquire a session.
+    fn editor(&mut self, editor: &Editor, depth: usize) -> Result<(), String> {
+        self.sync_group(&editor.sync_group)?;
+        match &editor.source {
+            EditorSource::Document { document } => {
+                self.editors += 1;
+                if !self.allow_editor
+                    || self.editors > 1
+                    || self.editor_source.as_ref() != Some(document)
+                {
+                    return Err("Editor must uniquely reference this layout's exact source".into());
+                }
+                if !editor.changes.is_empty() {
+                    return Err(
+                        "Document Editor decorations use the owned document decoration interface"
+                            .into(),
+                    );
+                }
+            }
+            EditorSource::Snapshot { text } => {
+                self.readonly_editors += 1;
+                self.bytes += text.len();
+                if !editor.read_only {
+                    return Err("Snapshot Editor must be readonly".into());
+                }
+                if self.readonly_editors > 8
+                    || text.len() > 256 * 1024
+                    || self.bytes > 1024 * 1024
+                    || editor.changes.len() > 512
+                {
+                    return Err("Snapshot Editor quota exceeded".into());
+                }
+                if editor.changes.iter().any(|range| {
+                    range.start > range.end
+                        || range.end > text.len()
+                        || !text.is_char_boundary(range.start)
+                        || !text.is_char_boundary(range.end)
+                }) {
+                    return Err("Snapshot Editor ranges require bounded UTF-8 boundaries".into());
+                }
+            }
+        }
+        if editor.left_actions().len() + editor.right_actions().len() > 128 {
+            return Err("Editor action quota exceeded".into());
+        }
+        // Edge subtrees are auxiliary input surfaces, including edges of literal Editors.
+        // Only the root layout may borrow the one authoritative document input.
+        let allow_editor = self.allow_editor;
+        self.allow_editor = false;
+        for action in editor.left_actions().iter().chain(editor.right_actions()) {
+            let valid = match &editor.source {
+                EditorSource::Document { .. } => action.offset <= 1024 * 1024,
+                EditorSource::Snapshot { text } => {
+                    action.offset <= text.len() && text.is_char_boundary(action.offset)
+                }
+            };
+            if !valid {
+                return Err("Editor action requires a bounded UTF-8 source anchor".into());
+            }
+            self.node(&action.content, depth + 1)?;
+        }
+        self.allow_editor = allow_editor;
+        Ok(())
+    }
+
     /// Groups remain local to this document and cannot create unbounded pairwise mapping work.
     fn sync_group(&mut self, group: &Option<String>) -> Result<(), String> {
         let Some(group) = group else {
@@ -308,6 +373,7 @@ impl Validator {
         dimension(layout.gap, 0., 256.)?;
         dimension(layout.padding, 0., 256.)?;
         match &node.kind {
+            Kind::Editor(editor) => self.editor(editor, depth)?,
             Kind::Tree { handle } => {
                 if handle.instance.is_empty()
                     || handle.instance.len() > 256
@@ -316,58 +382,6 @@ impl Validator {
                     || handle.resource == 0
                 {
                     return Err("Tree requires a bounded nonzero owned resource handle".into());
-                }
-            }
-            Kind::NativeEditor { document } | Kind::EditorWithActions { document, .. } => {
-                self.editors += 1;
-                if !self.allow_editor
-                    || self.editors > 1
-                    || self.editor_source.as_ref() != Some(document)
-                {
-                    return Err(
-                        "Native editor must uniquely reference this layout's exact source".into(),
-                    );
-                }
-                if let Kind::EditorWithActions {
-                    left,
-                    right,
-                    sync_group,
-                    ..
-                } = &node.kind
-                {
-                    self.sync_group(sync_group)?;
-                    if left.len() + right.len() > 128 {
-                        return Err("Editor action quota exceeded".into());
-                    }
-                    for action in left.iter().chain(right) {
-                        if action.offset > 1024 * 1024 {
-                            return Err("Editor action offset exceeds source quota".into());
-                        }
-                        self.node(&action.content, depth + 1)?;
-                    }
-                }
-            }
-            Kind::ReadonlyCode {
-                text,
-                changes,
-                sync_group,
-            } => {
-                self.readonly_editors += 1;
-                if self.readonly_editors > 8 {
-                    return Err("Readonly code pane quota exceeded".into());
-                }
-                self.sync_group(sync_group)?;
-                self.bytes += text.len();
-                if text.len() > 256 * 1024 || self.bytes > 1024 * 1024 || changes.len() > 512 {
-                    return Err("Readonly code quota exceeded".into());
-                }
-                if changes.iter().any(|range| {
-                    range.start > range.end
-                        || range.end > text.len()
-                        || !text.is_char_boundary(range.start)
-                        || !text.is_char_boundary(range.end)
-                }) {
-                    return Err("Readonly code ranges require bounded UTF-8 boundaries".into());
                 }
             }
             Kind::SideTabs(tabs) => {

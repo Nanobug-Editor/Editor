@@ -68,8 +68,7 @@ fn delivered_markdown_preview_tracks_unsaved_native_edits_and_reclaims_split(
     cx: &mut TestAppContext,
 ) {
     use super::composable_tests::{publish, pump};
-    let package =
-        Package::read(&crate::test_packages::archive("markdown-0.18.2-readme-pr")).unwrap();
+    let package = Package::read(&crate::test_packages::archive("markdown-0.18.6")).unwrap();
     assert!(
         package.manifest.component.is_some(),
         "the preview requires the independently built guest"

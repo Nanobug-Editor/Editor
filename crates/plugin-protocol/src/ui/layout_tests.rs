@@ -49,7 +49,7 @@ fn native_editor_layout_references_are_exact_and_unique() {
         "version":1,"revision":2,"editor_layout":true,
         "source":{"id":"open-text","path":"notes.txt","revision":3},
         "root":{"id":"layout","kind":{"type":"row","children":[
-            {"id":"editor","kind":{"type":"native_editor","document":{"id":"open-text","path":"notes.txt","revision":3}}},
+            {"id":"editor","kind":{"type":"editor","source":{"type":"document","document":{"id":"open-text","path":"notes.txt","revision":3}}}},
             {"id":"detail","kind":{"type":"text","text":"Details"}}
         ]}}
     });
@@ -60,7 +60,8 @@ fn native_editor_layout_references_are_exact_and_unique() {
     disabled.root.disabled = true;
     assert!(disabled.active_native_editor().is_none());
     let mut invalid = wire.clone();
-    invalid["root"]["kind"]["children"][0]["kind"]["document"]["id"] = "another-file".into();
+    invalid["root"]["kind"]["children"][0]["kind"]["source"]["document"]["id"] =
+        "another-file".into();
     assert!(
         serde_json::from_value::<Document>(invalid)
             .unwrap()

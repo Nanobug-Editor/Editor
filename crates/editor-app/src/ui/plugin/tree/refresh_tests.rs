@@ -105,25 +105,27 @@ fn document(version: &DocumentVersion, resource: &TreeResource, disabled: bool) 
     let mut document = Document::new(
         ui::Node::new(
             "source",
-            Kind::EditorWithActions {
-                document: version.clone(),
-                left: vec![ui::EditorAction {
-                    offset: 0,
-                    content: Box::new(
-                        ui::Node::new(
-                            "catalog-tree",
-                            Kind::Tree {
-                                handle: resource.handle().clone(),
-                            },
-                        )
-                        .width(240.)
-                        .height(280.)
-                        .disabled(disabled),
-                    ),
-                }],
-                right: Vec::new(),
+            Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor {
+                line_actions: Some(plugin_runtime::plugin_protocol::ui::EditorActions {
+                    left: vec![ui::EditorAction {
+                        offset: 0,
+                        content: Box::new(
+                            ui::Node::new(
+                                "catalog-tree",
+                                Kind::Tree {
+                                    handle: resource.handle().clone(),
+                                },
+                            )
+                            .width(240.)
+                            .height(280.)
+                            .disabled(disabled),
+                        ),
+                    }],
+                    right: Vec::new(),
+                }),
                 sync_group: None,
-            },
+                ..plugin_runtime::plugin_protocol::ui::Editor::document(version.clone())
+            }),
         )
         .width(600.)
         .height(320.),
@@ -187,9 +189,18 @@ fn mount<'a>(
             view.set_code_sync_source(Some((initial_version.clone(), source.clone())), cx);
             let editor = source.clone();
             view.native_editor = Some(Rc::new(move |_, actions, _, _, cx| {
-                let body = controls::window_editor_body(&editor, None, cx);
+                let body = editor_ui::source_editor::Editor::new(&editor)
+                    .identity("work-window-document", None)
+                    .document_commands(true)
+                    .tools(false)
+                    .presentation(None)
+                    .into_any_element();
                 Some(if let Some(actions) = actions {
-                    controls::with_projected_editor_actions(body, &editor, actions, None)
+                    editor_ui::source_editor::Editor::new(&editor)
+                        .tools(false)
+                        .presentation(Some(body))
+                        .edge_controls(actions, None)
+                        .into_any_element()
                 } else {
                     body
                 })

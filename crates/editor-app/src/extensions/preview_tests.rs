@@ -33,9 +33,9 @@ fn publish_preview_source(app: &Entity<EditorApp>, cx: &mut App) {
                     // The simulated public guest declares geometry instead of relying on a host split.
                     let editor = Node::new(
                         "source",
-                        Kind::NativeEditor {
-                            document: version.clone(),
-                        },
+                        Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor::document(
+                            version.clone(),
+                        )),
                     )
                     .grow();
                     let content = Node::column(
@@ -97,7 +97,7 @@ fn svg_preview_follows_open_documents_and_unsaved_edits(cx: &mut TestAppContext)
             // Publish through the existing runtime boundary; no installed user plugins are touched.
             let manifest: protocol::Manifest = serde_json::from_value(serde_json::json!({
                 "id": "svg", "name": "SVG 预览", "version": "0.1.0",
-                "protocol": 7, "api": {"base":"^1","required":{"ui.native":">=1.1,<2","ui.canvas":"^1","editor.documents":"^1","editor.layout":"^1"}}, "component": "svg.wasm",
+                "protocol": 7, "api": {"base":"^1","required":{"ui.native":">=1.1,<2","ui.canvas":"^1","editor.documents":"^1","editor.layout":"^2", "ui.code_editor":"^2"}}, "component": "svg.wasm",
                 "permissions": ["editor.read"], "storage_limit": 1024,
                 "panels": [{ "id": "preview", "title": "SVG 预览",
                     "position": "editor", "file_extensions": ["svg"] }]

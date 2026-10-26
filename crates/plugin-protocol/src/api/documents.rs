@@ -76,7 +76,7 @@
 //! Split comparisons also align added/deleted rows using bounded, display-only blank space over
 //! the original native sessions. Native search/code-action overlays temporarily pause alignment;
 //! unsupported geometry or size limits explicitly fall back to independent panes. Plugin code
-//! groups opt into the same mechanism through `ui.code_editor` 1.1 and `Document.code_alignment`.
+//! groups opt into the same mechanism through `ui.code_editor` 2.0 and `Document.code_alignment`.
 //! These semantics do not alter the legacy `CompareDocuments` operation described above.
 //!
 //! A preview may replace another unpinned preview; a pinned comparison remains until closed.

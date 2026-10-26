@@ -20,8 +20,7 @@ fn document(version: &DocumentVersion) -> Document {
                 ui::Node::text(title_id, title),
                 ui::Node::new(
                     id,
-                    Kind::ReadonlyCode {
-                        text: text.into(),
+                    Kind::Editor(ui::Editor {
                         // Full-file changes also exercise background paints and their finite
                         // geometry follow-ups in the real independent-window idle regression.
                         changes: vec![plugin_runtime::plugin_protocol::api::TextRange {
@@ -29,7 +28,8 @@ fn document(version: &DocumentVersion) -> Document {
                             end: text.len(),
                         }],
                         sync_group: Some("comparison".into()),
-                    },
+                        ..ui::Editor::snapshot(text)
+                    }),
                 )
                 .grow(),
             ],
@@ -63,12 +63,7 @@ fn document(version: &DocumentVersion) -> Document {
                     ui::Node::text("result-title", "Result · Editable"),
                     ui::Node::new(
                         "source",
-                        Kind::EditorWithActions {
-                            document: version.clone(),
-                            left: edge("left", "→"),
-                            right: edge("right", "←"),
-                            sync_group: Some("comparison".into()),
-                        },
+                        Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor { line_actions: Some(plugin_runtime::plugin_protocol::ui::EditorActions { left: edge("left", "→"), right: edge("right", "←") }), sync_group: Some("comparison".into()), ..plugin_runtime::plugin_protocol::ui::Editor::document(version.clone()) }),
                     )
                     .grow(),
                 ],

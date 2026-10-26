@@ -9,11 +9,11 @@ fn document(version: &DocumentVersion) -> Document {
     let peer = |id, text: &str| {
         ui::Node::new(
             id,
-            Kind::ReadonlyCode {
-                text: text.into(),
+            Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor {
                 changes: Vec::new(),
                 sync_group: Some("comparison".into()),
-            },
+                ..plugin_runtime::plugin_protocol::ui::Editor::snapshot(text)
+            }),
         )
         .width(340.)
         .height(210.)
@@ -25,12 +25,14 @@ fn document(version: &DocumentVersion) -> Document {
                 peer("left", TEXTS[0]),
                 ui::Node::new(
                     "source",
-                    Kind::EditorWithActions {
-                        document: version.clone(),
-                        left: Vec::new(),
-                        right: Vec::new(),
+                    Kind::Editor(plugin_runtime::plugin_protocol::ui::Editor {
+                        line_actions: Some(plugin_runtime::plugin_protocol::ui::EditorActions {
+                            left: Vec::new(),
+                            right: Vec::new(),
+                        }),
                         sync_group: Some("comparison".into()),
-                    },
+                        ..plugin_runtime::plugin_protocol::ui::Editor::document(version.clone())
+                    }),
                 )
                 .width(340.)
                 .height(210.),
@@ -57,9 +59,9 @@ fn assert_native_rows(
         let alignment = group(mounted, cx);
         let view = mounted.view.read(cx);
         let editors = [
-            view.readonly_code["left"].editor.clone(),
+            view.snapshots["left"].editor.clone(),
             mounted.source.clone(),
-            view.readonly_code["right"].editor.clone(),
+            view.snapshots["right"].editor.clone(),
         ];
         for pane in 0..3 {
             let editor = editors[pane].read(cx);
@@ -118,9 +120,9 @@ fn native_code_alignment_peer_insertions_share_visible_rows_without_text_or_sele
         });
         let view = mounted.view.read(cx);
         [
-            view.readonly_code["left"].editor.read(cx).selected_range(),
+            view.snapshots["left"].editor.read(cx).selected_range(),
             mounted.source.read(cx).selected_range(),
-            view.readonly_code["right"].editor.read(cx).selected_range(),
+            view.snapshots["right"].editor.read(cx).selected_range(),
         ]
     });
     settle(ui);

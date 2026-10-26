@@ -14,6 +14,32 @@ fn candidate() -> Package {
     Package::from_bytes(&bytes).unwrap()
 }
 
+/// Compatible hot-replacement baseline reuses the real migrated guest under a lower test version.
+/// Historical editor.layout 1 bytes remain immutable and must be rejected before guest execution.
+fn compatible_baseline(package: &Package) -> Package {
+    let legacy = std::fs::read(crate::test_packages::archive("markdown-0.18.2")).unwrap();
+    assert!(Package::from_bytes(&legacy).is_err());
+    let mut files = package.files.clone();
+    let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
+    manifest["version"] = "0.18.5-test".into();
+    files.insert(
+        "manifest.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
+    let declaration = String::from_utf8(files["plugin.toml"].clone()).unwrap();
+    files.insert(
+        "plugin.toml".into(),
+        declaration
+            .replacen(
+                &format!("version = \"{}\"", package.manifest.version),
+                "version = \"0.18.5-test\"",
+                1,
+            )
+            .into_bytes(),
+    );
+    Package::from_files(files).unwrap()
+}
+
 /// New helpers retain one transaction/Undo, and a failed candidate cannot lose the open unsaved session.
 #[gpui::test]
 #[ignore = "actual independently built Markdown SDK ZIP; set NANOBUG_MARKDOWN_SDK_PACKAGE and SHA256"]
@@ -21,17 +47,7 @@ fn markdown_sdk_adoption_hot_update_retains_document_undo_and_retires_old_resour
     cx: &mut TestAppContext,
 ) {
     let package = candidate();
-    use sha2::Digest as _;
-    let old_bytes = std::fs::read(
-        std::env::var_os("NANOBUG_MARKDOWN_SDK_OLD_PACKAGE")
-            .expect("Select the unchanged local 0.18.2 baseline ZIP"),
-    )
-    .unwrap();
-    assert_eq!(
-        format!("{:x}", sha2::Sha256::digest(&old_bytes)),
-        "61a648070f6d659ffbadd9cf8a7f8da04110ba47d007a55f6ddcd28c93a31ca2"
-    );
-    let old = Package::from_bytes(&old_bytes).unwrap();
+    let old = compatible_baseline(&package);
     let (mut fixture, ui) = NativeMarkdown::mount_package(cx, &[("notes.md", "磁盘正文\n")], &old);
     fixture.open("notes.md", ui);
     fixture.focus_editor(ui);

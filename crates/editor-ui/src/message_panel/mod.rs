@@ -29,7 +29,8 @@ impl MessageLevel {
         let dark = cx.theme().is_dark();
         match self {
             Self::Info => gpui_kit::rgb(if dark { 0x60a5fa } else { 0x2563eb }).into(),
-            Self::Warning => gpui_kit::rgb(if dark { 0xfb923c } else { 0xea580c }).into(),
+            // Tiny reminders need amber's yellow component to remain distinct from danger red.
+            Self::Warning => gpui_kit::rgb(if dark { 0xfbbf24 } else { 0xf59e0b }).into(),
             Self::Error => cx.theme().danger,
         }
     }

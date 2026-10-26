@@ -1,10 +1,16 @@
 # 插件系统文档目录
 
-- [共享 UI 路线图](specs/shared-ui-roadmap.md)、[S0/S1 契约](specs/shared-ui-s0-s1.md)与[本地实施工单](tickets/shared-ui-foundation/README.md)：设计文档已整理，功能实施及统一 Editor 迁移不属于本次主分支整合。
+- [统一默认 Editor 与插件编辑节点](specs/unified-editor.md)、[验收记录](verification/unified-editor-2026-10-25.md)：默认 Editor 统一文档、只读快照、行边缘控件和同步呈现，完成协议主版本及消费者迁移；功能回归通过，追加发现的横向拖动瓶颈已按授权使用锁定 Base 本地补丁修复，见[真实字体与原生性能验收](../ui/verification/internal-resize-performance-2026-10-25.md)。
+
+- [宿主与插件共享 UI 分阶段实施方案](specs/shared-ui-roadmap.md)、[S0／S1 细化契约](specs/shared-ui-s0-s1.md)、[七张本地工单](tickets/shared-ui-foundation/README.md)：规划／待实施；补齐目标与请求状态、事件因果、权限和错误，以端到端垂直切片明确直接依赖；本轮仅文档，不修改代码或依赖，不发布远程议题。
+
+- [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
 
 - [Git 提交范围与即时勾选响应](verification/git-commit-ranges-2026-10-25.md)：Git 0.1.44 两类文件统一本地选择，点击提交后校验并仅提交所选文件；旧暂存策略由本轮明确替换，测量与实际包验证状态见记录。
 
 - [Zed 终端固定参考与差异盘点](specs/terminal-zed-reference-2026-10-24.md)：记录原实现差异、许可证及核心已有能力；本轮增强采用独立 `editor-terminal` 和原生文字网格，并将选用的 Alacritty 算法融入库内实现，实际结果见[验证记录](verification/terminal-enhancements-2026-10-24.md)。
+
+- [终端首次启动空白行与滚动条](verification/terminal-startup-2026-10-25.md)：修正空屏清屏时产生一行虚假历史的计算，保留真实输出与滚动能力；核心及宿主首帧回归结果见记录。
 
 - [提交按钮响应与提交并推送](verification/git-commit-submit-2026-10-24.md)：Git 0.1.43 将常规 Windows 仓库暂存后的九次串行进程缩减为两次，增加成功后才推送的提交按钮；实际耗时、失败恢复、门禁及安装状态见记录。
 
@@ -37,8 +43,6 @@
 - [Git 拓扑图分支配色](verification/git-topology-colors-2026-10-23.md)：Git 0.1.31 使用深浅主题调色板区分轨道，线条与节点同色，普通提交实心、合并提交空心；分页、轨道压缩与滚动保持既有颜色，实际验证状态见记录。
 
 - [Git 提交列表列宽与排版](verification/git-history-columns-2026-10-22.md)：Git 0.1.30 的紧凑元数据列、三条透明拖动边界、加粗提交者及标准时间格式；沿用通用画布接口，实际验证状态见记录。
-
-- [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
 
 - [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
 
@@ -218,6 +222,7 @@ Markdown 插件：[总方案](https://github.com/Nanobug-Editor/Markdown/blob/31
 | 分类 | 入口 | 状态 |
 | --- | --- | --- |
 | 平台设计 | [插件平台方案](specs/plugin-api-platform.md) | 已完成实施，正文保留设计基线 |
+| Canvas 扩展 | [通用 Canvas 协议扩展方案](specs/canvas-protocol-extension.md)、[四张实施工单](tickets/canvas-protocol-extension/README.md) | 2026-10-24 已确认；#128 实施中，#129–#131 待前置，拟议能力尚未验收 |
 | 实施工单 | [20 张工单、议题映射及依赖图](tickets/README.md) | 全部已完成 |
 | 最终验收 | [T01–T26 契约验收](verification/plugin-api-contract-verification.md) | 已完成，含真实执行证据与限制 |
 | 运行与构建 | [运行时插件平台](runtime-plugins.md) | 当前使用参考，随平台维护 |

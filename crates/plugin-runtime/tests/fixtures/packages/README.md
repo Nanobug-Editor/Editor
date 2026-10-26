@@ -1,13 +1,21 @@
 # Frozen plugin test inputs
 
+The configurable Editor 2 acceptance inputs are `git-0.1.45.zip`, `markdown-0.18.6.zip`,
+`svg-0.6.2.zip`, `layout-example-0.4.0.zip` and `sdk-canvas-fixture-1.1.0.zip`.
+They were independently rebuilt with the same public host SDK, validated through Package/Manager
+and affected native consumers, then frozen after verification. Bare IDs now select these current
+contract inputs. Exact archive names continue to select immutable historical bytes; older editor
+capability majors are rejection/migration inputs. Published marketplace catalog snapshots remain
+unchanged. See [the Editor verification record](../../../../../docs/plugins/verification/unified-editor-2026-10-25.md).
+
 `markdown-0.18.2-readme-pr.zip` is the isolated source-PR README presentation candidate: paragraph alignment,
 accessible image alt semantics and Primer metrics through public `ui.styles`. The 0.18.0/0.18.1
 local candidates and the first `markdown-0.18.2.zip` remain preserved. `sdk-styles-fixture-1.0.0.zip` is an independent minimal current-SDK
 consumer for reusable style negotiation and demand-owned view activation; its source is in ../sdk-styles.
 Each explicit ledger entry
 records its actual public SDK digest and leaves revisions that were uncommitted at build time null. Native
-Markdown behavior regressions select this archive explicitly; bare `markdown` and marketplace
-distribution snapshots keep the reviewed 0.17.2 package. Neither the new fixture nor a successful
+Earlier Markdown behavior regressions selected this archive explicitly; current native regressions
+select 0.18.6, and the reviewed 0.17.2 bytes remain an exact historical input. Neither the new fixture nor a successful
 build changes marketplace admission or any already published ZIP.
 
 The adjacent `sdk-canvas` project independently exercises the current `editor.layout` contract: it
@@ -15,6 +23,14 @@ publishes a native source bound to the exact Preview version beside a zoomable S
 placeholder source is published during Prepare; unsaved text comes only from Preview. Build it with
 the same public `--plugin-cargo` release/wasm32-wasip2 command as `sdk-launch` and archive only its
 manifest and component. The source and ZIP digests are fixed in the ledger; it is never a listing.
+
+`canvas-flow-1.0.0.zip` is the independent `ui.canvas 1.7` flow-diagram acceptance input.
+Its source in `../canvas-flow` uses only the public SDK for structured paths, viewport policy
+and object selection. Ordinary buttons deliberately publish stale revisions and retired identities
+to verify atomic rejection and recovery. Rebuild with the current host
+`--plugin-package crates/plugin-runtime/tests/fixtures/canvas-flow --output target/canvas-packages`;
+after actual Package/Manager/native acceptance, freeze the resulting ZIP and record its SDK digest.
+It is a test input and has no marketplace listing or host-specific API.
 
 These archives are test inputs, excluded from the application, installer and exported SDK. Official business sources live in the seven independent `*-for-Nanobug` repositories. The six retired examples are retained only as immutable Package/SDK test artifacts; their IDs preserve existing lifecycle and migration assertions and do not create marketplace listings.
 

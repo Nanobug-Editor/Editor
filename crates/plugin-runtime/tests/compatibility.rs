@@ -34,6 +34,56 @@ fn local_package_rejects_an_unsupported_contribution_host_range() {
     assert!(error.to_string().contains("host"), "{error:#}");
 }
 
+/// Both retired editor capability majors fail public admission, while restoration preserves user data.
+#[test]
+fn unified_editor_rejects_retired_contracts_and_preserves_installed_data() {
+    let current = json!({"id":"retired-editor","name":"Editor contract","version":"1.0.0",
+        "protocol":7,"api":{"base":"^1","required":{"editor.layout":"^2","ui.code_editor":"^2"}},
+        "permissions":["storage"],"component":"test.wasm","storage_limit":1024});
+    plugin_runtime::Package::from_files(executable_contract_files(current.clone())).unwrap();
+    for (capability, range) in [("editor.layout", "^1"), ("ui.code_editor", "^1.1")] {
+        let mut retired = current.clone();
+        retired["api"]["required"][capability] = range.into();
+        let error = plugin_runtime::Package::from_files(executable_contract_files(retired.clone()))
+            .err()
+            .unwrap();
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("update the plugin") && message.contains(capability),
+            "{message}"
+        );
+        let root = tempfile::tempdir().unwrap();
+        let record = json!({"retired-editor": {
+            "manifest":retired,"digest":"c".repeat(64),"grants":["storage"],
+            "enabled":true,"project_enabled":["retained-project"]
+        }});
+        std::fs::write(
+            root.path().join("registry.json"),
+            serde_json::to_vec(&record).unwrap(),
+        )
+        .unwrap();
+        let private = root.path().join("data/retired-editor/retained.bin");
+        std::fs::create_dir_all(private.parent().unwrap()).unwrap();
+        std::fs::write(&private, b"retained opaque editor preferences").unwrap();
+        let mut manager = Manager::open(root.path().into(), Environment::default()).unwrap();
+        assert!(manager.installed["retired-editor"].error.is_some());
+        assert!(manager.enable("retired-editor").is_err());
+        assert!(manager.live.is_empty());
+        let saved = Manager::read_registry(root.path()).unwrap();
+        assert!(saved["retired-editor"].enabled);
+        assert!(saved["retired-editor"].grants.contains("storage"));
+        assert!(
+            saved["retired-editor"]
+                .project_enabled
+                .contains("retained-project")
+        );
+        assert_eq!(
+            std::fs::read(&private).unwrap(),
+            b"retained opaque editor preferences"
+        );
+    }
+}
+
 /// Release floors and optional capability fallback stay independent of the current wire protocol.
 #[test]
 fn package_host_floor_and_optional_fallback_do_not_require_empty_wasm() {

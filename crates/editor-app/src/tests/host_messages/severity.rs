@@ -59,8 +59,8 @@ fn assert_both_locations(form: &mut VisualTestContext, color: u32) {
 fn host_messages_severity_colors_preserve_priority_and_acknowledgement(cx: &mut TestAppContext) {
     with_messages(cx, |form, app, _| {
         for (dark, scale, blue, orange, red) in [
-            (false, 1., 0x2563eb, 0xea580c, 0xdc2626),
-            (true, 1.5, 0x60a5fa, 0xfb923c, 0xf87171),
+            (false, 1., 0x2563eb, 0xf59e0b, 0xdc2626),
+            (true, 1.5, 0x60a5fa, 0xfbbf24, 0xf87171),
         ] {
             form.update(|window, cx| {
                 apply_theme(builtin_theme(dark), cx);

@@ -312,7 +312,10 @@ impl EditorApp {
             .map(|(index, (source, editor, title, selector))| {
                 let label = format!("{title} · {}", t!("editor.readonly_label"));
                 let input = comparison.alignment.pane(index).unwrap_or_else(|| {
-                    editor_ui::readonly_editor(selector, label.clone(), editor, window, cx)
+                    editor_ui::source_editor::Editor::new(editor)
+                        .identity(selector, Some(label.clone()))
+                        .tools(false)
+                        .into_any_element()
                 });
                 let target = self.plugin_document_menu_target(source);
                 let editor = editor.clone();

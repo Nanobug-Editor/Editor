@@ -14,7 +14,6 @@ pub mod dialog;
 pub mod disclosure;
 pub mod dock;
 pub mod editor;
-pub mod editor_actions;
 pub mod editor_canvas;
 pub mod file_operation;
 pub mod icon;
@@ -63,13 +62,7 @@ pub use definition_popup::definition_popup;
 pub use diagnostic_popup::diagnostic_popup;
 pub use dialog::DialogContent;
 pub use disclosure::disclosure;
-pub use editor::{
-    gutter_separator, readonly_editor, readonly_editor_body, synchronize_editor_appearance,
-    window_editor, window_editor_body,
-};
-pub use editor_actions::{
-    EditorActionElements, EditorActionProjection, with_projected_editor_actions,
-};
+pub use editor::{gutter_separator, synchronize_editor_appearance};
 pub use editor_canvas::empty_editor_canvas;
 pub use icon::Icon;
 pub use input::Input;
@@ -85,6 +78,7 @@ pub use shortcut_panel::{
     shortcut_footer, shortcut_keycaps, shortcut_list, shortcut_modal, shortcut_pending_hint,
     shortcut_row, shortcut_search, shortcut_tabs,
 };
+pub use source_editor::{EditorActionElements, EditorActionProjection};
 pub use spinner::Spinner;
 pub use split::split_container;
 pub use status_bar::StatusBar;

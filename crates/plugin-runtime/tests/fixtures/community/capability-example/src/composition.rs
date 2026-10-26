@@ -126,7 +126,10 @@ impl Demo {
     pub(super) fn preview(&mut self, source: Option<api::DocumentVersion>, text: &str) {
         self.document.source = source.clone();
         visit(&mut self.document.root, &mut |node| {
-            if let Kind::NativeEditor { document } = &mut node.kind
+            if let Kind::Editor(plugin_protocol::ui::Editor {
+                source: plugin_protocol::ui::EditorSource::Document { document },
+                ..
+            }) = &mut node.kind
                 && let Some(source) = &source
             {
                 *document = source.clone();
@@ -190,7 +193,7 @@ impl Demo {
 
 /// Hide source-bound resources only in the publication clone; preserve the asset for later previews.
 fn unbind_source(node: &mut Node) {
-    if matches!(node.kind, Kind::NativeEditor { .. }) {
+    if matches!(&node.kind, Kind::Editor(editor) if editor.document_version().is_some()) {
         node.kind = Kind::Spacer;
     }
     node.source_range = None;

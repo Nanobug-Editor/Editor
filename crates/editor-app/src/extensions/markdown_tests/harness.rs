@@ -12,7 +12,7 @@ fn delivered_package() -> Package {
         assert_eq!(format!("{:x}", sha2::Sha256::digest(&bytes)), expected);
         return Package::from_bytes(&bytes).unwrap();
     }
-    Package::read(&crate::test_packages::archive("markdown-0.18.2-readme-pr")).unwrap()
+    Package::read(&crate::test_packages::archive("markdown-0.18.6")).unwrap()
 }
 
 /// Remove one declared permission before public installation, preserving the actual guest and assets.

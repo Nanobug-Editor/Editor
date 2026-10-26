@@ -371,8 +371,10 @@ impl Manager {
     pub(super) fn poll_parked(&mut self) {
         for scope in self.parked.values_mut() {
             for instance in scope.live.values_mut() {
-                if instance.poll().is_err() {
-                    instance.stop();
+                if let Err(error) = instance.poll() {
+                    if !instance.preserve_rejected_scene(&error) {
+                        instance.stop();
+                    }
                 }
             }
         }

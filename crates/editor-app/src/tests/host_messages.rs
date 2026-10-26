@@ -5,6 +5,7 @@ use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use std::cell::RefCell;
 
 mod button;
+mod chrome;
 mod policy;
 mod severity;
 

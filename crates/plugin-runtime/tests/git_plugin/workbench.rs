@@ -163,7 +163,10 @@ fn snapshot(manager: &Manager, column: usize) -> String {
         .unwrap_or_else(|| panic!("missing visible history source {id}"))
         .kind
     {
-        ui::Kind::ReadonlyCode { text, .. } => text.clone(),
+        ui::Kind::Editor(ui::Editor {
+            source: ui::EditorSource::Snapshot { text },
+            ..
+        }) => text.clone(),
         _ => panic!("history source is not readonly code"),
     }
 }

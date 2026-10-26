@@ -12,7 +12,8 @@ fn overlay_peer(dialog: bool, svg: bool) -> Package {
     manifest["settings_hook"] = serde_json::json!(false);
     manifest["settings"]["label"]["default"] = serde_json::json!("composable-ui");
     manifest["api"]["required"]["editor.toolbar"] = serde_json::json!("^1");
-    manifest["api"]["required"]["editor.layout"] = serde_json::json!("^1");
+    manifest["api"]["required"]["editor.layout"] = serde_json::json!("^2");
+    manifest["api"]["required"]["ui.code_editor"] = serde_json::json!("^2");
     manifest["api"]["required"]["ui.collections"] = serde_json::json!("^1");
     manifest["panels"][0]["position"] = serde_json::json!("editor");
     manifest["panels"][0]["file_extensions"] = serde_json::json!(["md"]);
@@ -20,13 +21,13 @@ fn overlay_peer(dialog: bool, svg: bool) -> Package {
     let mut document = Document::new(
         Node::new(
             "fixture-editor",
-            protocol::ui::Kind::NativeEditor {
-                document: protocol::api::DocumentVersion {
+            protocol::ui::Kind::Editor(protocol::ui::Editor::document(
+                protocol::api::DocumentVersion {
                     id: "template".into(),
                     path: "notes.md".into(),
                     revision: 0,
                 },
-            },
+            )),
         )
         .grow(),
     );

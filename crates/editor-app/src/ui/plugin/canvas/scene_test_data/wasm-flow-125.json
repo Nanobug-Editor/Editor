@@ -1,0 +1,4 @@
+{
+  "wasm_flow":true,"dpi_percent":125,"expect_presented":true,
+  "visible_colors":[{"rgba":[51,153,255,255],"minimum":100},{"rgba":[102,204,136,255],"minimum":100}]
+}

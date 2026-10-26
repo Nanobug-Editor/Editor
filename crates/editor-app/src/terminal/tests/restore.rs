@@ -140,9 +140,21 @@ fn native_terminal_reopen_preserves_history_and_resize(cx: &mut TestAppContext) 
         painted(&app, visual).contains("preserved-history")
     });
     let after = painted(&app, visual);
+    let restored_grid =
+        visual.update(|_, cx| app.read(cx).terminal.read(cx).sessions[0].engine.snapshot());
+    let restored_rows = restored_grid
+        .lines
+        .iter()
+        .take(4)
+        .map(|row| row.iter().map(|cell| cell.c).collect::<String>())
+        .collect::<Vec<_>>();
     assert!(
         after.contains(&before),
-        "restored cells must retain the original prompt and output: {after}"
+        "restored cells must retain the original prompt and output: before={before:?}, after={after:?}, size={}x{}, cursor={:?}, offset={}, rows={restored_rows:?}",
+        restored_grid.columns,
+        restored_grid.rows,
+        restored_grid.cursor,
+        restored_grid.offset
     );
     assert!(!after.contains("restoredsession"));
     for (width, height) in [(840., 600.), (1200., 950.), (900., 670.), (1100., 800.)] {

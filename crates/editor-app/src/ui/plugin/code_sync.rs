@@ -59,7 +59,7 @@ struct Group {
     pending: Vec<Option<Locator>>,
     sample_attempts: u8,
     geometry_failed: bool,
-    /// Optional zero-byte presentation; legacy 1.0 groups retain semantic scroll synchronization.
+    /// Optional zero-byte presentation; groups without alignment keep semantic scroll synchronization.
     alignment: Option<editor_ui::aligned_editor::AlignmentGroup>,
     alignment_requested: bool,
 }
@@ -221,8 +221,8 @@ fn active_nodes<'a>(node: &'a ui::Node, out: &mut Vec<&'a ui::Node>) {
                 active_nodes(&tab.content, out);
             }
         }
-        Kind::EditorWithActions { left, right, .. } => {
-            for action in left.iter().chain(right) {
+        Kind::Editor(editor) => {
+            for action in editor.left_actions().iter().chain(editor.right_actions()) {
                 active_nodes(&action.content, out);
             }
         }
@@ -231,6 +231,30 @@ fn active_nodes<'a>(node: &'a ui::Node, out: &mut Vec<&'a ui::Node>) {
 }
 
 impl PluginView {
+    /// Borrow readonly input policy for the currently mounted source and release it on withdrawal.
+    pub(super) fn sync_editor_access(&mut self, cx: &mut Context<Self>) {
+        let source = self
+            .document
+            .active_editor()
+            .filter(|editor| editor.read_only && self.scene_current.get())
+            .and_then(|config| {
+                self.code_sync.source.as_ref().filter(|(source, _)| {
+                    config.document_version().is_some_and(|document| {
+                        source.id == document.id && source.path == document.path
+                    })
+                })
+            })
+            .map(|(_, editor)| editor.clone());
+        let identity = source.as_ref().map(Entity::entity_id);
+        if self.readonly_mount.as_ref().map(|(id, _)| *id) != identity {
+            self.readonly_mount = source.map(|editor| {
+                (
+                    editor.entity_id(),
+                    editor_ui::source_editor::ReadOnlyLease::new(&editor, cx),
+                )
+            });
+        }
+    }
     /// Paint and input inspect only the bound native session. The owner may still be updating
     /// while painting, so its authoritative callback is reserved for actual event dispatch.
     /// Marked text revokes actions even when Base has only notified, without an ordinary Change.
@@ -289,6 +313,7 @@ impl PluginView {
             cx.notify();
         }
         self.code_sync.source = source;
+        self.sync_editor_access(cx);
     }
 
     /// Resolve active panes after native snapshot reconciliation. Pure maps are cached between
@@ -307,11 +332,12 @@ impl PluginView {
         let mut grouped = BTreeMap::<String, Vec<Pane>>::new();
         for node in nodes {
             let (group, editor, generation, native) = match &node.kind {
-                Kind::ReadonlyCode {
+                Kind::Editor(ui::Editor {
+                    source: ui::EditorSource::Snapshot { .. },
                     sync_group: Some(group),
                     ..
-                } => {
-                    let snapshot = self.readonly_code.get(&node.id);
+                }) => {
+                    let snapshot = self.snapshots.get(&node.id);
                     (
                         group,
                         snapshot.map(|snapshot| snapshot.editor.clone()),
@@ -319,11 +345,11 @@ impl PluginView {
                         None,
                     )
                 }
-                Kind::EditorWithActions {
-                    document,
+                Kind::Editor(ui::Editor {
+                    source: ui::EditorSource::Document { document },
                     sync_group: Some(group),
                     ..
-                } => {
+                }) => {
                     let editor = self
                         .code_sync
                         .source

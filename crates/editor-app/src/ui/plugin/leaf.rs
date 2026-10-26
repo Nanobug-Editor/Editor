@@ -34,7 +34,6 @@ impl PluginView {
         let native_id = SharedString::from(format!("plugin-ui-{}", node.id));
         let gesture = self.action_gesture(&node.id);
         match &node.kind {
-            Kind::ReadonlyCode { .. } => self.render_readonly_code(&node.id, window, cx),
             Kind::Tree { .. } => self
                 .trees
                 .get(&node.id)

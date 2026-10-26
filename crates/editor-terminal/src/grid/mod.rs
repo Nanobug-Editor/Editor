@@ -310,6 +310,8 @@ impl<T: GridCell + Default + PartialEq> Grid<T> {
         }
     }
 
+    /// Archive occupied viewport rows and clear the rest; an empty viewport adds no history.
+    /// `D` identifies the cell-template value used when resetting newly cleared rows.
     pub fn clear_viewport<D>(&mut self)
     where
         T: ResetDiscriminant<D>,
@@ -318,13 +320,19 @@ impl<T: GridCell + Default + PartialEq> Grid<T> {
         // Determine how many lines to scroll up by.
         let end = Point::new(Line(self.lines as i32 - 1), Column(self.columns()));
         let mut iter = self.iter_from(end);
+        // Exhaustion leaves the iterator at the first cell, even when every cell was empty.
+        // Count only an occupied visible cell, rather than archiving that exhausted position.
+        let mut positions = 0;
         while let Some(cell) = iter.prev() {
-            if !cell.is_empty() || cell.point.line < 0 {
+            if cell.point.line < 0 {
+                break;
+            }
+            if !cell.is_empty() {
+                positions = (cell.point.line.0 + 1) as usize;
                 break;
             }
         }
         debug_assert!(iter.point.line >= -1);
-        let positions = (iter.point.line.0 + 1) as usize;
         let region = Line(0)..Line(self.lines as i32);
 
         // Clear the viewport.

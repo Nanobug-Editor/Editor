@@ -233,6 +233,10 @@ impl Manager {
                 }
                 return Err(failure.into());
             }
+            self.live
+                .get_mut(id)
+                .expect("validated UI owner")
+                .accept_scene_event(panel.as_deref().expect("validated panel"), event)?;
             if let ui::Action::Tree(tree_event) = &event.action {
                 let instance = self.live.get(id).expect("validated UI owner");
                 instance.validate_tree_event(tree_event)?;
@@ -311,6 +315,9 @@ impl Manager {
             .get_mut(id)
             .ok_or_else(|| anyhow::anyhow!("Plugin is disabled"))?;
         if let Err(error) = instance.notify(panel, event) {
+            if instance.preserve_rejected_scene(&error) {
+                return Err(error);
+            }
             instance.stop();
             if let Some(entry) = self.installed.get_mut(id) {
                 entry.error = Some(format!("{error:#}"));

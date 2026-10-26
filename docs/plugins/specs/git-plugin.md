@@ -122,7 +122,7 @@
 | 比较 | editor.virtual、editor.diff、唯一 DocumentSession | 当前每侧最多 1 MiB／2000 行、4M 比较单元，源变化即结束；需持续比较会话、版本化差异块动作、只读隐藏来源与多比较标签 |
 | 多源合并 | 只读文档、编辑事务、精确 revision | 没有多个来源加一个结果的现成插件接口；结果必须使用原文档会话 |
 | 独立比较窗口 | GPUI 窗口与既有文档会话 | 尚未确认公开插件契约可创建此类窗口；需验证通用窗口资源、跨窗口焦点与文档绑定、关闭和插件退役生命周期；不能增加 Git 独占 API |
-| 补白对齐 | 公开原生绘制、几何、InputHandler 与 RootPlugin 接缝 | 本地 `ui/controls/aligned_*` 组合裁剪原生显示与最终输入挂载；显示空白不进入文本，以窗口根指针投影及 IME 几何适配保留唯一会话。通用 `ui.code_editor` 1.1 的 `Document.code_alignment` 显式启用；原生搜索／代码操作期间整组暂停，关闭后恢复。实现与原生集成复验进行中，不复制或 fork 上游 |
+| 补白对齐 | 公开原生绘制、几何、InputHandler 与 RootPlugin 接缝 | 本地 `ui/controls/aligned_*` 组合裁剪原生显示与最终输入挂载；显示空白不进入文本，以窗口根指针投影及 IME 几何适配保留唯一会话。通用 `ui.code_editor` 2.0 的 `Document.code_alignment` 显式启用；原生搜索／代码操作期间整组暂停，关闭后恢复。实现与原生集成复验进行中，不复制或 fork 上游 |
 | Git 执行 | 字节保真 stdout／stderr、argv、cwd、stdin Write、受管进程 | 缺少 stdin 半关闭；需通用 EOF 契约，保证先入队字节写完再关闭，退出前排空输出 |
 | 仓库刷新 | 文档事件、工作区观察、定时器 | watcher 排除 .git，linked worktree 的 gitdir/common-dir 可在根外；采用受控查询与有界轮询，不越权扩大文件访问 |
 | 保存到暂存 | 精确版本保存、磁盘冲突拒绝 | 保存和 Git 写 index 不是同一事务；执行前重验快照，旧差异块失效，外部变化时停止并刷新 |

@@ -1,4 +1,6 @@
 //! Actual independently built guest validates layout negotiation, source epochs and auxiliary limits.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
@@ -59,6 +61,12 @@ fn independent_layout_guest_obeys_negotiation_and_source_ownership() {
         manager
             .install(&pkg, pkg.manifest.permissions.clone())
             .unwrap();
+        // Installation is cold; the same public view demand as a host tab admits this guest.
+        demand_support::ready(
+            &mut manager,
+            "layout-example",
+            plugin_runtime::DemandReason::View("layout".into()),
+        );
         let source = api::DocumentVersion {
             id: "native-text".into(),
             path: "notes.layout".into(),
@@ -88,8 +96,8 @@ fn independent_layout_guest_obeys_negotiation_and_source_ownership() {
         assert!(doc.editor_layout);
         let mut reference = None;
         doc.root.visit(&mut |node| {
-            if let ui::Kind::NativeEditor { document } = &node.kind {
-                reference = Some(document.clone());
+            if let ui::Kind::Editor(editor) = &node.kind {
+                reference = editor.document_version().cloned();
             }
         });
         assert_eq!(reference, Some(source.clone()));

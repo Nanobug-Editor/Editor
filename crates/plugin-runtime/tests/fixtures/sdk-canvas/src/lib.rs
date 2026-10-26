@@ -69,7 +69,7 @@ impl Guest for CanvasFixture {
 export!(CanvasFixture);
 
 impl State {
-    /// A NativeEditor is valid only with the exact current source; no placeholder claims authority.
+    /// A document Editor is valid only with the exact current source; no placeholder claims authority.
     fn view(&self) -> ui::Document {
         let Some(source) = &self.source else {
             return ui::Document::new(Node::text("pending", "Waiting for source"))
@@ -104,9 +104,7 @@ impl State {
         };
         let source_node = Node::new(
             "source",
-            Kind::NativeEditor {
-                document: source.clone(),
-            },
+            Kind::Editor(plugin_protocol::ui::Editor::document(source.clone())),
         )
         .grow();
         let preview = Node::column(

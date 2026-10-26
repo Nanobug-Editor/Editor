@@ -24,6 +24,8 @@ pub(crate) struct VectorImage {
 #[derive(Clone, Default)]
 pub(crate) struct SceneImages {
     vectors: BTreeMap<String, Arc<Vec<Option<VectorImage>>>>,
+    /// Structured paths share the worker's publication and keyed retirement with raster resources.
+    pub(super) graphics: BTreeMap<String, Arc<super::canvas::scene::PreparedScene>>,
     pub photos: BTreeMap<String, Arc<Photo>>,
 }
 
@@ -38,11 +40,19 @@ impl SceneImages {
     /// Retiring a worker discards both vector surfaces and asynchronous image results.
     pub fn clear(&mut self) {
         self.vectors.clear();
+        self.graphics.clear();
         self.photos.clear();
     }
     /// Resource completion can change layout even when the guest document Arc stays unchanged.
     pub fn changed(&self, other: &Self) -> bool {
-        self.photos.len() != other.photos.len()
+        self.graphics.len() != other.graphics.len()
+            || self.graphics.iter().any(|(key, value)| {
+                other
+                    .graphics
+                    .get(key)
+                    .is_none_or(|old| !Arc::ptr_eq(old, value))
+            })
+            || self.photos.len() != other.photos.len()
             || self.photos.iter().any(|(key, value)| {
                 other
                     .photos
@@ -62,6 +72,8 @@ pub(crate) struct Photo {
 /// Font discovery and parsing are cached while the worker owns the currently published scenes.
 #[derive(Default)]
 pub(crate) struct VectorRenderer {
+    /// Equal structured scenes retain tessellation across unrelated native-tree revisions.
+    graphics: BTreeMap<String, Arc<super::canvas::scene::PreparedScene>>,
     /// Derived canvas surfaces retain their identities while the owning native document stays unchanged.
     nested: BTreeMap<String, (Arc<Document>, Arc<Vec<Paint>>)>,
     drawings: BTreeMap<String, (Arc<Vec<Paint>>, Arc<Vec<Option<VectorImage>>>)>,
@@ -81,11 +93,47 @@ impl VectorRenderer {
     pub fn prepare(&mut self, documents: &BTreeMap<String, Arc<Document>>) -> SceneImages {
         let mut surfaces = BTreeMap::new();
         let mut nested_keys = BTreeSet::new();
+        // Derived scene textures and paths are bounded across plugins, in addition to source decoding.
+        let mut scene_pixels = 64 * 1024 * 1024_u64;
+        let mut scene_vertices = 1_000_000_usize;
         for (key, document) in documents {
             let mut visit = |node: &plugin_runtime::plugin_protocol::ui::Node| {
                 if let plugin_runtime::plugin_protocol::ui::Kind::Canvas(drawing) = &node.kind {
+                    let image_prefix = format!("{key}/image/");
                     let key = format!("{key}/canvas/{}", node.id);
                     nested_keys.insert(key.clone());
+                    if let Some(scene) = &drawing.scene {
+                        let photos=scene.image_nodes().into_iter().filter_map(|id|{
+                            self.photos.get(&format!("{image_prefix}{id}"))
+                                .filter(|photo|document.source.as_ref().is_some_and(|source|photo.resource.source==*source)||document.file.as_ref().is_some_and(|file|photo.resource.source==plugin_runtime::plugin_protocol::api::ContentVersion::File(file.clone())))
+                                .map(|photo|(id.to_owned(),photo.clone()))
+                        }).collect::<BTreeMap<_,_>>();
+                        let limits = (scene_pixels, scene_vertices);
+                        if self
+                            .graphics
+                            .get(&key)
+                            .is_none_or(|old| !old.current(scene, document, &photos, limits))
+                        {
+                            let prepared = super::canvas::scene::PreparedScene::new(
+                                scene.clone(),
+                                document,
+                                photos,
+                                limits,
+                                |source, bounds| {
+                                    self.rasterize_with_budget(source, bounds, bounds, limits.0)
+                                },
+                            );
+                            self.graphics.insert(key.clone(), Arc::new(prepared));
+                        }
+                        if let Some(Ok(drawing)) =
+                            self.graphics.get(&key).map(|prepared| &prepared.drawing)
+                        {
+                            scene_pixels = scene_pixels.saturating_sub(drawing.resident_bytes());
+                            scene_vertices = scene_vertices.saturating_sub(drawing.vertex_count());
+                        }
+                    } else {
+                        self.graphics.remove(&key);
+                    }
                     if self
                         .nested
                         .get(&key)
@@ -108,6 +156,7 @@ impl VectorRenderer {
             }
         }
         self.nested.retain(|key, _| nested_keys.contains(key));
+        self.graphics.retain(|key, _| nested_keys.contains(key));
         let scenes = &surfaces;
         self.drawings.retain(|key, _| scenes.contains_key(key));
         let mut used = BTreeSet::new();
@@ -185,6 +234,7 @@ impl VectorRenderer {
             .collect();
         SceneImages {
             vectors,
+            graphics: self.graphics.clone(),
             photos: BTreeMap::new(),
         }
     }
@@ -195,7 +245,6 @@ impl VectorRenderer {
         documents: &BTreeMap<String, Arc<Document>>,
         resources: &BTreeMap<String, Arc<plugin_runtime::ImageResource>>,
     ) -> SceneImages {
-        let mut output = self.prepare(documents);
         self.photos.retain(|key, photo| {
             resources
                 .get(key)
@@ -241,12 +290,24 @@ impl VectorRenderer {
                 self.photos.insert(key.clone(), photo);
             }
         }
+        let mut output = self.prepare(documents);
         output.photos = self.photos.clone();
         output
     }
 
     /// Preserve SVG alpha, block ambient file reads, and allocate only the visible clipped area.
     fn rasterize(&mut self, source: &str, rect: Rect, clip: Rect) -> Option<VectorImage> {
+        self.rasterize_with_budget(source, rect, clip, 64 * 1024 * 1024)
+    }
+
+    /// Scene fallback checks its shared remaining output capacity before native allocation.
+    fn rasterize_with_budget(
+        &mut self,
+        source: &str,
+        rect: Rect,
+        clip: Rect,
+        remaining: u64,
+    ) -> Option<VectorImage> {
         let target = intersection(rect, clip)?;
         let digest = <[u8; 32]>::from(Sha256::digest(source.as_bytes()));
         let tree = if let Some(tree) = self.trees.get(&digest) {
@@ -273,6 +334,9 @@ impl VectorRenderer {
         let density = 2_f32.min(2048. / target.w).min(2048. / target.h);
         let width = (target.w * density).ceil().clamp(1., 2048.) as u32;
         let height = (target.h * density).ceil().clamp(1., 2048.) as u32;
+        if u64::from(width) * u64::from(height) * 4 > remaining {
+            return None;
+        }
         let transform = tiny_skia::Transform::from_row(
             rect.w / tree.size().width() * density,
             0.,

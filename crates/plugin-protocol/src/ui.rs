@@ -34,13 +34,13 @@
 //! aggregate these states to pause optional refresh timers when no native surface is displayed.
 //! Dock tab selection, containing dock collapse and platform window visibility all participate.
 //! These observations never activate an instance or replace normal completion/cancellation handling.
-//! A window may set `editor_layout` and `source` to mount its one exact NativeEditor reference
-//! after negotiating `editor.layout` and `editor.read`. The source must already be open in
+//! A window may set `editor_layout` and `source` to mount its one exact document Editor reference
+//! after negotiating `editor.layout` 2.0, `ui.code_editor` 2.0 and `editor.read`. The source must already be open in
 //! this workspace; virtual sources must belong to the publishing instance. The host borrows
 //! the existing document/IME/Undo session and suppresses its main-editor mount while visible.
 //! Readonly source snapshots use ordinary native presentation nodes and grant no edit authority.
 //!
-//! `ui.code_editor` 1.1 adds [`Document::code_alignment`]. Opted-in two/three-pane `sync_group`s
+//! `ui.code_editor` 2.0 retains [`Document::code_alignment`]. Opted-in two/three-pane `sync_group`s
 //! align logical rows and native soft wraps with zero-byte visual gaps. Original editors retain
 //! text, selection, composition and Undo. A scene shares 4M comparison cells, admits at most four
 //! groups, and bounds each source to 1 MiB/2001 logical rows (including the empty EOF row).
@@ -53,6 +53,8 @@ use std::ops::Range;
 
 mod controls;
 pub use controls::*;
+mod editor;
+pub use editor::{EDITOR_CAPABILITY_VERSION, Editor, EditorActions, EditorSource};
 mod styles;
 pub use styles::*;
 mod canvas;
@@ -107,7 +109,7 @@ pub struct Document {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<ToolButton>,
     /// The selected file provider owns this complete center tree. Requires `editor.layout`.
-    /// NativeEditor nodes borrow the existing source session; omitting them hides its input surface.
+    /// Document Editor nodes borrow the existing source session; omitting them hides its input surface.
     #[serde(default)]
     pub editor_layout: bool,
     /// File-resource authority echoed by `editor.files`; no text session or mutable bytes implied.
@@ -135,7 +137,7 @@ pub struct Document {
     #[serde(default)]
     pub code_highlighting: bool,
     /// Align native code panes sharing a `sync_group` with display-only blank rows.
-    /// Requires `ui.code_editor` 1.1; false preserves independent native pane layout.
+    /// Requires `ui.code_editor` 2.0; false preserves independent native pane layout.
     /// The host keeps source bytes, selections, IME and Undo in their existing editor sessions.
     /// Layout/algorithm limits are shown explicitly; alignment never pads the source text.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -153,6 +155,52 @@ pub struct Document {
 }
 
 impl Document {
+    /// Editor content and controls are immutable within one UI revision. This also binds literal
+    /// edge actions to their original bytes even though those bytes carry no document authority.
+    /// Call `validate` first to bound traversal; comparison borrows content without copying literals.
+    pub fn validate_editor_replacement(&self, previous: &Self) -> Result<(), crate::api::Failure> {
+        fn collect<'a>(node: &'a Node, result: &mut Vec<(&'a str, &'a Editor)>) {
+            match &node.kind {
+                Kind::Editor(editor) => {
+                    result.push((&node.id, editor));
+                    for action in editor.left_actions().iter().chain(editor.right_actions()) {
+                        collect(&action.content, result);
+                    }
+                }
+                Kind::Column { children } | Kind::Row { children } => {
+                    for child in children {
+                        collect(child, result);
+                    }
+                }
+                Kind::Scroll { content } => collect(content, result),
+                Kind::Tabs { tabs, .. } => {
+                    for tab in tabs {
+                        collect(&tab.content, result);
+                    }
+                }
+                _ => {}
+            }
+        }
+        fn editors(document: &Document) -> Vec<(&str, &Editor)> {
+            let mut result = Vec::new();
+            collect(&document.root, &mut result);
+            if let Some(dialog) = &document.dialog {
+                collect(&dialog.content, &mut result);
+            }
+            if let Some(toolbar) = &document.editor_toolbar {
+                collect(toolbar, &mut result);
+            }
+            result
+        }
+        if self.revision <= previous.revision && editors(self) != editors(previous) {
+            return Err(crate::api::Failure::new(
+                crate::api::ErrorCode::StaleRevision,
+                "Editor replacement must advance its UI revision",
+            ));
+        }
+        Ok(())
+    }
+
     /// Minimum public capabilities for all nodes, including hidden tabs, menus and dialogs.
     /// Embedding consumers use the same requirements as ordinary plugin surfaces before rendering.
     pub fn required_capabilities(
@@ -173,19 +221,21 @@ impl Document {
                 required.insert("ui.richtext", semver::Version::new(1, 0, 0));
             }
             match &node.kind {
+                Kind::Editor(editor) => {
+                    required.insert("ui.code_editor", EDITOR_CAPABILITY_VERSION.clone());
+                    if editor.line_actions.is_some() {
+                        required.insert("editor.actions", semver::Version::new(1, 0, 0));
+                    }
+                }
                 Kind::Textarea(_) => {
                     let version = if node.textarea_rows.is_some() { 2 } else { 1 };
                     let native = required.get_mut("ui.native").unwrap();
                     *native = native.clone().max(semver::Version::new(1, version, 0));
                 }
-                Kind::ReadonlyCode { .. } => {
-                    required.insert("ui.code_editor", semver::Version::new(1, 0, 0));
-                }
-                Kind::EditorWithActions { .. } => {
-                    required.insert("editor.actions", semver::Version::new(1, 0, 0));
-                }
                 Kind::Canvas(canvas) => {
-                    let version = if canvas.column_resize.is_some() {
+                    let version = if canvas.scene.is_some() {
+                        semver::Version::new(1, 7, 0)
+                    } else if canvas.column_resize.is_some() {
                         semver::Version::new(1, 6, 0)
                     } else if !canvas.measure_text.is_empty() {
                         semver::Version::new(1, 5, 0)
@@ -254,7 +304,10 @@ impl Document {
         if self.code_alignment {
             // Install this after visiting nodes: a readonly node's 1.0 floor must never
             // downgrade the document-level alignment requirement.
-            required.insert("ui.code_editor", semver::Version::new(1, 1, 0));
+            required.insert("ui.code_editor", EDITOR_CAPABILITY_VERSION.clone());
+        }
+        if self.editor_layout {
+            required.insert("editor.layout", semver::Version::new(2, 0, 0));
         }
         if self.editor_viewport.is_some() {
             required.insert("editor.viewport", semver::Version::new(1, 0, 0));
@@ -295,7 +348,7 @@ impl Document {
     }
 
     /// Opt all active `sync_group` code panes into bounded display-row alignment.
-    /// The caller must negotiate `ui.code_editor` 1.1; this grants no text-write authority.
+    /// The caller must negotiate `ui.code_editor` 2.0; this grants no text-write authority.
     pub fn code_alignment(mut self, enabled: bool) -> Self {
         self.code_alignment = enabled;
         self
@@ -308,20 +361,49 @@ impl Document {
 
     /// Reject unsupported versions, duplicate identities and unbounded native workloads.
     pub fn validate(&self) -> Result<(), String> {
-        validate::document(self)
+        validate::document(self)?;
+        let mut images = std::collections::BTreeSet::new();
+        let mut references = Vec::new();
+        let mut visit = |node: &Node| match &node.kind {
+            Kind::Image { .. } | Kind::FileImage { .. } => {
+                images.insert(node.id.clone());
+            }
+            Kind::Canvas(canvas) => {
+                if let Some(scene) = &canvas.scene {
+                    references.extend(scene.image_nodes().into_iter().map(str::to_owned));
+                }
+            }
+            _ => {}
+        };
+        self.root.visit(&mut visit);
+        if let Some(toolbar) = &self.editor_toolbar {
+            toolbar.visit(&mut visit);
+        }
+        if let Some(dialog) = &self.dialog {
+            dialog.content.visit(&mut visit);
+        }
+        if references.iter().any(|id| !images.contains(id)) {
+            return Err(
+                "Canvas scene image reference must name an Image/FileImage in this document".into(),
+            );
+        }
+        Ok(())
     }
 
     /// Return the editor reference actually mounted in the active root, excluding disabled/inactive trees.
     /// Validation separately requires exact source ownership and at most one reference in the full tree.
     pub fn active_native_editor(&self) -> Option<&crate::api::DocumentVersion> {
-        fn active(node: &Node) -> Option<&crate::api::DocumentVersion> {
+        self.active_editor().and_then(Editor::document_version)
+    }
+
+    /// Return the active borrowed-source configuration, preserving the root's single-session rule.
+    pub fn active_editor(&self) -> Option<&Editor> {
+        fn active(node: &Node) -> Option<&Editor> {
             if node.disabled {
                 return None;
             }
             match &node.kind {
-                Kind::NativeEditor { document } | Kind::EditorWithActions { document, .. } => {
-                    Some(document)
-                }
+                Kind::Editor(editor) if editor.document_version().is_some() => Some(editor),
                 Kind::Column { children } | Kind::Row { children } => {
                     children.iter().find_map(active)
                 }
@@ -355,17 +437,14 @@ impl Document {
     pub fn editor_action_source(&self, id: &str) -> Option<&crate::api::DocumentVersion> {
         fn find<'a>(node: &'a Node, id: &str) -> Option<&'a crate::api::DocumentVersion> {
             match &node.kind {
-                Kind::EditorWithActions {
-                    document,
-                    left,
-                    right,
-                    ..
-                } if left
-                    .iter()
-                    .chain(right)
-                    .any(|action| action.content.find(id).is_some()) =>
+                Kind::Editor(editor)
+                    if editor
+                        .left_actions()
+                        .iter()
+                        .chain(editor.right_actions())
+                        .any(|action| action.content.find(id).is_some()) =>
                 {
-                    Some(document)
+                    editor.document_version()
                 }
                 Kind::Column { children } | Kind::Row { children } => {
                     children.iter().find_map(|node| find(node, id))
@@ -498,44 +577,12 @@ pub struct EditorAction {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Kind {
+    /// The configurable local Editor: exact document or readonly snapshot plus optional features.
+    Editor(Editor),
     /// Native lazy tree backed by an instance-owned `ui.tree` resource; the handle is not a file grant.
     Tree {
         /// Created through the formal tree interface and revoked by CloseResource or owner retirement.
         handle: crate::api::ResourceHandle,
-    },
-    /// Borrow the existing editor of this exact source version; never creates mutable document state.
-    /// Only one reference is permitted, in the root of a negotiated file layout.
-    NativeEditor {
-        document: crate::api::DocumentVersion,
-    },
-    /// Borrow the same unique native source with version-bound controls at its line edges.
-    /// Requires `editor.actions` 1.0 and the ordinary layout/read grants. Controls use normal
-    /// UI events; offsets are UTF-8 bytes, and offscreen/folded anchors have no active hit area.
-    EditorWithActions {
-        document: crate::api::DocumentVersion,
-        left: Vec<EditorAction>,
-        right: Vec<EditorAction>,
-        /// Optional group shared with two/three currently displayed code panes in this document.
-        /// Native source ownership/revision and actual layout are rechecked before every scroll.
-        /// This changes only native vertical scroll, never selection, focus, text or Undo.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        sync_group: Option<String>,
-    },
-    /// Immutable literal source with native selection, copying, line numbers and scrolling.
-    /// Requires `ui.code_editor` 1.0. Text is at most 256 KiB; ranges are UTF-8 boundaries.
-    /// A complete document allows at most 8 literal panes and 1 MiB of aggregate literal bytes.
-    /// These supplied bytes carry no document, file, edit or language-tool authority.
-    ReadonlyCode {
-        text: String,
-        #[serde(default)]
-        changes: Vec<crate::api::TextRange>,
-        /// Optional native scroll group, limited to 4 groups and 3 members per group.
-        /// IDs use 1..64 ASCII letters/digits/./_/-; inactive tabs never drive synchronization.
-        /// Mapping admits at most 2,000 logical rows per pane and an aggregate 4M diff-cell
-        /// rebuild budget. Content/layout outside these bounds visibly retains independent
-        /// scrolling. Old messages omit this field and retain independent scrolling unchanged.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        sync_group: Option<String>,
     },
     /// Display this context's file using controlled decoding. Requires `ui.file_images` and
     /// `workspace.read`; the guest chooses sizing, while the host performs native layout/painting.
@@ -903,9 +950,7 @@ impl Node {
         }
         match &self.kind {
             Kind::Tree { .. } => "tree",
-            Kind::NativeEditor { .. }
-            | Kind::EditorWithActions { .. }
-            | Kind::ReadonlyCode { .. } => "editor",
+            Kind::Editor(_) => "editor",
             Kind::SideTabs(_) => "tab_bar",
             Kind::Canvas(_) => "canvas",
             Kind::Column { .. } | Kind::Row { .. } => "container",
@@ -931,14 +976,11 @@ impl Node {
     pub fn visit(&self, visitor: &mut impl FnMut(&Node)) {
         visitor(self);
         match &self.kind {
+            Kind::Editor(editor) => editor.visit_actions(visitor),
             Kind::Column { children } | Kind::Row { children } => {
                 children.iter().for_each(|n| n.visit(visitor))
             }
             Kind::Scroll { content } => content.visit(visitor),
-            Kind::EditorWithActions { left, right, .. } => left
-                .iter()
-                .chain(right)
-                .for_each(|action| action.content.visit(visitor)),
             Kind::Tabs { tabs, .. } => tabs.iter().for_each(|t| t.content.visit(visitor)),
             _ => {}
         }
@@ -976,9 +1018,10 @@ impl Node {
                 children.iter().find_map(|n| n.find(id))
             }
             Kind::Scroll { content } => content.find(id),
-            Kind::EditorWithActions { left, right, .. } => left
+            Kind::Editor(editor) => editor
+                .left_actions()
                 .iter()
-                .chain(right)
+                .chain(editor.right_actions())
                 .find_map(|action| action.content.find(id)),
             Kind::Tabs { tabs, selected } => tabs
                 .iter()

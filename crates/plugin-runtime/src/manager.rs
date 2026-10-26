@@ -833,6 +833,9 @@ impl Manager {
         });
         for (id, instance) in &mut self.live {
             if let Err(error) = instance.poll() {
+                if instance.preserve_rejected_scene(&error) {
+                    continue;
+                }
                 instance.stop();
                 if let Some(entry) = self.installed.get_mut(id) {
                     entry.error = Some(format!("{error:#}"));

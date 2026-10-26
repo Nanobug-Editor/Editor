@@ -43,6 +43,8 @@ pub use search::Search;
 #[cfg(test)]
 mod feature_tests;
 #[cfg(test)]
+mod startup_tests;
+#[cfg(test)]
 mod tests;
 
 /// Actual character dimensions, independent from dock and sidebar pixels.
@@ -280,6 +282,7 @@ impl Engine {
             return;
         }
         self.term.resize(size);
+        self.reveal_history();
     }
 
     /// Once native EOF is observed, no future redraw can restore clipped screen cells. Ended tabs

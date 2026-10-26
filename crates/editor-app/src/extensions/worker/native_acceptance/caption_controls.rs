@@ -302,7 +302,7 @@ fn source_state(h: &Harness, oid: &str) -> anyhow::Result<serde_json::Value> {
             .active_node(id)
             .context("readonly source declaration missing")?;
         ensure!(
-            matches!(node.kind, Kind::ReadonlyCode { .. }),
+            matches!(node.kind, Kind::Editor(_)),
             "history source is no longer readonly"
         );
         Ok::<_, anyhow::Error>(serde_json::json!({"id": id, "source": node.kind}))

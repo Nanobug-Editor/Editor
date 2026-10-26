@@ -9,6 +9,20 @@ use super::*;
 
 use crate::screen::cell::Cell;
 
+/// Clearing a pristine screen cannot manufacture scrollback from its first default cell.
+#[test]
+fn clearing_empty_viewport_does_not_add_history() {
+    let mut grid = Grid::<Cell>::new(24, 100, 100);
+    for _ in 0..2 {
+        grid.clear_viewport::<vte::ansi::Color>();
+        assert_eq!(
+            grid.history_size(),
+            0,
+            "an empty screen has no rows to archive"
+        );
+    }
+}
+
 impl GridCell for usize {
     fn is_empty(&self) -> bool {
         *self == 0

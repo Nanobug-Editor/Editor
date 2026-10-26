@@ -15,6 +15,7 @@ impl PluginView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         self.sync_widgets(window, cx);
+        self.sync_editor_access(cx);
         self.sync_code_groups(window, cx);
         self.sync_code_highlighting(cx);
         let viewport_frame = self.begin_viewport_frame();
@@ -206,8 +207,7 @@ impl PluginView {
         // Recursive geometry/editor borrowing stays outside the large leaf control renderer's stack.
         let content = if matches!(
             node.kind,
-            Kind::NativeEditor { .. }
-                | Kind::EditorWithActions { .. }
+            Kind::Editor(_)
                 | Kind::Row { .. }
                 | Kind::Column { .. }
                 | Kind::Scroll { .. }

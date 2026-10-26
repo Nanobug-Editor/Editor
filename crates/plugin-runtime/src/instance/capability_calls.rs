@@ -555,9 +555,17 @@ impl Instance {
         anyhow::ensure!(output.views.len() <= 8, "Too many native views");
         for view in &output.views {
             // Validate structure before walking or allocating native controls, preserving a typed failure.
-            view.document
-                .validate()
-                .map_err(|message| Failure::new(ErrorCode::InvalidRequest, message))?;
+            view.document.validate().map_err(|message| {
+                let failure = Failure::new(ErrorCode::InvalidRequest, message);
+                if super::scene_history::has_scene(&view.document) {
+                    super::scene_history::rejected(failure)
+                } else {
+                    failure.into()
+                }
+            })?;
+            if let Some(previous) = self.views.get(&view.panel) {
+                view.document.validate_editor_replacement(previous)?;
+            }
             self.check_tool_authority(&view.panel, &view.document)?;
             for (name, minimum) in view.document.required_capabilities() {
                 if !self
@@ -802,6 +810,8 @@ impl Instance {
                 return Err(Failure::new(ErrorCode::InvalidRequest, message).into());
             }
         }
+        self.validate_scenes(&output.views)
+            .map_err(super::scene_history::rejected)?;
         Ok(output)
     }
 }

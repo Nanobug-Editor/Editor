@@ -9,6 +9,7 @@ mod lifecycle;
 mod native_profile;
 mod native_search;
 mod restore;
+mod startup;
 #[cfg(windows)]
 mod tasks;
 mod upgrade;

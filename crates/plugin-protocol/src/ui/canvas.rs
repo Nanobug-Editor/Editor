@@ -4,10 +4,17 @@ mod text_measure;
 pub use text_measure::*;
 mod columns;
 pub use columns::*;
+mod scene;
+pub use scene::*;
+#[cfg(test)]
+mod scene_tests;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canvas {
+    /// `ui.canvas 1.7`: structured artwork; mutually exclusive with nonempty legacy `paint`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene: Option<CanvasScene>,
     /// `ui.canvas 1.6`: transparent native column handles and frame-local TextBox resizing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub column_resize: Option<ColumnResize>,
@@ -82,6 +89,25 @@ pub enum PointerPhase {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CanvasEvent {
+    /// `ui.canvas 1.7`: the native paint reached this exact scene; an error reports failed preparation.
+    ScenePresented {
+        /// Current nonzero scene identity, never a replacement or retired owner.
+        identity: u64,
+        /// Scene drawing version actually painted, independent of the outer UI revision.
+        scene_revision: u64,
+        /// Text source authority at actual preparation time; retained only through unrelated repaint.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<crate::api::DocumentVersion>,
+        /// Binary source authority is independent of optional editable text.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file: Option<crate::api::FileVersion>,
+        /// Viewport declaration actually painted; a changed projection needs a new display receipt.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        projection: Option<super::VisualViewport>,
+        /// Bounded preparation diagnostic; absent means artwork was submitted to GPUI.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
     /// `ui.canvas 1.6`: final widths after a native gesture, matched by epoch and fixed total width.
     ColumnsResized {
         epoch: u64,
@@ -148,6 +174,14 @@ pub enum ScrollChange {
 impl Canvas {
     /// Validate geometry and bound expensive vectors before allocating host rendering resources.
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(scene) = &self.scene {
+            if !self.paint.is_empty() || self.column_resize.is_some() || self.grid {
+                return Err(
+                    "A structured scene excludes legacy paint, columns and character grids".into(),
+                );
+            }
+            scene.validate()?;
+        }
         self.validate_measurements()?;
         self.validate_columns()?;
         if let Some(buffer) = &self.scroll_buffer {

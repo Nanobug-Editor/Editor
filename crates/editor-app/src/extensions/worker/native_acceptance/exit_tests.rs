@@ -347,7 +347,11 @@ struct ExitWindow {
 impl Render for ExitWindow {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(editor) = &self.editor {
-            editor_ui::window_editor(editor, cx)
+            editor_ui::source_editor::Editor::new(editor)
+                .identity("work-window-document", None)
+                .document_commands(true)
+                .tools(false)
+                .into_any_element()
         } else {
             div().size_full().bg(rgb(0x101010)).into_any_element()
         }

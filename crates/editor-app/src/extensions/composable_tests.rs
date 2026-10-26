@@ -225,6 +225,13 @@ fn composed_wasm_preview_follows_memory_and_reclaims_the_editor_split(cx: &mut T
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // Cold installation compiles asynchronously; admit the public view demand before measuring UI.
+    super::demand_plugin_fixture(
+        &mut manager,
+        "sdk-canvas-fixture",
+        plugin_runtime::DemandReason::View("welcome".into()),
+    )
+    .unwrap();
     let mut renderer = images::VectorRenderer::default();
     let workspace = Workspace::open(directory.path()).unwrap();
     let slot = Rc::new(RefCell::new(None));

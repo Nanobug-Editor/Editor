@@ -12,6 +12,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    // Every independent consumer receives the unified Editor provenance/options contract.
+    (
+        "src/ui/editor.rs",
+        include_bytes!("../../plugin-protocol/src/ui/editor.rs"),
+    ),
     // Public module declarations must remain independently buildable in the exported SDK.
     (
         "src/language_content.rs",
@@ -200,6 +205,24 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/canvas/columns.rs",
         include_bytes!("../../plugin-protocol/src/ui/canvas/columns.rs"),
     ),
+    // Scene consumers receive the same bounded value contracts used by host admission.
+    (
+        "src/ui/canvas/scene.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene.rs"),
+    ),
+    (
+        "src/ui/canvas/scene/geometry.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene/geometry.rs"),
+    ),
+    (
+        "src/ui/canvas/scene/style.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene/style.rs"),
+    ),
+    (
+        "src/ui/canvas/scene_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scene_tests.rs"),
+    ),
+    // Keep native presentation contract modules complete in the independently compiled SDK.
     (
         "src/ui/canvas/text_measure.rs",
         include_bytes!("../../plugin-protocol/src/ui/canvas/text_measure.rs"),
@@ -212,7 +235,6 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/text_box_tests.rs",
         include_bytes!("../../plugin-protocol/src/ui/text_box_tests.rs"),
     ),
-    // Keep native presentation contract tests available to independently compiled SDK consumers.
     (
         "src/ui/textarea_tests.rs",
         include_bytes!("../../plugin-protocol/src/ui/textarea_tests.rs"),

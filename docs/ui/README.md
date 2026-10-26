@@ -2,6 +2,12 @@
 
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
+- [警告提示点与消息标题分隔线修正](verification/message-severity-appearance-2026-10-26.md)：依据实际截图纠正偏红的警告橙，以及停靠标题的额外顶部抗锯齿边缘；检查状态见记录。
+
+- [主分支 Release 消息橙点实测](verification/message-severity-release-2026-10-25.md)：主分支工作区强制重编译、实际 Release 的孤立警告验证，以及新旧 EXE 的桌面对照。
+
+- [宿主与插件共享 UI 分阶段实施方案](../plugins/specs/shared-ui-roadmap.md)、[S0／S1 契约](../plugins/specs/shared-ui-s0-s1.md)、[本地工单](../plugins/tickets/shared-ui-foundation/README.md)：规划／待实施；原生模块集中在 `editor-ui`，宿主直接调用、插件经声明式适配器复用，补齐目标／焦点、定向文本、剪贴板和拖放的状态、事件、授权及联合验收。
+
 - [提交面板顶部高度分割条](verification/commit-panel-split-resize-2026-10-24.md)：隐藏槽位导致的可见邻居索引错误、即时尺寸更新与释放后保存。
 
 - [Hover 内容层级与统一外观](verification/editor-hover-appearance-2026-10-24.md)：定义与诊断卡片的圆角、柔和外框、级别提示，以及正文／代码／来源的排版。
@@ -10,7 +16,7 @@
 
 - [消息按钮三色提醒](verification/message-severity-2026-10-24.md)：普通信息蓝点、警告橙点、危险／错误红点，保留最高未查看等级及溢出入口一致性；实际检查见记录。
 
-- [内部布局横向拖动与实时换行测量](verification/internal-resize-performance-2026-10-23.md)：保存单帧 CPU 对照及原生交互历史；本地 Base 补丁已撤回，性能优化仍待公开接口范围内重新处理。
+- [内部布局横向拖动与实时换行测量](verification/internal-resize-performance-2026-10-23.md)：保留补丁撤回前的历史；[统一 Editor 后诊断](../plugins/verification/unified-editor-2026-10-25.md)确认瓶颈来自发布版 Base 全文换行。[2026-10-25 修复与验收](verification/internal-resize-performance-2026-10-25.md)按用户明确授权维护锁定 Base 0.8.0 本地补丁，真实字体及原生分隔线门禁通过，保留实时换行与慢帧边界说明。
 
 - [分层菜单方向图标](verification/action-menu-icons-2026-10-23.md)：Git 顶部分支菜单等通用分层菜单复用目录树的方向图标，验证范围与结果见记录。
 

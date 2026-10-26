@@ -4,11 +4,18 @@ use super::*;
 use gpui_kit::{EntityInputHandler as _, gpui};
 use std::time::{Duration, Instant};
 
-/// Draw the same source at changing widths and heights, reporting CPU frame work independently.
-#[gpui::test]
-#[ignore = "explicit width/height CPU comparison; run Release with --nocapture"]
-fn source_resize_frame_cost(cx: &mut TestAppContext) {
-    let (editor, visual) = source(cx);
+/// Draw the same source using native fonts; no-op test fonts omit actual shaping costs.
+/// Borrow the production platform text system while retaining deterministic test window dispatch.
+#[test]
+#[ignore = "explicit native-font width/height CPU comparison; run Release with --nocapture"]
+fn source_resize_frame_cost() {
+    let platform = gpui_kit::platform::current_platform(false);
+    let mut cx = TestAppContext::build_with_text_system(
+        gpui_kit::TestDispatcher::new(0),
+        None,
+        platform.text_system(),
+    );
+    let (editor, visual) = source(&mut cx);
     let requested_rows = std::env::var("NANOBUG_DRAG_SOURCE_ROWS")
         .unwrap_or_else(|_| "1500".into())
         .parse::<usize>()

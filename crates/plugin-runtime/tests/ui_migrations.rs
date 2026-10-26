@@ -1,4 +1,6 @@
 //! Delivered UI packages cross the same installed-package and addressed-event boundary as third parties.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
@@ -23,12 +25,24 @@ fn manager(root: &Path) -> Manager {
 }
 /// Events retain their declared panel; tests cannot reach guest internals or bypass permissions.
 fn notify(manager: &mut Manager, id: &str, panel: &str, event: api::Notification) {
+    ready_view(manager, id, panel);
     manager.event(id, Some(panel.into()), event).unwrap();
+}
+/// Demand the addressed view after cold installation or re-enablement, preserving admission checks.
+fn ready_view(manager: &mut Manager, id: &str, panel: &str) {
+    if !manager.live.contains_key(id) {
+        demand_support::ready(
+            manager,
+            id,
+            plugin_runtime::DemandReason::View(panel.into()),
+        );
+    }
 }
 fn tree<'a>(manager: &'a Manager, id: &str, panel: &str) -> &'a ui::Document {
     manager.live[id].views[panel].as_ref()
 }
 fn action(manager: &mut Manager, id: &str, panel: &str, node: &str, action: ui::Action) {
+    ready_view(manager, id, panel);
     let revision = tree(manager, id, panel).revision;
     notify(
         manager,
@@ -103,6 +117,7 @@ fn example_installs_without_grants_and_restores_notes_and_count() {
     }
     manager.disable("example").unwrap();
     manager.enable("example").unwrap();
+    ready_view(&mut manager, "example", "counter");
     assert!(
         serde_json::to_string(tree(&manager, "example", "counter"))
             .unwrap()
@@ -298,6 +313,7 @@ fn markdown_composed_quota_preserves_editor_and_recovers_after_shortening() {
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    ready_view(&mut manager, "markdown", "preview");
     let instance = manager.instance_id("markdown").unwrap().to_owned();
     for (revision, text, limited) in [
         (2, "x\n\n".repeat(673), true),
@@ -338,7 +354,7 @@ fn markdown_composed_quota_preserves_editor_and_recovers_after_shortening() {
         assert_eq!(scene.active_node("preview-limit").is_some(), limited);
         assert!(matches!(
             &scene.active_node("markdown-native-editor").unwrap().kind,
-            ui::Kind::NativeEditor { document } if document == &source
+            ui::Kind::Editor(editor) if editor.document_version() == Some(&source)
         ));
         assert_eq!(manager.instance_id("markdown"), Some(instance.as_str()));
         assert!(manager.installed["markdown"].error.is_none());

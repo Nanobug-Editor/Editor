@@ -20,54 +20,53 @@ impl PluginView {
         let native_id = SharedString::from(format!("plugin-ui-{}", node.id));
         let colors = self.colors(node.theme_role(), cx);
         match &node.kind {
-            Kind::NativeEditor { document } => self
-                .native_editor
-                .as_ref()
-                .filter(|_| !disabled)
-                .and_then(|render| render(document, None, None, window, cx))
-                .unwrap_or_else(|| div().into_any_element()),
-            Kind::EditorWithActions {
-                document,
-                left,
-                right,
-                ..
-            } => {
-                // Keep stale rails in the same geometry while withdrawing their activation.
-                // Native typing must not widen/reflow the result pane until the guest catches up.
-                let current = self.code_action_native_current(document, window, cx);
-                let actions = editor_ui::EditorActionElements::new(
-                    left.iter()
-                        .map(|action| {
-                            (
-                                action.offset,
-                                self.node(&action.content, disabled || !current, window, cx),
+            Kind::Editor(editor) => {
+                let current = editor
+                    .document_version()
+                    .is_none_or(|document| self.code_action_native_current(document, window, cx));
+                let actions = (editor.line_actions.is_some()).then(|| {
+                    editor_ui::EditorActionElements::new(
+                        editor
+                            .left_actions()
+                            .iter()
+                            .map(|action| {
+                                (
+                                    action.offset,
+                                    self.node(&action.content, disabled || !current, window, cx),
+                                )
+                            })
+                            .collect(),
+                        editor
+                            .right_actions()
+                            .iter()
+                            .map(|action| {
+                                (
+                                    action.offset,
+                                    self.node(&action.content, disabled || !current, window, cx),
+                                )
+                            })
+                            .collect(),
+                    )
+                });
+                let source = match &editor.source {
+                    ui::EditorSource::Document { document } => self
+                        .native_editor
+                        .as_ref()
+                        .filter(|_| !disabled)
+                        .and_then(|render| {
+                            render(
+                                document,
+                                actions,
+                                self.code_alignment_pane(&node.id),
+                                window,
+                                cx,
                             )
                         })
-                        .collect(),
-                    right
-                        .iter()
-                        .map(|action| {
-                            (
-                                action.offset,
-                                self.node(&action.content, disabled || !current, window, cx),
-                            )
-                        })
-                        .collect(),
-                );
-                let source = self
-                    .native_editor
-                    .as_ref()
-                    .filter(|_| !disabled)
-                    .and_then(|render| {
-                        render(
-                            document,
-                            Some(actions),
-                            self.code_alignment_pane(&node.id),
-                            window,
-                            cx,
-                        )
-                    })
-                    .unwrap_or_else(|| div().into_any_element());
+                        .unwrap_or_else(|| div().into_any_element()),
+                    ui::EditorSource::Snapshot { .. } => {
+                        self.render_editor_snapshot(&node.id, actions, window, cx)
+                    }
+                };
                 self.code_sync_pane(&node.id, source)
             }
             Kind::Column { children } | Kind::Row { children } => {

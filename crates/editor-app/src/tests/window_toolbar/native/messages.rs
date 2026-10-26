@@ -21,7 +21,7 @@ pub(super) async fn exercise(
         (
             MessageLevel::Warning,
             "warning",
-            if dark { 0xfb923c } else { 0xea580c },
+            if dark { 0xfbbf24 } else { 0xf59e0b },
         ),
         (
             MessageLevel::Error,

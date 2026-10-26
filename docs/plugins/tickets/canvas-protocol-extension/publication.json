@@ -1,0 +1,20 @@
+{
+  "repository": "Nanobug-Editor/Editor",
+  "stable_id": "canvas-protocol-extension",
+  "published_on": "2026-10-24",
+  "implementation_base": "561aa5b2006c38668a083482156646a16cd02b3e",
+  "parent": {"number":127,"id":6014181625,"url":"https://github.com/Nanobug-Editor/Editor/issues/127","state":"open"},
+  "tickets": [
+    {"ordinal":"01","number":128,"id":6014181791,"url":"https://github.com/Nanobug-Editor/Editor/issues/128","state":"open"},
+    {"ordinal":"02","number":129,"id":6014182339,"url":"https://github.com/Nanobug-Editor/Editor/issues/129","state":"open"},
+    {"ordinal":"03","number":130,"id":6014196056,"url":"https://github.com/Nanobug-Editor/Editor/issues/130","state":"open"},
+    {"ordinal":"04","number":131,"id":6014197252,"url":"https://github.com/Nanobug-Editor/Editor/issues/131","state":"open"}
+  ],
+  "dependencies": [
+    {"blocked":129,"blocked_by":128,"blocked_by_id":6014181791,"verified":true},
+    {"blocked":130,"blocked_by":129,"blocked_by_id":6014182339,"verified":true},
+    {"blocked":131,"blocked_by":128,"blocked_by_id":6014181791,"verified":true}
+  ],
+  "sub_issues_verified": true,
+  "publication_transport": "GitHub REST using existing local Git authentication; connector create returned 403"
+}

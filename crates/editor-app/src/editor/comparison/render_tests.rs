@@ -43,7 +43,11 @@ impl Render for Fixture {
                 let content = if self.aligned {
                     self.group.pane(index).unwrap()
                 } else {
-                    editor_ui::window_editor(&self.editors[index], cx)
+                    editor_ui::source_editor::Editor::new(&self.editors[index])
+                        .identity("work-window-document", None)
+                        .document_commands(true)
+                        .tools(false)
+                        .into_any_element()
                 };
                 div()
                     .id(("comparison-paint-pane", index))

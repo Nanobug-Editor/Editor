@@ -296,10 +296,11 @@ pub(super) fn render(
                     });
                 })
             })
-            .child(
-                body.take()
-                    .unwrap_or_else(|| editor_ui::native_editor_scrollbars(editor)),
-            )
+            .child(body.take().unwrap_or_else(|| {
+                editor_ui::source_editor::Editor::new(editor)
+                    .tools(false)
+                    .into_any_element()
+            }))
             .children(completion_view)
             .children(hover_view)
             // Completion remains the active editing surface until it closes.

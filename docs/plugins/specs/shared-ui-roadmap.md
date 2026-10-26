@@ -41,7 +41,7 @@ S0／S1 已补充[状态、事件、权限与错误细化规格](shared-ui-s0-s1
 核对入口：
 
 - [本地控件入口](../../../crates/editor-ui/src/lib.rs)
-- [插件 UI 描述与现行编辑器节点](../../../crates/plugin-protocol/src/ui.rs)；统一 Editor 迁移仍在独立任务中验证，本路线图不将其视为已经合入的能力。
+- [插件 UI 描述](../../../crates/plugin-protocol/src/ui.rs)、[统一 Editor](../../../crates/plugin-protocol/src/ui/editor.rs)
 - [文档接口与事件语义](../../../crates/plugin-protocol/src/api/documents.rs)、[树契约](../../../crates/plugin-protocol/src/tree.rs)
 - [插件呈现适配器](../../../crates/editor-app/src/ui/plugin/containers.rs)
 

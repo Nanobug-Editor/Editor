@@ -130,9 +130,7 @@ impl PluginView {
                     || matches!(
                         child.kind,
                         Kind::Button { .. }
-                            | Kind::NativeEditor { .. }
-                            | Kind::EditorWithActions { .. }
-                            | Kind::ReadonlyCode { .. }
+                            | Kind::Editor(_)
                             | Kind::Input(_)
                             | Kind::Checkbox { .. }
                             | Kind::Choice { .. }

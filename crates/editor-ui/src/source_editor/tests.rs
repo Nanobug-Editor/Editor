@@ -7,6 +7,137 @@ use std::{cell::RefCell, rc::Rc};
 
 mod resizing;
 
+/// A literal source exercises optional rails through exactly the default host Editor interface.
+struct SnapshotHost {
+    /// Sole readonly source; configuration changes must retain this native entity.
+    snapshot: Snapshot,
+    /// Observable result of a real native edge-button activation.
+    clicks: Rc<std::cell::Cell<usize>>,
+    /// Enable the optional rails independently of whether they currently contain controls.
+    rails: bool,
+    /// Withdraw controls while retaining the declared rail width.
+    show_button: bool,
+}
+impl Render for SnapshotHost {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let action = crate::Button::new("snapshot-action")
+            .label("Review")
+            .debug_selector(|| "snapshot-action".into())
+            .on_click(cx.listener(|this, _, _, _| this.clicks.set(this.clicks.get() + 1)))
+            .into_any_element();
+        let mut editor = Editor::new(&self.snapshot.editor)
+            .identity("snapshot-source", Some("Readonly source".into()))
+            .tools(false);
+        if self.rails {
+            let controls = if self.show_button {
+                vec![(0, action)]
+            } else {
+                Vec::new()
+            };
+            editor = editor.edge_controls(EditorActionElements::new(controls, Vec::new()), None);
+        }
+        div().size_full().child(editor)
+    }
+}
+
+/// Literal input remains immutable while native copying, selection and configured rails work.
+#[gpui::test]
+fn configurable_editor_snapshot_copies_and_routes_native_edges(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        crate::typography::init(cx);
+        crate::theme::apply_theme(crate::theme::builtin_theme(false), cx);
+    });
+    let slot = Rc::new(RefCell::new(None));
+    let capture = slot.clone();
+    let clicks = Rc::new(std::cell::Cell::new(0));
+    let counter = clicks.clone();
+    let (_, visual) = cx.add_window_view(|window, cx| {
+        let snapshot = Snapshot::new("source 中文😀\n".into(), Vec::new(), window, cx);
+        snapshot
+            .editor
+            .update(cx, |state, cx| state.focus(window, cx));
+        let editor = snapshot.editor.clone();
+        let host = cx.new(|_| SnapshotHost {
+            snapshot,
+            clicks: counter,
+            rails: true,
+            show_button: true,
+        });
+        capture.replace(Some((editor, host.clone())));
+        gpui_base::Root::new(host, window, cx)
+    });
+    visual.simulate_resize(size(px(800.), px(500.)));
+    visual.update(|window, cx| window.draw(cx).clear(cx));
+    let (editor, host) = slot.borrow_mut().take().unwrap();
+    visual.simulate_input("blocked");
+    visual.simulate_keystrokes("ctrl-a ctrl-c");
+    visual.run_until_parked();
+    visual.update(|_, cx| {
+        assert_eq!(editor.read(cx).text().to_string(), "source 中文😀\n");
+        assert_eq!(
+            cx.read_from_clipboard().and_then(|item| item.text()),
+            Some("source 中文😀\n".into())
+        );
+    });
+    let button = visual
+        .debug_bounds("snapshot-action")
+        .expect("configured native edge is painted");
+    visual.simulate_click(button.center(), Default::default());
+    visual.run_until_parked();
+    assert_eq!(clicks.get(), 1);
+    let original_width = visual.debug_bounds("snapshot-source").unwrap().size.width;
+    visual.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.show_button = false;
+            cx.notify();
+        })
+    });
+    visual.run_until_parked();
+    visual.update(|window, cx| window.draw(cx).clear(cx));
+    assert_eq!(
+        visual.debug_bounds("snapshot-source").unwrap().size.width,
+        original_width
+    );
+    visual.update(|_, cx| {
+        host.update(cx, |host, cx| {
+            host.rails = false;
+            cx.notify();
+        })
+    });
+    visual.run_until_parked();
+    visual.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(visual.debug_bounds("snapshot-source").unwrap().size.width > original_width);
+}
+
+/// Readonly configuration borrows input policy without replacing the document or its Undo history.
+#[gpui::test]
+fn configurable_editor_readonly_mount_restores_owner_after_last_release(cx: &mut TestAppContext) {
+    let (editor, visual) = source(cx);
+    let original = visual.update(|_, cx| editor.read(cx).text().to_string());
+    let first = visual.update(|_, cx| ReadOnlyLease::new(&editor, cx));
+    let second = visual.update(|_, cx| ReadOnlyLease::new(&editor, cx));
+    visual.simulate_input("blocked");
+    visual.run_until_parked();
+    visual.update(|_, cx| assert_eq!(editor.read(cx).text().to_string(), original));
+    drop(first);
+    visual.run_until_parked();
+    visual.update(|_, cx| assert!(!editor.read(cx).is_editable()));
+    drop(second);
+    visual.run_until_parked();
+    visual.simulate_input("allowed");
+    visual.run_until_parked();
+    visual.update(|_, cx| assert_ne!(editor.read(cx).text().to_string(), original));
+    visual.simulate_keystrokes("ctrl-z");
+    visual.run_until_parked();
+    visual.update(|_, cx| assert_eq!(editor.read(cx).text().to_string(), original));
+    visual.update(|_, cx| editor.update(cx, |state, cx| state.set_readonly(true, cx)));
+    let readonly_owner = visual.update(|_, cx| ReadOnlyLease::new(&editor, cx));
+    drop(readonly_owner);
+    visual.run_until_parked();
+    visual.update(|_, cx| assert!(!editor.read(cx).is_editable()));
+}
+
 /// A source-only host exercises the same local frame used by the editor application.
 struct SourceHost {
     /// Sole source editing and Undo authority mounted by this fixture.
