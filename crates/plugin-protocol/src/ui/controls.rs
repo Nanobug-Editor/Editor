@@ -40,6 +40,10 @@ pub struct SideTab {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PopupMenu {
     pub id: String,
+    /// Optional scene-local placement; x/y are offsets from the anchor's projected bottom-left.
+    /// Requires ui.canvas 1.9; omission preserves the original panel-local position.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<CanvasNodeAnchor>,
     pub x: f32,
     pub y: f32,
     pub items: Vec<MenuItem>,
@@ -122,6 +126,10 @@ impl PopupMenu {
     /// Bound popup anchors and item workload before native layout.
     pub fn validate(&self) -> Result<(), String> {
         let menu = self;
+
+        if let Some(anchor) = &menu.anchor {
+            anchor.validate()?;
+        }
 
         if !identity(&menu.id)
             || ![menu.x, menu.y]

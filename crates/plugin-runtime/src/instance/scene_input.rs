@@ -94,7 +94,11 @@ impl InputHistory {
                             target.epoch,
                         );
                         if let Some(chain) = self.text.get(&key).filter(|_| {
-                            same_source(previous.get(&view.panel).map(Arc::as_ref), &view.document)
+                            same_owner(
+                                previous.get(&view.panel).map(Arc::as_ref),
+                                &view.document,
+                                &node.id,
+                            )
                         }) {
                             if let Err(error) = chain.reconciled(binding, text) {
                                 result = Err(error);
@@ -174,9 +178,10 @@ impl InputHistory {
                             .text
                             .get(&key)
                             .filter(|_| {
-                                same_source(
+                                same_owner(
                                     previous.get(&view.panel).map(Arc::as_ref),
                                     &view.document,
+                                    &node.id,
                                 )
                             })
                             .map_or_else(
@@ -197,7 +202,7 @@ impl InputHistory {
         self.focused.retain(|key| {
             let document=views.iter().find(|view|view.panel==key.0).map(|view|&view.document)
                 .or_else(||previous.get(&key.0).map(Arc::as_ref));
-            document.filter(|document|same_source(previous.get(&key.0).map(Arc::as_ref),document)).and_then(|document|document.active_node(&key.1)).is_some_and(|node|
+            document.filter(|document|same_owner(previous.get(&key.0).map(Arc::as_ref),document,&key.1)).and_then(|document|document.active_node(&key.1)).is_some_and(|node|
                 matches!(&node.kind,ui::Kind::Canvas(canvas) if canvas.scene.as_ref().is_some_and(|scene|
                     scene.identity==key.2&&scene.targets.iter().any(|target|target.id==key.3&&target.epoch==key.4))))
         });
@@ -289,34 +294,16 @@ impl InputHistory {
 fn same_source(previous: Option<&ui::Document>, next: &ui::Document) -> bool {
     previous.is_none_or(|previous| previous.source == next.source && previous.file == next.file)
 }
+/// An unchanged inner scene cannot inherit native drafts/focus after an enclosing overlay is replaced.
+fn same_owner(previous: Option<&ui::Document>, next: &ui::Document, node: &str) -> bool {
+    same_source(previous, next)
+        && previous.is_none_or(|before| {
+            crate::ui_owners::lineage(before, node) == crate::ui_owners::lineage(next, node)
+        })
+}
 /// Publications retain identities under temporary modal ownership; this lookup grants no input.
 fn declared_node<'a>(document: &'a ui::Document, id: &str) -> Option<&'a ui::Node> {
-    fn find<'a>(node: &'a ui::Node, id: &str) -> Option<&'a ui::Node> {
-        if node.id == id {
-            return Some(node);
-        }
-        match &node.kind {
-            ui::Kind::Column { children } | ui::Kind::Row { children } => {
-                children.iter().find_map(|node| find(node, id))
-            }
-            ui::Kind::Scroll { content } => find(content, id),
-            ui::Kind::Tabs { tabs, .. } => tabs.iter().find_map(|tab| find(&tab.content, id)),
-            _ => None,
-        }
-    }
-    find(&document.root, id)
-        .or_else(|| {
-            document
-                .editor_toolbar
-                .as_ref()
-                .and_then(|node| find(node, id))
-        })
-        .or_else(|| {
-            document
-                .dialog
-                .as_ref()
-                .and_then(|dialog| find(&dialog.content, id))
-        })
+    crate::ui_owners::find(document, id)
 }
 /// Preserve unchanged panels' current text identities without retaining a second document tree.
 fn collect_text_keys(

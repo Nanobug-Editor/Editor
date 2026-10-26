@@ -94,6 +94,7 @@ impl Worker {
             let mut target_calls = super::targets::TargetCalls::default();
             let mut configuration_calls = super::configurations::ConfigurationCalls::default();
             let mut demands = super::demands::Demands::default();
+            let mut transfers = super::transfers::Routes::default();
             loop {
                 // Development candidates use the live actor's transaction and private data owner.
                 if preparation.is_none() && deferred.is_empty() {
@@ -866,6 +867,25 @@ impl Worker {
                                     "host.ui.retired",
                                     t!("plugins.log_retired_callback").to_string(),
                                 );
+                                Ok(())
+                            }
+                        }
+                        Some(Work::Transfer {
+                            plugin,
+                            panel,
+                            epoch,
+                            ingress,
+                        }) => {
+                            let current = output
+                                .lock()
+                                .unwrap()
+                                .instance_epochs
+                                .get(&plugin)
+                                .copied()
+                                .unwrap_or(0);
+                            if current == epoch {
+                                transfers.deliver(&mut manager, &plugin, &panel, epoch, ingress)
+                            } else {
                                 Ok(())
                             }
                         }

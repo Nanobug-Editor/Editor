@@ -701,6 +701,7 @@ impl Package {
                     "navigation.external",
                     "storage",
                     "clipboard",
+                    "ui.transfer",
                     "assets.read",
                     "editor.read",
                     "editor.diagnostics",

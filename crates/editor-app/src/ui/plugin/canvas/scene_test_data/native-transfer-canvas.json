@@ -1,0 +1,5 @@
+{"transfer_canvas_script":true,"scene":{"identity":62,"revision":1,"roots":[
+ {"kind":"group","id":"target-space","transform":[1,0,0,1,20,10],"children":[
+  {"kind":"shape","id":"shape","geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":200,"h":100}},"fill":{"kind":"solid","rgba":4097793791}}
+ ]}],"targets":[{"id":"receiver","epoch":4,"space":"target-space",
+ "geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":200,"h":100}},"drop_target":{"preferred":["text/html"]}}]}}

@@ -3,7 +3,7 @@ use crate::theme::ActiveTheme as _;
 use gpui_base::input::TextareaState;
 use gpui_kit::{
     App, Entity, InteractiveElement as _, IntoElement, ParentElement, Pixels, RenderOnce, Role,
-    StatefulInteractiveElement as _, Styled, Window, div, prelude::FluentBuilder as _, px,
+    StatefulInteractiveElement as _, Styled, Window, div, prelude::FluentBuilder as _, px, rems,
 };
 
 /// A compact ordinary-text field, distinct from both a single-line input and a document editor.
@@ -12,6 +12,8 @@ pub struct Textarea {
     state: Entity<TextareaState>,
     /// Explicit form viewport; omitted controls retain their native auto-grow layout.
     height: Option<Pixels>,
+    /// Uniform form projection, independent of OS DPI and caller-owned editing state.
+    scale: f32,
 }
 impl Textarea {
     /// The caller owns editing state for the form lifetime; painting never resets its value.
@@ -19,6 +21,7 @@ impl Textarea {
         Self {
             state: state.clone(),
             height: None,
+            scale: 1.,
         }
     }
 
@@ -26,6 +29,16 @@ impl Textarea {
     /// Callers should use a bounded native row policy instead of auto-growing beyond this viewport.
     pub fn height(mut self, height: Pixels) -> Self {
         self.height = Some(height.max(px(0.)));
+        self
+    }
+
+    /// Scale default padding, border and typography by a finite positive factor; height stays explicit.
+    pub fn scale(mut self, scale: f32) -> Self {
+        debug_assert!(
+            scale.is_finite() && scale > 0.,
+            "textarea scale must be finite and positive"
+        );
+        self.scale = scale;
         self
     }
 }
@@ -40,17 +53,19 @@ impl RenderOnce for Textarea {
             .then(|| self.state.read(cx).value().to_string());
         div()
             .w_full()
-            .when(self.height.is_none(), |view| view.min_h(px(52.)))
+            .when(self.height.is_none(), |view| {
+                view.min_h(px(52. * self.scale))
+            })
             .when_some(self.height, |view, height| view.h(height).overflow_hidden())
-            .px_2()
-            .py_1()
-            .rounded(palette.radius)
-            .border_1()
+            .px(rems(0.5 * self.scale))
+            .py(rems(0.25 * self.scale))
+            .rounded(palette.radius * self.scale)
+            .border(px(self.scale))
             .border_color(palette.input)
             .bg(palette.background)
             .text_color(palette.foreground)
             // Multiline fields scale with the same global typography as their labels and inputs.
-            .text_sm()
+            .text_size(rems(0.875 * self.scale))
             .child(
                 gpui_base::input::InputBase::new(("local-textarea", self.state.entity_id()))
                     .w_full()

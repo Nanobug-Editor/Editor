@@ -96,6 +96,8 @@ pub mod structure;
 pub mod targets;
 /// Disposable timer and debounce resources revoked with their owning instance.
 pub mod timers;
+/// Lazy bounded clipboard and drag/drop data, with no inherited filesystem authority.
+pub mod transfer;
 /// Generic native lazy trees and their bounded provider callbacks.
 pub mod tree;
 pub mod ui;

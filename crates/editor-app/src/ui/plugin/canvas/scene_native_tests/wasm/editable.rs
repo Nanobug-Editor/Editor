@@ -51,7 +51,11 @@ async fn settle(
             return Ok(());
         }
     }
-    anyhow::bail!("native guest updates did not settle within the bounded acceptance window")
+    anyhow::bail!(
+        "native guest updates did not settle within the bounded acceptance window; ui_revision={}, pending_events={}",
+        owner.document.revision,
+        events.borrow().len().saturating_sub(*consumed)
+    )
 }
 /// Focus the guest's declared emoji text object and select the original joined emoji via native UTF-16.
 fn focus(
@@ -133,19 +137,25 @@ pub(in crate::ui::plugin::canvas::scene_native_tests) async fn run(
     cx: &mut AsyncApp,
 ) -> anyhow::Result<()> {
     let mut consumed = 0;
-    settle(owner, view, events, &mut consumed, window, cx).await?;
+    settle(owner, view, events, &mut consumed, window, cx)
+        .await
+        .map_err(|error| anyhow::anyhow!("initial display: {error:#}"))?;
     let handle = window.update(cx, |_, window, _| super::super::uia::owned_handle(window))??;
     window.update(cx, |_, _, _| super::super::ime::prepare_owned(handle))??;
     cx.background_executor()
         .timer(Duration::from_millis(150))
         .await;
     window.update(cx, |_, window, cx| focus(kind, view, window, cx))??;
-    settle(owner, view, events, &mut consumed, window, cx).await?;
+    settle(owner, view, events, &mut consumed, window, cx)
+        .await
+        .map_err(|error| anyhow::anyhow!("after native focus/selection: {error:#}"))?;
     window.update(cx, |_, _, _| super::super::ime::start_owned(handle))??;
     cx.background_executor()
         .timer(Duration::from_millis(500))
         .await;
-    settle(owner, view, events, &mut consumed, window, cx).await?;
+    settle(owner, view, events, &mut consumed, window, cx)
+        .await
+        .map_err(|error| anyhow::anyhow!("during OS preedit: {error:#}"))?;
     window.update(cx, |_, window, cx| {
         let input =
             super::super::super::targets::native_text_tests::focused_endpoint(view, window, cx);
@@ -166,7 +176,9 @@ pub(in crate::ui::plugin::canvas::scene_native_tests) async fn run(
     cx.background_executor()
         .timer(Duration::from_millis(450))
         .await;
-    settle(owner, view, events, &mut consumed, window, cx).await?;
+    settle(owner, view, events, &mut consumed, window, cx)
+        .await
+        .map_err(|error| anyhow::anyhow!("after OS commit: {error:#}"))?;
     anyhow::ensure!(
         domain_text(owner, kind) == "e\u{301} 中文",
         "actual WASM did not publish the independent OS commit: {:?}",
@@ -213,7 +225,9 @@ pub(in crate::ui::plugin::canvas::scene_native_tests) async fn run(
             "actual table native virtual totals: {before}"
         );
     }
-    settle(owner, view, events, &mut consumed, window, cx).await?;
+    settle(owner, view, events, &mut consumed, window, cx)
+        .await
+        .map_err(|error| anyhow::anyhow!("after UIA SetValue: {error:#}"))?;
     anyhow::ensure!(
         domain_text(owner, kind) == "辅助 value",
         "native UIA SetValue did not reach the actual guest"

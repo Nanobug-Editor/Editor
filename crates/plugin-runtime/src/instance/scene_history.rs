@@ -49,14 +49,25 @@ impl Instance {
         &mut self,
         panel: &str,
         event: &ui::UiEvent,
-    ) -> Result<(), Failure> {
+    ) -> Result<bool, Failure> {
         let action = match &event.action {
             ui::Action::Canvas(input)
             | ui::Action::ViewportInput(ui::ViewportInput { event: input, .. }) => input,
-            _ => return Ok(()),
+            _ => return Ok(true),
         };
         if let ui::CanvasEvent::Input { input } = action {
             self.scene_frames.validate(panel, event, input)?;
+            if input.cleanup_kind().is_some()
+                && !self.scene_frames.same_ancestry(
+                    panel,
+                    event,
+                    input,
+                    self.views.get(panel).map(std::sync::Arc::as_ref),
+                )
+            {
+                self.scene_frames.commit(panel, event, input);
+                return Ok(false);
+            }
             if input.cleanup_kind().is_some() {
                 self.scene_inputs.cancel(
                     panel,
@@ -78,22 +89,23 @@ impl Instance {
                 self.scene_inputs.accept(panel, node, input)?;
             }
             self.scene_frames.commit(panel, event, input);
-            return Ok(());
+            return Ok(true);
         }
         let Some(document) = self.views.get(panel) else {
-            return Ok(());
+            return Ok(true);
         };
         let Some(node) = document.active_node(&event.node) else {
-            return Ok(());
+            return Ok(true);
         };
         let ui::Kind::Canvas(canvas) = &node.kind else {
-            return Ok(());
+            return Ok(true);
         };
         let Some(scene) = &canvas.scene else {
-            return Ok(());
+            return Ok(true);
         };
         if matches!(action, ui::CanvasEvent::ScenePresented { .. }) {
-            self.scene_frames.present(panel, event, action, scene)?;
+            self.scene_frames
+                .present(panel, event, action, scene, document)?;
         } else if matches!(
             action,
             ui::CanvasEvent::Pointer { .. } | ui::CanvasEvent::Wheel { .. }
@@ -104,11 +116,12 @@ impl Instance {
                 "Canvas coordinates have no current native presentation",
             ));
         }
-        Ok(())
+        Ok(true)
     }
     /// Publication changes current drawing authority, independently of native frame/cleanup lifetime.
     pub(super) fn reconcile_scene_presentations(&mut self) {
         self.scene_frames.reconcile(&self.views);
+        self.reconcile_transfer_offers();
     }
     /// Keep the accepted views and resources after a rejected live scene, while exposing diagnostics.
     /// Candidate activation and genuine WASM/native failures still follow ordinary retirement.

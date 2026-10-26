@@ -179,6 +179,7 @@ fn popup_reopens_without_resizing_canvas_or_losing_escape(cx: &mut TestAppContex
     for revision in [1, 3] {
         let mut opened = document.clone().revision(revision);
         opened.menu = Some(PopupMenu {
+            anchor: None,
             id: "popup".into(),
             x: 20.,
             y: 20.,

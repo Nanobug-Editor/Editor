@@ -305,6 +305,7 @@ fn editor_toolbar_events_share_revision_and_modal_priority() {
     assert!(document.active_node("close").is_some());
     document.dialog = None;
     document.menu = Some(PopupMenu {
+        anchor: None,
         id: "popup".into(),
         x: 0.,
         y: 0.,

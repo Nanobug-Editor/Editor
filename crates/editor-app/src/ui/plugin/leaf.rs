@@ -231,6 +231,7 @@ impl PluginView {
             Kind::Button { label } => self
                 .font(
                     Button::new(action_gestures::native_id(native_id.clone(), gesture))
+                        .scale(self.native_scale)
                         .when_some(
                             self.action_gestures
                                 .focus
@@ -246,7 +247,12 @@ impl PluginView {
                         .when(self.editor_action_nodes.contains(&node.id), |button| {
                             // Three native rail actions fit without padding expanding the row;
                             // disabled siblings keep the same geometry and accessible controls.
-                            button.small().compact().w(px(24.)).min_w_0().px_0()
+                            button
+                                .small()
+                                .compact()
+                                .w(px(24. * self.native_scale))
+                                .min_w_0()
+                                .px_0()
                         })
                         .when(node.button_icon.is_none(), |button| {
                             button.label(label.clone())
@@ -258,9 +264,14 @@ impl PluginView {
                                 .small()
                                 .compact()
                         })
-                        .when_some(node.tooltip.clone(), |button, tooltip| {
-                            button.accessibility_label(tooltip.clone()).tooltip(tooltip)
-                        })
+                        .when_some(
+                            node.tooltip
+                                .clone()
+                                .filter(|_| node.tooltip_anchor.is_none()),
+                            |button, tooltip| {
+                                button.accessibility_label(tooltip.clone()).tooltip(tooltip)
+                            },
+                        )
                         // A waiting latest draft blocks activations, not editing authority.
                         .disabled(disabled || self.form_activation_blocked())
                         .border_color(colors.border)
@@ -282,6 +293,7 @@ impl PluginView {
             Kind::Input(_) => self
                 .font(
                     Input::new(&self.inputs[&node.id].state)
+                        .scale(self.native_scale)
                         .bg(colors.background)
                         .text_color(colors.foreground)
                         .border_color(colors.border),
@@ -295,12 +307,11 @@ impl PluginView {
                         .w_full()
                         .when(node.layout.height.is_some(), |view| view.h_full())
                         .child(
-                            editor_ui::Textarea::new(&self.textareas[&node.id].state).when_some(
-                                node.layout.height,
-                                |view, height| {
+                            editor_ui::Textarea::new(&self.textareas[&node.id].state)
+                                .scale(self.native_scale)
+                                .when_some(node.layout.height, |view, height| {
                                     view.height(px((height - node.layout.padding * 2.).max(0.)))
-                                },
-                            ),
+                                }),
                         ),
                     node.theme_role(),
                 )
@@ -348,11 +359,16 @@ impl PluginView {
                         .border_color(colors.background)
                         .rounded(px(4.))
                         .focus_visible(|style| style.border_color(colors.accent))
-                        .when_some(node.tooltip.clone(), |checkbox, tooltip| {
-                            checkbox.tooltip(move |window, cx| {
-                                Tooltip::new(tooltip.clone()).build(window, cx)
-                            })
-                        })
+                        .when_some(
+                            node.tooltip
+                                .clone()
+                                .filter(|_| node.tooltip_anchor.is_none()),
+                            |checkbox, tooltip| {
+                                checkbox.tooltip(move |window, cx| {
+                                    Tooltip::new(tooltip.clone()).build(window, cx)
+                                })
+                            },
+                        )
                         .flex()
                         .items_center()
                         .gap_2()

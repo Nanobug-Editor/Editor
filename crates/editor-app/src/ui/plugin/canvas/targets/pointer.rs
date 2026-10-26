@@ -133,6 +133,14 @@ impl CanvasView {
         if !self.emit_target(target.clone(), CanvasInputKind::Pointer(input.clone()), cx) {
             return false;
         }
+        if event.button == MouseButton::Left
+            && let Some(frame) = self.targets.frame.as_ref()
+            && let Some((anchor, source)) = super::super::transfer::TransferFrame::from_frame(frame)
+                .source_at(event.position.x / px(1.), event.position.y / px(1.))
+            && let Some(pressed) = &self.source_pressed
+        {
+            pressed(anchor, source, frame.revision, event.position, cx);
+        }
         if capture {
             let buttons = self
                 .targets
@@ -222,6 +230,24 @@ impl CanvasView {
     ) {
         let owner = cx.entity().downgrade();
         let gesture = self.action_gesture;
+        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
+            if phase.capture() {
+                let _ = owner.update(cx, |this, cx| {
+                    if this.action_gesture != gesture
+                        || !this.enabled
+                        || this.targets.captured.is_none()
+                    {
+                        return;
+                    }
+                    // A captured pointer owns additional buttons too. Intercept before an
+                    // overlaid native input can focus itself or open its own context menu.
+                    if this.target_pointer_down(event, window, cx) {
+                        cx.stop_propagation();
+                    }
+                });
+            }
+        });
+        let owner = cx.entity().downgrade();
         window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
             if phase.capture() {
                 let _ = owner.update(cx, |this, cx| {

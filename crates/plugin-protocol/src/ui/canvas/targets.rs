@@ -5,6 +5,12 @@ use super::*;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HitTarget {
+    /// ui.canvas 1.9 + ui.transfer 1.0: accept inert offers on this exact hit shape and target epoch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drop_target: Option<crate::transfer::DropTarget>,
+    /// ui.canvas 1.9 + ui.transfer 1.0: export inert bytes only after a native gesture on this shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drag_source: Option<crate::transfer::DragSource>,
     /// Optional group-local coordinate space; ancestors' transforms, clips and visibility apply.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub space: Option<String>,

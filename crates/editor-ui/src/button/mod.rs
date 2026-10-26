@@ -90,6 +90,8 @@ pub struct Button {
     selected: bool,
     content_full_width: bool,
     reveal_group: Option<SharedString>,
+    /// Scene-native forms scale local metrics without replacing Base behavior or focus.
+    scale: f32,
 }
 
 impl Button {
@@ -122,6 +124,7 @@ impl Button {
             selected: false,
             content_full_width: false,
             reveal_group: None,
+            scale: 1.,
         }
     }
 
@@ -129,6 +132,16 @@ impl Button {
     /// Dialog and disclosure triggers supply the Base button without supplying product styling.
     pub fn with_base(mut self, base: BaseButton) -> Self {
         self.base = base;
+        self
+    }
+
+    /// Apply a finite positive uniform scale to default native metrics; explicit Styled overrides win.
+    pub fn scale(mut self, scale: f32) -> Self {
+        debug_assert!(
+            scale.is_finite() && scale > 0.,
+            "button scale must be finite and positive"
+        );
+        self.scale = scale;
         self
     }
 
@@ -271,7 +284,7 @@ impl ParentElement for Button {
 }
 
 impl RenderOnce for Button {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         Self::init_keys(cx);
         let palette = cx.theme();
         let (background, foreground, hover, active) = match self.variant {
@@ -334,11 +347,13 @@ impl RenderOnce for Button {
         let content = div()
             .flex()
             .items_center()
-            .gap_1()
+            .gap(px(window.rem_size() / px(1.) * 0.25 * self.scale))
             .when(self.content_full_width, |content| {
                 content.w_full().min_w_0()
             })
-            .when_some(icon, |this, icon| this.child(icon.small()))
+            .when_some(icon, |this, icon| {
+                this.child(icon.small().scale(self.scale))
+            })
             .when_some(self.label.clone(), |this, label| this.child(label))
             .children(self.children);
         let semantic_label = self
@@ -351,12 +366,14 @@ impl RenderOnce for Button {
             })
             .key_context("EditorActivate")
             .disabled(self.disabled || self.loading)
-            .h(px(height))
-            .min_w(px(if self.compact { height } else { 48. }))
-            .px(px(if self.compact { 4. } else { 10. }))
-            .rounded(palette.radius)
+            .h(px(height * self.scale))
+            .min_w(px(if self.compact { height } else { 48. } * self.scale))
+            .px(px(if self.compact { 4. } else { 10. } * self.scale))
+            .rounded(palette.radius * self.scale)
             .when(self.outline, |button| {
-                button.border_1().border_color(outline_color.opacity(0.65))
+                button
+                    .border(px(self.scale))
+                    .border_color(outline_color.opacity(0.65))
             })
             .bg(if self.selected {
                 palette.list_active
@@ -364,7 +381,7 @@ impl RenderOnce for Button {
                 background
             })
             .text_color(foreground)
-            .text_size(px(if self.small { 12. } else { 13. }))
+            .text_size(px(if self.small { 12. } else { 13. } * self.scale))
             .cursor_pointer()
             .hover(|style| style.bg(hover))
             .active(|style| style.bg(active))

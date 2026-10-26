@@ -1,0 +1,7 @@
+{
+  "anchor_script":true,
+  "scene":{"identity":61,"revision":1,"roots":[
+    {"kind":"group","id":"node-space","transform":[1,0,0,1,20,20],"children":[]}
+  ],"targets":[{"id":"node","epoch":2,"space":"node-space","focusable":true,"tab_index":0,
+    "geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":140,"h":90}}}]}
+}

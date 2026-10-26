@@ -154,7 +154,21 @@ impl CanvasView {
                         }),
                     ];
                     self.targets.focus.insert(key.clone(), handle);
-                    self.targets.subscriptions.insert(key, subscriptions);
+                    self.targets
+                        .subscriptions
+                        .insert(key.clone(), subscriptions);
+                }
+                if let Some(handle) = self.targets.focus.get_mut(&key) {
+                    // Register only explicit Tab targets; actual clipped elements determine the
+                    // native window's stops, shared with ordinary controls before/after the Canvas.
+                    *handle = handle
+                        .clone()
+                        .tab_stop(target.tab_index.is_some())
+                        .tab_index(
+                            target
+                                .tab_index
+                                .map_or(0, |index| isize::try_from(index).unwrap_or(isize::MAX)),
+                        );
                 }
             }
         }
@@ -382,43 +396,12 @@ impl CanvasView {
             && !modifiers.alt
             && !modifiers.meta
         {
-            let mut order = self
-                .drawing
-                .scene
-                .as_ref()
-                .unwrap()
-                .targets
-                .iter()
-                // Invisible/clipped scene targets have no native focus element. Use the shown
-                // frame's prepared geometry rather than trapping Tab on an unrendered handle.
-                .filter(|target| {
-                    self.targets
-                        .frame
-                        .as_ref()
-                        .is_some_and(|frame| frame.target_visible(&target.id, target.epoch))
-                })
-                .filter_map(|target| {
-                    target
-                        .tab_index
-                        .map(|index| (index, target.id.clone(), target.epoch))
-                })
-                .collect::<Vec<_>>();
-            order.sort();
-            if let Some(index) = order
-                .iter()
-                .position(|(_, id, epoch)| *id == target.0 && *epoch == target.1)
-            {
-                let next = if modifiers.shift {
-                    (index + order.len() - 1) % order.len()
-                } else {
-                    (index + 1) % order.len()
-                };
-                let (_, id, epoch) = &order[next];
-                if let Some(handle) = self.targets.focus.get(&(id.clone(), *epoch)) {
-                    handle.focus(window, cx);
-                    cx.notify();
-                }
+            if modifiers.shift {
+                window.focus_prev(cx);
+            } else {
+                window.focus_next(cx);
             }
+            cx.notify();
         }
         true
     }

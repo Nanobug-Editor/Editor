@@ -12,6 +12,19 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
+    (
+        "src/ui/canvas/overlay_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/overlay_tests.rs"),
+    ),
+    // Scene foreground placement and interchange belong to the independent public SDK.
+    (
+        "src/transfer.rs",
+        include_bytes!("../../plugin-protocol/src/transfer.rs"),
+    ),
+    (
+        "src/ui/canvas/overlay.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/overlay.rs"),
+    ),
     // Public module declarations must remain independently buildable in the exported SDK.
     (
         "src/language_content.rs",

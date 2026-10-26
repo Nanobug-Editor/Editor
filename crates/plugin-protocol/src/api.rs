@@ -517,6 +517,10 @@ pub enum Notification {
         update: RequestUpdate,
     },
     Ui(crate::ui::UiEvent),
+    /// ui.transfer 1.0: native-owned drag lifecycle; cannot be injected through ordinary Manager.event.
+    Transfer(crate::transfer::Event),
+    /// Native-only completion for a declared drag source; ordinary events cannot inject it.
+    DragFinished(crate::transfer::DragResult),
     /// Bottom-bar functions retain the captured file/window target after native focus changes.
     Tool(crate::ui::ToolEvent),
     Theme(crate::Environment),
@@ -758,6 +762,14 @@ pub enum EditorOperation {
     },
     /// Clipboard calls are separately negotiated and authorized; they use the same asynchronous completion gate.
     ReadClipboard,
+    /// ui.clipboard 1.1: bounded multi-format enumeration, selected lazy reads and atomic writes.
+    Clipboard {
+        operation: crate::transfer::ClipboardOperation,
+    },
+    /// ui.transfer 1.0: lazy, instance-scoped drop data. Does not grant clipboard or workspace access.
+    Transfer {
+        operation: crate::transfer::Operation,
+    },
     WriteClipboard {
         text: String,
     },
@@ -803,6 +815,10 @@ pub enum EditorOperation {
 /// Values describe the actual document and revision observed or saved, rather than an acknowledgement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EditorValue {
+    /// One inert selected drop representation under its original scoped offer.
+    Transfer(crate::transfer::Value),
+    /// Inert formatted clipboard data; old Clipboard { text } completions retain their meaning.
+    ClipboardFormats(crate::transfer::ClipboardValue),
     /// Successful native attachment and a one-use, consumer/document-bound transport lease.
     /// The guest may return this token to its declared language prepare method; it is not a process
     /// handle and grants no filesystem access or permission to select an unrelated provider.

@@ -113,6 +113,7 @@ fn retained_view_popup_remains_usable_after_visibility_withdrawal(cx: &mut TestA
     let (_, visual) = cx.add_window_view(move |window, cx| {
         let mut document = Document::new(Node::text("body", "Body"));
         document.menu = Some(ui::PopupMenu {
+            anchor: None,
             id: "popup".into(),
             x: 20.,
             y: 20.,

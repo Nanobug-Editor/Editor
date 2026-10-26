@@ -11,6 +11,8 @@ pub(super) struct Frames {
 }
 /// Original source, projection and target membership cannot be reinterpreted by later publications.
 struct Frame {
+    /// A replacement enclosing overlay cannot inherit this child Canvas's original native proof.
+    lineage: crate::ui_owners::Lineage,
     receipt: ui::CanvasEvent,
     revision: u64,
     targets: BTreeSet<(String, u64)>,
@@ -35,6 +37,20 @@ impl Frame {
     }
 }
 impl Frames {
+    /// Native drag uses the latest actually shown target membership, independently of accepted artwork.
+    pub(super) fn transfer_current(
+        &self,
+        panel: &str,
+        address: &plugin_protocol::transfer::Address,
+    ) -> bool {
+        let Some(anchor) = &address.canvas else {
+            return false;
+        };
+        self.shown.get(&(panel.into(),address.node.clone())).and_then(|frames|frames.back()).is_some_and(|frame|
+            !frame.retired&&frame.revision==address.ui_revision&&frame.targets.contains(&(anchor.target.id.clone(),anchor.target.epoch))
+                &&matches!(&frame.receipt,ui::CanvasEvent::ScenePresented{identity,scene_revision,source,file,error:None,..}
+                    if *identity==anchor.identity&&*scene_revision==anchor.scene_revision&&*source==address.source&&*file==address.file))
+    }
     /// Remember a successful native frame with a four-frame queue; failures revoke input first.
     pub fn present(
         &mut self,
@@ -42,8 +58,10 @@ impl Frames {
         event: &ui::UiEvent,
         receipt: &ui::CanvasEvent,
         scene: &ui::CanvasScene,
+        document: &ui::Document,
     ) -> Result<(), api::Failure> {
         let key = (panel.to_owned(), event.node.clone());
+        let lineage = crate::ui_owners::lineage(document, &event.node).unwrap_or_default();
         let ui::CanvasEvent::ScenePresented { error, .. } = receipt else {
             return Ok(());
         };
@@ -81,7 +99,7 @@ impl Frames {
             .collect();
         let cleanup = frames
             .back()
-            .filter(|frame| frame.same_owner(receipt))
+            .filter(|frame| frame.same_owner(receipt) && frame.lineage == lineage)
             .map(|frame| {
                 frame
                     .cleanup
@@ -92,6 +110,7 @@ impl Frames {
             })
             .unwrap_or_default();
         frames.push_back(Frame {
+            lineage,
             receipt: receipt.clone(),
             revision: event.revision,
             targets,
@@ -138,6 +157,10 @@ impl Frames {
         let Some(frames) = self.shown.get_mut(&(panel.to_owned(), event.node.clone())) else {
             return;
         };
+        let lineage = frames
+            .iter()
+            .find(|frame| frame.matches(event, input))
+            .map(|frame| frame.lineage.clone());
         let (add, remove) = match &input.kind {
             Kind::Focus { focused: true } => (1, 0),
             Kind::Focus { focused: false } => (0, 1),
@@ -159,6 +182,9 @@ impl Frames {
             _ => (0, 0),
         };
         for frame in frames {
+            if lineage.as_ref() != Some(&frame.lineage) {
+                continue;
+            }
             let same = matches!(&frame.receipt,ui::CanvasEvent::ScenePresented{identity,source,file,..}
                 if *identity==input.identity&&*source==input.source&&*file==input.file);
             if !same || !frame.targets.contains(&(input.target.clone(), input.epoch)) {
@@ -176,6 +202,24 @@ impl Frames {
                 frame.cleanup.remove(&target);
             }
         }
+    }
+    /// Retired native cleanup may seal its old lease, but cannot mutate a replacement child's focus/draft.
+    pub fn same_ancestry(
+        &self,
+        panel: &str,
+        event: &ui::UiEvent,
+        input: &ui::CanvasInput,
+        document: Option<&ui::Document>,
+    ) -> bool {
+        let current =
+            document.and_then(|document| crate::ui_owners::lineage(document, &event.node));
+        self.shown
+            .get(&(panel.into(), event.node.clone()))
+            .is_some_and(|frames| {
+                frames.iter().any(|frame| {
+                    frame.matches(event, input) && current.as_ref() == Some(&frame.lineage)
+                })
+            })
     }
     /// Old legacy pointer coordinates still require the exact current scene and viewport.
     pub fn current(&self, panel: &str, node: &ui::Node, document: &ui::Document) -> bool {
@@ -195,7 +239,7 @@ impl Frames {
             let document=views.get(panel);
             for frame in frames.iter_mut() {
                 let live=document.and_then(|document|document.active_node(id).map(|node|(document,node)))
-                    .is_some_and(|(document,node)|!node.disabled&&matches!((&frame.receipt,&node.kind),
+                    .is_some_and(|(document,node)|!node.disabled&&crate::ui_owners::lineage(document,id).as_ref()==Some(&frame.lineage)&&matches!((&frame.receipt,&node.kind),
                         (ui::CanvasEvent::ScenePresented{identity,source,file,error:None,..},ui::Kind::Canvas(canvas))
                         if *source==document.source&&*file==document.file&&canvas.scene.as_ref().is_some_and(|scene|scene.identity==*identity)));
                 if !live {retire(frame);}

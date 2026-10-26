@@ -24,6 +24,7 @@ mod leaf;
 #[cfg(test)]
 mod link_tests;
 mod links;
+mod overlays;
 mod readonly_code;
 mod render;
 #[cfg(test)]
@@ -33,6 +34,7 @@ mod svg;
 mod tests;
 mod textareas;
 mod theme;
+pub(crate) mod transfer;
 mod tree;
 #[cfg(test)]
 mod tree_tests;
@@ -96,6 +98,12 @@ pub(crate) struct PluginView {
     /// Callbacks without a Window defer to this original native surface before checking IME.
     window: gpui_kit::AnyWindowHandle,
     inputs: BTreeMap<String, NativeInput>,
+    /// Temporary render scope for foreground controls; public document geometry remains immutable.
+    native_scale: f32,
+    /// Overlay target generations revoke ordinary controls without resetting drawing-only updates.
+    overlays: overlays::OverlayControls,
+    /// One native offer scope, revoked together with source, visibility and overlay generations.
+    transfers: transfer::Transfers,
     /// Only undelivered ordinary form drafts wait for their exact native/guest incarnation.
     forms: form_delivery::Forms,
     textareas: BTreeMap<String, textareas::NativeTextarea>,
@@ -155,7 +163,11 @@ impl PluginView {
             // Ordinary controls now survive hiding; their old pending Base presses must not.
             self.action_gestures.retained_visibility = true;
             self.invalidate_action_gestures(cx);
+            self.suspend_overlay_controls(cx);
             self.suspend_popup(cx);
+            for canvas in self.canvases.values() {
+                canvas.update(cx, |canvas, _| canvas.discard_anchor_geometry());
+            }
             for tree in self.trees.values() {
                 tree.read(cx).resource.suspend();
             }
@@ -175,8 +187,12 @@ impl PluginView {
             }
         }
         if self.scene_current.replace(current) != current {
+            if current && !self.overlays.scopes.is_empty() {
+                self.overlays.needs_sync = true;
+            }
             cx.notify();
         }
+        self.reconcile_native_transfers();
         if current {
             self.schedule_form_delivery(cx);
         }
@@ -311,6 +327,7 @@ impl PluginView {
         // an explicit cleanup, including the current window while App temporarily lends it out.
         let image_window = window.window_handle();
         cx.on_release(move |this, cx| {
+            this.transfers.suspend(&this.document);
             let pixels = this.image_leases.clear(cx);
             if image_window
                 .update(cx, |_, window, cx| {
@@ -347,6 +364,9 @@ impl PluginView {
             scene_current,
             window: window.window_handle(),
             inputs: BTreeMap::new(),
+            native_scale: 1.,
+            overlays: Default::default(),
+            transfers: Default::default(),
             forms: Default::default(),
             textareas: BTreeMap::new(),
             readonly_code: BTreeMap::new(),
@@ -482,6 +502,7 @@ impl PluginView {
                     .is_some_and(|scene| !scene.belongs_to(&self.document))
                 {
                     canvas.scene_graphics = None;
+                    canvas.discard_anchor_geometry();
                     canvas.deactivate();
                     canvas.invalidate_measurement();
                 }
@@ -502,6 +523,7 @@ impl PluginView {
         }
         self.sync_native(window, cx);
         // A removed image or source replacement can retire this tree without another worker update.
+        self.reconcile_native_transfers();
         let mut keep = BTreeSet::new();
         let mut visit = |node: &plugin_runtime::plugin_protocol::ui::Node| {
             let Some(photo) = self.photos.get(&node.id) else {
@@ -553,6 +575,7 @@ impl PluginView {
     }
 
     fn sync_native(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let overlay_focus_returns = self.reconcile_overlay_controls(window, cx);
         self.scene_layout.reset(&self.document);
         self.viewport.reset_scene();
         self.sync_link_focus(window, cx);
@@ -618,9 +641,14 @@ impl PluginView {
                     let owner = cx.entity().downgrade();
                     let id = node.id.clone();
                     let target_window = self.window;
+                    let overlay_owner = owner.clone();
+                    let overlay_canvas = id.clone();
+                    let anchor_owner = owner.clone();
+                    let source_owner = owner.clone();
+                    let source_canvas = id.clone();
                     let view = cx.new(|cx| {
                         let canvas = cx.entity().downgrade();
-                        canvas::CanvasView::new_versioned(
+                        let mut view = canvas::CanvasView::new_versioned(
                             drawing.clone(),
                             move |event, revision, gesture, cx| {
                                 let owner = owner.clone();
@@ -666,7 +694,22 @@ impl PluginView {
                             },
                             window,
                             cx,
-                        )
+                        );
+                        view.overlay_renderer = Some(Rc::new(move |overlay, layout, window, cx| {
+                            overlay_owner.update(cx, |this, cx| {
+                                this.render_canvas_overlay(&overlay_canvas, overlay, layout, window, cx)
+                            }).unwrap_or_else(|_| gpui_kit::div().into_any_element())
+                        }));
+                        view.anchor_changed=Some(Rc::new(move |cx| {
+                            let owner=anchor_owner.clone();
+                            cx.defer(move |cx| {let _=owner.update(cx,|_,cx|cx.notify());});
+                        }));
+                        view.source_pressed = Some(Rc::new(move |anchor, expected, revision, position, cx| {
+                            let _ = source_owner.update(cx, |this, _| {
+                                this.canvas_source_pointer_down(&source_canvas, anchor, expected, revision, position);
+                            });
+                        }));
+                        view
                     });
                     self.canvases.insert(node.id.clone(), view);
                 }
@@ -756,7 +799,8 @@ impl PluginView {
                     },
                 );
             }
-            let disabled = self.document.active_node(&node.id).is_none();
+            let disabled = self.document.active_node(&node.id).is_none()
+                || (!self.scene_current.get() && self.overlays.scopes.contains_key(&node.id));
             let entry = self.inputs.get_mut(&node.id).unwrap();
             let replace = entry.value_revision != input.value_revision;
             if replace {
@@ -773,6 +817,14 @@ impl PluginView {
             });
         }
         self.reconcile_form_delivery(cx);
+        for request in overlay_focus_returns {
+            if let Some(canvas) = self.canvases.get(&request.canvas) {
+                canvas.update(cx, |canvas, cx| {
+                    canvas.request_overlay_focus(request.identity, request.target);
+                    cx.notify();
+                });
+            }
+        }
     }
 
     /// Non-source notifications can use an App-only entry. Source actions always require a Window.

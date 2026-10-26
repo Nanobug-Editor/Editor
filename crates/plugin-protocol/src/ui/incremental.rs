@@ -113,6 +113,11 @@ fn index<'a>(node: &'a Node, nodes: &mut BTreeMap<String, &'a Node>) {
             }
         }
         Kind::Scroll { content } => index(content, nodes),
+        Kind::Canvas(canvas) => {
+            for overlay in &canvas.overlays {
+                index(&overlay.child, nodes);
+            }
+        }
         Kind::Tabs { tabs, .. } => {
             for tab in tabs {
                 index(&tab.content, nodes);
@@ -134,6 +139,11 @@ fn children_mut(
             }
         }
         Kind::Scroll { content } => visit(content)?,
+        Kind::Canvas(canvas) => {
+            for overlay in &mut canvas.overlays {
+                visit(&mut overlay.child)?;
+            }
+        }
         Kind::Tabs { tabs, .. } => {
             for tab in tabs {
                 visit(&mut tab.content)?;

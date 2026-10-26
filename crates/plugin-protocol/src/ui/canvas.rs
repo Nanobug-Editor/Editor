@@ -22,6 +22,10 @@ mod semantics;
 pub use semantics::*;
 mod placement;
 pub use placement::*;
+mod overlay;
+pub use overlay::*;
+#[cfg(test)]
+mod overlay_tests;
 #[cfg(test)]
 mod paragraph_tests;
 #[cfg(test)]
@@ -30,6 +34,9 @@ mod scene_tests;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canvas {
+    /// `ui.canvas 1.9`: ordinary native children, in foreground order, anchored to live scene targets.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overlays: Vec<CanvasOverlay>,
     /// `ui.canvas 1.8`: bounded native point queries for named paragraphs in this exact scene.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub text_queries: Vec<CanvasTextQuery>,
@@ -217,6 +224,7 @@ pub enum ScrollChange {
 impl Canvas {
     /// Validate geometry and bound expensive vectors before allocating host rendering resources.
     pub fn validate(&self) -> Result<(), String> {
+        self.validate_overlays()?;
         if let Some(scene) = &self.scene {
             if !self.paint.is_empty() || self.column_resize.is_some() || self.grid {
                 return Err(

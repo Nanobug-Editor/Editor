@@ -1,6 +1,6 @@
 {
- "id":"canvas-table","name":"Canvas table acceptance","version":"1.0.0","protocol":7,
- "api":{"base":"^1","required":{"ui.native":"^1","ui.panels":"^1","ui.canvas":">=1.8,<2"}},
- "scope":"workspace","component":"canvas_table.wasm","permissions":["ui.panels"],
+ "id":"canvas-table","name":"Canvas table acceptance","version":"1.1.0","protocol":7,
+ "api":{"base":"^1","required":{"ui.native":"^1","ui.panels":"^1","ui.canvas":">=1.9,<2","ui.clipboard":">=1.1,<2","ui.transfer":"^1"}},
+ "scope":"workspace","component":"canvas_table.wasm","permissions":["ui.panels","clipboard","ui.transfer"],
  "panels":[{"id":"table","title":"表格 / Table","position":"right"}],"storage_limit":1024
 }

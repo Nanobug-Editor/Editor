@@ -6,9 +6,24 @@ use plugin_protocol::{
 };
 use serde_json::json;
 use std::cell::RefCell;
+mod drag;
+mod exchange;
 
 /// Visible cells are a bounded projection of a logical grid, never a host-specific table service.
 struct Table {
+    /// One pending native drop retains its original destination, independent of later selection changes.
+    transfer_request: Option<api::ResourceHandle>,
+    transfer_offer: Option<api::ResourceHandle>,
+    transfer_destination: Option<usize>,
+    transfer_status: String,
+    /// Opaque PNG content is transported back out unchanged; this sample does not decode guest pixels.
+    image: Option<Vec<u8>>,
+    /// The guest correlates its own clipboard request without borrowing host table state.
+    clipboard_request: Option<api::ResourceHandle>,
+    /// A selected clipboard read borrows only this original offer and is closed on every terminal path.
+    clipboard_offer: Option<api::ResourceHandle>,
+    clipboard_pasting: bool,
+    clipboard_status: String,
     revision: u64,
     cells: Vec<String>,
     text_revisions: Vec<u64>,
@@ -16,11 +31,20 @@ struct Table {
     acknowledgements: Vec<u64>,
     selected: usize,
     /// Undo is exclusively guest business state; native drafts do not own this stack.
-    undo: Vec<(usize, String)>,
+    undo: Vec<Vec<(usize, String)>>,
 }
 impl Default for Table {
     fn default() -> Self {
         Self {
+            transfer_request: None,
+            transfer_offer: None,
+            transfer_destination: None,
+            transfer_status: "ready".into(),
+            image: None,
+            clipboard_request: None,
+            clipboard_offer: None,
+            clipboard_pasting: false,
+            clipboard_status: "ready".into(),
             revision: 1,
             cells: [
                 "姓名 / Name",
@@ -51,6 +75,43 @@ impl Guest for Plugin {
                 match input {
                     api::Input::Prepare { .. } => *state = Table::default(),
                     api::Input::Activate => {}
+                    api::Input::Event {
+                        event: api::Notification::DragFinished(result),
+                        ..
+                    } => {
+                        state.transfer_status = match result.outcome {
+                            plugin_protocol::transfer::DragOutcome::Dropped => "dropped",
+                            plugin_protocol::transfer::DragOutcome::Cancelled => "cancelled",
+                        }
+                        .into();
+                    }
+                    api::Input::Event {
+                        event: api::Notification::Transfer(event),
+                        ..
+                    } => {
+                        if event.phase != plugin_protocol::transfer::Phase::Drop {
+                            return Ok(Default::default());
+                        }
+                        if let Err(error) = state.drop(event) {
+                            state.transfer_status = format!("{:?}", error.code);
+                        }
+                    }
+                    api::Input::Event {
+                        event: api::Notification::Request { handle, update },
+                        ..
+                    } if state.transfer_request.as_ref() == Some(&handle) => {
+                        if let api::RequestUpdate::Completed { result } = update {
+                            state.drop_complete(result);
+                        }
+                    }
+                    api::Input::Event {
+                        event: api::Notification::Request { handle, update },
+                        ..
+                    } if state.clipboard_request.as_ref() == Some(&handle) => {
+                        if let api::RequestUpdate::Completed { result } = update {
+                            state.clipboard_complete(result);
+                        }
+                    }
                     api::Input::Snapshot => {
                         return Ok(api::Output {
                             snapshot: Some(Default::default()),
@@ -63,6 +124,16 @@ impl Guest for Plugin {
                     } => match event.action {
                         ui::Action::Click if event.node == "undo" => {
                             state.undo();
+                        }
+                        ui::Action::Click if event.node == "copy" => {
+                            if let Err(error) = state.copy() {
+                                state.clipboard_status = format!("{:?}", error.code);
+                            }
+                        }
+                        ui::Action::Click if event.node == "paste" => {
+                            if let Err(error) = state.paste() {
+                                state.clipboard_status = format!("{:?}", error.code);
+                            }
                         }
                         ui::Action::Canvas(ui::CanvasEvent::Input { input }) => {
                             let Some(index) = input
@@ -84,7 +155,7 @@ impl Guest for Plugin {
                                         },
                                     )?;
                                     let before = state.cells[index].clone();
-                                    state.undo.push((index, before));
+                                    state.undo.push(vec![(index, before)]);
                                     state.cells[index].replace_range(
                                         edit.range.start..edit.range.end,
                                         &edit.text,
@@ -101,7 +172,7 @@ impl Guest for Plugin {
                                     ..
                                 } => {
                                     let before = state.cells[index].clone();
-                                    state.undo.push((index, before));
+                                    state.undo.push(vec![(index, before)]);
                                     state.cells[index] = value;
                                     state.text_revisions[index] += 1;
                                     state.epochs[index] += 1;
@@ -114,6 +185,21 @@ impl Guest for Plugin {
                                     ..
                                 } if modifiers.ctrl && key == "z" => {
                                     state.undo();
+                                }
+                                ui::CanvasInputKind::Key {
+                                    phase: ui::CanvasKeyPhase::Down,
+                                    key,
+                                    modifiers,
+                                    ..
+                                } if modifiers.ctrl && (key == "c" || key == "v") => {
+                                    let result = if key == "c" {
+                                        state.copy()
+                                    } else {
+                                        state.paste()
+                                    };
+                                    if let Err(error) = result {
+                                        state.clipboard_status = format!("{:?}", error.code);
+                                    }
                                 }
                                 _ => return Ok(Default::default()),
                             }
@@ -138,11 +224,13 @@ export!(Plugin);
 impl Table {
     /// Domain undo deliberately replaces the target generation to cancel conflicting native preedit.
     fn undo(&mut self) {
-        if let Some((index, text)) = self.undo.pop() {
-            self.cells[index] = text;
-            self.text_revisions[index] += 1;
-            self.epochs[index] += 1;
-            self.acknowledgements[index] = 0;
+        if let Some(batch) = self.undo.pop() {
+            for (index, text) in batch {
+                self.cells[index] = text;
+                self.text_revisions[index] += 1;
+                self.epochs[index] += 1;
+                self.acknowledgements[index] = 0;
+            }
         }
     }
     /// Describe six visible cells and logical totals, with all shaping/input/accessibility public.
@@ -173,12 +261,23 @@ impl Table {
                 "name":{"en":format!("Row {}, column {}",row+1,column+1),"zh_cn":format!("第 {} 行，第 {} 列",row+1,column+1)},
                 "value":text,"row":row+1,"column":column+1,"actions":["focus","set_value","scroll_into_view"]}));
         }
+        self.drag_handles(&mut roots, &mut targets);
         let canvas:ui::Canvas=serde_json::from_value(json!({"paint":[],"scene":{"identity":1,"revision":self.revision,"roots":roots,"targets":targets,"semantics":semantics}})).unwrap();
         ui::Document::new(
             ui::Node::column(
                 "root",
                 vec![
-                    ui::Node::button("undo", "撤销 / Undo"),
+                    ui::Node::row(
+                        "toolbar",
+                        vec![
+                            ui::Node::button("undo", "撤销 / Undo"),
+                            ui::Node::button("copy", "复制 / Copy"),
+                            ui::Node::button("paste", "粘贴 / Paste"),
+                        ],
+                    ),
+                    ui::Node::text("clipboard-status", self.clipboard_status.clone()),
+                    self.image_drop(),
+                    ui::Node::text("transfer-status", self.transfer_status.clone()),
                     ui::Node::new("drawing", ui::Kind::Canvas(canvas)).grow(),
                 ],
             )

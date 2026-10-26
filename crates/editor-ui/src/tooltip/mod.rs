@@ -1,10 +1,11 @@
 //! Tooltip surface styled by the editor while gpui-base places it.
 
 use crate::theme::ActiveTheme as _;
+use gpui_base::TestSupportExt as _;
 use gpui_base::Tooltip as BaseTooltip;
 use gpui_kit::{
-    AnyView, App, AppContext as _, Context, IntoElement, ParentElement, Render, SharedString,
-    Styled, Window, div, px,
+    AnyView, App, AppContext as _, Context, InteractiveElement as _, IntoElement, ParentElement,
+    Render, SharedString, StatefulInteractiveElement as _, Styled, Window, div, px,
 };
 
 /// Local tooltip content; Base supplies placement and the owning control supplies hover lifetime.
@@ -39,7 +40,13 @@ impl Render for Tooltip {
                 .text_color(palette.popover_foreground)
                 .text_size(px(12.))
                 .shadow_md()
-                .child(self.text.clone()),
+                .child(
+                    div()
+                        .id("editor-tooltip-content")
+                        .aria_label(self.text.clone())
+                        .child(self.text.clone())
+                        .test_support(),
+                ),
         )
     }
 }

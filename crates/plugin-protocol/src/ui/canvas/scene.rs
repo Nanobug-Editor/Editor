@@ -118,7 +118,13 @@ impl CanvasScene {
         }
         semver::Version::new(
             1,
-            if text || !self.targets.is_empty() || !self.semantics.is_empty() {
+            if self
+                .targets
+                .iter()
+                .any(|target| target.drop_target.is_some() || target.drag_source.is_some())
+            {
+                9
+            } else if text || !self.targets.is_empty() || !self.semantics.is_empty() {
                 8
             } else {
                 7
@@ -199,6 +205,12 @@ impl Budget {
             return Err("Canvas target budget exceeded".into());
         }
         for target in targets {
+            if let Some(drop) = &target.drop_target {
+                drop.validate().map_err(|error| error.to_string())?;
+            }
+            if let Some(source) = &target.drag_source {
+                source.validate().map_err(|error| error.to_string())?;
+            }
             if !valid_id(&target.id)
                 || target.epoch == 0
                 || !ids.insert(&target.id)

@@ -1,0 +1,8 @@
+{
+ "group_clip_script":true,"canvas_samples":[{"x":145,"y":75,"rgba":[0,102,255,255]}],
+ "scene":{"identity":61,"revision":1,"roots":[
+  {"kind":"shape","id":"background","geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":320,"h":240}},"fill":{"kind":"solid","rgba":6750207}},
+  {"kind":"group","id":"node-space","transform":[1,0,0,1,20,20],"clip":{"kind":"rect","rect":{"x":0,"y":0,"w":90,"h":90}},"children":[]}
+ ],"targets":[{"id":"node","epoch":2,"space":"node-space","focusable":true,"geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":140,"h":90}}}]},
+ "overlays":[{"id":"rename-box","anchor":{"identity":61,"scene_revision":1,"target":{"id":"node","epoch":2},"space":"node-space","rect":{"x":0,"y":0,"w":140,"h":32}},"rect":{"x":0,"y":40,"w":140,"h":32},"child":{"id":"rename","kind":{"type":"input","value":"Native group clip","value_revision":0}}}]
+}

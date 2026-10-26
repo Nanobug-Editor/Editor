@@ -15,6 +15,8 @@ use std::ops::Range;
 mod column_tests;
 #[cfg(test)]
 mod native_columns_tests;
+mod overlays;
+pub(in crate::ui::plugin) use overlays::OverlayLayout;
 pub(super) mod scene;
 #[cfg(all(test, target_os = "windows"))]
 mod scene_native_tests;
@@ -23,12 +25,34 @@ mod semantics;
 mod targets;
 mod text;
 mod text_layout;
+mod transfer;
+pub(in crate::ui::plugin) use transfer::TransferFrame;
 
 pub(crate) struct CanvasView {
     /// Names resolve against the same host locale as ordinary native plugin controls.
     pub(super) locale: String,
     /// Target identities retain native focus independently of the legacy Canvas opt-in.
     targets: targets::Targets,
+    /// Ordinary keyed controls are rendered by their document owner above scene pixels.
+    pub(super) overlay_renderer: Option<overlays::OverlayRenderer>,
+    /// Last successful native geometry is presentation-only and survives menu input takeover.
+    anchor_geometry: Option<overlays::AnchorGeometry>,
+    /// Notify the document only when actual anchor geometry changes, never on idle paints.
+    pub(super) anchor_changed: Option<Rc<dyn Fn(&mut App)>>,
+    /// Forward an actually hit native source without synthesizing a guest pointer or borrowing newer data.
+    pub(super) source_pressed: Option<
+        Rc<
+            dyn Fn(
+                protocol::ui::CanvasAnchor,
+                protocol::transfer::DragSource,
+                u64,
+                Point<Pixels>,
+                &mut App,
+            ),
+        >,
+    >,
+    /// A removed focused native child waits for a successful actual paint before returning focus.
+    pending_overlay_focus: Option<(u64, protocol::ui::CanvasTargetRef)>,
     pub(crate) drawing: Canvas,
     /// Optional guest-supplied visual projection; ordinary canvases retain their existing coordinates.
     pub(super) viewport: Option<protocol::ui::VisualViewport>,
@@ -289,6 +313,11 @@ impl CanvasView {
         let mut view = Self {
             locale: String::new(),
             targets: targets::Targets::new(cx),
+            overlay_renderer: None,
+            anchor_geometry: None,
+            anchor_changed: None,
+            source_pressed: None,
+            pending_overlay_focus: None,
             drawing,
             viewport: None,
             font: Default::default(),
@@ -360,6 +389,7 @@ impl CanvasView {
     }
     /// Deactivation revokes all input ownership; a non-focusable but active image keeps its drag.
     pub(super) fn deactivate(&mut self) {
+        self.pending_overlay_focus = None;
         self.targets.clear();
         self.scene_presented = None;
         self.text_layout_result = None;
@@ -403,6 +433,10 @@ impl CanvasView {
         if self.bounds != bounds && self.columns.dragging() {
             self.columns.cancel();
             self.drag = None;
+        }
+        if self.bounds != bounds && !self.drawing.overlays.is_empty() {
+            // A first layout (or resize) resolves viewport fitting before foreground construction.
+            cx.notify();
         }
         self.bounds = bounds;
         self.scroll.update(bounds, self.drawing.scroll.clone());
@@ -612,11 +646,13 @@ impl CanvasView {
             None
         };
         if let Some(presentation) = presentation {
+            self.record_anchor_geometry(&presentation, bounds, cx);
             self.record_target_frame(&presentation, bounds, window, cx);
             if self.enabled && self.scene_presented.as_ref() != Some(&presentation) {
                 self.scene_presented = Some(presentation.clone());
                 self.emit(presentation, cx);
             }
+            self.apply_overlay_focus(window, cx);
         }
         self.measure_paragraph_layouts(window, cx);
         self.install_target_text_input(window, cx);
@@ -980,7 +1016,8 @@ impl Render for CanvasView {
         }
         element = element
             .children(self.target_elements())
-            .children(self.semantic_elements(cx));
+            .children(self.semantic_elements(cx))
+            .children(self.overlay_elements(window, cx));
         // The overlay must paint after the guest canvas, which may fill its entire bounds.
         if self.enabled && self.drawing.scroll.is_some() {
             element = element.child(editor_ui::vertical_viewport_scrollbar(&self.scroll, cx));

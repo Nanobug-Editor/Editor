@@ -565,6 +565,13 @@ impl Instance {
             })?;
             self.check_tool_authority(&view.panel, &view.document)?;
             for (name, minimum) in view.document.required_capabilities() {
+                if name == "ui.transfer" && !self.store.data().permissions.contains("ui.transfer") {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Native transfer declarations require ui.transfer consent",
+                    )
+                    .into());
+                }
                 if !self
                     .store
                     .data()

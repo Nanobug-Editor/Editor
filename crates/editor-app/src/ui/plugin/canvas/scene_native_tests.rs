@@ -5,11 +5,15 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+mod anchors;
+mod clipboard;
 mod dpi;
 mod ime;
 mod input;
 mod layout;
+mod overlay;
 mod resources;
+mod transfer;
 mod uia;
 mod wasm;
 
@@ -33,14 +37,20 @@ fn native_canvas_scene_paints_transformed_shapes() {
             .stderr(log.try_clone().unwrap())
             .spawn()
             .unwrap();
-        // A real package may consume its bounded 60 s cold demand before the native 30 s portion.
-        let deadline = Instant::now() + Duration::from_secs(90);
+        // Cold component compilation runs inside Manager::poll; allow that blocking preparation
+        // before the separately bounded native interactions, including slower shared CI hosts.
+        let deadline = Instant::now() + Duration::from_secs(180);
         let status = loop {
             if let Some(status) = child.try_wait().unwrap() {
                 break status;
             }
             if Instant::now() > deadline {
                 child.kill().unwrap();
+                child.wait().unwrap();
+                log.rewind().unwrap();
+                let mut captured = String::new();
+                log.read_to_string(&mut captured).unwrap();
+                eprintln!("{captured}");
                 panic!("native canvas child timed out");
             }
             std::thread::sleep(Duration::from_millis(20));
@@ -73,15 +83,36 @@ fn native_canvas_scene_paints_transformed_shapes() {
     } else {
         serde_json::Value::Null
     };
-    let installed = fixture["wasm_editable"]
+    let mut installed = fixture["wasm_editable"]
         .as_str()
         .map(wasm::install_editable)
+        .or_else(|| {
+            if fixture["wasm_transfer_source"].as_str() == Some("table") {
+                return Some(wasm::install_editable("table"));
+            }
+            fixture["wasm_transfer_source"]
+                .as_bool()
+                .unwrap_or(false)
+                .then(wasm::install_transfer)
+        })
         .or_else(|| {
             fixture["wasm_flow"]
                 .as_bool()
                 .unwrap_or(false)
                 .then(wasm::install)
         });
+    if fixture["transfer_bad_image"].as_bool().unwrap_or(false) {
+        let owner = installed
+            .as_mut()
+            .expect("image source requires actual package");
+        owner
+            .deliver(&[ui::UiEvent {
+                revision: owner.document.revision,
+                node: "bad-source".into(),
+                action: ui::Action::Click,
+            }])
+            .unwrap();
+    }
     let managed_document = installed.as_ref().map(|owner| owner.document.clone());
     let result = Rc::new(RefCell::new(None));
     let output = result.clone();
@@ -111,6 +142,7 @@ fn native_canvas_scene_paints_transformed_shapes() {
             }
             if case=="custom"&&!fixture["scene"].is_null() {wire["scene"]=fixture["scene"].clone();}
             if !fixture["text_queries"].is_null() {wire["text_queries"]=fixture["text_queries"].clone();}
+            if !fixture["overlays"].is_null() {wire["overlays"]=fixture["overlays"].clone();}
             if let Some(count)=fixture["image_repetitions"].as_u64() {
                 assert!((1..=32).contains(&count));
                 let original=wire["scene"]["roots"][0]["children"][0].clone();
@@ -121,6 +153,8 @@ fn native_canvas_scene_paints_transformed_shapes() {
             let canvas:Canvas=serde_json::from_value(wire).unwrap();
             let mut document=Document::new(ui::Node::new("drawing",Kind::Canvas(canvas)).grow()).revision(1);
             if !fixture["viewport"].is_null() {document.root.viewport=Some(serde_json::from_value(fixture["viewport"].clone()).unwrap());}
+            if let Some(text)=fixture["tooltip"].as_str() {document.root.tooltip=Some(text.into());}
+            if !fixture["tooltip_anchor"].is_null() {document.root.tooltip_anchor=Some(serde_json::from_value(fixture["tooltip_anchor"].clone()).unwrap());}
             if let Some(managed)=managed_document {document=managed;}
             if fixture["legacy_rtl_reference"].as_bool().unwrap_or(false) {
                 document.root.layout.height=Some(100.);
@@ -153,6 +187,12 @@ fn native_canvas_scene_paints_transformed_shapes() {
                     source:version.into(),uri:"local.png".into(),state:plugin_runtime::ImageState::Ready(Arc::new(encoded.into_inner()))}));
             }
             resources::attach(&fixture,&mut document,&mut resources);
+            if fixture["transfer_node_script"].as_bool().unwrap_or(false) {
+                let mut drop=ui::Node::text("drop-zone","拖入 / Drop");
+                drop.layout.height=Some(80.);
+                drop.drop_target=Some(protocol::transfer::DropTarget {preferred:vec!["text/html".into()]});
+                document.root=ui::Node::column("transfer-root",vec![drop,document.root]).grow();
+            }
             document.validate().unwrap();
             let expected_scene=document.active_node("drawing").and_then(|node|if let Kind::Canvas(canvas)=&node.kind {canvas.scene.as_ref()}else{None}).map(|scene|(scene.identity,scene.revision));
             let events=Rc::new(RefCell::new(Vec::new()));let record=events.clone();
@@ -162,14 +202,22 @@ fn native_canvas_scene_paints_transformed_shapes() {
             let images=if deferred {super::super::images::SceneImages::default()}else{renderer.prepare_resources(&documents,&resources)};
             let preparation=deferred.then_some((renderer,documents,resources));
             let retained=Rc::new(RefCell::new(None));let saved=retained.clone();
+            let legacy_paths = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let legacy_target = legacy_paths.clone();
+            let legacy_receiver = fixture["legacy_transfer_script"].as_bool().unwrap_or(false);
+            let fixture_width=fixture["window_width"].as_f64().filter(|value|(240. ..=1200.).contains(value)).unwrap_or(320.) as f32;
+            let fixture_height=fixture["window_height"].as_f64().filter(|value|(240. ..=900.).contains(value)).unwrap_or(240.) as f32;
             let window=cx.open_window(gpui_kit::WindowOptions {
-                window_bounds:Some(gpui_kit::WindowBounds::Windowed(Bounds::new(point(px(100.),px(100.)),size(px(320.),px(240.))))),
+                window_bounds:Some(gpui_kit::WindowBounds::Windowed(Bounds::new(point(px(100.),px(100.)),size(px(fixture_width),px(fixture_height))))),
                 ..Default::default()
             },move |window,cx| {
                 let view=cx.new(|cx|PluginView::new("ordinary".into(),document,Environment::default(),move |event,_|record.borrow_mut().push(event),window,cx));
                 *saved.borrow_mut()=Some(view.clone());
                 view.update(cx,|view,cx|view.update_images("ordinary/diagram",&images,window,cx));
-                cx.new(|cx|gpui_base::Root::new(view,window,cx))
+                if legacy_receiver {
+                    let receiver = cx.new(|_|transfer::legacy::Receiver::new(view,legacy_target));
+                    cx.new(|cx|gpui_base::Root::new(receiver,window,cx))
+                } else { cx.new(|cx|gpui_base::Root::new(view,window,cx)) }
             }).unwrap();
             // Native dispatch may draw Root; do not retain a typed Root update while dispatching.
             let window:gpui_kit::AnyWindowHandle=window.into();
@@ -246,6 +294,116 @@ fn native_canvas_scene_paints_transformed_shapes() {
                     Some(cx.background_executor().spawn(async move {uia::probe(handle)}).await)
                 }else{None};
                 let mut interaction_error=None;
+                if fixture["legacy_transfer_script"].as_bool().unwrap_or(false) {
+                    let prepared=window.update(cx,|_,window,cx| {
+                        if !fixture["legacy_transfer_control"].as_bool().unwrap_or(false) {
+                            retained.borrow().as_ref().unwrap().update(cx,|view,cx|view.set_native_transfers(Rc::new(|_|false),window,cx))?;
+                        }
+                        window.draw(cx).clear(cx);
+                        uia::owned_handle(window)
+                    }).and_then(|result|result);
+                    match prepared {
+                        Ok(hwnd)=> {if let Err(error)=cx.background_executor().spawn(async move {transfer::legacy::run(hwnd,legacy_paths)}).await {interaction_error=Some(error);}},
+                        Err(error)=>interaction_error=Some(error),
+                    }
+                }
+                if fixture["transfer_file_script"].as_bool().unwrap_or(false) {
+                    let original = owner.take().expect("file transfer requires an actual package");
+                    let view = retained.borrow().as_ref().unwrap().clone();
+                    if let Err(error) = wasm::files::run(original, &view, events.clone(), window, cx).await { interaction_error = Some(error); }
+                }
+                if fixture["transfer_outgoing_script"].as_bool().unwrap_or(false) {
+                    let source_owner=Rc::new(RefCell::new(owner.take().expect("outgoing requires an actual package")));
+                    let cancel_before_ready=fixture["transfer_cancel_before_ready"].as_bool().unwrap_or(false);
+                    let source_case=transfer::outgoing::Case {cancel_before_ready,canvas_source:fixture["transfer_canvas_source"].as_bool().unwrap_or(false),bad_image:fixture["transfer_bad_image"].as_bool().unwrap_or(false),table_source:fixture["transfer_table_source"].as_bool().unwrap_or(false)};
+                    let prepared=window.update(cx,|_,window,cx|transfer::outgoing::prepare(retained.borrow().as_ref().unwrap(),source_owner.clone(),events.clone(),source_case,window,cx)).and_then(|result|result);
+                    cx.background_executor().timer(Duration::from_millis(120)).await;
+                    match prepared {
+                        Ok((probe,peer,registration))=> {
+                            if let Err(error)=cx.background_executor().spawn(async move {transfer::outgoing::run(probe)}).await {interaction_error=Some(error);}
+                            drop(registration);
+                            let _=peer.update(cx,|_,window,_|window.remove_window());
+                            cx.background_executor().timer(Duration::from_millis(150)).await;
+                            let result=source_owner.borrow().document.clone();
+                            let expected=if cancel_before_ready {"cancelled"}else{"dropped"};
+                            let result_node=if source_case.table_source {"transfer-status"}else{"drag-result"};
+                            let mut completed=false;result.root.visit(&mut|node|{if node.id==result_node&&matches!(&node.kind,Kind::Text{text} if text==expected){completed=true;}});
+                            if !completed&&interaction_error.is_none() {interaction_error=Some(anyhow::anyhow!("actual source guest missed {expected} completion"));}
+                        }
+                        Err(error)=>interaction_error=Some(error),
+                    }
+                }
+                if fixture["clipboard_script"].as_bool().unwrap_or(false) {
+                    if let Err(error)=window.update(cx,|_,window,cx|clipboard::run(window,cx)).and_then(|result|result) {interaction_error=Some(error);}
+                }
+                if fixture["transfer_script"].as_bool().unwrap_or(false) {
+                    let prepared=window.update(cx,|_,_,_|transfer::prepare()).and_then(|result|result);
+                    match prepared {
+                        Ok(prepared) => {
+                            if let Err(error)=cx.background_executor().spawn(async move {transfer::read(prepared)}).await {
+                                interaction_error=Some(error);
+                            }
+                        }
+                        Err(error) => interaction_error=Some(error),
+                    }
+                }
+                if fixture["transfer_os_script"].as_bool().unwrap_or(false) {
+                    let prepared=window.update(cx,|_,window,_|transfer::prepare_os(window)).and_then(|result|result);
+                    match prepared {
+                        Ok((_registration, probe)) => {
+                            if let Err(error)=cx.background_executor().spawn(async move {transfer::run_os(probe)}).await {
+                                interaction_error=Some(error);
+                            }
+                        }
+                        Err(error) => interaction_error=Some(error),
+                    }
+                }
+                if fixture["transfer_node_script"].as_bool().unwrap_or(false)||fixture["transfer_canvas_script"].as_bool().unwrap_or(false) {
+                    let expected_canvas=fixture["transfer_canvas_script"].as_bool().unwrap_or(false);
+                    let blocked=fixture["transfer_blocked"].as_bool().unwrap_or(false);
+                    let prepared=window.update(cx,|_,window,cx|transfer::prepare_node(retained.borrow().as_ref().unwrap(),expected_canvas,blocked,window,cx)).and_then(|result|result);
+                    cx.background_executor().timer(Duration::from_millis(120)).await;
+                    match prepared {
+                        Ok(probe) => {
+                            if let Err(error)=cx.background_executor().spawn(async move {transfer::run_os(probe)}).await {interaction_error=Some(error);}
+                        }
+                        Err(error) => interaction_error=Some(error),
+                    }
+                }
+                if fixture["tooltip_script"].as_bool().unwrap_or(false) {
+                    for phase in 0..7 {
+                        if let Err(error)=window.update(cx,|_,window,cx|anchors::tooltip_phase(retained.borrow().as_ref().unwrap(),phase,window,cx)).and_then(|result|result) {interaction_error=Some(error);break;}
+                        cx.background_executor().timer(Duration::from_millis(800)).await;
+                    }
+                }
+                if fixture["anchor_script"].as_bool().unwrap_or(false) {
+                    for phase in 0..5 {
+                        if let Err(error)=window.update(cx,|_,window,cx|anchors::phase(retained.borrow().as_ref().unwrap(),phase,fixture["anchor_modal_script"].as_bool().unwrap_or(false),window,cx)).and_then(|result|result) {interaction_error=Some(error);break;}
+                        cx.background_executor().timer(Duration::from_millis(100)).await;
+                    }
+                }
+                if fixture["group_clip_script"].as_bool().unwrap_or(false) {
+                    for phase in 0..3 {
+                        if let Err(error)=window.update(cx,|_,window,cx|overlay::group_clip_phase(retained.borrow().as_ref().unwrap(),phase,window,cx)).and_then(|result|result) {interaction_error=Some(error);break;}
+                        cx.background_executor().timer(Duration::from_millis(80)).await;
+                    }
+                }
+                if fixture["overlay_script"].as_bool().unwrap_or(false) {
+                    let mut evidence=overlay::Evidence::default();
+                    evidence.return_focus=fixture["overlay_return_script"].as_bool().unwrap_or(false);
+                    evidence.projected=fixture["overlay_scale_script"].as_bool().unwrap_or(false);
+                    evidence.tab=fixture["overlay_tab_script"].as_bool().unwrap_or(false);
+                    evidence.hidden=fixture["overlay_hide_script"].as_bool().unwrap_or(false);
+                    evidence.hover=fixture["overlay_hover_script"].as_bool().unwrap_or(false);
+                    evidence.capture=fixture["overlay_capture_script"].as_bool().unwrap_or(false);
+                    evidence.clipped=fixture["overlay_clip_script"].as_bool().unwrap_or(false);
+                    evidence.scaled_button=fixture["overlay_button_scale_script"].as_bool().unwrap_or(false);
+                    evidence.scaled_textarea=fixture["overlay_textarea_scale_script"].as_bool().unwrap_or(false);
+                    for phase in 0..if evidence.capture {6}else if evidence.return_focus||evidence.tab||evidence.hidden||evidence.clipped {5}else if fixture["overlay_epoch_script"].as_bool().unwrap_or(false) {6}else{3} {
+                        if let Err(error)=window.update(cx,|_,window,cx|overlay::phase(retained.borrow().as_ref().unwrap(),&mut evidence,phase,window,cx)).and_then(|result|result) {interaction_error=Some(error);break;}
+                        cx.background_executor().timer(Duration::from_millis(80)).await;
+                    }
+                }
                 if fixture["rounded_hit_script"].as_bool().unwrap_or(false) {
                     if let Err(error)=window.update(cx,|_,window,cx|input::hits::run(retained.borrow().as_ref().unwrap(),window,cx)).and_then(|result|result) {interaction_error=Some(error);}
                     if interaction_error.is_none() {if let Err(error)=input::hits::verify(&events.borrow()) {interaction_error=Some(error);}}
@@ -295,6 +453,7 @@ fn native_canvas_scene_paints_transformed_shapes() {
                     if case=="custom" {
                         if let Some(result)=&semantic_result {uia::verify(result.as_ref().map_err(|error|anyhow::anyhow!("{error:#}"))?,&events.borrow(),scale)?;}
                         if fixture["target_os_ime_script"].as_bool().unwrap_or(false) {ime::verify(&events.borrow())?;}
+                        if fixture["overlay_script"].as_bool().unwrap_or(false) {overlay::verify(&events.borrow(),&fixture)?;}
                         if fixture["target_key_script"].as_bool().unwrap_or(false) {input::verify_keys(&events.borrow())?;}
                         if fixture["target_button_chord_script"].as_bool().unwrap_or(false) {input::chords::verify(&events.borrow())?;}
                         if fixture["target_edit_keys_script"].as_bool().unwrap_or(false) {input::editing::verify(&events.borrow())?;}
@@ -332,7 +491,7 @@ fn native_canvas_scene_paints_transformed_shapes() {
                             let count=image.pixels().filter(|pixel|pixel.0[..3].iter().max().unwrap()-pixel.0[..3].iter().min().unwrap()>32).count();
                             anyhow::ensure!(count>=minimum as usize,"worker-prepared native color emoji became monochrome: {count} pixels");
                         }
-                        if fixture["expect_presented"].as_bool().unwrap_or(false)&&!fixture["target_ime_script"].as_bool().unwrap_or(false)&&!fixture["target_os_ime_script"].as_bool().unwrap_or(false) {
+                        if fixture["expect_presented"].as_bool().unwrap_or(false)&&!fixture["target_ime_script"].as_bool().unwrap_or(false)&&!fixture["target_os_ime_script"].as_bool().unwrap_or(false)&&!fixture["overlay_script"].as_bool().unwrap_or(false) {
                             let receipts=events.borrow().iter().filter_map(|event|match &event.action {
                                 ui::Action::Canvas(CanvasEvent::ScenePresented{identity,scene_revision,error,..})
                                 |ui::Action::ViewportInput(ui::ViewportInput{event:CanvasEvent::ScenePresented{identity,scene_revision,error,..},..})=>Some((*identity,*scene_revision,error.clone())),_=>None

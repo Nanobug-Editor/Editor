@@ -11,6 +11,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
+mod clipboard;
 mod cloud;
 mod commands;
 mod compiled;
@@ -44,6 +45,7 @@ mod structure;
 mod terminal_calls;
 mod tool_metadata;
 mod tools;
+mod transfer;
 mod trees;
 mod workspace_events;
 mod workspace_files;
@@ -84,6 +86,13 @@ struct State {
     editor_requests: std::collections::BTreeMap<u64, crate::editor_requests::PendingRequest>,
     /// Native inputs and their slots share this incarnation; pending writers retain their own immutable payload.
     image_inputs: std::collections::BTreeMap<u64, image_inputs::Input>,
+    /// Format metadata is bounded and scoped separately from native image inputs and file roots.
+    clipboard_offers:
+        std::collections::BTreeMap<u64, std::sync::Arc<crate::ClipboardOfferResource>>,
+    /// User drops issue destination-owned transient metadata and lazy native data leases.
+    transfer_offers: std::collections::BTreeMap<u64, std::sync::Arc<crate::TransferOfferResource>>,
+    /// Revoked live offers report a bounded cancellation at the next guest-safe polling boundary.
+    transfer_cancellations: Vec<(String, api::Notification)>,
     /// User-selected targets remain separate from workspace and private-data roots.
     selected_resources: std::collections::BTreeMap<u64, selected_resources::Selection>,
     /// IO leases and recovery slots remain separate from mutable native document state.
@@ -424,6 +433,9 @@ impl Instance {
             roots: ResourceRoots::new(&environment.workspace, application, manifest.storage_limit),
             editor_requests: Default::default(),
             image_inputs: Default::default(),
+            clipboard_offers: Default::default(),
+            transfer_offers: Default::default(),
+            transfer_cancellations: Vec::new(),
             selected_resources: Default::default(),
             file_root_lifetimes: Default::default(),
             workspace_batches: Default::default(),
@@ -885,6 +897,15 @@ impl Instance {
         self.store.data_mut().timers.clear();
         self.store.data_mut().clear_temporary_data();
         self.clear_image_inputs();
+        for resource in self.store.data().clipboard_offers.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().clipboard_offers.clear();
+        for resource in self.store.data().transfer_offers.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().transfer_offers.clear();
+        self.store.data_mut().transfer_cancellations.clear();
         self.store.data_mut().clear_selections();
         self.store.data_mut().clear_workspace_resources();
         self.store.data_mut().file_subscriptions.clear();

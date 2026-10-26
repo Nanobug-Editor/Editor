@@ -70,7 +70,8 @@ impl PluginView {
                     },
                 );
             }
-            let active = self.document.active_node(&node.id).is_some();
+            let active = self.document.active_node(&node.id).is_some()
+                && (self.scene_current.get() || !self.overlays.scopes.contains_key(&node.id));
             let entry = self.textareas.get_mut(&node.id).unwrap();
             let fixed_height = node.layout.height.is_some();
             let changed_height_policy = entry.fixed_height != fixed_height;

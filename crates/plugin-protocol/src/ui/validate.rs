@@ -219,6 +219,18 @@ impl Validator {
         }
     }
     fn node(&mut self, node: &Node, depth: usize) -> Result<(), String> {
+        if let Some(target) = &node.drop_target {
+            target.validate().map_err(|error| error.to_string())?;
+        }
+        if let Some(source) = &node.drag_source {
+            source.validate().map_err(|error| error.to_string())?;
+        }
+        if let Some(anchor) = &node.tooltip_anchor {
+            anchor.validate()?;
+            if node.tooltip.is_none() {
+                return Err("Canvas tooltip anchor requires tooltip text".into());
+            }
+        }
         node.layout.margin.validate(10000.)?;
         if let Some(viewport) = &node.viewport {
             viewport.validate(&node.kind)?;
@@ -373,6 +385,10 @@ impl Validator {
             }
             Kind::Canvas(canvas) => {
                 canvas.validate()?;
+                canvas.validate_overlay_projection(node.viewport.as_ref())?;
+                for overlay in &canvas.overlays {
+                    self.node(&overlay.child, depth + 1)?;
+                }
                 if let Some(scene) = &canvas.scene {
                     let mut text_error = None;
                     for root in &scene.roots {

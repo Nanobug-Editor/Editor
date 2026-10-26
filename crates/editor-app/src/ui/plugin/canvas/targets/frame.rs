@@ -47,6 +47,46 @@ pub(in crate::ui::plugin::canvas) fn content_viewport(
     }
 }
 impl CanvasView {
+    /// Accepted-but-unpainted or disabled scenes cannot publish native drop geometry.
+    pub(in crate::ui::plugin) fn transfer_frame(
+        &self,
+    ) -> Option<super::super::transfer::TransferFrame> {
+        let frame = self.targets.frame.as_ref()?;
+        if !self.enabled || self.drawing.scene.as_ref() != Some(&frame.graphics.source) {
+            return None;
+        }
+        Some(super::super::transfer::TransferFrame::from_frame(frame))
+    }
+    /// Focus only the declared live target in a successful painted frame after its receipt is emitted.
+    pub(in crate::ui::plugin::canvas) fn apply_overlay_focus(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((identity, target)) = self.pending_overlay_focus.take() else {
+            return;
+        };
+        let valid = self.enabled
+            && window.is_window_active()
+            && matches!(
+                self.scene_presented,
+                Some(CanvasEvent::ScenePresented { error: None, .. })
+            )
+            && self.targets.frame.as_ref().is_some_and(|frame| {
+                frame.graphics.source.identity == identity
+                    && frame.gesture == self.action_gesture
+                    && self.drawing.scene.as_ref() == Some(&frame.graphics.source)
+                    && frame.target_visible(&target.id, target.epoch)
+                    && frame.graphics.source.targets.iter().any(|item| {
+                        item.id == target.id && item.epoch == target.epoch && item.focusable
+                    })
+            });
+        if valid && let Some(handle) = self.target_focus(&(target.id, target.epoch)) {
+            handle.focus(window, cx);
+            cx.notify();
+        }
+    }
+
     /// Install only successful native paint evidence. A failed paint cancels existing native input first.
     pub(in crate::ui::plugin::canvas) fn record_target_frame(
         &mut self,

@@ -40,6 +40,7 @@ mod shared_context_tests;
 #[cfg(test)]
 mod shutdown_tests;
 pub(super) mod targets;
+mod transfers;
 #[cfg(test)]
 mod typescript_package_tests;
 #[cfg(test)]
@@ -106,6 +107,13 @@ impl RunStatus {
 }
 
 pub enum Work {
+    /// OS/layout evidence bypasses guest-injectable notifications and retains the original instance epoch.
+    Transfer {
+        plugin: String,
+        panel: String,
+        epoch: u64,
+        ingress: crate::ui::plugin::transfer::Ingress,
+    },
     /// Release the exact source intent without disturbing another document's analysis context.
     ReleaseLanguageDocument {
         workspace: String,

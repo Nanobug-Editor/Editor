@@ -15,6 +15,10 @@ pub(super) enum RootKind {
     Temporary,
     EditorRequest,
     ImageInput,
+    /// Clipboard metadata cannot be read as a file or another instance's root.
+    ClipboardOffer,
+    /// A destination's drop offer is never a workspace or native file root.
+    TransferOffer,
     /// Readonly text never grants file-root authority.
     VirtualDocument,
     /// Diagnostic handles contain no file access or independent mutable text.
@@ -172,6 +176,8 @@ impl State {
             | RootKind::Decoration
             | RootKind::Selected
             | RootKind::ImageInput
+            | RootKind::ClipboardOffer
+            | RootKind::TransferOffer
             | RootKind::ServiceReference
             | RootKind::ServiceRequest
             | RootKind::ServiceInvocation
@@ -333,6 +339,12 @@ impl State {
                 }
                 self.preference_subscriptions.remove(&handle.resource);
                 self.image_inputs.remove(&handle.resource);
+                if let Some(offer) = self.clipboard_offers.remove(&handle.resource) {
+                    offer.revoke();
+                }
+                if let Some(offer) = self.transfer_offers.remove(&handle.resource) {
+                    offer.revoke();
+                }
                 self.plugin_services.references.remove(&handle.resource);
                 if let Some(incoming) = self.plugin_services.incoming.remove(&handle.resource) {
                     // Explicitly dropping a reply rejects its wait; created native effects stay owned.
@@ -346,6 +358,8 @@ impl State {
                 }
                 if let Some(request) = self.editor_requests.remove(&handle.resource) {
                     request.call.retire();
+                    // Closing a request withdraws delivery, including an already completed native offer.
+                    self.finish_clipboard_enumeration(&request.call, None);
                     self.finish_image_input_request(&request.call, &request.call.status());
                 }
                 self.roots.slots.remove(&handle.resource);

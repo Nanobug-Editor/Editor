@@ -19,8 +19,15 @@ struct Table {
 impl Table {
     /// Use the built independent package; candidate override never changes the historical input ledger.
     fn open() -> Self {
+        Self::open_version("canvas-table-1.0.0")
+    }
+    /// C consumers use their own frozen package and never reinterpret the immutable B baseline.
+    fn open_interchange() -> Self {
+        Self::open_version("canvas-table-1.1.0")
+    }
+    fn open_version(version: &str) -> Self {
         let package = std::env::var_os("NANOBUG_CANVAS_TABLE_PACKAGE").map_or_else(
-            || test_packages::package("canvas-table-1.0.0"),
+            || test_packages::package(version),
             |path| Package::read(std::path::Path::new(&path)).unwrap(),
         );
         let profile = tempfile::tempdir().unwrap();
@@ -113,6 +120,9 @@ impl Table {
         )
     }
 }
+#[path = "canvas_table/interchange.rs"]
+mod interchange;
+
 /// One shared transport carries target identity, actual shown frame and public source evidence.
 fn input(
     document: &ui::Document,

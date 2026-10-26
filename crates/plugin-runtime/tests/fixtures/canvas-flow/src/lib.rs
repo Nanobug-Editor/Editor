@@ -8,6 +8,19 @@ use std::cell::RefCell;
 
 /// Domain selection and viewport policy belong to the guest, never to the host renderer.
 struct State {
+    /// Ordinary native property editing is guest-owned committed state, separate from scene text.
+    property: String,
+    property_revision: u64,
+    /// Public request/notification observations; no private host state is inspected by the guest.
+    exchange: String,
+    /// One observable OS result; source cancellation never mutates destination/business permissions.
+    drag_result: String,
+    /// Existing document popup owns input only while the guest keeps this policy enabled.
+    menu: bool,
+    /// Optional nested native Canvas exercises ancestor ownership through the ordinary UI protocol.
+    nested: bool,
+    /// Deliberate oversized PNG exercises native decoder admission without allocating guest pixels.
+    bad_source_image: bool,
     /// Domain text and undo live entirely in this ordinary guest.
     text: String,
     undo: Vec<String>,
@@ -33,6 +46,13 @@ struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
+            property: "节点属性 / Node property".into(),
+            property_revision: 0,
+            exchange: String::new(),
+            drag_result: "idle".into(),
+            menu: false,
+            nested: false,
+            bad_source_image: false,
             text: "e\u{301} 👩‍💻".into(),
             undo: Vec::new(),
             text_revision: 1,
@@ -64,6 +84,39 @@ impl Guest for Flow {
                 match input {
                     api::Input::Prepare { .. } => *state = State::default(),
                     api::Input::Activate => {}
+                    api::Input::Event {
+                        event: api::Notification::Command { id, arguments, .. },
+                        ..
+                    } if id == "exchange-probe" => {
+                        let operation = serde_json::from_value(arguments.unwrap_or_default())
+                            .map_err(|error| {
+                                api::Failure::new(api::ErrorCode::InvalidRequest, error.to_string())
+                            })?;
+                        state.exchange =
+                            serde_json::to_string(&api::guest::request(operation)).unwrap();
+                    }
+                    api::Input::Event {
+                        event: api::Notification::Request { update, .. },
+                        ..
+                    } => {
+                        state.exchange = serde_json::to_string(&update).unwrap();
+                    }
+                    api::Input::Event {
+                        event: api::Notification::Transfer(event),
+                        ..
+                    } => {
+                        state.exchange = serde_json::to_string(&event).unwrap();
+                    }
+                    api::Input::Event {
+                        event: api::Notification::DragFinished(result),
+                        ..
+                    } => {
+                        state.drag_result = match result.outcome {
+                            plugin_protocol::transfer::DragOutcome::Dropped => "dropped",
+                            plugin_protocol::transfer::DragOutcome::Cancelled => "cancelled",
+                        }
+                        .into();
+                    }
                     api::Input::Snapshot => {
                         return Ok(api::Output {
                             snapshot: Some(Default::default()),
@@ -74,7 +127,23 @@ impl Guest for Flow {
                         event: api::Notification::Ui(event),
                         ..
                     } => match event.action {
-                        ui::Action::Click if event.node == "zoom" => state.transform.scale *= 1.25,
+                        ui::Action::Click if event.node == "zoom" => {
+                            state.transform.scale = (state.transform.scale * 1.25).min(4.)
+                        }
+                        ui::Action::Change(value) if event.node == "native-property" => {
+                            state.property = value;
+                            state.property_revision += 1;
+                        }
+                        ui::Action::Click if event.node == "show-menu" => state.menu = true,
+                        ui::Action::Click if event.node == "nested" => state.nested = !state.nested,
+                        ui::Action::Click if event.node == "bad-source" => {
+                            state.bad_source_image = true
+                        }
+                        ui::Action::Dismiss | ui::Action::Select(_)
+                            if event.node == "scene-menu" =>
+                        {
+                            state.menu = false
+                        }
                         ui::Action::Click if event.node == "pan" => state.transform.x += 20.,
                         ui::Action::Click if event.node == "rewind" => {
                             state.scene_override = Some(1)
@@ -216,6 +285,9 @@ impl State {
                 vec![serde_json::from_value(serde_json::json!({
                 "id":"start","epoch":self.target_epoch,"focusable":true,"tab_index":0,"cursor":"text",
                 "geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":60}},
+                "drop_target":{"preferred":["text/html","text/plain;charset=utf-8"]},
+                "drag_source":{"items":[{"mime":"text/plain;charset=utf-8","bytes":b"Flow\tnode".to_vec()},
+                    {"mime":"text/html","bytes":b"<table><tr><td>Flow</td></tr></table>".to_vec()}]},
                 "text_input":{"paragraph":"start-text","layout_key":format!("start-{}",self.text_revision),
                     "text_revision":self.text_revision,"acknowledged_sequence":if self.bad_ack {self.acknowledged+100}else{self.acknowledged},
                     "selection":{"start":self.text.len(),"end":self.text.len()},"editing_keys":true}
@@ -268,15 +340,74 @@ impl State {
                 },
             ],
         };
+        let nested = if self.nested && self.target_present {
+            let mut nested_scene = scene.clone();
+            nested_scene.identity = 2001;
+            nested_scene.targets[0].epoch = 1;
+            if let Some(binding) = &mut nested_scene.targets[0].text_input {
+                binding.acknowledged_sequence = 0;
+            }
+            Some(ui::CanvasOverlay {
+                id: "nested-scene".into(),
+                anchor: self.anchor(),
+                focus_return: None,
+                rect: Rect {
+                    x: 0.,
+                    y: 130.,
+                    w: 300.,
+                    h: 200.,
+                },
+                child: Box::new(Node::new(
+                    "nested-drawing",
+                    Kind::Canvas(ui::Canvas {
+                        scene: Some(nested_scene),
+                        focusable: true,
+                        ..Default::default()
+                    }),
+                )),
+            })
+        } else {
+            None
+        };
         let mut canvas = Node::new(
             "drawing",
             Kind::Canvas(ui::Canvas {
+                overlays: if self.target_present {
+                    vec![ui::CanvasOverlay {
+                        id: "properties".into(),
+                        anchor: self.anchor(),
+                        focus_return: Some(ui::CanvasTargetRef {
+                            id: "start".into(),
+                            epoch: self.target_epoch,
+                        }),
+                        rect: Rect {
+                            x: 20.,
+                            y: 90.,
+                            w: 190.,
+                            h: 32.,
+                        },
+                        child: Box::new(Node::input(
+                            "native-property",
+                            ui::Input {
+                                value: self.property.clone(),
+                                value_revision: self.property_revision,
+                                placeholder: "节点属性 / Node property".into(),
+                                ..Default::default()
+                            },
+                        )),
+                    }]
+                } else {
+                    Vec::new()
+                },
                 scene: Some(scene),
                 focusable: true,
                 ..Default::default()
             }),
         )
         .grow();
+        if let Kind::Canvas(drawing) = &mut canvas.kind {
+            drawing.overlays.extend(nested);
+        }
         canvas.viewport = Some(ui::VisualViewport {
             content: Some(ui::ContentSize {
                 width: 320.,
@@ -284,7 +415,24 @@ impl State {
             }),
             transform: Some(self.transform),
         });
-        ui::Document::new(
+        if self.target_present {
+            canvas.tooltip = Some("开始节点 / Start node".into());
+            canvas.tooltip_anchor = Some(ui::CanvasNodeAnchor {
+                canvas: "drawing".into(),
+                anchor: self.anchor(),
+            });
+        }
+        let mut drop_zone = Node::button("drop-zone", "拖入文字或图片 / Drop text or image");
+        drop_zone.drop_target = Some(plugin_protocol::transfer::DropTarget {
+            preferred: vec![
+                plugin_protocol::transfer::FILES_MIME.into(),
+                "image/png".into(),
+                "text/html".into(),
+                "text/plain;charset=utf-8".into(),
+            ],
+        });
+        let mut document = ui::Document::new(
+            // Ordinary source/target declarations use the same host port as Canvas hit targets.
             Node::column(
                 "root",
                 vec![
@@ -304,14 +452,97 @@ impl State {
                             Node::button("restore-target", "旧目标 / Old target"),
                             Node::button("fresh-target", "新目标 / Fresh target"),
                             Node::button("undo", "撤销 / Undo"),
+                            Node::button("show-menu", "菜单 / Menu"),
+                            Node::button("nested", "嵌套场景 / Nested scene"),
+                            Node::button("bad-source", "超额图片 / Oversized image"),
                         ],
                     ),
                     Node::text("selection", if self.selected { "start" } else { "none" }),
+                    Node::text("exchange", self.exchange.clone()),
+                    drop_zone,
+                    {
+                        let mut source = Node::button("drag-source", "拖出节点 / Drag node out");
+                        source.drag_source = Some(plugin_protocol::transfer::DragSource {
+                            items: vec![
+                                plugin_protocol::transfer::Item {
+                                    mime: "text/plain;charset=utf-8".into(),
+                                    bytes: b"Flow\tnode".to_vec(),
+                                },
+                                plugin_protocol::transfer::Item {
+                                    mime: "text/html".into(),
+                                    bytes: b"<table><tr><td>Flow</td></tr></table>".to_vec(),
+                                },
+                                plugin_protocol::transfer::Item {
+                                    mime: "application/vnd.nanobug.canvas-flow.node".into(),
+                                    bytes: b"flow-node-a".to_vec(),
+                                },
+                                plugin_protocol::transfer::Item {
+                                    mime: "image/png".into(),
+                                    bytes: if self.bad_source_image {
+                                        vec![
+                                            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72,
+                                            68, 82, 0, 1, 0, 0, 0, 1, 0, 0, 8, 6, 0, 0, 0, 108,
+                                            132, 48, 227, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156,
+                                            99, 48, 158, 249, 255, 63, 0, 5, 153, 2, 203, 20, 229,
+                                            63, 253, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+                                        ]
+                                    } else {
+                                        vec![
+                                            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72,
+                                            68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21,
+                                            196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99,
+                                            48, 158, 249, 255, 63, 0, 5, 153, 2, 203, 20, 229, 63,
+                                            253, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+                                        ]
+                                    },
+                                },
+                            ],
+                        });
+                        source
+                    },
+                    Node::text("drag-result", self.drag_result.clone()),
                     canvas,
                 ],
             )
             .grow(),
         )
-        .revision(self.revision)
+        .revision(self.revision);
+        if self.menu {
+            document.menu = Some(ui::PopupMenu {
+                id: "scene-menu".into(),
+                x: 0.,
+                y: 0.,
+                anchor: Some(ui::CanvasNodeAnchor {
+                    canvas: "drawing".into(),
+                    anchor: self.anchor(),
+                }),
+                items: vec![ui::MenuItem {
+                    id: "inspect".into(),
+                    label: "节点属性 / Node property".into(),
+                    disabled: false,
+                    separator_before: false,
+                }],
+            });
+        }
+        document
+    }
+
+    /// The guest declares a stable target lifetime; native projection is entirely host-owned.
+    fn anchor(&self) -> ui::CanvasAnchor {
+        ui::CanvasAnchor {
+            identity: self.identity,
+            scene_revision: 1,
+            target: ui::CanvasTargetRef {
+                id: "start".into(),
+                epoch: self.target_epoch,
+            },
+            space: None,
+            rect: Rect {
+                x: 20.,
+                y: 20.,
+                w: 100.,
+                h: 60.,
+            },
+        }
     }
 }
