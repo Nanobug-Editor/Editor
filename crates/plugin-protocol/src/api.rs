@@ -411,6 +411,15 @@ pub enum Input {
 /// Native UI notifications contain no legacy canvas or character-grid fields.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Notification {
+    /// Canvas 1.10: one actual next-visible GPUI opportunity, never a business timer tick.
+    CanvasFrame {
+        /// Declared owning panel.
+        panel: String,
+        /// Canvas node in that panel.
+        canvas: String,
+        /// Consumed native frame request and actual viewport/interval observations.
+        opportunity: crate::ui::CanvasFrameOpportunity,
+    },
     /// ui.visibility 1.0: the first sampled state, then changes, for one declared owned panel.
     /// Requires negotiation and the ordinary ui.panels grant; older guests receive no such event.
     /// `Input::Event.panel` equals `panel`. Visible means the platform presents the containing
@@ -982,6 +991,13 @@ pub struct Output {
     /// Requires ui.incremental 1; full and patched publications share atomic validation.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub view_patches: Vec<ViewPatch>,
+    /// Canvas 1.10: atomic artwork deltas with independent encoded and expanded budgets.
+    /// Each panel accepts one full View, subtree patch or scene delta per completion.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scene_patches: Vec<crate::ui::CanvasScenePatch>,
+    /// Canvas 1.10: at most one pending request per current Canvas, independent of View publication.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub canvas_frames: Vec<crate::ui::CanvasFrameRequest>,
     pub snapshot: Option<crate::Snapshot>,
 }
 

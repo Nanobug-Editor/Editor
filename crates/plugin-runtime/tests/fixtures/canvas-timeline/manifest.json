@@ -1,0 +1,24 @@
+{
+  "id":"canvas-timeline","name":"Retained timeline acceptance","version":"1.0.0","protocol":7,
+  "api":{"base":"^1","required":{"ui.native":"^1","ui.panels":"^1","ui.canvas":">=1.10,<2","ui.viewport":"^1","ui.visibility":"^1","lifecycle.timers":"^1"}},
+  "scope":"workspace","component":"canvas_timeline.wasm","permissions":["ui.panels"],
+  "commands":[
+    {"id":"mutate","title":"Update one timeline event"},
+    {"id":"stale-patch","title":"Exercise stale timeline delta"},
+    {"id":"invalid-patch","title":"Exercise invalid timeline delta"},
+    {"id":"resync","title":"Republish retained timeline"},
+    {"id":"new-scene","title":"Replace timeline incarnation"},
+    {"id":"aba","title":"Exercise retired timeline incarnation"},
+    {"id":"animate","title":"Play using visible native frame opportunities"},
+    {"id":"stop","title":"Stop timeline playback"},
+    {"id":"request-again","title":"Repeat the same pending frame token"},
+    {"id":"request-conflict","title":"Exercise conflicting frame token"},
+    {"id":"business-timer","title":"Start a domain timer independent of visibility"},
+    {"id":"business-stop","title":"Stop the domain timer"},
+    {"id":"set-offset","title":"Navigate the logical timeline"},
+    {"id":"publication-mode","title":"Compare full and delta publications"},
+    {"id":"zoom-in","title":"放大时间轴 / Zoom timeline in"},
+    {"id":"zoom-out","title":"缩小时间轴 / Zoom timeline out"}
+  ],
+  "panels":[{"id":"timeline","title":"时间轴 / Timeline","position":"right"}],"storage_limit":1024
+}

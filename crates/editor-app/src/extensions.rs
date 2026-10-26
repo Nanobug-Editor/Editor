@@ -91,6 +91,8 @@ mod tools;
 mod tools_tests;
 pub(crate) use recovery::{level_label, log_time, severity_icon};
 pub(crate) use tools::FunctionContext;
+mod canvas_frames;
+mod input_backpressure;
 #[cfg(test)]
 mod recovery_tests;
 #[cfg(test)]
@@ -1073,6 +1075,8 @@ impl ExtensionPanel {
             }
         };
         self.poll_view_demand(cx);
+        self.reconcile_input_backpressure(cx);
+        self.schedule_canvas_frames(cx);
         self.publish_panel_visibility();
         if !editor_requests.is_empty() {
             let parent = self.parent.clone();

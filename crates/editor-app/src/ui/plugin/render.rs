@@ -36,6 +36,10 @@ impl PluginView {
             .tab_group()
             .track_focus(&self.view_focus)
             .capture_key_down(cx.listener(|view, _, window, cx| {
+                if view.input_backpressure {
+                    cx.stop_propagation();
+                    return;
+                }
                 // Register on the focused root's ancestry; an overlay's paint node may be a sibling.
                 if view.view_focus.contains_focused(window, cx) {
                     view.viewport.manual_input();
@@ -226,7 +230,7 @@ impl PluginView {
         } else {
             node
         };
-        let disabled = node.disabled || parent_disabled;
+        let disabled = node.disabled || parent_disabled || self.input_backpressure;
         // Recursive geometry/editor borrowing stays outside the large leaf control renderer's stack.
         let content = if matches!(
             node.kind,

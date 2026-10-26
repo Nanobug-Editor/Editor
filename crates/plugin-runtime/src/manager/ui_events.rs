@@ -14,6 +14,7 @@ impl Manager {
             api::Notification::ImageInput { .. }
                 | api::Notification::Transfer(_)
                 | api::Notification::DragFinished(_)
+                | api::Notification::CanvasFrame { .. }
         ) {
             return Err(api::Failure::new(
                 api::ErrorCode::InvalidRequest,

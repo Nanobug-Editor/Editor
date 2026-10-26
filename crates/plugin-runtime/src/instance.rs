@@ -33,9 +33,11 @@ mod presentation;
 mod private;
 mod process_calls;
 mod resource_roots;
+mod scene_animation;
 mod scene_frames;
 mod scene_history;
 mod scene_input;
+mod scene_patches;
 mod selected_resources;
 mod service_preparation;
 mod service_replies;
@@ -249,6 +251,8 @@ pub struct Instance {
     scene_identities: BTreeSet<(String, String, u64)>,
     /// Native shown frames/order/cleanup proofs are independent of accepted drawing publications.
     scene_frames: scene_frames::Frames,
+    /// One-shot visible frame intents do not change scene/UI revisions or business timers.
+    frame_requests: scene_animation::FrameRequests,
     /// Target tombstones and pending native text belong to this exact isolated incarnation.
     scene_inputs: scene_input::InputHistory,
     panels: std::collections::BTreeSet<String>,
@@ -575,6 +579,7 @@ impl Instance {
             views: Default::default(),
             scene_identities: Default::default(),
             scene_frames: Default::default(),
+            frame_requests: Default::default(),
             scene_inputs: Default::default(),
             panels: manifest.panels.iter().map(|p| p.id.clone()).collect(),
             error: None,
@@ -765,6 +770,7 @@ impl Instance {
                 );
             }
             self.reconcile_scene_presentations();
+            self.accept_frame_requests(&reply.canvas_frames);
             // Revoke against the newly published opt-in, before a second public event can use old slots.
             // Accepted writers pin their payload independently and still deliver the original save receipt.
             self.reconcile_image_inputs();
@@ -947,6 +953,7 @@ impl Instance {
         self.store.data_mut().roots.retire();
         self.views.clear();
         self.scene_frames = Default::default();
+        self.frame_requests = Default::default();
         self.scene_inputs = Default::default();
         self.store.data_mut().processes.clear();
         self.store.data_mut().process_handles.clear();
@@ -978,6 +985,7 @@ impl Instance {
         let revoked = self.poll_service_revocations()?;
         self.poll_service_requests()?;
         self.poll_editor_requests()?;
+        let frames_changed = self.poll_canvas_frames()?;
         self.poll_document_events()?;
         self.poll_document_streams()?;
         self.poll_workspace_events()?;
@@ -985,8 +993,12 @@ impl Instance {
         let timers_changed = self.poll_timers()?;
         let events = self.store.data_mut().poll_processes()?;
         // Tree retirement and timer callbacks both change the instance's published native state.
-        let changed =
-            revoked || trees_changed || preferences_changed || timers_changed || !events.is_empty();
+        let changed = revoked
+            || trees_changed
+            || preferences_changed
+            || timers_changed
+            || frames_changed
+            || !events.is_empty();
         for event in events {
             // Exit removes its slot, but the last callback still inherits the originating service authority.
             let context = if let api::Notification::Process { handle, .. } = &event {

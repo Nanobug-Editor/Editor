@@ -5,9 +5,12 @@ use plugin_protocol::{
     ui::{self, Kind, Node},
 };
 use std::cell::RefCell;
+mod publication;
 
 /// Domain selection and viewport policy belong to the guest, never to the host renderer.
 struct State {
+    /// Immutable publication bytes are a wire base, never another editable model or undo stack.
+    published: Option<ui::Document>,
     /// Ordinary native property editing is guest-owned committed state, separate from scene text.
     property: String,
     property_revision: u64,
@@ -46,6 +49,7 @@ struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
+            published: None,
             property: "节点属性 / Node property".into(),
             property_revision: 0,
             exchange: String::new(),
@@ -78,12 +82,30 @@ thread_local! {static STATE:RefCell<State>=RefCell::new(State::default());}
 struct Flow;
 impl Guest for Flow {
     fn dispatch(payload: String) -> Result<String, String> {
+        if let Some(completion) = publication::budget_completion(&payload) {
+            STATE.with(|state| state.borrow_mut().published = None);
+            return completion;
+        }
         api::guest::dispatch(&payload, |input| {
             STATE.with(|state| {
                 let mut state = state.borrow_mut();
+                // Deliberate invalid publications must reach host admission, preserving its recoverable
+                // scene rejection contract instead of becoming a guest callback failure.
+                let explicit_full=matches!(&input,api::Input::Event{event:api::Notification::Ui(event),..}
+                    if ["rewind","bad-ack","restore","restore-target","bad-source","recover"].contains(&event.node.as_str()));
+                let retired_publication=matches!(&input,api::Input::Event{event:api::Notification::Ui(event),..}
+                    if ["restore","restore-target"].contains(&event.node.as_str()));
                 match input {
                     api::Input::Prepare { .. } => *state = State::default(),
                     api::Input::Activate => {}
+                    api::Input::Event {
+                        event: api::Notification::Command { id, arguments, .. }, ..
+                    } if id=="publication-probe" => {
+                        // Public wire faults exercise host transaction admission through a real component.
+                        // An unconfirmed injected publication can never become our next diff baseline.
+                        state.published=None;
+                        return publication::probe(arguments.unwrap_or_default());
+                    }
                     api::Input::Event {
                         event: api::Notification::Command { id, arguments, .. },
                         ..
@@ -151,6 +173,7 @@ impl Guest for Flow {
                         ui::Action::Click if event.node == "recover" => {
                             state.scene_override = None;
                             state.bad_ack = false;
+                            state.published = None;
                         }
                         ui::Action::Click if event.node == "hold" => {
                             state.hold = true;
@@ -237,13 +260,18 @@ impl Guest for Flow {
                     _ => return Ok(Default::default()),
                 }
                 state.revision += 1;
-                Ok(api::Output {
-                    views: vec![api::View {
-                        panel: "diagram".into(),
-                        document: state.view(),
-                    }],
-                    ..Default::default()
-                })
+                let next=state.view();
+                let unconfirmed=state.scene_override.is_some() || state.bad_ack || state.bad_source_image
+                    || retired_publication;
+                if explicit_full || unconfirmed {
+                    state.published=None;
+                    // Recovery itself is valid, so the next local edit may use its newly sent base.
+                    if !unconfirmed {state.published=Some(next.clone());}
+                    return Ok(api::Output{views:vec![api::View{panel:"diagram".into(),document:next}],..Default::default()});
+                }
+                let publication=ui::retained_publication("diagram",state.published.as_ref(),next)?;
+                state.published=Some(publication.document);
+                Ok(publication.output)
             })
         })
     }

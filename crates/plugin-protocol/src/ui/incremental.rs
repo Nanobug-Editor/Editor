@@ -10,6 +10,18 @@ pub struct Reuse {
     pub source_shift: i64,
 }
 
+impl Node {
+    /// Visit ordinary children mutably, including inactive tabs and Canvas native overlays.
+    /// A visitor failure stops traversal; stage a clone when atomic mutation is required.
+    pub fn try_visit_mut(
+        &mut self,
+        visitor: &mut impl FnMut(&mut Node) -> Result<(), String>,
+    ) -> Result<(), String> {
+        visitor(self)?;
+        children_mut(self, &mut |child| child.try_visit_mut(visitor))
+    }
+}
+
 /// Shift only derived source coordinates; controls and link destinations remain unchanged.
 pub fn shift_source(node: &mut Node, delta: i64) -> Result<(), String> {
     if let Some(range) = &mut node.source_range {
@@ -113,6 +125,11 @@ fn index<'a>(node: &'a Node, nodes: &mut BTreeMap<String, &'a Node>) {
             }
         }
         Kind::Scroll { content } => index(content, nodes),
+        Kind::EditorWithActions { left, right, .. } => {
+            for action in left.iter().chain(right) {
+                index(&action.content, nodes);
+            }
+        }
         Kind::Canvas(canvas) => {
             for overlay in &canvas.overlays {
                 index(&overlay.child, nodes);
@@ -139,6 +156,11 @@ fn children_mut(
             }
         }
         Kind::Scroll { content } => visit(content)?,
+        Kind::EditorWithActions { left, right, .. } => {
+            for action in left.iter_mut().chain(right) {
+                visit(&mut action.content)?;
+            }
+        }
         Kind::Canvas(canvas) => {
             for overlay in &mut canvas.overlays {
                 visit(&mut overlay.child)?;

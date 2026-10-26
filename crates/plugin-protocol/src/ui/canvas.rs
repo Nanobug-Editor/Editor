@@ -24,6 +24,12 @@ mod placement;
 pub use placement::*;
 mod overlay;
 pub use overlay::*;
+mod scroll_2d;
+pub use scroll_2d::*;
+mod retained;
+pub use retained::*;
+mod frames;
+pub use frames::*;
 #[cfg(test)]
 mod overlay_tests;
 #[cfg(test)]
@@ -34,6 +40,9 @@ mod scene_tests;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Canvas {
+    /// Canvas 1.10: absolute two-axis content with a bounded painted overscan rectangle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scroll_2d: Option<SceneScroll2D>,
     /// `ui.canvas 1.9`: ordinary native children, in foreground order, anchored to live scene targets.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub overlays: Vec<CanvasOverlay>,
@@ -117,6 +126,21 @@ pub enum PointerPhase {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CanvasEvent {
+    /// Canvas 1.10: latest absolute native request in the same retained content incarnation.
+    Scroll2D {
+        /// Same scene incarnation; a replacement cannot borrow an old content epoch.
+        identity: u64,
+        /// Original document source observed by the native scroll owner.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<crate::api::DocumentVersion>,
+        /// Original binary source, independently of editable text.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file: Option<crate::api::FileVersion>,
+        /// Matching nonzero content lifetime; never source/document authority.
+        epoch: u64,
+        /// Requested absolute content position, independent of the currently painted buffer.
+        offset: SceneOffset,
+    },
     /// `ui.canvas 1.8`: stable target input bound to an actual native presentation.
     Input {
         input: CanvasInput,
@@ -224,6 +248,22 @@ pub enum ScrollChange {
 impl Canvas {
     /// Validate geometry and bound expensive vectors before allocating host rendering resources.
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(scroll) = &self.scroll_2d {
+            scroll.validate()?;
+            if self.scene.is_none()
+                || self.scroll.is_some()
+                || self.scroll_buffer.is_some()
+                || self.scroll_epoch.is_some()
+                || self.column_resize.is_some()
+                || self.grid
+                || self.caret.is_some()
+            {
+                return Err(
+                    "Two-axis retained scenes exclude legacy ranges, buffers, grids and columns"
+                        .into(),
+                );
+            }
+        }
         self.validate_overlays()?;
         if let Some(scene) = &self.scene {
             if !self.paint.is_empty() || self.column_resize.is_some() || self.grid {

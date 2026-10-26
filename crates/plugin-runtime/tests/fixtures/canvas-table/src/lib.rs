@@ -11,6 +11,8 @@ mod exchange;
 
 /// Visible cells are a bounded projection of a logical grid, never a host-specific table service.
 struct Table {
+    /// Immutable last wire publication supports generic deltas; domain cells remain the only edit state.
+    published: Option<ui::Document>,
     /// One pending native drop retains its original destination, independent of later selection changes.
     transfer_request: Option<api::ResourceHandle>,
     transfer_offer: Option<api::ResourceHandle>,
@@ -36,6 +38,7 @@ struct Table {
 impl Default for Table {
     fn default() -> Self {
         Self {
+            published: None,
             transfer_request: None,
             transfer_offer: None,
             transfer_destination: None,
@@ -209,13 +212,10 @@ impl Guest for Plugin {
                     _ => return Ok(Default::default()),
                 }
                 state.revision += 1;
-                Ok(api::Output {
-                    views: vec![api::View {
-                        panel: "table".into(),
-                        document: state.view(),
-                    }],
-                    ..Default::default()
-                })
+                let publication =
+                    ui::retained_publication("table", state.published.as_ref(), state.view())?;
+                state.published = Some(publication.document);
+                Ok(publication.output)
             })
         })
     }

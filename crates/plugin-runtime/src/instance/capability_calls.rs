@@ -433,6 +433,9 @@ impl Instance {
         };
         anyhow::ensure!(completion.id == id, "Plugin completion ID mismatch");
         let mut output = completion.result?;
+        // Retained artwork rejoins the ordinary atomic UI checks before any live view is changed.
+        self.restore_scene_patches(&mut output)
+            .map_err(super::scene_history::rejected)?;
         // Pure language callbacks cannot acquire view authority through incremental patches.
         anyhow::ensure!(
             !self.store.data().language_pure || output.view_patches.is_empty(),
@@ -815,6 +818,8 @@ impl Instance {
             }
         }
         self.validate_scenes(&output.views)
+            .map_err(super::scene_history::rejected)?;
+        self.validate_frame_requests(&output.canvas_frames, &output.views)
             .map_err(super::scene_history::rejected)?;
         Ok(output)
     }

@@ -51,6 +51,7 @@ pub(crate) mod scopes;
 mod settings;
 mod targets;
 pub use targets::{TargetOrigin, TargetRequest};
+mod canvas_frames;
 mod ui_events;
 use host_services::HostSessions;
 use scopes::ParkedWorkspace;

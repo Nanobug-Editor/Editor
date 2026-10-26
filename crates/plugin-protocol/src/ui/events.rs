@@ -4,6 +4,23 @@ use crate::api::{ErrorCode, Failure};
 
 impl Document {
     pub fn validate_event(&self, event: &UiEvent) -> Result<(), Failure> {
+        let scroll_2d = match &event.action {
+            Action::Canvas(input @ CanvasEvent::Scroll2D { .. })
+            | Action::ViewportInput(ViewportInput {
+                event: input @ CanvasEvent::Scroll2D { .. },
+                ..
+            }) => Some(input),
+            _ => None,
+        };
+        if scroll_2d.is_some_and(|input| {
+            matches!(input,CanvasEvent::Scroll2D{source,file,..}
+            if *source!=self.source || *file!=self.file)
+        }) {
+            return Err(Failure::new(
+                ErrorCode::StaleRevision,
+                "Retained scroll source was replaced",
+            ));
+        }
         let target_input = match &event.action {
             Action::Canvas(CanvasEvent::Input { input })
             | Action::ViewportInput(ViewportInput {
@@ -109,10 +126,15 @@ impl Document {
             && self.dialog.is_none()
             && self.menu.is_none()
             && self.editor_action_source(&event.node).is_none()
-            && matches!(&event.action, Action::Canvas(CanvasEvent::ScrollInput { epoch, .. })
+            && (matches!(&event.action, Action::Canvas(CanvasEvent::ScrollInput { epoch, .. })
                 if *epoch != 0 && self.active_node(&event.node).is_some_and(|node|
                     node.viewport.is_none() && matches!(&node.kind, Kind::Canvas(canvas)
-                        if canvas.scroll_epoch == Some(*epoch))));
+                        if canvas.scroll_epoch == Some(*epoch))))
+                || scroll_2d.is_some_and(|input| {
+                    self.active_node(&event.node).is_some_and(
+                        |node| matches!(&node.kind,Kind::Canvas(canvas) if canvas.accepts(input)),
+                    )
+                }));
         let current_columns = event.revision < self.revision
             && self.dialog.is_none()
             && self.menu.is_none()
@@ -174,7 +196,9 @@ impl Document {
                     && input.content.valid()
                     && match &node.kind {
                         Kind::Canvas(canvas) => {
-                            node.viewport.as_ref().unwrap().content == Some(input.content)
+                            (node.viewport.as_ref().unwrap().content == Some(input.content)
+                                // Absolute retained offsets carry no viewport-local point/delta authority.
+                                || current_scroll && matches!(input.event,CanvasEvent::Scroll2D{..}))
                                 && canvas.accepts(&input.event)
                         }
                         _ => Canvas::default().accepts(&input.event),
@@ -268,6 +292,19 @@ impl Canvas {
                         .all(|(result, request)| {
                             result.id == request.id && finite(result.width) && result.width >= 0.
                         })
+            }
+            CanvasEvent::Scroll2D {
+                identity,
+                epoch,
+                offset,
+                ..
+            } => {
+                self.scene
+                    .as_ref()
+                    .is_some_and(|scene| scene.identity == *identity)
+                    && self.scroll_2d.as_ref().is_some_and(|scroll| {
+                        scroll.epoch == *epoch && scroll.valid_offset(*offset)
+                    })
             }
             CanvasEvent::ScrollInput { epoch, change } => {
                 *epoch != 0

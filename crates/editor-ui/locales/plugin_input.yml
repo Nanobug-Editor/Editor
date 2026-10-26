@@ -1,0 +1,4 @@
+_version: 2
+plugins.input_queue_exhausted:
+  en: "Plugin input is busy. The current interaction was cancelled; please retry."
+  zh-CN: "插件输入繁忙，本次交互已取消，请重试。"

@@ -65,6 +65,34 @@ struct Work {
 }
 
 impl VisualParagraph {
+    /// Translate presentation coordinates while keeping original clusters and native glyph IDs.
+    pub(super) fn translate(&mut self, delta: gpui_kit::Point<Pixels>) {
+        self.bounds.origin += delta;
+        for glyph in &mut self.glyphs {
+            glyph.origin += delta;
+            glyph.top += delta.y;
+        }
+        for row in &mut self.rows {
+            row.top += delta.y;
+            row.rect.origin += delta;
+            for (_, x) in &mut row.carets {
+                *x += delta.x;
+            }
+        }
+        for edges in self.edges.values_mut() {
+            if let Some(point) = &mut edges.up {
+                *point += delta;
+            }
+            if let Some(point) = &mut edges.down {
+                *point += delta;
+            }
+        }
+        for cluster in &mut self.clusters {
+            cluster.rect.origin += delta;
+            cluster.start += delta;
+            cluster.end += delta;
+        }
+    }
     /// Preserve native fonts, glyphs and wrapping; normalize visual order and bounded formatting.
     /// Windows' locked backend drops DirectWrite bidi origins, so its clusters use UAX #9 ordering.
     /// Other native backends retain their physical cluster order.

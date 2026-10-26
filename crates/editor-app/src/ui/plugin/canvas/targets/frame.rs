@@ -16,14 +16,37 @@ pub(in crate::ui::plugin::canvas) struct InputFrame {
     /// Actual native Canvas bounds and content-to-window logical basis at that paint.
     pub bounds: Bounds<Pixels>,
     pub basis: protocol::Rect,
+    /// Actual retained content coverage; unpainted positions never acquire native hit authority.
+    pub content_clip: Option<protocol::Rect>,
 }
 impl InputFrame {
     /// Tab visits only targets intersecting this shown viewport, including its original scroll/zoom.
     pub(super) fn target_visible(&self, id: &str, epoch: u64) -> bool {
         self.graphics
             .targets
-            .bounds_in(id, epoch, content_viewport(self.bounds, self.basis))
+            .bounds_in(id, epoch, self.content_viewport())
             .is_some()
+    }
+    /// Shared content-space viewport for keyboard, semantics, pointer and native data transfer.
+    pub(in crate::ui::plugin::canvas) fn content_viewport(&self) -> protocol::Rect {
+        clip_content(content_viewport(self.bounds, self.basis), self.content_clip)
+    }
+}
+/// Intersect native visible content with the provider's explicit painted coverage.
+pub(in crate::ui::plugin::canvas) fn clip_content(
+    viewport: protocol::Rect,
+    clip: Option<protocol::Rect>,
+) -> protocol::Rect {
+    let Some(clip) = clip else {
+        return viewport;
+    };
+    let x = viewport.x.max(clip.x);
+    let y = viewport.y.max(clip.y);
+    protocol::Rect {
+        x,
+        y,
+        w: ((viewport.x + viewport.w).min(clip.x + clip.w) - x).max(0.),
+        h: ((viewport.y + viewport.h).min(clip.y + clip.h) - y).max(0.),
     }
 }
 /// Invert the viewport's positive axis-aligned native basis without changing scene affine geometry.
@@ -125,6 +148,7 @@ impl CanvasView {
             revision,
             gesture: self.action_gesture,
             bounds,
+            content_clip: self.retained_content_clip(),
             basis: self.project(
                 protocol::Rect {
                     x: 0.,

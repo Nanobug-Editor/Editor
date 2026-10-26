@@ -157,6 +157,7 @@ impl ExtensionPanel {
                 eprintln!("Native plugin transfer registration failed: {error:#}");
             }
         }
+        self.schedule_canvas_frames(cx);
         let key = format!(
             "{}/{}",
             self.active.as_deref().unwrap_or_default(),

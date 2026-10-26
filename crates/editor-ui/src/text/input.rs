@@ -315,7 +315,7 @@ impl EntityInputHandler for CanvasInputState {
     fn bounds_for_range(
         &mut self,
         range: Range<usize>,
-        _bounds: Bounds<Pixels>,
+        bounds: Bounds<Pixels>,
         window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
@@ -324,7 +324,9 @@ impl EntityInputHandler for CanvasInputState {
         }
         let range = canvas_text_range_from_utf16(self.model.text(), range);
         let rect = self.shaped(window).ok()?.caret_bounds(range.end, true)?;
-        Some(self.layout.as_ref()?.window_rect(rect))
+        // Range lookup still uses original shaped text; only the visible OS candidate geometry clips.
+        let rect = self.layout.as_ref()?.window_rect(rect).intersect(&bounds);
+        (rect.size.width > px(0.) && rect.size.height > px(0.)).then_some(rect)
     }
     fn character_index_for_point(
         &mut self,

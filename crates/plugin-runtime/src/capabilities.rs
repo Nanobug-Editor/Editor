@@ -220,7 +220,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.file_images".into(), Version::new(1, 0, 0)),
         ("ui.viewport".into(), Version::new(1, 0, 0)),
         ("editor.files".into(), Version::new(1, 0, 0)),
-        ("ui.canvas".into(), Version::new(1, 9, 0)),
+        ("ui.canvas".into(), Version::new(1, 10, 0)),
         ("ui.collections".into(), Version::new(1, 0, 0)),
         ("ui.tree".into(), Version::new(1, 7, 0)),
         ("ui.workspace".into(), Version::new(1, 0, 0)),

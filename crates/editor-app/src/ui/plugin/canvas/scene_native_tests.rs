@@ -13,6 +13,11 @@ mod input;
 mod layout;
 mod overlay;
 mod resources;
+mod retained;
+mod scroll_2d;
+mod timeline;
+mod timeline_os;
+mod timeline_perf;
 mod transfer;
 mod uia;
 mod wasm;
@@ -143,6 +148,7 @@ fn native_canvas_scene_paints_transformed_shapes() {
             if case=="custom"&&!fixture["scene"].is_null() {wire["scene"]=fixture["scene"].clone();}
             if !fixture["text_queries"].is_null() {wire["text_queries"]=fixture["text_queries"].clone();}
             if !fixture["overlays"].is_null() {wire["overlays"]=fixture["overlays"].clone();}
+            if !fixture["scroll_2d"].is_null() {wire["scroll_2d"]=fixture["scroll_2d"].clone();}
             if let Some(count)=fixture["image_repetitions"].as_u64() {
                 assert!((1..=32).contains(&count));
                 let original=wire["scene"]["roots"][0]["children"][0].clone();
@@ -388,6 +394,24 @@ fn native_canvas_scene_paints_transformed_shapes() {
                         cx.background_executor().timer(Duration::from_millis(80)).await;
                     }
                 }
+                if fixture["retained_paragraph_script"].as_bool().unwrap_or(false) {
+                    let mut evidence=retained::Evidence::default();
+                    for phase in 0..7 {
+                        if phase==6 {
+                            let native=window.update(cx,|_,window,_|dpi::NativeDpi::capture(window).map(|native|(native,if (window.scale_factor()-1.25).abs()<0.01 {150}else{125}))).and_then(|value|value);
+                            match native {Ok((native,percent))=>{
+                                if let Err(error)=cx.background_executor().spawn(async move {native.apply(percent)}).await {interaction_error=Some(error);break;}
+                                cx.background_executor().timer(Duration::from_millis(200)).await;
+                            },Err(error)=>{interaction_error=Some(error);break;}}
+                        }
+                        if let Err(error)=window.update(cx,|_,window,cx|retained::phase(retained.borrow().as_ref().unwrap(),&mut evidence,phase,window,cx)).and_then(|result|result) {interaction_error=Some(error);break;}
+                        cx.background_executor().timer(Duration::from_millis(50)).await;
+                    }
+                }
+                if fixture["scroll_2d_script"].as_bool().unwrap_or(false) {
+                    if let Err(error)=window.update(cx,|_,window,cx|scroll_2d::run(retained.borrow().as_ref().unwrap(),window,cx)).and_then(|result|result) {interaction_error=Some(error);}
+                    if interaction_error.is_none() {if let Err(error)=scroll_2d::verify(&events.borrow()) {interaction_error=Some(error);}}
+                }
                 if fixture["overlay_script"].as_bool().unwrap_or(false) {
                     let mut evidence=overlay::Evidence::default();
                     evidence.return_focus=fixture["overlay_return_script"].as_bool().unwrap_or(false);
@@ -497,7 +521,8 @@ fn native_canvas_scene_paints_transformed_shapes() {
                                 |ui::Action::ViewportInput(ui::ViewportInput{event:CanvasEvent::ScenePresented{identity,scene_revision,error,..},..})=>Some((*identity,*scene_revision,error.clone())),_=>None
                             }).collect::<Vec<_>>();
                             let expected=expected_scene.expect("receipt acceptance requires a published scene");
-                            anyhow::ensure!(receipts==vec![(expected.0,expected.1,None)],"expected one exact native presentation receipt, observed {receipts:?}");
+                            let expected=fixture["expected_presented_revisions"].as_array().map(|versions|versions.iter().map(|version|(expected.0,version.as_u64().expect("native receipt revision"),None)).collect::<Vec<_>>()).unwrap_or_else(||vec![(expected.0,expected.1,None)]);
+                            anyhow::ensure!(receipts==expected,"expected exact native presentation receipts {expected:?}, observed {receipts:?}");
                         }
                         if fixture["expected_text_hits"].is_array()||fixture["allowed_text_boundaries"].is_array() {
                             let reports=events.borrow().iter().filter_map(|event| {

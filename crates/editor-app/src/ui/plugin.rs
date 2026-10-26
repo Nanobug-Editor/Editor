@@ -16,9 +16,11 @@ mod form_delivery;
 pub(crate) use form_delivery::{FormChangeSink, FormReceipt};
 #[cfg(test)]
 mod form_delivery_tests;
+mod frames;
 #[cfg(test)]
 mod image_dimensions_tests;
 pub(crate) mod images;
+mod input_backpressure;
 mod layout;
 mod leaf;
 #[cfg(test)]
@@ -95,6 +97,8 @@ pub(crate) struct PluginView {
     sink: EventSink,
     /// Nested canvas/control sinks share the gate; retained readonly trees cannot dispatch stale input.
     scene_current: Rc<Cell<bool>>,
+    /// A rejected native input suspends this producer until ordered cancellation is acknowledged.
+    input_backpressure: bool,
     /// Callbacks without a Window defer to this original native surface before checking IME.
     window: gpui_kit::AnyWindowHandle,
     inputs: BTreeMap<String, NativeInput>,
@@ -153,13 +157,16 @@ impl PluginView {
     /// Withdraw projected gestures before an owning native window or pane is removed. The router
     /// flushes the original control's release while its old frame is still mounted.
     pub(crate) fn retire_code_panes(&mut self, cx: &mut Context<Self>) {
+        self.pause_canvas_frames(cx);
         self.invalidate_action_gestures(cx);
         self.code_sync.cancel(cx);
     }
 
     /// Suspend guest input and pending locations while retaining paint and the native text entity.
     pub(crate) fn set_scene_current(&mut self, current: bool, cx: &mut Context<Self>) {
+        let current = current && !self.input_backpressure;
         if self.scene_current.get() && !current {
+            self.pause_canvas_frames(cx);
             // Ordinary controls now survive hiding; their old pending Base presses must not.
             self.action_gestures.retained_visibility = true;
             self.invalidate_action_gestures(cx);
@@ -362,6 +369,7 @@ impl PluginView {
                 }
             }),
             scene_current,
+            input_backpressure: false,
             window: window.window_handle(),
             inputs: BTreeMap::new(),
             native_scale: 1.,
@@ -658,6 +666,7 @@ impl PluginView {
                                     event,
                                     plugin_runtime::plugin_protocol::ui::CanvasEvent::Resize { .. }
                                         | plugin_runtime::plugin_protocol::ui::CanvasEvent::TextMeasured { .. }
+                                        | plugin_runtime::plugin_protocol::ui::CanvasEvent::ScenePresented { .. }
                                 );
                                 cx.defer(move |cx| {
                                     let accepted = target_window.update(cx, |_, window, cx| {
@@ -685,9 +694,16 @@ impl PluginView {
                                         })
                                     });
                                     if measurement && !matches!(accepted, Ok(Ok(true))) {
+                                        // A paint can finish during source withdrawal or before a newer
+                                        // UI is accepted. Its cached proof must retry on an actual paint;
+                                        // otherwise later coordinates claim a receipt never forwarded.
+                                        let retry_now = !matches!(event, ui::CanvasEvent::ScenePresented { .. })
+                                            || owner.update(cx, |view, _| view.scene_current.get()).unwrap_or(false);
                                         let _ = canvas.update(cx, |view, cx| {
                                             view.invalidate_measurement();
-                                            cx.notify();
+                                            // A withdrawn source cannot self-dirty. Reactivation's
+                                            // existing notify supplies its next real presentation.
+                                            if retry_now { cx.notify(); }
                                         });
                                     }
                                 });
@@ -713,7 +729,9 @@ impl PluginView {
                     });
                     self.canvases.insert(node.id.clone(), view);
                 }
-                let active = !node.disabled && self.document.active_node(&node.id).is_some();
+                let active = !self.input_backpressure
+                    && !node.disabled
+                    && self.document.active_node(&node.id).is_some();
                 let font = drawing.font.clone().over(self.environment.font_style(
                     &self.plugin,
                     node.theme_role(),
@@ -799,7 +817,8 @@ impl PluginView {
                     },
                 );
             }
-            let disabled = self.document.active_node(&node.id).is_none()
+            let disabled = self.input_backpressure
+                || self.document.active_node(&node.id).is_none()
                 || (!self.scene_current.get() && self.overlays.scopes.contains_key(&node.id));
             let entry = self.inputs.get_mut(&node.id).unwrap();
             let replace = entry.value_revision != input.value_revision;

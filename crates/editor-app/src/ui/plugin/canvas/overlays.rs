@@ -10,6 +10,8 @@ pub(super) struct AnchorGeometry {
     /// Canvas-local projection into native window logical coordinates.
     bounds: Bounds<Pixels>,
     basis: protocol::Rect,
+    /// Coverage from the same successful native paint, including a partially waiting scroll buffer.
+    content_clip: Option<protocol::Rect>,
 }
 
 /// The document owner supplies existing native controls; no GPUI object crosses the guest contract.
@@ -69,6 +71,7 @@ impl CanvasView {
                 && old.receipt == *receipt
                 && old.bounds == bounds
                 && old.basis == basis
+                && old.content_clip == self.retained_content_clip()
         });
         if !same {
             self.anchor_geometry = Some(AnchorGeometry {
@@ -76,6 +79,7 @@ impl CanvasView {
                 receipt: receipt.clone(),
                 bounds,
                 basis,
+                content_clip: self.retained_content_clip(),
             });
             if let Some(changed) = &self.anchor_changed {
                 changed(cx);
@@ -104,7 +108,10 @@ impl CanvasView {
                 .bounds_in(
                     &anchor.target.id,
                     anchor.target.epoch,
-                    targets::frame::content_viewport(shown.bounds, shown.basis),
+                    targets::frame::clip_content(
+                        targets::frame::content_viewport(shown.bounds, shown.basis),
+                        shown.content_clip,
+                    ),
                 )
                 .is_none()
         {
@@ -224,8 +231,11 @@ impl CanvasView {
                     self.bounds,
                 );
                 let full = Bounds::new(point(px(rect.x), px(rect.y)), size(px(rect.w), px(rect.h)));
-                let mut visible =
-                    full.intersect(&Bounds::new(point(px(0.), px(0.)), self.bounds.size));
+                let coverage = self.native_paint_clip(self.bounds);
+                let mut visible = full.intersect(&Bounds::new(
+                    coverage.origin - self.bounds.origin,
+                    coverage.size,
+                ));
                 if let Some(clip) = overlay.anchor.native_clip(&graphics.source).ok()? {
                     // Intersect in content space first, so a huge harmless ancestor clip never
                     // overflows native projected bounds or changes the control's editing width.

@@ -7,6 +7,8 @@ use protocol::ui::{MenuItem, PointerPhase};
 impl TerminalPanel {
     pub(super) fn canvas_event(&mut self, event: CanvasEvent, cx: &mut Context<Self>) {
         match event {
+            // The terminal retains its legacy one-axis grid; retained scene motion is unrelated.
+            CanvasEvent::Scroll2D { .. } => {}
             // The native terminal owns its viewport directly and does not opt into guest scroll epochs.
             CanvasEvent::ScrollInput { .. } => return,
             // This grid requests neither sample measurements nor native text-column gestures.

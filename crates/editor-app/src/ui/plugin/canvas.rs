@@ -17,10 +17,12 @@ mod column_tests;
 mod native_columns_tests;
 mod overlays;
 pub(in crate::ui::plugin) use overlays::OverlayLayout;
+mod native_frames;
 pub(super) mod scene;
 #[cfg(all(test, target_os = "windows"))]
 mod scene_native_tests;
 mod scroll;
+mod scroll_2d;
 mod semantics;
 mod targets;
 mod text;
@@ -67,6 +69,8 @@ pub(crate) struct CanvasView {
     pub(super) scene_graphics: Option<std::sync::Arc<scene::PreparedScene>>,
     /// Display receipts converge per scene outcome, independently of ordinary native repaints.
     scene_presented: Option<CanvasEvent>,
+    /// One-shot native opportunity demand never invalidates retained scene resources.
+    native_frames: native_frames::NativeFrames,
     /// Query observations retain their exact drawing, source, projection and native font binding.
     text_layout_result: Option<(u64, CanvasEvent)>,
     focus: FocusHandle,
@@ -81,6 +85,8 @@ pub(crate) struct CanvasView {
     selection: Range<usize>,
     drag: Option<MouseButton>,
     scroll: scroll::CanvasScroll,
+    /// Two-axis native positions retain no guest scene or second domain dataset.
+    scroll_2d: scroll_2d::CanvasScroll2D,
     sink: Rc<dyn Fn(CanvasEvent, u64, Option<action_gestures::ActionGesture>, &mut App)>,
     /// Native acceptance observes the original callback before its ordinary input gates.
     #[cfg(test)]
@@ -180,6 +186,11 @@ impl CanvasView {
         if self.drawing.scroll_epoch != drawing.scroll_epoch {
             self.scroll.reset();
         }
+        if self.drawing.scroll_2d.as_ref().map(|scroll| scroll.epoch)
+            != drawing.scroll_2d.as_ref().map(|scroll| scroll.epoch)
+        {
+            self.scroll_2d.reset();
+        }
         self.drawing = drawing;
         self.configure_columns();
     }
@@ -238,6 +249,17 @@ impl CanvasView {
     }
     /// Canvas artwork uses the same public content transform as either native image kind.
     fn project(&self, rect: protocol::Rect, bounds: Bounds<Pixels>) -> protocol::Rect {
+        if let Some(scroll) = &self.drawing.scroll_2d {
+            return scroll.project(
+                rect,
+                self.scroll_2d.shown_or(scroll.offset),
+                self.viewport.as_ref(),
+                protocol::ui::ContentSize {
+                    width: bounds.size.width / px(1.),
+                    height: bounds.size.height / px(1.),
+                },
+            );
+        }
         let mut projected = self
             .viewport
             .as_ref()
@@ -265,6 +287,48 @@ impl CanvasView {
             .scroll_buffer
             .as_ref()
             .map_or(0., |buffer| self.scroll.translation(buffer))
+    }
+    /// The exact content rectangle is shared by pixels, native hit tests, controls and semantics.
+    fn retained_content_clip(&self) -> Option<protocol::Rect> {
+        self.drawing
+            .scroll_2d
+            .as_ref()
+            .map(|scroll| scroll.buffer_rect)
+    }
+    /// Base zoom/pan before content scrolling; its inverse origin also bounds overscan motion.
+    fn scroll_projection(&self, bounds: Bounds<Pixels>) -> protocol::Rect {
+        let unit = protocol::Rect {
+            x: 0.,
+            y: 0.,
+            w: 1.,
+            h: 1.,
+        };
+        self.drawing.scroll_2d.as_ref().map_or(unit, |scroll| {
+            scroll.project(
+                unit,
+                Default::default(),
+                self.viewport.as_ref(),
+                protocol::ui::ContentSize {
+                    width: bounds.size.width / px(1.),
+                    height: bounds.size.height / px(1.),
+                },
+            )
+        })
+    }
+    /// Unpainted content remains empty even if a delayed buffer cannot cover a newer shown position.
+    fn native_paint_clip(&self, bounds: Bounds<Pixels>) -> Bounds<Pixels> {
+        let Some(clip) = self.retained_content_clip() else {
+            return bounds;
+        };
+        let clip = self.project(clip, bounds);
+        let left = clip.x.max(0.);
+        let top = clip.y.max(0.);
+        let right = (clip.x + clip.w).min(bounds.size.width / px(1.)).max(left);
+        let bottom = (clip.y + clip.h).min(bounds.size.height / px(1.)).max(top);
+        Bounds::new(
+            bounds.origin + point(px(left), px(top)),
+            size(px(right - left), px(bottom - top)),
+        )
     }
     /// Sibling native controls return keyboard input to the addressed canvas after their action.
     pub(crate) fn focus_handle(&self) -> FocusHandle {
@@ -328,6 +392,7 @@ impl CanvasView {
             images: None,
             scene_graphics: None,
             scene_presented: None,
+            native_frames: Default::default(),
             text_layout_result: None,
             #[cfg(test)]
             painted_text: Vec::new(),
@@ -345,6 +410,7 @@ impl CanvasView {
             selection: 0..0,
             drag: None,
             scroll: Default::default(),
+            scroll_2d: Default::default(),
             sink: Rc::new(sink),
             #[cfg(test)]
             key_observer: None,
@@ -389,6 +455,9 @@ impl CanvasView {
     }
     /// Deactivation revokes all input ownership; a non-focusable but active image keeps its drag.
     pub(super) fn deactivate(&mut self) {
+        // Epochs are local to an owner/scene lifetime. Old kinetic callbacks keep their old Rc
+        // across identity replacement, source withdrawal, disabled input and retirement.
+        self.scroll_2d.reset();
         self.pending_overlay_focus = None;
         self.targets.clear();
         self.scene_presented = None;
@@ -414,12 +483,29 @@ impl CanvasView {
         cx: &mut Context<Self>,
     ) {
         let point = position - self.bounds.origin;
+        let content_point = self.drawing.scroll_2d.as_ref().map(|_| {
+            let basis = self.project(
+                protocol::Rect {
+                    x: 0.,
+                    y: 0.,
+                    w: 1.,
+                    h: 1.,
+                },
+                self.bounds,
+            );
+            (
+                (point.x / px(1.) - basis.x) / basis.w,
+                (point.y / px(1.) - basis.y) / basis.h,
+            )
+        });
         self.emit(
             CanvasEvent::Pointer {
                 phase,
-                x: point.x / px(1.),
+                x: content_point.map_or(point.x / px(1.), |point| point.0),
                 // Hit testing refers to the guest drawing, including unacknowledged local motion.
-                y: point.y / px(1.) - self.scroll_translation(),
+                y: content_point.map_or(point.y / px(1.) - self.scroll_translation(), |point| {
+                    point.1
+                }),
                 button,
                 clicks,
                 shift,
@@ -440,6 +526,27 @@ impl CanvasView {
         }
         self.bounds = bounds;
         self.scroll.update(bounds, self.drawing.scroll.clone());
+        self.scroll_2d.update(
+            bounds,
+            self.drawing.scroll_2d.clone(),
+            self.scroll_projection(bounds),
+        );
+        if self.enabled
+            && let Some(prepared) = &self.scene_graphics
+            && let Some(scroll) = &self.drawing.scroll_2d
+            && let Some(offset) = self.scroll_2d.take_offset()
+        {
+            self.emit(
+                CanvasEvent::Scroll2D {
+                    identity: prepared.source.identity,
+                    source: prepared.document_source.clone(),
+                    file: prepared.file_source.clone(),
+                    epoch: scroll.epoch,
+                    offset,
+                },
+                cx,
+            );
+        }
         if let Some(offset) = self.scroll.take_offset() {
             self.emit(self.scroll_event(ScrollChange::To { offset }), cx);
         }
@@ -610,7 +717,14 @@ impl CanvasView {
         let presentation = if let Some(prepared) = &self.scene_graphics {
             if self.drawing.scene.as_ref() == Some(&prepared.source) {
                 let error = match &prepared.drawing {
-                    Ok(drawing) => drawing.paint(self, bounds, window, cx).err(),
+                    Ok(drawing) => window
+                        .with_content_mask(
+                            Some(gpui_kit::ContentMask {
+                                bounds: self.native_paint_clip(bounds),
+                            }),
+                            |window| drawing.paint(self, bounds, window, cx),
+                        )
+                        .err(),
                     Err(error) => Some(error.clone()),
                 };
                 let error = error.map(|error| {
@@ -797,6 +911,12 @@ fn rect_bounds(rect: protocol::Rect, origin: Point<Pixels>) -> Bounds<Pixels> {
 
 impl Render for CanvasView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Native children are constructed before prepaint measurement; bind the new buffer/zoom now.
+        self.scroll_2d.update(
+            self.bounds,
+            self.drawing.scroll_2d.clone(),
+            self.scroll_projection(self.bounds),
+        );
         self.sync_targets(window, cx);
         self.sync_native_draft(window, cx);
         let gesture = self.action_gesture;
@@ -977,6 +1097,17 @@ impl Render for CanvasView {
                 };
                 let delta = event.delta.pixel_delta(px(line_height));
                 let at = event.position - this.bounds.origin;
+                let basis = this.drawing.scroll_2d.as_ref().map(|_| {
+                    this.project(
+                        protocol::Rect {
+                            x: 0.,
+                            y: 0.,
+                            w: 1.,
+                            h: 1.,
+                        },
+                        this.bounds,
+                    )
+                });
                 let event = if this.drawing.scroll_epoch.is_some()
                     && delta.x == px(0.)
                     && !event.modifiers.shift
@@ -986,10 +1117,10 @@ impl Render for CanvasView {
                     })
                 } else {
                     CanvasEvent::Wheel {
-                        x: at.x / px(1.),
-                        y: at.y / px(1.),
-                        delta_x: delta.x / px(1.),
-                        delta_y: delta.y / px(1.),
+                        x: basis.map_or(at.x / px(1.), |basis| (at.x / px(1.) - basis.x) / basis.w),
+                        y: basis.map_or(at.y / px(1.), |basis| (at.y / px(1.) - basis.y) / basis.h),
+                        delta_x: basis.map_or(delta.x / px(1.), |basis| delta.x / px(1.) / basis.w),
+                        delta_y: basis.map_or(delta.y / px(1.), |basis| delta.y / px(1.) / basis.h),
                         shift: event.modifiers.shift,
                     }
                 };
@@ -1019,8 +1150,36 @@ impl Render for CanvasView {
             .children(self.semantic_elements(cx))
             .children(self.overlay_elements(window, cx));
         // The overlay must paint after the guest canvas, which may fill its entire bounds.
+        if self.enabled && self.drawing.scroll_2d.is_some() {
+            element = element.child(editor_ui::two_axis_viewport_scrollbars(&self.scroll_2d, cx));
+        }
         if self.enabled && self.drawing.scroll.is_some() {
             element = element.child(editor_ui::vertical_viewport_scrollbar(&self.scroll, cx));
+        }
+        if self.enabled
+            && let Some(scroll) = &self.drawing.scroll_2d
+        {
+            let motion_id = action_gestures::native_id(
+                gpui_kit::SharedString::from(format!(
+                    "canvas-wheel-2d:{:?}:{}:{}",
+                    cx.entity_id(),
+                    self.drawing
+                        .scene
+                        .as_ref()
+                        .map_or(0, |scene| scene.identity),
+                    scroll.epoch
+                )),
+                gesture,
+            );
+            return editor_ui::scroll::SmoothScroll::new(
+                motion_id,
+                &self.scroll_2d,
+                editor_ui::scroll::ScrollAxis::Both,
+                element,
+            )
+            .external_scroll(px(self.font.size_px.unwrap_or(14.)))
+            .filter_wheel(|event| !event.modifiers.control && !event.modifiers.alt)
+            .into_any_element();
         }
         if self.enabled && self.drawing.scroll.is_some() {
             let line_height = match &self.measured {

@@ -13,6 +13,31 @@ use std::process::Command;
 
 const SDK_FILES: &[(&str, &[u8])] = &[
     (
+        "src/ui/canvas/retained/mutation.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained/mutation.rs"),
+    ),
+    (
+        "src/ui/canvas/retained/publication.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained/publication.rs"),
+    ),
+    (
+        "src/ui/canvas/frames.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/frames.rs"),
+    ),
+    (
+        "src/ui/canvas/scroll_2d.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scroll_2d.rs"),
+    ),
+    // Retained deltas are independent SDK contracts, with no native drawing dependency.
+    (
+        "src/ui/canvas/retained.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained.rs"),
+    ),
+    (
+        "src/ui/canvas/retained/bounds.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained/bounds.rs"),
+    ),
+    (
         "src/ui/canvas/overlay_tests.rs",
         include_bytes!("../../plugin-protocol/src/ui/canvas/overlay_tests.rs"),
     ),

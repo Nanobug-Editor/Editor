@@ -1,0 +1,16 @@
+[package]
+name = "canvas-timeline"
+version = "1.0.0"
+edition = "2024"
+license = "MIT"
+
+# Independent acceptance consumer; only the host's content-addressed SDK supplies the protocol.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }

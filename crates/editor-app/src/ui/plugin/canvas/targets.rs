@@ -221,17 +221,20 @@ impl CanvasView {
     }
     /// Native element construction clips the worker's fragments against the current layout viewport.
     pub(in crate::ui::plugin::canvas) fn target_content_viewport(&self) -> protocol::Rect {
-        frame::content_viewport(
-            self.bounds,
-            self.project(
-                protocol::Rect {
-                    x: 0.,
-                    y: 0.,
-                    w: 1.,
-                    h: 1.,
-                },
+        frame::clip_content(
+            frame::content_viewport(
                 self.bounds,
+                self.project(
+                    protocol::Rect {
+                        x: 0.,
+                        y: 0.,
+                        w: 1.,
+                        h: 1.,
+                    },
+                    self.bounds,
+                ),
             ),
+            self.retained_content_clip(),
         )
     }
     /// Emit only from a target in the exact successfully painted scene, with its original source.

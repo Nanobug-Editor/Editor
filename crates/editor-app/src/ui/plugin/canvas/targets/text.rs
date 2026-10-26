@@ -203,7 +203,14 @@ impl CanvasView {
         let Ok(context) = scene::paragraph::input_context(frame, &paragraph) else {
             return;
         };
-        let bounds = context.window_rect(context.bounds);
+        let mut bounds = context.window_rect(context.bounds);
+        if self.drawing.scroll_2d.is_some() {
+            // Clip only native window geometry; the original text/layout remains authoritative.
+            bounds = bounds.intersect(&self.native_paint_clip(frame.bounds));
+            if bounds.size.width <= px(0.) || bounds.size.height <= px(0.) {
+                return;
+            }
+        }
         input.update(cx, |input, _| input.set_layout(context, window));
         let focus = input.read(cx).focus_handle();
         if input.read(cx).active(window) {

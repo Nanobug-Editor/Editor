@@ -13,6 +13,8 @@ pub(in crate::ui::plugin) struct TransferFrame {
     graphics: std::sync::Arc<scene::PreparedScene>,
     bounds: Bounds<Pixels>,
     basis: protocol::Rect,
+    /// Only actual painted retained content participates in OS source/drop hit testing.
+    content_viewport: protocol::Rect,
 }
 impl TransferFrame {
     /// Borrow immutable geometry through the existing target module's native presentation boundary.
@@ -24,6 +26,7 @@ impl TransferFrame {
             graphics: frame.graphics.clone(),
             bounds: frame.bounds,
             basis: frame.basis,
+            content_viewport: frame.content_viewport(),
         }
     }
     /// A native source uses the same frontmost path, clips and target epoch as ordinary pointer input.
@@ -36,6 +39,9 @@ impl TransferFrame {
             return None;
         }
         let position = self.position(x, y);
+        if !self.contains_content(position.x, position.y) {
+            return None;
+        }
         let (id, epoch) = self.graphics.targets.hit(position.x, position.y)?;
         let target = self
             .graphics
@@ -44,11 +50,10 @@ impl TransferFrame {
             .iter()
             .find(|target| target.id == id && target.epoch == epoch)?;
         let source = target.drag_source.clone()?;
-        let rect = self.graphics.targets.bounds_in(
-            &id,
-            epoch,
-            super::targets::frame::content_viewport(self.bounds, self.basis),
-        )?;
+        let rect = self
+            .graphics
+            .targets
+            .bounds_in(&id, epoch, self.content_viewport)?;
         Some((
             CanvasAnchor {
                 identity: self.graphics.source.identity,
@@ -77,6 +82,9 @@ impl TransferFrame {
             return None;
         }
         let position = self.position(x, y);
+        if !self.contains_content(position.x, position.y) {
+            return None;
+        }
         let (id, epoch) = self.graphics.targets.hit(position.x, position.y)?;
         let target = self
             .graphics
@@ -85,11 +93,10 @@ impl TransferFrame {
             .iter()
             .find(|target| target.id == id && target.epoch == epoch)?;
         let declaration = target.drop_target.clone()?;
-        let rect = self.graphics.targets.bounds_in(
-            &id,
-            epoch,
-            super::targets::frame::content_viewport(self.bounds, self.basis),
-        )?;
+        let rect = self
+            .graphics
+            .targets
+            .bounds_in(&id, epoch, self.content_viewport)?;
         Some((
             CanvasAnchor {
                 identity: self.graphics.source.identity,
@@ -100,5 +107,10 @@ impl TransferFrame {
             },
             declaration,
         ))
+    }
+    /// A sparse/late buffer cannot expose a source or destination in an unpainted viewport gap.
+    fn contains_content(&self, x: f32, y: f32) -> bool {
+        let clip = self.content_viewport;
+        x >= clip.x && y >= clip.y && x < clip.x + clip.w && y < clip.y + clip.h
     }
 }

@@ -870,6 +870,31 @@ impl Worker {
                                 Ok(())
                             }
                         }
+                        Some(Work::InputBackpressure {
+                            plugin,
+                            epoch,
+                            panel,
+                            resume,
+                        }) => {
+                            if resume {
+                                if let Some(plugin) = plugin {
+                                    actor_sender.acknowledge_input_resume(
+                                        &plugin,
+                                        epoch,
+                                        panel.as_deref(),
+                                    );
+                                }
+                            } else if plugin.as_ref().is_none_or(|plugin| {
+                                output.lock().unwrap().instance_epochs.get(plugin).copied()
+                                    == Some(epoch)
+                            }) {
+                                output.lock().unwrap().status = Some(OperationStatus {
+                                    plugin,
+                                    message: t!("plugins.input_queue_exhausted").to_string(),
+                                });
+                            }
+                            Ok(())
+                        }
                         Some(Work::Transfer {
                             plugin,
                             panel,
@@ -1317,6 +1342,7 @@ impl Worker {
                 published
                     .editor_requests
                     .retain(|(_, request)| !request.status().is_terminal());
+                published.canvas_frames = manager.take_canvas_frame_requests();
                 for request in editor_requests {
                     if published.editor_requests.len() < 256 {
                         published.editor_requests.push(request);
@@ -1426,6 +1452,7 @@ impl Worker {
                 // Recovery also changes ownership when installation returns Err; the same
                 // real-instance publication is used by application-level Manager fixtures.
                 published.publish_manager(&mut manager);
+                actor_sender.retain_input_owners(&published);
                 published.diagnostics = manager
                     .installed
                     .keys()

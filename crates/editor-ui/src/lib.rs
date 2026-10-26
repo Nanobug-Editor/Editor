@@ -74,8 +74,8 @@ pub use input::Input;
 pub use notification::Notification;
 pub use popover::popover;
 pub use scrollbar::{
-    install_scrollbar_theme, native_editor as native_editor_scrollbars, vertical_scrollbar,
-    vertical_viewport_scrollbar,
+    install_scrollbar_theme, native_editor as native_editor_scrollbars,
+    two_axis_viewport_scrollbars, vertical_scrollbar, vertical_viewport_scrollbar,
 };
 pub use segmented_tabs::SegmentedTabs;
 pub use shortcut_panel::{

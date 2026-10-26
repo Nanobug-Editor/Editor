@@ -47,7 +47,9 @@ pub mod workspace_io;
 /// A caller-owned gate for one request; public so a host caller can await its own answer.
 pub use plugin_protocol::api::RequestUpdate;
 pub use request_state::Completion;
+mod canvas_frames;
 mod instance;
+pub use canvas_frames::CanvasFrameResource;
 mod presentation;
 pub use presentation::{WorkspacePresentationResource, WorkspacePresentationSnapshot};
 mod language_bindings;

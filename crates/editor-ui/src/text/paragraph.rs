@@ -78,6 +78,26 @@ pub struct CanvasParagraph {
     line_height: Pixels,
 }
 impl CanvasParagraph {
+    /// Move a shaped paragraph in window-logical pixels without reshaping; byte-point mapping,
+    /// glyphs, carets, selections and line rectangles all move by the same delta.
+    pub fn set_origin(&mut self, origin: gpui_kit::Point<Pixels>) {
+        let delta = origin - self.bounds.origin;
+        if delta == gpui_kit::point(px(0.), px(0.)) {
+            return;
+        }
+        self.bounds.origin = origin;
+        self.visual.translate(delta);
+    }
+    /// Move and paint retained glyphs; subsequent geometry queries use this same new origin.
+    pub fn paint_at(
+        &mut self,
+        origin: gpui_kit::Point<Pixels>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Result<(), String> {
+        self.set_origin(origin);
+        self.paint(window, cx)
+    }
     /// Shape original UTF-8 `text` using the native `face`, logical `font_size`, `color` and `style`.
     /// `bounds` defines alignment, wrapping and clipping; `window` supplies the actual native fonts.
     /// Native layout errors propagate before presentation; styles never change original source offsets.

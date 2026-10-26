@@ -47,6 +47,14 @@ impl CanvasView {
             return None;
         }
         let (x, y) = self.target_point(position);
+        let visible = frame.content_viewport();
+        if x < visible.x
+            || y < visible.y
+            || x >= visible.x + visible.w
+            || y >= visible.y + visible.h
+        {
+            return None;
+        }
         frame.graphics.targets.hit(x, y)
     }
     /// Build one genuine native mouse observation; GPUI supplies no full button mask or pressure here.

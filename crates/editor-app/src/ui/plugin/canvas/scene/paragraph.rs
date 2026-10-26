@@ -1,5 +1,9 @@
 //! Project validated paragraph values onto the local native text component.
 use super::*;
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
+};
 mod query;
 pub(in crate::ui::plugin::canvas) use query::query;
 
@@ -26,6 +30,19 @@ pub(super) struct ParagraphDrawing {
     style: protocol::ui::ParagraphStyle,
     /// Parent scale is applied to typography exactly once before viewport projection.
     scale: f32,
+    /// One bounded actual-window glyph layout, reusable through scene-only drawing changes.
+    layout_cache: Arc<Mutex<Option<NativeLayout>>>,
+    /// Actual native layout work for the owning Canvas incarnation.
+    layouts: Arc<AtomicU64>,
+}
+
+/// Native glyphs bind to actual font/density and size/style; origin moves without reshaping.
+struct NativeLayout {
+    context: editor_ui::text::paragraph::CanvasTextLayout,
+    window_fonts: usize,
+    density: f32,
+    face: gpui_kit::FontId,
+    paragraph: editor_ui::text::paragraph::CanvasParagraph,
 }
 
 /// Resolve OS geometry from the actual shown frame while retaining the native session's private draft.
@@ -135,7 +152,24 @@ impl ParagraphDrawing {
             },
             style: style.clone(),
             scale: a,
+            layout_cache: Default::default(),
+            layouts: Default::default(),
         })
+    }
+    /// Attribute native preparation to this Canvas while keeping layout ownership bounded.
+    pub(super) fn observe_layouts(mut self, layouts: Arc<AtomicU64>) -> Self {
+        self.layouts = layouts;
+        self
+    }
+    /// Placement changes preserve glyphs only while text and layout meaning remain identical.
+    pub(super) fn reuse_layout(&mut self, before: &Self) {
+        if self.id == before.id
+            && self.layout_key == before.layout_key
+            && self.text == before.text
+            && self.style == before.style
+        {
+            self.layout_cache = before.layout_cache.clone();
+        }
     }
     /// Resolve the current canvas font, project bounds and submit native glyphs to the owning window.
     pub(super) fn paint(
@@ -165,15 +199,6 @@ impl ParagraphDrawing {
                 input.paint(window, cx)
             });
         }
-        self.layout(view, bounds, window)?.paint(window, cx)
-    }
-    /// Share the exact native layout construction between drawing and point queries.
-    fn layout(
-        &self,
-        view: &CanvasView,
-        bounds: Bounds<Pixels>,
-        window: &Window,
-    ) -> Result<editor_ui::text::paragraph::CanvasParagraph, String> {
         let context = self.context(
             &view.font,
             view.foreground,
@@ -188,15 +213,46 @@ impl ParagraphDrawing {
             ),
             bounds,
         );
-        editor_ui::text::paragraph::CanvasParagraph::new(
-            self.text.clone().into(),
-            context.font,
-            context.font_size,
-            context.color,
-            context.bounds,
-            &context.style,
-            window,
-        )
+        let origin = context.bounds.origin;
+        let mut key = context.clone();
+        key.bounds.origin = point(px(0.), px(0.));
+        let density = window.scale_factor();
+        let system: &gpui_kit::TextSystem = window.text_system();
+        let window_fonts = system as *const gpui_kit::TextSystem as usize;
+        let face = window.text_system().resolve_font(&context.font);
+        let mut cached = self
+            .layout_cache
+            .lock()
+            .map_err(|_| "Native paragraph cache is unavailable")?;
+        if cached.as_ref().is_none_or(|old| {
+            old.context != key
+                || old.window_fonts != window_fonts
+                || old.density != density
+                || old.face != face
+        }) {
+            let paragraph = editor_ui::text::paragraph::CanvasParagraph::new(
+                self.text.clone().into(),
+                context.font,
+                context.font_size,
+                context.color,
+                context.bounds,
+                &context.style,
+                window,
+            )?;
+            self.layouts.fetch_add(1, Ordering::Relaxed);
+            *cached = Some(NativeLayout {
+                context: key,
+                window_fonts,
+                density,
+                face,
+                paragraph,
+            });
+        }
+        cached
+            .as_mut()
+            .unwrap()
+            .paragraph
+            .paint_at(origin, window, cx)
     }
     /// Materialize one immutable native typography/projection used identically by paint and OS input.
     fn context(

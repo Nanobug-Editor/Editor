@@ -168,6 +168,7 @@ impl ExtensionPanel {
             .update(cx, |view, cx| {
                 view.update_images(&key, &self.images, window, cx)
             });
+        self.schedule_canvas_frames(cx);
         self.native_toolbar.clone()
     }
 }

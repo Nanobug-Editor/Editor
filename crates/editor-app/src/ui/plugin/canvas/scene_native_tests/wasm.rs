@@ -4,6 +4,7 @@ pub(super) mod editable;
 pub(super) mod files;
 #[path = "../../../../../../plugin-runtime/tests/support/packages.rs"]
 mod test_packages;
+pub(super) mod timeline;
 
 /// Keep package authority and temporary paths alive through the last native window callback.
 pub(super) struct InstalledFlow {
