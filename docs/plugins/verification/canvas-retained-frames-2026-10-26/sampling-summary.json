@@ -1,0 +1,491 @@
+{
+  "schema": 1,
+  "source_commit": "bd5d920f38c88fc60ac722b4989c96ccbcf66bd6",
+  "source_tree": "cb49ef64bca3953af4146271c74f3a00905232fb",
+  "native_test_exe_sha256": "100dbb72dfc99d115e455e3af89dc747bb6fb493bef6d3985bda53bf050828c9",
+  "timeline_package_sha256": "ee6132d9724d9c308b43be05bfcb4b4e2e0345f608af16bd8db19b96ca2d57cb",
+  "acceptance": "AC6/AC7 pending: neither patch run completed 600 seconds; desktop currently needed by user",
+  "machine": {
+    "cpu": "AMD Ryzen 9 9950X3D",
+    "gpu": "NVIDIA GeForce RTX 5080",
+    "gpu_driver": "32.0.16.1088",
+    "os": "Windows 11 Pro 10.0.26200",
+    "visible_memory_kib": 64545140,
+    "display_pixels": [
+      3840,
+      2160
+    ],
+    "display_hz": 144,
+    "window_dpi_scale": 1.5
+  },
+  "comparison_limitations": [
+    "Full is viewport full publication on the current retained host, not a historical binary.",
+    "Patch observations are interrupted attempts, not ten-minute acceptance evidence.",
+    "Warm-up overscan geometry/cache base can differ slightly; preserve original headers.",
+    "Trace ring evictions include already drained observations; completeness is separately audited.",
+    "Peak counters are maxima of one-second observations, not absolute OS peaks.",
+    "Input latency measures native dispatch to draw and excludes hardware/SendInput dispatch.",
+    "Native GPU atlas bytes are not measured."
+  ],
+  "runs": [
+    {
+      "name": "full-30s",
+      "result": "passed_30_second_baseline",
+      "physical_wheel_inputs": 75,
+      "test_result": "Ok(())",
+      "raw_file": "full-30s.jsonl.gz",
+      "raw_sha256": "bebe9b910d10f559cb9cc6adfaa85ed54a1f7c0f23d44b5e6c2bf6df2e5aa705",
+      "gzip_sha256": "9de19c467f634265cc329e8b42b479e8e7311e360df914476f10a9873f6b12cd",
+      "record_counts": {
+        "header": 1,
+        "draw": 4292,
+        "present": 4292,
+        "sample": 29,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "full",
+        "requested_seconds": 30,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.0,
+            "y": 8.0,
+            "w": 959.54694,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 705.39386,
+          "full_publication": true,
+          "business_ticks": 91
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 392,
+          "reuse": 10973,
+          "shape": 72,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-prerequisite\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-prerequisite\\Editor\\target\\release\\deps\\canvas-d-release-lifetime-native.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.5,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "summary": {
+        "kind": "summary",
+        "elapsed_ms": 30001,
+        "frames": 1912,
+        "offset": [
+          334.05923,
+          336.0
+        ],
+        "business_ticks": 1282,
+        "publication_bytes": 145416550,
+        "publications": 11273,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 11620,
+        "raw_draw_events": 4292,
+        "raw_present_events": 4292,
+        "draw_fps": 143.0609427983453,
+        "present_fps": 143.06094184464385,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 22729,
+        "rss_bytes": 133599232,
+        "private_bytes": 127033344,
+        "peaks": {
+          "rss_bytes": 135000064,
+          "private_bytes": 128610304,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 19
+        },
+        "cache": {
+          "prepare": 7057,
+          "reuse": 644777,
+          "shape": 1051,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 320,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 4292,
+          "p50_ns": 596479,
+          "p95_ns": 856575,
+          "p99_ns": 1134591,
+          "max_ns": 1987583
+        },
+        "dirty_to_present": {
+          "count": 4292,
+          "p50_ns": 6905855,
+          "p95_ns": 7565311,
+          "p99_ns": 7999487,
+          "max_ns": 64356351
+        },
+        "present_interval": {
+          "count": 4237,
+          "p50_ns": 6934527,
+          "p95_ns": 7622655,
+          "p99_ns": 8044543,
+          "max_ns": 64389119
+        },
+        "input_to_frame": {
+          "count": 74,
+          "p50_ns": 3901439,
+          "p95_ns": 6955007,
+          "p99_ns": 7380991,
+          "max_ns": 7380991
+        },
+        "input_mid_draw_excluded": 0
+      }
+    },
+    {
+      "name": "patch-20s-interrupted",
+      "result": "failed_foreground_guard",
+      "physical_wheel_inputs": 49,
+      "test_result": "Err(timeline input window lost foreground)",
+      "raw_file": "patch-20s-interrupted.jsonl.gz",
+      "raw_sha256": "04cb9226fdedf19bb24c54cf77baa918f9bfc68c09f694fa271bfd0dd0bffa57",
+      "gzip_sha256": "920e926a2cab8797e8f3c3b661c948c2efa84182e5855caca76c7fffebe386fc",
+      "record_counts": {
+        "header": 1,
+        "draw": 2872,
+        "present": 2872,
+        "sample": 19,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "patch",
+        "requested_seconds": 600,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.0,
+            "y": 8.0,
+            "w": 959.94257,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 706.6404,
+          "full_publication": false,
+          "business_ticks": 93
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 392,
+          "reuse": 10973,
+          "shape": 72,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-prerequisite\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-prerequisite\\Editor\\target\\release\\deps\\canvas-d-release-lifetime-native.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.5,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "summary": {
+        "kind": "summary",
+        "elapsed_ms": 20014,
+        "frames": 1286,
+        "offset": [
+          168.0,
+          334.06158
+        ],
+        "business_ticks": 901,
+        "publication_bytes": 5549748,
+        "publications": 7548,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 7902,
+        "raw_draw_events": 2872,
+        "raw_present_events": 2872,
+        "draw_fps": 143.49613892960414,
+        "present_fps": 143.49613749568064,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 15293,
+        "rss_bytes": 127459328,
+        "private_bytes": 124338176,
+        "peaks": {
+          "rss_bytes": 130289664,
+          "private_bytes": 127295488,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 4
+        },
+        "cache": {
+          "prepare": 4870,
+          "reuse": 434504,
+          "shape": 739,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 349,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 2872,
+          "p50_ns": 537599,
+          "p95_ns": 845311,
+          "p99_ns": 1130495,
+          "max_ns": 1980415
+        },
+        "dirty_to_present": {
+          "count": 2872,
+          "p50_ns": 6905855,
+          "p95_ns": 7516159,
+          "p99_ns": 7872511,
+          "max_ns": 35618815
+        },
+        "present_interval": {
+          "count": 2818,
+          "p50_ns": 6934527,
+          "p95_ns": 7565311,
+          "p99_ns": 7979007,
+          "max_ns": 8790015
+        },
+        "input_to_frame": {
+          "count": 49,
+          "p50_ns": 4415487,
+          "p95_ns": 7086079,
+          "p99_ns": 7360511,
+          "max_ns": 7360511
+        },
+        "input_mid_draw_excluded": 0
+      }
+    },
+    {
+      "name": "patch-40s-interrupted",
+      "result": "failed_foreground_guard",
+      "physical_wheel_inputs": 99,
+      "test_result": "Err(timeline input window lost foreground)",
+      "raw_file": "patch-40s-interrupted.jsonl.gz",
+      "raw_sha256": "3de47f495b9c44ecc3d5587c4e0751675336462f2c4206adff53e20fbcdeaf51",
+      "gzip_sha256": "f8f4294e7e187d304ccec2c854df600d8702c01c3fac863dbd8772bb81b6cc0d",
+      "record_counts": {
+        "header": 1,
+        "draw": 5716,
+        "present": 5716,
+        "sample": 39,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "patch",
+        "requested_seconds": 600,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.5708008,
+            "y": 8.0,
+            "w": 960.0,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 706.1695,
+          "full_publication": false,
+          "business_ticks": 93
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 450,
+          "reuse": 12771,
+          "shape": 101,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-prerequisite\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-prerequisite\\Editor\\target\\release\\deps\\canvas-d-release-lifetime-native.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.5,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "summary": {
+        "kind": "summary",
+        "elapsed_ms": 40002,
+        "frames": 2561,
+        "offset": [
+          336.0,
+          501.2117
+        ],
+        "business_ticks": 1713,
+        "publication_bytes": 11173348,
+        "publications": 15111,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 15461,
+        "raw_draw_events": 5716,
+        "raw_present_events": 5716,
+        "draw_fps": 142.89274926467044,
+        "present_fps": 142.89274855024297,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 30411,
+        "rss_bytes": 126869504,
+        "private_bytes": 125173760,
+        "peaks": {
+          "rss_bytes": 129839104,
+          "private_bytes": 128249856,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 3
+        },
+        "cache": {
+          "prepare": 9329,
+          "reuse": 862690,
+          "shape": 1384,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 320,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 5716,
+          "p50_ns": 539647,
+          "p95_ns": 854527,
+          "p99_ns": 1098751,
+          "max_ns": 2361343
+        },
+        "dirty_to_present": {
+          "count": 5716,
+          "p50_ns": 6905855,
+          "p95_ns": 7548927,
+          "p99_ns": 8028159,
+          "max_ns": 36143103
+        },
+        "present_interval": {
+          "count": 5654,
+          "p50_ns": 6930431,
+          "p95_ns": 7602175,
+          "p99_ns": 8056831,
+          "max_ns": 10313727
+        },
+        "input_to_frame": {
+          "count": 99,
+          "p50_ns": 4485119,
+          "p95_ns": 6942719,
+          "p99_ns": 7163903,
+          "max_ns": 7163903
+        },
+        "input_mid_draw_excluded": 0
+      }
+    }
+  ]
+}

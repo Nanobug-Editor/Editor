@@ -1,0 +1,39 @@
+
+running 1 test
+
+running 1 test
+test ui::plugin::canvas::scene_native_tests::timeline::native_canvas_timeline_real_frames_scroll_and_idle ... actual timeline visible frames and business state: {"revision":5,"scene_revision":5,"identity":401,"seed":1729,"edits":{},"offset":[0.0,0.0],"width":640.0,"height":360.0,"scale":1.0,"buffer":{"x":0.0,"y":0.0,"w":800.0,"h":520.0},"animating":true,"frame_request":4,"frames":3,"playhead":2.540946,"full_publication":false,"business_ticks":6}
+native timeline phase: hide; state={"revision":5,"scene_revision":5,"identity":401,"seed":1729,"edits":{},"offset":[0.0,0.0],"width":640.0,"height":360.0,"scale":1.0,"buffer":{"x":0.0,"y":0.0,"w":800.0,"h":520.0},"animating":true,"frame_request":4,"frames":3,"playhead":2.540946,"full_publication":false,"business_ticks":6}
+test ui::plugin::canvas::scene_native_tests::timeline::native_canvas_timeline_real_frames_scroll_and_idle ... FAILED
+
+failures:
+
+failures:
+    ui::plugin::canvas::scene_native_tests::timeline::native_canvas_timeline_real_frames_scroll_and_idle
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1111 filtered out; finished in 46.30s
+
+native timeline phase: resume; state={"revision":6,"scene_revision":6,"identity":401,"seed":1729,"edits":{},"offset":[0.0,0.0],"width":640.0,"height":360.0,"scale":1.0,"buffer":{"x":0.0,"y":0.0,"w":800.0,"h":520.0},"animating":true,"frame_request":5,"frames":4,"playhead":3.378108,"full_publication":false,"business_ticks":19}
+native timeline phase: stop/idle; state={"revision":8,"scene_revision":8,"identity":401,"seed":1729,"edits":{},"offset":[0.0,0.0],"width":640.0,"height":360.0,"scale":1.0,"buffer":{"x":0.0,"y":0.0,"w":800.0,"h":520.0},"animating":true,"frame_request":7,"frames":6,"playhead":21.486767,"full_publication":false,"business_ticks":25}
+native timeline phase: native wheels; state={"revision":9,"scene_revision":9,"identity":401,"seed":1729,"edits":{},"offset":[0.0,0.0],"width":640.0,"height":360.0,"scale":1.0,"buffer":{"x":0.0,"y":0.0,"w":800.0,"h":520.0},"animating":false,"frame_request":8,"frames":7,"playhead":22.27918,"full_publication":false,"business_ticks":45}
+native timeline smoke: visible/resume frames, hidden pause/business timer, idle zero draw, OS x/y scroll/pixels; cache=SceneStatistics { prepared_items: 269, reused_items: 1585, target_preparations: 2, target_reuses: 7, rasterizations: 0, paragraph_layouts: 58, cached_items: 262, resident_bytes: 0, live_resident_bytes: 0, live_textures: 0, vertices: 1674 }; state={"revision":10,"scene_revision":10,"identity":401,"seed":1729,"edits":{},"offset":[151.12952,167.6927],"width":640.0,"height":360.0,"scale":1.0,"buffer":{"x":0.0,"y":0.070007324,"w":801.4256,"h":680.0},"animating":false,"frame_request":8,"frames":7,"playhead":22.27918,"full_publication":false,"business_ticks":72}
+native timeline raw report: C:\Users\Tmiracle\.codex\worktrees\canvas-prerequisite\Editor\target\canvas-d-final-patch-600s-retry1.jsonl
+actual timeline patch run: 40.002s, 99 physical wheel inputs, result=Err(timeline input window lost foreground)
+
+thread 'ui::plugin::canvas::scene_native_tests::timeline::native_canvas_timeline_real_frames_scroll_and_idle' (41944) panicked at crates\editor-app\src\ui\plugin\canvas\scene_native_tests\timeline.rs:52:11:
+called `Result::unwrap()` on an `Err` value: timeline input window lost foreground
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    ui::plugin::canvas::scene_native_tests::timeline::native_canvas_timeline_real_frames_scroll_and_idle
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1111 filtered out; finished in 46.24s
+
+
+
+thread 'ui::plugin::canvas::scene_native_tests::timeline::native_canvas_timeline_real_frames_scroll_and_idle' (52712) panicked at crates\editor-app\src\ui\plugin\canvas\scene_native_tests\timeline.rs:49:9:
+timeline native child failed: exit code: 101
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

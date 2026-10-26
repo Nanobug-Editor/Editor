@@ -6,7 +6,7 @@
 
 **Blocked by：**[01 / #128 — 场景图形与空间操作](https://github.com/Nanobug-Editor/Editor/issues/128)。代码开始不以 02/03 为阻塞；整批关闭前必须完成 02/03 并通过下面的组合验收。当前顺序执行使其在 03 后实施。
 
-**Status：**实施中；真实议题 [#131](https://github.com/Nanobug-Editor/Editor/issues/131)。01/02/03 均已读回 closed/completed；同一独立分支顺序实施，完成整批验收后再合并 main。
+**Status：**待完整十分钟实机采样验收（2026-10-27）；真实议题 [#131](https://github.com/Nanobug-Editor/Editor/issues/131) 保持开放。源码、固定包、定向/实际 WASM/原生回归、双轴审查和 30 秒基线已完成；两次长测因窗口失去前台在 20/40 秒中止，用户当前需要桌面，暂不重启。详见[验证记录](../../verification/canvas-retained-frames-2026-10-26.md)。01/02/03 均已读回 closed/completed；同一独立分支顺序实施，完成整批验收后再合并 main。
 
 **Why separate：**补丁、帧和资源保留基于同一场景身份，有独立的性能及队列风险；此单是整批集成交付责任单，不另拆纯验证工单。
 
