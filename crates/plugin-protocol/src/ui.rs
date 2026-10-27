@@ -251,7 +251,13 @@ impl Document {
                     }) {
                         required.insert("ui.transfer", semver::Version::new(1, 0, 0));
                     }
-                    let version = if canvas.scroll_2d.is_some() {
+                    let version = if canvas
+                        .column_resize
+                        .as_ref()
+                        .is_some_and(|columns| columns.viewport.is_some())
+                    {
+                        semver::Version::new(1, 11, 0)
+                    } else if canvas.scroll_2d.is_some() {
                         semver::Version::new(1, 10, 0)
                     } else if !canvas.overlays.is_empty() {
                         semver::Version::new(1, 9, 0)

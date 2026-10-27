@@ -79,6 +79,17 @@
 //! groups opt into the same mechanism through `ui.code_editor` 2.0 and `Document.code_alignment`.
 //! These semantics do not alter the legacy `CompareDocuments` operation described above.
 //!
+//! With `editor.virtual >=1.2,<2`, `OpenVirtualSource.language_path` may carry the original
+//! filename/path (at most 4096 UTF-8 bytes; nonempty, no NUL). It is recognition
+//! metadata only: it never opens a file, authorizes filesystem access, or changes resource identity.
+//! The host applies the installed file associations and selected grammar to the readonly source.
+//! Explicit `language` takes precedence; absent both hints or an available provider, text stays
+//! plain. Theme/provider changes recolor existing sources without replacing their text or revision.
+//! The existing `editor.read` permission and instance ownership remain required; no new grant is
+//! introduced. Supplying the hint below 1.2 returns `CapabilityUnavailable`; an empty, overlong or
+//! NUL-containing hint returns `InvalidRequest` before allocating a source. Historic tabs/newlines
+//! are accepted as inert filename characters; the host never normalizes or resolves them on disk.
+//!
 //! A preview may replace another unpinned preview; a pinned comparison remains until closed.
 //! Closing a source or retiring its owner revokes every referencing descriptor. Superseded hidden
 //! snapshots are reclaimed when no descriptor references them. Neither closing a comparison nor

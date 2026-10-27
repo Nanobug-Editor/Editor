@@ -1,6 +1,64 @@
 //! Comparison admission checks added source semantics before native resources are allocated.
 use super::*;
 
+/// Filename hints are additive metadata, bounded before admission and never a filesystem lookup.
+#[test]
+fn virtual_source_language_paths_require_1_2_and_bounded_metadata() {
+    let mut operation = EditorOperation::OpenVirtualSource {
+        title: "snapshot".into(),
+        language: None,
+        language_path: None,
+        text: "source".into(),
+    };
+    let mut negotiated = api::Negotiated {
+        base: semver::Version::new(1, 0, 0),
+        capabilities: [("editor.virtual".into(), semver::Version::new(1, 1, 0))].into(),
+    };
+    validate_virtual_source_request(&operation, &negotiated).unwrap();
+    if let EditorOperation::OpenVirtualSource { language_path, .. } = &mut operation {
+        *language_path = Some("deleted/path/source.novel".into());
+    }
+    assert_eq!(
+        validate_virtual_source_request(&operation, &negotiated)
+            .unwrap_err()
+            .code,
+        ErrorCode::CapabilityUnavailable
+    );
+    negotiated
+        .capabilities
+        .insert("editor.virtual".into(), semver::Version::new(1, 2, 0));
+    validate_virtual_source_request(&operation, &negotiated).unwrap();
+    // Historic paths may contain tabs/newlines even when this platform cannot check them out.
+    for valid in ["old\nsource.novel", "old\tsource.novel"] {
+        if let EditorOperation::OpenVirtualSource { language_path, .. } = &mut operation {
+            *language_path = Some(valid.into());
+        }
+        validate_virtual_source_request(&operation, &negotiated).unwrap();
+    }
+    for invalid in [String::new(), "a\0b".into(), "文".repeat(1366)] {
+        if let EditorOperation::OpenVirtualSource { language_path, .. } = &mut operation {
+            *language_path = Some(invalid);
+        }
+        assert_eq!(
+            validate_virtual_source_request(&operation, &negotiated)
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidRequest
+        );
+    }
+    let prior: EditorOperation = serde_json::from_value(serde_json::json!({
+        "kind": "open_virtual_source", "title": "snapshot", "text": "plain"
+    }))
+    .unwrap();
+    assert!(matches!(
+        prior,
+        EditorOperation::OpenVirtualSource {
+            language_path: None,
+            ..
+        }
+    ));
+}
+
 /// Runtime-issued direct commands own private sources; nested, foreign and revoked calls do not.
 #[test]
 fn direct_editor_owner_keeps_typed_host_commands_inside_the_original_instance() {

@@ -100,7 +100,11 @@ pub(crate) struct VirtualTab {
     pub(crate) hidden: bool,
     pub(crate) resource: std::sync::Arc<plugin_runtime::VirtualDocumentResource>,
     pub(crate) title: String,
+    /// Canonical language used by metadata and native highlighting; explicit IDs retain their identity.
     pub(crate) language: String,
+    /// Inert original filename for reevaluating automatic recognition after provider changes.
+    /// Present only when the caller omitted an explicit language ID.
+    pub(crate) language_path: Option<String>,
 }
 
 impl Drop for VirtualTab {

@@ -290,17 +290,36 @@ impl EditorApp {
             });
         }
         let current = self.providers.languages();
-        for tab in self.tabs.iter().filter_map(|file| file.text.as_ref()) {
-            let language = self.language_for_path(tab.path());
-            if self.providers.handles_path(tab.path())
+        // Virtual snapshots retain their explicit language or inert source path, never the opaque
+        // resource URI. Withdrawal clears their styles; reinstalling recognition restores them.
+        for index in 0..self.tabs.len() {
+            let file = &self.tabs[index];
+            let Some(tab) = file.text.as_ref() else {
+                continue;
+            };
+            let language = file.virtual_document.as_ref().map_or_else(
+                || self.language_for_path(tab.path()),
+                |source| {
+                    source.language_path.as_ref().map_or_else(
+                        || source.language.clone(),
+                        |path| self.language_for_path(Path::new(path)),
+                    )
+                },
+            );
+            if file.virtual_document.is_some()
+                || self.providers.handles_path(tab.path())
                 || current.contains(&language)
                 || self
                     .dynamic_language_ids
                     .contains(tab.editor.read(cx).language_name().as_ref())
             {
                 // Highlight-only providers keep the identity supplied by an independent recognizer.
-                tab.editor
-                    .update(cx, |editor, cx| editor.set_highlighter(language, cx));
+                tab.editor.update(cx, |editor, cx| {
+                    editor.set_highlighter(language.clone(), cx)
+                });
+                if let Some(source) = &mut self.tabs[index].virtual_document {
+                    source.language = language;
+                }
             }
         }
         self.dynamic_language_ids = current;

@@ -81,6 +81,8 @@ pub(crate) struct CanvasView {
     /// Column previews belong to native frames; the guest receives only completed widths.
     columns: editor_ui::column_resize::ColumnResize,
     column_bindings: Vec<Option<usize>>,
+    /// Declared full-row fills follow only viewport width changes, independently of inner columns.
+    column_spans: Vec<bool>,
     composition: String,
     selection: Range<usize>,
     drag: Option<MouseButton>,
@@ -199,12 +201,31 @@ impl CanvasView {
     fn configure_columns(&mut self) {
         let was_dragging = self.columns.dragging();
         self.column_bindings = vec![None; self.drawing.paint.len()];
+        self.column_spans = vec![false; self.drawing.paint.len()];
         if let Some(columns) = &self.drawing.column_resize {
-            self.columns
-                .configure(columns.epoch, columns.x, &columns.widths, &columns.minimum);
+            self.columns.configure(
+                columns.epoch,
+                columns.x,
+                &columns.widths,
+                &columns.minimum,
+                columns
+                    .viewport
+                    .as_ref()
+                    .map(|viewport| editor_ui::column_resize::Viewport {
+                        width: viewport.width,
+                        flexible: viewport.flexible,
+                    }),
+            );
             for binding in &columns.bindings {
                 if let Some(slot) = self.column_bindings.get_mut(binding.paint) {
                     *slot = Some(binding.column);
+                }
+            }
+            if let Some(viewport) = &columns.viewport {
+                for index in &viewport.span_paints {
+                    if let Some(span) = self.column_spans.get_mut(*index) {
+                        *span = true;
+                    }
                 }
             }
         } else {
@@ -232,6 +253,8 @@ impl CanvasView {
     fn column_rect(&self, index: usize, mut rect: protocol::Rect) -> protocol::Rect {
         if let Some(Some(column)) = self.column_bindings.get(index) {
             (rect.x, rect.w) = self.columns.project(*column, rect.x, rect.w);
+        } else if self.column_spans.get(index) == Some(&true) {
+            rect.w = self.columns.span_width(rect.w);
         }
         rect
     }
@@ -406,6 +429,7 @@ impl CanvasView {
             text_measurements: None,
             columns: Default::default(),
             column_bindings: Vec::new(),
+            column_spans: Vec::new(),
             composition: String::new(),
             selection: 0..0,
             drag: None,
@@ -546,6 +570,10 @@ impl CanvasView {
             cx.notify();
         }
         self.bounds = bounds;
+        if self.columns.resize_viewport(bounds.size.width / px(1.)) {
+            // Text and row backgrounds use this frame's fit immediately; refresh cursor hit bands.
+            cx.notify();
+        }
         self.scroll.update(bounds, self.drawing.scroll.clone());
         self.scroll_2d.update(
             bounds,
@@ -651,7 +679,7 @@ impl CanvasView {
                     color,
                     extend_to_bottom,
                 } => {
-                    let mut rect = *rect;
+                    let mut rect = self.column_rect(index, *rect);
                     if *extend_to_bottom {
                         let height = self
                             .viewport

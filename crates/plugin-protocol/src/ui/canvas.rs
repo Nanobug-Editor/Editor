@@ -53,6 +53,7 @@ pub struct Canvas {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scene: Option<CanvasScene>,
     /// `ui.canvas 1.6`: transparent native column handles and frame-local TextBox resizing.
+    /// The optional [`ColumnViewport`] adds frame-local viewport fitting in `ui.canvas 1.11`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub column_resize: Option<ColumnResize>,
     /// Optional typography for custom grids; omitted fields inherit the selected theme role.
@@ -183,6 +184,7 @@ pub enum CanvasEvent {
         error: Option<String>,
     },
     /// `ui.canvas 1.6`: final widths after a native gesture, matched by epoch and fixed total width.
+    /// `ColumnViewport` (1.11) permits totals from a newer native viewport than the last drawing.
     ColumnsResized {
         epoch: u64,
         widths: Vec<f32>,

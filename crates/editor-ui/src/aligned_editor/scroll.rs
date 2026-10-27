@@ -31,6 +31,21 @@ impl ColumnMetrics {
 }
 
 impl GroupState {
+    /// Reserve the shared bottom rail only while at least one native source actually overflows.
+    /// All panes keep one height, including a short peer beside an unwrapped long source.
+    pub(super) fn horizontal_rail_height(&self) -> Pixels {
+        if self
+            .measurements
+            .iter()
+            .flatten()
+            .any(|measured| measured.source_width > measured.viewport.size.width + px(0.5))
+        {
+            px(RAIL)
+        } else {
+            px(0.)
+        }
+    }
+
     /// Reserve equal total width in comparison columns: the first source already has reading
     /// clearance, while peers reserve the same amount beside their native input. Generic code
     /// groups keep their independent rails. `index` identifies the existing source membership.

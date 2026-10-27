@@ -112,6 +112,7 @@ fn native_canvas_text_and_columns_reach_pixels() {
 fn drawing() -> Canvas {
     Canvas {
         column_resize: Some(protocol::ui::ColumnResize {
+            viewport: None,
             epoch: 1,
             x: 0.,
             widths: vec![200., 200.],

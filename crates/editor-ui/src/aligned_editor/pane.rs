@@ -215,6 +215,7 @@ impl Render for PaneView {
             && large;
         let inner_gutter = group.inner_gutters && self.index == 0;
         let source_right_inset = group.source_right_inset(self.index);
+        let horizontal_rail_height = group.horizontal_rail_height();
         let shows_vertical_scrollbar = group.shows_vertical_scrollbar(self.index);
         let painted_gutter = if inner_gutter {
             self.gutter_metrics.get()
@@ -767,7 +768,7 @@ impl Render for PaneView {
                         .top_0()
                         .left_0()
                         .right(source_right_inset)
-                        .bottom(px(scroll::RAIL))
+                        .bottom(horizontal_rail_height)
                         .w_auto()
                         .h_auto(),
                 )
@@ -787,19 +788,24 @@ impl Render for PaneView {
                             )),
                     )
                 })
-                .child(
-                    div()
-                        .id("aligned-horizontal-scrollbar")
-                        .absolute()
-                        .bottom_0()
-                        .left_0()
-                        .h(px(scroll::RAIL))
-                        .right(source_right_inset)
-                        .child(
-                            super::super::scrollbar::vertical_viewport_scrollbar(&self.scroll, cx)
+                .when(horizontal_rail_height > px(0.), |body| {
+                    body.child(
+                        div()
+                            .id("aligned-horizontal-scrollbar")
+                            .absolute()
+                            .bottom_0()
+                            .left_0()
+                            .h(px(scroll::RAIL))
+                            .right(source_right_inset)
+                            .child(
+                                super::super::scrollbar::vertical_viewport_scrollbar(
+                                    &self.scroll,
+                                    cx,
+                                )
                                 .axis(ScrollbarAxis::Horizontal),
-                        ),
-                )
+                            ),
+                    )
+                })
                 .children(folding::disclosures(&self.group, self.index, cx))
                 .into_any_element()
         };

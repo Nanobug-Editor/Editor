@@ -456,7 +456,9 @@ impl GroupState {
                 .map(|(index, m)| {
                     let mut bounds = m.viewport;
                     bounds.size.width = self.independent_width(index, bounds.size.width);
-                    bounds.size.height += px(scroll::RAIL);
+                    // Fallback removes only the rail actually reserved by the aligned panes.
+                    // A phantom rail would misclassify every fallback paint as a new resize.
+                    bounds.size.height += self.horizontal_rail_height();
                     bounds
                 })
                 .collect();

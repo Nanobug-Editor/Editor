@@ -1,5 +1,6 @@
 //! Real package comparisons retain native source edits and hide immutable snapshot tabs.
 use super::*;
+mod adjacent;
 mod source_tabs;
 
 /// Both native actions remain present and expose their independent availability after tab activation.

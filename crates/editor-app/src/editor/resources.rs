@@ -200,6 +200,23 @@ impl EditorApp {
             window,
             cx,
         );
+        // The resource URI is opaque and has no source extension. Keep recognition separate from
+        // identity, without reading that path or attaching language servers to a readonly snapshot.
+        let language_path = match request.operation() {
+            Op::OpenVirtualSource { language_path, .. } if language.is_none() => {
+                language_path.clone()
+            }
+            _ => None,
+        };
+        let language = language.map(str::to_owned).unwrap_or_else(|| {
+            language_path.as_ref().map_or_else(
+                || "text".into(),
+                |path| self.language_for_path(Path::new(path)),
+            )
+        });
+        native.editor.update(cx, |editor, cx| {
+            editor.set_highlighter(language.clone(), cx)
+        });
         self.tabs.push(OpenTab {
             preview: false,
             source_only: None,
@@ -214,7 +231,8 @@ impl EditorApp {
                 hidden: matches!(request.operation(), Op::OpenVirtualSource { .. }),
                 resource: resource.clone(),
                 title: title.into(),
-                language: language.unwrap_or("text").into(),
+                language,
+                language_path,
             }),
         });
         let index = self.tabs.len() - 1;

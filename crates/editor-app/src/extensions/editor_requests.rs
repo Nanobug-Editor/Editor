@@ -280,6 +280,7 @@ impl EditorApp {
                 title,
                 language,
                 text,
+                ..
             } => self.open_plugin_virtual(title, language.as_deref(), text, &request, window, cx),
             Op::LocateDocument { document, position } => {
                 self.locate_plugin_resource(document, *position, &request, window, cx)

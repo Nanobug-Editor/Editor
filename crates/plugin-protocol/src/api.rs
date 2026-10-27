@@ -705,6 +705,11 @@ pub enum EditorOperation {
         title: String,
         #[serde(default)]
         language: Option<String>,
+        /// editor.virtual 1.2: inert source filename/path for installed language recognition.
+        /// Explicit `language` wins. No file is opened and no filesystem permission is granted.
+        /// At most 4096 UTF-8 bytes, nonempty and without NUL when supplied.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        language_path: Option<String>,
         text: String,
     },
     /// Refresh owned readonly content at its exact revision without a user edit or undo entry.

@@ -1,8 +1,9 @@
 //! Actual canvas separator drags keep commit selection, vertical scroll and sibling scenes intact.
 use super::*;
-use gpui_kit::{FontWeight, MouseMoveEvent, TextRun, font};
+use gpui_kit::{FontWeight, MouseMoveEvent, font};
 use plugin_runtime::plugin_protocol::Paint;
 mod cursor;
+mod viewport;
 
 /// Observe actual public text positions/contents; invisible hit targets need no test-only paint markers.
 fn text_layout(h: &Harness) -> anyhow::Result<Vec<(f32, String)>> {
@@ -24,42 +25,29 @@ fn text_layout(h: &Harness) -> anyhow::Result<Vec<(f32, String)>> {
         .collect())
 }
 
-/// Public metadata rectangles expose the three invisible dividers without duplicating sizing policy.
-fn targets(h: &Harness) -> anyhow::Result<[f32; 3]> {
-    let state = h.worker.state.lock().unwrap();
-    let Kind::Canvas(canvas) = &state.views["git/history"].active_node("log").unwrap().kind else {
-        anyhow::bail!("log is not a canvas");
-    };
-    if let Some(columns) = &canvas.column_resize {
-        let mut edge = columns.x;
-        let result: Vec<_> = columns
-            .widths
-            .iter()
-            .take(3)
-            .map(|width| {
-                edge += width;
-                edge
-            })
-            .collect();
-        return Ok(result
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("four resize columns required"))?);
-    }
-    let positions: Vec<_> = canvas
-        .paint
-        .iter()
-        .filter_map(|paint| match paint {
-            Paint::TextBox { rect, .. } => Some(rect.x - 4.),
-            _ => None,
-        })
-        .take(3)
-        .collect();
-    ensure!(positions.len() == 3, "metadata regions missing");
-    Ok([positions[0], positions[1], positions[2]])
+/// Native boundaries include current viewport fitting; guest declarations may use a wider reference.
+fn targets(h: &Harness, window: &Window, cx: &App) -> anyhow::Result<[f32; 3]> {
+    let snapshot = native_canvas(h, window, cx).context("native log missing")?;
+    let positions: Vec<f32> = serde_json::from_value(snapshot["column_dividers"].clone())?;
+    positions
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("three native column dividers required"))
+}
+
+/// Read actual clip rectangles so glyph measurement observes the same fit as native painting.
+fn painted_rects(
+    h: &Harness,
+    window: &Window,
+    cx: &App,
+) -> anyhow::Result<Vec<plugin_runtime::plugin_protocol::Rect>> {
+    let snapshot = native_canvas(h, window, cx).context("native log missing")?;
+    Ok(serde_json::from_value(snapshot["painted_boxes"].clone())?)
 }
 
 /// Shape the first public row with the same native typography that actually paints the text.
-fn actual_row(h: &Harness, window: &mut Window) -> anyhow::Result<Vec<(f32, f32)>> {
+fn actual_row(h: &Harness, window: &mut Window, cx: &App) -> anyhow::Result<Vec<(f32, f32)>> {
+    let painted = painted_rects(h, window, cx)?;
+    let mut painted = painted.iter();
     let state = h.worker.state.lock().unwrap();
     let Kind::Canvas(canvas) = &state.views["git/history"].active_node("log").unwrap().kind else {
         anyhow::bail!("log is not a canvas");
@@ -69,14 +57,7 @@ fn actual_row(h: &Harness, window: &mut Window) -> anyhow::Result<Vec<(f32, f32)
         .iter()
         .filter_map(|paint| {
             let (text, size, bold, family) = match paint {
-                Paint::Text {
-                    text,
-                    size,
-                    bold,
-                    font,
-                    ..
-                }
-                | Paint::TextBox {
+                Paint::TextBox {
                     text,
                     size,
                     bold,
@@ -95,20 +76,8 @@ fn actual_row(h: &Harness, window: &mut Window) -> anyhow::Result<Vec<(f32, f32)
                 face.weight = FontWeight::BOLD;
             }
             match paint {
-                Paint::Text { x, .. } => {
-                    let line = window.text_system().shape_line(
-                        text.clone().into(),
-                        px(*size),
-                        &[TextRun {
-                            len: text.len(),
-                            font: face,
-                            ..Default::default()
-                        }],
-                        None,
-                    );
-                    Some((*x, line.width / px(1.)))
-                }
-                Paint::TextBox { rect, align, .. } => {
+                Paint::TextBox { align, .. } => {
+                    let rect = painted.next()?;
                     let align = match align {
                         plugin_runtime::plugin_protocol::ui::Alignment::Start => {
                             gpui_kit::TextAlign::Left
@@ -145,8 +114,13 @@ fn actual_row(h: &Harness, window: &mut Window) -> anyhow::Result<Vec<(f32, f32)
 }
 
 /// Compare real glyph edges against the current public divider anchors, including clamped drags.
-fn alignment(h: &Harness, targets: [f32; 3], window: &mut Window) -> anyhow::Result<[f32; 3]> {
-    let row = actual_row(h, window)?;
+fn alignment(
+    h: &Harness,
+    targets: [f32; 3],
+    window: &mut Window,
+    cx: &App,
+) -> anyhow::Result<[f32; 3]> {
+    let row = actual_row(h, window, cx)?;
     let label_end = targets[1] - 4.;
     let author_start = targets[1] + 4.;
     let time_start = targets[2] + 4.;
@@ -176,21 +150,27 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     if std::env::var_os("NANOBUG_GIT_NATIVE_BRANCH_COMPACT").is_some() {
         current_branch(h)?;
     }
-    let gaps = h
-        .main
-        .update(cx, |_, window, _| -> anyhow::Result<[f32; 2]> {
-            let row = actual_row(h, window)?;
-            Ok([
+    let (gaps, glyph_slack) = h.main.update(cx, |_, window, cx| -> anyhow::Result<_> {
+        let row = actual_row(h, window, cx)?;
+        let rectangles = painted_rects(h, window, cx)?;
+        let glyph_slack = (rectangles[2].w - row[2].1).max(0.);
+        Ok((
+            [
                 row[2].0 - row[1].0 - row[1].1,
                 row[3].0 - row[2].0 - row[2].1,
-            ])
-        })??;
+            ],
+            glyph_slack,
+        ))
+    })??;
     ensure!(
-        gaps.iter().all(|gap| (*gap - 8.).abs() < 1.),
+        (gaps[0] - 8.).abs() < 1. && (gaps[1] - glyph_slack - 8.).abs() < 1.,
         "native metadata gaps are not compact: {gaps:?}"
     );
-    h.record("history_compact_gaps", serde_json::json!({"label_author_px": gaps[0], "author_time_px": gaps[1], "native_font_metrics": true}));
+    h.record("history_compact_gaps", serde_json::json!({"label_author_px": gaps[0], "author_time_px": gaps[1], "author_time_glyph_slack_px":glyph_slack, "native_font_metrics": true}));
     h.capture(h.main, "history-compact-default.png", cx)?;
+    if std::env::var_os("NANOBUG_GIT_NATIVE_VIEWPORT_COLUMNS").is_some() {
+        viewport::exercise(h, cx).await?;
+    }
     let selected_before = selected(h);
     let offset = log_offset(h);
     let staging_revision = h.worker.state.lock().unwrap().views["git/staging"].revision;
@@ -206,7 +186,10 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     let mut resize_cursor = false;
     let mut drag_times = Vec::new();
     if probe_drag {
-        cursor::exercise(h, origin, y, targets(h)?[1], cx).await?;
+        let native_targets = h
+            .main
+            .update(cx, |_, window, cx| targets(h, window, cx))??;
+        cursor::exercise(h, origin, y, native_targets[1], cx).await?;
         resize_cursor = true;
     }
     // Give the compact label column room first; its neighboring subject can already be at minimum.
@@ -215,7 +198,9 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         let native_before = h.main.update(cx, |_, window, cx| {
             native_canvas(h, window, cx).and_then(|snapshot| snapshot.get("painted_boxes").cloned())
         })?;
-        let before_targets = targets(h)?;
+        let before_targets = h
+            .main
+            .update(cx, |_, window, cx| targets(h, window, cx))??;
         // Widen labels before the subject; the last gesture then gives extra room to time.
         let start = point(origin + px(before_targets[index]), y);
         let end = start + point(px(if index == 2 { -12. } else { 12. }), px(0.));
@@ -281,7 +266,9 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
             );
         })?;
         h.settle(cx).await?;
-        let after_targets = targets(h)?;
+        let after_targets = h
+            .main
+            .update(cx, |_, window, cx| targets(h, window, cx))??;
         ensure!(
             before_targets.iter().zip(after_targets).enumerate().all(
                 |(position, (before, after))| if position == index {
@@ -322,9 +309,9 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
             "column boundaries must not paint separator lines"
         );
     }
-    let errors = h
-        .main
-        .update(cx, |_, window, _| alignment(h, targets(h)?, window))??;
+    let errors = h.main.update(cx, |_, window, cx| {
+        alignment(h, targets(h, window, cx)?, window, cx)
+    })??;
     h.record(
         "history_column_alignment",
         serde_json::json!({

@@ -47,23 +47,7 @@ impl State {
                 "Deadline must be between 1 and 300000 ms",
             ));
         }
-        for (needed, capability) in [(
-            matches!(&operation, EditorOperation::OpenVirtualSource { .. }),
-            "editor.virtual",
-        )] {
-            if needed
-                && self
-                    .api
-                    .capabilities
-                    .get(capability)
-                    .is_none_or(|version| *version < semver::Version::new(1, 1, 0))
-            {
-                return Err(Failure::new(
-                    ErrorCode::CapabilityUnavailable,
-                    format!("Operation requires {capability} 1.1"),
-                ));
-            }
-        }
+        validate_virtual_source_request(&operation, &self.api)?;
         validate_comparison_request(&operation, &self.api)?;
         // Silent local-source preparation is additive; an older negotiated document contract
         // must not accidentally grant a new presentation or lifetime operation.
@@ -551,6 +535,7 @@ impl State {
                 title,
                 language,
                 text,
+                ..
             } => {
                 if !direct_editor_owner(
                     self.plugin_services.context.as_ref(),
@@ -697,6 +682,37 @@ fn validate_comparison_navigation(
             )
         })?;
         signature.parameters.accepts(&action.arguments)?;
+    }
+    Ok(())
+}
+
+/// Validate inert recognition hints before allocating sources; paths never authorize file access.
+fn validate_virtual_source_request(
+    operation: &EditorOperation,
+    negotiated: &api::Negotiated,
+) -> Result<(), Failure> {
+    let EditorOperation::OpenVirtualSource { language_path, .. } = operation else {
+        return Ok(());
+    };
+    let minimum = semver::Version::new(1, if language_path.is_some() { 2 } else { 1 }, 0);
+    if negotiated
+        .capabilities
+        .get("editor.virtual")
+        .is_none_or(|version| version < &minimum)
+    {
+        return Err(Failure::new(
+            ErrorCode::CapabilityUnavailable,
+            format!("Operation requires editor.virtual {minimum}"),
+        ));
+    }
+    if language_path
+        .as_ref()
+        .is_some_and(|path| path.is_empty() || path.len() > 4096 || path.contains('\0'))
+    {
+        return Err(Failure::new(
+            ErrorCode::InvalidRequest,
+            "Invalid virtual source language path",
+        ));
     }
     Ok(())
 }

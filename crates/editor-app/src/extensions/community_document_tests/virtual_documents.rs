@@ -1,6 +1,151 @@
 //! Readonly virtual input, replacement and native/runtime lifecycle acceptance.
 use super::*;
 
+/// Readonly comparison snapshots use the same selected plugin grammar as ordinary native documents.
+/// The frozen consumer supports visible virtual opens; both variants share `open_plugin_virtual`.
+#[gpui::test]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
+fn community_virtual_comparison_sources_apply_selected_language(cx: &mut TestAppContext) {
+    crate::tests::with_shortcut_editor(cx, false, Vec::new(), |visual, app, path| {
+        let workspace = path.parent().unwrap();
+        let mut manager = Manager::open(
+            workspace.join(".runtime-plugin-test"),
+            Environment {
+                workspace: workspace.display().to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let package = crate::test_packages::package("history-preview-0.1.2");
+        manager
+            .install(&package, package.manifest.permissions.clone())
+            .unwrap();
+        let language =
+            crate::extensions::language_tests::packages::language_package("snapshot-language");
+        manager.install(&language, Default::default()).unwrap();
+        crate::extensions::language_tests::publish_languages(&app, &manager, visual);
+        let mut sources = Vec::new();
+        for (title, text) in [
+            ("left snapshot", "answer = 41\n"),
+            ("right snapshot", "answer = 42\n"),
+        ] {
+            let api::EditorValue::DocumentOpened(info) = invoke(
+                visual,
+                &app,
+                &mut manager,
+                json!({"kind":"open_virtual_document", "title":title, "language":"novel", "text":text}),
+            ) else {
+                panic!("readonly source expected")
+            };
+            visual.update(|_, cx| {
+                let owner = app.read(cx);
+                let editor = owner
+                    .tabs
+                    .iter()
+                    .find(|tab| tab.title() == title)
+                    .unwrap()
+                    .text
+                    .as_ref()
+                    .unwrap()
+                    .editor
+                    .read(cx);
+                assert_eq!(
+                    editor.language_name().as_ref(),
+                    "novel",
+                    "virtual sources must enable their declared grammar before mounting"
+                );
+                assert_eq!(editor.value().as_ref(), text);
+            });
+            sources.push(info.document);
+        }
+        invoke(
+            visual,
+            &app,
+            &mut manager,
+            json!({"kind":"compare_documents", "left":sources[0], "right":sources[1]}),
+        );
+        visual.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(visual.debug_bounds("document-diff-left").is_some());
+        assert!(visual.debug_bounds("document-diff-right").is_some());
+        let mut palettes = Vec::new();
+        for dark in [false, true] {
+            visual.update(|window, cx| {
+                crate::theme::apply_theme(crate::theme::builtin_theme(dark), cx);
+                window.draw(cx).clear(cx);
+                let owner = app.read(cx);
+                let mut colors = Vec::new();
+                for source in &sources {
+                    let index = (0..owner.tabs.len())
+                        .find(|&index| owner.plugin_document_version(index).unwrap() == *source)
+                        .unwrap();
+                    let editor = owner.tabs[index].text.as_ref().unwrap().editor.read(cx);
+                    let mut syntax = crate::language::highlighter::SyntaxHighlighter::new(
+                        &owner.providers.parser_key(&editor.language_name()),
+                    );
+                    assert!(syntax.update(None, editor.text(), None));
+                    let styles = syntax.styles(
+                        &(0..editor.text().len()),
+                        cx.theme().highlight_theme.as_ref(),
+                    );
+                    colors.push(
+                        styles
+                            .iter()
+                            .find(|(range, style)| range.contains(&9) && style.color.is_some())
+                            .expect("number capture must use the selected plugin theme")
+                            .1
+                            .color
+                            .unwrap(),
+                    );
+                    assert!(editor.presentation().is_readonly());
+                }
+                palettes.push(colors);
+            });
+        }
+        assert_ne!(
+            palettes[0], palettes[1],
+            "both source palettes follow theme changes"
+        );
+        for enabled in [false, true] {
+            if enabled {
+                manager.enable("snapshot-language").unwrap();
+            } else {
+                manager.disable("snapshot-language").unwrap();
+            }
+            crate::extensions::language_tests::publish_languages(&app, &manager, visual);
+            visual.update(|_, cx| {
+                let owner = app.read(cx);
+                assert_eq!(owner.providers.grammars().is_empty(), !enabled);
+                for source in &sources {
+                    let index = (0..owner.tabs.len())
+                        .find(|&index| owner.plugin_document_version(index).unwrap() == *source)
+                        .unwrap();
+                    let editor = owner.tabs[index].text.as_ref().unwrap().editor.read(cx);
+                    assert_eq!(
+                        editor.language_name().as_ref(),
+                        "novel",
+                        "explicit source language survives provider withdrawal/reinstall"
+                    );
+                    let mut syntax = crate::language::highlighter::SyntaxHighlighter::new(
+                        &owner.providers.parser_key(&editor.language_name()),
+                    );
+                    assert!(syntax.update(None, editor.text(), None));
+                    assert_eq!(
+                        syntax
+                            .styles(
+                                &(0..editor.text().len()),
+                                cx.theme().highlight_theme.as_ref()
+                            )
+                            .iter()
+                            .any(|(range, style)| range.contains(&9) && style.color.is_some()),
+                        enabled,
+                        "provider withdrawal removes token styles and reenabling restores them"
+                    );
+                }
+            });
+        }
+    });
+}
+
 /// Virtual content is opened through the real guest and remains readonly under native keyboard input.
 #[gpui::test]
 #[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]

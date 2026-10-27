@@ -1,6 +1,42 @@
 //! Physical scrolling gestures must target the shared viewport and original native x offset.
 use super::*;
 
+/// A wrapped comparison has no horizontal overflow, so its native viewport must reach the pane edge.
+#[gpui::test]
+fn aligned_editor_wrapped_sources_do_not_reserve_an_empty_bottom_rail(cx: &mut TestAppContext) {
+    let (view, ui) = mount(cx);
+    for scale in [1., 1.5] {
+        ui.simulate_scale_factor_change(scale);
+        settle(ui);
+        ui.update(|_, cx| {
+            let group = view.read(cx).group.state.read(cx);
+            for viewport in group.viewports.iter().flatten() {
+                assert!(
+                    (viewport.bottom() - px(180.)).abs() < px(0.5),
+                    "wrapped sources leave an unused bottom strip: {viewport:?}"
+                );
+            }
+        });
+    }
+    // A real horizontal overflow still reserves a draggable rail and releases it after wrapping.
+    for wrapped in [false, true] {
+        ui.update(|window, cx| {
+            let editors = view.read(cx).editors.clone();
+            for editor in editors {
+                editor.update(cx, |editor, cx| editor.set_soft_wrap(wrapped, window, cx));
+            }
+        });
+        settle(ui);
+        ui.update(|_, cx| {
+            let group = view.read(cx).group.state.read(cx);
+            let bottom = px(180. - if wrapped { 0. } else { scroll::RAIL });
+            for viewport in group.viewports.iter().flatten() {
+                assert!((viewport.bottom() - bottom).abs() < px(0.5));
+            }
+        });
+    }
+}
+
 /// Locate the actually painted local thumb, not a guessed rail coordinate. Both axes keep their
 /// hit surface outside the editor's pointer projection, so the real Base drag must move content.
 fn thumb(ui: &mut VisualTestContext, viewport: Bounds<Pixels>, horizontal: bool) -> Point<Pixels> {

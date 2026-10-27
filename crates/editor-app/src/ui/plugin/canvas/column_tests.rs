@@ -3,6 +3,214 @@ use super::*;
 use gpui_kit::{AppContext as _, TestAppContext, gpui};
 use std::cell::RefCell;
 
+/// The native viewport may resize every frame while the worker is still drawing an older width.
+#[gpui::test]
+fn canvas_columns_follow_viewport_before_guest_resize_reply(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        editor_ui::typography::init(cx);
+    });
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let output = events.clone();
+    let saved = Rc::new(RefCell::new(None));
+    let retained = saved.clone();
+    let (_, visual) = cx.add_window_view(move |window, cx| {
+        let view = cx.new(|cx| {
+            CanvasView::new(
+                viewport_columns(600., None),
+                move |event, _, _| output.borrow_mut().push(event),
+                window,
+                cx,
+            )
+        });
+        *retained.borrow_mut() = Some(view.clone());
+        gpui_base::Root::new(view, window, cx)
+    });
+    let view = saved.borrow().as_ref().unwrap().clone();
+    visual.simulate_resize(size(px(600.), px(160.)));
+    visual.run_until_parked();
+    events.borrow_mut().clear();
+    for width in [560., 640., 590., 620.] {
+        visual.simulate_resize(size(px(width), px(160.)));
+        visual.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let view = view.read(cx);
+            let last = view.painted_boxes.last().unwrap();
+            assert_eq!(
+                last.x + last.w,
+                width - 12.,
+                "the last column must keep its right inset before any worker resize reply"
+            );
+        });
+    }
+    assert!(!events.borrow().iter().any(|event| matches!(
+        event,
+        CanvasEvent::ColumnsResized { .. } | CanvasEvent::Pointer { .. }
+    )));
+    for stale_width in [560., 640., 600.] {
+        visual.update(|window, cx| {
+            view.update(cx, |view, _| {
+                view.update_drawing(viewport_columns(stale_width, None))
+            });
+            window.draw(cx).clear(cx);
+            let last = *view.read(cx).painted_boxes.last().unwrap();
+            assert_eq!(
+                last.x + last.w,
+                608.,
+                "late resized artwork cannot move the right anchor"
+            );
+        });
+    }
+    let start = visual.update(|_, cx| view.read(cx).bounds.origin + point(px(420.), px(40.)));
+    visual.simulate_mouse_down(start, MouseButton::Left, Default::default());
+    visual.simulate_mouse_move(
+        start + point(px(20.), px(0.)),
+        MouseButton::Left,
+        Default::default(),
+    );
+    visual.update(|window, cx| {
+        view.update(cx, |view, _| {
+            view.update_drawing(viewport_columns(560., None))
+        });
+        window.draw(cx).clear(cx);
+        assert!(
+            view.read(cx).columns.dragging(),
+            "a delayed reply is not an external native resize"
+        );
+        assert_eq!(view.read(cx).painted_boxes[2].x, 444.);
+        assert_eq!(
+            view.read(cx)
+                .column_rect(
+                    4,
+                    protocol::Rect {
+                        x: 0.,
+                        y: 0.,
+                        w: 560.,
+                        h: 28.
+                    }
+                )
+                .w,
+            620.
+        );
+    });
+    visual.simulate_mouse_up(
+        start + point(px(20.), px(0.)),
+        MouseButton::Left,
+        Default::default(),
+    );
+    let releases = events
+        .borrow()
+        .iter()
+        .filter_map(|event| match event {
+            CanvasEvent::ColumnsResized { widths, .. } => Some(widths.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(releases, [vec![320., 120., 60., 112.]]);
+    visual.simulate_resize(size(px(660.), px(160.)));
+    visual.update(|window, cx| {
+        view.update(cx, |view, _| {
+            view.update_drawing(viewport_columns(620., Some([120., 60., 112.])))
+        });
+        window.draw(cx).clear(cx);
+        assert_eq!(view.read(cx).painted_boxes[2].x, 484.);
+        let last = *view.read(cx).painted_boxes.last().unwrap();
+        assert_eq!(last.x + last.w, 648.);
+    });
+    // Reference drawings retain the preferred tail even below its total minimum. Compare all
+    // metadata edges, not just the right anchor: alternate compression policies can hide there.
+    for actual in [340., 260., 660., 300., 660.] {
+        visual.simulate_resize(size(px(actual), px(160.)));
+        let before = visual.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            view.read(cx).painted_boxes.clone()
+        });
+        for reply in [600., 340., 260., 660.] {
+            visual.update(|window, cx| {
+                view.update(cx, |view, _| {
+                    view.update_drawing(viewport_columns(reply, Some([120., 60., 112.])))
+                });
+                window.draw(cx).clear(cx);
+                for (before, after) in before.iter().zip(&view.read(cx).painted_boxes) {
+                    assert!(
+                        (before.x - after.x).abs() < 0.002,
+                        "reply {reply} at {actual}"
+                    );
+                    assert!(
+                        (before.w - after.w).abs() < 0.002,
+                        "reply {reply} at {actual}"
+                    );
+                }
+            });
+        }
+    }
+}
+
+/// Four ordinary table columns reserve eight outer pixels and four inner pixels per side.
+fn viewport_columns(width: f32, trailing: Option<[f32; 3]>) -> Canvas {
+    let tail = trailing.unwrap_or([100., 80., 112.]);
+    let width = width.max(104. + tail.iter().sum::<f32>() + 8.);
+    let widths = vec![
+        width - 8. - tail.iter().sum::<f32>(),
+        tail[0],
+        tail[1],
+        tail[2],
+    ];
+    let mut x = 0.;
+    let mut paint: Vec<_> = widths
+        .iter()
+        .map(|width| {
+            let rect = protocol::Rect {
+                x: x + 4.,
+                y: 10.,
+                w: *width - 8.,
+                h: 20.,
+            };
+            x += *width;
+            protocol::Paint::TextBox {
+                rect,
+                text: "Table 中文".into(),
+                color: 0xffffff,
+                size: 12.,
+                bold: false,
+                font: None,
+                align: protocol::ui::Alignment::Start,
+            }
+        })
+        .collect();
+    paint.push(protocol::Paint::Fill {
+        rect: protocol::Rect {
+            x: 0.,
+            y: 40.,
+            w: width,
+            h: 28.,
+        },
+        color: 0x123456,
+        extend_to_bottom: false,
+    });
+    Canvas {
+        column_resize: Some(protocol::ui::ColumnResize {
+            epoch: 1,
+            x: 0.,
+            widths,
+            minimum: vec![104., 40., 24., 100.],
+            bindings: (0..4)
+                .map(|index| protocol::ui::ColumnBinding {
+                    paint: index,
+                    column: index,
+                })
+                .collect(),
+            viewport: Some(protocol::ui::ColumnViewport {
+                width,
+                flexible: 0,
+                span_paints: vec![4],
+            }),
+        }),
+        paint,
+        ..Default::default()
+    }
+}
+
 /// Native pointer routing, actual paint rectangles and late replies share one public declaration.
 #[gpui::test]
 fn canvas_columns_paint_every_move_without_guest_roundtrips(cx: &mut TestAppContext) {
@@ -13,6 +221,7 @@ fn canvas_columns_paint_every_move_without_guest_roundtrips(cx: &mut TestAppCont
     let drawing = Canvas {
         column_resize: Some(protocol::ui::ColumnResize {
             epoch: 1,
+            viewport: None,
             x: 0.,
             widths: vec![200., 200.],
             minimum: vec![80., 80.],
@@ -206,6 +415,7 @@ fn relocated_document(left: f32, revision: u64) -> Document {
         Kind::Canvas(Canvas {
             column_resize: Some(protocol::ui::ColumnResize {
                 epoch: 1,
+                viewport: None,
                 x: 0.,
                 widths: vec![200., 200.],
                 minimum: vec![80., 80.],

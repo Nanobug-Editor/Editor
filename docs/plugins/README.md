@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [Git 差异主题、相邻文件与视口列布局](verification/git-diff-navigation-layout-2026-10-27.md)：实现与本机验证完成，记录通用语言提示、导航实包对比、底部轨道和两组原生拖动／滚动验收；候选尚未合并或安装。
+
 - [统一默认 Editor 与插件编辑节点](specs/unified-editor.md)、[验收记录](verification/unified-editor-2026-10-25.md)：默认 Editor 统一文档、只读快照、行边缘控件和同步呈现，完成协议主版本及消费者迁移；功能回归通过，追加发现的横向拖动瓶颈已按授权使用锁定 Base 本地补丁修复，见[真实字体与原生性能验收](../ui/verification/internal-resize-performance-2026-10-25.md)。
 
 - [宿主与插件共享 UI 分阶段实施方案](specs/shared-ui-roadmap.md)、[S0／S1 细化契约](specs/shared-ui-s0-s1.md)、[七张本地工单](tickets/shared-ui-foundation/README.md)：规划／待实施；补齐目标与请求状态、事件因果、权限和错误，以端到端垂直切片明确直接依赖；本轮仅文档，不修改代码或依赖，不发布远程议题。
