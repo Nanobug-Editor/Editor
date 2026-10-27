@@ -7,7 +7,7 @@ pub(super) struct Evidence {
     renderer: super::super::super::images::VectorRenderer,
 }
 
-/// Paint twice, change a sibling, translate, then change size/face and the actual native DPI.
+/// Paint twice, change a sibling, translate, then change size/face, native DPI and the active theme.
 pub(super) fn phase(
     view: &Entity<PluginView>,
     evidence: &mut Evidence,
@@ -92,6 +92,116 @@ pub(super) fn phase(
     anyhow::ensure!(
         count == expected,
         "retained native paragraph shapes: phase {phase}, expected {expected}, observed {count}"
+    );
+    if phase == 6 {
+        theme_changes(view, evidence, window, cx)?;
+    }
+    Ok(())
+}
+
+/// Switch the real theme on `view` through its ordinary host environment and `evidence` renderer.
+/// `window` supplies actual glyph pixels; `cx` applies the palette without changing the public scene.
+fn theme_changes(
+    view: &Entity<PluginView>,
+    evidence: &mut Evidence,
+    window: &mut Window,
+    cx: &mut App,
+) -> anyhow::Result<()> {
+    let (document, original_environment) = {
+        let view = view.read(cx);
+        (view.document.clone(), view.environment.clone())
+    };
+    let documents = BTreeMap::from([("ordinary/diagram".into(), Arc::new(document.clone()))]);
+    for (dark, expected_layouts) in [(false, 5), (true, 6), (true, 6), (false, 7)] {
+        editor_ui::theme::apply_theme(editor_ui::theme::builtin_theme(dark), cx);
+        // Use the same host projection as installed plugins; applying only global native colors
+        // would leave the explicit worker/Canvas environment unchanged and miss this dependency.
+        let environment = crate::extensions::environment(std::path::Path::new(""), cx);
+        let foreground = environment.foreground;
+        anyhow::ensure!(
+            environment.dark == dark,
+            "host theme projection did not switch"
+        );
+        evidence.renderer.set_environment(environment.clone());
+        let images = evidence.renderer.prepare(&documents);
+        view.update(cx, |view, cx| {
+            view.update_document(document.clone(), environment, window, cx);
+            view.update_images("ordinary/diagram", &images, window, cx);
+        });
+        window.draw(cx).clear(cx);
+        theme_glyph_pixels(view, foreground, window, cx)?;
+        let current = view.read(cx);
+        anyhow::ensure!(
+            current.document == document,
+            "a theme change must preserve the scene identity, revision and original text"
+        );
+        let actual = current.canvases["drawing"]
+            .read(cx)
+            .scene_graphics
+            .as_ref()
+            .unwrap()
+            .statistics()
+            .paragraph_layouts;
+        anyhow::ensure!(
+            actual == expected_layouts,
+            "theme {dark}: expected {expected_layouts} native layouts, observed {actual}"
+        );
+        eprintln!(
+            "retained theme: dark={dark}, unchanged public scene, glyph color=#{foreground:06x}, layouts={actual}"
+        );
+    }
+    // Keep the original fixture's final black-pixel and presentation-revision assertions intact.
+    editor_ui::theme::apply_theme(editor_ui::theme::builtin_theme(false), cx);
+    evidence
+        .renderer
+        .set_environment(original_environment.clone());
+    let images = evidence.renderer.prepare(&documents);
+    view.update(cx, |view, cx| {
+        view.update_document(document, original_environment, window, cx);
+        view.update_images("ordinary/diagram", &images, window, cx);
+    });
+    window.draw(cx).clear(cx);
+    Ok(())
+}
+
+/// Read only the known paragraph's interior in `window`; unrelated theme surfaces cannot satisfy it.
+/// `view` supplies its actual origin and `foreground` is the ordinary host's resolved RGB glyph color.
+fn theme_glyph_pixels(
+    view: &Entity<PluginView>,
+    foreground: u32,
+    window: &mut Window,
+    cx: &App,
+) -> anyhow::Result<()> {
+    let snapshot = view
+        .read(cx)
+        .native_canvas_input_snapshot("drawing", window, cx)
+        .expect("native paragraph Canvas geometry");
+    let scale = f64::from(window.scale_factor());
+    // Earlier phases translate the parent by 24 pixels; the paragraph itself starts at (20,20).
+    // This rectangle excludes the colored sibling at y=130 and contains no controls or borders.
+    let x = ((snapshot["origin_x"].as_f64().unwrap() + 44.) * scale) as u32;
+    let y = ((snapshot["origin_y"].as_f64().unwrap() + 20.) * scale) as u32;
+    let image = window.render_to_image()?;
+    let expected = [
+        (foreground >> 16) as u8,
+        (foreground >> 8) as u8,
+        foreground as u8,
+    ];
+    let mut ink = 0;
+    for row in y..(y + (80. * scale) as u32).min(image.height()) {
+        for column in x..(x + (180. * scale) as u32).min(image.width()) {
+            let actual = image.get_pixel(column, row).0;
+            ink += usize::from(
+                actual[..3]
+                    .iter()
+                    .zip(expected)
+                    .all(|(actual, expected)| actual.abs_diff(expected) <= 3),
+            );
+        }
+    }
+    anyhow::ensure!(
+        ink >= 24,
+        "retained paragraph did not repaint theme glyph color #{foreground:06x}: {ink} interior pixels"
     );
     Ok(())
 }
