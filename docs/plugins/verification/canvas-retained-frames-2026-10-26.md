@@ -1,6 +1,6 @@
 # Canvas 04：保留场景与显示帧验收记录
 
-状态：本页保留前期源码、固定包及旧显示环境的验证历史；最新统一 Editor 集成、修复与验收进展见[2026-10-27 记录](canvas-retained-integration-2026-10-27.md)。完整十分钟实机采样仍未完成，AC6/AC7 未验收，#131/#127 保持开放，尚未合并 main。依据为[工单 04](../tickets/canvas-protocol-extension/04-retained-frames.md)和[扩展方案](../specs/canvas-protocol-extension.md)。
+状态：本页保留截至 2026-10-26 的前期源码、固定包、失败尝试及旧显示环境验证历史，不代表当前进度。2026-10-27 已完成统一 Editor 集成、full30／patch600 和全部八项验收，最终证据及交付状态见[2026-10-27 记录](canvas-retained-integration-2026-10-27.md)。依据为[工单 04](../tickets/canvas-protocol-extension/04-retained-frames.md)和[扩展方案](../specs/canvas-protocol-extension.md)。
 
 ## 工作边界
 

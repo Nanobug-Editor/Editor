@@ -1,0 +1,1145 @@
+{
+  "schema": 1,
+  "date": "2026-10-27",
+  "scope": "Final integrated retained Canvas performance evidence, including the preceding intermittent native teardown failure and successful old-binary probes.",
+  "production_source_revision": "3f30e1b077f2dcc0eeba2616c4b68f7512403113",
+  "test_harness_source_revision": "5c0184027e8983ec877abd29a56d1865b1ac6d6a",
+  "production_sdk_sha256": "4fb641244caa8cac3a08c0ef6b3584bed8cae01c12de0304bd164d0fcb90e6b4",
+  "source_relationship": {
+    "old_executable_compiled_source_revision": "3f30e1b077f2dcc0eeba2616c4b68f7512403113",
+    "old_runs_checkout_revision": "6d0f4ef6a783fa6fe92254c9724cfa5149a8c1e4",
+    "old_checkout_delta": "6d0f4ef6 adds only evidence/docs to 3f30e1b0; it changes no executable source.",
+    "new_harness_delta": "5c018402 changes only the native timeline test teardown and adjacent test lifecycle helper. Production Canvas/runtime/SDK code remains 3f30e1b0.",
+    "old_probe_purpose": "The same old binary passed 1-second and 30-second exit probes after one 30-second teardown abort; this supports an intermittent lifecycle race, not a deterministic measurement failure or a proven single cause."
+  },
+  "binaries": {
+    "old": {
+      "path": "target/release/deps/editor_app-5978b8e51a333e5a.exe",
+      "bytes": 132709888,
+      "sha256": "3be675196593105b8e20c4ba55b7fb4f7f744a56890e8df929a26fb904e51a8a",
+      "compiled_source_revision": "3f30e1b077f2dcc0eeba2616c4b68f7512403113",
+      "sdk_sha256": "4fb641244caa8cac3a08c0ef6b3584bed8cae01c12de0304bd164d0fcb90e6b4",
+      "identity_evidence": "Unchanged native_executable entry in functional-evidence.json; Cargo later replaced this pathname with the new executable."
+    },
+    "new": {
+      "path": "target/release/deps/editor_app-5978b8e51a333e5a.exe",
+      "bytes": 131886080,
+      "sha256": "2034e3303aca1021c071a6e0a42fb69c0083647a01612e4334a73d06a97cd628",
+      "compiled_source_revision": "5c0184027e8983ec877abd29a56d1865b1ac6d6a",
+      "sdk_sha256": "4fb641244caa8cac3a08c0ef6b3584bed8cae01c12de0304bd164d0fcb90e6b4",
+      "identity_evidence": "Parent recorded before both final runs; rehashed from the current on-disk executable during archival."
+    }
+  },
+  "package": {
+    "path": "crates/plugin-runtime/tests/fixtures/packages/canvas-timeline-1.0.1.zip",
+    "bytes": 539412,
+    "sha256": "ee6132d9724d9c308b43be05bfcb4b4e2e0345f608af16bd8db19b96ca2d57cb",
+    "version": "1.0.1",
+    "note": "Fixed package provenance and original builder SDK remain in packages/inputs.json; the production SDK above identifies the integrated host, not a rebuilt guest package."
+  },
+  "environment": {
+    "machine": "TMIRACLE",
+    "os": "Windows 11 build 26200",
+    "cpu": "AMD Ryzen 9 9950X3D, 16 cores / 32 logical CPUs",
+    "gpu": "NVIDIA GeForce RTX 5080",
+    "driver": "32.0.16.1088",
+    "display": "WMI: 2560x1440 at 143 Hz; GPUI recorded refresh interval: 6944444 ns (approximately 144 Hz)",
+    "dpi_scale": 1.0,
+    "environment_provenance": "This run's WMI display-mode inspection reports 2560x1440 at 143 Hz. GPUI independently records a 6944444 ns refresh interval (approximately 144 Hz); this is not the WMI mode value. Raw run headers record DPI scale 1.0. A 60 Hz comparison budget does not describe this display."
+  },
+  "measurement_notes": [
+    "All five run exit codes are external process outcomes: 101, 0, 0, 0, 0. A JSONL terminal summary is emitted before teardown and cannot itself establish native process success.",
+    "The failed run completed 30.014 seconds of measurement, then its child aborted with 0xc0000409 after accesskit_windows ClientToScreen returned HRESULT 0x80070578 for an invalid HWND. The outer test process failed with 101.",
+    "Final teardown stops the real actor, withdraws active scene/input, blurs for two actual draw opportunities, removes the native window, waits for original HWND destruction, drops retained owners, and quits normally. It does not disable UIA or suppress process failure.",
+    "Both publication modes use the same new Release binary, frozen guest package, retained production renderer cache, seed, input cycle, and observer. This compares full viewport publications with patches; it is not a comparison against an old uncached renderer binary.",
+    "Warmup cache bases, playhead, and overscan buffer differ between separate starts and are retained in raw headers and analysis. Header comparison covers selected control conditions, not bit-identical warmed state.",
+    "prepare/reuse/shape/raster are cumulative work counters. RSS/private/current cache residency/live resources are gauges. Do not infer a memory leak from increasing cumulative work.",
+    "observation_ring_evictions records runtime observability Snapshot.dropped: omitted/evicted detailed runtime records, not GPUI profiler rotation. Do not assume every omitted record was read before eviction. Publication completeness is independently checked using Actor calls and consumed Publication records.",
+    "fixture_ingress is an Actor-lifetime high-water mark for the fixture adapter with capacity 128, not instantaneous occupancy or production WorkSender queue depth.",
+    "Peaks are maxima of one-second observations, not absolute OS peaks. Native GPU atlas memory is unmeasured. This timeline uses zero resident derived-image textures; other retained-cache/native layer evidence covers image resource paths.",
+    "Input-to-frame HDR measures native window dispatch to draw, excluding hardware/SendInput dispatch delay; cumulative HDR quantiles must not be averaged or subtracted.",
+    "Exact 30-second/steady-phase cumulative counter boundaries are labelled linear interpolation estimates from observed brackets. Actual endpoint deltas and raw timing distributions are preserved separately in analysis."
+  ],
+  "runs": [
+    {
+      "id": "failed-full-30s-retry1",
+      "binary": "old",
+      "compiled_source_revision": "3f30e1b077f2dcc0eeba2616c4b68f7512403113",
+      "checkout_at_execution": "6d0f4ef6a783fa6fe92254c9724cfa5149a8c1e4",
+      "profile": "release",
+      "publication_mode": "full",
+      "requested_seconds": 30,
+      "measured_seconds_from_log": 30.014,
+      "recorder_elapsed_ms": 30013,
+      "physical_wheel_inputs": 75,
+      "measurement_result": "Ok(())",
+      "process_exit_code": 101,
+      "exit_code_provenance": "External test-process result recorded by the parent orchestrator; not inferred from the JSONL summary.",
+      "native_child_abort_code": "0xc0000409",
+      "status": "measurement_completed_but_native_teardown_failed",
+      "normal_retirement_assertion_recorded": false,
+      "log": {
+        "source": "target/canvas-integration-full-30s-retry1-20261027.log",
+        "archive": "canvas-integration-full-30s-retry1-20261027.log.gz",
+        "bytes": 9248,
+        "sha256": "e89f6efb5dd352094e245daa37575b6b36fb027dc43fde3342dda2f1573dd991",
+        "gzip_bytes": 2379,
+        "gzip_sha256": "4ccd85f8f9d3c3bfc7e5d91b32687605e4e1dc821648e57ef11a1c09853cdddd"
+      },
+      "raw_jsonl": {
+        "source": "target/canvas-integration-full-30s-retry1-20261027.jsonl",
+        "archive": "canvas-integration-full-30s-retry1-20261027.jsonl.gz",
+        "bytes": 1187476,
+        "sha256": "4178f14223c5079967b2b7448c80393ec9288560972d70d971ae5a509ec22062",
+        "gzip_bytes": 171517,
+        "gzip_sha256": "3212ae62406ac2626fa2e81f290d1308a6b1079bbf7b6d8c5bdfb642e877e4c0"
+      },
+      "record_counts": {
+        "header": 1,
+        "draw": 4306,
+        "present": 4306,
+        "sample": 29,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "full",
+        "requested_seconds": 30,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.0,
+            "y": 8.0,
+            "w": 959.78674,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 706.3861,
+          "full_publication": true,
+          "business_ticks": 91
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 392,
+          "reuse": 10973,
+          "shape": 72,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\target\\release\\deps\\editor_app-5978b8e51a333e5a.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.0,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "terminal_summary": {
+        "kind": "summary",
+        "elapsed_ms": 30013,
+        "frames": 1926,
+        "offset": [
+          334.45816,
+          336.0
+        ],
+        "business_ticks": 1285,
+        "publication_bytes": 146450873,
+        "publications": 11335,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 11683,
+        "raw_draw_events": 4306,
+        "raw_present_events": 4306,
+        "draw_fps": 143.46708214769194,
+        "present_fps": 143.4670816696891,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 22855,
+        "rss_bytes": 130162688,
+        "private_bytes": 121036800,
+        "peaks": {
+          "rss_bytes": 130863104,
+          "private_bytes": 121823232,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 3
+        },
+        "cache": {
+          "prepare": 7071,
+          "reuse": 651017,
+          "shape": 1051,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 320,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 4306,
+          "p50_ns": 460031,
+          "p95_ns": 778239,
+          "p99_ns": 992767,
+          "max_ns": 2150399
+        },
+        "dirty_to_present": {
+          "count": 4306,
+          "p50_ns": 6922239,
+          "p95_ns": 7450623,
+          "p99_ns": 7725055,
+          "max_ns": 58163199
+        },
+        "present_interval": {
+          "count": 4253,
+          "p50_ns": 6942719,
+          "p95_ns": 7483391,
+          "p99_ns": 7778303,
+          "max_ns": 58163199
+        },
+        "input_to_frame": {
+          "count": 74,
+          "p50_ns": 3143679,
+          "p95_ns": 6348799,
+          "p99_ns": 6582271,
+          "max_ns": 6582271
+        },
+        "input_mid_draw_excluded": 0
+      }
+    },
+    {
+      "id": "old-exit-probe-1s",
+      "binary": "old",
+      "compiled_source_revision": "3f30e1b077f2dcc0eeba2616c4b68f7512403113",
+      "checkout_at_execution": "6d0f4ef6a783fa6fe92254c9724cfa5149a8c1e4",
+      "profile": "release",
+      "publication_mode": "full",
+      "requested_seconds": 1,
+      "measured_seconds_from_log": 1.002,
+      "recorder_elapsed_ms": 1001,
+      "physical_wheel_inputs": 2,
+      "measurement_result": "Ok(())",
+      "process_exit_code": 0,
+      "exit_code_provenance": "External test-process result recorded by the parent orchestrator; not inferred from the JSONL summary.",
+      "native_child_abort_code": null,
+      "status": "completed_with_normal_process_exit",
+      "normal_retirement_assertion_recorded": false,
+      "log": {
+        "source": "target/canvas-integration-exit-probe-1s-20261027.log",
+        "archive": "canvas-integration-exit-probe-1s-20261027.log.gz",
+        "bytes": 3047,
+        "sha256": "2c79c111c3f1d2f2cbb342e3aeb968b47b431de87412da94b11d2bb778d21ba0",
+        "gzip_bytes": 882,
+        "gzip_sha256": "82d673e6b240a79d6c3c94a8e1ac91730811dbc1d8757fa173f761ec250676f0"
+      },
+      "raw_jsonl": {
+        "source": "target/canvas-integration-exit-probe-1s-20261027.jsonl",
+        "archive": "canvas-integration-exit-probe-1s-20261027.jsonl.gz",
+        "bytes": 40665,
+        "sha256": "0496059cf59364122b1533528a8e12da23c38fe5408de7e374b1116d225fff46",
+        "gzip_bytes": 6845,
+        "gzip_sha256": "a832678c97611aa7f6f261cad8e05e729931795ae9856a55b1a6977883a5d0c3"
+      },
+      "record_counts": {
+        "header": 1,
+        "draw": 139,
+        "present": 139,
+        "sample": 1,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "full",
+        "requested_seconds": 1,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.0,
+            "y": 8.0,
+            "w": 959.5133,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 705.8916,
+          "full_publication": true,
+          "business_ticks": 90
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 392,
+          "reuse": 10973,
+          "shape": 72,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\target\\release\\deps\\editor_app-5978b8e51a333e5a.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.0,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "terminal_summary": {
+        "kind": "summary",
+        "elapsed_ms": 1001,
+        "frames": 65,
+        "offset": [
+          297.77814,
+          336.0
+        ],
+        "business_ticks": 129,
+        "publication_bytes": 4560550,
+        "publications": 319,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 670,
+        "raw_draw_events": 139,
+        "raw_present_events": 139,
+        "draw_fps": 138.76368544368938,
+        "present_fps": 138.76368544368938,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 829,
+        "rss_bytes": 130420736,
+        "private_bytes": 120397824,
+        "peaks": {
+          "rss_bytes": 130420736,
+          "private_bytes": 120397824,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 3
+        },
+        "cache": {
+          "prepare": 585,
+          "reuse": 31204,
+          "shape": 115,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 349,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 139,
+          "p50_ns": 399871,
+          "p95_ns": 694271,
+          "p99_ns": 757759,
+          "max_ns": 1794047
+        },
+        "dirty_to_present": {
+          "count": 139,
+          "p50_ns": 6836223,
+          "p95_ns": 7565311,
+          "p99_ns": 7806975,
+          "max_ns": 7921663
+        },
+        "present_interval": {
+          "count": 86,
+          "p50_ns": 6922239,
+          "p95_ns": 7512063,
+          "p99_ns": 8429567,
+          "max_ns": 8429567
+        },
+        "input_to_frame": {
+          "count": 2,
+          "p50_ns": 2168831,
+          "p95_ns": 4333567,
+          "p99_ns": 4333567,
+          "max_ns": 4333567
+        },
+        "input_mid_draw_excluded": 0
+      }
+    },
+    {
+      "id": "old-exit-probe-30s",
+      "binary": "old",
+      "compiled_source_revision": "3f30e1b077f2dcc0eeba2616c4b68f7512403113",
+      "checkout_at_execution": "6d0f4ef6a783fa6fe92254c9724cfa5149a8c1e4",
+      "profile": "release",
+      "publication_mode": "full",
+      "requested_seconds": 30,
+      "measured_seconds_from_log": 30.01,
+      "recorder_elapsed_ms": 30010,
+      "physical_wheel_inputs": 75,
+      "measurement_result": "Ok(())",
+      "process_exit_code": 0,
+      "exit_code_provenance": "External test-process result recorded by the parent orchestrator; not inferred from the JSONL summary.",
+      "native_child_abort_code": null,
+      "status": "completed_with_normal_process_exit",
+      "normal_retirement_assertion_recorded": false,
+      "log": {
+        "source": "target/canvas-integration-exit-probe-30s-20261027.log",
+        "archive": "canvas-integration-exit-probe-30s-20261027.log.gz",
+        "bytes": 3046,
+        "sha256": "6b1205500bf5e0dcee59cca0196e2e89ea3d44ad1b1227f6aeb58f256d509c05",
+        "gzip_bytes": 892,
+        "gzip_sha256": "91192c12e7b48af02a0376c061247075848d90165c27dd1dd5da3f4491a4cab0"
+      },
+      "raw_jsonl": {
+        "source": "target/canvas-integration-exit-probe-30s-20261027.jsonl",
+        "archive": "canvas-integration-exit-probe-30s-20261027.jsonl.gz",
+        "bytes": 1189263,
+        "sha256": "ea06b54c3d6fad492d582086b2acc1d2431c3fb8ff8a65296432149f50e9557f",
+        "gzip_bytes": 171289,
+        "gzip_sha256": "68a9ef98ffdeb98ec6d33fad929a5bdfcf68eb28f870fe1aad0d1ecfeddbf9ff"
+      },
+      "record_counts": {
+        "header": 1,
+        "draw": 4313,
+        "present": 4313,
+        "sample": 29,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "full",
+        "requested_seconds": 30,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.001449585,
+            "y": 8.0,
+            "w": 960.0,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 707.53656,
+          "full_publication": true,
+          "business_ticks": 89
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 450,
+          "reuse": 12771,
+          "shape": 101,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\target\\release\\deps\\editor_app-5978b8e51a333e5a.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.0,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "terminal_summary": {
+        "kind": "summary",
+        "elapsed_ms": 30010,
+        "frames": 1930,
+        "offset": [
+          334.5428,
+          336.0
+        ],
+        "business_ticks": 1283,
+        "publication_bytes": 147355214,
+        "publications": 11342,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 11691,
+        "raw_draw_events": 4313,
+        "raw_present_events": 4313,
+        "draw_fps": 143.71771593356064,
+        "present_fps": 143.71771497576879,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 22871,
+        "rss_bytes": 130576384,
+        "private_bytes": 120545280,
+        "peaks": {
+          "rss_bytes": 131153920,
+          "private_bytes": 121159680,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 3
+        },
+        "cache": {
+          "prepare": 7089,
+          "reuse": 652643,
+          "shape": 1058,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 320,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 4313,
+          "p50_ns": 449535,
+          "p95_ns": 774143,
+          "p99_ns": 1002495,
+          "max_ns": 1697791
+        },
+        "dirty_to_present": {
+          "count": 4313,
+          "p50_ns": 6922239,
+          "p95_ns": 7393279,
+          "p99_ns": 7667711,
+          "max_ns": 8609791
+        },
+        "present_interval": {
+          "count": 4260,
+          "p50_ns": 6942719,
+          "p95_ns": 7426047,
+          "p99_ns": 7766015,
+          "max_ns": 8617983
+        },
+        "input_to_frame": {
+          "count": 74,
+          "p50_ns": 3631103,
+          "p95_ns": 6709247,
+          "p99_ns": 7086079,
+          "max_ns": 7086079
+        },
+        "input_mid_draw_excluded": 0
+      }
+    },
+    {
+      "id": "final-full-30s",
+      "binary": "new",
+      "compiled_source_revision": "5c0184027e8983ec877abd29a56d1865b1ac6d6a",
+      "checkout_at_execution": "5c0184027e8983ec877abd29a56d1865b1ac6d6a",
+      "profile": "release",
+      "publication_mode": "full",
+      "requested_seconds": 30,
+      "measured_seconds_from_log": 30.001,
+      "recorder_elapsed_ms": 30001,
+      "physical_wheel_inputs": 75,
+      "measurement_result": "Ok(())",
+      "process_exit_code": 0,
+      "exit_code_provenance": "External test-process result recorded by the parent orchestrator; not inferred from the JSONL summary.",
+      "native_child_abort_code": null,
+      "status": "completed_with_normal_process_exit",
+      "normal_retirement_assertion_recorded": true,
+      "log": {
+        "source": "target/canvas-integration-full-30s-teardown-final-20261027.log",
+        "archive": "canvas-integration-full-30s-teardown-final-20261027.log.gz",
+        "bytes": 3144,
+        "sha256": "7821da352bad660fe417b3fc20a36340cd0a099bdcdbbc8f449c50b9877720e4",
+        "gzip_bytes": 942,
+        "gzip_sha256": "a39b52cf879dc99b9a83fa3ced3981d4abb2122148865fbdd6bd00a2a765fc8a"
+      },
+      "raw_jsonl": {
+        "source": "target/canvas-integration-full-30s-teardown-final-20261027.jsonl",
+        "archive": "canvas-integration-full-30s-teardown-final-20261027.jsonl.gz",
+        "bytes": 1188755,
+        "sha256": "24a37af0cd5adec41a05c1da8a6cc6b9352cfdc30f51972a260ddcf175060fd2",
+        "gzip_bytes": 171440,
+        "gzip_sha256": "a017c0803ee521032e24ed8d28ce583a9dd17b01931889b989eb633ff7940819"
+      },
+      "record_counts": {
+        "header": 1,
+        "draw": 4311,
+        "present": 4311,
+        "sample": 29,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "full",
+        "requested_seconds": 30,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.0,
+            "y": 8.0,
+            "w": 959.6142,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 707.15674,
+          "full_publication": true,
+          "business_ticks": 90
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 392,
+          "reuse": 10973,
+          "shape": 72,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\target\\release\\deps\\editor_app-5978b8e51a333e5a.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.0,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "terminal_summary": {
+        "kind": "summary",
+        "elapsed_ms": 30001,
+        "frames": 1927,
+        "offset": [
+          334.05603,
+          336.0
+        ],
+        "business_ticks": 1283,
+        "publication_bytes": 146554782,
+        "publications": 11331,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 11676,
+        "raw_draw_events": 4311,
+        "raw_present_events": 4311,
+        "draw_fps": 143.69388343036198,
+        "present_fps": 143.69388295140277,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 22841,
+        "rss_bytes": 129527808,
+        "private_bytes": 120811520,
+        "peaks": {
+          "rss_bytes": 130277376,
+          "private_bytes": 121745408,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 3
+        },
+        "cache": {
+          "prepare": 7072,
+          "reuse": 647525,
+          "shape": 1051,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 320,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 4311,
+          "p50_ns": 441855,
+          "p95_ns": 773631,
+          "p99_ns": 1020415,
+          "max_ns": 2071551
+        },
+        "dirty_to_present": {
+          "count": 4311,
+          "p50_ns": 6922239,
+          "p95_ns": 7503871,
+          "p99_ns": 7778303,
+          "max_ns": 8617983
+        },
+        "present_interval": {
+          "count": 4258,
+          "p50_ns": 6942719,
+          "p95_ns": 7544831,
+          "p99_ns": 7852031,
+          "max_ns": 8740863
+        },
+        "input_to_frame": {
+          "count": 74,
+          "p50_ns": 3950591,
+          "p95_ns": 6651903,
+          "p99_ns": 6950911,
+          "max_ns": 6950911
+        },
+        "input_mid_draw_excluded": 0
+      }
+    },
+    {
+      "id": "final-patch-600s",
+      "binary": "new",
+      "compiled_source_revision": "5c0184027e8983ec877abd29a56d1865b1ac6d6a",
+      "checkout_at_execution": "5c0184027e8983ec877abd29a56d1865b1ac6d6a",
+      "profile": "release",
+      "publication_mode": "patch",
+      "requested_seconds": 600,
+      "measured_seconds_from_log": 600.004,
+      "recorder_elapsed_ms": 600004,
+      "physical_wheel_inputs": 1500,
+      "measurement_result": "Ok(())",
+      "process_exit_code": 0,
+      "exit_code_provenance": "External test-process result recorded by the parent orchestrator; not inferred from the JSONL summary.",
+      "native_child_abort_code": null,
+      "status": "completed_with_normal_process_exit",
+      "normal_retirement_assertion_recorded": true,
+      "log": {
+        "source": "target/canvas-integration-patch-600s-teardown-final-20261027.log",
+        "archive": "canvas-integration-patch-600s-teardown-final-20261027.log.gz",
+        "bytes": 3153,
+        "sha256": "1bea50ad978b825a6887440a016a675fe119086a82a63ad07584807e36cdb90f",
+        "gzip_bytes": 946,
+        "gzip_sha256": "e3be398e8ae7c9707f89cd5b665656c2e412f6eb475697b53d0e4d9f6c12477e"
+      },
+      "raw_jsonl": {
+        "source": "target/canvas-integration-patch-600s-teardown-final-20261027.jsonl",
+        "archive": "canvas-integration-patch-600s-teardown-final-20261027.jsonl.gz",
+        "bytes": 23935525,
+        "sha256": "3bfc6e92360a4ed7b0cb44d032c60a92a1f090c06e95eb2c5927a74528eab023",
+        "gzip_bytes": 3407574,
+        "gzip_sha256": "547bc3af9c14cd8c4fe03028b783c7754590ed94db13ad46d63cd78168ff58cf"
+      },
+      "record_counts": {
+        "header": 1,
+        "draw": 86156,
+        "present": 86156,
+        "sample": 593,
+        "summary": 1
+      },
+      "header": {
+        "kind": "header",
+        "schema": 1,
+        "mode": "patch",
+        "requested_seconds": 600,
+        "profile": "release",
+        "seed": 1729,
+        "initial_state": {
+          "revision": 43,
+          "scene_revision": 43,
+          "identity": 401,
+          "seed": 1729,
+          "edits": {},
+          "offset": [
+            168.0,
+            168.0
+          ],
+          "width": 640.0,
+          "height": 360.0,
+          "scale": 1.0,
+          "buffer": {
+            "x": 0.06253052,
+            "y": 8.0,
+            "w": 960.0,
+            "h": 680.0
+          },
+          "animating": true,
+          "frame_request": 40,
+          "frames": 38,
+          "playhead": 707.43396,
+          "full_publication": false,
+          "business_ticks": 89
+        },
+        "logical_items": 100000,
+        "cache_work_base": {
+          "prepare": 450,
+          "reuse": 12771,
+          "shape": 101,
+          "raster": 0
+        },
+        "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+        "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\target\\release\\deps\\editor_app-5978b8e51a333e5a.exe",
+        "machine": "TMIRACLE",
+        "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+        "logical_cpus": 32,
+        "architecture": "x86_64",
+        "os": "windows",
+        "dpi_scale": 1.0,
+        "observer": {
+          "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+          "trace_rotation_seconds": 1,
+          "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+          "raw_frame_poll_ms": 100,
+          "counter_sample_ms": 1000,
+          "runtime_capture_renew_seconds": 45,
+          "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+          "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+          "renderer_cache": "same retained production cache in both modes",
+          "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+          "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+        }
+      },
+      "terminal_summary": {
+        "kind": "summary",
+        "elapsed_ms": 600004,
+        "frames": 38411,
+        "offset": [
+          1008.0,
+          1174.5116
+        ],
+        "business_ticks": 24666,
+        "publication_bytes": 169509655,
+        "publications": 228297,
+        "publication_missing_byte_records": 0,
+        "publication_records_complete": true,
+        "publication_records_expected": 228646,
+        "raw_draw_events": 86156,
+        "raw_present_events": 86156,
+        "draw_fps": 143.59227165994076,
+        "present_fps": 143.592271612077,
+        "frame_trace_complete": true,
+        "observation_ring_evictions": 450125,
+        "rss_bytes": 130367488,
+        "private_bytes": 120000512,
+        "peaks": {
+          "rss_bytes": 131436544,
+          "private_bytes": 121049088,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "cached_items": 349,
+          "native_vertices": 2022,
+          "instance_resources": 2,
+          "fixture_ingress": 10
+        },
+        "cache": {
+          "prepare": 134553,
+          "reuse": 12729384,
+          "shape": 19572,
+          "raster": 0,
+          "current_derived_pixel_bytes": 0,
+          "live_derived_pixel_bytes": 0,
+          "live_textures": 0,
+          "items": 320,
+          "vertices": 2022
+        },
+        "fixture_queue_overflow": 0,
+        "resources": 2,
+        "draw": {
+          "count": 86156,
+          "p50_ns": 445183,
+          "p95_ns": 782847,
+          "p99_ns": 1019903,
+          "max_ns": 2299903
+        },
+        "dirty_to_present": {
+          "count": 86156,
+          "p50_ns": 6926335,
+          "p95_ns": 7487487,
+          "p99_ns": 7778303,
+          "max_ns": 63569919
+        },
+        "present_interval": {
+          "count": 86103,
+          "p50_ns": 6946815,
+          "p95_ns": 7528447,
+          "p99_ns": 7856127,
+          "max_ns": 63569919
+        },
+        "input_to_frame": {
+          "count": 1499,
+          "p50_ns": 4003839,
+          "p95_ns": 6832127,
+          "p99_ns": 7229439,
+          "max_ns": 47120383
+        },
+        "input_mid_draw_excluded": 0
+      }
+    }
+  ],
+  "supporting_logs": [
+    {
+      "purpose": "New native test executable Release compilation",
+      "process_exit_code": 0,
+      "exit_code_provenance": "Parent build orchestration reported success; release completion is also present in the raw log.",
+      "file": {
+        "source": "target/canvas-integration-teardown-build-20261027.log",
+        "archive": "canvas-integration-teardown-build-20261027.log.gz",
+        "bytes": 48779,
+        "sha256": "0e3e3c4de68f4085c203fc3512e1e18d8102ccb2614e02dabb71489c95b8367a",
+        "gzip_bytes": 7131,
+        "gzip_sha256": "0c3874c3b9f53fc7056579c04c9c88e1a0e3d64c4aa8b8d1424520e86c27eb28"
+      }
+    },
+    {
+      "purpose": "Rust formatting check after teardown-only test change",
+      "process_exit_code": 0,
+      "exit_code_provenance": "Parent formatting orchestration reported success; empty stdout/stderr is expected on success.",
+      "file": {
+        "source": "target/canvas-integration-teardown-fmt-20261027.log",
+        "archive": "canvas-integration-teardown-fmt-20261027.log.gz",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "gzip_bytes": 20,
+        "gzip_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+      }
+    }
+  ],
+  "analysis": {
+    "file": {
+      "source": "target/canvas-final-analysis-20261027.json",
+      "archive": "analysis.json.gz",
+      "bytes": 145319,
+      "sha256": "e7b78d1175a18924584c94e2a55125ddfc28086c950c8608322061350ab63726",
+      "gzip_bytes": 14781,
+      "gzip_sha256": "3c14868c4b9ce5ce529edd2e9a4fd83d4fe15c6c94802d7bd9c7c46174c1939e"
+    },
+    "process_exit_code": 0,
+    "source_inputs": [
+      "canvas-integration-full-30s-teardown-final-20261027.jsonl.gz",
+      "canvas-integration-patch-600s-teardown-final-20261027.jsonl.gz"
+    ],
+    "external_input_exit_codes": [
+      0,
+      0
+    ],
+    "tool_location": "target/canvas-final-analyze-20261027.py (local generated tool, intentionally not committed)",
+    "selected_control_conditions_match": true,
+    "structural_and_observer_checks_ok": {
+      "full": true,
+      "patch": true
+    },
+    "first30_publication_and_work_comparison": {
+      "publication_bytes": {
+        "full_first30_delta_estimate": 146549624.61142856,
+        "patch_first30_delta_estimate": 8306735.192607004,
+        "full_per_second_estimate": 4884987.487047618,
+        "patch_per_second_estimate": 276891.17308690015,
+        "patch_over_full_ratio": 0.05668206393999326
+      },
+      "publications": {
+        "full_first30_delta_estimate": 11330.624285714286,
+        "patch_first30_delta_estimate": 11303.543774319067,
+        "full_per_second_estimate": 377.6874761904762,
+        "patch_per_second_estimate": 376.78479247730223,
+        "patch_over_full_ratio": 0.9976099718151132
+      },
+      "prepare": {
+        "full_first30_delta_estimate": 6679.774285714286,
+        "patch_first30_delta_estimate": 6591.650778210117,
+        "full_per_second_estimate": 222.65914285714285,
+        "patch_per_second_estimate": 219.72169260700392,
+        "patch_over_full_ratio": 0.9868074123862787
+      },
+      "reuse": {
+        "full_first30_delta_estimate": 636530.08,
+        "patch_first30_delta_estimate": 632096.8356031128,
+        "full_per_second_estimate": 21217.66933333333,
+        "patch_per_second_estimate": 21069.89452010376,
+        "patch_over_full_ratio": 0.9930352947391157
+      },
+      "shape": {
+        "full_first30_delta_estimate": 978.97,
+        "patch_first30_delta_estimate": 951.3822957198445,
+        "full_per_second_estimate": 32.632333333333335,
+        "patch_per_second_estimate": 31.71274319066148,
+        "patch_over_full_ratio": 0.9718196632377339
+      },
+      "raster": {
+        "full_first30_delta_estimate": 0.0,
+        "patch_first30_delta_estimate": 0.0,
+        "full_per_second_estimate": 0.0,
+        "patch_per_second_estimate": 0.0,
+        "patch_over_full_ratio": null
+      }
+    },
+    "patch_same_phase_current_gauge_shift": {
+      "rss_bytes": {
+        "same_phase_means": [
+          130076891.42857143,
+          130040454.73684211,
+          130683454.87719299
+        ],
+        "late_minus_early_mean": 606563.4486215562
+      },
+      "private_bytes": {
+        "same_phase_means": [
+          120090916.57142857,
+          119688641.12280701,
+          120322371.36842105
+        ],
+        "late_minus_early_mean": 231454.79699248075
+      },
+      "instance_resources": {
+        "same_phase_means": [
+          2.0,
+          2.0,
+          2.0
+        ],
+        "late_minus_early_mean": 0.0
+      },
+      "current_derived_pixel_bytes": {
+        "same_phase_means": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "late_minus_early_mean": 0.0
+      },
+      "live_derived_pixel_bytes": {
+        "same_phase_means": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "late_minus_early_mean": 0.0
+      },
+      "live_textures": {
+        "same_phase_means": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "late_minus_early_mean": 0.0
+      },
+      "cached_items": {
+        "same_phase_means": [
+          329.8392857142857,
+          330.6842105263158,
+          329.1578947368421
+        ],
+        "late_minus_early_mean": -0.6813909774436411
+      },
+      "native_vertices": {
+        "same_phase_means": [
+          2022.0,
+          2022.0,
+          2022.0
+        ],
+        "late_minus_early_mean": 0.0
+      }
+    },
+    "same_phase_seconds": [
+      [
+        57.6,
+        115.2
+      ],
+      [
+        288,
+        345.6
+      ],
+      [
+        537.6,
+        595.2
+      ]
+    ],
+    "acceptance_decision_in_analysis": false
+  },
+  "preserved_existing": {
+    "archive_files": 35,
+    "functional_evidence_files": 1,
+    "functional_evidence_sha256": "d4bd6e199c449491f477a7c1025dd2cc956fd82890eef381bd53a6c9e8cf3e1e",
+    "note": "All 36 preexisting files were retained byte-for-byte; this manifest adds evidence and does not replace historical failures or A/B/C records."
+  },
+  "gzip_encoding": {
+    "compression_level": 9,
+    "mtime": 0,
+    "embedded_filename": "",
+    "validation": "Every gzip was decompressed and compared byte-for-byte with its raw target source."
+  }
+}

@@ -1,10 +1,10 @@
 # Canvas 协议扩展实施工单
 
-日期：2026-10-24；状态更新：2026-10-27。用户已确认四单拆分、依赖、测试接缝和审查基点；方案 [#127](https://github.com/Nanobug-Editor/Editor/issues/127) 与四单 [#128](https://github.com/Nanobug-Editor/Editor/issues/128)–[#131](https://github.com/Nanobug-Editor/Editor/issues/131) 已发布。01、02、03 已读回 closed/completed；04 的集成功能验收通过，但新基线在 0.405 秒因窗口失去前台中止，完整十分钟采样待连续桌面时段，#131/#127 保持开放。真实 ID 见[发布记录](publication.json)。
+日期：2026-10-24；状态更新：2026-10-27。用户已确认四单拆分、依赖、测试接缝和审查基点；方案 [#127](https://github.com/Nanobug-Editor/Editor/issues/127) 与四单 [#128](https://github.com/Nanobug-Editor/Editor/issues/128)–[#131](https://github.com/Nanobug-Editor/Editor/issues/131) 已发布。01、02、03 已读回 closed/completed；04 的全部验收通过，包括完整 full30／patch600 与正常原生退出，正在完成合并和 #131/#127 关闭登记。真实 ID 见[发布记录](publication.json)。
 
 来源：[通用 Canvas 协议扩展方案](../../specs/canvas-protocol-extension.md)。采用原方案的四个端到端垂直切片，不再按协议、运行时、宿主和测试拆单。执行方式为顺序 `implement`：这些切片共享画布声明、发布校验和原生视图，线性实施能够保持同一工作区的交互与回归证据。
 
-2026-10-25：Canvas 1.4–1.6 前置已独立交付至 main 的 `56cb99ae`，见[前置基线边界](git-boundary.md)。2026-10-27 在独立集成工作区将主分支 `707173c8` 的统一 Editor 与四单源码组合，修复旧快照动作输入边界，门禁、实际包、原生组合与两轴审查通过；详见[最终集成记录](../../verification/canvas-retained-integration-2026-10-27.md)。用户最新授权为完成剩余工单、确认验收后关闭总工单；仍沿用独立工作区实施、全部验收后统一合并 main 的约束。AC6/AC7 未满足前不合并、不关闭 #131/#127，既有失败采样保留。
+2026-10-25：Canvas 1.4–1.6 前置已独立交付至 main 的 `56cb99ae`，见[前置基线边界](git-boundary.md)。2026-10-27 在独立集成工作区将主分支 `707173c8` 的统一 Editor 与四单源码组合，修复旧快照动作输入边界，门禁、实际包、原生组合与两轴审查通过；随后修复测试退出生命周期，完整实机采样满足 AC6/AC7。详见[最终集成记录](../../verification/canvas-retained-integration-2026-10-27.md)。用户最新授权为完成剩余工单、确认验收后关闭总工单；仍沿用独立工作区实施、全部验收后统一合并 main 的约束，既有失败采样保留。
 
 | 工单 | 用户可见交付 | 开始前阻塞项 | 关闭门槛 |
 | --- | --- | --- | --- |
@@ -31,4 +31,4 @@
 
 按执行技能和仓库约定进行规范/规格双轴审查。用户已确认以上述开始时 HEAD 为固定比较点，同时用任务基线核对排除既有改动。若提交无法独立成立，先完成可执行的实现与验证并记录具体依赖，不能为了满足提交步骤混入其他任务。
 
-拆分确认后，按稳定标识 `canvas-protocol-extension` 查重，再在 `Nanobug-Editor/Editor` 发布方案与四张工单、维护原生阻塞关系和 `publication.json`。用户要求执行的插件平台工单沿用“实现→验证与审查→普通提交→推送→读回关闭”授权；父设计议题不关闭，未完成验收的工单不关闭。
+拆分确认后，按稳定标识 `canvas-protocol-extension` 查重，再在 `Nanobug-Editor/Editor` 发布方案与四张工单、维护原生阻塞关系和 `publication.json`。用户要求执行的插件平台工单沿用“实现→验证与审查→普通提交→推送→读回关闭”授权；2026-10-27 用户进一步明确授权整批验收后关闭本方案总工单 #127，未完成验收的工单不关闭。
