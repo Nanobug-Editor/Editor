@@ -1,0 +1,783 @@
+{
+  "schema": 1,
+  "source_revision": "3f30e1b077f2dcc0eeba2616c4b68f7512403113",
+  "source_tree": "c88d2ed5df2423e66b7fdfe3ace2d8e1c2fd648c",
+  "logs": [
+    {
+      "source": "canvas-integration-check-final-20261027.log",
+      "archive": "canvas-integration-check-final-20261027.txt.gz",
+      "bytes": 56883,
+      "sha256": "eea4cc106c46bff15d0f2ec7bcb2d2d1bb4c1251f075fca307d6d37d59eb473f",
+      "gzip_sha256": "633238a1590a655ee151b987a250a75dd03e05b58b1dd2b1e6050f2f3c6afd31",
+      "test_results": [],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-full-30s-20261027.log",
+      "archive": "canvas-integration-full-30s-20261027.txt.gz",
+      "bytes": 4063,
+      "sha256": "52d4082d9994d0843d9e3c2fad90433888905eb56fac7569d9c0e827d84ae2f3",
+      "gzip_sha256": "d1766aa81b182fed993ee0a2ed7217372fb11eccf6a2234d9270d4b32b0dc9ff",
+      "test_results": [
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 6.54s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 6.48s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-git-native-20261027.log",
+      "archive": "canvas-integration-git-native-20261027.txt.gz",
+      "bytes": 205,
+      "sha256": "0db1d4bbfdecc2d52840629fdb94eebe7532a6611fbd4ed37a1da52154d427d0",
+      "gzip_sha256": "41927fcb6e80628e157e2f262c1192a48afbddca844fe2ba20075b421d59aad6",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 19.58s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-git-scroll-20261027.log",
+      "archive": "canvas-integration-git-scroll-20261027.txt.gz",
+      "bytes": 1530,
+      "sha256": "4b071d7a1d1045eb515678b475e2d2b6b90278110ab20934c56182b083a425f0",
+      "gzip_sha256": "d4da4439aa3a6590d48b26023f83115511961d8b186baac51ac101dc06433a92",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 77 filtered out; finished in 5.65s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-mailbox-20261027.log",
+      "archive": "canvas-integration-mailbox-20261027.txt.gz",
+      "bytes": 48613,
+      "sha256": "e400b79ede4b00f04598ba87cefb45b7bef84638f59f8f422e7205a4720a4ca5",
+      "gzip_sha256": "6bf9e4e3dfab6d39fab4caaee8830b20d0bcc3c11c4f041f1c24a4282a7aa8cd",
+      "test_results": [
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1179 filtered out; finished in 0.00s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-mailbox-final-20261027.log",
+      "archive": "canvas-integration-mailbox-final-20261027.txt.gz",
+      "bytes": 1107,
+      "sha256": "83b38155e98bdb555a1c78c97df7e0ad192a9fc2010602c85be8ffe0e2d3425e",
+      "gzip_sha256": "17a2dd812183f8db8af59b225920f0a3527a66978f687cb8bba7d3988b5a614c",
+      "test_results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1169 filtered out; finished in 0.61s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-basic-20261027.log",
+      "archive": "canvas-integration-native-basic-20261027.txt.gz",
+      "bytes": 440,
+      "sha256": "c9f953a3bf6211fd6b99d8aecc03a8ef7b334005f8b0fc81cf2f75ba6404a6ac",
+      "gzip_sha256": "7b77784e2706c2a6797bd94ae43c2af414e62402d9bbf7321d517b35dc23bccd",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.19s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.26s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-image-20261027.log",
+      "archive": "canvas-integration-native-image-20261027.txt.gz",
+      "bytes": 440,
+      "sha256": "a0732c722489c8a63a9e83b6405bfdd152c8440be984308d6ab1a25518565655",
+      "gzip_sha256": "8d323442d0c73a269b5cd09f60194e4ce6b02a4b73d118722a4b6346535e5eb8",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.20s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.26s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-layers-20261027.log",
+      "archive": "canvas-integration-native-layers-20261027.txt.gz",
+      "bytes": 440,
+      "sha256": "62095ef67d9c794c7f1913fa7c1a019106a71014a45afcd10ddabc1b5f97ff75",
+      "gzip_sha256": "14252a2fc71db3307f51eb80f471261a2f95b0c6b2e80093dd8ff5bf206e7bc9",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.22s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.28s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-native-clipboard-20261027.log",
+      "archive": "canvas-integration-native-native-clipboard-20261027.txt.gz",
+      "bytes": 440,
+      "sha256": "a0732c722489c8a63a9e83b6405bfdd152c8440be984308d6ab1a25518565655",
+      "gzip_sha256": "8d323442d0c73a269b5cd09f60194e4ce6b02a4b73d118722a4b6346535e5eb8",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.20s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.26s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-native-retained-paragraph-20261027.log",
+      "archive": "canvas-integration-native-native-retained-paragraph-20261027.txt.gz",
+      "bytes": 774,
+      "sha256": "f412f7237b70d1c75f7f855f383525bf3f9c520de92f05b3b3c02f5cef25b233",
+      "gzip_sha256": "9375d061592656e1cc36de20b170323ad0941c2d2dc247aaeec6075383a5e120",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.84s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.89s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-native-scroll-2d-20261027.log",
+      "archive": "canvas-integration-native-native-scroll-2d-20261027.txt.gz",
+      "bytes": 440,
+      "sha256": "c9f953a3bf6211fd6b99d8aecc03a8ef7b334005f8b0fc81cf2f75ba6404a6ac",
+      "gzip_sha256": "7b77784e2706c2a6797bd94ae43c2af414e62402d9bbf7321d517b35dc23bccd",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.19s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 1.26s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-wasm-c-flow-125-dark-20261027.log",
+      "archive": "canvas-integration-native-wasm-c-flow-125-dark-20261027.txt.gz",
+      "bytes": 827,
+      "sha256": "533bcb4990faee1e315c69654c93a39b65c58b15efc87588eb885f34ac2c23cb",
+      "gzip_sha256": "ab2eaab71b75c7909f02f479fdf698fd0bd3382ac82e7945a7d2e0a40f1ebab0",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 10.24s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 10.31s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-native-wasm-c-table-200-20261027.log",
+      "archive": "canvas-integration-native-wasm-c-table-200-20261027.txt.gz",
+      "bytes": 848,
+      "sha256": "d580acd3cd3d53bae5ba08033ee408b0ae5d76d6dc174e0d2edac62949b0625d",
+      "gzip_sha256": "31e180121474dc3e6fc0b7eb11e0ddf7bc8aaacb38e68526ea2925ca7f285fe7",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 8.07s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 8.13s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-release-build-20261027.log",
+      "archive": "canvas-integration-release-build-20261027.txt.gz",
+      "bytes": 33230,
+      "sha256": "e1b113e93e4e31be59136266b8c0a98d2d249095432979a511f7eb4926c416c7",
+      "gzip_sha256": "c1cd90f5768e41760b602329d417a49d8d88802125f5246b4c59b6947e8bd165",
+      "test_results": [],
+      "source_context": "Unfrozen transition from 600ef5d4 to 3f30e1b0; mixed compile inputs failed and this is not an accepted binary"
+    },
+    {
+      "source": "canvas-integration-release-final-20261027.log",
+      "archive": "canvas-integration-release-final-20261027.txt.gz",
+      "bytes": 49293,
+      "sha256": "b5d21735a2c9e379777f23c707b09eb0caede2b7da1b42f5b5422b13498470f7",
+      "gzip_sha256": "9c0f9f591b5728417133802381e9b794888a1cc047d861ffb603aea14eb34e72",
+      "test_results": [],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-sdk-20261027.log",
+      "archive": "canvas-integration-sdk-20261027.txt.gz",
+      "bytes": 49084,
+      "sha256": "5dfcd86f672966effc61ffc30217ebba1a1bc4fb127c05d1516f2e78fab14bb0",
+      "gzip_sha256": "9e53cccb9d93c846ddcd40c8cc713ef1a18cde863418551d3193d44d9ce09013",
+      "test_results": [
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 1173 filtered out; finished in 0.61s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-svg-preview-20261027.log",
+      "archive": "canvas-integration-svg-preview-20261027.txt.gz",
+      "bytes": 213,
+      "sha256": "61246dd062c58498e600b215e8dca369158060ef04519d1a4bfad3561c38453f",
+      "gzip_sha256": "a8257ef5626a68c04375ab06ce82ebefd408792735cac1a21e0ac4a47ff3491b",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1178 filtered out; finished in 0.96s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-table-b-20261027.log",
+      "archive": "canvas-integration-table-b-20261027.txt.gz",
+      "bytes": 354,
+      "sha256": "8a62288ec066ef42639d5c23265383925200b519ba6a0254426d2510aa6e3c1c",
+      "gzip_sha256": "d3beeaaf32cafc5586656b89489542682bc66974ae6c3ec6cc4993e8ce4b1bbe",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.59s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-table-d-20261027.log",
+      "archive": "canvas-integration-table-d-20261027.txt.gz",
+      "bytes": 871,
+      "sha256": "44b17963236901b6ef32dbff55f06ef678aca3647ecb368c48cd796c82288a19",
+      "gzip_sha256": "856ec406bac1447329d9efd4d0f8e49e760d0baa383da873c4ab4ce6c59aeaad",
+      "test_results": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 22.40s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-terminal-20261027.log",
+      "archive": "canvas-integration-terminal-20261027.txt.gz",
+      "bytes": 53284,
+      "sha256": "2431d96478a4d90fbfbbb6547b885c4444838b03c2ecd3c3f7f89312163568e4",
+      "gzip_sha256": "fab9848c52e584bda847daa91bd50cb6c529ef1a36f6bb87bbbfbd79a9529b36",
+      "test_results": [
+        "test result: ok. 38 passed; 0 failed; 5 ignored; 0 measured; 1136 filtered out; finished in 37.66s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-ui-debug-20261027.log",
+      "archive": "canvas-integration-ui-debug-20261027.txt.gz",
+      "bytes": 66598,
+      "sha256": "62d534483c23045a8c751df08ce0719f2774cc90bfe0058ae013a2ab047e9f40",
+      "gzip_sha256": "8de494f14ceebb3c3e86c5655b728ca25bdf594708714f644d93eb692e2bc27f",
+      "test_results": [
+        "test result: ok. 90 passed; 0 failed; 22 ignored; 0 measured; 1067 filtered out; finished in 4.42s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-wasm-five-20261027.log",
+      "archive": "canvas-integration-wasm-five-20261027.txt.gz",
+      "bytes": 9324,
+      "sha256": "d2f312fced6b8c9169fba4dc623e836508d7ddbc16001b89f2f202978f8525fe",
+      "gzip_sha256": "25385e122192f938fcffe3cfa941a9c05f321930f5d7162d35e3d62a30f8419e",
+      "test_results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.62s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.42s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.45s",
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 39.64s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 92.70s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-workspace-final-20261027.log",
+      "archive": "canvas-integration-workspace-final-20261027.txt.gz",
+      "bytes": 190600,
+      "sha256": "8521e72dce8a0e72c2465ad138235eee43248e6c9041f82badf8dac3fabc6893",
+      "gzip_sha256": "cc066e2de2e34a97d9c34568242f151c6d86db944ec6e48fe27f85863b9c4c97",
+      "test_results": [
+        "test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s",
+        "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 205 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.28s",
+        "test result: ok. 143 passed; 0 failed; 14 ignored; 0 measured; 0 filtered out; finished in 6.09s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s",
+        "test result: ok. 9 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 136 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 5.04s",
+        "test result: ok. 0 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 18 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 13 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 11 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 76 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+        "test result: ok. 0 passed; 0 failed; 16 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 13 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 10 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s",
+        "test result: ok. 11 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.19s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 0 passed; 0 failed; 13 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+        "test result: ok. 1 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 14 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "source_context": "3f30e1b077f2dcc0eeba2616c4b68f7512403113"
+    },
+    {
+      "source": "canvas-integration-workspace-test-20261027.log",
+      "archive": "canvas-integration-workspace-test-20261027.txt.gz",
+      "bytes": 86920,
+      "sha256": "22f90b36a07e0b6062dc48525e7293bb7383fe7b58f4a77f82b2d656ab981a1f",
+      "gzip_sha256": "77755104c06f356f71ee7fd500e2457fecc9308382f7d6f0ffcfd2f571ba2a21",
+      "test_results": [
+        "test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s",
+        "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 205 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.28s",
+        "test result: ok. 143 passed; 0 failed; 14 ignored; 0 measured; 0 filtered out; finished in 6.12s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+        "test result: ok. 9 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "source_context": "600ef5d4; first integration attempt failed because a new test fixture omitted paint"
+    },
+    {
+      "source": "canvas-integration-editor-actions-red.log",
+      "archive": "canvas-integration-editor-actions-red.txt.gz",
+      "bytes": 1298,
+      "sha256": "8082876d782d73e7404aea78a6ace3469ccbdbc99cedf5f378fe1fe2eed1923f",
+      "gzip_sha256": "f043bb404a20927cb8b800c686c639dbac74e41ac7625be838380c01df2c6813",
+      "test_results": [
+        "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "source_context": "600ef5d4 plus regression and fixture correction; reproduces old Snapshot action admission"
+    },
+    {
+      "source": "canvas-integration-editor-actions-green.log",
+      "archive": "canvas-integration-editor-actions-green.txt.gz",
+      "bytes": 573,
+      "sha256": "dce97dec95c7e33733e92f3cc89c4d7dffce6a84fb499e7462905179203a709e",
+      "gzip_sha256": "3b2c70aaf2562c879ca006029b69f68f54051257f5a25bd246932070c1af95dc",
+      "test_results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "source_context": "Fix candidate later committed as 3f30e1b0; repeated by final workspace suite"
+    },
+    {
+      "source": "canvas-integration-editor-action-lifetimes.log",
+      "archive": "canvas-integration-editor-action-lifetimes.txt.gz",
+      "bytes": 7427,
+      "sha256": "0c742bbc7461c4baf10d5a6db76e548a782a49da3833690655a22f36385bad65",
+      "gzip_sha256": "6bf24a057851293ef430334b6ba29b7652a67d6450b316ea081b31427ddc671c",
+      "test_results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 134 filtered out; finished in 0.00s"
+      ],
+      "source_context": "Frozen fix later committed as 3f30e1b0; repeated by final workspace suite"
+    }
+  ],
+  "interrupted_sampling": {
+    "status": "failed_foreground_before_baseline",
+    "header": {
+      "kind": "header",
+      "schema": 1,
+      "mode": "full",
+      "requested_seconds": 30,
+      "profile": "release",
+      "seed": 1729,
+      "initial_state": {
+        "revision": 30,
+        "scene_revision": 30,
+        "identity": 401,
+        "seed": 1729,
+        "edits": {},
+        "offset": [
+          168,
+          168
+        ],
+        "width": 640,
+        "height": 360,
+        "scale": 1,
+        "buffer": {
+          "x": 0.10543823,
+          "y": 8,
+          "w": 960,
+          "h": 680
+        },
+        "animating": true,
+        "frame_request": 27,
+        "frames": 25,
+        "playhead": 706.2273,
+        "full_publication": true,
+        "business_ticks": 88
+      },
+      "logical_items": 100000,
+      "cache_work_base": {
+        "prepare": 437,
+        "reuse": 8247,
+        "shape": 101,
+        "raster": 0
+      },
+      "package": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\crates\\plugin-runtime\\tests\\fixtures\\packages\\canvas-timeline-1.0.1.zip",
+      "exe": "C:\\Users\\Tmiracle\\.codex\\worktrees\\canvas-integration-20261027\\Editor\\target\\release\\deps\\editor_app-5978b8e51a333e5a.exe",
+      "machine": "TMIRACLE",
+      "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+      "logical_cpus": 32,
+      "architecture": "x86_64",
+      "os": "windows",
+      "dpi_scale": 1,
+      "observer": {
+        "profiler": "gpui-pre 0.3.9 profiler; global frame ring 16 MiB; task rings 16 MiB per thread",
+        "trace_rotation_seconds": 1,
+        "trace_rotation": "drain native frames, disable/clear trace buffers, reenable with a fresh cursor; HDR is unaffected",
+        "raw_frame_poll_ms": 100,
+        "counter_sample_ms": 1000,
+        "runtime_capture_renew_seconds": 45,
+        "peaks_scope": "maximum of 1-second observations, not an OS-wide absolute peak",
+        "input_latency_scope": "Window native dispatch to drawn frame; hardware and SendInput dispatch delay are excluded",
+        "renderer_cache": "same retained production cache in both modes",
+        "ingress_queue": "fixture adapter, capacity128; this is not the editor WorkSender queue",
+        "memory": "OS working set and private commit; native GPU atlas bytes are not measured"
+      }
+    },
+    "summary": {
+      "kind": "summary",
+      "elapsed_ms": 405,
+      "frames": 8,
+      "offset": [
+        168,
+        168
+      ],
+      "business_ticks": 98,
+      "publication_bytes": 621937,
+      "publications": 34,
+      "publication_missing_byte_records": 0,
+      "publication_records_complete": true,
+      "publication_records_expected": 335,
+      "raw_draw_events": 18,
+      "raw_present_events": 18,
+      "draw_fps": 44.412237347878836,
+      "present_fps": 44.41222638984362,
+      "frame_trace_complete": true,
+      "observation_ring_evictions": 159,
+      "rss_bytes": 120471552,
+      "private_bytes": 111448064,
+      "peaks": {
+        "rss_bytes": 120471552,
+        "private_bytes": 111448064,
+        "live_derived_pixel_bytes": 0,
+        "live_textures": 0,
+        "cached_items": 349,
+        "native_vertices": 2022,
+        "instance_resources": 2,
+        "fixture_ingress": 3
+      },
+      "cache": {
+        "prepare": 445,
+        "reuse": 11031,
+        "shape": 101,
+        "raster": 0,
+        "current_derived_pixel_bytes": 0,
+        "live_derived_pixel_bytes": 0,
+        "live_textures": 0,
+        "items": 349,
+        "vertices": 2022
+      },
+      "fixture_queue_overflow": 0,
+      "resources": 2,
+      "draw": {
+        "count": 18,
+        "p50_ns": 488703,
+        "p95_ns": 664575,
+        "p99_ns": 664575,
+        "max_ns": 664575
+      },
+      "dirty_to_present": {
+        "count": 18,
+        "p50_ns": 7966719,
+        "p95_ns": 35094527,
+        "p99_ns": 35094527,
+        "max_ns": 35094527
+      },
+      "present_interval": null,
+      "input_to_frame": null,
+      "input_mid_draw_excluded": 0
+    },
+    "archive": "full-0.405s-interrupted.jsonl.gz",
+    "bytes": 7535,
+    "sha256": "eab8b39cb75bbe744068fa83b81b51ce954c5d0a88958aac0aa3d49b788b2086",
+    "gzip_sha256": "0d93e80fda1f7f65a9a5c5cb6a32b3bb4099621ed4ea4eda13f17bef5bf61aad"
+  },
+  "note": "Results preserve ignored/zero-test and failed attempts; nested native parent/child output is not added together as separate scenarios.",
+  "source_revision_note": "Final validated source. Each log's source_context distinguishes historical failing attempts and test-only red/green steps from final-source validation.",
+  "native_executable": {
+    "path": "target/release/deps/editor_app-5978b8e51a333e5a.exe",
+    "bytes": 132709888,
+    "sha256": "3be675196593105b8e20c4ba55b7fb4f7f744a56890e8df929a26fb904e51a8a",
+    "sdk_files": 94,
+    "sdk_sha256": "4fb641244caa8cac3a08c0ef6b3584bed8cae01c12de0304bd164d0fcb90e6b4"
+  },
+  "artifact_files": [
+    {
+      "path": "canvas-integration-check-final-20261027.txt.gz",
+      "bytes": 12614,
+      "sha256": "633238a1590a655ee151b987a250a75dd03e05b58b1dd2b1e6050f2f3c6afd31"
+    },
+    {
+      "path": "canvas-integration-full-30s-20261027.txt.gz",
+      "bytes": 1124,
+      "sha256": "d1766aa81b182fed993ee0a2ed7217372fb11eccf6a2234d9270d4b32b0dc9ff"
+    },
+    {
+      "path": "canvas-integration-git-native-20261027.txt.gz",
+      "bytes": 166,
+      "sha256": "41927fcb6e80628e157e2f262c1192a48afbddca844fe2ba20075b421d59aad6"
+    },
+    {
+      "path": "canvas-integration-git-scroll-20261027.txt.gz",
+      "bytes": 752,
+      "sha256": "d4da4439aa3a6590d48b26023f83115511961d8b186baac51ac101dc06433a92"
+    },
+    {
+      "path": "canvas-integration-mailbox-20261027.txt.gz",
+      "bytes": 7065,
+      "sha256": "6bf9e4e3dfab6d39fab4caaee8830b20d0bcc3c11c4f041f1c24a4282a7aa8cd"
+    },
+    {
+      "path": "canvas-integration-mailbox-final-20261027.txt.gz",
+      "bytes": 398,
+      "sha256": "17a2dd812183f8db8af59b225920f0a3527a66978f687cb8bba7d3988b5a614c"
+    },
+    {
+      "path": "canvas-integration-native-basic-20261027.txt.gz",
+      "bytes": 179,
+      "sha256": "7b77784e2706c2a6797bd94ae43c2af414e62402d9bbf7321d517b35dc23bccd"
+    },
+    {
+      "path": "canvas-integration-native-image-20261027.txt.gz",
+      "bytes": 178,
+      "sha256": "8d323442d0c73a269b5cd09f60194e4ce6b02a4b73d118722a4b6346535e5eb8"
+    },
+    {
+      "path": "canvas-integration-native-layers-20261027.txt.gz",
+      "bytes": 177,
+      "sha256": "14252a2fc71db3307f51eb80f471261a2f95b0c6b2e80093dd8ff5bf206e7bc9"
+    },
+    {
+      "path": "canvas-integration-native-native-clipboard-20261027.txt.gz",
+      "bytes": 178,
+      "sha256": "8d323442d0c73a269b5cd09f60194e4ce6b02a4b73d118722a4b6346535e5eb8"
+    },
+    {
+      "path": "canvas-integration-native-native-retained-paragraph-20261027.txt.gz",
+      "bytes": 268,
+      "sha256": "9375d061592656e1cc36de20b170323ad0941c2d2dc247aaeec6075383a5e120"
+    },
+    {
+      "path": "canvas-integration-native-native-scroll-2d-20261027.txt.gz",
+      "bytes": 179,
+      "sha256": "7b77784e2706c2a6797bd94ae43c2af414e62402d9bbf7321d517b35dc23bccd"
+    },
+    {
+      "path": "canvas-integration-native-wasm-c-flow-125-dark-20261027.txt.gz",
+      "bytes": 442,
+      "sha256": "ab2eaab71b75c7909f02f479fdf698fd0bd3382ac82e7945a7d2e0a40f1ebab0"
+    },
+    {
+      "path": "canvas-integration-native-wasm-c-table-200-20261027.txt.gz",
+      "bytes": 450,
+      "sha256": "31e180121474dc3e6fc0b7eb11e0ddf7bc8aaacb38e68526ea2925ca7f285fe7"
+    },
+    {
+      "path": "canvas-integration-release-build-20261027.txt.gz",
+      "bytes": 8140,
+      "sha256": "c1cd90f5768e41760b602329d417a49d8d88802125f5246b4c59b6947e8bd165"
+    },
+    {
+      "path": "canvas-integration-release-final-20261027.txt.gz",
+      "bytes": 7173,
+      "sha256": "9c0f9f591b5728417133802381e9b794888a1cc047d861ffb603aea14eb34e72"
+    },
+    {
+      "path": "canvas-integration-sdk-20261027.txt.gz",
+      "bytes": 7221,
+      "sha256": "9e53cccb9d93c846ddcd40c8cc713ef1a18cde863418551d3193d44d9ce09013"
+    },
+    {
+      "path": "canvas-integration-svg-preview-20261027.txt.gz",
+      "bytes": 167,
+      "sha256": "a8257ef5626a68c04375ab06ce82ebefd408792735cac1a21e0ac4a47ff3491b"
+    },
+    {
+      "path": "canvas-integration-table-b-20261027.txt.gz",
+      "bytes": 256,
+      "sha256": "d3beeaaf32cafc5586656b89489542682bc66974ae6c3ec6cc4993e8ce4b1bbe"
+    },
+    {
+      "path": "canvas-integration-table-d-20261027.txt.gz",
+      "bytes": 486,
+      "sha256": "856ec406bac1447329d9efd4d0f8e49e760d0baa383da873c4ab4ce6c59aeaad"
+    },
+    {
+      "path": "canvas-integration-terminal-20261027.txt.gz",
+      "bytes": 8371,
+      "sha256": "fab9848c52e584bda847daa91bd50cb6c529ef1a36f6bb87bbbfbd79a9529b36"
+    },
+    {
+      "path": "canvas-integration-ui-debug-20261027.txt.gz",
+      "bytes": 11415,
+      "sha256": "8de494f14ceebb3c3e86c5655b728ca25bdf594708714f644d93eb692e2bc27f"
+    },
+    {
+      "path": "canvas-integration-wasm-five-20261027.txt.gz",
+      "bytes": 2801,
+      "sha256": "25385e122192f938fcffe3cfa941a9c05f321930f5d7162d35e3d62a30f8419e"
+    },
+    {
+      "path": "canvas-integration-workspace-final-20261027.txt.gz",
+      "bytes": 38390,
+      "sha256": "cc066e2de2e34a97d9c34568242f151c6d86db944ec6e48fe27f85863b9c4c97"
+    },
+    {
+      "path": "canvas-integration-workspace-test-20261027.txt.gz",
+      "bytes": 20524,
+      "sha256": "77755104c06f356f71ee7fd500e2457fecc9308382f7d6f0ffcfd2f571ba2a21"
+    },
+    {
+      "path": "full-0.405s-interrupted.jsonl.gz",
+      "bytes": 2206,
+      "sha256": "0d93e80fda1f7f65a9a5c5cb6a32b3bb4099621ed4ea4eda13f17bef5bf61aad"
+    },
+    {
+      "path": "git-dark-zh-CN-100-evidence.json.gz",
+      "bytes": 1279,
+      "sha256": "3400792cdda9fa8d84c4f0b0297de3cade0e440792c8f27e18a496570c53460e"
+    },
+    {
+      "path": "git-dark-zh-CN-100-history-scroll.png",
+      "bytes": 183880,
+      "sha256": "adaa18435c47d3ecc00ab7aba57ed8d49d090d474f91e98493a1b0dc89b8770a"
+    },
+    {
+      "path": "git-dark-zh-CN-100-native.log.gz",
+      "bytes": 949,
+      "sha256": "0fb2aea2af2690f9c5766888e1b4dfc0347843403c28894a72d4ba39e2169cb4"
+    },
+    {
+      "path": "git-light-en-150-evidence.json.gz",
+      "bytes": 1364,
+      "sha256": "cabe43179cec1a22e547d65b75fd3da03adb36d0fa92eaf625602857ce089354"
+    },
+    {
+      "path": "git-light-en-150-history-scroll.png",
+      "bytes": 316359,
+      "sha256": "90dd675696afef1dca356b9500497b46291878d1316a57ddacf25e7573be6911"
+    },
+    {
+      "path": "git-light-en-150-native.log.gz",
+      "bytes": 969,
+      "sha256": "2667d53972c1520a1c3102e85f06e854ed2c82b6fc225308371f6840420340a0"
+    },
+    {
+      "path": "canvas-integration-editor-actions-red.txt.gz",
+      "sha256": "f043bb404a20927cb8b800c686c639dbac74e41ac7625be838380c01df2c6813"
+    },
+    {
+      "path": "canvas-integration-editor-actions-green.txt.gz",
+      "sha256": "3b2c70aaf2562c879ca006029b69f68f54051257f5a25bd246932070c1af95dc"
+    },
+    {
+      "path": "canvas-integration-editor-action-lifetimes.txt.gz",
+      "sha256": "6bf24a057851293ef430334b6ba29b7652a67d6450b316ea081b31427ddc671c"
+    }
+  ]
+}

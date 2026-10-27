@@ -1,6 +1,6 @@
 # Canvas 04：保留场景与显示帧验收记录
 
-状态：源码和固定包已完成；完整十分钟实机采样待桌面可用，AC6/AC7 未验收。AC1–AC8 暂不整批勾选，[#131](https://github.com/Nanobug-Editor/Editor/issues/131) 保持开放，尚未合并 main。依据为[工单 04](../tickets/canvas-protocol-extension/04-retained-frames.md)和[扩展方案](../specs/canvas-protocol-extension.md)。
+状态：本页保留前期源码、固定包及旧显示环境的验证历史；最新统一 Editor 集成、修复与验收进展见[2026-10-27 记录](canvas-retained-integration-2026-10-27.md)。完整十分钟实机采样仍未完成，AC6/AC7 未验收，#131/#127 保持开放，尚未合并 main。依据为[工单 04](../tickets/canvas-protocol-extension/04-retained-frames.md)和[扩展方案](../specs/canvas-protocol-extension.md)。
 
 ## 工作边界
 

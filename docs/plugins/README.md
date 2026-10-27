@@ -4,7 +4,7 @@
 
 - [宿主与插件共享 UI 分阶段实施方案](specs/shared-ui-roadmap.md)、[S0／S1 细化契约](specs/shared-ui-s0-s1.md)、[七张本地工单](tickets/shared-ui-foundation/README.md)：规划／待实施；补齐目标与请求状态、事件因果、权限和错误，以端到端垂直切片明确直接依赖；本轮仅文档，不修改代码或依赖，不发布远程议题。
 
-- [Canvas 协议扩展](specs/canvas-protocol-extension.md)：四个顺序实施的垂直切片；[工单与依赖](tickets/canvas-protocol-extension/README.md)、[实施验证](verification/canvas-protocol-extension-2026-10-24.md)。1.4–1.6 前置已交付，01 已验收关闭，02 [已验收关闭](verification/canvas-editable-targets-2026-10-25.md)，03 [已验收关闭](verification/canvas-native-transfer-2026-10-26.md)；04 源码、固定包和 30 秒基线已验证，完整十分钟实机采样[待桌面可用后验收](verification/canvas-retained-frames-2026-10-26.md)。全部完成后统一合并独立分支至 main。
+- [Canvas 协议扩展](specs/canvas-protocol-extension.md)：四个顺序实施的垂直切片；[工单与依赖](tickets/canvas-protocol-extension/README.md)、[实施验证](verification/canvas-protocol-extension-2026-10-24.md)。1.4–1.6 前置已交付，01 已验收关闭，02 [已验收关闭](verification/canvas-editable-targets-2026-10-25.md)，03 [已验收关闭](verification/canvas-native-transfer-2026-10-26.md)；04 与统一 Editor 的[最终集成功能验收已通过](verification/canvas-retained-integration-2026-10-27.md)，新基线因窗口失去前台中止，完整十分钟采样仍待连续桌面时段。AC6／AC7 满足后才合并 main 并关闭第四单与总工单。
 
 - [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
 
