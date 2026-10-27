@@ -3,6 +3,7 @@ use super::*;
 use gpui_kit::{AnyWindowHandle, AppContext, Application, WindowBounds, WindowOptions};
 use std::io::{Read, Seek};
 use wasm::timeline::{Actor, Input, Snapshot};
+mod lifecycle;
 mod perf;
 mod smoke;
 
@@ -149,12 +150,31 @@ fn run() -> anyhow::Result<()> {
                     Ok::<(), anyhow::Error>(())
                 }
                 .await;
-                let _ = window.update(cx, |_, window, _| window.remove_window());
-                cx.background_executor()
-                    .timer(Duration::from_millis(150))
-                    .await;
+                // No guest publication may enqueue more native work after retirement starts.
                 actor.stop();
-                *output.borrow_mut() = Some(observed);
+                let retired = lifecycle::retire(&view, window, cx).await;
+                // Native input and paint buffers have retired before the final retained owners.
+                saved.borrow_mut().take();
+                drop(view);
+                drop(snapshot);
+                drop(actor);
+                let no_windows = cx.update(|cx| {
+                    anyhow::ensure!(
+                        cx.windows().is_empty(),
+                        "timeline retained a GPUI window after retirement"
+                    );
+                    Ok(())
+                });
+                let failures = [observed, retired, no_windows]
+                    .into_iter()
+                    .filter_map(Result::err)
+                    .map(|error| format!("{error:#}"))
+                    .collect::<Vec<_>>();
+                *output.borrow_mut() = Some(if failures.is_empty() {
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!(failures.join("\n")))
+                });
                 let _ = cx.update(|cx| cx.quit());
             })
             .detach();
