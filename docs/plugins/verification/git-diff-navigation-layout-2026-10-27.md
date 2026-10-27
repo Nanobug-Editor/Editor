@@ -1,6 +1,6 @@
 # Git 差异主题、相邻文件导航与视口列布局
 
-日期：2026-10-27。状态：实现与本机验证完成；尚未合并、安装或发布。
+日期：2026-10-27。状态：实现、本机验证及主分支集成完成；已重新打包，尚未安装或发布。主分支交付见末节。
 
 宿主任务分支 `codex/git-diff-scroll-fixes`，起点 `176760ee6264ff63368689cb53037fda4a9fd35d`。独立 Git 源码位于 `C:/Projects/RustProjects/Git-for-Nanobug`；候选版本 0.1.46。主 checkout 的其他未提交修改没有复制进本任务。
 
@@ -63,8 +63,26 @@
 
 最终原生验收记录在 `native-columns-final/`。两组均实际移动分支树／提交列表分隔条，比较第一帧的列坐标与宽度和等待 worker 后同尺寸的结果，并在按住分隔条时等待其稳定。验证选择、垂直滚动、提交面板 revision 及恢复原尺寸。之后继续运行三个内部列边界拖动、滚轮像素累计／反向边界、图块复用、滚动条拖动与隐藏动画检查；临时窗口退出清理通过。主进程日志 `native-columns-final.log`，两组子目录各有 `evidence.json`、原生截图和退出清理记录。截图已人工查看，无文本重叠。
 
-## 候选交付物
+## 此前隔离工作区候选交付物
 
 `delivery/Nanobug.exe` 为此 worktree 的 Release 宿主，SHA256 `8630AE9DB177D677B7FBA4E7E9E7F39D682A08FFF2620D039411735720DC834F`；`delivery/git-0.1.46.zip` 的 SHA256 为 `B99DBC2925CB766B318CECA7490EC9E0D7A36D7C2CBF06C2419D5A147CE6F0BD`。路径相对于上述项目外证据目录，`delivery/sha256.json` 保存机器可读摘要。
 
 两者须配套验证；未替换用户安装、未合并主 checkout、未提交或发布。候选宿主不含主 checkout 其他任务的未提交改动。
+
+## 主分支集成与重新打包
+
+用户随后授权“合并到主分支，保留已有改动，重新编译打包宿主和 Git 插件，我手动安装验证”。本次修复提交为 `2a60c8aff349f8a3f1a297c3379845eda74bf9a7`，`main` 从原基线快进合入。主工作区原有 20 个修改/新增文件已在项目外备份；19 个保持逐字节一致，唯一重叠的 `docs/plugins/README.md` 保留用户原条目。它们继续保持未提交状态，没有 stash、清理、提交或推送其他任务内容。
+
+重新构建使用 `C:/Projects/RustProjects/Editor/target/`，已通过 `cargo metadata --no-deps --format-version 1` 核对。宿主 Release 包含主工作区原有未提交修改。Git 源码保持已经验证的 0.1.46，用新主分支宿主的 `--plugin-cargo` 测试和 `--plugin-package` 入口重建。该入口仅支持 build/check/test，metadata 核对改用直接 Cargo，确认 Git 仍使用自身的 `target/`。
+
+主分支检查结果：`cargo fmt --check`、`cargo check --workspace`、`cargo test --workspace --exclude editor-app` 均通过；workspace 838 passed / 0 failed / 441 ignored。列绘图 3 项、差异渲染 7 项、重新打包的 Git 实包导航/高亮测试 1 项（显式执行 ignored）通过；Git 访客 208 项通过。原有改动及修改路径集合在构建后再次核对保留。
+
+新证据目录：`C:/Users/Tmiracle/.codex/task-artifacts/git-diff-main-2026-10-27/`。其中 `delivery/Nanobug-Windows-x64.zip` 包含 x64 程序、品牌图标与终端许可证，不夹带插件；`delivery/git-0.1.46.zip` 单独交付。已检查 PE 架构、ZIP 完整性和压缩包内程序与 Release 产物一致。当前机器没有已安装的 Inno Setup，交付完整便携 ZIP，没有安装工具链或执行安装。
+
+| 产物 | SHA256 |
+| --- | --- |
+| 宿主便携 ZIP | `0f8d7f44407ed7bdf95d6246694e607d8c750b7d663c5b2136c939da57f557e8` |
+| ZIP 内 Nanobug.exe | `e88f6fda453611de7366915c20171ca6e13c669491fffe1dc8ff06400cdc1caa` |
+| Git 0.1.46 ZIP | `c220d9bc40b7ca53257f55155fb273305754fda68b7d7a2ca35e97fb6e1b0270` |
+
+先退出旧宿主，再运行解压出的新宿主并从插件管理器安装新 Git ZIP，避免单实例递交给旧进程。实际安装和用户项目验收由用户执行；没有发布远程版本。
