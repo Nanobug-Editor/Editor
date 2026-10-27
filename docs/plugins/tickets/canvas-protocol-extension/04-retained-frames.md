@@ -6,7 +6,7 @@
 
 **Blocked by：**[01 / #128 — 场景图形与空间操作](https://github.com/Nanobug-Editor/Editor/issues/128)。代码开始不以 02/03 为阻塞；整批关闭前必须完成 02/03 并通过下面的组合验收。当前顺序执行使其在 03 后实施。
 
-**Status：**全部验收通过（2026-10-27），正在交付合并与关单。独立集成工作区保留主分支统一 Editor 与完整 Canvas 1.10，修复快照 Editor 动作的旧输入边界及原生测试退出顺序；门禁、实际 WASM、原生组合和双轴复审通过。同一最终 Release 二进制完成 full 30.001 秒与 patch 600.004 秒，分别 75／1,500 次真实输入，记录完整、资源稳态且正常退出。详见[最终集成记录](../../verification/canvas-retained-integration-2026-10-27.md)与[前期记录](../../verification/canvas-retained-frames-2026-10-26.md)。01/02/03 均已读回 closed/completed；推送和合并核对后按用户授权关闭 [#131](https://github.com/Nanobug-Editor/Editor/issues/131) 与总工单 #127。
+**Status：**已完成并验收（2026-10-27）。独立集成工作区保留主分支统一 Editor 与完整 Canvas 1.10，修复快照 Editor 动作的旧输入边界及原生测试退出顺序；门禁、实际 WASM、原生组合和双轴复审通过。同一最终 Release 二进制完成 full 30.001 秒与 patch 600.004 秒，分别 75／1,500 次真实输入，记录完整、资源稳态且正常退出。验收归档 `8f825f27` 已合并并推送 main；[本单 #131](https://github.com/Nanobug-Editor/Editor/issues/131)、总工单 #127 及 01/02/03 均已读回 closed/completed。详见[最终集成记录](../../verification/canvas-retained-integration-2026-10-27.md)与[前期记录](../../verification/canvas-retained-frames-2026-10-26.md)。
 
 **Why separate：**补丁、帧和资源保留基于同一场景身份，有独立的性能及队列风险；此单是整批集成交付责任单，不另拆纯验证工单。
 

@@ -4,7 +4,7 @@
 
 - [宿主与插件共享 UI 分阶段实施方案](specs/shared-ui-roadmap.md)、[S0／S1 细化契约](specs/shared-ui-s0-s1.md)、[七张本地工单](tickets/shared-ui-foundation/README.md)：规划／待实施；补齐目标与请求状态、事件因果、权限和错误，以端到端垂直切片明确直接依赖；本轮仅文档，不修改代码或依赖，不发布远程议题。
 
-- [Canvas 协议扩展](specs/canvas-protocol-extension.md)：四个顺序实施的垂直切片；[工单与依赖](tickets/canvas-protocol-extension/README.md)、[实施验证](verification/canvas-protocol-extension-2026-10-24.md)。1.4–1.6 前置已交付，01 已验收关闭，02 [已验收关闭](verification/canvas-editable-targets-2026-10-25.md)，03 [已验收关闭](verification/canvas-native-transfer-2026-10-26.md)；04 与统一 Editor 的[最终集成验收已通过](verification/canvas-retained-integration-2026-10-27.md)，包含完整 full30／patch600、正常原生退出及稳态证据，正在完成合并 main 与第四单／总工单的交付登记。
+- [Canvas 协议扩展](specs/canvas-protocol-extension.md)：四个顺序实施的垂直切片；[工单与依赖](tickets/canvas-protocol-extension/README.md)、[实施验证](verification/canvas-protocol-extension-2026-10-24.md)。1.4–1.6 前置已交付，01 已验收关闭，02 [已验收关闭](verification/canvas-editable-targets-2026-10-25.md)，03 [已验收关闭](verification/canvas-native-transfer-2026-10-26.md)；04 与统一 Editor 的[最终集成验收已通过](verification/canvas-retained-integration-2026-10-27.md)，包含完整 full30／patch600、正常原生退出及稳态证据。已合并并推送 main，第四单与总工单均已读回 closed/completed。
 
 - [Canvas 1.4–1.6 前置基线](verification/canvas-baseline-2026-10-25.md)：TextBox、原生文字测量与列宽拖动的独立整理及验证记录。
 
@@ -224,7 +224,7 @@ Markdown 插件：[总方案](https://github.com/Nanobug-Editor/Markdown/blob/31
 | 分类 | 入口 | 状态 |
 | --- | --- | --- |
 | 平台设计 | [插件平台方案](specs/plugin-api-platform.md) | 已完成实施，正文保留设计基线 |
-| Canvas 扩展 | [通用 Canvas 协议扩展方案](specs/canvas-protocol-extension.md)、[四张实施工单](tickets/canvas-protocol-extension/README.md) | 2026-10-27 四单全部验收通过，完整十分钟实机采样通过；合并与关单登记见最终验收记录 |
+| Canvas 扩展 | [通用 Canvas 协议扩展方案](specs/canvas-protocol-extension.md)、[四张实施工单](tickets/canvas-protocol-extension/README.md) | 2026-10-27 四单全部验收、完整十分钟实机采样通过，已合并 main；四单与总工单均已关闭 |
 | 实施工单 | [20 张工单、议题映射及依赖图](tickets/README.md) | 全部已完成 |
 | 最终验收 | [T01–T26 契约验收](verification/plugin-api-contract-verification.md) | 已完成，含真实执行证据与限制 |
 | 运行与构建 | [运行时插件平台](runtime-plugins.md) | 当前使用参考，随平台维护 |

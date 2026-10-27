@@ -7,7 +7,10 @@
     "number": 127,
     "id": 6014181625,
     "url": "https://github.com/Nanobug-Editor/Editor/issues/127",
-    "state": "open"
+    "state": "closed",
+    "state_reason": "completed",
+    "closed_at": "2026-10-27T02:32:55Z",
+    "delivery_commit": "8f825f270ea1496d079fc29d4fd1f29116454726"
   },
   "tickets": [
     {
@@ -40,7 +43,10 @@
       "number": 131,
       "id": 6014197252,
       "url": "https://github.com/Nanobug-Editor/Editor/issues/131",
-      "state": "open"
+      "state": "closed",
+      "state_reason": "completed",
+      "closed_at": "2026-10-27T02:32:52Z",
+      "delivery_commit": "8f825f270ea1496d079fc29d4fd1f29116454726"
     }
   ],
   "dependencies": [
@@ -65,5 +71,7 @@
   ],
   "sub_issues_verified": true,
   "publication_transport": "GitHub REST using existing local Git authentication; connector create returned 403",
-  "state_verified_on": "2026-10-27"
+  "state_verified_on": "2026-10-27",
+  "state_verification": "REST PATCH/GET for #131/#127, then independent GitHub connector read of #127–#131: all closed/completed",
+  "integrated_delivery_commit": "8f825f270ea1496d079fc29d4fd1f29116454726"
 }
