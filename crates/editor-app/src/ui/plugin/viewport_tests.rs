@@ -143,7 +143,9 @@ fn settle(cx: &mut VisualTestContext) {
 /// A platform wheel event exercises Base's genuine offset, hover and clipping behavior.
 fn wheel(cx: &mut VisualTestContext, pixels: f32) {
     let bounds = cx.debug_bounds("plugin-ui-viewport").unwrap();
-    cx.simulate_event(gpui_kit::ScrollWheelEvent {
+    cx.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: bounds.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(pixels))),
         modifiers: Default::default(),

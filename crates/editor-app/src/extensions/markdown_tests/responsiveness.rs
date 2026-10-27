@@ -17,7 +17,9 @@ fn delivered_markdown_source_home_reclaims_preview_and_link(cx: &mut TestAppCont
         .debug_bounds("plugin-ui-preview-scroll")
         .unwrap()
         .center();
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Lines(gpui_kit::point(0., -12.)),
         ..Default::default()
@@ -163,7 +165,9 @@ fn delivered_markdown_wheel_notch_does_not_bounce(cx: &mut TestAppContext) {
             .unwrap()
             .center();
         let before = ui.debug_bounds("plugin-ui-preview-body").unwrap().top();
-        ui.simulate_event(gpui_kit::ScrollWheelEvent {
+        ui.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position,
             delta: gpui_kit::ScrollDelta::Lines(gpui_kit::point(0., -3.)),
             ..Default::default()

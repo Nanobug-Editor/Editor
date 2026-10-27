@@ -459,7 +459,9 @@ fn native_code_alignment_routes_real_rails_and_wheel_across_three_panes(cx: &mut
     for (pane, delta) in [(0, -160.), (2, 60.)] {
         let before = ui.update(|_, cx| group(&mounted, cx).scroll_offset(cx));
         let viewport = ui.update(|_, cx| group(&mounted, cx).viewport(pane, cx).unwrap());
-        ui.simulate_event(gpui_kit::ScrollWheelEvent {
+        ui.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(delta))),
             modifiers: Default::default(),

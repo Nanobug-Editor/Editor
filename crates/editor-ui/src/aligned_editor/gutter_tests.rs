@@ -4,9 +4,8 @@ use crate::theme::ActiveTheme as _;
 use gpui_base::input::{Editor, InputState, RopeExt as _};
 use gpui_kit::{
     Context, ElementInputHandler, EntityInputHandler as _, InputHandler as _,
-    InteractiveElement as _, MouseButton, ParentElement as _, Render, ScrollDelta,
-    ScrollWheelEvent, Styled as _, TestAppContext, TouchPhase, VisualTestContext, Window, div,
-    gpui, point, size,
+    InteractiveElement as _, MouseButton, ParentElement as _, Render, ScrollDelta, ScrollEvent,
+    Styled as _, TestAppContext, TouchPhase, VisualTestContext, Window, div, gpui, point, size,
 };
 
 /// The same native entities remain mounted when the group is paused or retired.
@@ -365,7 +364,9 @@ fn inner_gutters_keep_native_rows_and_stay_fixed_during_horizontal_scrolling(
         assert!((left.left() - left_pane.left() - px(12.)).abs() < px(0.5));
         assert!(right.left() > right_pane.left() + px(20.));
         let selected = ui.update(|_, cx| view.read(cx).editors[0].read(cx).selected_range());
-        ui.simulate_event(ScrollWheelEvent {
+        ui.simulate_event(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: point(left_pane.left() + px(100.), left.center().y),
             delta: ScrollDelta::Pixels(point(px(-48.), px(0.))),
             touch_phase: TouchPhase::Moved,

@@ -138,7 +138,7 @@ impl EditorApp {
                             app.measure_source_viewport(&preview, window, cx)
                         });
                         let wheel_owner = owner.clone();
-                        window.on_mouse_event(move |event: &ScrollWheelEvent, phase, _, cx| {
+                        window.on_mouse_event(move |event: &ScrollEvent, phase, _, cx| {
                             if phase == gpui_kit::DispatchPhase::Capture {
                                 let _ = wheel_owner.update(cx, |app, cx| {
                                     if app.editor.read(cx).input_bounds().contains(&event.position)

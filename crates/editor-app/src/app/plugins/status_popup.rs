@@ -71,7 +71,7 @@ impl EditorApp {
             .occlude()
             .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_up(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-            .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+            .on_scroll(|_, _, cx| cx.stop_propagation())
             .on_any_mouse_down(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();
                 this.close_plugin_popup(window, cx);

@@ -168,7 +168,9 @@ fn svg_preview_follows_open_documents_and_unsaved_edits(cx: &mut TestAppContext)
     cx.update(|window, cx| {
         // Wheel input goes only to this surface, with coordinates relative to the preview panel.
         window.dispatch_event(
-            PlatformInput::ScrollWheel(ScrollWheelEvent {
+            PlatformInput::Scroll(ScrollEvent {
+                // Wheel and trackpad fixtures retain pointer-device semantics.
+                source: gpui_kit::ScrollSource::Pointer,
                 position: preview.center(),
                 delta: gpui_kit::ScrollDelta::Lines(point(0., 2.)),
                 ..Default::default()

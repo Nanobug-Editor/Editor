@@ -22,7 +22,8 @@ impl EditorApp {
                                 .get()
                                 .is_some_and(|bounds| bounds.contains(&event.position));
                             app.definition_popup_focus.pointer_gesture.set(in_card);
-                            if !in_card && event.modifiers.secondary() {
+                            // Resolve the navigation modifier with this application's OS.
+                            if !in_card && event.modifiers.secondary(cx) {
                                 // Native handlers must consume this press before its cached definition
                                 // is retired; capture-time dismissal otherwise breaks Ctrl+click.
                                 let owner = cx.entity().downgrade();
@@ -128,7 +129,7 @@ impl EditorApp {
                     ..text.position_to_offset(&entry.diagnostic.range.end)
             })
             .or_else(|| symbol_at_point(self.editor.read(cx), event.position));
-        if event.modifiers.secondary() {
+        if event.modifiers.secondary(cx) {
             // Ctrl-hover belongs to the editor's definition navigation path.
             // Invalidate our pending detail request without clearing its underline.
             self.pointer_hover_generation = self.pointer_hover_generation.wrapping_add(1);

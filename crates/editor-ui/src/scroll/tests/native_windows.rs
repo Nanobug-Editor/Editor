@@ -294,7 +294,9 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
                     );
                     moving_frames.borrow_mut().clear();
                     window.dispatch_event(
-                        gpui_kit::PlatformInput::ScrollWheel(ScrollWheelEvent {
+                        gpui_kit::PlatformInput::Scroll(ScrollEvent {
+                            // Wheel and trackpad fixtures retain pointer-device semantics.
+                            source: gpui_kit::ScrollSource::Pointer,
                             position,
                             delta: ScrollDelta::Lines(point(0., wheel_lines)),
                             modifiers: Default::default(),
@@ -311,7 +313,9 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
                         // Sustained physical input spans enough vsyncs for a cadence measurement.
                         if index > 0 && index < 75 && index % 4 == 0 {
                             window.dispatch_event(
-                                gpui_kit::PlatformInput::ScrollWheel(ScrollWheelEvent {
+                                gpui_kit::PlatformInput::Scroll(ScrollEvent {
+                                    // Wheel and trackpad fixtures retain pointer-device semantics.
+                                    source: gpui_kit::ScrollSource::Pointer,
                                     position,
                                     delta: ScrollDelta::Lines(point(0., wheel_lines)),
                                     modifiers: Default::default(),

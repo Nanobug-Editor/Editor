@@ -317,7 +317,7 @@ impl CanvasView {
     /// Preserve native wheel units and subpixel deltas; target motion is inverse-projected once.
     pub(in crate::ui::plugin::canvas) fn target_wheel(
         &mut self,
-        event: &ScrollWheelEvent,
+        event: &ScrollEvent,
         cx: &mut Context<Self>,
     ) -> bool {
         let target = self

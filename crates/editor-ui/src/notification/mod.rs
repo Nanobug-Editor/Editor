@@ -32,7 +32,7 @@ pub fn message_card(
         .shadow_lg()
         .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
         .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
+        .on_scroll(|_, _, cx| cx.stop_propagation())
 }
 
 /// One replaceable informational card; it never takes focus from the editor or blocks other panels.

@@ -17,8 +17,8 @@ fn visible_label(visual: &mut VisualTestContext, label: &str) -> bool {
     })
 }
 
-/// Base activation needs both platform events, including release, for Enter and Space.
-fn activate(visual: &mut VisualTestContext, key: &str) {
+/// Base activation for fixed Enter/Space fixture keys needs both key-down and release.
+fn activate(visual: &mut VisualTestContext, key: &'static str) {
     let keystroke = Keystroke::parse(key).unwrap();
     visual.simulate_event(KeyDownEvent {
         keystroke: keystroke.clone(),

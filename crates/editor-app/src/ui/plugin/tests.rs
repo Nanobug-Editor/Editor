@@ -54,7 +54,9 @@ fn visual_viewport_canvas_emits_shared_input(cx: &mut TestAppContext) {
         if event.revision == 7 && input.content == (ui::ContentSize {width: 100., height: 50.})
             && matches!(input.event, ui::CanvasEvent::Resize {width: 400., height: 300., ..}))
     ));
-    visual.simulate_event(gpui_kit::ScrollWheelEvent {
+    visual.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: point(px(200.), px(150.)),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(14.))),
         ..Default::default()
@@ -304,7 +306,9 @@ fn side_tabs_compose_with_canvas_and_emit_native_resize(cx: &mut TestAppContext)
     for lines in [1., -1.] {
         cx.update(|window, cx| {
             window.dispatch_event(
-                gpui_kit::PlatformInput::ScrollWheel(gpui_kit::ScrollWheelEvent {
+                gpui_kit::PlatformInput::Scroll(gpui_kit::ScrollEvent {
+                    // Wheel and trackpad fixtures retain pointer-device semantics.
+                    source: gpui_kit::ScrollSource::Pointer,
                     position: canvas.center(),
                     delta: gpui_kit::ScrollDelta::Lines(point(0., lines)),
                     ..Default::default()

@@ -320,7 +320,9 @@ fn project_switcher_live_changes_keep_keyboard_selection_visible(cx: &mut TestAp
         visual.run_until_parked();
         click(&mut home, "project-switcher-trigger");
         let position = recent_bounds(&mut home, 0).unwrap().center();
-        home.simulate_event(gpui_kit::ScrollWheelEvent {
+        home.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position,
             delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-5000.))),
             touch_phase: gpui_kit::TouchPhase::Moved,
@@ -339,7 +341,9 @@ fn project_switcher_live_changes_keep_keyboard_selection_visible(cx: &mut TestAp
         // History changed in the peer dropdown; scroll its refreshed records into view before clicking.
         let position = home.debug_bounds("project-search").unwrap().center()
             + gpui_kit::point(px(0.), px(80.));
-        home.simulate_event(gpui_kit::ScrollWheelEvent {
+        home.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position,
             delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-5000.))),
             touch_phase: gpui_kit::TouchPhase::Moved,

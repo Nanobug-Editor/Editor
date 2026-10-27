@@ -335,7 +335,8 @@ impl ShortcutPanel {
                 !gpui_kit::is_no_action(binding.action())
                     && !gpui_kit::is_unbind(binding.action())
                     && binding.keystrokes().len() == 1
-                    && binding.keystrokes()[0].unparse() == key.unparse()
+                    // Canonicalize both sides with this App's host modifier names.
+                    && binding.keystrokes()[0].unparse(cx.platform_info().os) == key.unparse(cx.platform_info().os)
                     && binding
                         .predicate()
                         .is_none_or(|predicate| predicate.depth_of(&event.context_stack).is_some())
@@ -349,7 +350,11 @@ impl ShortcutPanel {
 
     /// Show the first stroke immediately; the shared executor owns its two-second deadline.
     fn record(&mut self, key: &Keystroke, cx: &mut Context<Self>) {
-        if !self.capture.record(key, cx.background_executor().now()) {
+        // Captured bindings use the same host conventions as the loaded profile.
+        if !self
+            .capture
+            .record(key, cx.background_executor().now(), cx.platform_info().os)
+        {
             return;
         }
         self.scroll.set_offset(Default::default());

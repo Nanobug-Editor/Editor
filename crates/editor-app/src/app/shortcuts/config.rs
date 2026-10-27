@@ -1,7 +1,7 @@
 //! Stores user overrides separately from package defaults and workspace data.
 
 use editor_core::DocumentStore;
-use gpui_kit::Keystroke;
+use gpui_kit::{Keystroke, OperatingSystem};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::Path};
 
@@ -29,7 +29,8 @@ impl Default for UserBindings {
 impl UserBindings {
     /// Read a user profile without silently replacing unreadable or newer data.
     /// Only a missing file means that the user has not configured bindings yet.
-    pub(super) fn load(path: &Path) -> Result<Self, String> {
+    /// `os` resolves host modifier aliases when normalizing dynamic profile text.
+    pub(super) fn load(path: &Path, os: OperatingSystem) -> Result<Self, String> {
         let bytes = match fs::read(path) {
             Ok(bytes) => bytes,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -49,7 +50,7 @@ impl UserBindings {
         for (id, bindings) in &mut config.overrides {
             // Explicit conflict replacement can retain untouched upstream defaults in an
             // override. Reload must preserve such keys; only newly edited drafts restrict text.
-            *bindings = normalize(bindings, false).map_err(|error| {
+            *bindings = normalize(bindings, false, os).map_err(|error| {
                 format!("{}: {id}: {error:?}", editor_core::display_path(&path))
             })?;
         }
@@ -91,9 +92,11 @@ pub(super) enum InvalidBinding {
 
 /// Canonicalize complete candidates, retaining order and removing exact duplicates.
 /// Restoring upstream defaults may bypass the new-text-key restriction, never syntax checks.
+/// Resolve dynamic aliases and serialize platform modifiers with the same host `os`.
 pub(super) fn normalize(
     bindings: &[Sequence],
     restrict_text: bool,
+    os: OperatingSystem,
 ) -> Result<Vec<Sequence>, InvalidBinding> {
     let mut result = Vec::<Sequence>::new();
     for sequence in bindings {
@@ -102,8 +105,8 @@ pub(super) fn normalize(
         }
         let mut canonical = Vec::with_capacity(sequence.len());
         for source in sequence {
-            let key =
-                Keystroke::parse(source).map_err(|_| InvalidBinding::Keystroke(source.clone()))?;
+            let key = Keystroke::parse_with_os(source, os)
+                .map_err(|_| InvalidBinding::Keystroke(source.clone()))?;
             if restrict_text
                 && matches!(key.key.as_str(), "escape" | "esc")
                 && key.modifiers == Default::default()
@@ -138,7 +141,7 @@ pub(super) fn normalize(
             {
                 return Err(InvalidBinding::TextNeedsModifier(source.clone()));
             }
-            canonical.push(key.unparse());
+            canonical.push(key.unparse(os));
         }
         if !result.contains(&canonical) {
             if result
@@ -158,4 +161,38 @@ pub(super) fn prefixes_overlap(left: &[String], right: &[String]) -> bool {
     !left.is_empty()
         && !right.is_empty()
         && left.iter().zip(right).all(|(left, right)| left == right)
+}
+
+#[cfg(test)]
+mod tests {
+    //! Dynamic profiles retain host-specific input semantics across persistence.
+    use super::*;
+
+    /// A saved dynamic profile retains native platform modifiers and secondary aliases after reload.
+    #[test]
+    fn shortcut_profile_host_modifiers_survive_round_trip() {
+        for (os, platform, secondary) in [
+            (OperatingSystem::Windows, "win-k", "ctrl-p"),
+            (OperatingSystem::Mac, "cmd-k", "cmd-p"),
+            (OperatingSystem::Linux, "super-k", "ctrl-p"),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("shortcuts.json");
+            let expected = vec![vec![platform.to_owned()], vec![secondary.to_owned()]];
+            let bindings = vec![
+                vec![platform.to_owned()],
+                vec![format!("secondary-{}", "p")],
+            ];
+            let mut profile = UserBindings::default();
+            profile.overrides.insert(
+                "fixture:operation".into(),
+                normalize(&bindings, true, os).unwrap(),
+            );
+            profile.save(&path).unwrap();
+            assert_eq!(
+                UserBindings::load(&path, os).unwrap().overrides["fixture:operation"],
+                expected
+            );
+        }
+    }
 }

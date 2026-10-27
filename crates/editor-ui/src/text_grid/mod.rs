@@ -5,8 +5,8 @@ use gpui_kit::{
     App, Bounds, Context, ElementInputHandler, EntityInputHandler, FocusHandle, Focusable,
     FontWeight, InteractiveElement, IntoElement, KeyDownEvent, Modifiers, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, Render,
-    ScrollWheelEvent, Styled, Subscription, TextRun, UTF16Selection, Window, canvas, div, fill,
-    font, point, px, rgb, size,
+    ScrollEvent, Styled, Subscription, TextRun, UTF16Selection, Window, canvas, div, fill, font,
+    point, px, rgb, size,
 };
 use std::{ops::Range, rc::Rc};
 
@@ -388,7 +388,7 @@ impl Render for TextGrid {
                     );
                 }
             }))
-            .on_scroll_wheel(cx.listener(|grid, event: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(|grid, event: &ScrollEvent, _, cx| {
                 let height = match &grid.measured {
                     Some(GridEvent::Resize {
                         grid: Some(metrics),

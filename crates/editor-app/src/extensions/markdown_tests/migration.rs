@@ -59,7 +59,9 @@ fn delivered_markdown_platform_specification_previews_and_scrolls_to_end(cx: &mu
             .height
             > viewport.size.height
     );
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: viewport.center(),
         delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-100_000.))),
         ..Default::default()

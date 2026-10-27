@@ -12,7 +12,7 @@ base64 = "0.22"
 bitflags = { version = "2.4.1", features = ["serde"] }
 editor-ui = { path = "../editor-ui" }
 gpui-kit.workspace = true
-gpui-base = "=0.8.0"
+gpui-base = "=0.8.1"
 log = "0.4"
 regex = "1"
 regex-automata = "0.4.3"

@@ -7,7 +7,7 @@ use super::{
 use gpui_base::ScrollbarHandle;
 use gpui_kit::{
     AnyElement, App, Element, ElementId, Entity, EntityId, GlobalElementId, Hitbox, HitboxBehavior,
-    InspectorElementId, IntoElement, LayoutId, Pixels, Point, RenderOnce, ScrollWheelEvent, Window,
+    InspectorElementId, IntoElement, LayoutId, Pixels, Point, RenderOnce, ScrollEvent, Window,
     point, px,
 };
 use std::{
@@ -28,7 +28,7 @@ pub enum ScrollAxis {
 
 impl ScrollAxis {
     /// Convert a wheel to pixels using `line`; single-axis surfaces retain native axis fallback.
-    pub(super) fn delta(self, event: &ScrollWheelEvent, line: Pixels) -> Point<Pixels> {
+    pub(super) fn delta(self, event: &ScrollEvent, line: Pixels) -> Point<Pixels> {
         let delta = event.delta.pixel_delta(line);
         match self {
             Self::Vertical => point(px(0.), if delta.y != px(0.) { delta.y } else { delta.x }),
@@ -56,7 +56,7 @@ pub struct SmoothScroll {
     /// Projected controls supply the native line height outside their hidden authority's style scope.
     line_height: Option<Pixels>,
     /// External surfaces can reserve domain-specific wheel gestures for their original handler.
-    wheel_filter: Option<Rc<dyn Fn(&ScrollWheelEvent) -> bool>>,
+    wheel_filter: Option<Rc<dyn Fn(&ScrollEvent) -> bool>>,
 }
 
 impl SmoothScroll {
@@ -104,7 +104,7 @@ impl SmoothScroll {
 
     /// Leave rejected wheel gestures with the original content handler, including inside nested
     /// scroll surfaces. The predicate must be cheap; it runs once per physical wheel event.
-    pub fn filter_wheel(mut self, accept: impl Fn(&ScrollWheelEvent) -> bool + 'static) -> Self {
+    pub fn filter_wheel(mut self, accept: impl Fn(&ScrollEvent) -> bool + 'static) -> Self {
         self.wheel_filter = Some(Rc::new(accept));
         self
     }
@@ -179,7 +179,7 @@ struct Surface {
     /// Comparison's actual native line height, when outside the source style scope.
     line_height: Option<Pixels>,
     /// Reserved domain gestures must reach the original native content handler.
-    wheel_filter: Option<Rc<dyn Fn(&ScrollWheelEvent) -> bool>>,
+    wheel_filter: Option<Rc<dyn Fn(&ScrollEvent) -> bool>>,
     /// Per-surface endpoint and last applied animation coordinate.
     state: Entity<Motion>,
     /// Existing rendered view to notify on a physical wheel event.

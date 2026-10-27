@@ -1,8 +1,8 @@
 //! Describes real command targets without changing their dispatch or lifetime.
 
 use gpui_kit::{
-    Action, App, KeyBinding, KeyBindingContextPredicate, KeyContext, Keystroke, SharedString,
-    is_no_action, is_unbind,
+    Action, App, KeyBinding, KeyBindingContextPredicate, KeyContext, Keystroke, OperatingSystem,
+    SharedString, is_no_action, is_unbind,
 };
 use plugin_runtime::Installed;
 use std::rc::Rc;
@@ -71,6 +71,7 @@ impl Clone for Operation {
 /// Build the complete default catalog before applying user overrides, independent of focus.
 /// The engine needs every Input binding at startup, even if no editor has been opened yet.
 /// Internal blocking bindings stay in the engine's baseline but are not editable operations.
+/// `cx` keeps dynamic plugin shortcuts and native modifier names on the same host OS.
 pub(super) fn all_operations(
     bindings: &[KeyBinding],
     plugins: &[Installed],
@@ -114,7 +115,7 @@ pub(super) fn all_operations(
         let keys = binding
             .keystrokes()
             .iter()
-            .map(|key| key.unparse())
+            .map(|key| key.unparse(cx.platform_info().os))
             .collect::<Vec<_>>();
         if let Some(existing) = result.iter_mut().find(|operation| operation.id == id) {
             if !existing.defaults.contains(&keys) {
@@ -135,7 +136,7 @@ pub(super) fn all_operations(
         });
     }
     append_unbound(&mut result, cx);
-    append_plugins(&mut result, plugins);
+    append_plugins(&mut result, plugins, cx.platform_info().os);
     result.sort_by(|left, right| {
         left.title
             .cmp(&right.title)
@@ -359,7 +360,8 @@ pub(super) fn native_id(
 }
 
 /// Manifest command shortcuts are currently dispatched at the shell, independent of panel titles.
-fn append_plugins(result: &mut Vec<Operation>, plugins: &[Installed]) {
+/// Resolve dynamic manifest aliases and canonical modifier names using the host `os`.
+fn append_plugins(result: &mut Vec<Operation>, plugins: &[Installed], os: OperatingSystem) {
     for entry in plugins
         .iter()
         .filter(|entry| entry.enabled && entry.error.is_none())
@@ -371,7 +373,7 @@ fn append_plugins(result: &mut Vec<Operation>, plugins: &[Installed]) {
                 .and_then(|shortcut| {
                     shortcut
                         .split_whitespace()
-                        .map(|part| Keystroke::parse(part).map(|key| key.unparse()))
+                        .map(|part| Keystroke::parse_with_os(part, os).map(|key| key.unparse(os)))
                         .collect::<Result<Vec<_>, _>>()
                         .ok()
                         .filter(|keys| !keys.is_empty())

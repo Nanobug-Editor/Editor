@@ -44,7 +44,9 @@ fn reveal(cx: &mut gpui_kit::VisualTestContext, selector: &'static str) {
         if viewport.contains(&center) {
             return;
         }
-        cx.simulate_event(gpui_kit::ScrollWheelEvent {
+        cx.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Lines(point(
                 0.,

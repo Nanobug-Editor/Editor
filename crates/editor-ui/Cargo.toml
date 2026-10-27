@@ -14,7 +14,7 @@ test-support = []
 
 [dependencies]
 gpui-kit.workspace = true
-gpui-base = "=0.8.0"
+gpui-base = "=0.8.1"
 plugin-schema.workspace = true
 # Prompt ownership and declarative data remain the existing public runtime/protocol contracts.
 plugin-runtime = { path = "../plugin-runtime" }
@@ -30,10 +30,10 @@ futures = "0.3"
 resvg = "=0.45.1"
 
 [dev-dependencies]
-# Match Kit 0.8.0's locked GPUI family without activating its weak component reference.
-gpui-base = { version = "=0.8.0", features = ["test-support"] }
-gpui = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
-gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = ["test-support"] }
+# Match Kit 0.8.1's locked GPUI family without activating its weak component reference.
+gpui-base = { version = "=0.8.1", features = ["test-support"] }
+gpui = { package = "gpui-pre", version = "=0.3.10", features = ["test-support"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", features = ["test-support"] }
 lsp-types = "0.97.0"
 tempfile.workspace = true
 serde.workspace = true

@@ -176,8 +176,8 @@ impl PluginView {
             .min_h_0()
             .overflow_hidden()
             .child(image)
-            .on_scroll_wheel(cx.listener(
-                move |view, event: &gpui_kit::ScrollWheelEvent, window, cx| {
+            .on_scroll(
+                cx.listener(move |view, event: &gpui_kit::ScrollEvent, window, cx| {
                     let bounds = wheel_bounds.get();
                     let local = event.position - bounds.origin;
                     let delta = event.delta.pixel_delta(px(view
@@ -201,8 +201,8 @@ impl PluginView {
                     ) {
                         cx.stop_propagation();
                     }
-                },
-            ));
+                }),
+            );
         // Input mechanisms are shared with canvas clients; no native pan or zoom policy consumes them.
         for (button, index) in [
             (gpui_kit::MouseButton::Left, 0),
@@ -460,7 +460,9 @@ mod tests {
             if input.content == (ui::ContentSize {width: 100., height: 50.}) && matches!(input.event, ui::CanvasEvent::Resize {width: 400., height: 300., ..}))));
         events.borrow_mut().clear();
         for delta in [14., -14., 14.] {
-            visual.simulate_event(gpui_kit::ScrollWheelEvent {
+            visual.simulate_event(gpui_kit::ScrollEvent {
+                // Wheel and trackpad fixtures retain pointer-device semantics.
+                source: gpui_kit::ScrollSource::Pointer,
                 // Off-center input must not use the pointer as its zoom anchor.
                 position: bounds.origin + point(px(10.), px(10.)),
                 delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(delta))),
@@ -485,7 +487,9 @@ mod tests {
             })
         });
         // File authority changed: retained callbacks cannot publish measurements for the old resource.
-        visual.simulate_event(gpui_kit::ScrollWheelEvent {
+        visual.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: bounds.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(14.))),
             ..Default::default()

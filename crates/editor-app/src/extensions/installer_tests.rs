@@ -143,7 +143,9 @@ fn installer_dialog_requires_sdk_choice_and_concrete_execution_confirmation(
         let content_before = dialog_cx
             .debug_bounds("plugin-install-prompt-details")
             .unwrap();
-        dialog_cx.simulate_event(gpui_kit::ScrollWheelEvent {
+        dialog_cx.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: details.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-300.))),
             touch_phase: gpui_kit::TouchPhase::Moved,

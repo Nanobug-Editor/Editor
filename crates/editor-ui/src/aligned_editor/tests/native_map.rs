@@ -1,6 +1,6 @@
 //! Native wrapped-row maps avoid hidden glyph work without losing nowrap horizontal scrolling.
 use super::*;
-use gpui_kit::{ScrollDelta, ScrollWheelEvent, TouchPhase};
+use gpui_kit::{ScrollDelta, ScrollEvent, TouchPhase};
 
 /// Build enough genuinely wrapped Unicode lines to exercise the large-source native-map path.
 fn wrapped_source() -> String {
@@ -149,7 +149,9 @@ fn native_map_nowrap_transition_preserves_horizontal_scroll_and_reenters_wrapped
         measured.viewport.center()
     });
     // Exercise the native horizontal input path, not a direct mutation of our cached metrics.
-    ui.simulate_event(ScrollWheelEvent {
+    ui.simulate_event(ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: ScrollDelta::Pixels(point(px(-75.), px(0.))),
         touch_phase: TouchPhase::Moved,

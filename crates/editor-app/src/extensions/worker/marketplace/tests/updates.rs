@@ -371,7 +371,9 @@ fn native_update(
     form.run_until_parked();
     form.update(|window, cx| window.draw(cx).clear(cx));
     let viewport = form.debug_bounds("plugin-manager-detail-content").unwrap();
-    form.simulate_event(gpui_kit::ScrollWheelEvent {
+    form.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: viewport.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-350.))),
         touch_phase: gpui_kit::TouchPhase::Moved,

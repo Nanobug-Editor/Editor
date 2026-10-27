@@ -327,7 +327,9 @@ fn long_runtime_logs_scroll_below_fixed_tabs(cx: &mut TestAppContext) {
         let header = form.debug_bounds("plugin-manager-header").unwrap();
         let tabs = form.debug_bounds("plugin-detail-tabs-5").unwrap();
         let viewport = form.debug_bounds("plugin-manager-detail-content").unwrap();
-        form.simulate_event(gpui_kit::ScrollWheelEvent {
+        form.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))),
             touch_phase: gpui_kit::TouchPhase::Moved,
@@ -338,7 +340,9 @@ fn long_runtime_logs_scroll_below_fixed_tabs(cx: &mut TestAppContext) {
         assert_eq!(tabs, form.debug_bounds("plugin-detail-tabs-5").unwrap());
         assert!(form.update(|_, cx| owner.read(cx).manager_detail_scroll.offset().y < px(0.)));
         // In descending order, review the oldest records before the new error arrives at the top.
-        form.simulate_event(gpui_kit::ScrollWheelEvent {
+        form.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-99_999.))),
             touch_phase: gpui_kit::TouchPhase::Moved,
@@ -367,7 +371,9 @@ fn long_runtime_logs_scroll_below_fixed_tabs(cx: &mut TestAppContext) {
         );
         assert!(form.debug_bounds("plugin-detail-tabs-5-Error").is_some());
         // Only scrolling back to the new message reads it and removes the unread error indicator.
-        form.simulate_event(gpui_kit::ScrollWheelEvent {
+        form.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(99_999.))),
             touch_phase: gpui_kit::TouchPhase::Moved,
@@ -446,7 +452,9 @@ fn check_detail_navigation(form: &mut VisualTestContext, owner: &Entity<Extensio
     let tab = form.debug_bounds("plugin-detail-tabs-0").unwrap();
     let content = form.debug_bounds("plugin-manager-detail-content").unwrap();
     assert!(content.top() >= tab.bottom());
-    form.simulate_event(gpui_kit::ScrollWheelEvent {
+    form.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: content.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))),
         touch_phase: gpui_kit::TouchPhase::Moved,

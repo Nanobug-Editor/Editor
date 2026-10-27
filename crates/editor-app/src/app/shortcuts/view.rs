@@ -1,4 +1,5 @@
 //! Composes shortcut state with local Base-backed controls and localized descriptions.
+//! Keycap text follows the runtime host OS used by the shortcut profile.
 
 use super::*;
 use editor_ui::scroll::ScrollableElement as _;
@@ -134,11 +135,14 @@ impl Render for ShortcutPanel {
                             .child(t!("shortcuts.press_keys").to_string())
                             .into_any_element()
                     } else {
-                        shortcut_keycaps(&capture::display(&self.capture.strokes), cx)
-                            .debug_selector(|| "shortcuts-search-keycaps".into())
-                            .flex_nowrap()
-                            .flex_shrink_0()
-                            .into_any_element()
+                        shortcut_keycaps(
+                            &capture::display(&self.capture.strokes, cx.platform_info().os),
+                            cx,
+                        )
+                        .debug_selector(|| "shortcuts-search-keycaps".into())
+                        .flex_nowrap()
+                        .flex_shrink_0()
+                        .into_any_element()
                     })
             })
             .when(!self.key_search, |field| {

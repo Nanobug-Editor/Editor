@@ -20,7 +20,7 @@ editor-history = { path = "../editor-history" }
 editor-ui = { path = "../editor-ui" }
 dirs.workspace = true
 gpui-kit.workspace = true
-gpui-base = "=0.8.0"
+gpui-base = "=0.8.1"
 # Use the same locked Rope implementation for its public O(1) immutable instance comparison.
 ropey = "=2.0.0-beta.1"
 glob = "0.3"
@@ -71,10 +71,10 @@ embed-resource = "=3.0.11"
 editor-ui = { path = "../editor-ui", features = ["test-support"] }
 # Enable the already-locked test foundations directly: Kit's weak component feature
 # reference otherwise retains the unused styled runtime in Cargo.lock.
-gpui-base = { version = "=0.8.0", features = ["test-support"] }
+gpui-base = { version = "=0.8.1", features = ["test-support"] }
 # Native acceptance reads the locked renderer's real frame/input histograms in Release tests.
-gpui-test-foundation = { package = "gpui-pre", version = "=0.3.9", features = ["test-support", "profiler"] }
-gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = ["test-support"] }
+gpui-test-foundation = { package = "gpui-pre", version = "=0.3.10", features = ["test-support", "profiler"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.10", features = ["test-support"] }
 # Reidentified hybrid fixtures retain their declarative resources through a parsed TOML manifest.
 toml.workspace = true
 # Build independent declarative package fixtures through the public ZIP inspection boundary.

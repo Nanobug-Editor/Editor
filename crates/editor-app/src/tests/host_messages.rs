@@ -59,8 +59,8 @@ fn row(id: u64) -> &'static str {
     Box::leak(format!("host-message-{id}").into_boxed_str())
 }
 
-/// Native button clicks occur on key release; a key-down-only shortcut is not a complete activation.
-fn activate(form: &mut VisualTestContext, key: &str) {
+/// Native button clicks for fixed fixture keys require release as well as key-down.
+fn activate(form: &mut VisualTestContext, key: &'static str) {
     let keystroke = gpui_kit::Keystroke::parse(key).unwrap();
     form.simulate_event(gpui_kit::KeyDownEvent {
         keystroke: keystroke.clone(),
@@ -330,7 +330,9 @@ fn host_messages_progressive_history_keeps_the_latest_five_hundred(cx: &mut Test
         draw(form);
         let panel = form.debug_bounds("host-messages-panel").unwrap();
         let before = form.debug_bounds(row(502)).unwrap().top();
-        form.simulate_event(gpui_kit::ScrollWheelEvent {
+        form.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: panel.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-400.))),
             touch_phase: gpui_kit::TouchPhase::Moved,

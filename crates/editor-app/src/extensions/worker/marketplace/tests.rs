@@ -524,7 +524,9 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         form.run_until_parked();
         form.update(|window, cx| window.draw(cx).clear(cx));
         let viewport = form.debug_bounds("plugin-manager-detail-content").unwrap();
-        form.simulate_event(gpui_kit::ScrollWheelEvent {
+        form.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))),
             touch_phase: gpui_kit::TouchPhase::Moved,
@@ -533,7 +535,9 @@ fn marketplace_native_consent_and_install_in_both_locales(cx: &mut gpui_kit::Tes
         form.run_until_parked();
         form.update(|window, cx| window.draw(cx).clear(cx));
         assert!(form.update(|_, cx| panel.read(cx).manager_detail_scroll.offset().y < px(0.)));
-        form.simulate_event(gpui_kit::ScrollWheelEvent {
+        form.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(600.))),
             touch_phase: gpui_kit::TouchPhase::Moved,

@@ -2,7 +2,7 @@
 
 use super::*;
 use gpui_base::input::{EditorState, TextareaState};
-use gpui_kit::{Entity, ScrollDelta, ScrollWheelEvent, VisualTestContext};
+use gpui_kit::{Entity, ScrollDelta, ScrollEvent, VisualTestContext};
 
 /// Configure a short public idle hold, retaining the production width transition and colors.
 fn init(cx: &mut TestAppContext, dark: bool) {
@@ -297,7 +297,9 @@ fn scrollbar_native_inputs_contract_independently_and_restore_global_theme(
         "a hidden child must not lend its palette to a native sibling"
     );
     // A real wheel reveals only its source and preserves both buffers and selection authority.
-    ui.simulate_event(ScrollWheelEvent {
+    ui.simulate_event(ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: point(px(100.), px(70.)),
         delta: ScrollDelta::Pixels(point(px(0.), px(-60.))),
         ..Default::default()

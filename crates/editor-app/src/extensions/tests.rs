@@ -397,7 +397,9 @@ fn second_local_import_shows_visible_consent(cx: &mut TestAppContext) {
     progress_cx.run_until_parked();
     progress_cx.update(|window, cx| window.draw(cx).clear(cx));
     let progress_region = progress_cx.debug_bounds("plugin-install-progress").unwrap();
-    progress_cx.simulate_event(gpui_kit::ScrollWheelEvent {
+    progress_cx.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: progress_region.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-600.))),
         touch_phase: gpui_kit::TouchPhase::Moved,

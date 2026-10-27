@@ -77,7 +77,9 @@ fn community_decorations_hide_offscreen_markers_and_restore_after_scroll(cx: &mu
             gutter_position(visual, &app, selector, offset);
         }
         let viewport = visual.update(|_, cx| app.read(cx).editor.read(cx).input_bounds());
-        visual.simulate_event(gpui_kit::ScrollWheelEvent {
+        visual.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-820.))),
             touch_phase: gpui_kit::TouchPhase::Moved,
@@ -107,7 +109,9 @@ fn community_decorations_hide_offscreen_markers_and_restore_after_scroll(cx: &mu
                 );
             }
         }
-        visual.simulate_event(gpui_kit::ScrollWheelEvent {
+        visual.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(820.))),
             touch_phase: gpui_kit::TouchPhase::Moved,

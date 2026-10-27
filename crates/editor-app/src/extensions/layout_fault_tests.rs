@@ -146,7 +146,9 @@ fn binary_fault_retains_tab_and_retries(
         "long diagnostics cannot push Retry outside its visible viewport"
     );
     let diagnostic = visual.debug_bounds("file-view-diagnostic").unwrap();
-    visual.simulate_event(gpui_kit::ScrollWheelEvent {
+    visual.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: diagnostic.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-400.))),
         touch_phase: gpui_kit::TouchPhase::Moved,

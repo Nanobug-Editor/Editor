@@ -73,7 +73,7 @@ fn configure(ui: &mut VisualTestContext) {
 /// Holding guest replies must not hold a retained scrolling row at its previous screen position.
 #[gpui::test]
 fn scrollbar_canvas_paints_motion_before_guest_reply(cx: &mut TestAppContext) {
-    use gpui_kit::{ScrollDelta, ScrollWheelEvent, TouchPhase};
+    use gpui_kit::{ScrollDelta, ScrollEvent, TouchPhase};
     use plugin_runtime::plugin_protocol::{
         Paint, Rect,
         ui::{Canvas, CanvasEvent, PointerPhase, ScrollBuffer, ScrollRange},
@@ -121,7 +121,9 @@ fn scrollbar_canvas_paints_motion_before_guest_reply(cx: &mut TestAppContext) {
     });
     frame(ui, 0);
     for expected in [118., 101., 84.] {
-        ui.simulate_event(ScrollWheelEvent {
+        ui.simulate_event(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: point(px(80.), px(100.)),
             delta: ScrollDelta::Pixels(point(px(0.), px(-17.))),
             modifiers: Default::default(),
@@ -242,7 +244,7 @@ impl Render for CanvasHost {
 fn scrollbar_canvas_common_smooth_motion_precise_input_and_epoch_retirement(
     cx: &mut TestAppContext,
 ) {
-    use gpui_kit::{ScrollDelta, ScrollWheelEvent, TouchPhase};
+    use gpui_kit::{ScrollDelta, ScrollEvent, TouchPhase};
     use plugin_runtime::plugin_protocol::ui::{Canvas, CanvasEvent, ScrollChange, ScrollRange};
     init(cx, false);
     let events = Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -272,7 +274,9 @@ fn scrollbar_canvas_common_smooth_motion_precise_input_and_epoch_retirement(
     let canvas = slot.borrow_mut().take().unwrap();
     frame(ui, 0);
     events.borrow_mut().clear();
-    let wheel = |delta, modifiers| ScrollWheelEvent {
+    let wheel = |delta, modifiers| ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: point(px(80.), px(100.)),
         delta,
         modifiers,
@@ -391,7 +395,7 @@ fn scrollbar_canvas_common_smooth_motion_precise_input_and_epoch_retirement(
 #[gpui::test]
 fn scrollbar_plugin_containers_and_tabs_share_native_kinetic_motion(cx: &mut TestAppContext) {
     use super::*;
-    use gpui_kit::{ScrollDelta, ScrollWheelEvent};
+    use gpui_kit::{ScrollDelta, ScrollEvent};
     use plugin_runtime::plugin_protocol::ui::{Node, Tab};
     for horizontal in [false, true] {
         init(cx, false);
@@ -452,7 +456,9 @@ fn scrollbar_plugin_containers_and_tabs_share_native_kinetic_motion(cx: &mut Tes
             }
         };
         let initial = coordinate(ui);
-        ui.simulate_event(ScrollWheelEvent {
+        ui.simulate_event(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: point(px(40.), px(20.)),
             delta: ScrollDelta::Lines(point(0., -3.)),
             ..Default::default()

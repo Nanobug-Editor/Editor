@@ -347,7 +347,9 @@ fn settle(cx: &mut VisualTestContext) {
 /// Dispatch the platform event through the readonly native frame instead of claiming a test driver.
 fn wheel(cx: &mut VisualTestContext, selector: &'static str, delta: f32) {
     let bounds = cx.debug_bounds(selector).unwrap();
-    cx.simulate_event(gpui_kit::ScrollWheelEvent {
+    cx.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: bounds.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(delta))),
         modifiers: Default::default(),

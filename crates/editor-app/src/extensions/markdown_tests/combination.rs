@@ -186,7 +186,9 @@ fn delivered_markdown_combines_edits_images_tasks_links_ime_and_scaled_layout(
         .debug_bounds("plugin-ui-preview-scroll")
         .unwrap()
         .center();
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-1100.))),
         ..Default::default()

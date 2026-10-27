@@ -257,7 +257,9 @@ fn status_popover_marks_only_the_summaries_visible_in_its_scroll_viewport(cx: &m
         assert_eq!(logs.unread_severity("status-00"), Some(LogLevel::Error));
         let header = form.debug_bounds("plugin-status-popup").unwrap();
         let viewport = form.debug_bounds("plugin-status-scroll").unwrap();
-        form.simulate_event(ScrollWheelEvent {
+        form.simulate_event(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: viewport.center(),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-99_999.))),
             touch_phase: gpui_kit::TouchPhase::Moved,

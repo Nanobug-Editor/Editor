@@ -6,7 +6,7 @@ use super::{
 use gpui_kit::{
     AnyElement, App, Bounds, Context, Element, ElementId, Entity, EntityId, GlobalElementId,
     Hitbox, InspectorElementId, IntoElement, KeyDownEvent, LayoutId, MouseDownEvent,
-    MouseExitEvent, Pixels, Render, ScrollWheelEvent, WeakEntity, Window, div,
+    MouseExitEvent, Pixels, Render, ScrollEvent, WeakEntity, Window, div,
 };
 use std::{
     cell::RefCell,
@@ -45,7 +45,7 @@ pub(super) struct Region {
     /// Style-resolved logical line height for discrete wheel input.
     pub line_height: Pixels,
     /// The innermost surface may reserve a wheel gesture for its original content handler.
-    pub wheel_filter: Option<Rc<dyn Fn(&ScrollWheelEvent) -> bool>>,
+    pub wheel_filter: Option<Rc<dyn Fn(&ScrollEvent) -> bool>>,
 }
 
 /// Only the currently painted surfaces are inspected when an actual input event arrives.
@@ -67,7 +67,7 @@ impl Router {
     pub fn listen(&self, region: Region, window: &mut Window) {
         let router = self.clone();
         let region = Rc::new(region);
-        window.on_mouse_event(move |_: &ScrollWheelEvent, phase, window, _| {
+        window.on_mouse_event(move |_: &ScrollEvent, phase, window, _| {
             if phase.capture() && region.hitbox.should_handle_scroll(window) {
                 router
                     .0
@@ -93,7 +93,7 @@ impl Router {
     }
 
     /// Native capture observers see the physical event; smooth wheel input replaces only bubbling.
-    fn wheel(&self, event: &ScrollWheelEvent, window: &mut Window, cx: &mut App) {
+    fn wheel(&self, event: &ScrollEvent, window: &mut Window, cx: &mut App) {
         let regions = self.0.candidates.borrow();
         if event.modifiers.control || event.modifiers.alt || event.modifiers.platform {
             drop(regions);
@@ -246,7 +246,7 @@ impl Element for Root {
         cx: &mut App,
     ) {
         let router = self.router.clone();
-        window.on_mouse_event(move |_: &ScrollWheelEvent, phase, _, _| {
+        window.on_mouse_event(move |_: &ScrollEvent, phase, _, _| {
             if phase.capture() {
                 router.0.candidates.borrow_mut().clear();
             }
@@ -272,7 +272,7 @@ impl Element for Root {
         self.content.paint(window, cx);
         // Bubble listeners run in reverse paint order: choose a target before native offset writes.
         let router = self.router.clone();
-        window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+        window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
             if phase.bubble() {
                 router.wheel(event, window, cx);
                 router.0.candidates.borrow_mut().clear();

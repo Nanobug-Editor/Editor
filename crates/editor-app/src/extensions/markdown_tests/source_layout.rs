@@ -78,7 +78,9 @@ fn delivered_markdown_source_fills_height_below_toolbar(cx: &mut TestAppContext)
                     .unwrap()
                     .start
             });
-            ui.simulate_event(gpui_kit::ScrollWheelEvent {
+            ui.simulate_event(gpui_kit::ScrollEvent {
+                // Wheel and trackpad fixtures retain pointer-device semantics.
+                source: gpui_kit::ScrollSource::Pointer,
                 position: input.center(),
                 delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-500.))),
                 ..Default::default()

@@ -2,7 +2,7 @@
 //! Raw debug rectangles are not clickable masks, and original session postimages remain the oracle.
 use super::*;
 use gpui_base::test_support::ElementSnapshot;
-use gpui_kit::{Bounds, ElementId, MouseButton, ScrollDelta, ScrollWheelEvent, TouchPhase};
+use gpui_kit::{Bounds, ElementId, MouseButton, ScrollDelta, ScrollEvent, TouchPhase};
 
 /// Reveal the current real button by wheel, then prove native pointer-down hit it before releasing.
 /// Earlier Undone cards remain retained; removing them or calling an internal Undo would hide this UI boundary.
@@ -58,7 +58,9 @@ pub(in crate::extensions::worker) fn undo(
                 };
                 let position = region.center();
                 visual.simulate_mouse_move(position, None, Default::default());
-                visual.simulate_event(ScrollWheelEvent {
+                visual.simulate_event(ScrollEvent {
+                    // Wheel and trackpad fixtures retain pointer-device semantics.
+                    source: gpui_kit::ScrollSource::Pointer,
                     position,
                     delta: ScrollDelta::Pixels(point(px(0.), px(delta))),
                     touch_phase: TouchPhase::Moved,

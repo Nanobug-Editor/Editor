@@ -1,6 +1,6 @@
 //! Real wheel frames must reuse source geometry instead of rescanning an unchanged long diff.
 use super::*;
-use gpui_kit::{ScrollDelta, ScrollWheelEvent, TouchPhase};
+use gpui_kit::{ScrollDelta, ScrollEvent, TouchPhase};
 use std::time::Instant;
 
 /// Native wrapped source, a middle insertion and distant scroll positions share one real viewport.
@@ -146,7 +146,9 @@ fn exercise_scroll_delta(
     for _ in 0..wheels {
         let started = Instant::now();
         let before = ui.update(|_, cx| view.read(cx).group.scroll_offset(cx));
-        ui.simulate_event(ScrollWheelEvent {
+        ui.simulate_event(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: point,
             delta: ScrollDelta::Pixels(gpui_kit::point(px(0.), delta)),
             touch_phase: TouchPhase::Moved,

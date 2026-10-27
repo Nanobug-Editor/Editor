@@ -34,12 +34,14 @@ pub(in crate::ui::plugin::canvas::scene_native_tests) fn run(
         view.update_document(document, environment, window, cx)
     });
     window.dispatch_event(
-        PlatformInput::ScrollWheel(ScrollWheelEvent {
+        PlatformInput::Scroll(ScrollEvent {
             position: point(
                 px(snapshot["origin_x"].as_f64().unwrap() as f32 + 30.),
                 px(snapshot["origin_y"].as_f64().unwrap() as f32 + 30.),
             ),
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.5), px(-2.25))),
+            // Preserve the original pointer wheel while testing shown-frame projection.
+            source: gpui_kit::ScrollSource::Pointer,
             ..Default::default()
         }),
         cx,

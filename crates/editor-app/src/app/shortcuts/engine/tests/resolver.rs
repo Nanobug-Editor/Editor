@@ -1,4 +1,5 @@
 //! Verify two-step execution against real window/focus identities and the shared keymap.
+//! Dynamic fixture keys use the same runtime host OS as native dispatch.
 
 use super::*;
 use crate::app::shortcuts::resolver::{Resolution, Resolver};
@@ -49,7 +50,7 @@ fn shortcut_resolver_timeout_and_unmatched_second_preserve_native_processing(
             panic!("first step must show a next-step hint")
         };
         assert_eq!(hint.deadline, start + Duration::from_secs(2));
-        assert_eq!(hint.next[0].sequence, bindings(&["ctrl-k ctrl-c"])[0]);
+        assert_eq!(hint.next[0].sequence, bindings(&["ctrl-k ctrl-c"], cx)[0]);
         assert!(!hint.next[0].title.is_empty());
         assert!(matches!(
             resolver.resolve(
@@ -66,7 +67,7 @@ fn shortcut_resolver_timeout_and_unmatched_second_preserve_native_processing(
         assert!(resolver.pending().is_none());
         assert_eq!(second, Keystroke::parse("ctrl-v").unwrap());
         assert!(
-            native(cx, &second.unparse(), &["Input"])[0]
+            native(cx, &second.unparse(cx.platform_info().os), &["Input"])[0]
                 .action()
                 .partial_eq(&Paste)
         );

@@ -1,9 +1,7 @@
 //! Branch filtering and real dock toggles preserve loaded provider pages and native review state.
 use super::*;
 use gpui_base::test_support::{ElementSnapshot, snapshots};
-use gpui_kit::{
-    ElementId, FocusHandle, MouseButton, Role, ScrollDelta, ScrollWheelEvent, point, px,
-};
+use gpui_kit::{ElementId, FocusHandle, MouseButton, Role, ScrollDelta, ScrollEvent, point, px};
 use plugin_runtime::{TreeResource, TreeSnapshot, plugin_protocol::ui};
 use std::sync::Arc;
 
@@ -282,7 +280,9 @@ fn git_branch_filter_and_dock_toggles_retain_loaded_native_tree_state(cx: &mut T
         });
         let position =
             visual.update(|window, _| branch_node(window, Role::Tree, None).bounds().center());
-        visual.simulate_event(ScrollWheelEvent {
+        visual.simulate_event(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position,
             delta: ScrollDelta::Pixels(point(px(0.), px(-26.))),
             ..Default::default()

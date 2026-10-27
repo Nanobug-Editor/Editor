@@ -376,7 +376,9 @@ fn click_scrolled(visual: &mut VisualTestContext, pane: &'static str, selector: 
             modifiers: Default::default(),
         });
         visual.run_until_parked();
-        visual.simulate_event(gpui::ScrollWheelEvent {
+        visual.simulate_event(gpui::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position: bounds.center(),
             delta: gpui::ScrollDelta::Pixels(gpui_kit::point(
                 gpui_kit::px(0.),

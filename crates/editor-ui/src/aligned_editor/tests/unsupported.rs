@@ -86,7 +86,9 @@ fn aligned_editor_disjoint_native_viewports_use_independent_native_editing(
         // Dispatch the actual platform event and distinguish native handling from a later paint
         // accidentally resetting its offset. No direct scroll mutation substitutes for the wheel.
         window.dispatch_event(
-            gpui_kit::PlatformInput::ScrollWheel(gpui_kit::ScrollWheelEvent {
+            gpui_kit::PlatformInput::Scroll(gpui_kit::ScrollEvent {
+                // Wheel and trackpad fixtures retain pointer-device semantics.
+                source: gpui_kit::ScrollSource::Pointer,
                 position,
                 delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-70.))),
                 ..Default::default()

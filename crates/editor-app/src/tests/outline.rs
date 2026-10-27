@@ -370,7 +370,9 @@ fn native_outline_package_navigation_follow_and_revocation(cx: &mut TestAppConte
         })
     });
     let tree_bounds = visual.debug_bounds("outline-tree").unwrap();
-    visual.simulate_event(gpui_kit::ScrollWheelEvent {
+    visual.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: tree_bounds.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(5000.))),
         ..Default::default()

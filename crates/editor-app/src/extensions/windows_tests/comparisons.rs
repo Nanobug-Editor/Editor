@@ -562,7 +562,9 @@ fn git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections(
                 (viewport.size.height * 0.6).min(px(240.)),
             )
         });
-        visual.simulate_event(gpui_kit::ScrollWheelEvent {
+        visual.simulate_event(gpui_kit::ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position,
             delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), lead_in)),
             ..Default::default()
@@ -602,7 +604,9 @@ fn git_comparison_soft_wrapped_scroll_tracks_source_without_moving_selections(
                         .top(),
                 )
             });
-            visual.simulate_event(gpui_kit::ScrollWheelEvent {
+            visual.simulate_event(gpui_kit::ScrollEvent {
+                // Wheel and trackpad fixtures retain pointer-device semantics.
+                source: gpui_kit::ScrollSource::Pointer,
                 position,
                 delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(delta))),
                 ..Default::default()

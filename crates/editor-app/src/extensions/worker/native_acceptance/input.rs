@@ -139,7 +139,9 @@ fn point_press_count(
 /// delay the canvas's original deferred event. Text and IME continue through their existing helpers.
 pub(super) fn history_control_key(window: &mut Window, key: &str, cx: &mut App) {
     assert!(matches!(key, "home" | "end" | "enter"));
-    let key = Keystroke::parse(key).expect("the fixed history control key is valid");
+    // Dynamic notation follows the same host OS as this window's input route.
+    let key = Keystroke::parse_with_os(key, cx.platform_info().os)
+        .expect("the fixed history control key is valid");
     window.dispatch_event(
         PlatformInput::KeyDown(KeyDownEvent {
             keystroke: key.clone(),
@@ -153,7 +155,9 @@ pub(super) fn history_control_key(window: &mut Window, key: &str, cx: &mut App) 
 
 pub(super) fn wheel(window: &mut Window, position: Point<Pixels>, y: f32, cx: &mut App) {
     window.dispatch_event(
-        PlatformInput::ScrollWheel(ScrollWheelEvent {
+        PlatformInput::Scroll(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position,
             delta: ScrollDelta::Pixels(point(px(0.), px(y))),
             ..Default::default()

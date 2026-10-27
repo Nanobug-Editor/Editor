@@ -4,8 +4,8 @@ use harness::NativeMarkdown;
 
 mod synchronized;
 
-/// Exercise the actual Base press/release contract; dispatch_keystroke alone omits native KeyUp.
-fn activate_key(ui: &mut gpui_kit::VisualTestContext, key: &str) {
+/// Exercise Base press/release for a fixed fixture key; dispatch_keystroke alone omits KeyUp.
+fn activate_key(ui: &mut gpui_kit::VisualTestContext, key: &'static str) {
     let keystroke = gpui_kit::Keystroke::parse(key).unwrap();
     ui.simulate_event(gpui_kit::KeyDownEvent {
         keystroke: keystroke.clone(),

@@ -51,9 +51,8 @@ use gpui_kit::{
     App, AppContext as _, Bounds, ClickEvent, Context, Entity, EventEmitter, FocusHandle,
     Focusable, HighlightStyle, InteractiveElement as _, IntoElement, KeyBinding, Modifiers,
     MouseButton, MouseDownEvent, MouseUpEvent, ParentElement, Pixels, PlatformInput, Point, Render,
-    ScrollHandle, ScrollStrategy, ScrollWheelEvent, StatefulInteractiveElement, StyleRefinement,
-    Styled, Subscription, WeakEntity, Window, WindowBounds, WindowControlArea, WindowHandle,
-    actions,
+    ScrollEvent, ScrollHandle, ScrollStrategy, StatefulInteractiveElement, StyleRefinement, Styled,
+    Subscription, WeakEntity, Window, WindowBounds, WindowControlArea, WindowHandle, actions,
 };
 use gpui_kit::{div, point, prelude::FluentBuilder, px, size};
 use platform_windows::NativeFileStore;

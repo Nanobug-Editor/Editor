@@ -4,12 +4,14 @@ use gpui_kit::{App, KeyDownEvent, KeyUpEvent, Keystroke, PlatformInput, Window};
 
 /// Deliver Unicode `text` to `window` while `cx` owns its update, without advancing the executor.
 /// Refresh each character's frame so input handlers track any focus change during dispatch.
+/// Dynamic notation uses the window application's OS when resolving modifier aliases.
 pub fn input_text(window: &mut Window, text: &str, cx: &mut App) {
     window.refresh();
     window.draw(cx).clear(cx);
     for character in text.chars() {
         let text = character.to_string();
-        let mut key = Keystroke::parse(&text).expect("Unicode text is a valid GPUI keystroke");
+        let mut key = Keystroke::parse_with_os(&text, cx.platform_info().os)
+            .expect("Unicode text is a valid GPUI keystroke");
         key.key_char = Some(text);
         window.dispatch_keystroke(key, cx);
         window.refresh();
@@ -19,8 +21,10 @@ pub fn input_text(window: &mut Window, text: &str, cx: &mut App) {
 
 /// Send the parsed native `key` pair to `window` in `cx`; invalid test notation panics.
 /// Enter and Tab dispatch bindings without adding simulated IME text afterward.
+/// Dynamic notation resolves modifier aliases using the window application's OS.
 pub fn press_key(window: &mut Window, key: &str, cx: &mut App) {
-    let key = Keystroke::parse(key).expect("the acceptance keystroke is valid");
+    let key = Keystroke::parse_with_os(key, cx.platform_info().os)
+        .expect("the acceptance keystroke is valid");
     window.refresh();
     window.draw(cx).clear(cx);
     let key = if matches!(key.key.as_str(), "enter" | "tab") {

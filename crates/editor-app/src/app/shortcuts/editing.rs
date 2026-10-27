@@ -280,7 +280,11 @@ impl ShortcutPanel {
         let Some(draft) = self.draft.as_mut() else {
             return false;
         };
-        if !draft.capture.record(key, cx.background_executor().now()) {
+        // Draft serialization must match the profile's runtime host modifier names.
+        if !draft
+            .capture
+            .record(key, cx.background_executor().now(), cx.platform_info().os)
+        {
             return true;
         }
         self.edit_error = None;

@@ -2,8 +2,7 @@
 use super::*;
 use editor_ui::aligned_pointer::AlignedPointerRouter;
 use gpui_kit::{
-    Render, ScrollDelta, ScrollWheelEvent, TestAppContext, TouchPhase, VisualTestContext, gpui,
-    size,
+    Render, ScrollDelta, ScrollEvent, TestAppContext, TouchPhase, VisualTestContext, gpui, size,
 };
 
 /// Retain the same production line/character layers and native entities across theme/geometry changes.
@@ -270,7 +269,9 @@ fn comparison_has_one_shared_vertical_scrollbar(cx: &mut TestAppContext) {
     // The configured scrolling-mode thumb is intentionally hidden before the first scroll.
     // Reveal it through a real wheel gesture, then grab its painted pixels rather than guessing
     // that an invisible track already accepts mouse-down at its theoretical origin.
-    ui.simulate_event(ScrollWheelEvent {
+    ui.simulate_event(ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: point(rail.left() - px(40.), rail.center().y),
         delta: ScrollDelta::Pixels(point(px(0.), px(-36.))),
         touch_phase: TouchPhase::Moved,
@@ -471,7 +472,9 @@ fn comparison_rows_preserve_native_input_default_scroll_and_layer_cleanup(cx: &m
             rectangle.top(),
         )
     });
-    ui.simulate_event(ScrollWheelEvent {
+    ui.simulate_event(ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: ScrollDelta::Pixels(point(px(0.), px(-36.))),
         touch_phase: TouchPhase::Moved,

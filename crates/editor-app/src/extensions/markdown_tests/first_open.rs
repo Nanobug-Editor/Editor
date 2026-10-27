@@ -35,7 +35,9 @@ fn delivered_markdown_first_preview_scroll_does_not_return_to_top(cx: &mut TestA
     let preview = ui
         .debug_bounds("plugin-ui-preview-scroll")
         .expect("first visible preview");
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: preview.center(),
         delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-900.))),
         ..Default::default()

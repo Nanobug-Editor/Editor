@@ -357,8 +357,9 @@ impl ActionMenu {
             _ => {}
         }
     }
-    /// Base consumes list keys as input actions; route them before search, retaining IME ownership.
-    fn search_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
+    /// Base consumes fixed list keys as input actions; route them before search, retaining IME ownership.
+    /// GPUI's static parser accepts these platform-independent navigation names.
+    fn search_key(&mut self, key: &'static str, window: &mut Window, cx: &mut Context<Self>) {
         self.key(
             &KeyDownEvent {
                 keystroke: gpui_kit::Keystroke::parse(key).unwrap(),

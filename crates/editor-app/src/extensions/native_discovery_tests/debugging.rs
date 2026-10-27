@@ -210,7 +210,9 @@ fn cargo_artifacts_debug_in_parallel_and_retire_through_native_management(cx: &m
         modifiers: Default::default(),
     });
     cx.run_until_parked();
-    cx.simulate_event(gpui::ScrollWheelEvent {
+    cx.simulate_event(gpui::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: pane.center(),
         delta: gpui::ScrollDelta::Pixels(point(px(0.), px(-350.))),
         modifiers: Default::default(),
@@ -395,7 +397,9 @@ fn configuration(
             if viewport.contains(&field.center()) {
                 break;
             }
-            cx.simulate_event(gpui::ScrollWheelEvent {
+            cx.simulate_event(gpui::ScrollEvent {
+                // Wheel and trackpad fixtures retain pointer-device semantics.
+                source: gpui_kit::ScrollSource::Pointer,
                 position: viewport.center(),
                 delta: gpui::ScrollDelta::Lines(point(0., -3.)),
                 ..Default::default()

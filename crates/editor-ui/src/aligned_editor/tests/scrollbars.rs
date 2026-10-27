@@ -45,7 +45,7 @@ fn thumb(ui: &mut VisualTestContext, viewport: Bounds<Pixels>, horizontal: bool)
 fn aligned_editor_real_scrollbar_drags_and_diagonal_wheel_preserve_native_horizontal_axis(
     cx: &mut TestAppContext,
 ) {
-    use gpui_kit::{MouseButton, ScrollDelta, ScrollWheelEvent, TouchPhase};
+    use gpui_kit::{MouseButton, ScrollDelta, ScrollEvent, TouchPhase};
     let (view, ui) = mount(cx);
     ui.update(|window, cx| {
         let editors = view.read(cx).editors.clone();
@@ -61,7 +61,9 @@ fn aligned_editor_real_scrollbar_drags_and_diagonal_wheel_preserve_native_horizo
             fixture.editors[0].read(cx).selected_range(),
         )
     });
-    ui.simulate_event(ScrollWheelEvent {
+    ui.simulate_event(ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: point(px(120.), px(80.)),
         delta: ScrollDelta::Pixels(point(px(-50.), px(-55.))),
         touch_phase: TouchPhase::Moved,

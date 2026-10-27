@@ -1,4 +1,5 @@
 //! Installs a single managed shortcut resolver in every native Base Root window.
+//! Pending keycaps retain the runtime host conventions used by the resolver.
 
 use super::{
     catalog,
@@ -426,7 +427,12 @@ impl Render for ShortcutRuntime {
                 t!("shortcuts.pending").to_string(),
                 hint.next
                     .iter()
-                    .map(|next| (next.title.clone(), super::capture::display(&next.sequence)))
+                    .map(|next| {
+                        (
+                            next.title.clone(),
+                            super::capture::display(&next.sequence, cx.platform_info().os),
+                        )
+                    })
                     .collect(),
                 cx,
             );
@@ -439,7 +445,7 @@ impl Render for ShortcutRuntime {
                     .map(|conflict| {
                         (
                             conflict.title.clone(),
-                            super::capture::display(&conflict.binding),
+                            super::capture::display(&conflict.binding, cx.platform_info().os),
                         )
                     })
                     .collect(),

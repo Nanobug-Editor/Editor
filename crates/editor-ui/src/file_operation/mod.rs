@@ -110,7 +110,7 @@ pub fn conflict_prompt(
                 .on_any_mouse_down(|_, _, cx| cx.stop_propagation())
                 .on_mouse_up(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_mouse_up(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-                .on_scroll_wheel(|_, _, cx| cx.stop_propagation()),
+                .on_scroll(|_, _, cx| cx.stop_propagation()),
         )
         .popup(gpui_base::DialogPopup::new().child(body))
         .into_any_element()

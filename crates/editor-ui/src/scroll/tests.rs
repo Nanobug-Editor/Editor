@@ -3,7 +3,7 @@ use super::*;
 use gpui_base::input::EditorState;
 use gpui_kit::{
     AppContext as _, Context, Entity, IntoElement, ParentElement as _, Point, Render, ScrollDelta,
-    ScrollWheelEvent, Styled as _, TestAppContext, VisualTestContext, point, px, size,
+    ScrollEvent, Styled as _, TestAppContext, VisualTestContext, point, px, size,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -232,7 +232,9 @@ fn frame(ui: &mut VisualTestContext, millis: u64) {
 
 /// Use a Windows-style discrete line wheel or a precise device's original pixel delta.
 fn wheel(ui: &mut VisualTestContext, delta: ScrollDelta) {
-    ui.simulate_event(ScrollWheelEvent {
+    ui.simulate_event(ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: point(px(50.), px(50.)),
         delta,
         modifiers: Default::default(),
@@ -273,7 +275,9 @@ fn smooth_scroll_native_surfaces_have_intermediate_frames_and_settle(cx: &mut Te
         } else {
             point(px(50.), px(50.))
         };
-        ui.simulate_event(ScrollWheelEvent {
+        ui.simulate_event(ScrollEvent {
+            // Wheel and trackpad fixtures retain pointer-device semantics.
+            source: gpui_kit::ScrollSource::Pointer,
             position,
             delta: ScrollDelta::Lines(point(0., -3.)),
             modifiers: Default::default(),
@@ -438,7 +442,9 @@ fn smooth_scroll_burst_preserves_virtualization_and_stops_requesting_frames(
     ui.update(|window, cx| {
         for _ in 0..120 {
             window.dispatch_event(
-                gpui_kit::PlatformInput::ScrollWheel(ScrollWheelEvent {
+                gpui_kit::PlatformInput::Scroll(ScrollEvent {
+                    // Wheel and trackpad fixtures retain pointer-device semantics.
+                    source: gpui_kit::ScrollSource::Pointer,
                     position: point(px(50.), px(50.)),
                     delta: ScrollDelta::Lines(point(0., -3.)),
                     modifiers: Default::default(),

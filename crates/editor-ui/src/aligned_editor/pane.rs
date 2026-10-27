@@ -8,8 +8,8 @@ use gpui_base::{
 };
 use gpui_kit::{
     AccessibleAction, Context, DispatchPhase, Focusable as _, HitboxBehavior,
-    InteractiveElement as _, ParentElement as _, Point, Render, Role, ScrollWheelEvent,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, Window, canvas,
+    InteractiveElement as _, ParentElement as _, Point, Render, Role, ScrollEvent, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Subscription, Window, canvas,
 };
 use gpui_kit::{div, point, prelude::FluentBuilder as _};
 
@@ -284,33 +284,31 @@ impl Render for PaneView {
                 canvas(
                     |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
                     move |_, hitbox, window, _| {
-                        window.on_mouse_event(
-                            move |event: &ScrollWheelEvent, phase, window, cx| {
-                                if phase != DispatchPhase::Capture
-                                    || crate::scroll::routes_wheel(window, cx)
-                                    || !hitbox.bounds.contains(&event.position)
-                                    || !hitbox.should_handle_scroll(window)
-                                {
-                                    return;
-                                }
-                                let delta = event.delta.pixel_delta(line);
-                                if unavailable || delta.y == px(0.) {
-                                    return;
-                                }
-                                // A touchpad event can move both axes. Consuming its shared vertical
-                                // part must not discard horizontal motion owned by the native source.
-                                if delta.x != px(0.) {
-                                    wheel_editor.update(cx, |editor, cx| {
-                                        editor.set_scroll_offset(
-                                            point(editor.scroll_offset().x + delta.x, px(0.)),
-                                            cx,
-                                        );
-                                    });
-                                }
-                                wheel_group.update(cx, |group, cx| group.scroll_by(-delta.y, cx));
-                                cx.stop_propagation();
-                            },
-                        );
+                        window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
+                            if phase != DispatchPhase::Capture
+                                || crate::scroll::routes_wheel(window, cx)
+                                || !hitbox.bounds.contains(&event.position)
+                                || !hitbox.should_handle_scroll(window)
+                            {
+                                return;
+                            }
+                            let delta = event.delta.pixel_delta(line);
+                            if unavailable || delta.y == px(0.) {
+                                return;
+                            }
+                            // A touchpad event can move both axes. Consuming its shared vertical
+                            // part must not discard horizontal motion owned by the native source.
+                            if delta.x != px(0.) {
+                                wheel_editor.update(cx, |editor, cx| {
+                                    editor.set_scroll_offset(
+                                        point(editor.scroll_offset().x + delta.x, px(0.)),
+                                        cx,
+                                    );
+                                });
+                            }
+                            wheel_group.update(cx, |group, cx| group.scroll_by(-delta.y, cx));
+                            cx.stop_propagation();
+                        });
                     },
                 )
                 .absolute()

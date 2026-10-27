@@ -14,7 +14,9 @@ fn delivered_markdown_source_scroll_reveals_the_corresponding_native_block(
     let (mut fixture, ui) = NativeMarkdown::mount(cx, &[("notes.md", &source)]);
     fixture.open("notes.md", ui);
     let position = ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).input_bounds().center());
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-2400.))),
         ..Default::default()
@@ -100,7 +102,9 @@ fn wheel(ui: &mut gpui_kit::VisualTestContext, selector: &'static str, delta: f3
         .debug_bounds(selector)
         .expect("visible native viewport")
         .center();
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(delta))),
         ..Default::default()
@@ -270,7 +274,9 @@ fn delivered_markdown_sync_scroll_refreshes_image_table_wrap_and_divider_geometr
     fixture.open("notes.md", ui);
     ready.recv_timeout(Duration::from_secs(5)).unwrap();
     let position = ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).input_bounds().center());
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-1200.))),
         ..Default::default()

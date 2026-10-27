@@ -48,7 +48,7 @@ impl TreeView {
             |_, _, _| (),
             move |bounds, _, window, _| {
                 let wheel = owner.clone();
-                window.on_mouse_event(move |event: &gpui_kit::ScrollWheelEvent, phase, _, cx| {
+                window.on_mouse_event(move |event: &gpui_kit::ScrollEvent, phase, _, cx| {
                     if phase.capture() && bounds.contains(&event.position) {
                         let _ = wheel.update(cx, |this, _| {
                             if this.frame_current(gesture) {

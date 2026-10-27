@@ -110,7 +110,8 @@ impl Resolver {
         if self.invalidate_if_changed(engine.revision(), window, focus.clone(), contexts, now) {
             return Resolution::Pass;
         }
-        let key = stroke.unparse();
+        // Match the profile's host modifier names rather than the build target's conventions.
+        let key = stroke.unparse(engine.os());
         if let Some(pending) = self.pending.take() {
             // A failed continuation is not reinterpreted as another first step. The very
             // same event continues through native keymap/text handling, as the spec requires.

@@ -442,13 +442,11 @@ impl PluginView {
                     |_, _, _| (),
                     move |bounds, _, window, _| {
                         let wheel = driver.clone();
-                        window.on_mouse_event(
-                            move |event: &gpui_kit::ScrollWheelEvent, phase, _, _| {
-                                if phase.capture() && bounds.contains(&event.position) {
-                                    wheel.claim(index);
-                                }
-                            },
-                        );
+                        window.on_mouse_event(move |event: &gpui_kit::ScrollEvent, phase, _, _| {
+                            if phase.capture() && bounds.contains(&event.position) {
+                                wheel.claim(index);
+                            }
+                        });
                         let pointer = driver.clone();
                         window.on_mouse_event(
                             move |event: &gpui_kit::MouseDownEvent, phase, _, _| {

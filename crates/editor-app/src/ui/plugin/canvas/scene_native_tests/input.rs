@@ -207,9 +207,11 @@ pub(super) fn pointer(
             moved(110., 90., None, window, cx);
             moved(30., 30., None, window, cx);
             window.dispatch_event(
-                PlatformInput::ScrollWheel(ScrollWheelEvent {
+                PlatformInput::Scroll(ScrollEvent {
                     position: at(30., 30.),
                     delta: gpui_kit::ScrollDelta::Pixels(point(px(0.5), px(-2.25))),
+                    // Native wheel acceptance remains pointer-origin input.
+                    source: gpui_kit::ScrollSource::Pointer,
                     modifiers: Modifiers {
                         shift: true,
                         ..Default::default()

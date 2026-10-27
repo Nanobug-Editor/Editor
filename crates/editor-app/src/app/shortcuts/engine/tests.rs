@@ -15,7 +15,7 @@ mod resolver;
 fn engine(cx: &mut App, path: &Path, defaults: Vec<KeyBinding>) -> BindingEngine {
     cx.clear_key_bindings();
     cx.bind_keys(defaults.clone());
-    let mut engine = BindingEngine::load(path.to_owned(), defaults).unwrap();
+    let mut engine = BindingEngine::load(path.to_owned(), defaults, cx).unwrap();
     engine.register(catalog::all_operations(engine.defaults(), &[], cx));
     engine.apply(cx).unwrap();
     engine
@@ -28,14 +28,18 @@ fn operation(engine: &BindingEngine, action: &dyn Action) -> String {
     }).expect("registered native operation").id.clone()
 }
 
-/// Canonical input strings match the same parser used by real keyboard events.
-fn bindings(sequences: &[&str]) -> Vec<Sequence> {
+/// Canonical input strings use the same runtime host OS and parser as real keyboard events.
+fn bindings(sequences: &[&str], cx: &App) -> Vec<Sequence> {
     sequences
         .iter()
         .map(|sequence| {
             sequence
                 .split_whitespace()
-                .map(|step| Keystroke::parse(step).unwrap().unparse())
+                .map(|step| {
+                    Keystroke::parse_with_os(step, cx.platform_info().os)
+                        .unwrap()
+                        .unparse(cx.platform_info().os)
+                })
                 .collect()
         })
         .collect()
@@ -48,11 +52,14 @@ fn contexts(names: &[&str]) -> Vec<KeyContext> {
         .collect()
 }
 
-/// Query dispatch candidates rather than inspecting the engine's private override map.
+/// Query dispatch candidates with the App's host OS rather than the private override map.
 fn native(cx: &App, key: &str, path: &[&str]) -> Vec<KeyBinding> {
     cx.key_bindings()
         .borrow()
-        .bindings_for_input(&[Keystroke::parse(key).unwrap()], &contexts(path))
+        .bindings_for_input(
+            &[Keystroke::parse_with_os(key, cx.platform_info().os).unwrap()],
+            &contexts(path),
+        )
         .0
         .into_iter()
         .collect()
@@ -73,7 +80,7 @@ fn shortcut_engine_rebind_remove_restore_never_revives_shadowed_action(cx: &mut 
         );
         let id = operation(&engine, &DeleteToPreviousWordStart);
         engine
-            .save(&id, &bindings(&["ctrl-shift-backspace"]), false, cx)
+            .save(&id, &bindings(&["ctrl-shift-backspace"], cx), false, cx)
             .unwrap();
         assert!(native(cx, "ctrl-backspace", &["Root", "Input"]).is_empty());
         let actual = native(cx, "ctrl-shift-backspace", &["Root", "Input"]);
@@ -113,7 +120,7 @@ fn shortcut_engine_multiple_bindings_preserve_exact_enter_payload(cx: &mut TestA
         let id = operation(&engine, &primary);
         assert_ne!(id, operation(&engine, &secondary));
         engine
-            .save(&id, &bindings(&["f5", "f6"]), false, cx)
+            .save(&id, &bindings(&["f5", "f6"], cx), false, cx)
             .unwrap();
         engine.remove(&id, 0, cx).unwrap();
         assert!(native(cx, "enter", &["Input"]).is_empty());
@@ -161,12 +168,12 @@ fn shortcut_engine_conflict_replacement_preserves_other_binding_and_restore_prev
         let cut = operation(&engine, &Cut);
         assert_eq!(
             engine
-                .validate(&paste, &bindings(&["ctrl-c"]))
+                .validate(&paste, &bindings(&["ctrl-c"], cx))
                 .unwrap()
                 .len(),
             1
         );
-        let chord = bindings(&["ctrl-c ctrl-u"]);
+        let chord = bindings(&["ctrl-c ctrl-u"], cx);
         assert!(matches!(
             engine.save(&paste, &chord, false, cx),
             Err(BindingError::Conflicts(_))
@@ -177,7 +184,7 @@ fn shortcut_engine_conflict_replacement_preserves_other_binding_and_restore_prev
                 .partial_eq(&Paste)
         );
         engine.save(&paste, &chord, true, cx).unwrap();
-        assert_eq!(engine.effective(&copy), bindings(&["ctrl-insert"]));
+        assert_eq!(engine.effective(&copy), bindings(&["ctrl-insert"], cx));
         assert!(
             native(cx, "ctrl-insert", &["Input"])[0]
                 .action()
@@ -193,7 +200,7 @@ fn shortcut_engine_conflict_replacement_preserves_other_binding_and_restore_prev
         ));
         assert_eq!(engine.effective(&paste), chord);
         assert_eq!(
-            engine.validate(&cut, &bindings(&["ctrl-c"])).unwrap()[0].operation,
+            engine.validate(&cut, &bindings(&["ctrl-c"], cx)).unwrap()[0].operation,
             paste
         );
     });
@@ -224,7 +231,7 @@ fn shortcut_engine_conflicts_follow_reachable_input_tree_and_plugin_scopes(
         let down = operation(&engine, &SelectDown);
         assert_eq!(
             engine
-                .validate(&down, &bindings(&["ctrl-c"]))
+                .validate(&down, &bindings(&["ctrl-c"], cx))
                 .unwrap()
                 .len(),
             1
@@ -232,12 +239,12 @@ fn shortcut_engine_conflicts_follow_reachable_input_tree_and_plugin_scopes(
         let paste = operation(&engine, &Paste);
         assert!(
             engine
-                .validate(&paste, &bindings(&["ctrl-s"]))
+                .validate(&paste, &bindings(&["ctrl-s"], cx))
                 .unwrap()
                 .is_empty()
         );
         engine
-            .save(&paste, &bindings(&["ctrl-s"]), false, cx)
+            .save(&paste, &bindings(&["ctrl-s"], cx), false, cx)
             .unwrap();
         let ordinary = native(cx, "ctrl-s", &["Root", "EditorShell", "Input"]);
         assert_eq!(ordinary.len(), 1);
@@ -268,11 +275,11 @@ fn shortcut_engine_failed_save_preserves_running_configuration(cx: &mut TestAppC
         fs::write(&parent, "a file cannot contain the shortcut profile").unwrap();
         let revision = engine.revision();
         assert!(matches!(
-            engine.save(&id, &bindings(&["ctrl-alt-c"]), false, cx),
+            engine.save(&id, &bindings(&["ctrl-alt-c"], cx), false, cx),
             Err(BindingError::Storage(_))
         ));
         assert_eq!(engine.revision(), revision);
-        assert_eq!(engine.effective(&id), bindings(&["ctrl-c"]));
+        assert_eq!(engine.effective(&id), bindings(&["ctrl-c"], cx));
         assert!(
             native(cx, "ctrl-c", &["Input"])[0]
                 .action()
@@ -298,13 +305,18 @@ fn shortcut_engine_profile_reload_preserves_overrides_and_rejects_corruption(
         let mut first = engine(cx, &path, defaults.clone());
         let id = operation(&first, &Copy);
         first
-            .save(&id, &bindings(&["ctrl-alt-c", "ctrl-insert"]), false, cx)
+            .save(
+                &id,
+                &bindings(&["ctrl-alt-c", "ctrl-insert"], cx),
+                false,
+                cx,
+            )
             .unwrap();
         drop(first);
         let mut restarted = engine(cx, &path, defaults);
         assert_eq!(
             restarted.effective(&id),
-            bindings(&["ctrl-alt-c", "ctrl-insert"])
+            bindings(&["ctrl-alt-c", "ctrl-insert"], cx)
         );
         assert!(native(cx, "ctrl-c", &["Input"]).is_empty());
         assert!(
@@ -343,21 +355,24 @@ fn shortcut_engine_inherited_text_defaults_reload_but_new_text_is_rejected(
         let id = operation(&first, &SelectDown);
         // Digits are text on both steps too; a valid modified prefix cannot exempt its continuation.
         for draft in [
-            bindings(&["k"]),
-            bindings(&["j", "shift-k"]),
-            bindings(&["8"]),
-            bindings(&["shift-8"]),
-            bindings(&["ctrl-k a"]),
-            bindings(&["ctrl-k j"]),
-            bindings(&["ctrl-k 8"]),
-            bindings(&["f5 f6 f7"]),
+            bindings(&["k"], cx),
+            bindings(&["j", "shift-k"], cx),
+            bindings(&["8"], cx),
+            bindings(&["shift-8"], cx),
+            bindings(&["ctrl-k a"], cx),
+            bindings(&["ctrl-k j"], cx),
+            bindings(&["ctrl-k 8"], cx),
+            bindings(&["f5 f6 f7"], cx),
         ] {
             assert!(matches!(
                 first.save(&id, &draft, false, cx),
                 Err(BindingError::Invalid(_))
             ));
         }
-        for draft in [bindings(&["j", "escape"]), bindings(&["ctrl-k escape"])] {
+        for draft in [
+            bindings(&["j", "escape"], cx),
+            bindings(&["ctrl-k escape"], cx),
+        ] {
             assert!(matches!(
                 first.validate(&id, &draft),
                 Err(BindingError::Invalid(InvalidBinding::ReservedEscape))
@@ -368,16 +383,16 @@ fn shortcut_engine_inherited_text_defaults_reload_but_new_text_is_rejected(
             ));
         }
         assert!(!path.exists());
-        let added = bindings(&["j", "down", "ctrl-j"]);
+        let added = bindings(&["j", "down", "ctrl-j"], cx);
         assert!(first.validate(&id, &added).unwrap().is_empty());
         first.save(&id, &added, false, cx).unwrap();
         first.remove(&id, 1, cx).unwrap();
         let escape = operation(&first, &Escape);
         first
-            .save(&escape, &bindings(&["escape", "f9"]), false, cx)
+            .save(&escape, &bindings(&["escape", "f9"], cx), false, cx)
             .unwrap();
         let restarted = engine(cx, &path, defaults);
-        assert_eq!(restarted.effective(&id), bindings(&["j", "ctrl-j"]));
+        assert_eq!(restarted.effective(&id), bindings(&["j", "ctrl-j"], cx));
         assert!(
             native(cx, "j", &["Tree"])[0]
                 .action()

@@ -72,16 +72,13 @@ impl PluginView {
                         view.finish_viewport_frame(viewport_frame, revision, cx);
                     });
                     let input = viewport.clone();
-                    window.on_mouse_event(
-                        move |event: &gpui_kit::ScrollWheelEvent, phase, _, cx| {
-                            if phase.capture() {
-                                // Manual input revokes pending locates against the live scene; a
-                                // repaint gap must not leave one free to override this wheel.
-                                let _ =
-                                    input.update(cx, |view, _| view.viewport_wheel(event.position));
-                            }
-                        },
-                    );
+                    window.on_mouse_event(move |event: &gpui_kit::ScrollEvent, phase, _, cx| {
+                        if phase.capture() {
+                            // Manual input revokes pending locates against the live scene; a
+                            // repaint gap must not leave one free to override this wheel.
+                            let _ = input.update(cx, |view, _| view.viewport_wheel(event.position));
+                        }
+                    });
                     // A scrollbar press supersedes a queued locate before Base begins its native drag.
                     let pointer = viewport.clone();
                     window.on_mouse_event(move |event: &gpui_kit::MouseDownEvent, phase, _, cx| {

@@ -257,7 +257,9 @@ fn delivered_markdown_link_cancels_queued_sync_before_opening_target(cx: &mut Te
         NativeMarkdown::mount(cx, &[("notes.md", &source), ("next.md", &target)]);
     fixture.open("notes.md", ui);
     let position = ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).input_bounds().center());
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(-350.))),
         ..Default::default()

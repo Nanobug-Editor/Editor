@@ -1,7 +1,7 @@
 //! Real native wheels retain their motion across paint-only PluginView document publications.
 use super::*;
 use crate::ui::plugin::{Environment, PluginView};
-use gpui_kit::{AppContext as _, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext};
+use gpui_kit::{AppContext as _, ScrollDelta, ScrollEvent, TestAppContext, VisualTestContext};
 use plugin_runtime::plugin_protocol::ui::{Canvas, CanvasScene, Document, Kind, Node, SceneExtent};
 use std::time::Duration;
 
@@ -40,11 +40,13 @@ fn two_axis_paint_updates_after_visibility_restore_preserve_native_motion(cx: &m
         });
     });
     frame(visual, 0);
-    visual.simulate_event(ScrollWheelEvent {
+    visual.simulate_event(ScrollEvent {
         position: point(px(50.), px(50.)),
         delta: ScrollDelta::Lines(point(-3., -3.)),
         modifiers: Default::default(),
         touch_phase: gpui_kit::TouchPhase::Moved,
+        // This synthetic wheel keeps its native pointer input semantics.
+        source: gpui_kit::ScrollSource::Pointer,
     });
     frame(visual, 0);
     let mut previous = point(px(0.), px(0.));

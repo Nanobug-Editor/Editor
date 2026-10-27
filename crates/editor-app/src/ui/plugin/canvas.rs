@@ -3,8 +3,8 @@ use super::*;
 use gpui_kit::{
     Bounds, ElementInputHandler, EntityInputHandler, FontWeight, InteractiveElement, KeyDownEvent,
     KeyUpEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels,
-    Point, ScrollWheelEvent, StatefulInteractiveElement, Styled, Subscription, TextRun,
-    UTF16Selection, canvas, div, fill, font, point, px, rgb, size,
+    Point, ScrollEvent, StatefulInteractiveElement, Styled, Subscription, TextRun, UTF16Selection,
+    canvas, div, fill, font, point, px, rgb, size,
 };
 use plugin_runtime::plugin_protocol::{
     self as protocol,
@@ -1108,7 +1108,7 @@ impl Render for CanvasView {
                 );
         }
         element = element
-            .on_scroll_wheel(cx.listener(move |this, event: &ScrollWheelEvent, _, cx| {
+            .on_scroll(cx.listener(move |this, event: &ScrollEvent, _, cx| {
                 if this.targets.lifetime() == target_lifetime && this.target_wheel(event, cx) {
                     cx.stop_propagation();
                     return;

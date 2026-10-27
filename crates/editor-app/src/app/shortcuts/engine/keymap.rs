@@ -1,15 +1,17 @@
 //! Rebuilds the native keymap while preserving exact actions and late control defaults.
 
 use super::*;
-use gpui_kit::{DummyKeyboardMapper, KeyBindingContextPredicate as Predicate, Unbind};
+use gpui_kit::{KeyBindingContextPredicate as Predicate, Unbind};
 use std::rc::Rc;
 
 impl BindingEngine {
     /// Build a complete native keymap without changing unrelated defaults or their priority.
+    /// `cx` supplies the runtime OS and keyboard mapper for dynamic binding text.
     pub(super) fn native_bindings(
         &self,
         config: &UserBindings,
         activate: Option<&str>,
+        cx: &App,
     ) -> Result<Vec<KeyBinding>, BindingError> {
         let suspended = |id: &str| self.suspended.contains_key(id) && activate != Some(id);
         let mut result = Vec::new();
@@ -37,7 +39,7 @@ impl BindingEngine {
             }
             result.push(binding.clone());
         }
-        self.block_ancestor_fallbacks(&mut result, &removed, config)?;
+        self.block_ancestor_fallbacks(&mut result, &removed, config, cx)?;
         for operation in self.operations.values() {
             if suspended(&operation.id) {
                 continue;
@@ -60,7 +62,7 @@ impl BindingEngine {
                     predicate.clone(),
                     false,
                     action_input.clone(),
-                    &DummyKeyboardMapper,
+                    cx,
                 )
                 .map_err(|error| BindingError::NativeBinding(error.to_string()))?;
                 result.push(binding);
@@ -73,11 +75,13 @@ impl BindingEngine {
     /// alone therefore leaves Root Copy able to copy from Input with the same old keystroke.
     /// Add a scoped Unbind after defaults, before overrides, only when that exact action still
     /// has another matching scope. Unlike NoAction this preserves unrelated actions on the key.
+    /// Rebuilt bindings retain `cx`'s host keyboard conventions.
     fn block_ancestor_fallbacks(
         &self,
         bindings: &mut Vec<KeyBinding>,
         removed: &[&KeyBinding],
         config: &UserBindings,
+        cx: &App,
     ) -> Result<(), BindingError> {
         let mut blockers = Vec::new();
         for removed in removed
@@ -95,7 +99,7 @@ impl BindingEngine {
             if !fallback_exists {
                 continue;
             }
-            let key = removed.keystrokes()[0].unparse();
+            let key = removed.keystrokes()[0].unparse(self.os);
             let has_other_payload = bindings.iter().any(|binding| {
                 binding.keystrokes() == removed.keystrokes()
                     && binding.action().name() == removed.action().name()
@@ -120,17 +124,17 @@ impl BindingEngine {
                     binding.keystrokes() == removed.keystrokes()
                         && binding.action().partial_eq(removed.action())
                 }) {
-                    exclude_removed_scope(binding, removed)?;
+                    exclude_removed_scope(binding, removed, cx)?;
                 }
             } else {
                 blockers.push(
                     KeyBinding::load(
-                        &removed.keystrokes()[0].unparse(),
+                        &removed.keystrokes()[0].unparse(self.os),
                         Box::new(Unbind(removed.action().name().into())),
                         removed.predicate(),
                         false,
                         None,
-                        &DummyKeyboardMapper,
+                        cx,
                     )
                     .map_err(|error| BindingError::NativeBinding(error.to_string()))?,
                 );
@@ -182,9 +186,11 @@ fn binding_target(binding: &KeyBinding) -> Target {
 
 /// Exclude only occurrences at or above the removed handler's context. A deeper binding of
 /// the same action remains available; different action payloads are never touched at all.
+/// Dynamic reconstruction uses the same host OS and keyboard mapper from `cx`.
 fn exclude_removed_scope(
     binding: &mut KeyBinding,
     removed: &KeyBinding,
+    cx: &App,
 ) -> Result<(), BindingError> {
     let predicate = match (binding.predicate(), removed.predicate()) {
         (Some(original), Some(removed)) => {
@@ -214,12 +220,12 @@ fn exclude_removed_scope(
     };
     let previous_meta = binding.meta();
     let mut replacement = KeyBinding::load(
-        &binding.keystrokes()[0].unparse(),
+        &binding.keystrokes()[0].unparse(cx.platform_info().os),
         binding.action().boxed_clone(),
         predicate,
         false,
         binding.action_input(),
-        &DummyKeyboardMapper,
+        cx,
     )
     .map_err(|error| BindingError::NativeBinding(error.to_string()))?;
     if let Some(meta) = previous_meta {

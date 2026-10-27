@@ -287,7 +287,9 @@ fn shortcuts_two_stroke_query_and_fixed_layout(cx: &mut TestAppContext) {
             let header = visual.debug_bounds("shortcuts-tab-0").unwrap();
             let footer = visual.debug_bounds("shortcuts-footer").unwrap();
             let list = visual.debug_bounds("shortcuts-list").unwrap();
-            visual.simulate_event(gpui_kit::ScrollWheelEvent {
+            visual.simulate_event(gpui_kit::ScrollEvent {
+                // Wheel and trackpad fixtures retain pointer-device semantics.
+                source: gpui_kit::ScrollSource::Pointer,
                 position: list.center(),
                 delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(-500.))),
                 ..Default::default()

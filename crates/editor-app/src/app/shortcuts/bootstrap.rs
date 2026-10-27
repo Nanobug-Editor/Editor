@@ -37,7 +37,9 @@ pub(crate) fn configure(cx: &mut App, path: PathBuf) -> Result<(), String> {
     super::init(cx);
     Button::init_keys(cx);
     let defaults = cx.key_bindings().borrow().bindings().cloned().collect();
-    let mut engine = BindingEngine::load(path, defaults).map_err(|error| format!("{error:?}"))?;
+    // Profile normalization follows the same runtime host OS as native key dispatch.
+    let mut engine =
+        BindingEngine::load(path, defaults, cx).map_err(|error| format!("{error:?}"))?;
     let operations = catalog::all_operations(engine.defaults(), &[], cx);
     engine.register(operations);
     engine.apply(cx).map_err(|error| format!("{error:?}"))?;

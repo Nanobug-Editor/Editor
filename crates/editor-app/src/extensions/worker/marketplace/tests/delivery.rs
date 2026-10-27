@@ -373,7 +373,9 @@ fn click(form: &mut VisualTestContext, selector: &'static str) {
 /// Use the actual wheel input to reach version actions and the rendered changelog in the details viewport.
 fn scroll_details(form: &mut VisualTestContext, delta: f32) {
     let viewport = form.debug_bounds("plugin-manager-detail-content").unwrap();
-    form.simulate_event(gpui_kit::ScrollWheelEvent {
+    form.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position: viewport.center(),
         delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(delta))),
         touch_phase: gpui_kit::TouchPhase::Moved,

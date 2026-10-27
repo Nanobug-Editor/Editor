@@ -5,7 +5,7 @@ use super::{
     config::{InvalidBinding, Sequence, UserBindings, normalize, prefixes_overlap},
     conflicts::{Conflict, ContextProfiles},
 };
-use gpui_kit::{App, Global, KeyBinding, KeyContext};
+use gpui_kit::{App, Global, KeyBinding, KeyContext, OperatingSystem};
 
 mod keymap;
 #[cfg(test)]
@@ -29,6 +29,8 @@ pub(super) enum BindingError {
 /// One App global serves every workspace window; per-window pending input lives in Resolver.
 /// Defaults include unrelated and NoAction bindings so a rebuild cannot erase native controls.
 pub(super) struct BindingEngine {
+    /// One App's host conventions govern persisted and dispatched keystrokes alike.
+    os: OperatingSystem,
     path: PathBuf,
     config: UserBindings,
     defaults: Vec<KeyBinding>,
@@ -46,11 +48,18 @@ impl Global for BindingEngine {}
 impl BindingEngine {
     /// Load before applying overrides. Malformed profiles are reported, never overwritten.
     /// `defaults` must be captured after upstream and local controls register their keymaps.
-    pub(super) fn load(path: PathBuf, defaults: Vec<KeyBinding>) -> Result<Self, BindingError> {
-        let config = UserBindings::load(&path).map_err(BindingError::Storage)?;
+    /// `cx` supplies the host OS used to normalize dynamic profile text.
+    pub(super) fn load(
+        path: PathBuf,
+        defaults: Vec<KeyBinding>,
+        cx: &App,
+    ) -> Result<Self, BindingError> {
+        let os = cx.platform_info().os;
+        let config = UserBindings::load(&path, os).map_err(BindingError::Storage)?;
         let last_applied = defaults.clone();
         let defaults = normalize_defaults(defaults);
         Ok(Self {
+            os,
             path,
             config,
             last_applied,
@@ -152,6 +161,11 @@ impl BindingEngine {
     /// Stable revision invalidates candidates after configuration or plugin incarnation changes.
     pub(super) fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// Resolver serialization must match the OS used when loading this App's profile.
+    pub(super) fn os(&self) -> OperatingSystem {
+        self.os
     }
 
     /// The lifecycle owner also calls this when a same-digest plugin instance is replaced.
@@ -325,17 +339,17 @@ impl BindingEngine {
     pub(super) fn apply(&mut self, cx: &mut App) -> Result<(), BindingError> {
         self.absorb_late_defaults(cx);
         self.validate_configuration(&self.config)?;
-        let bindings = self.native_bindings(&self.config, None)?;
+        let bindings = self.native_bindings(&self.config, None, cx)?;
         self.install(bindings, cx);
         Ok(())
     }
 
     /// Reload only after the file has parsed; invalid data leaves the running profile intact.
     pub(super) fn reload(&mut self, cx: &mut App) -> Result<(), BindingError> {
-        let config = UserBindings::load(&self.path).map_err(BindingError::Storage)?;
+        let config = UserBindings::load(&self.path, self.os).map_err(BindingError::Storage)?;
         self.absorb_late_defaults(cx);
         self.validate_configuration(&config)?;
-        let bindings = self.native_bindings(&config, None)?;
+        let bindings = self.native_bindings(&config, None, cx)?;
         self.config = config;
         self.invalidate_pending();
         self.install(bindings, cx);
@@ -350,11 +364,12 @@ impl BindingEngine {
         id: &str,
         bindings: &[Sequence],
     ) -> Result<Vec<Sequence>, BindingError> {
-        let bindings = normalize(bindings, false).map_err(BindingError::Invalid)?;
+        let bindings = normalize(bindings, false, self.os).map_err(BindingError::Invalid)?;
         let existing = self.configured(id);
         for sequence in &bindings {
             if !existing.contains(sequence) {
-                normalize(std::slice::from_ref(sequence), true).map_err(BindingError::Invalid)?;
+                normalize(std::slice::from_ref(sequence), true, self.os)
+                    .map_err(BindingError::Invalid)?;
             }
         }
         Ok(bindings)
@@ -462,7 +477,7 @@ impl BindingEngine {
         cx: &mut App,
     ) -> Result<(), BindingError> {
         self.absorb_late_defaults(cx);
-        let bindings = self.native_bindings(&config, activate)?;
+        let bindings = self.native_bindings(&config, activate, cx)?;
         config.save(&self.path).map_err(BindingError::Storage)?;
         self.config = config;
         if let Some(id) = activate {

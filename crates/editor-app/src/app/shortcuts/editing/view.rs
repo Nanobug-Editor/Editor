@@ -1,4 +1,5 @@
 //! Local inline controls and fixed decision prompts for shortcut editing.
+//! Dynamic keycap text is parsed with the same host OS as the profile.
 
 use super::*;
 use crate::app::shortcuts::catalog::Target;
@@ -60,7 +61,10 @@ impl ShortcutPanel {
                     .py(px(2.))
                     .px_0()
                     .accessibility_label(t!("shortcuts.edit.modify").to_string())
-                    .child(shortcut_keycaps(&capture::display(binding), cx))
+                    .child(shortcut_keycaps(
+                        &capture::display(binding, cx.platform_info().os),
+                        cx,
+                    ))
                     .on_click(cx.listener(move |panel, _, window, cx| {
                         panel.request_edit_intent(
                             Intent::Edit {
@@ -154,7 +158,11 @@ impl ShortcutPanel {
                 .child(t!("shortcuts.press_keys").to_string())
                 .into_any_element()
         } else {
-            shortcut_keycaps(&capture::display(&draft.capture.strokes), cx).into_any_element()
+            shortcut_keycaps(
+                &capture::display(&draft.capture.strokes, cx.platform_info().os),
+                cx,
+            )
+            .into_any_element()
         };
         Some(
             Button::new("shortcuts-edit-capture")
@@ -330,7 +338,10 @@ impl ShortcutPanel {
                             .justify_between()
                             .gap_2()
                             .child(conflict.title.clone())
-                            .child(shortcut_keycaps(&capture::display(&conflict.binding), cx))
+                            .child(shortcut_keycaps(
+                                &capture::display(&conflict.binding, cx.platform_info().os),
+                                cx,
+                            ))
                     })),
             );
         }

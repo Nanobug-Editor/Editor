@@ -45,7 +45,9 @@ fn delivered_markdown_small_preview_scroll_moves_source_without_bouncing(cx: &mu
     fixture.open("notes.md", ui);
     super::image_preview::complete(&mut fixture, ui);
     let position = ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).input_bounds().center());
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(0.))),
         ..Default::default()
@@ -111,7 +113,9 @@ fn wheel(ui: &mut gpui_kit::VisualTestContext, selector: &'static str, delta: f3
         .debug_bounds(selector)
         .expect("visible native viewport")
         .center();
-    ui.simulate_event(gpui_kit::ScrollWheelEvent {
+    ui.simulate_event(gpui_kit::ScrollEvent {
+        // Wheel and trackpad fixtures retain pointer-device semantics.
+        source: gpui_kit::ScrollSource::Pointer,
         position,
         delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(px(0.), px(delta))),
         ..Default::default()
