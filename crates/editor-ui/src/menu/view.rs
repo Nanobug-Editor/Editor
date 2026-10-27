@@ -130,6 +130,30 @@ impl Render for PopupMenu {
                     }
                 }))
                 .map(|row| match detail {
+                    Some(MenuRowContent::Icon { icon, tooltip }) => {
+                        let tooltip = tooltip.clone();
+                        let selector = item.id.clone();
+                        row.tooltip(move |window, cx| {
+                            crate::Tooltip::new(tooltip.clone()).build(window, cx)
+                        })
+                        .child(
+                            div()
+                                .debug_selector(move || selector.clone())
+                                .flex()
+                                .items_center()
+                                .gap_2()
+                                .w_full()
+                                .min_w_0()
+                                .child(icon.clone().small())
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .child(item.label.clone()),
+                                ),
+                        )
+                    }
                     Some(MenuRowContent::Detail { secondary, checked }) => {
                         let tooltip = secondary.clone();
                         row.accessibility_label(format!("{}\n{}", item.label, secondary))

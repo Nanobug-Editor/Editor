@@ -197,6 +197,7 @@
 - [运行顶栏图标与选择语义](specs/run-debug-build.md#3-顶栏与选择语义)：2026-10-14 按用户提供的四个 SVG 统一线条粗细；运行、调试默认绿色，无活动执行、准备或调试目标时隐藏停止按钮。
 - [构建与运行配置 B2：IDEA 参考设计提案](specs/run-config-idea-design.md)（用户已选 A / 方案 1）；[B3：双栏简洁版](specs/run-config-simple-design.md)（已落地原生弹窗，支持插件默认目标）；[B3 实现与验收](verification/run-config-simple-2026-10-06.md)。设计图与真实验证的范围在对应记录中区分。
 - [运行配置重构：插件模板、原生表单与配置树](specs/run-config-plugin-tree.md)／[规格 #67](https://github.com/Nanobug-Editor/Editor/issues/67)（2026-10-07 产品基线及测试入口已确认）。新规格替代 B3 的表单、目录组织、提交和存储约定，不将旧验收计作新功能通过。
+- [运行配置添加模板菜单](verification/run-config-add-menu-2026-10-27.md)：按用户要求将 `+` 的模板抽屉替换为分组菜单弹窗，保留配置树和插件模板策略；本轮检查与交付状态见记录。
 - [运行配置重构实施工单](tickets/run-config-plugin-tree/README.md)：4 个端到端切片 #68–#71 的实现与验收均完成，普通提交及 GitHub 交付记录见各工单。30 个验收场景的实际包、Windows 与真实调试证据见 [验收记录](verification/run-config-plugin-tree.md)。2026-10-07 用户另行授权合并主分支并推送，独立候选的冲突处理和验证见 [主分支集成记录](verification/run-config-main-merge-2026-10-07.md)。
 
 Windows 原生验收已通过；macOS/Linux 未实测或交叉构建。七个正式插件包已在本地构建和验收，未发布 GitHub Release。完整结果以[最终契约验收](verification/plugin-api-contract-verification.md)为准。

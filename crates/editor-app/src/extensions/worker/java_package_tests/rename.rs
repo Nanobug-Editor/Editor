@@ -426,9 +426,9 @@ pub(super) fn wait_control(
                 .map(|record| (record.source, record.message))
                 .collect::<Vec<_>>();
             panic!(
-                "{selector}: {}; drawer={:?}; providers={failures:?}; logs={logs:?}",
+                "{selector}: {}; menu={:?}; providers={failures:?}; logs={logs:?}",
                 visual.update(|_, cx| fixture.app.read(cx).status.clone()),
-                visual.debug_bounds("run-config-drawer")
+                visual.debug_bounds("native-popup-menu")
             );
         }
         std::thread::sleep(Duration::from_millis(20));

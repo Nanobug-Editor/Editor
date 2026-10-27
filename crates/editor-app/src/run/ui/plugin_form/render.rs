@@ -11,6 +11,7 @@ pub(in crate::run::ui) fn render(
     cx: &mut gpui_kit::App,
 ) -> AnyElement {
     tree::synchronize(form, cx);
+    template_menu::synchronize(form, cx);
     if form.read(cx).plugin.as_ref().unwrap().decision.is_some() {
         return tree::decision(app, form, cx);
     }
@@ -108,6 +109,7 @@ pub(in crate::run::ui) fn render(
             .filter(|reason| !reason.is_empty())
     });
     let applying = state.commit.is_some();
+    let popup = state.template_menu.as_ref().map(|menu| menu.popup.clone());
     let body = h_flex()
         // h_flex centers children by default; both panes must instead fill the native dialog body.
         // Otherwise the percentage-height plugin scroller has no usable input/paint area.
@@ -160,6 +162,7 @@ pub(in crate::run::ui) fn render(
         })
         .child(body)
         .child(footer(app, form, cx))
+        .children(popup)
         .into_any_element()
 }
 
@@ -175,7 +178,7 @@ fn empty(text: String, cx: &gpui_kit::App) -> AnyElement {
         .into_any_element()
 }
 
-/// Template discovery overlays the tree while the toolbar and right form keep their positions.
+/// The configuration tree remains mounted while template selection opens in a native popup.
 fn sidebar(
     app: &Entity<EditorApp>,
     form: &Entity<RunConfigForm>,
@@ -183,6 +186,9 @@ fn sidebar(
 ) -> AnyElement {
     let state = form.read(cx).plugin.as_ref().unwrap();
     let add = app.clone();
+    let add_form = form.clone();
+    let trigger = std::rc::Rc::new(std::cell::Cell::new(gpui_kit::Bounds::default()));
+    let measured = trigger.clone();
     let delete = app.clone();
     let copy = app.clone();
     let folder = app.clone();
@@ -194,18 +200,12 @@ fn sidebar(
         .border_b_1()
         .border_color(cx.theme().border)
         .child(
-            toolbar("run-config-add", thin_icon("add"), t!("run.form_new").into()).disabled(locked).on_click(
-                move |_, _, cx| {
-                    let Some(form) = add.read(cx).run_form.clone() else {
-                        return;
-                    };
-                    form.update(cx, |form, cx| {
-                        let state = form.plugin.as_mut().unwrap();
-                        state.drawer = !state.drawer;
-                        cx.notify();
-                    });
-                },
-            ),
+            div().relative()
+                // Mouse and keyboard activation use the button's painted lower edge.
+                .child(gpui_kit::canvas(move |bounds, _, _| measured.set(bounds), |_, _, _, _| {}).absolute().size_full())
+                .child(toolbar("run-config-add", thin_icon("add"), t!("run.form_new").into()).track_focus(&state.template_trigger_focus).disabled(locked).on_click(
+                    move |_, window, cx| template_menu::open(&add, &add_form, trigger.get(), window, cx),
+                )),
         )
         .child(
             toolbar(
@@ -232,70 +232,6 @@ fn sidebar(
             )
             .disabled(locked).on_click(move |_, window, cx| folder.update(cx, |app, cx| app.add_plugin_folder(window, cx))),
         );
-    let mut rows = Vec::new();
-    let drawer = state.drawer;
-    if state.drawer {
-        let mut groups: BTreeMap<String, Vec<(String, contract::Template)>> = BTreeMap::new();
-        for (provider, template) in &state.catalog {
-            groups
-                .entry(template.group.clone())
-                .or_default()
-                .push((provider.clone(), template.clone()));
-        }
-        for (group, templates) in groups {
-            rows.push(
-                div()
-                    .px_2()
-                    .py_1()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(group)
-                    .into_any_element(),
-            );
-            for (provider, template) in templates {
-                let owner = app.clone();
-                let target = template.clone();
-                let label = template.label.clone();
-                let disabled = template.unavailable.is_some();
-                let selector = format!("run-template-{provider}-{}", template.id);
-                rows.push(
-                    Button::new(format!("run-template-{provider}-{}", template.id))
-                        .debug_selector(move || selector.clone())
-                        .ghost()
-                        .w_full()
-                        .min_w_0()
-                        .content_full_width()
-                        .h(px(32.))
-                        .icon(template_icon(&template.icon))
-                        .label(label)
-                        .disabled(disabled)
-                        .tooltip(template.unavailable.unwrap_or_else(|| provider.clone()))
-                        .on_click(move |_, _, cx| {
-                            owner.update(cx, |app, cx| {
-                                app.add_plugin_configuration(provider.clone(), target.clone(), cx)
-                            })
-                        })
-                        .into_any_element(),
-                );
-            }
-        }
-        if rows.is_empty() {
-            rows.push(empty(t!("run.plugin_no_templates").into(), cx));
-        }
-    } else {
-        return v_flex()
-            .debug_selector(|| "run-config-sidebar".into())
-            .h_full()
-            .w(px(220.))
-            .flex_shrink_0()
-            .min_h_0()
-            .bg(cx.theme().muted)
-            .border_r_1()
-            .border_color(cx.theme().border)
-            .child(header)
-            .child(div().flex_1().min_h_0().child(tree::render(app, form, cx)))
-            .into_any_element();
-    }
     v_flex()
         .debug_selector(|| "run-config-sidebar".into())
         .h_full()
@@ -306,23 +242,7 @@ fn sidebar(
         .border_r_1()
         .border_color(cx.theme().border)
         .child(header)
-        .child(
-            v_flex()
-                .id("run-config-tree-list")
-                .debug_selector(move || {
-                    if drawer {
-                        "run-config-drawer"
-                    } else {
-                        "run-config-tree-list"
-                    }
-                    .into()
-                })
-                .flex_1()
-                .min_h_0()
-                .overflow_y_scrollbar_with(&state.scroll)
-                .p_2()
-                .children(rows),
-        )
+        .child(div().flex_1().min_h_0().child(tree::render(app, form, cx)))
         .into_any_element()
 }
 
@@ -350,7 +270,8 @@ fn thin_icon(kind: &str) -> Icon {
     Icon::default().data(format!("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='{path}'/></svg>").as_bytes())
 }
 
-fn template_icon(name: &str) -> Icon {
+/// Resolve provider artwork or the existing stock configuration icons for tree and menu rows.
+pub(super) fn template_icon(name: &str) -> Icon {
     // Plugins may provide a bounded self-contained SVG instead of using the stock command artwork.
     if name.trim_start().starts_with("<svg") {
         return Icon::default().data(name.as_bytes());

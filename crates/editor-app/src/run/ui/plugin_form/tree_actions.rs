@@ -24,7 +24,6 @@ impl EditorApp {
             );
             state.draft.place_tree_node(&id, parent, None).ok()?;
             state.selected = Some(id.clone());
-            state.drawer = false;
             cx.notify();
             Some(id)
         });

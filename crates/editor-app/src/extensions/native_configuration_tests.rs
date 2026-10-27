@@ -447,18 +447,21 @@ fn plugin_configuration_packages_edit_save_reopen_and_execute(cx: &mut TestAppCo
         cx.debug_bounds("run-template-configuration-alpha-program")
             .is_some()
     });
-    let drawer = cx.debug_bounds("run-config-drawer").unwrap();
-    assert!(drawer.size.width <= cx.debug_bounds("run-config-sidebar").unwrap().size.width);
+    let menu = cx.debug_bounds("native-popup-menu").unwrap();
+    let trigger = cx.debug_bounds("run-config-add").unwrap();
+    assert_eq!(menu.left(), trigger.left().max(px(8.)));
+    assert_eq!(menu.top(), trigger.bottom());
+    assert!(cx.debug_bounds("run-config-tree-list").is_some());
     assert_eq!(
         page,
         cx.debug_bounds("run-config-page").unwrap(),
-        "drawer leaves the right pane fixed"
+        "template menu leaves the right pane fixed"
     );
     click(cx, "run-template-configuration-alpha-program");
     driver.wait(&mut manager, &app, cx, |cx| {
         cx.debug_bounds("plugin-ui-name").is_some()
     });
-    assert!(cx.debug_bounds("run-config-drawer").is_none());
+    assert!(cx.debug_bounds("native-popup-menu").is_none());
     let label = cx.debug_bounds("plugin-ui-name-field-label").unwrap();
     let input = cx.debug_bounds("plugin-ui-name").unwrap();
     assert!(

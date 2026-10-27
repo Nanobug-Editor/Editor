@@ -6,7 +6,10 @@ pub(in crate::run::ui) struct State {
     pub draft: RunConfigSet,
     pub selected: Option<String>,
     pub catalog: Vec<(String, contract::Template)>,
-    pub drawer: bool,
+    /// The native template popup belongs to this draft and is retired with its window.
+    pub template_menu: Option<super::template_menu::TemplateMenu>,
+    /// A stable add-button focus target receives keyboard control when its popup is dismissed.
+    pub template_trigger_focus: FocusHandle,
     pub documents: BTreeMap<String, native::Document>,
     /// Native callbacks retain their form's incarnation rather than implicitly adopting a replacement.
     pub form_origins: BTreeMap<String, plugin_runtime::TargetOrigin>,
@@ -18,7 +21,6 @@ pub(in crate::run::ui) struct State {
     pub commit_requested: Option<CommitMode>,
     pub commit: Option<Commit>,
     pub error: Option<String>,
-    pub scroll: gpui_kit::ScrollHandle,
     pub tree: Option<Entity<gpui_base::TreeState>>,
     pub tree_signature: String,
     pub tree_observer: Option<Subscription>,
@@ -28,14 +30,16 @@ pub(in crate::run::ui) struct State {
 }
 
 impl State {
-    pub fn new(set: RunConfigSet, selected: Option<String>) -> Self {
+    /// Start a window draft from `set`, its optional `selected` configuration and add-button `focus`.
+    pub fn new(set: RunConfigSet, selected: Option<String>, focus: FocusHandle) -> Self {
         let selected = selected.filter(|id| set.plugin_configurations.contains_key(id));
         Self {
             baseline: set.clone(),
             draft: set,
             selected,
             catalog: vec![],
-            drawer: false,
+            template_menu: None,
+            template_trigger_focus: focus,
             documents: BTreeMap::new(),
             form_origins: BTreeMap::new(),
             views: BTreeMap::new(),
@@ -45,7 +49,6 @@ impl State {
             commit_requested: None,
             commit: None,
             error: None,
-            scroll: gpui_kit::ScrollHandle::new(),
             tree: None,
             tree_signature: String::new(),
             tree_observer: None,

@@ -10,6 +10,7 @@ mod projection;
 mod render;
 use projection::{projection, validated};
 mod state;
+mod template_menu;
 pub(super) use state::*;
 #[cfg(test)]
 mod fault_tests;
@@ -102,7 +103,7 @@ impl EditorApp {
             }
         });
         form.update(cx, |form, cx| {
-            let mut state = State::new(set, selected.clone());
+            let mut state = State::new(set, selected.clone(), cx.focus_handle());
             state.catalog = host_templates::templates(&self.workspace_key());
             state.tree = Some(tree);
             state.tree_observer = Some(observer);

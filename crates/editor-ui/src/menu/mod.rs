@@ -116,6 +116,13 @@ pub enum MenuRowContent {
     Heading,
     /// A two-line selectable row with an optional current-selection check.
     Detail { secondary: String, checked: bool },
+    /// A compact command row with caller-resolved artwork and a hover explanation.
+    Icon {
+        /// Local static or admitted SVG artwork displayed before the command label.
+        icon: crate::Icon,
+        /// Provider identity or an explanation of why this command is unavailable.
+        tooltip: String,
+    },
 }
 
 /// The popup owns focus/navigation/scrolling; callers receive stable item identities.
@@ -344,7 +351,7 @@ impl PopupMenu {
         match self.row_content.get(&item.id) {
             Some(MenuRowContent::Heading) => 26.,
             Some(MenuRowContent::Detail { .. }) => 50.,
-            None => 29.,
+            _ => 29.,
         }
     }
     /// Pin a bounded number of final actions; callers still use one identity/navigation list.
