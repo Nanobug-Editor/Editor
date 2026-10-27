@@ -138,6 +138,69 @@ fn retained_disable_restores_logical_scene_without_reusing_native_frame_lease() 
     revoked(&replacement);
 }
 
+/// Workspace trust revocation retires actual guest resources and cannot revive an old native lease.
+#[test]
+#[ignore = "executes frozen timeline Package through public Manager trust revocation and demand"]
+fn retained_workspace_trust_revocation_reclaims_resources_and_seals_old_frame_lease() {
+    let mut harness = Harness::open();
+    let manager = &mut harness.manager;
+    let original = manager.instance_id("canvas-timeline").unwrap().to_owned();
+    manager
+        .invoke_command("canvas-timeline", "business-timer", Value::Null)
+        .unwrap();
+    let lease = pending(manager);
+    assert!(
+        manager.resource_count() > 0,
+        "the actual guest must own resources before trust is withdrawn"
+    );
+    assert!(lease.is_pending());
+
+    manager.set_workspace_trust(false).unwrap();
+    assert!(manager.instance_id("canvas-timeline").is_none());
+    assert!(
+        manager.live.is_empty(),
+        "an untrusted workspace cannot retain its timeline or published views"
+    );
+    assert_eq!(
+        manager.resource_count(),
+        0,
+        "trust revocation must reclaim the actual guest's timers and native resources"
+    );
+    assert!(manager.take_canvas_frame_requests().is_empty());
+    revoked(&lease);
+    manager.poll();
+    assert!(manager.live.is_empty());
+    assert_eq!(manager.resource_count(), 0);
+
+    // A newly trusted incarnation needs its own demand and request; an old adapter Arc cannot
+    // publish an opportunity into it even when the same package, panel and Canvas IDs return.
+    manager.set_workspace_trust(true).unwrap();
+    activate(manager, "canvas-timeline", "timeline");
+    assert_ne!(
+        manager.instance_id("canvas-timeline"),
+        Some(original.as_str())
+    );
+    assert!(manager.take_canvas_frame_requests().is_empty());
+    let replacement = pending(manager);
+    assert!(!Arc::ptr_eq(&lease, &replacement));
+    revoked(&lease);
+    manager.poll();
+    assert!(
+        replacement.is_pending(),
+        "a rejected old native opportunity must not consume the replacement's request"
+    );
+    assert_eq!(timeline_snapshot(manager)["frames"].as_u64(), Some(0));
+    let requests = manager.take_canvas_frame_requests();
+    assert_eq!(requests.len(), 1);
+    assert!(Arc::ptr_eq(&requests[0].1, &replacement));
+
+    manager.set_workspace_trust(false).unwrap();
+    revoked(&lease);
+    revoked(&replacement);
+    assert!(manager.take_canvas_frame_requests().is_empty());
+    assert_eq!(manager.resource_count(), 0);
+}
+
 /// Failed real candidate preparation preserves the accepted view and old native owner; a later
 /// cutover snapshots edits made after preparation and revokes every old frame reference.
 #[test]
