@@ -10,6 +10,8 @@ use plugin_runtime::plugin_protocol::ui::Node;
 pub(super) enum ActionGesture {
     /// Editor edge actions also capture the UI revision supplying their document-source binding.
     Source { incarnation: u64, revision: u64 },
+    /// Literal Editor rails have exact UI ownership without a document-source credential.
+    Snapshot { incarnation: u64, revision: u64 },
     /// Ordinary controls retained after hiding capture only their native scene lifetime.
     Visibility { incarnation: u64 },
     /// Native foreground controls retain their owning target lineage, independently of artwork revisions.
@@ -24,22 +26,10 @@ impl ActionGesture {
     pub(super) fn incarnation(self) -> u64 {
         match self {
             Self::Source { incarnation, .. }
+            | Self::Snapshot { incarnation, .. }
             | Self::Visibility { incarnation }
             | Self::Overlay { incarnation, .. } => incarnation,
         }
-    }
-
-    /// Diagnostic classification does not mistake a visibility ticket for document-source input.
-    #[cfg(test)]
-    pub(super) fn is_source(self) -> bool {
-        matches!(
-            self,
-            Self::Source { .. }
-                | Self::Overlay {
-                    revision: Some(_),
-                    ..
-                }
-        )
     }
 }
 
@@ -80,12 +70,20 @@ pub(super) fn native_id(
         Some(ActionGesture::Source { incarnation, .. }) => {
             format!("{id}-action-{incarnation}").into()
         }
+        Some(ActionGesture::Snapshot { incarnation, .. }) => {
+            format!("{id}-action-snapshot-{incarnation}").into()
+        }
         Some(ActionGesture::Visibility { incarnation }) => {
             format!("{id}-action-visibility-{incarnation}").into()
         }
-        Some(ActionGesture::Overlay { incarnation, .. }) => {
-            format!("{id}-action-overlay-{incarnation}").into()
-        }
+        Some(ActionGesture::Overlay {
+            incarnation,
+            revision: Some(revision),
+        }) => format!("{id}-action-overlay-{incarnation}-{revision}").into(),
+        Some(ActionGesture::Overlay {
+            incarnation,
+            revision: None,
+        }) => format!("{id}-action-overlay-{incarnation}").into(),
         None => id,
     }
 }
@@ -220,12 +218,17 @@ impl PluginView {
                 incarnation: scope.generation,
                 revision: self
                     .document
-                    .editor_action_source(id)
-                    .map(|_| self.document.revision),
+                    .is_editor_action(id)
+                    .then_some(self.document.revision),
             });
         }
         if self.document.editor_action_source(id).is_some() {
             Some(ActionGesture::Source {
+                incarnation: self.action_gestures.incarnation,
+                revision: self.document.revision,
+            })
+        } else if self.document.is_editor_action(id) {
+            Some(ActionGesture::Snapshot {
                 incarnation: self.action_gestures.incarnation,
                 revision: self.document.revision,
             })

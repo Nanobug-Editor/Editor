@@ -154,3 +154,99 @@ fn retained_view_popup_remains_usable_after_visibility_withdrawal(cx: &mut TestA
     assert!(events.borrow().iter().any(|event| event.node == "popup"
         && matches!(&event.action, Action::Select(id) if id == "item")));
 }
+
+/// Snapshot rail presses bind their original literal UI without acquiring document authority.
+#[gpui::test]
+fn snapshot_editor_action_replacement_revokes_held_native_press_before_draw(
+    cx: &mut TestAppContext,
+) {
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        editor_ui::typography::init(cx);
+        crate::ui::theme::apply_theme(crate::ui::theme::builtin_theme(false), cx);
+        editor_ui::init(cx);
+    });
+    let document = |revision, text: &str| {
+        let mut editor = ui::Editor::snapshot(text);
+        editor.line_actions = Some(ui::EditorActions {
+            left: vec![ui::EditorAction {
+                offset: 0,
+                content: Box::new(Node::button("activate", "Activate")),
+            }],
+            right: vec![],
+        });
+        Document::new(Node::new("snapshot", Kind::Editor(editor)).height(180.)).revision(revision)
+    };
+    let first = document(1, "Before");
+    let next = document(2, "After");
+    first.validate().unwrap();
+    next.validate().unwrap();
+    assert!(first.editor_action_source("activate").is_none());
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let output = events.clone();
+    let slot = Rc::new(RefCell::new(None));
+    let capture = slot.clone();
+    let (_, visual) = cx.add_window_view(move |window, cx| {
+        let view = cx.new(|cx| {
+            PluginView::new(
+                "snapshot-controls".into(),
+                first,
+                Environment::default(),
+                move |event, _| output.borrow_mut().push(event),
+                window,
+                cx,
+            )
+        });
+        capture.replace(Some(view.clone()));
+        Root::new(view, window, cx)
+    });
+    let view = slot.borrow_mut().take().unwrap();
+    visual.update(|window, cx| {
+        window.draw(cx).clear(cx);
+    });
+    let position = visual
+        .debug_bounds("plugin-button-activate")
+        .expect("actual snapshot rail button")
+        .center();
+    visual.simulate_mouse_down(position, MouseButton::Left, Default::default());
+    visual.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.update_document(next, Environment::default(), window, cx)
+        });
+        window.dispatch_event(
+            gpui_kit::PlatformInput::MouseUp(gpui_kit::MouseUpEvent {
+                position,
+                button: MouseButton::Left,
+                click_count: 1,
+                modifiers: Default::default(),
+            }),
+            cx,
+        );
+    });
+    visual.run_until_parked();
+    assert!(
+        !events
+            .borrow()
+            .iter()
+            .any(|event| matches!(event.action, Action::Click)),
+        "the replacement snapshot cannot adopt the old rail's pending Down"
+    );
+    visual.update(|window, cx| {
+        window.draw(cx).clear(cx);
+    });
+    let position = visual
+        .debug_bounds("plugin-button-activate")
+        .unwrap()
+        .center();
+    visual.simulate_click(position, Default::default());
+    visual.run_until_parked();
+    assert_eq!(
+        events
+            .borrow()
+            .iter()
+            .filter(|event| event.revision == 2 && matches!(event.action, Action::Click))
+            .count(),
+        1,
+        "fresh native input remains usable with the replacement UI ticket"
+    );
+}

@@ -468,6 +468,32 @@ impl Document {
                 .and_then(|toolbar| toolbar.find(id))
         })
     }
+    /// Whether an active node belongs to any Editor rail, including readonly snapshot actions.
+    /// These subtrees require their exact UI revision; this query grants no document authority.
+    pub fn is_editor_action(&self, id: &str) -> bool {
+        if self.active_node(id).is_none() {
+            return false;
+        }
+        let mut found = false;
+        let mut visit = |node: &Node| {
+            if let Kind::Editor(editor) = &node.kind {
+                found |= editor
+                    .left_actions()
+                    .iter()
+                    .chain(editor.right_actions())
+                    .any(|action| action.content.find(id).is_some());
+            }
+        };
+        self.root.visit(&mut visit);
+        if let Some(toolbar) = &self.editor_toolbar {
+            toolbar.visit(&mut visit);
+        }
+        if let Some(dialog) = &self.dialog {
+            dialog.content.visit(&mut visit);
+        }
+        found
+    }
+
     /// Line-edge actions retain source authority in addition to the ordinary UI scene revision.
     /// Native hosts must revalidate this exact version immediately before forwarding an event.
     pub fn editor_action_source(&self, id: &str) -> Option<&crate::api::DocumentVersion> {

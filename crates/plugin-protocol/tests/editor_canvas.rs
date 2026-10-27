@@ -18,6 +18,7 @@ fn document() -> ui::Document {
         }],
     });
     let canvas: ui::Canvas = serde_json::from_value(json!({
+        "paint":[],
         "scene":{"identity":61,"revision":1,"roots":[],"targets":[{
             "id":"anchor","epoch":1,
             "geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":100,"h":100}}
@@ -41,6 +42,113 @@ fn document() -> ui::Document {
     document.source = Some(source);
     document.editor_layout = true;
     document
+}
+
+/// Literal Editor rails carry UI-revision authority even when the nested target remains unchanged.
+#[test]
+fn snapshot_editor_canvas_actions_reject_prior_ui_input() {
+    let canvas = ui::Canvas {
+        scene: Some(
+            serde_json::from_value(json!({
+                "identity":41,"revision":1,"roots":[],"targets":[{
+                    "id":"surface","epoch":1,
+                    "geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":64,"h":48}}
+                }]
+            }))
+            .unwrap(),
+        ),
+        ..Default::default()
+    };
+    let event = ui::UiEvent {
+        revision: 1,
+        node: "target-canvas".into(),
+        action: ui::Action::Canvas(ui::CanvasEvent::Input {
+            input: ui::CanvasInput {
+                identity: 41,
+                presented_revision: 1,
+                target: "surface".into(),
+                epoch: 1,
+                sequence: 1,
+                source: None,
+                file: None,
+                projection: None,
+                kind: ui::CanvasInputKind::Wheel(ui::CanvasWheelInput {
+                    x: 4.,
+                    y: 4.,
+                    delta_x: 1.,
+                    delta_y: 0.,
+                    unit: ui::CanvasWheelUnit::Lines,
+                    modifiers: Default::default(),
+                }),
+            },
+        }),
+    };
+    let ordinary = ui::Document::new(ui::Node::new(
+        "target-canvas",
+        ui::Kind::Canvas(canvas.clone()),
+    ))
+    .revision(2);
+    ordinary.validate().unwrap();
+    ordinary
+        .validate_event(&event)
+        .expect("ordinary retained targets keep their paint-only exception");
+    for right in [false, true] {
+        for nested in [false, true] {
+            let child = ui::Node::new("target-canvas", ui::Kind::Canvas(canvas.clone()));
+            let child =
+                if nested {
+                    let mut outer = canvas.clone();
+                    outer.scene.as_mut().unwrap().identity = 51;
+                    outer.overlays.push(serde_json::from_value(json!({
+                    "id":"owner","anchor":{"identity":51,"scene_revision":1,
+                        "target":{"id":"surface","epoch":1},"rect":{"x":0,"y":0,"w":64,"h":48}},
+                    "rect":{"x":0,"y":0,"w":64,"h":48},"child":child
+                })).unwrap());
+                    ui::Node::new("outer", ui::Kind::Canvas(outer))
+                } else {
+                    child
+                };
+            let action = ui::EditorAction {
+                offset: 0,
+                content: Box::new(child),
+            };
+            let mut editor = ui::Editor::snapshot("old");
+            editor.line_actions = Some(if right {
+                ui::EditorActions {
+                    left: vec![],
+                    right: vec![action],
+                }
+            } else {
+                ui::EditorActions {
+                    left: vec![action],
+                    right: vec![],
+                }
+            });
+            let original =
+                ui::Document::new(ui::Node::new("snapshot", ui::Kind::Editor(editor))).revision(1);
+            original.validate().unwrap();
+            assert!(
+                original.editor_action_source("target-canvas").is_none(),
+                "literal content cannot acquire document authority"
+            );
+            original.validate_event(&event).unwrap();
+            let mut changed = original.clone();
+            changed.revision = 2;
+            let ui::Kind::Editor(editor) = &mut changed.root.kind else {
+                panic!()
+            };
+            editor.source = ui::EditorSource::Snapshot { text: "new".into() };
+            changed.validate().unwrap();
+            let failure = changed
+                .validate_event(&event)
+                .expect_err("snapshot action must not adopt old shown-target input");
+            assert_eq!(
+                failure.code,
+                api::ErrorCode::StaleRevision,
+                "right={right}, nested={nested}"
+            );
+        }
+    }
 }
 
 /// Neither action nor overlay boundaries hide capabilities, source credentials or retained mutations.

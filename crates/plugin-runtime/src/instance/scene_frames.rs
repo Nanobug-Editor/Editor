@@ -24,6 +24,8 @@ struct Accepted {
 struct Frame {
     /// A replacement enclosing overlay cannot inherit this child Canvas's original native proof.
     lineage: crate::ui_owners::Lineage,
+    /// Editor rails bind literal and document actions to one exact outer UI revision.
+    action_revision: Option<u64>,
     receipt: ui::CanvasEvent,
     revision: u64,
     targets: BTreeSet<(String, u64)>,
@@ -41,10 +43,10 @@ impl Frame {
                 if *identity==input.identity&&*scene_revision==input.presented_revision&&*source==input.source&&*file==input.file&&*projection==input.projection)
     }
     /// New paint may carry active target ownership only within the same source/scene lifetime.
-    fn same_owner(&self, receipt: &ui::CanvasEvent) -> bool {
+    fn same_owner(&self, receipt: &ui::CanvasEvent, action_revision: Option<u64>) -> bool {
         matches!((&self.receipt,receipt),
             (ui::CanvasEvent::ScenePresented{identity:a,source:sa,file:fa,..},ui::CanvasEvent::ScenePresented{identity:b,source:sb,file:fb,..})
-            if a==b&&sa==sb&&fa==fb&&!self.retired)
+            if a==b&&sa==sb&&fa==fb&&!self.retired&&self.action_revision==action_revision)
     }
 }
 impl Frames {
@@ -140,6 +142,9 @@ impl Frames {
     ) -> Result<(), api::Failure> {
         let key = (panel.to_owned(), event.node.clone());
         let lineage = crate::ui_owners::lineage(document, &event.node).unwrap_or_default();
+        let action_revision = document
+            .is_editor_action(&event.node)
+            .then_some(document.revision);
         let ui::CanvasEvent::ScenePresented { error, .. } = receipt else {
             return Ok(());
         };
@@ -177,7 +182,7 @@ impl Frames {
             .collect();
         let cleanup = frames
             .back()
-            .filter(|frame| frame.same_owner(receipt) && frame.lineage == lineage)
+            .filter(|frame| frame.same_owner(receipt, action_revision) && frame.lineage == lineage)
             .map(|frame| {
                 frame
                     .cleanup
@@ -189,6 +194,7 @@ impl Frames {
             .unwrap_or_default();
         frames.push_back(Frame {
             lineage,
+            action_revision,
             receipt: receipt.clone(),
             revision: event.revision,
             targets,
@@ -235,10 +241,10 @@ impl Frames {
         let Some(frames) = self.shown.get_mut(&(panel.to_owned(), event.node.clone())) else {
             return;
         };
-        let lineage = frames
+        let owner = frames
             .iter()
             .find(|frame| frame.matches(event, input))
-            .map(|frame| frame.lineage.clone());
+            .map(|frame| (frame.lineage.clone(), frame.action_revision));
         let (add, remove) = match &input.kind {
             Kind::Focus { focused: true } => (1, 0),
             Kind::Focus { focused: false } => (0, 1),
@@ -260,7 +266,9 @@ impl Frames {
             _ => (0, 0),
         };
         for frame in frames {
-            if lineage.as_ref() != Some(&frame.lineage) {
+            if owner.as_ref().is_none_or(|(lineage, revision)| {
+                *lineage != frame.lineage || *revision != frame.action_revision
+            }) {
                 continue;
             }
             let same = matches!(&frame.receipt,ui::CanvasEvent::ScenePresented{identity,source,file,..}
@@ -289,13 +297,24 @@ impl Frames {
         input: &ui::CanvasInput,
         document: Option<&ui::Document>,
     ) -> bool {
-        let current =
-            document.and_then(|document| crate::ui_owners::lineage(document, &event.node));
+        let current = document.and_then(|document| {
+            crate::ui_owners::lineage(document, &event.node).map(|lineage| {
+                (
+                    lineage,
+                    document
+                        .is_editor_action(&event.node)
+                        .then_some(document.revision),
+                )
+            })
+        });
         self.shown
             .get(&(panel.into(), event.node.clone()))
             .is_some_and(|frames| {
                 frames.iter().any(|frame| {
-                    frame.matches(event, input) && current.as_ref() == Some(&frame.lineage)
+                    frame.matches(event, input)
+                        && current.as_ref().is_some_and(|(lineage, revision)| {
+                            *lineage == frame.lineage && *revision == frame.action_revision
+                        })
                 })
             })
     }
@@ -308,7 +327,7 @@ impl Frames {
             return false;
         };
         self.shown.get(&(panel.to_owned(),node.id.clone())).and_then(|frames|frames.back()).is_some_and(|frame|
-            !frame.retired&&matches!(&frame.receipt,ui::CanvasEvent::ScenePresented{identity,scene_revision,source,file,projection,error:None}
+            !frame.retired&&frame.action_revision==document.is_editor_action(&node.id).then_some(document.revision)&&matches!(&frame.receipt,ui::CanvasEvent::ScenePresented{identity,scene_revision,source,file,projection,error:None}
                 if *identity==scene.identity&&*scene_revision==scene.revision&&*source==document.source&&*file==document.file&&*projection==node.viewport))
     }
     /// Ordinary drawing updates retain proofs; source/modal/scene retirement retains only active cleanup.
@@ -327,7 +346,7 @@ impl Frames {
             let document=views.get(panel);
             for frame in frames.iter_mut() {
                 let live=document.and_then(|document|document.active_node(id).map(|node|(document,node)))
-                    .is_some_and(|(document,node)|!node.disabled&&crate::ui_owners::lineage(document,id).as_ref()==Some(&frame.lineage)&&matches!((&frame.receipt,&node.kind),
+                    .is_some_and(|(document,node)|!node.disabled&&frame.action_revision==document.is_editor_action(id).then_some(document.revision)&&crate::ui_owners::lineage(document,id).as_ref()==Some(&frame.lineage)&&matches!((&frame.receipt,&node.kind),
                         (ui::CanvasEvent::ScenePresented{identity,source,file,error:None,..},ui::Kind::Canvas(canvas))
                         if *source==document.source&&*file==document.file&&canvas.scene.as_ref().is_some_and(|scene|scene.identity==*identity)));
                 if !live {retire(frame);}
@@ -345,8 +364,8 @@ fn same_lifetime(before: &ui::Document, current: &ui::Document, id: &str) -> boo
         || before.menu.is_some()
         || current.dialog.is_some()
         || current.menu.is_some()
-        || before.editor_action_source(id).is_some()
-        || current.editor_action_source(id).is_some()
+        || before.is_editor_action(id)
+        || current.is_editor_action(id)
         || crate::ui_owners::lineage(before, id) != crate::ui_owners::lineage(current, id)
     {
         return false;

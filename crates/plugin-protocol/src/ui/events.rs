@@ -114,7 +114,7 @@ impl Document {
         let current_presentation = event.revision < self.revision
             && self.dialog.is_none()
             && self.menu.is_none()
-            && self.editor_action_source(&event.node).is_none()
+            && !self.is_editor_action(&event.node)
             && presentation.is_some_and(|receipt| {
                 self.active_node(&event.node).is_some_and(
                     |node| matches!(&node.kind,Kind::Canvas(canvas) if canvas.accepts(receipt)),
@@ -125,7 +125,7 @@ impl Document {
         let current_scroll = event.revision < self.revision
             && self.dialog.is_none()
             && self.menu.is_none()
-            && self.editor_action_source(&event.node).is_none()
+            && !self.is_editor_action(&event.node)
             && (matches!(&event.action, Action::Canvas(CanvasEvent::ScrollInput { epoch, .. })
                 if *epoch != 0 && self.active_node(&event.node).is_some_and(|node|
                     node.viewport.is_none() && matches!(&node.kind, Kind::Canvas(canvas)
@@ -138,14 +138,14 @@ impl Document {
         let current_columns = event.revision < self.revision
             && self.dialog.is_none()
             && self.menu.is_none()
-            && self.editor_action_source(&event.node).is_none()
+            && !self.is_editor_action(&event.node)
             && matches!(&event.action, Action::Canvas(CanvasEvent::ColumnsResized { epoch, widths })
                 if self.active_node(&event.node).is_some_and(|node| node.viewport.is_none()
                     && matches!(&node.kind, Kind::Canvas(canvas) if canvas.column_resize.as_ref().is_some_and(|columns| columns.accepts(*epoch, widths)))));
         // Target input identifies its actual displayed frame separately. Manager must still match
         // that frame's native receipt; this gate only retains the currently live source/target epoch.
         let current_target=event.revision<self.revision&&self.dialog.is_none()&&self.menu.is_none()
-            &&self.editor_action_source(&event.node).is_none()
+            &&!self.is_editor_action(&event.node)
             &&target_input.is_some_and(|input|self.active_node(&event.node).is_some_and(|node|
                 matches!(&node.kind,Kind::Canvas(canvas) if canvas.scene.as_ref().is_some_and(|scene|scene.accepts_input(input)))));
         if event.revision != self.revision

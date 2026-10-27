@@ -227,9 +227,9 @@ fn accepted_history_overlay_lineage_aba_prunes_only_original_child_qualification
     );
 }
 
-/// Editor 2's left/right rails must preserve nested foreground lineage in retained proofs.
+/// Editor 2's left/right rails require exact UI proof, including nested foreground canvases.
 #[test]
-fn accepted_history_editor_rails_keep_nested_overlay_retirement() {
+fn accepted_history_editor_rails_never_retain_prior_ui_proofs() {
     for right_rail in [false, true] {
         let mut outer = canvas(91);
         outer.overlays.push(
@@ -264,22 +264,138 @@ fn accepted_history_editor_rails_keep_nested_overlay_retirement() {
         let original =
             ui::Document::new(ui::Node::new("editor", ui::Kind::Editor(editor))).revision(1);
         original.validate().unwrap();
-        irreversible_aba(original, |next| {
-            let ui::Kind::Editor(editor) = &mut next.root.kind else {
-                panic!()
-            };
-            let rails = editor.line_actions.as_mut().unwrap();
-            let action = if right_rail {
-                &mut rails.right[0]
-            } else {
-                &mut rails.left[0]
-            };
-            let ui::Kind::Canvas(outer) = &mut action.content.kind else {
-                panic!()
-            };
-            outer.overlays[0].id = "owner-b".into();
-        });
+        assert_eq!(
+            crate::ui_owners::lineage(&original, "drawing")
+                .unwrap()
+                .len(),
+            1
+        );
+        let event = receipt(&original, "drawing", None);
+        let mut current = BTreeMap::from([("panel".into(), Arc::new(original.clone()))]);
+        let mut frames = Frames::default();
+        publish(&mut frames, &mut current, original.revision(2));
+        assert!(
+            frames
+                .accepted_document("panel", &event, &current["panel"])
+                .is_none(),
+            "a snapshot rail cannot acquire the ordinary Canvas late-presentation exception"
+        );
     }
+}
+
+/// A late native cancellation seals only its old rail; a new rail keeps its independent focus.
+#[test]
+fn editor_action_old_cleanup_cannot_clear_replacement_focus() {
+    let mut drawing = document().root;
+    let ui::Kind::Canvas(canvas) = &mut drawing.kind else {
+        panic!()
+    };
+    canvas.scene.as_mut().unwrap().targets[0].focusable = true;
+    let mut editor = ui::Editor::snapshot("before");
+    editor.line_actions = Some(ui::EditorActions {
+        left: vec![ui::EditorAction {
+            offset: 0,
+            content: Box::new(drawing),
+        }],
+        right: vec![],
+    });
+    let original =
+        Arc::new(ui::Document::new(ui::Node::new("editor", ui::Kind::Editor(editor))).revision(1));
+    original.validate().unwrap();
+    assert!(original.editor_action_source("drawing").is_none());
+    let mut frames = Frames::default();
+    let mut current = BTreeMap::from([("panel".into(), original.clone())]);
+    show(&mut frames, &original);
+    let (event, input) = native_focus(&original, 1, true);
+    frames.validate("panel", &event, &input).unwrap();
+    frames.commit("panel", &event, &input);
+    let mut replacement = original.as_ref().clone().revision(2);
+    let ui::Kind::Editor(editor) = &mut replacement.root.kind else {
+        panic!()
+    };
+    editor.source = ui::EditorSource::Snapshot {
+        text: "after".into(),
+    };
+    replacement.validate().unwrap();
+    publish(&mut frames, &mut current, replacement);
+    let replacement = current["panel"].clone();
+    show(&mut frames, &replacement);
+    let (unowned, input) = native_focus(&replacement, 2, false);
+    assert!(
+        frames.validate("panel", &unowned, &input).is_err(),
+        "new UI must not inherit the previous rail's active cleanup lease"
+    );
+    let (fresh, input) = native_focus(&replacement, 2, true);
+    frames.validate("panel", &fresh, &input).unwrap();
+    frames.commit("panel", &fresh, &input);
+    let (old_cleanup, input) = native_focus(&original, 3, false);
+    frames.validate("panel", &old_cleanup, &input).unwrap();
+    assert!(
+        !frames.same_ancestry("panel", &old_cleanup, &input, Some(&replacement)),
+        "old UI cleanup cannot reach the replacement's guest focus/draft"
+    );
+    frames.commit("panel", &old_cleanup, &input);
+    let (new_cleanup, input) = native_focus(&replacement, 4, false);
+    frames
+        .validate("panel", &new_cleanup, &input)
+        .expect("old cleanup must leave new focus owned");
+    frames.commit("panel", &new_cleanup, &input);
+    let (repeated, input) = native_focus(&replacement, 5, false);
+    assert!(frames.validate("panel", &repeated, &input).is_err());
+}
+
+/// A native proof is built only from the actual public document selected for this display.
+fn show(frames: &mut Frames, document: &ui::Document) {
+    let event = receipt(document, "drawing", None);
+    document.validate_event(&event).unwrap();
+    let ui::Action::Canvas(action) = &event.action else {
+        panic!()
+    };
+    let ui::Kind::Canvas(canvas) = &document.active_node("drawing").unwrap().kind else {
+        panic!()
+    };
+    frames
+        .present(
+            "panel",
+            &event,
+            action,
+            canvas.scene.as_ref().unwrap(),
+            document,
+        )
+        .unwrap();
+}
+
+/// Focus observations echo exact source/projection fields and use one monotonically ordered stream.
+fn native_focus(
+    document: &ui::Document,
+    sequence: u64,
+    focused: bool,
+) -> (ui::UiEvent, ui::CanvasInput) {
+    let node = document.active_node("drawing").unwrap();
+    let ui::Kind::Canvas(canvas) = &node.kind else {
+        panic!()
+    };
+    let scene = canvas.scene.as_ref().unwrap();
+    let input = ui::CanvasInput {
+        identity: scene.identity,
+        presented_revision: scene.revision,
+        target: "surface".into(),
+        epoch: 1,
+        sequence,
+        source: document.source.clone(),
+        file: document.file.clone(),
+        projection: node.viewport.clone(),
+        kind: ui::CanvasInputKind::Focus { focused },
+    };
+    let event = ui::UiEvent {
+        revision: document.revision,
+        node: "drawing".into(),
+        action: ui::Action::Canvas(ui::CanvasEvent::Input {
+            input: input.clone(),
+        }),
+    };
+    document.validate_event(&event).unwrap();
+    (event, input)
 }
 
 /// Late failure cannot select a historical document or revoke a newer successful shown proof.

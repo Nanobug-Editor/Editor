@@ -469,8 +469,8 @@ impl PluginView {
                 });
             let same_source =
                 self.document.source == document.source && self.document.file == document.file;
-            let current = same_source
-                && (self.document == document || self.document.editor_action_source(id).is_none());
+            let current =
+                same_source && (self.document == document || !self.document.is_editor_action(id));
             let reason = if document.dialog.is_some() || document.menu.is_some() {
                 ui::CanvasCancelReason::Modal
             } else if !current {
