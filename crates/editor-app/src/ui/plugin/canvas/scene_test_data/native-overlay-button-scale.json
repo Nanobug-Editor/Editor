@@ -1,0 +1,16 @@
+{
+  "expect_presented":true, "overlay_script":true, "overlay_scale_script":true,"overlay_button_scale_script":true,
+  "dark":true, "dpi_percent":125,
+  "viewport":{"content":{"width":320,"height":240},"transform":{"scale":0.75,"x":0,"y":0,"anchor_x":0,"anchor_y":0}},
+  "scene":{"identity":61,"revision":1,"roots":[
+    {"kind":"group","id":"node-space","transform":[2,0,0,2,20,20],"children":[]}
+  ],"targets":[{"id":"node","epoch":2,"space":"node-space","focusable":true,
+    "geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":140,"h":90}}}]},
+  "overlays":[{"id":"rename-box","anchor":{"identity":61,"scene_revision":1,
+    "target":{"id":"node","epoch":2},"space":"node-space","rect":{"x":0,"y":0,"w":140,"h":32}},
+    "rect":{"x":0,"y":40,"w":140,"h":80},
+    "child":{"id":"properties","kind":{"type":"column","children":[
+      {"id":"rename","kind":{"type":"input","value":"","value_revision":0,"placeholder":"名称 / Name"}},
+      {"id":"apply","kind":{"type":"button","label":"应用 / Apply"}}
+    ]}}}]
+}

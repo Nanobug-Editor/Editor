@@ -11,6 +11,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView};
 mod capability_calls;
+mod clipboard;
 mod cloud;
 mod commands;
 mod compiled;
@@ -32,7 +33,11 @@ mod presentation;
 mod private;
 mod process_calls;
 mod resource_roots;
+mod scene_animation;
+mod scene_frames;
 mod scene_history;
+mod scene_input;
+mod scene_patches;
 mod selected_resources;
 mod service_preparation;
 mod service_replies;
@@ -42,6 +47,7 @@ mod structure;
 mod terminal_calls;
 mod tool_metadata;
 mod tools;
+mod transfer;
 mod trees;
 mod workspace_events;
 mod workspace_files;
@@ -84,6 +90,13 @@ struct State {
     editor_requests: std::collections::BTreeMap<u64, crate::editor_requests::PendingRequest>,
     /// Native inputs and their slots share this incarnation; pending writers retain their own immutable payload.
     image_inputs: std::collections::BTreeMap<u64, image_inputs::Input>,
+    /// Format metadata is bounded and scoped separately from native image inputs and file roots.
+    clipboard_offers:
+        std::collections::BTreeMap<u64, std::sync::Arc<crate::ClipboardOfferResource>>,
+    /// User drops issue destination-owned transient metadata and lazy native data leases.
+    transfer_offers: std::collections::BTreeMap<u64, std::sync::Arc<crate::TransferOfferResource>>,
+    /// Revoked live offers report a bounded cancellation at the next guest-safe polling boundary.
+    transfer_cancellations: Vec<(String, api::Notification)>,
     /// User-selected targets remain separate from workspace and private-data roots.
     selected_resources: std::collections::BTreeMap<u64, selected_resources::Selection>,
     /// IO leases and recovery slots remain separate from mutable native document state.
@@ -238,8 +251,12 @@ pub struct Instance {
     pub views: std::collections::BTreeMap<String, std::sync::Arc<ui::Document>>,
     /// Bounded incarnation-local tombstones prevent removed scene identities from acquiring new input.
     scene_identities: BTreeSet<(String, String, u64)>,
-    /// Last successful native presentation, scoped to this incarnation's panel and canvas node.
-    scene_presentations: std::collections::BTreeMap<(String, String), ui::CanvasEvent>,
+    /// Native shown frames/order/cleanup proofs are independent of accepted drawing publications.
+    scene_frames: scene_frames::Frames,
+    /// One-shot visible frame intents do not change scene/UI revisions or business timers.
+    frame_requests: scene_animation::FrameRequests,
+    /// Target tombstones and pending native text belong to this exact isolated incarnation.
+    scene_inputs: scene_input::InputHistory,
     panels: std::collections::BTreeSet<String>,
     pub error: Option<String>,
 }
@@ -422,6 +439,9 @@ impl Instance {
             roots: ResourceRoots::new(&environment.workspace, application, manifest.storage_limit),
             editor_requests: Default::default(),
             image_inputs: Default::default(),
+            clipboard_offers: Default::default(),
+            transfer_offers: Default::default(),
+            transfer_cancellations: Vec::new(),
             selected_resources: Default::default(),
             file_root_lifetimes: Default::default(),
             workspace_batches: Default::default(),
@@ -561,7 +581,9 @@ impl Instance {
             bindings,
             views: Default::default(),
             scene_identities: Default::default(),
-            scene_presentations: Default::default(),
+            scene_frames: Default::default(),
+            frame_requests: Default::default(),
+            scene_inputs: Default::default(),
             panels: manifest.panels.iter().map(|p| p.id.clone()).collect(),
             error: None,
         };
@@ -751,6 +773,7 @@ impl Instance {
                 );
             }
             self.reconcile_scene_presentations();
+            self.accept_frame_requests(&reply.canvas_frames);
             // Revoke against the newly published opt-in, before a second public event can use old slots.
             // Accepted writers pin their payload independently and still deliver the original save receipt.
             self.reconcile_image_inputs();
@@ -883,6 +906,15 @@ impl Instance {
         self.store.data_mut().timers.clear();
         self.store.data_mut().clear_temporary_data();
         self.clear_image_inputs();
+        for resource in self.store.data().clipboard_offers.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().clipboard_offers.clear();
+        for resource in self.store.data().transfer_offers.values() {
+            resource.revoke();
+        }
+        self.store.data_mut().transfer_offers.clear();
+        self.store.data_mut().transfer_cancellations.clear();
         self.store.data_mut().clear_selections();
         self.store.data_mut().clear_workspace_resources();
         self.store.data_mut().file_subscriptions.clear();
@@ -923,7 +955,9 @@ impl Instance {
         self.file_sources.clear();
         self.store.data_mut().roots.retire();
         self.views.clear();
-        self.scene_presentations.clear();
+        self.scene_frames = Default::default();
+        self.frame_requests = Default::default();
+        self.scene_inputs = Default::default();
         self.store.data_mut().processes.clear();
         self.store.data_mut().process_handles.clear();
         self.store.data_mut().process_display_scopes.clear();
@@ -954,6 +988,7 @@ impl Instance {
         let revoked = self.poll_service_revocations()?;
         self.poll_service_requests()?;
         self.poll_editor_requests()?;
+        let frames_changed = self.poll_canvas_frames()?;
         self.poll_document_events()?;
         self.poll_document_streams()?;
         self.poll_workspace_events()?;
@@ -961,8 +996,12 @@ impl Instance {
         let timers_changed = self.poll_timers()?;
         let events = self.store.data_mut().poll_processes()?;
         // Tree retirement and timer callbacks both change the instance's published native state.
-        let changed =
-            revoked || trees_changed || preferences_changed || timers_changed || !events.is_empty();
+        let changed = revoked
+            || trees_changed
+            || preferences_changed
+            || timers_changed
+            || frames_changed
+            || !events.is_empty();
         for event in events {
             // Exit removes its slot, but the last callback still inherits the originating service authority.
             let context = if let api::Notification::Process { handle, .. } = &event {

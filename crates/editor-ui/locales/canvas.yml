@@ -1,0 +1,4 @@
+_version: 2
+canvas.semantic_grid_size:
+  en: "%{rows} rows, %{columns} columns"
+  zh-CN: "%{rows} 行，%{columns} 列"

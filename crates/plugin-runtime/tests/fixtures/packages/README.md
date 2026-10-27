@@ -8,6 +8,24 @@ contract inputs. Exact archive names continue to select immutable historical byt
 capability majors are rejection/migration inputs. Published marketplace catalog snapshots remain
 unchanged. See [the Editor verification record](../../../../../docs/plugins/verification/unified-editor-2026-10-25.md).
 
+`canvas-flow-1.0.0.zip` is the independent public `ui.canvas 1.7` scene consumer in `../canvas-flow`.
+It covers curved edges, rounded nodes, viewport input and selected-node repaint, plus rejected-scene
+recovery through the public Manager. It is an acceptance fixture, excluded from distribution and SDK.
+
+`canvas-flow-1.1.0.zip` and `canvas-table-1.0.0.zip` independently consume public `ui.canvas 1.8`.
+They exercise original-grapheme edits, guest-owned undo, native target focus/IME, bounded semantic
+trees, and the public Manager's shown-frame/acknowledgement/retirement gates. The table declares six
+visible cells and 100000 logical rows. Native acceptance loads these exact ledger entries and drives
+real Windows Chinese IME plus UI Automation; candidate overrides are optional development inputs.
+The accepted flow 1.0 archive and its ledger entry remain unchanged. Both newer packages
+were produced with the recorded committed host/SDK; later native geometry fixes retain that same
+SDK and guest source. They are excluded from distribution and SDK and create no marketplace listing.
+
+`canvas-flow-1.0.0-main-candidate.zip` preserves the earlier Canvas 1.7 candidate from main
+commit `707173c8` byte-for-byte under a distinct archive name. The canonical `canvas-flow-1.0.0.zip`
+continues to select the accepted A input; the ledger records both digests without replacing either
+historical package. Current Editor 2 inputs precede historical inputs for bare-ID selection.
+
 `markdown-0.18.2-readme-pr.zip` is the isolated source-PR README presentation candidate: paragraph alignment,
 accessible image alt semantics and Primer metrics through public `ui.styles`. The 0.18.0/0.18.1
 local candidates and the first `markdown-0.18.2.zip` remain preserved. `sdk-styles-fixture-1.0.0.zip` is an independent minimal current-SDK
@@ -35,6 +53,8 @@ It is a test input and has no marketplace listing or host-specific API.
 These archives are test inputs, excluded from the application, installer and exported SDK. Official business sources live in the seven independent `*-for-Nanobug` repositories. The six retired examples are retained only as immutable Package/SDK test artifacts; their IDs preserve existing lifecycle and migration assertions and do not create marketplace listings.
 
 `inputs.json` records each exact version and SHA-256, its source commit, the host SDK digest and build toolchain. `tests/support/packages.rs` checks the fixed digest and inspects through the public `Package` boundary before extracting resource-only inputs. This does not execute guests or grant installation permissions; the existing Manager/native/ignored integration tests continue to cover those boundaries.
+
+Canvas C adds immutable `canvas-flow-1.2.0.zip` and `canvas-table-1.1.0.zip`, built through the committed host's `--plugin-cargo` entry and containing only their manifest and actual WASM component. Exact archive IDs select C; earlier bare-ID selection and all A/B entries stay unchanged. Source digests sort fixture-relative paths case-insensitively, then hash each original UTF-8 slash path, one NUL and its raw file bytes (excluding build output). SDK exports contain no Markdown. See the [native transfer acceptance record](../../../../../docs/plugins/verification/canvas-native-transfer-2026-10-26.md) for native and explicit ignored test evidence; these packages never enter distribution or the marketplace.
 
 The official catalog and statistics are byte snapshots of the published Pages data, with their own digests and registry revision/measurement time in the ledger. Integration tests replace only the transport URL with a controlled local HTTP server. Historical Rust, Rust Debugger and TOML packages exercise real existing-user migration; they are never marketplace candidates.
 

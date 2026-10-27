@@ -5,10 +5,30 @@ use protocol::ui::{
     CanvasScene, SceneBrush, SceneFillRule, SceneGeometry, SceneLineCap, SceneLineJoin, SceneNode,
     ScenePathSegment, SceneStroke, SceneTransform,
 };
+mod bounds;
+mod native;
+use native::{brush, build_path, guarded_image, rectangular_clip};
+pub(super) mod paragraph;
+mod retained;
 mod svg;
+pub(crate) use retained::SceneStatistics;
+
+/// Drawing, generated vectors and interactive clips share the same independent corner limits.
+pub(super) fn corner_radii(rect: protocol::Rect, radii: [f32; 4]) -> [f32; 4] {
+    radii.map(|radius| radius.min(rect.w.min(rect.h) * 0.5))
+}
+
+/// Scene preparation resolves the same inherited native face/color as the live Canvas adapter.
+#[derive(Clone, PartialEq)]
+pub(in crate::ui::plugin) struct Typography {
+    pub font: protocol::FontStyle,
+    pub foreground: u32,
+}
 
 /// Worker result retains its exact source so late preparation cannot paint a replacement scene.
 pub(in crate::ui::plugin) struct PreparedScene {
+    /// Flat hit geometry is prepared beside drawing and cannot outlive this source snapshot.
+    pub(super) targets: std::sync::Arc<super::targets::geometry::PreparedTargets>,
     /// Complete public source identity, including geometry and resource references.
     pub source: CanvasScene,
     /// Bounded tessellation or an explicit preparation failure; never partial successful artwork.
@@ -21,6 +41,10 @@ pub(in crate::ui::plugin) struct PreparedScene {
     photos: BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
     /// Failed bounded preparations may retry when another scene releases resident capacity.
     limits: (u64, usize),
+    /// Inherited fonts/colors participate in prepared native glyph pixel identity.
+    typography: Typography,
+    /// Actual work for this preparation; worker diagnostics accumulate it once on publication.
+    statistics: SceneStatistics,
 }
 impl PreparedScene {
     /// Tessellate `source` outside native UI callbacks and retain its admission/preparation result.
@@ -29,29 +53,114 @@ impl PreparedScene {
         owner: &Document,
         photos: BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
         limits: (u64, usize),
-        mut rasterize: impl FnMut(&str, protocol::Rect) -> Option<super::super::images::VectorImage>,
+        typography: Typography,
+        mut rasterize: impl FnMut(
+            &str,
+            protocol::Rect,
+            &BTreeMap<String, std::sync::Arc<Vec<u8>>>,
+        ) -> Option<super::super::images::VectorImage>,
     ) -> Self {
+        Self::reuse(
+            source,
+            owner,
+            photos,
+            limits,
+            typography,
+            None,
+            |source, bounds, images, _budget| rasterize(source, bounds, images),
+        )
+    }
+    /// Reuse unchanged drawing items from `previous` only within the same source and scene identity.
+    /// Geometry, ancestor transforms/clips, typography and referenced native pixels remain key inputs.
+    pub fn reuse(
+        source: CanvasScene,
+        owner: &Document,
+        photos: BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
+        limits: (u64, usize),
+        typography: Typography,
+        previous: Option<&Self>,
+        mut rasterize: impl FnMut(
+            &str,
+            protocol::Rect,
+            &BTreeMap<String, std::sync::Arc<Vec<u8>>>,
+            u64,
+        ) -> Option<super::super::images::VectorImage>,
+    ) -> Self {
+        let previous =
+            previous.filter(|old| old.source.identity == source.identity && old.belongs_to(owner));
+        let mut statistics = SceneStatistics::default();
+        let mut targets = std::sync::Arc::new(super::targets::geometry::PreparedTargets::default());
         let drawing = source.validate().and_then(|()| {
-            SceneDrawing::compile(&source, &photos, limits).or_else(|_| {
-                let (svg, bounds) = svg::encode(&source, &photos)?;
-                let raster = rasterize(&svg, bounds)
+            if let Some(old) = previous.filter(|old| {
+                old.targets.vertices <= limits.1 && retained::same_targets(&old.source, &source)
+            }) {
+                targets = old.targets.clone();
+                statistics.target_reuses += 1;
+            } else {
+                targets = std::sync::Arc::new(super::targets::geometry::PreparedTargets::new(
+                    &source, limits.1,
+                )?);
+                statistics.target_preparations += 1;
+            }
+            let mut drawing = SceneDrawing::compile(
+                &source,
+                &photos,
+                (limits.0, limits.1.saturating_sub(targets.vertices)),
+                &typography,
+                previous.and_then(|old| old.drawing.as_ref().ok()),
+                &mut statistics,
+                &mut rasterize,
+            )
+            .or_else(|_| -> Result<SceneDrawing, String> {
+                let (svg, bounds, images) =
+                    svg::encode(&source, &photos, &typography, limits.0, None)?;
+                let raster = rasterize(&svg, bounds, &images, limits.0)
                     .ok_or("Canvas raster preparation exceeded its budget or failed".to_owned())?;
+                statistics.rasterizations += 1;
                 Ok(SceneDrawing {
+                    native_layouts: previous
+                        .and_then(|old| old.drawing.as_ref().ok())
+                        .map(|old| old.native_layouts.clone())
+                        .unwrap_or_default(),
                     paths: Vec::new(),
                     raster: Some(raster),
                     bitmaps: BTreeMap::new(),
                     vertices: 0,
+                    retained: BTreeMap::new(),
                 })
-            })
+            })?;
+            drawing.vertices += targets.vertices;
+            Ok(drawing)
         });
+        if drawing.is_err() {
+            targets = Default::default();
+        }
         Self {
+            targets,
             source,
             drawing,
             document_source: owner.source.clone(),
             file_source: owner.file.clone(),
             photos,
             limits,
+            typography,
+            statistics,
         }
+    }
+    /// Report work increments for this preparation, current resources and cumulative native paragraph
+    /// layouts for this Canvas/source incarnation. Accumulate work once per new PreparedScene Arc;
+    /// worker-wide cumulative work and old-snapshot `live_*` belong to SceneImages::statistics.
+    pub(crate) fn statistics(&self) -> SceneStatistics {
+        let mut result = self.statistics;
+        if let Ok(drawing) = &self.drawing {
+            result.cached_items = drawing.retained.len();
+            result.resident_bytes = drawing.resident_bytes();
+            result.vertices = drawing.vertex_count();
+            result.paragraph_layouts = drawing
+                .native_layouts
+                .load(std::sync::atomic::Ordering::Relaxed);
+        }
+        result
     }
     /// Geometry caches may survive UI revisions, never resource completion or source replacement.
     pub fn current(
@@ -60,8 +169,10 @@ impl PreparedScene {
         owner: &Document,
         photos: &BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
         limits: (u64, usize),
+        typography: &Typography,
     ) -> bool {
         self.source == *source
+            && self.typography == *typography
             && self.belongs_to(owner)
             && self.photos.len() == photos.len()
             && self.photos.iter().all(|(id, old)| {
@@ -80,18 +191,49 @@ impl PreparedScene {
     pub fn belongs_to(&self, owner: &Document) -> bool {
         self.document_source == owner.source && self.file_source == owner.file
     }
+    /// Complex layers substitute one sealed native presentation on the bounded image worker.
+    /// Public scene identity/targets/resources stay immutable and are checked again before display.
+    pub(in crate::ui::plugin::canvas) fn prepare_draft(
+        &self,
+        draft: &paragraph::NativeDraft,
+        budget: u64,
+    ) -> Result<super::super::images::VectorImage, String> {
+        let (svg, bounds, images) = svg::encode(
+            &self.source,
+            &self.photos,
+            &self.typography,
+            budget,
+            Some(draft),
+        )?;
+        super::super::images::VectorRenderer::rasterize_generated(&svg, bounds, &images, budget)
+            .ok_or_else(|| "Native text raster preparation failed or exhausted its budget".into())
+    }
 }
 
 /// Prepared native paths contain no guest callback or mutable domain state.
 pub(in crate::ui::plugin) struct SceneDrawing {
-    paths: Vec<ScenePrimitive>,
+    /// Retained native paragraph work belongs to this Canvas/source incarnation, not a test observer.
+    native_layouts: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    paths: Vec<std::sync::Arc<ScenePrimitive>>,
     raster: Option<super::super::images::VectorImage>,
     /// One guarded native texture per source image; repeated placements share its pixels.
     bitmaps: BTreeMap<String, std::sync::Arc<gpui_kit::RenderImage>>,
     vertices: usize,
+    /// Only this publication's live leaf items are retained; old revisions own no global cache entries.
+    retained: BTreeMap<String, std::sync::Arc<retained::Item>>,
 }
 /// One tessellated primitive and its native solid/gradient brush.
 enum ScenePrimitive {
+    /// An independently retained isolated root; unrelated siblings remain native drawing items.
+    Raster {
+        image: super::super::images::VectorImage,
+        clip: Option<protocol::Rect>,
+    },
+    /// Native paragraphs share the same ordered clips and projected bounds as artwork.
+    Paragraph {
+        drawing: paragraph::ParagraphDrawing,
+        clip: Option<protocol::Rect>,
+    },
     /// A tessellated local path in final canvas coordinates.
     Path {
         path: Path<Pixels>,
@@ -107,20 +249,45 @@ enum ScenePrimitive {
     },
 }
 impl SceneDrawing {
+    /// Only complex layers need a private raster; ordinary paragraphs paint their native draft directly.
+    pub(in crate::ui::plugin::canvas) fn uses_raster(&self) -> bool {
+        self.raster.is_some()
+            || self
+                .paths
+                .iter()
+                .any(|item| matches!(item.as_ref(), ScenePrimitive::Raster { .. }))
+    }
     /// Build one atomic drawing, charging aggregate vertices before publishing it to the UI.
     fn compile(
         source: &CanvasScene,
         photos: &BTreeMap<String, std::sync::Arc<super::super::images::Photo>>,
         limits: (u64, usize),
+        typography: &Typography,
+        previous: Option<&Self>,
+        statistics: &mut SceneStatistics,
+        rasterize: &mut retained::Rasterizer<'_>,
     ) -> Result<Self, String> {
         let mut drawing = Self {
+            native_layouts: previous
+                .map(|old| old.native_layouts.clone())
+                .unwrap_or_default(),
             paths: Vec::new(),
             raster: None,
             bitmaps: BTreeMap::new(),
             vertices: 0,
+            retained: BTreeMap::new(),
         };
         for node in &source.roots {
-            drawing.node(node, SceneTransform::default(), photos, limits, None)?;
+            retained::layers::prepare_root(
+                &mut drawing,
+                node,
+                photos,
+                limits,
+                typography,
+                previous,
+                statistics,
+                rasterize,
+            )?;
         }
         Ok(drawing)
     }
@@ -208,7 +375,7 @@ impl SceneDrawing {
                         self.bitmaps.insert(image.clone(), padded);
                     }
                 }
-                self.paths.push(ScenePrimitive::Image {
+                self.paths.push(std::sync::Arc::new(ScenePrimitive::Image {
                     rect: protocol::Rect {
                         x: rect.x * a + x,
                         y: rect.y * d + y,
@@ -218,7 +385,23 @@ impl SceneDrawing {
                     image: self.bitmaps.get(image).cloned(),
                     status,
                     clip,
-                });
+                }));
+            }
+            SceneNode::Paragraph {
+                id,
+                layout_key,
+                text,
+                rect,
+                style,
+            } => {
+                self.paths
+                    .push(std::sync::Arc::new(ScenePrimitive::Paragraph {
+                        drawing: paragraph::ParagraphDrawing::new(
+                            id, layout_key, text, *rect, style, transform,
+                        )?
+                        .observe_layouts(self.native_layouts.clone()),
+                        clip,
+                    }));
             }
         }
         Ok(())
@@ -238,7 +421,11 @@ impl SceneDrawing {
         if self.vertices > limit {
             return Err("Canvas tessellation exceeds its shared vertex budget".into());
         }
-        self.paths.push(ScenePrimitive::Path { path, brush, clip });
+        self.paths.push(std::sync::Arc::new(ScenePrimitive::Path {
+            path,
+            brush,
+            clip,
+        }));
         Ok(())
     }
     /// Charge only unique derived textures; original authorized decode pixels have their own pool.
@@ -265,6 +452,9 @@ impl SceneDrawing {
         window: &mut Window,
         _cx: &mut App,
     ) -> Result<(), String> {
+        if self.uses_raster() && view.paint_native_draft(bounds, window)? {
+            return Ok(());
+        }
         if let Some(raster) = &self.raster {
             window
                 .paint_image(
@@ -278,8 +468,12 @@ impl SceneDrawing {
                 .map_err(|error| format!("Canvas texture submission failed: {error}"))?;
         }
         for item in &self.paths {
+            let item = item.as_ref();
             let clip = match item {
-                ScenePrimitive::Path { clip, .. } | ScenePrimitive::Image { clip, .. } => clip,
+                ScenePrimitive::Path { clip, .. }
+                | ScenePrimitive::Raster { clip, .. }
+                | ScenePrimitive::Image { clip, .. }
+                | ScenePrimitive::Paragraph { clip, .. } => clip,
             };
             window.with_content_mask(
                 clip.map(|clip| gpui_kit::ContentMask {
@@ -299,6 +493,21 @@ impl SceneDrawing {
         cx: &mut App,
     ) -> Result<(), String> {
         let ScenePrimitive::Path { path, brush, .. } = item else {
+            if let ScenePrimitive::Raster { image, .. } = item {
+                return window
+                    .paint_image(
+                        bounds,
+                        rect_bounds(view.project(image.rect, bounds), bounds.origin),
+                        Default::default(),
+                        image.image.clone(),
+                        0,
+                        false,
+                    )
+                    .map_err(|error| format!("Canvas layer submission failed: {error}"));
+            }
+            if let ScenePrimitive::Paragraph { drawing, .. } = item {
+                return drawing.paint(view, bounds, window, cx);
+            }
             if let ScenePrimitive::Image {
                 rect,
                 image,
@@ -384,216 +593,11 @@ impl SceneDrawing {
         self.raster
             .iter()
             .map(|image| image.image.clone())
-            .chain(self.paths.iter().filter_map(|item| match item {
+            .chain(self.paths.iter().filter_map(|item| match item.as_ref() {
                 ScenePrimitive::Image { image, .. } => image.clone(),
+                ScenePrimitive::Raster { image, .. } => Some(image.image.clone()),
                 _ => None,
             }))
             .collect()
     }
-}
-
-/// Native two-stop backgrounds retain explicit alpha; more complex gradients use raster preparation.
-fn brush(value: &SceneBrush) -> Result<Background, String> {
-    match value {
-        SceneBrush::Solid { rgba: color } => Ok(rgba(*color).into()),
-        SceneBrush::LinearGradient { angle, stops }
-            if stops.len() == 2 && stops[0].offset < stops[1].offset =>
-        {
-            Ok(gpui_kit::linear_gradient(
-                angle.rem_euclid(360.),
-                gpui_kit::linear_color_stop(rgba(stops[0].rgba), stops[0].offset),
-                gpui_kit::linear_color_stop(rgba(stops[1].rgba), stops[1].offset),
-            ))
-        }
-        _ => Err("Canvas gradient requires raster preparation".into()),
-    }
-}
-
-/// Tessellate in local coordinates first, then transform vertices so nonuniform strokes remain correct.
-fn build_path(
-    geometry: &SceneGeometry,
-    stroke: Option<&SceneStroke>,
-    transform: SceneTransform,
-) -> Result<Path<Pixels>, String> {
-    // Keep uninterruptible native tessellation small; larger paths use the bounded raster worker.
-    if geometry.segment_count() > 32 {
-        return Err("Complex path requires raster preparation".into());
-    }
-    let mut builder = if let Some(stroke) = stroke {
-        if stroke.cap != SceneLineCap::Butt
-            || stroke.join != SceneLineJoin::Miter
-            || stroke.miter_limit != 4.
-        {
-            return Err("Canvas stroke requires raster preparation".into());
-        }
-        let mut builder = PathBuilder::stroke(px(stroke.width));
-        if !stroke.dash.is_empty() {
-            builder = builder.dash_array(&stroke.dash.iter().copied().map(px).collect::<Vec<_>>());
-        }
-        builder
-    } else {
-        let rule = match geometry {
-            SceneGeometry::Path {
-                rule: SceneFillRule::EvenOdd,
-                ..
-            } => FillRule::EvenOdd,
-            _ => FillRule::NonZero,
-        };
-        PathBuilder::fill().with_style(PathStyle::Fill(FillOptions::default().with_fill_rule(rule)))
-    };
-    match geometry {
-        SceneGeometry::Rect { rect, radii } => {
-            let [a, b, c, d] = radii.map(|radius| radius.min(rect.w.min(rect.h) * 0.5));
-            let (x, y, r, bottom) = (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
-            builder.move_to(point(px(x + a), px(y)));
-            builder.line_to(point(px(r - b), px(y)));
-            if b > 0. {
-                builder.arc_to(
-                    point(px(b), px(b)),
-                    px(0.),
-                    false,
-                    true,
-                    point(px(r), px(y + b)),
-                );
-            }
-            builder.line_to(point(px(r), px(bottom - c)));
-            if c > 0. {
-                builder.arc_to(
-                    point(px(c), px(c)),
-                    px(0.),
-                    false,
-                    true,
-                    point(px(r - c), px(bottom)),
-                );
-            }
-            builder.line_to(point(px(x + d), px(bottom)));
-            if d > 0. {
-                builder.arc_to(
-                    point(px(d), px(d)),
-                    px(0.),
-                    false,
-                    true,
-                    point(px(x), px(bottom - d)),
-                );
-            }
-            builder.line_to(point(px(x), px(y + a)));
-            if a > 0. {
-                builder.arc_to(
-                    point(px(a), px(a)),
-                    px(0.),
-                    false,
-                    true,
-                    point(px(x + a), px(y)),
-                );
-            }
-            builder.close();
-        }
-        SceneGeometry::Path { segments, .. } => {
-            for segment in segments {
-                match *segment {
-                    ScenePathSegment::Move { x, y } => builder.move_to(point(px(x), px(y))),
-                    ScenePathSegment::Line { x, y } => builder.line_to(point(px(x), px(y))),
-                    ScenePathSegment::Quadratic { cx, cy, x, y } => {
-                        builder.curve_to(point(px(x), px(y)), point(px(cx), px(cy)))
-                    }
-                    ScenePathSegment::Cubic {
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        x,
-                        y,
-                    } => builder.cubic_bezier_to(
-                        point(px(x), px(y)),
-                        point(px(x1), px(y1)),
-                        point(px(x2), px(y2)),
-                    ),
-                    ScenePathSegment::Close => builder.close(),
-                }
-            }
-        }
-    }
-    let mut path = builder
-        .build()
-        .map_err(|error| format!("Canvas path tessellation failed: {error}"))?;
-    for vertex in &mut path.vertices {
-        let (x, y) = transform.point(vertex.xy_position.x / px(1.), vertex.xy_position.y / px(1.));
-        vertex.xy_position = point(px(x), px(y));
-    }
-    if let Some(first) = path.vertices.first() {
-        let mut min = first.xy_position;
-        let mut max = min;
-        for vertex in &path.vertices {
-            min.x = min.x.min(vertex.xy_position.x);
-            min.y = min.y.min(vertex.xy_position.y);
-            max.x = max.x.max(vertex.xy_position.x);
-            max.y = max.y.max(vertex.xy_position.y);
-        }
-        path.bounds = Bounds::new(min, size(max.x - min.x, max.y - min.y));
-    }
-    Ok(path)
-}
-
-/// Duplicate boundary texels under the derived-image quota so atlas filtering cannot bleed in.
-fn guarded_image(
-    bitmap: &super::super::bitmap::Bitmap,
-    remaining: u64,
-) -> Result<std::sync::Arc<gpui_kit::RenderImage>, String> {
-    let width = bitmap.width + 2;
-    let height = bitmap.height + 2;
-    if u64::from(width) * u64::from(height) * 4 > remaining {
-        return Err("Canvas image exceeds its derived pixel budget".into());
-    }
-    let bytes = bitmap
-        .image
-        .as_bytes(0)
-        .ok_or("Canvas image frame is unavailable")?;
-    let mut output = image::RgbaImage::new(width, height);
-    for (x, y, pixel) in output.enumerate_pixels_mut() {
-        let (sx, sy) = (
-            x.saturating_sub(1).min(bitmap.width - 1),
-            y.saturating_sub(1).min(bitmap.height - 1),
-        );
-        let offset = ((sy * bitmap.width + sx) * 4) as usize;
-        *pixel = image::Rgba(
-            bytes[offset..offset + 4]
-                .try_into()
-                .map_err(|_| "Invalid canvas image frame")?,
-        );
-    }
-    Ok(std::sync::Arc::new(gpui_kit::RenderImage::new([
-        image::Frame::new(output),
-    ])))
-}
-
-/// Axis-aligned rectangular groups use GPUI's native intersecting mask stack, including reflection.
-fn rectangular_clip(
-    geometry: &SceneGeometry,
-    transform: SceneTransform,
-    parent: Option<protocol::Rect>,
-) -> Result<protocol::Rect, String> {
-    let SceneGeometry::Rect { rect, radii } = geometry else {
-        return Err("Path clipping requires raster preparation".into());
-    };
-    let [_, b, c, _, _, _] = transform.0;
-    if b != 0. || c != 0. || radii.iter().any(|radius| *radius != 0.) {
-        return Err("Transformed clipping requires raster preparation".into());
-    }
-    let (x0, y0) = transform.point(rect.x, rect.y);
-    let (x1, y1) = transform.point(rect.x + rect.w, rect.y + rect.h);
-    let mut clip = protocol::Rect {
-        x: x0.min(x1),
-        y: y0.min(y1),
-        w: (x1 - x0).abs(),
-        h: (y1 - y0).abs(),
-    };
-    if let Some(parent) = parent {
-        let right = (clip.x + clip.w).min(parent.x + parent.w);
-        let bottom = (clip.y + clip.h).min(parent.y + parent.h);
-        clip.x = clip.x.max(parent.x);
-        clip.y = clip.y.max(parent.y);
-        clip.w = (right - clip.x).max(0.);
-        clip.h = (bottom - clip.y).max(0.);
-    }
-    Ok(clip)
 }

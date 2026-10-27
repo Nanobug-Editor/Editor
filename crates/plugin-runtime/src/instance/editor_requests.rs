@@ -251,6 +251,7 @@ impl State {
                 ("editor.navigation", navigation_permission(target))
             }
             EditorOperation::SaveImageInput { .. } => ("editor.images", "workspace.write"),
+            EditorOperation::Transfer { .. } => ("ui.transfer", "ui.transfer"),
             EditorOperation::ReadDocumentSelection { .. } => ("editor.edit", "editor.read"),
             EditorOperation::ReplaceDocumentRange { .. } => ("editor.edit", "editor.write"),
             EditorOperation::ApplyEdits { .. } => ("editor.edit", "editor.write"),
@@ -260,9 +261,9 @@ impl State {
                     "Clipboard exceeds 1 MiB",
                 ));
             }
-            EditorOperation::ReadClipboard | EditorOperation::WriteClipboard { .. } => {
-                ("ui.clipboard", "clipboard")
-            }
+            EditorOperation::ReadClipboard
+            | EditorOperation::WriteClipboard { .. }
+            | EditorOperation::Clipboard { .. } => ("ui.clipboard", "clipboard"),
             EditorOperation::OpenDataFile { path } => {
                 if path.is_empty()
                     || path.len() > 4096
@@ -416,6 +417,20 @@ impl State {
         let Value::Resource(handle) = self.roots.open(RootKind::EditorRequest)? else {
             unreachable!()
         };
+        let clipboard_offer = match self.prepare_clipboard(&operation) {
+            Ok(offer) => offer,
+            Err(error) => {
+                self.roots.remove(&handle);
+                return Err(error);
+            }
+        };
+        let transfer_offer = match self.prepare_transfer(&operation) {
+            Ok(offer) => offer,
+            Err(error) => {
+                self.roots.remove(&handle);
+                return Err(error);
+            }
+        };
         let virtual_document = match self.prepare_virtual_document(&operation) {
             Ok(resource) => resource,
             Err(error) => {
@@ -434,6 +449,12 @@ impl State {
             self.plugin_services.context.as_ref(),
         )
         .with_comparison_icons(comparison_icons);
+        if let Some(offer) = clipboard_offer {
+            call = call.with_clipboard_offer(offer);
+        }
+        if let Some(offer) = transfer_offer {
+            call = call.with_transfer_offer(offer);
+        }
         call.observe(self.host_resources.observations.begin(
             self.observation_identity(),
             crate::observability::Stage::Request,
@@ -805,6 +826,12 @@ impl Instance {
     }
     /// Terminal results release slots even if the guest fails while consuming its notification.
     pub(super) fn poll_editor_requests(&mut self) -> anyhow::Result<()> {
+        self.reconcile_transfer_offers();
+        let cancelled = std::mem::take(&mut self.store.data_mut().transfer_cancellations);
+        for (panel, event) in cancelled {
+            self.notify(Some(panel), event)?;
+        }
+        self.store.data_mut().prune_clipboard_offers();
         // Native close, failed publication and delegated retirement release this source's quota.
         let revoked = self
             .store
@@ -867,6 +894,9 @@ impl Instance {
                 .check_language_update(update);
             if update.is_terminal() {
                 if let Some(pending) = self.store.data_mut().editor_requests.remove(&slot) {
+                    self.store
+                        .data_mut()
+                        .finish_clipboard_enumeration(&pending.call, Some(&update));
                     if matches!(
                         pending.call.operation(),
                         EditorOperation::Decorations {

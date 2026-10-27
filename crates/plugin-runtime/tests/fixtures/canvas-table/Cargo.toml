@@ -1,0 +1,13 @@
+[package]
+name = "canvas-table"
+version = "1.2.0"
+edition = "2024"
+license = "MIT"
+
+# Ordinary independent guest; SDK resolution is supplied only by the host build entry.
+[workspace]
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+plugin-protocol = { version = "=0.2.0", features = ["guest"] }
+serde_json = "1"

@@ -81,6 +81,10 @@ impl EditorAuthority {
 /// Clones share one completion gate; dropping an instance seals every outstanding call.
 #[derive(Clone)]
 pub struct EditorRequest {
+    /// One runtime-owned clipboard snapshot, admitted independently of the asynchronous request slot.
+    clipboard_offer: Option<Arc<crate::ClipboardOfferResource>>,
+    /// Sealed post-drop data authority, independent of clipboard and filesystem roots.
+    transfer_offer: Option<Arc<crate::TransferOfferResource>>,
     handle: ResourceHandle,
     operation: EditorOperation,
     workspace: String,
@@ -206,6 +210,8 @@ impl EditorRequest {
             image_input: None,
             virtual_document: None,
             diagnostic_collection: None,
+            clipboard_offer: None,
+            transfer_offer: None,
             decoration: None,
             decoration_icons: Default::default(),
             comparison_icons: Default::default(),
@@ -222,6 +228,27 @@ impl EditorRequest {
     }
     pub fn operation(&self) -> &EditorOperation {
         &self.operation
+    }
+    /// Attach only runtime-issued metadata after instance ownership and capability checks.
+    pub(crate) fn with_clipboard_offer(
+        mut self,
+        offer: Arc<crate::ClipboardOfferResource>,
+    ) -> Self {
+        self.clipboard_offer = Some(offer);
+        self
+    }
+    /// Native adapters may enumerate/select this sealed offer; guest JSON cannot provide its authority.
+    pub fn clipboard_offer(&self) -> Option<&Arc<crate::ClipboardOfferResource>> {
+        self.clipboard_offer.as_ref()
+    }
+    /// The instance attaches only an owned, actually dropped offer after its normal capability gate.
+    pub(crate) fn with_transfer_offer(mut self, offer: Arc<crate::TransferOfferResource>) -> Self {
+        self.transfer_offer = Some(offer);
+        self
+    }
+    /// Native IO borrows the exact resource checked at admission; JSON cannot redirect its source.
+    pub fn transfer_offer(&self) -> Option<&Arc<crate::TransferOfferResource>> {
+        self.transfer_offer.as_ref()
     }
     /// Borrow the unforgeable lifetime authority for an admitted persistent native view.
     /// Hosts may clone it to observe revocation, but cannot mutate its runtime-owned lifetimes.

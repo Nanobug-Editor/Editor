@@ -48,6 +48,10 @@ getrandom = "=0.3.4"
 sha2 = "0.10"
 # Full-color plugin vectors are rasterized on the existing background worker.
 resvg = "=0.45.1"
+# Native target hit paths use the already-locked geometry algorithms, flattened on the worker.
+lyon_algorithms = "=1.0.21"
+# Exact clipped target visibility reuses GPUI's locked fill tessellator under explicit output budgets.
+lyon_tessellation = "=1.0.22"
 svgtypes = "=0.15.3"
 # Explicitly retain the documented bitmap formats; native images are decoded under host quotas.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
@@ -68,7 +72,8 @@ editor-ui = { path = "../editor-ui", features = ["test-support"] }
 # Enable the already-locked test foundations directly: Kit's weak component feature
 # reference otherwise retains the unused styled runtime in Cargo.lock.
 gpui-base = { version = "=0.8.0", features = ["test-support"] }
-gpui-test-foundation = { package = "gpui-pre", version = "=0.3.9", features = ["test-support"] }
+# Native acceptance reads the locked renderer's real frame/input histograms in Release tests.
+gpui-test-foundation = { package = "gpui-pre", version = "=0.3.9", features = ["test-support", "profiler"] }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = ["test-support"] }
 # Reidentified hybrid fixtures retain their declarative resources through a parsed TOML manifest.
 toml.workspace = true
@@ -76,5 +81,7 @@ toml.workspace = true
 zip = { version = "4", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dev-dependencies]
+# A separate acceptance client queries the real Windows UI Automation interface, including new properties.
+windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Accessibility", "Win32_UI_Input_Ime", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 # Observe, resize and click only the acceptance process's own native HWND; reuse the locked SDK bindings.
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

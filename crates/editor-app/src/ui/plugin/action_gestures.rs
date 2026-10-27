@@ -4,27 +4,42 @@ use gpui_kit::SharedString;
 use plugin_runtime::plugin_protocol::ui::Node;
 
 /// Source changes and visibility withdrawal cannot reauthorize an earlier frame's press.
-/// Both kinds share one view-local nonce; their distinct variants never imply document authority.
+/// Source/visibility actions share a view nonce; overlay actions additionally follow their
+/// semantic owner chain. None of these private native credentials grants document authority.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ActionGesture {
     /// Editor edge actions also capture the UI revision supplying their document-source binding.
     Source { incarnation: u64, revision: u64 },
     /// Ordinary controls retained after hiding capture only their native scene lifetime.
     Visibility { incarnation: u64 },
+    /// Native foreground controls retain their owning target lineage, independently of artwork revisions.
+    Overlay {
+        incarnation: u64,
+        revision: Option<u64>,
+    },
 }
 
 impl ActionGesture {
     /// Native collection adapters use only the incarnation to revoke their local pointer state.
     pub(super) fn incarnation(self) -> u64 {
         match self {
-            Self::Source { incarnation, .. } | Self::Visibility { incarnation } => incarnation,
+            Self::Source { incarnation, .. }
+            | Self::Visibility { incarnation }
+            | Self::Overlay { incarnation, .. } => incarnation,
         }
     }
 
     /// Diagnostic classification does not mistake a visibility ticket for document-source input.
     #[cfg(test)]
     pub(super) fn is_source(self) -> bool {
-        matches!(self, Self::Source { .. })
+        matches!(
+            self,
+            Self::Source { .. }
+                | Self::Overlay {
+                    revision: Some(_),
+                    ..
+                }
+        )
     }
 }
 
@@ -67,6 +82,9 @@ pub(super) fn native_id(
         }
         Some(ActionGesture::Visibility { incarnation }) => {
             format!("{id}-action-visibility-{incarnation}").into()
+        }
+        Some(ActionGesture::Overlay { incarnation, .. }) => {
+            format!("{id}-action-overlay-{incarnation}").into()
         }
         None => id,
     }
@@ -197,6 +215,15 @@ impl PluginView {
     /// Source controls capture their UI revision. Once retained across hiding, ordinary controls
     /// also capture the shared nonce, with a distinct kind even when a source's revision is zero.
     pub(super) fn action_gesture(&self, id: &str) -> Option<ActionGesture> {
+        if let Some(scope) = self.overlays.scopes.get(id) {
+            return Some(ActionGesture::Overlay {
+                incarnation: scope.generation,
+                revision: self
+                    .document
+                    .editor_action_source(id)
+                    .map(|_| self.document.revision),
+            });
+        }
         if self.document.editor_action_source(id).is_some() {
             Some(ActionGesture::Source {
                 incarnation: self.action_gestures.incarnation,

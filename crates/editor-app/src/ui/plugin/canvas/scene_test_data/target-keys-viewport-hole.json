@@ -1,0 +1,183 @@
+{
+  "expect_presented": true,
+  "target_key_script": true,
+  "scene": {
+    "identity": 47,
+    "revision": 1,
+    "roots": [
+      {
+        "kind": "group",
+        "id": "hidden",
+        "opacity": 0,
+        "children": []
+      },
+      {
+        "kind": "group",
+        "id": "hollow",
+        "clip": {
+          "kind": "path",
+          "rule": "even_odd",
+          "segments": [
+            {
+              "op": "move",
+              "x": 0,
+              "y": 0
+            },
+            {
+              "op": "line",
+              "x": 1000,
+              "y": 0
+            },
+            {
+              "op": "line",
+              "x": 1000,
+              "y": 1000
+            },
+            {
+              "op": "line",
+              "x": 0,
+              "y": 1000
+            },
+            {
+              "op": "close"
+            },
+            {
+              "op": "move",
+              "x": 100,
+              "y": 100
+            },
+            {
+              "op": "line",
+              "x": 900,
+              "y": 100
+            },
+            {
+              "op": "line",
+              "x": 900,
+              "y": 900
+            },
+            {
+              "op": "line",
+              "x": 100,
+              "y": 900
+            },
+            {
+              "op": "close"
+            }
+          ]
+        },
+        "children": [
+          {
+            "kind": "shape",
+            "id": "background",
+            "geometry": {
+              "kind": "rect",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "w": 1000,
+                "h": 1000
+              }
+            },
+            "fill": {
+              "kind": "solid",
+              "rgba": 4294967295
+            }
+          }
+        ]
+      }
+    ],
+    "targets": [
+      {
+        "id": "cell-a",
+        "epoch": 1,
+        "focusable": true,
+        "tab_index": 0,
+        "geometry": {
+          "kind": "rect",
+          "rect": {
+            "x": 320,
+            "y": 320,
+            "w": 100,
+            "h": 40
+          }
+        }
+      },
+      {
+        "id": "ghost",
+        "epoch": 1,
+        "space": "hidden",
+        "focusable": true,
+        "tab_index": 1,
+        "geometry": {
+          "kind": "rect",
+          "rect": {
+            "x": 20,
+            "y": 80,
+            "w": 100,
+            "h": 40
+          }
+        }
+      },
+      {
+        "id": "offscreen",
+        "epoch": 1,
+        "focusable": true,
+        "tab_index": 1,
+        "geometry": {
+          "kind": "rect",
+          "rect": {
+            "x": 1000,
+            "y": 20,
+            "w": 100,
+            "h": 40
+          }
+        }
+      },
+      {
+        "id": "hole",
+        "epoch": 1,
+        "space": "hollow",
+        "focusable": true,
+        "tab_index": 1,
+        "geometry": {
+          "kind": "rect",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1000,
+            "h": 1000
+          }
+        }
+      },
+      {
+        "id": "cell-b",
+        "epoch": 1,
+        "focusable": true,
+        "tab_index": 2,
+        "geometry": {
+          "kind": "rect",
+          "rect": {
+            "x": 440,
+            "y": 320,
+            "w": 100,
+            "h": 40
+          }
+        }
+      }
+    ]
+  },
+  "viewport": {
+    "content": {
+      "width": 320,
+      "height": 240
+    },
+    "transform": {
+      "scale": 1,
+      "x": -300,
+      "y": -300,
+      "anchor_x": 0,
+      "anchor_y": 0
+    }
+  }
+}

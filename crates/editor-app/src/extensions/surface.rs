@@ -71,6 +71,7 @@ impl ExtensionPanel {
         cx: &mut Context<Self>,
     ) -> Entity<crate::ui::plugin::PluginView> {
         document.editor_toolbar = None;
+        let transfers = document.required_capabilities().contains_key("ui.transfer");
         let environment = self.native_environment(cx);
         if let Some(view) = &self.native_ui {
             view.update(cx, |view, cx| {
@@ -112,6 +113,51 @@ impl ExtensionPanel {
                 .with_form_changes(form_changes)
             }));
         }
+        if transfers
+            && !self
+                .native_ui
+                .as_ref()
+                .unwrap()
+                .read(cx)
+                .native_transfers_attached()
+        {
+            let tx = self.worker.tx.clone();
+            let plugin = self.active.clone().expect("a native transfer has an owner");
+            let panel = self
+                .surface_id
+                .clone()
+                .expect("a native transfer has a panel");
+            let visible = self.visible.clone();
+            let epoch = self.instance_epoch;
+            let sink: crate::ui::plugin::transfer::Sink = Rc::new(move |ingress| {
+                use crate::ui::plugin::transfer::Ingress;
+                let cleanup = matches!(
+                    &ingress,
+                    Ingress::Update {
+                        phase: protocol::transfer::Phase::Leave | protocol::transfer::Phase::Cancel,
+                        ..
+                    }
+                ) || matches!(&ingress, Ingress::FinishDrag { .. });
+                (visible.get() || cleanup)
+                    && tx
+                        .send(Work::Transfer {
+                            plugin: plugin.clone(),
+                            panel: panel.clone(),
+                            epoch,
+                            ingress,
+                        })
+                        .is_ok()
+            });
+            if let Err(error) = self
+                .native_ui
+                .as_ref()
+                .unwrap()
+                .update(cx, |view, cx| view.set_native_transfers(sink, window, cx))
+            {
+                eprintln!("Native plugin transfer registration failed: {error:#}");
+            }
+        }
+        self.schedule_canvas_frames(cx);
         let key = format!(
             "{}/{}",
             self.active.as_deref().unwrap_or_default(),

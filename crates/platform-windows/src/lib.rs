@@ -12,10 +12,16 @@ mod staged;
 pub use staged::PreparedFileStore;
 mod attachments;
 pub use attachments::{NewWorkspaceFileStore, PreparedNewFile, create_document_attachment};
+/// Bounded inert clipboard formats; enumeration never forces delayed rendering.
+#[cfg(windows)]
+pub mod clipboard;
 /// Per-plugin protected credentials, separate from document storage and history.
 pub mod credentials;
 /// File-system identity for native project routing, separate from persistent display paths.
 pub mod directory_identity;
+/// Apartment-safe lazy OLE data and native drag lifecycle; no guest filesystem authority.
+#[cfg(windows)]
+pub mod drag;
 pub mod file_picker;
 /// User-profile paths and guarded parent creation for native history recovery.
 pub mod history;

@@ -71,6 +71,16 @@ impl Icon {
         self
     }
 
+    /// Scale the native default extent; explicit caller-provided Styled dimensions remain authoritative.
+    pub fn scale(mut self, scale: f32) -> Self {
+        debug_assert!(
+            scale.is_finite() && scale > 0.,
+            "icon scale must be finite and positive"
+        );
+        self.size *= scale;
+        self
+    }
+
     /// Apply transformation when building the SVG; source artwork remains immutable.
     pub fn transform(mut self, transformation: Transformation) -> Self {
         self.transformation = Some(transformation);

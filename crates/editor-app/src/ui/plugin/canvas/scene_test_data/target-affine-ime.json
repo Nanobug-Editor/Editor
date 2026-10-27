@@ -1,0 +1,11 @@
+{
+  "expect_presented": true, "prepare_worker": true, "target_affine_ime_script": true,
+  "scene":{"identity":56,"revision":1,"roots":[
+    {"kind":"group","id":"placement","transform":[0,1,-1,0,200,0],"opacity":0.5,
+      "clip":{"kind":"path","segments":[{"op":"move","x":20,"y":20},{"op":"line","x":140,"y":20},{"op":"line","x":140,"y":80},{"op":"line","x":20,"y":80},{"op":"close"}]},
+      "children":[{"kind":"paragraph","id":"label","layout_key":"affine-ime","text":"AB","rect":{"x":20,"y":20,"w":120,"h":60},"style":{"font":{"family":"Segoe UI","size_px":18},"line_height":27}}]}
+  ],"targets":[
+    {"id":"edit","epoch":1,"space":"placement","focusable":true,"cursor":"text","geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":120,"h":60}},
+      "text_input":{"paragraph":"label","layout_key":"affine-ime","text_revision":1,"selection":{"start":0,"end":2},"editing_keys":true}}
+  ]}
+}

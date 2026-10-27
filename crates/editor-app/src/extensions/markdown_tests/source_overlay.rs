@@ -64,6 +64,7 @@ fn overlay_peer(dialog: bool, svg: bool) -> Package {
         ));
     } else {
         document.menu = Some(PopupMenu {
+            anchor: None,
             id: "fixture-menu".into(),
             x: 20.,
             y: 40.,

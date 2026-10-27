@@ -1,4 +1,5 @@
 {
   "wasm_flow":true,"dpi_percent":125,"expect_presented":true,
-  "visible_colors":[{"rgba":[51,153,255,255],"minimum":100},{"rgba":[102,204,136,255],"minimum":100}]
+  "canvas_samples":[{"x":50,"y":55,"rgba":[51,153,255,255]},{"x":160,"y":55,"rgba":[51,153,255,255]}],
+  "visible_colors":[{"rgba":[51,153,255,255],"minimum":13500},{"rgba":[102,204,136,255],"minimum":100}]
 }

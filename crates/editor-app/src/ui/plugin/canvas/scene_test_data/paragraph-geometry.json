@@ -1,0 +1,10 @@
+{
+  "expect_presented":true,"expected_text_hits":[],"expected_text_geometry":true,
+  "text_queries":[{"id":"q1","paragraph":"label","layout_key":"geometry-1","points":[],
+    "positions":[{"byte":0},{"byte":17}],"selections":[{"start":15,"end":23}]}],
+  "scene":{"identity":44,"revision":1,"roots":[{
+    "kind":"paragraph","id":"label","layout_key":"geometry-1",
+    "text":"Native multiline\n中文标签 office","rect":{"x":20,"y":20,"w":180,"h":100},
+    "style":{"font":{"family":"Segoe UI","size_px":18},"line_height":24,"wrap":true}
+  }]}
+}

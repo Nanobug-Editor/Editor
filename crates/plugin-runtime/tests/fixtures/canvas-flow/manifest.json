@@ -1,12 +1,13 @@
 {
   "id": "canvas-flow",
   "name": "Canvas flow acceptance",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "protocol": 7,
-  "api": {"base":"^1", "required":{"ui.native":"^1", "ui.panels":"^1", "ui.canvas":">=1.7,<2", "ui.viewport":"^1"}},
+  "api": {"base":"^1", "required":{"ui.native":"^1", "ui.panels":"^1", "ui.canvas":">=1.10,<2", "ui.incremental":"^1", "ui.viewport":"^1", "ui.collections":"^1", "ui.clipboard":">=1.1,<2", "ui.transfer":"^1"}},
   "scope": "workspace",
   "component": "canvas_flow.wasm",
-  "permissions": ["ui.panels"],
+  "permissions": ["ui.panels", "clipboard", "ui.transfer"],
+  "commands": [{"id":"exchange-probe", "title":"Public exchange acceptance"}, {"id":"publication-probe", "title":"Public retained publication acceptance"}],
   "panels": [{"id":"diagram", "title":"流程图 / Flow", "position":"right"}],
   "storage_limit": 1024
 }

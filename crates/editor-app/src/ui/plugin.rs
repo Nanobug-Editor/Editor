@@ -17,14 +17,17 @@ mod form_delivery;
 pub(crate) use form_delivery::{FormChangeSink, FormReceipt};
 #[cfg(test)]
 mod form_delivery_tests;
+mod frames;
 #[cfg(test)]
 mod image_dimensions_tests;
 pub(crate) mod images;
+mod input_backpressure;
 mod layout;
 mod leaf;
 #[cfg(test)]
 mod link_tests;
 mod links;
+mod overlays;
 mod render;
 #[cfg(test)]
 mod scrollbar_tests;
@@ -33,6 +36,7 @@ mod svg;
 mod tests;
 mod textareas;
 mod theme;
+pub(crate) mod transfer;
 mod tree;
 #[cfg(test)]
 mod tree_tests;
@@ -93,9 +97,17 @@ pub(crate) struct PluginView {
     sink: EventSink,
     /// Nested canvas/control sinks share the gate; retained readonly trees cannot dispatch stale input.
     scene_current: Rc<Cell<bool>>,
+    /// A rejected native input suspends this producer until ordered cancellation is acknowledged.
+    input_backpressure: bool,
     /// Callbacks without a Window defer to this original native surface before checking IME.
     window: gpui_kit::AnyWindowHandle,
     inputs: BTreeMap<String, NativeInput>,
+    /// Temporary render scope for foreground controls; public document geometry remains immutable.
+    native_scale: f32,
+    /// Overlay target generations revoke ordinary controls without resetting drawing-only updates.
+    overlays: overlays::OverlayControls,
+    /// One native offer scope, revoked together with source, visibility and overlay generations.
+    transfers: transfer::Transfers,
     /// Only undelivered ordinary form drafts wait for their exact native/guest incarnation.
     forms: form_delivery::Forms,
     textareas: BTreeMap<String, textareas::NativeTextarea>,
@@ -147,17 +159,30 @@ impl PluginView {
     /// Withdraw projected gestures before an owning native window or pane is removed. The router
     /// flushes the original control's release while its old frame is still mounted.
     pub(crate) fn retire_code_panes(&mut self, cx: &mut Context<Self>) {
+        self.pause_canvas_frames(cx);
         self.invalidate_action_gestures(cx);
+        for canvas in self.canvases.values() {
+            canvas.update(cx, |canvas, _| canvas.deactivate());
+        }
         self.code_sync.cancel(cx);
     }
 
     /// Suspend guest input and pending locations while retaining paint and the native text entity.
     pub(crate) fn set_scene_current(&mut self, current: bool, cx: &mut Context<Self>) {
+        let current = current && !self.input_backpressure;
         if self.scene_current.get() && !current {
+            self.pause_canvas_frames(cx);
             // Ordinary controls now survive hiding; their old pending Base presses must not.
             self.action_gestures.retained_visibility = true;
             self.invalidate_action_gestures(cx);
+            self.suspend_overlay_controls(cx);
             self.suspend_popup(cx);
+            for canvas in self.canvases.values() {
+                canvas.update(cx, |canvas, _| {
+                    canvas.discard_anchor_geometry();
+                    canvas.deactivate();
+                });
+            }
             for tree in self.trees.values() {
                 tree.read(cx).resource.suspend();
             }
@@ -179,8 +204,12 @@ impl PluginView {
             }
         }
         if self.scene_current.replace(current) != current {
+            if current && !self.overlays.scopes.is_empty() {
+                self.overlays.needs_sync = true;
+            }
             cx.notify();
         }
+        self.reconcile_native_transfers();
         if current {
             self.sync_editor_access(cx);
             self.schedule_form_delivery(cx);
@@ -316,6 +345,7 @@ impl PluginView {
         // an explicit cleanup, including the current window while App temporarily lends it out.
         let image_window = window.window_handle();
         cx.on_release(move |this, cx| {
+            this.transfers.suspend(&this.document);
             let pixels = this.image_leases.clear(cx);
             if image_window
                 .update(cx, |_, window, cx| {
@@ -350,8 +380,12 @@ impl PluginView {
                 }
             }),
             scene_current,
+            input_backpressure: false,
             window: window.window_handle(),
             inputs: BTreeMap::new(),
+            native_scale: 1.,
+            overlays: Default::default(),
+            transfers: Default::default(),
             forms: Default::default(),
             textareas: BTreeMap::new(),
             snapshots: BTreeMap::new(),
@@ -420,6 +454,39 @@ impl PluginView {
         if self.document == document && self.environment == environment {
             return;
         }
+        // Withdraw target ownership while the old frame/gesture still exists. Deferred cleanup
+        // keeps only that original scope and is separately checked against Manager's native leases.
+        for (id, canvas) in &self.canvases {
+            let next = document
+                .active_node(id)
+                .filter(|node| !node.disabled)
+                .and_then(|node| {
+                    if let Kind::Canvas(canvas) = &node.kind {
+                        Some(canvas)
+                    } else {
+                        None
+                    }
+                });
+            let same_source =
+                self.document.source == document.source && self.document.file == document.file;
+            let current = same_source
+                && (self.document == document || self.document.editor_action_source(id).is_none());
+            let reason = if document.dialog.is_some() || document.menu.is_some() {
+                ui::CanvasCancelReason::Modal
+            } else if !current {
+                ui::CanvasCancelReason::SceneReplaced
+            } else {
+                ui::CanvasCancelReason::TargetRemoved
+            };
+            canvas.update(cx, |view, cx| {
+                view.reconcile_target_lifetimes(next, current, reason, window, cx);
+                // Source/modal/disabled/removal withdrawal retires the native scroll endpoint.
+                // Artwork revisions still revoke their press tickets without losing motion.
+                if !same_source || next.is_none() {
+                    view.deactivate();
+                }
+            });
+        }
         if self.document != document {
             self.invalidate_action_gestures(cx);
             self.invalidate_code_highlighting(cx);
@@ -461,6 +528,8 @@ impl PluginView {
                     .is_some_and(|scene| !scene.belongs_to(&self.document))
                 {
                     canvas.scene_graphics = None;
+                    canvas.discard_anchor_geometry();
+                    canvas.deactivate();
                     canvas.invalidate_measurement();
                 }
             });
@@ -480,6 +549,7 @@ impl PluginView {
         }
         self.sync_native(window, cx);
         // A removed image or source replacement can retire this tree without another worker update.
+        self.reconcile_native_transfers();
         let mut keep = BTreeSet::new();
         let mut visit = |node: &plugin_runtime::plugin_protocol::ui::Node| {
             let Some(photo) = self.photos.get(&node.id) else {
@@ -531,6 +601,7 @@ impl PluginView {
     }
 
     fn sync_native(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let overlay_focus_returns = self.reconcile_overlay_controls(window, cx);
         self.scene_layout.reset(&self.document);
         self.viewport.reset_scene();
         self.sync_link_focus(window, cx);
@@ -596,9 +667,14 @@ impl PluginView {
                     let owner = cx.entity().downgrade();
                     let id = node.id.clone();
                     let target_window = self.window;
+                    let overlay_owner = owner.clone();
+                    let overlay_canvas = id.clone();
+                    let anchor_owner = owner.clone();
+                    let source_owner = owner.clone();
+                    let source_canvas = id.clone();
                     let view = cx.new(|cx| {
                         let canvas = cx.entity().downgrade();
-                        canvas::CanvasView::new_versioned(
+                        let mut view = canvas::CanvasView::new_versioned(
                             drawing.clone(),
                             move |event, revision, gesture, cx| {
                                 let owner = owner.clone();
@@ -608,18 +684,19 @@ impl PluginView {
                                     event,
                                     plugin_runtime::plugin_protocol::ui::CanvasEvent::Resize { .. }
                                         | plugin_runtime::plugin_protocol::ui::CanvasEvent::TextMeasured { .. }
+                                        | plugin_runtime::plugin_protocol::ui::CanvasEvent::ScenePresented { .. }
                                 );
                                 cx.defer(move |cx| {
                                     let accepted = target_window.update(cx, |_, window, cx| {
                                         owner.update(cx, |this, cx| {
-                                            if !this.action_gesture_current(&id, gesture) {
+                                            if !this.action_gesture_current(&id, gesture)&&!canvas_cleanup_event(&event) {
                                                 return false;
                                             }
                                             // Canvas and image viewports use the same input envelope, without host zoom state.
                                             let action = this
                                                 .document
                                                 .active_node(&id)
-                                                .filter(|_| !matches!(event, ui::CanvasEvent::TextMeasured { .. }))
+                                                .filter(|_| !matches!(event, ui::CanvasEvent::TextMeasured { .. }|ui::CanvasEvent::Input{..}))
                                                 .and_then(|node| node.viewport.as_ref())
                                                 .and_then(|viewport| viewport.content)
                                                 .map_or_else(
@@ -635,20 +712,44 @@ impl PluginView {
                                         })
                                     });
                                     if measurement && !matches!(accepted, Ok(Ok(true))) {
+                                        // A paint can finish during source withdrawal or before a newer
+                                        // UI is accepted. Its cached proof must retry on an actual paint;
+                                        // otherwise later coordinates claim a receipt never forwarded.
+                                        let retry_now = !matches!(event, ui::CanvasEvent::ScenePresented { .. })
+                                            || owner.update(cx, |view, _| view.scene_current.get()).unwrap_or(false);
                                         let _ = canvas.update(cx, |view, cx| {
                                             view.invalidate_measurement();
-                                            cx.notify();
+                                            // A withdrawn source cannot self-dirty. Reactivation's
+                                            // existing notify supplies its next real presentation.
+                                            if retry_now { cx.notify(); }
                                         });
                                     }
                                 });
                             },
                             window,
                             cx,
-                        )
+                        );
+                        view.overlay_renderer = Some(Rc::new(move |overlay, layout, window, cx| {
+                            overlay_owner.update(cx, |this, cx| {
+                                this.render_canvas_overlay(&overlay_canvas, overlay, layout, window, cx)
+                            }).unwrap_or_else(|_| gpui_kit::div().into_any_element())
+                        }));
+                        view.anchor_changed=Some(Rc::new(move |cx| {
+                            let owner=anchor_owner.clone();
+                            cx.defer(move |cx| {let _=owner.update(cx,|_,cx|cx.notify());});
+                        }));
+                        view.source_pressed = Some(Rc::new(move |anchor, expected, revision, position, cx| {
+                            let _ = source_owner.update(cx, |this, _| {
+                                this.canvas_source_pointer_down(&source_canvas, anchor, expected, revision, position);
+                            });
+                        }));
+                        view
                     });
                     self.canvases.insert(node.id.clone(), view);
                 }
-                let active = self.document.active_node(&node.id).is_some();
+                let active = !self.input_backpressure
+                    && !node.disabled
+                    && self.document.active_node(&node.id).is_some();
                 let font = drawing.font.clone().over(self.environment.font_style(
                     &self.plugin,
                     node.theme_role(),
@@ -664,6 +765,7 @@ impl PluginView {
                         view.invalidate_measurement();
                     }
                     view.viewport = node.viewport.clone();
+                    view.locale = self.environment.locale.clone();
                     view.font = font;
                     if active && !view.enabled {
                         view.invalidate_measurement();
@@ -733,7 +835,9 @@ impl PluginView {
                     },
                 );
             }
-            let disabled = self.document.active_node(&node.id).is_none();
+            let disabled = self.input_backpressure
+                || self.document.active_node(&node.id).is_none()
+                || (!self.scene_current.get() && self.overlays.scopes.contains_key(&node.id));
             let entry = self.inputs.get_mut(&node.id).unwrap();
             let replace = entry.value_revision != input.value_revision;
             if replace {
@@ -750,6 +854,14 @@ impl PluginView {
             });
         }
         self.reconcile_form_delivery(cx);
+        for request in overlay_focus_returns {
+            if let Some(canvas) = self.canvases.get(&request.canvas) {
+                canvas.update(cx, |canvas, cx| {
+                    canvas.request_overlay_focus(request.identity, request.target);
+                    cx.notify();
+                });
+            }
+        }
     }
 
     /// Non-source notifications can use an App-only entry. Source actions always require a Window.
@@ -797,7 +909,7 @@ impl PluginView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.event_source_current_in(id, window, cx) {
+        if !canvas_cleanup_action(&action) && !self.event_source_current_in(id, window, cx) {
             return false;
         }
         self.forward_version(id, revision, action, cx)
@@ -833,6 +945,20 @@ impl PluginView {
         }
         (self.sink)(event, cx);
         true
+    }
+}
+
+/// Original-scoped cleanup is an observation, never a way to dispatch a replaced source action.
+fn canvas_cleanup_event(event: &ui::CanvasEvent) -> bool {
+    matches!(event,ui::CanvasEvent::Input{input} if input.cleanup_kind().is_some())
+}
+/// Both native Canvas envelopes retain the same narrow cleanup classification.
+fn canvas_cleanup_action(action: &Action) -> bool {
+    match action {
+        Action::Canvas(event) | Action::ViewportInput(ui::ViewportInput { event, .. }) => {
+            canvas_cleanup_event(event)
+        }
+        _ => false,
     }
 }
 

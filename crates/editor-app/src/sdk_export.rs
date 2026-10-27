@@ -17,6 +17,44 @@ const SDK_FILES: &[(&str, &[u8])] = &[
         "src/ui/editor.rs",
         include_bytes!("../../plugin-protocol/src/ui/editor.rs"),
     ),
+    (
+        "src/ui/canvas/retained/mutation.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained/mutation.rs"),
+    ),
+    (
+        "src/ui/canvas/retained/publication.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained/publication.rs"),
+    ),
+    (
+        "src/ui/canvas/frames.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/frames.rs"),
+    ),
+    (
+        "src/ui/canvas/scroll_2d.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/scroll_2d.rs"),
+    ),
+    // Retained deltas are independent SDK contracts, with no native drawing dependency.
+    (
+        "src/ui/canvas/retained.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained.rs"),
+    ),
+    (
+        "src/ui/canvas/retained/bounds.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/retained/bounds.rs"),
+    ),
+    (
+        "src/ui/canvas/overlay_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/overlay_tests.rs"),
+    ),
+    // Scene foreground placement and interchange belong to the independent public SDK.
+    (
+        "src/transfer.rs",
+        include_bytes!("../../plugin-protocol/src/transfer.rs"),
+    ),
+    (
+        "src/ui/canvas/overlay.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/overlay.rs"),
+    ),
     // Public module declarations must remain independently buildable in the exported SDK.
     (
         "src/language_content.rs",
@@ -204,6 +242,43 @@ const SDK_FILES: &[(&str, &[u8])] = &[
     (
         "src/ui/canvas/columns.rs",
         include_bytes!("../../plugin-protocol/src/ui/canvas/columns.rs"),
+    ),
+    // Native paragraph declarations and their public admission regression travel with the SDK.
+    (
+        "src/ui/canvas/text_input.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/text_input.rs"),
+    ),
+    (
+        "src/ui/canvas/semantics.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/semantics.rs"),
+    ),
+    (
+        "src/ui/canvas/placement.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/placement.rs"),
+    ),
+    (
+        "src/ui/canvas/pointer.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/pointer.rs"),
+    ),
+    (
+        "src/ui/canvas/text_index.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/text_index.rs"),
+    ),
+    (
+        "src/ui/canvas/targets.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/targets.rs"),
+    ),
+    (
+        "src/ui/canvas/text_layout.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/text_layout.rs"),
+    ),
+    (
+        "src/ui/canvas/paragraph.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/paragraph.rs"),
+    ),
+    (
+        "src/ui/canvas/paragraph_tests.rs",
+        include_bytes!("../../plugin-protocol/src/ui/canvas/paragraph_tests.rs"),
     ),
     // Scene consumers receive the same bounded value contracts used by host admission.
     (

@@ -1,0 +1,15 @@
+{
+  "expect_presented":true,"target_key_script":true,
+  "scene":{"identity":47,"revision":1,"roots":[{"kind":"group","id":"hidden","opacity":0,"children":[]},
+    {"kind":"group","id":"hollow","clip":{"kind":"path","rule":"even_odd","segments":[
+      {"op":"move","x":0,"y":0},{"op":"line","x":300,"y":0},{"op":"line","x":300,"y":200},{"op":"line","x":0,"y":200},{"op":"close"},
+      {"op":"move","x":20,"y":70},{"op":"line","x":120,"y":70},{"op":"line","x":120,"y":150},{"op":"line","x":20,"y":150},{"op":"close"}
+    ]},"children":[{"kind":"shape","id":"background","geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":300,"h":200}},"fill":{"kind":"solid","rgba":4294967295}}]}
+  ],"targets":[
+    {"id":"cell-a","epoch":1,"focusable":true,"tab_index":0,"geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":40}}},
+    {"id":"ghost","epoch":1,"space":"hidden","focusable":true,"tab_index":1,"geometry":{"kind":"rect","rect":{"x":20,"y":80,"w":100,"h":40}}},
+    {"id":"offscreen","epoch":1,"focusable":true,"tab_index":1,"geometry":{"kind":"rect","rect":{"x":1000,"y":20,"w":100,"h":40}}},
+    {"id":"hole","epoch":1,"space":"hollow","focusable":true,"tab_index":1,"geometry":{"kind":"rect","rect":{"x":40,"y":90,"w":50,"h":20}}},
+    {"id":"cell-b","epoch":1,"focusable":true,"tab_index":2,"geometry":{"kind":"rect","rect":{"x":140,"y":20,"w":100,"h":40}}}
+  ]}
+}

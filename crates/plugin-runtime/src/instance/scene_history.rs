@@ -33,7 +33,7 @@ pub(super) fn has_scene(document: &ui::Document) -> bool {
 }
 
 /// Visit every declaration, including inactive modal content, without granting input authority.
-fn visit(document: &ui::Document, mut visitor: impl FnMut(&ui::Node)) {
+pub(super) fn visit(document: &ui::Document, mut visitor: impl FnMut(&ui::Node)) {
     document.root.visit(&mut visitor);
     if let Some(toolbar) = &document.editor_toolbar {
         toolbar.visit(&mut visitor);
@@ -44,61 +44,116 @@ fn visit(document: &ui::Document, mut visitor: impl FnMut(&ui::Node)) {
 }
 
 impl Instance {
-    /// Accept observations separately from input: publishing alone never authorizes scene coordinates.
+    /// Select an exact accepted snapshot only for a late successful native presentation receipt.
+    /// Every other notification validates against the current publication as before.
+    pub(crate) fn ui_event_document(
+        &self,
+        panel: &str,
+        event: &ui::UiEvent,
+    ) -> Result<std::sync::Arc<ui::Document>, Failure> {
+        let current = self
+            .views
+            .get(panel)
+            .ok_or_else(|| Failure::new(ErrorCode::InvalidHandle, "UI panel is unavailable"))?;
+        let presentation = matches!(
+            &event.action,
+            ui::Action::Canvas(ui::CanvasEvent::ScenePresented { .. })
+                | ui::Action::ViewportInput(ui::ViewportInput {
+                    event: ui::CanvasEvent::ScenePresented { .. },
+                    ..
+                })
+        );
+        if presentation && event.revision < current.revision {
+            // Do not fall back to the protocol's unchanged-scene observation exception after
+            // history eviction or retirement: that would revive a pruned source/modal ABA proof.
+            return self
+                .scene_frames
+                .accepted_document(panel, event, current)
+                .ok_or_else(|| {
+                    Failure::new(
+                        ErrorCode::StaleRevision,
+                        "Native Canvas presentation has no retained accepted snapshot",
+                    )
+                });
+        }
+        Ok(current.clone())
+    }
+    /// Gate shown-frame input before any guest call, retaining a narrow cleanup path after retirement.
     pub(crate) fn accept_scene_event(
         &mut self,
         panel: &str,
         event: &ui::UiEvent,
-    ) -> Result<(), Failure> {
-        let input = match &event.action {
+    ) -> Result<bool, Failure> {
+        let action = match &event.action {
             ui::Action::Canvas(input)
             | ui::Action::ViewportInput(ui::ViewportInput { event: input, .. }) => input,
-            _ => return Ok(()),
+            _ => return Ok(true),
         };
-        let Some(document) = self.views.get(panel) else {
-            return Ok(());
-        };
+        if let ui::CanvasEvent::Input { input } = action {
+            self.scene_frames.validate(panel, event, input)?;
+            if input.cleanup_kind().is_some()
+                && !self.scene_frames.same_ancestry(
+                    panel,
+                    event,
+                    input,
+                    self.views.get(panel).map(std::sync::Arc::as_ref),
+                )
+            {
+                self.scene_frames.commit(panel, event, input);
+                return Ok(false);
+            }
+            if input.cleanup_kind().is_some() {
+                self.scene_inputs.cancel(
+                    panel,
+                    &event.node,
+                    input,
+                    self.views.get(panel).map(std::sync::Arc::as_ref),
+                );
+            } else {
+                let node = self
+                    .views
+                    .get(panel)
+                    .and_then(|document| document.active_node(&event.node))
+                    .ok_or_else(|| {
+                        Failure::new(
+                            ErrorCode::StaleRevision,
+                            "Native Canvas target was replaced",
+                        )
+                    })?;
+                self.scene_inputs.accept(panel, node, input)?;
+            }
+            self.scene_frames.commit(panel, event, input);
+            return Ok(true);
+        }
+        let document = self.ui_event_document(panel, event)?;
         let Some(node) = document.active_node(&event.node) else {
-            return Ok(());
+            return Ok(true);
         };
         let ui::Kind::Canvas(canvas) = &node.kind else {
-            return Ok(());
+            return Ok(true);
         };
-        if canvas.scene.is_none() {
-            return Ok(());
-        }
-        let key = (panel.to_owned(), node.id.clone());
-        if let ui::CanvasEvent::ScenePresented { error, .. } = input {
-            if error.is_none() {
-                self.scene_presentations.insert(key, input.clone());
-            } else {
-                self.scene_presentations.remove(&key);
-            }
+        let Some(scene) = &canvas.scene else {
+            return Ok(true);
+        };
+        if matches!(action, ui::CanvasEvent::ScenePresented { .. }) {
+            self.scene_frames
+                .present(panel, event, action, scene, &document)?;
         } else if matches!(
-            input,
+            action,
             ui::CanvasEvent::Pointer { .. } | ui::CanvasEvent::Wheel { .. }
-        ) && !self
-            .scene_presentations
-            .get(&key)
-            .is_some_and(|receipt| matches_presentation(receipt, document, node))
+        ) && !self.scene_frames.current(panel, node, &document)
         {
             return Err(Failure::new(
                 ErrorCode::StaleRevision,
                 "Canvas coordinates have no current native presentation",
             ));
         }
-        Ok(())
+        Ok(true)
     }
-
-    /// Remove stale/withdrawn observations after the complete reply has committed its documents.
+    /// Publication changes current drawing authority, independently of native frame/cleanup lifetime.
     pub(super) fn reconcile_scene_presentations(&mut self) {
-        self.scene_presentations.retain(|(panel, node), receipt| {
-            self.views.get(panel).is_some_and(|document| {
-                document
-                    .active_node(node)
-                    .is_some_and(|node| matches_presentation(receipt, document, node))
-            })
-        });
+        self.scene_frames.reconcile(&self.views);
+        self.reconcile_transfer_offers();
     }
     /// Keep the accepted views and resources after a rejected live scene, while exposing diagnostics.
     /// Candidate activation and genuine WASM/native failures still follow ordinary retirement.
@@ -113,6 +168,8 @@ impl Instance {
     }
     /// Check the complete reply without mutating tombstones or any currently published document.
     pub(super) fn validate_scenes(&self, views: &[api::View]) -> Result<(), Failure> {
+        self.scene_inputs
+            .validate_publications(views, &self.views)?;
         let mut new = BTreeSet::new();
         let mut result = Ok(());
         for view in views {
@@ -183,6 +240,8 @@ impl Instance {
 
     /// Commit tombstones only after every peer document and declared panel has passed validation.
     pub(super) fn remember_scenes(&mut self, views: &[api::View]) {
+        self.scene_frames.remember(views, &self.views);
+        self.scene_inputs.remember(views, &self.views);
         for view in views {
             visit(&view.document, |node| {
                 if let ui::Kind::Canvas(canvas) = &node.kind {
@@ -197,20 +256,4 @@ impl Instance {
             });
         }
     }
-}
-
-/// Presentation remains valid only for the same scene, source authority and viewport declaration.
-fn matches_presentation(
-    receipt: &ui::CanvasEvent,
-    document: &ui::Document,
-    node: &ui::Node,
-) -> bool {
-    let ui::Kind::Canvas(canvas) = &node.kind else {
-        return false;
-    };
-    let Some(scene) = &canvas.scene else {
-        return false;
-    };
-    matches!(receipt,ui::CanvasEvent::ScenePresented{identity,scene_revision,source,file,projection,error:None}
-        if *identity==scene.identity&&*scene_revision==scene.revision&&*source==document.source&&*file==document.file&&*projection==node.viewport)
 }

@@ -42,6 +42,7 @@ mod shared_context_tests;
 #[cfg(test)]
 mod shutdown_tests;
 pub(super) mod targets;
+mod transfers;
 #[cfg(test)]
 mod typescript_package_tests;
 #[cfg(test)]
@@ -108,6 +109,20 @@ impl RunStatus {
 }
 
 pub enum Work {
+    /// Bounded native ingress reports cancellation after previously admitted input.
+    InputBackpressure {
+        plugin: Option<String>,
+        epoch: u64,
+        panel: Option<String>,
+        resume: bool,
+    },
+    /// OS/layout evidence bypasses guest-injectable notifications and retains the original instance epoch.
+    Transfer {
+        plugin: String,
+        panel: String,
+        epoch: u64,
+        ingress: crate::ui::plugin::transfer::Ingress,
+    },
     /// Release the exact source intent without disturbing another document's analysis context.
     ReleaseLanguageDocument {
         workspace: String,
@@ -472,6 +487,8 @@ pub(super) struct Published {
     pub file_events: plugin_runtime::WorkspaceEvents,
     /// Bounded typed work has a completion gate that survives queue transfer and rejects stale callbacks.
     pub editor_requests: Vec<(String, plugin_runtime::EditorRequest)>,
+    /// At most 256 borrowed native frame intents; hidden leases stay owned by their runtime.
+    pub canvas_frames: Vec<(String, Arc<plugin_runtime::CanvasFrameResource>)>,
     pub entries: Vec<Installed>,
     /// One entry per execution this editor started, joined to the configuration that produced it.
     ///

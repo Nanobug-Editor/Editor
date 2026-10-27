@@ -7,6 +7,7 @@ use plugin_runtime::{
     },
 };
 
+mod clipboard;
 mod contexts;
 mod decorations;
 mod documents;
@@ -15,6 +16,7 @@ mod images;
 mod interaction;
 mod language_control;
 mod navigation;
+mod transfer;
 mod viewport;
 
 impl EditorApp {
@@ -164,6 +166,14 @@ impl EditorApp {
         }
         if let Err(error) = self.check_virtual_request(&request) {
             request.finish(Err(error));
+            return;
+        }
+        if matches!(request.operation(), Op::Clipboard { .. }) {
+            self.perform_formatted_clipboard(request, window, cx);
+            return;
+        }
+        if matches!(request.operation(), Op::Transfer { .. }) {
+            self.perform_transfer_read(request, cx);
             return;
         }
         // Legacy selection/navigation consumers understand workspace paths only. New document
@@ -453,6 +463,8 @@ impl EditorApp {
                 })
             }
             Op::SaveDocument { .. }
+            | Op::Clipboard { .. }
+            | Op::Transfer { .. }
             | Op::RefreshVirtualDocument { .. }
             | Op::Interaction { .. }
             | Op::ReplaceDocumentRange { .. }

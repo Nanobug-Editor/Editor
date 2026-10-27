@@ -1,0 +1,1 @@
+{"target_button_chord_script":true,"scene":{"identity":48,"revision":1,"roots":[{"kind":"shape","id":"box","geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":80}},"fill":{"kind":"solid","rgba":863633407}}],"targets":[{"id":"drag","epoch":1,"capture_on_down":true,"geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":80}}}]}}

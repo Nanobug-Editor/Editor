@@ -1,0 +1,12 @@
+{
+ "expect_presented":true,"rounded_hit_script":true,
+ "scene":{"identity":58,"revision":1,"roots":[
+  {"kind":"shape","id":"round-paint","geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":100},"radii":[100,0,0,0]},"fill":{"kind":"solid","rgba":11141375}},
+  {"kind":"group","id":"corner","clip":{"kind":"rect","rect":{"x":160,"y":20,"w":100,"h":100},"radii":[100,0,0,0]},"children":[
+   {"kind":"shape","id":"clipped-paint","geometry":{"kind":"rect","rect":{"x":160,"y":20,"w":100,"h":100}},"fill":{"kind":"solid","rgba":11141375}}
+  ]}
+ ],"targets":[
+  {"id":"round","epoch":1,"geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":100},"radii":[100,0,0,0]}},
+  {"id":"clipped","epoch":1,"space":"corner","geometry":{"kind":"rect","rect":{"x":160,"y":20,"w":100,"h":100}}}
+ ]}
+}

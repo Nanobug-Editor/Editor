@@ -67,7 +67,8 @@ impl PluginView {
                     },
                 );
             }
-            let active = self.document.active_node(&node.id).is_some();
+            let active = self.document.active_node(&node.id).is_some()
+                && (self.scene_current.get() || !self.overlays.scopes.contains_key(&node.id));
             let entry = self.textareas.get_mut(&node.id).unwrap();
             let rows = textarea_rows(node);
             let changed_rows = entry.rows != rows;

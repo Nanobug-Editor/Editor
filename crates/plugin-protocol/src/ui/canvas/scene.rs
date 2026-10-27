@@ -11,6 +11,12 @@ pub use style::*;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CanvasScene {
+    /// `ui.canvas 1.8`: bounded visible semantic objects, separate from drawing and native controls.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub semantics: Vec<super::CanvasSemanticNode>,
+    /// `ui.canvas 1.8`: stable input objects, independent of drawing IDs; at most 4096 visible targets.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<super::HitTarget>,
     /// Nonzero semantic identity, retained through drawing-only updates.
     pub identity: u64,
     /// Monotonic drawing version within this identity; zero is not a published version.
@@ -61,6 +67,20 @@ pub enum SceneNode {
         /// Local destination rectangle; the same group transform and clip apply.
         rect: crate::Rect,
     },
+    /// A UTF-8 paragraph shaped by the host; committed text and domain undo stay with the plugin.
+    Paragraph {
+        /// Unique scene-local drawing identity.
+        id: String,
+        /// Bounded layout identity; change when the text or typography changes meaning.
+        layout_key: String,
+        /// Original UTF-8 text, including explicit newlines; offsets always refer to this string.
+        text: String,
+        /// Local layout and clipping rectangle, projected with the surrounding scene.
+        rect: crate::Rect,
+        /// Native font and wrapping policy.
+        #[serde(default)]
+        style: super::ParagraphStyle,
+    },
 }
 
 /// Default opacity for optional group declarations.
@@ -72,7 +92,10 @@ impl SceneNode {
     /// Return this item's stable identity, independent of its position in the tree.
     pub fn id(&self) -> &str {
         match self {
-            Self::Group { id, .. } | Self::Shape { id, .. } | Self::Image { id, .. } => id,
+            Self::Group { id, .. }
+            | Self::Shape { id, .. }
+            | Self::Image { id, .. }
+            | Self::Paragraph { id, .. } => id,
         }
     }
     /// Visit this subtree in drawing order, including groups before their children.
@@ -87,6 +110,28 @@ impl SceneNode {
 }
 
 impl CanvasScene {
+    /// Return the negotiated Canvas version needed by this scene's actual declarations.
+    pub fn minimum_canvas_version(&self) -> semver::Version {
+        let mut text = false;
+        for root in &self.roots {
+            root.visit(&mut |node| text |= matches!(node, SceneNode::Paragraph { .. }));
+        }
+        semver::Version::new(
+            1,
+            if self
+                .targets
+                .iter()
+                .any(|target| target.drop_target.is_some() || target.drag_source.is_some())
+            {
+                9
+            } else if text || !self.targets.is_empty() || !self.semantics.is_empty() {
+                8
+            } else {
+                7
+            },
+            0,
+        )
+    }
     /// Validate the composed native viewport before allocating paths or accepting inverse input.
     pub(in crate::ui) fn validate_projection(
         &self,
@@ -99,6 +144,9 @@ impl CanvasScene {
         for root in &self.roots {
             budget.node(root, transform, 0, 0)?;
         }
+        budget.targets(self, transform)?;
+        self.validate_text_inputs()?;
+        self.validate_semantics()?;
         Ok(())
     }
     /// Check IDs, transformed geometry and aggregate budgets before host resource preparation.
@@ -111,6 +159,9 @@ impl CanvasScene {
         for root in &self.roots {
             budget.node(root, SceneTransform::default(), 0, 0)?;
         }
+        budget.targets(self, SceneTransform::default())?;
+        self.validate_text_inputs()?;
+        self.validate_semantics()?;
         if serde_json::to_vec(self).map_or(true, |bytes| bytes.len() > 2 * 1024 * 1024) {
             return Err("Canvas scene exceeds its 2 MiB encoded budget".into());
         }
@@ -142,8 +193,55 @@ impl CanvasScene {
 struct Budget {
     ids: BTreeSet<String>,
     segments: usize,
+    /// All paragraph source bytes share one text allowance within the scene.
+    text_bytes: usize,
 }
 impl Budget {
+    /// Input geometry shares the scene's projected segment budget without sharing its ID namespace.
+    fn targets(&mut self, scene: &CanvasScene, transform: SceneTransform) -> Result<(), String> {
+        let targets = &scene.targets;
+        let mut ids = BTreeSet::new();
+        if targets.len() > 4096 {
+            return Err("Canvas target budget exceeded".into());
+        }
+        for target in targets {
+            if let Some(drop) = &target.drop_target {
+                drop.validate().map_err(|error| error.to_string())?;
+            }
+            if let Some(source) = &target.drag_source {
+                source.validate().map_err(|error| error.to_string())?;
+            }
+            if !valid_id(&target.id)
+                || target.epoch == 0
+                || !ids.insert(&target.id)
+                || target
+                    .tab_index
+                    .is_some_and(|index| index > 1_000_000 || !target.focusable)
+                || (target.capture_on_down && !target.pointer_events)
+            {
+                return Err("Invalid or duplicate Canvas target identity/focus policy".into());
+            }
+            let placement = scene
+                .group_placement(target.space.as_deref())
+                .ok_or("Canvas target references a missing group space")?;
+            self.geometry(&target.geometry, transform.compose(placement.transform))?;
+        }
+        for semantic in &scene.semantics {
+            if let Some(rect) = semantic.rect {
+                let placement = scene
+                    .group_placement(semantic.space.as_deref())
+                    .ok_or("Missing semantic group space")?;
+                self.geometry(
+                    &SceneGeometry::Rect {
+                        rect,
+                        radii: [0.; 4],
+                    },
+                    transform.compose(placement.transform),
+                )?;
+            }
+        }
+        Ok(())
+    }
     /// Admit one node under `parent`, rejecting excessive depth before recursing further.
     fn node(
         &mut self,
@@ -197,6 +295,27 @@ impl Budget {
                 }
                 if let Some(stroke) = stroke {
                     stroke.validate()?;
+                    if !stroke.dash.is_empty() {
+                        // Charge expansion before GPUI/resvg can loop or allocate. f64 accounting
+                        // also catches subnormal periods that cannot advance a large f32 cursor.
+                        let period = stroke
+                            .dash
+                            .iter()
+                            .map(|value| f64::from(*value))
+                            .sum::<f64>();
+                        let work = (geometry.length_bound() / period).ceil()
+                            * stroke.dash.len() as f64
+                            + stroke.dash.len() as f64;
+                        if !work.is_finite() || work > 128_000. {
+                            return Err("Canvas dash expansion exceeds its work budget".into());
+                        }
+                        self.segments += work as usize;
+                        if self.segments > 128_000 {
+                            return Err(
+                                "Canvas dash expansion exceeds its shared segment budget".into()
+                            );
+                        }
+                    }
                     let [a, b, c, d, _, _] = parent.0;
                     let margin = (a.abs() + c.abs()).max(b.abs() + d.abs())
                         * stroke.width
@@ -210,6 +329,35 @@ impl Budget {
             SceneNode::Image { image, rect, .. } => {
                 if !valid_id(image) {
                     return Err("Invalid canvas image reference".into());
+                }
+                self.geometry(
+                    &SceneGeometry::Rect {
+                        rect: *rect,
+                        radii: [0.; 4],
+                    },
+                    parent,
+                )?;
+            }
+            SceneNode::Paragraph {
+                layout_key,
+                text,
+                rect,
+                style,
+                ..
+            } => {
+                self.text_bytes += text.len();
+                if !valid_id(layout_key) || self.text_bytes > 64 * 1024 {
+                    return Err("Invalid paragraph layout identity or text budget exceeded".into());
+                }
+                style.validate(text)?;
+                // A small projected box does not bound font raster work. Charge effective
+                // typography independently; inherited fonts conservatively use the 128 px maximum.
+                let [a, b, c, d, _, _] = parent.0;
+                let density = (a.abs() + c.abs()).max(b.abs() + d.abs());
+                if style.font.size_px.unwrap_or(128.) * density > 1024.
+                    || style.line_height.unwrap_or(128. * 1.45) * density > 8192.
+                {
+                    return Err("Canvas paragraph exceeds its effective font budget".into());
                 }
                 self.geometry(
                     &SceneGeometry::Rect {

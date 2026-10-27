@@ -158,7 +158,7 @@ impl PluginView {
         let font = self.content_font(role, false);
         let element = element
             .font_family(font.family.unwrap_or_else(|| "Segoe UI".into()))
-            .text_size(px(font.size_px.unwrap_or(14.)))
+            .text_size(px(font.size_px.unwrap_or(14.) * self.native_scale))
             .font_weight(if font.bold.unwrap_or(false) {
                 FontWeight::BOLD
             } else {

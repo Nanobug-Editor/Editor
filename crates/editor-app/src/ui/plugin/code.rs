@@ -93,6 +93,17 @@ fn collect(
                 collect(providers, &tab.content, requests);
             }
         }
+        Kind::Editor(editor) => {
+            for action in editor.left_actions().iter().chain(editor.right_actions()) {
+                collect(providers, &action.content, requests);
+            }
+        }
+        Kind::Canvas(canvas) => {
+            // Native overlays are ordinary displayed children, including literal CodeBlock content.
+            for overlay in &canvas.overlays {
+                collect(providers, &overlay.child, requests);
+            }
+        }
         _ => {}
     }
 }

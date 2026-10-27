@@ -173,6 +173,11 @@ impl Document {
                     }
                 }
                 Kind::Scroll { content } => collect(content, result),
+                Kind::Canvas(canvas) => {
+                    for overlay in &canvas.overlays {
+                        collect(&overlay.child, result);
+                    }
+                }
                 Kind::Tabs { tabs, .. } => {
                     for tab in tabs {
                         collect(&tab.content, result);
@@ -209,6 +214,12 @@ impl Document {
         let mut required =
             std::collections::BTreeMap::from([("ui.native", semver::Version::new(1, 0, 0))]);
         let mut visit = |node: &Node| {
+            if node.drop_target.is_some() || node.drag_source.is_some() {
+                required.insert("ui.transfer", semver::Version::new(1, 0, 0));
+            }
+            if node.tooltip_anchor.is_some() {
+                required.insert("ui.canvas", semver::Version::new(1, 9, 0));
+            }
             if node.layout.align.is_some() || node.layout.margin != Edges::default() {
                 required.insert("ui.styles", semver::Version::new(1, 0, 0));
             }
@@ -233,8 +244,19 @@ impl Document {
                     *native = native.clone().max(semver::Version::new(1, version, 0));
                 }
                 Kind::Canvas(canvas) => {
-                    let version = if canvas.scene.is_some() {
-                        semver::Version::new(1, 7, 0)
+                    if canvas.scene.as_ref().is_some_and(|scene| {
+                        scene.targets.iter().any(|target| {
+                            target.drop_target.is_some() || target.drag_source.is_some()
+                        })
+                    }) {
+                        required.insert("ui.transfer", semver::Version::new(1, 0, 0));
+                    }
+                    let version = if canvas.scroll_2d.is_some() {
+                        semver::Version::new(1, 10, 0)
+                    } else if !canvas.overlays.is_empty() {
+                        semver::Version::new(1, 9, 0)
+                    } else if let Some(scene) = &canvas.scene {
+                        scene.minimum_canvas_version()
                     } else if canvas.column_resize.is_some() {
                         semver::Version::new(1, 6, 0)
                     } else if !canvas.measure_text.is_empty() {
@@ -285,6 +307,9 @@ impl Document {
         }
         if self.menu.is_some() {
             required.insert("ui.collections", semver::Version::new(1, 0, 0));
+        }
+        if self.menu.as_ref().is_some_and(|menu| menu.anchor.is_some()) {
+            required.insert("ui.canvas", semver::Version::new(1, 9, 0));
         }
         if self.link_events {
             required.insert("ui.links", semver::Version::new(1, 0, 0));
@@ -408,6 +433,17 @@ impl Document {
                     children.iter().find_map(active)
                 }
                 Kind::Scroll { content } => active(content),
+                Kind::Canvas(canvas) => canvas
+                    .overlays
+                    .iter()
+                    .filter(|overlay| {
+                        canvas
+                            .scene
+                            .as_ref()
+                            .and_then(|scene| overlay.anchor.placement(scene))
+                            .is_some_and(|placement| placement.visible)
+                    })
+                    .find_map(|overlay| active(&overlay.child)),
                 Kind::Tabs { tabs, selected } => tabs
                     .iter()
                     .find(|tab| tab.id == *selected)
@@ -450,6 +486,10 @@ impl Document {
                     children.iter().find_map(|node| find(node, id))
                 }
                 Kind::Scroll { content } => find(content, id),
+                Kind::Canvas(canvas) => canvas
+                    .overlays
+                    .iter()
+                    .find_map(|overlay| find(&overlay.child, id)),
                 Kind::Tabs { tabs, selected } => tabs
                     .iter()
                     .find(|tab| tab.id == *selected)
@@ -485,6 +525,13 @@ impl Dialog {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Node {
     pub id: String,
+    /// ui.transfer 1.0: accept inert offers under this node's ordinary identity and lifetime.
+    /// Negotiation grants no clipboard or filesystem authority; external files use imported handles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drop_target: Option<crate::transfer::DropTarget>,
+    /// ui.transfer 1.0: a declaration alone cannot start OS transfer or consume clipboard authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drag_source: Option<crate::transfer::DragSource>,
     /// Optional reusable visual input/projection; requires negotiated `ui.viewport`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewport: Option<VisualViewport>,
@@ -499,6 +546,10 @@ pub struct Node {
     /// Localized hover/accessibility text; this counts toward the ordinary UI text budget.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tooltip: Option<String>,
+    /// Optional scene rectangle for the existing native tooltip; requires ui.canvas 1.9.
+    /// The text remains inert and the target's displayed lifetime controls hover ownership.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tooltip_anchor: Option<CanvasNodeAnchor>,
     /// Geometry-only inline SVG for an icon-only Button, requiring negotiated `ui.icons`.
     /// At most 4 KiB per icon and 64 per document; `Kind::Button.label` remains its accessible name.
     /// The runtime rejects scripts, external resources, text, CSS and XML entities before publication.
@@ -791,6 +842,9 @@ impl Node {
             links: Vec::new(),
             source_range: None,
             tooltip: None,
+            drop_target: None,
+            drag_source: None,
+            tooltip_anchor: None,
             button_icon: None,
             textarea_rows: None,
             role: String::new(),
@@ -981,6 +1035,10 @@ impl Node {
                 children.iter().for_each(|n| n.visit(visitor))
             }
             Kind::Scroll { content } => content.visit(visitor),
+            Kind::Canvas(canvas) => canvas
+                .overlays
+                .iter()
+                .for_each(|overlay| overlay.child.visit(visitor)),
             Kind::Tabs { tabs, .. } => tabs.iter().for_each(|t| t.content.visit(visitor)),
             _ => {}
         }
@@ -1018,6 +1076,17 @@ impl Node {
                 children.iter().find_map(|n| n.find(id))
             }
             Kind::Scroll { content } => content.find(id),
+            Kind::Canvas(canvas) => canvas
+                .overlays
+                .iter()
+                .filter(|overlay| {
+                    canvas
+                        .scene
+                        .as_ref()
+                        .and_then(|scene| overlay.anchor.placement(scene))
+                        .is_some_and(|placement| placement.visible)
+                })
+                .find_map(|overlay| overlay.child.find(id)),
             Kind::Editor(editor) => editor
                 .left_actions()
                 .iter()

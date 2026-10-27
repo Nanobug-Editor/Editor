@@ -22,6 +22,10 @@ platform-windows = { path = "../platform-windows" }
 raw-window-handle = "0.6.2"
 rust-i18n.workspace = true
 tracing = "0.1"
+# Normalize the locked Windows backend's logical glyph stream with the existing UAX #9 implementation.
+unicode-bidi = "=0.3.18"
+# Native color glyphs are dispatched to the existing GPUI UI executor, never a shared GPU context on workers.
+futures = "0.3"
 # The bounded tree artwork resolver preserves literal multicolor SVGs.
 resvg = "=0.45.1"
 

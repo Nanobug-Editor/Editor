@@ -1,12 +1,12 @@
 //! Single-line input appearance around gpui-base's shared editing state.
 
 use crate::theme::ActiveTheme as _;
+pub(crate) mod body;
 use gpui_base::StyledExt as _;
-use gpui_base::input::{Input as BaseInput, InputState};
+use gpui_base::input::InputState;
 use gpui_kit::{
-    AnyElement, App, Entity, Focusable as _, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement as _, StyleRefinement, Styled, Window,
-    div, prelude::FluentBuilder as _, px,
+    AnyElement, App, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    SharedString, StyleRefinement, Styled, Window, div, prelude::FluentBuilder as _, px, rems,
 };
 
 /// Local single-line frame over one caller-owned Base InputState, including its IME and Undo.
@@ -17,6 +17,8 @@ pub struct Input {
     appearance: bool,
     bordered: bool,
     focus_bordered: bool,
+    /// Uniform scale of control-owned defaults; explicit Styled refinements retain precedence.
+    scale: f32,
     /// The native input publishes its semantic name independently of the placeholder text.
     accessibility_label: Option<SharedString>,
     /// Optional leading control shares this input's border; editing and IME remain owned by Base.
@@ -32,6 +34,7 @@ impl Input {
             appearance: true,
             bordered: true,
             focus_bordered: true,
+            scale: 1.,
             accessibility_label: None,
             prefix: None,
         }
@@ -40,6 +43,16 @@ impl Input {
     /// Choose whether to apply the local input background and default visual frame.
     pub fn appearance(mut self, appearance: bool) -> Self {
         self.appearance = appearance;
+        self
+    }
+    /// Scale the frame's default geometry and text by finite positive `scale`, excluding OS DPI.
+    /// The editing state, focus identity, IME and Undo are retained; explicit styles still win.
+    pub fn scale(mut self, scale: f32) -> Self {
+        debug_assert!(
+            scale.is_finite() && scale > 0.,
+            "input scale must be finite and positive"
+        );
+        self.scale = scale;
         self
     }
     /// Expose an explicit native accessibility label without changing shared editing behavior.
@@ -76,24 +89,26 @@ impl Styled for Input {
 impl RenderOnce for Input {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = cx.theme();
-        let accessible_state = self.state.clone();
         div()
             .w_full()
             // Base's single-line engine fills its frame. A minimum height alone leaves its
             // percentage-height hit region at zero, so painted fields cannot receive pointer/IME input.
-            .h(px(28.))
-            .min_h(px(28.))
+            .h(px(28. * self.scale))
+            .min_h(px(28. * self.scale))
             .flex()
             .items_center()
             .text_color(palette.foreground)
             // Rem-based text follows the single global typography size, including form zoom.
             .text_sm()
+            .when(self.scale != 1., |this| {
+                this.text_size(rems(0.875 * self.scale))
+            })
             .when(self.appearance, |this| {
-                this.px_2()
-                    .rounded(palette.radius)
+                this.px(rems(0.5 * self.scale))
+                    .rounded(palette.radius * self.scale)
                     .bg(palette.background)
                     .when(self.bordered, |this| {
-                        this.border_1().border_color(palette.input)
+                        this.border(px(self.scale)).border_color(palette.input)
                     })
             })
             .when(self.focus_bordered && self.appearance, |this| {
@@ -104,19 +119,15 @@ impl RenderOnce for Input {
             })
             .child(
                 gpui_base::input::InputBase::new(("local-input", self.state.entity_id()))
-                    // Bind the visible field to its existing input owner for native focus/value access.
-                    .track_focus(&self.state.read(cx).focus_handle(cx))
-                    .aria_value(self.state.read(cx).value())
-                    .on_a11y_action(gpui_kit::AccessibleAction::Focus, move |_, window, cx| {
-                        accessible_state.update(cx, |state, cx| state.focus(window, cx));
-                    })
+                    // The original editing element publishes its role and single focus/Tab stop.
+                    .role(gpui_base::RoleOverride::Presentational)
                     .flex_1()
                     .min_w(px(0.))
                     .h_full()
-                    .when_some(self.accessibility_label, |frame, label| {
-                        frame.accessibility_label(label)
-                    })
-                    .child(BaseInput::new(&self.state)),
+                    .child(body::NativeInputBody::new(
+                        self.state.clone(),
+                        self.accessibility_label,
+                    )),
             )
             .refine_style(&self.style)
     }

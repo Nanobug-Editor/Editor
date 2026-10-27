@@ -1,5 +1,66 @@
 # Canvas 协议扩展实施记录
 
+最新状态（2026-10-25）：1.4–1.6 前置已独立交付；01 完成门禁、真实包、原生验收与双轴审查，已推送独立分支 `d12c4d21` 并读回确认 #128 关闭。02 已推送并读回 #129 closed/completed，03 实施中、04 未开始，四单全部完成后统一合回 main。历史检索未覆盖本次分支调整，以用户当前明确要求和本节记录为准。
+
+## A 阶段交付验收（2026-10-25）
+
+源码候选 `1a101f34444db576a3366973ff3fd2b68f08c89e` 在独立 target 完成验收；审查固定点仍为 `561aa5b2`。后文保留过程和失败记录，最新交付结果以本节为准。
+
+| 入口 | 最终结果 |
+| --- | --- |
+| `cargo fmt --check`、`git diff --check` | 通过 |
+| `cargo test --workspace --exclude editor-app --offline --locked --jobs 2` | 109 组，535 passed，0 failed，385 ignored，含 doc-tests；跳过项不计通过 |
+| 原生 app 测试程序的 `ui::plugin::`、`sdk_export` | 77 passed / 19 ignored；SDK 6 passed / 0 ignored |
+| `cargo check --workspace --offline --locked --jobs 4`、`cargo build -p editor-app --offline --locked --jobs 4` | exit0 |
+| 实际宿主 `--plugin-package ./crates/plugin-runtime/tests/fixtures/canvas-flow --output ./target/canvas-packages` | exit0，实际 wasm32-wasip2 Release 重建 17.94 s |
+| 固定账本入口 `canvas_scene-3d4ed09e7e072a05.exe --ignored --nocapture --test-threads=1` | 2 passed，0 failed，61.81 s |
+| 原生图形、图片、DPI、裁剪、资源限额及旧 TextBox/列宽 | 既有矩阵通过；资源修复后新增 3 个图片组合通过，并复跑受影响图片、复杂栅格和宿主回归 |
+| 最终固定包的 125% 浅色 / 200% 深色 | 各 1 passed，36.22 s / 30.11 s；包含公开管理器 zoom/pan 与真实像素，不冒充 OS 鼠标输入 |
+
+最终 ZIP 仍为首次交付的 `canvas-flow 1.0.0`，306702 字节，SHA-256 `8ada9f8754cca3fb65290b8e6f2b3823f65fbf4eb8d26c89d03f4ffe7d387833`；内嵌 SDK `b724d24dd1150bc86d470cd8f06a492f86093e08314b5d2bf44eb8c51347b506`。源码和宿主版本均记录实际已提交的 `1a101f34`，工具链为 rustc 1.98.1 / wasm32-wasip2。账本只更新本包条目，其他固定输入保留。
+
+### Standards
+
+首次 2 项 P1、复审新增 1 项 P1 均已修复。最终未解决硬性问题 0，判断性坏味道 0。受控 URI 的安全小样为 `image_nodes=2 distinct_encoded_buffers=1`，不再按放置复制 PNG 编码缓冲。
+
+### Spec
+
+首次 2 项 P1 均已修复，后续两轮复审未解决及新增均为 0。只验收 01 的 AC1–8；02–04 及整批性能门槛没有记作完成。
+
+用户于 2026-10-25 要求四单仅在独立 worktree 的 `codex/canvas-protocol-extension` 分支执行，全部完成后统一合回 main；不再逐单同步或快进主工作区。各单仍按验证、审查、普通提交、推送该分支、核对关闭对应 issue 交付。 当前 main 保留已交付前置 `56cb99ae`，四单尚未合入；最新 ZIP/账本的最终两轴核对均为 0；分支推送后已读回 #128 为 closed/completed。
+
+## 已提交前置上的 A 阶段历史复验
+
+### A 候选正式审查与修复（2026-10-25）
+
+`b5826b87` 已相对固定点 `561aa5b2` 完成首轮双轴审查。Standards 轴报告 2 项 P1（图片展开在分配后才检查、嵌入原始 SVG 后绕过最终变换的滤镜预算）；Spec 轴报告 2 项 P1（虚线展开、同一图片展开问题）。两轴分别记录，重复发现不用于掩盖另一轴。
+
+公开协议回归 `canvas_scene_rejects_unbounded_dash_expansion` 先因接纳 500000 像素线段上的极小虚线周期失败，再以控制多边形长度上界和场景共享段数预算在接纳前拒绝，通过。PNG 原生回归 `image-reuse.json` 与 SVG 原生回归 `image-svg-pixels.json` 均先显示错误占位，修复后分别在 3.32 s / 2.65 s 通过原生像素及显示回执检查：同一来源在隔离透明组重复 24 次只编码一次；SVG 只使用此前已受限解码的 Bitmap，不能在新变换下再次执行源 XML/滤镜。
+
+生成的 SVG 追加与 PNG 压缩输出均在增长前计费，超限不生成部分成功画面。该可信数值/PNG 序列化路径与访客 SVG 的 XML/定义复用限制分开，且不共享解析缓存，不能凭相同摘要绕过访客 SVG 门禁。阶段门禁及修复后的双轴复审正在进行；当前不关闭 #128。
+
+随后 Standards 复审又发现 1 项 P1：锁定 usvg 会为每个 `<use>` 重新解码 data URL，XML 去重仍会复制 PNG 缓冲。安全小样证实 2 次放置产生 2 个不同 Arc；Spec 当轮未解决为 0，不能抵消 Standards 的新发现。最终改用只解析宿主生成 URI 的受控解析器返回同一 PNG Arc，禁用 data 及其他字符串来源；PNG 字节与 XML 共用 4 MiB 预算。另在解析前按每次放置的源像素和保守 2x 投影面积累计最多 16 Mi 像素工作，限制 resvg 按放置重复解码/采样的 CPU 成本。
+
+`image-raster-work.json` 用 200 次放置的有界小样先复现错误地成功呈现，再通过明确失败回执验收（1.57 s）；没有运行 GiB 级攻击输入。共享 URI 路径下 PNG、已解码 SVG 的原生像素与成功回执继续通过（3.00 s / 2.65 s），空图片映射的旋转渐变也通过。最终两轴复审尚待读回。
+
+候选路径 `C:/Users/Tmiracle/.codex/worktrees/canvas-prerequisite/Editor`，独立 target。以保存的 A 验证副本对初始快照的差异合入前置，保留两个已审查的列宽取消修复；未复制主工作区后来出现的 Editor 协议迁移。主工作区的 `cargo fmt --check` 因该并行迁移的格式差异返回 1，原始输出保存在 `C:/Users/Tmiracle/.codex/canvas-main-fmt-20261025.log`；本候选的格式和阶段门禁单独通过。
+
+| 入口 | 实际结果 |
+| --- | --- |
+| `cargo test -p plugin-protocol --lib --offline --locked --jobs 2` | 74 passed，0 failed，0 ignored |
+| `cargo test --workspace --exclude editor-app --offline --locked --jobs 2` | 109 组，534 passed，0 failed，385 ignored，含文档测试 |
+| `cargo test -p editor-app 'ui::plugin::' --offline --locked --jobs 4 -- --test-threads=1` | 77 passed，0 failed，19 ignored |
+| `cargo test -p editor-app sdk_export --offline --locked --jobs 4 -- --test-threads=1` | 6 passed，0 failed，0 ignored |
+| `cargo build -p editor-app --offline --locked --jobs 4`、`cargo check --workspace --offline --locked --jobs 4` | exit0 |
+| 实际宿主 `--plugin-package ./crates/plugin-runtime/tests/fixtures/canvas-flow --output ./target/canvas-packages` | exit0，实际 WASI Release 组件重新构建 |
+| `target/debug/deps/canvas_scene-3d4ed09e7e072a05.exe --ignored --nocapture --test-threads=1` | 2 passed，0 failed，0 ignored，126.07 s；实际固定包的投影、显示门禁、拒绝后恢复与 ABA |
+
+重建后的固定包仍为首次交付的 `canvas-flow 1.0.0`，306660 字节，SHA-256 `cd61d680422c2b5781bc64fcc82b1f356ce3dda7aa4a79d76c51de931033f40e`，实际内嵌 SDK 摘要 `6b78c801f237fc1edb2e7f7e8ea1a153d2d47167cadaa51853695d2036f1bc7a`。账本只新增该包条目，其他固定输入保持；包和 SDK 均不包含文档或宿主业务源码。源码/宿主在构建时仍含未提交的 A 差异，commit 字段继续为 null。
+
+原生验收继续使用上述 app 测试实际生成的 `target/debug/deps/editor_app-420de45671c333eb.exe`，显式 `--ignored --nocapture --test-threads=1`。basic/layers/image 与 circular-corners、dpi-125、dpi-200-dark、graphics、miter-shear、native-clips、pixel-budget、presentation、rotated-gradient 共 12 个场景通过；旧原生 TextBox/列宽入口也通过（1 项，3.27 s）。这不是把默认跳过的用例计为通过。
+
+另将实际 WASM 的原生用例补强为：通过公开管理器调用插件已声明的 zoom/pan 按钮，宿主不计算业务缩放策略；再绘制插件返回的场景。125% 下蓝色节点面积要求已从初始画面的 9124 像素红灯，改为放大后的至少 13500 像素；200% 深色对应至少 34000。实际 Canvas 原点取自原生布局，在局部显示坐标 `(50,55)`、`(160,55)` 检查蓝色，分别防止错误的重复缩放与漏用平移；这些坐标对应 guest 声明的 1.25 缩放和 20 像素平移。它们是公开管理器命令加真实原生像素的组合验收，不冒充 OS 鼠标点击或输入法验收。最终 125% 浅色、200% 深色均通过，分别 41.30 s、40.41 s；合计 14 个结构化场景组合及 1 个旧 TextBox/列宽原生入口显式通过。正式双轴审查及工单交付尚未完成。
+
 2026-10-24 开始，2026-10-25 续作。状态：阶段 A 实施与完整回归中；开发清单已接入 `ui.canvas 1.7` 候选，尚未验收交付，未提交、推送或关闭工单。
 
 规格见[通用 Canvas 协议扩展方案](../specs/canvas-protocol-extension.md)；用户已明确确认[四张工单、依赖、测试接缝及审查基点](../tickets/canvas-protocol-extension/README.md)，并要求全部顺序实施，无需逐单等待继续。方案 #127 与 #128–#131 已发布，原生父子/阻塞关系已读回，真实数据库 ID 见[发布记录](../tickets/canvas-protocol-extension/publication.json)。GitHub 连接器创建返回 403，发布使用既有本机 Git 认证的 REST 请求，凭据仅在进程内存中使用。

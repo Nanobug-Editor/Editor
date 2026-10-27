@@ -120,3 +120,9 @@ pub fn vertical_scrollbar<H: ScrollbarHandle + Clone>(handle: &H, _: &App) -> Sc
 pub fn vertical_viewport_scrollbar<H: ScrollbarHandle + Clone>(handle: &H, _: &App) -> Scrollbar {
     Scrollbar::new(handle, VIEWPORT_EDGE_INSET, true)
 }
+
+/// Two-dimensional native viewports reuse Base's original offset authority and both draggable rails.
+#[track_caller]
+pub fn two_axis_viewport_scrollbars<H: ScrollbarHandle + Clone>(handle: &H, _: &App) -> Scrollbar {
+    Scrollbar::new(handle, VIEWPORT_EDGE_INSET, true).axis(gpui_base::ScrollbarAxis::Both)
+}

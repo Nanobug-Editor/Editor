@@ -490,6 +490,12 @@ impl State {
                 }
                 api::EditorOperation::ReadClipboard
                 | api::EditorOperation::WriteClipboard { .. } => "clipboard",
+                api::EditorOperation::Clipboard { .. } | api::EditorOperation::Transfer { .. } => {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Clipboard offers cannot be delegated",
+                    ));
+                }
                 api::EditorOperation::OpenDataFile { .. } => {
                     return Err(Failure::new(
                         ErrorCode::PermissionDenied,

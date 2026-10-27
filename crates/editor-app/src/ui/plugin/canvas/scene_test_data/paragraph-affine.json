@@ -1,0 +1,10 @@
+{
+ "expect_presented":true,
+ "visible_colors":[{"rgba":[255,127,127,255],"minimum":60}],
+ "scene":{"identity":62,"revision":1,"roots":[
+  {"kind":"group","id":"rotated","transform":[0,1,-1,0,200,20],"opacity":0.5,
+   "clip":{"kind":"path","segments":[{"op":"move","x":0,"y":0},{"op":"line","x":40,"y":0},{"op":"line","x":40,"y":35},{"op":"line","x":0,"y":35},{"op":"close"}]},
+   "children":[{"kind":"paragraph","id":"label","layout_key":"affine-1","text":"AB中文","rect":{"x":0,"y":0,"w":100,"h":40},
+    "style":{"font":{"family":"Segoe UI","size_px":20,"bold":true},"runs":[{"range":{"start":0,"end":8},"rgba":4278190335}]}}]}
+ ]}
+}

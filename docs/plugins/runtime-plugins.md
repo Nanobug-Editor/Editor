@@ -54,12 +54,15 @@ WASM 不继承宿主目录、环境、输入输出或网络访问。每次调用
 | workspace.read / storage | 获授工作区读取 / 当前实例私有数据 |
 | editor.read / editor.write | 读取版本化文档信息 / 保存明确版本的文档 |
 | ui.panels / clipboard | 自己声明的面板 / 原生剪贴板 |
+| ui.transfer | 实际原生用户拖放的惰性数据；文件只以本次受控导入句柄读取 |
 | process.service.<id> | 清单固定服务；不能任意替换程序或参数 |
 | process.exec | 使用程序路径与 argv 执行任意本机程序，支持 stdio 或 PTY |
 | services.call | 调用声明的插件服务；完整调用链仍受来源权限约束 |
 | dependencies.prepare / dependencies.install | 校验后准备私有依赖 / 经额外确认执行声明安装步骤 |
 
 原生程序以当前 OS 用户身份运行，具有该用户的文件、网络与进程权限；WASM 权限不构成子进程文件沙箱。宿主经工具链解析程序并传 argv，不拼接 Shell 命令。插件自己的交互式 Shell 输入是用户授权的终端行为。
+
+`ui.clipboard 1.1` 的格式化入口保留原纯文本调用；`ui.transfer 1.0` 对普通控件与 `ui.canvas 1.9` 目标使用同一 offer。枚举与进入/移动只提供元数据，放下后才可按优先级选定读取；拖出内容先经当前包命名空间与字节预算检查，PNG 沿用原生图片解码限额。系统文件路径不进入客体消息，导入句柄不授权工作区写入，关闭、来源/目标撤销和期限届满会使迟到读取失效。公开义务见[传输](../../crates/plugin-protocol/src/transfer.rs)与[场景原生叠放](../../crates/plugin-protocol/src/ui/canvas/overlay.rs)。
 
 依赖在获授权的安装/更新流程中，或声明了 `on_demand` 的首次方法调用中，下载、校验并写入私有版本缓存。按需准备沿用已确认的依赖权限、原始调用期限和取消状态；原生安装步骤另行展示工具、参数及用途。不静默修改全局环境。取消只能停止尚未执行的请求、停止等待或尽力终止进程；不能承诺回滚已发生的外部副作用。
 

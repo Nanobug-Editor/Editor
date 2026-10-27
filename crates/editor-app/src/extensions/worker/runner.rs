@@ -74,6 +74,7 @@ impl Worker {
             let mut development = crate::plugin_development::instance::Loader::default();
             let mut development_install = None::<String>;
             let mut vectors = super::super::images::VectorRenderer::default();
+            vectors.set_environment(environment.clone());
             let mut preparation: Option<BackgroundPreparation> = None;
             let mut deferred = VecDeque::new();
             // A coalesced geometry burst retains its first input/lifecycle boundary verbatim.
@@ -94,6 +95,7 @@ impl Worker {
             let mut target_calls = super::targets::TargetCalls::default();
             let mut configuration_calls = super::configurations::ConfigurationCalls::default();
             let mut demands = super::demands::Demands::default();
+            let mut transfers = super::transfers::Routes::default();
             loop {
                 // Development candidates use the live actor's transaction and private data owner.
                 if preparation.is_none() && deferred.is_empty() {
@@ -772,6 +774,9 @@ impl Worker {
                                 .copied()
                                 .unwrap_or(0);
                             if epoch == current {
+                                if let api::Notification::Theme(environment) = &event {
+                                    vectors.set_environment(environment.clone());
+                                }
                                 let source_callback = matches!(
                                     &event,
                                     api::Notification::Preview { .. }
@@ -863,6 +868,50 @@ impl Worker {
                                     "host.ui.retired",
                                     t!("plugins.log_retired_callback").to_string(),
                                 );
+                                Ok(())
+                            }
+                        }
+                        Some(Work::InputBackpressure {
+                            plugin,
+                            epoch,
+                            panel,
+                            resume,
+                        }) => {
+                            if resume {
+                                if let Some(plugin) = plugin {
+                                    actor_sender.acknowledge_input_resume(
+                                        &plugin,
+                                        epoch,
+                                        panel.as_deref(),
+                                    );
+                                }
+                            } else if plugin.as_ref().is_none_or(|plugin| {
+                                output.lock().unwrap().instance_epochs.get(plugin).copied()
+                                    == Some(epoch)
+                            }) {
+                                output.lock().unwrap().status = Some(OperationStatus {
+                                    plugin,
+                                    message: t!("plugins.input_queue_exhausted").to_string(),
+                                });
+                            }
+                            Ok(())
+                        }
+                        Some(Work::Transfer {
+                            plugin,
+                            panel,
+                            epoch,
+                            ingress,
+                        }) => {
+                            let current = output
+                                .lock()
+                                .unwrap()
+                                .instance_epochs
+                                .get(&plugin)
+                                .copied()
+                                .unwrap_or(0);
+                            if current == epoch {
+                                transfers.deliver(&mut manager, &plugin, &panel, epoch, ingress)
+                            } else {
                                 Ok(())
                             }
                         }
@@ -1324,6 +1373,7 @@ impl Worker {
                 published
                     .editor_requests
                     .retain(|(_, request)| !request.status().is_terminal());
+                published.canvas_frames = manager.take_canvas_frame_requests();
                 for request in editor_requests {
                     if published.editor_requests.len() < 256 {
                         published.editor_requests.push(request);
@@ -1420,6 +1470,7 @@ impl Worker {
                 // Recovery also changes ownership when installation returns Err; the same
                 // real-instance publication is used by application-level Manager fixtures.
                 published.apply_manager_publication(manager_publication);
+                actor_sender.retain_input_owners(&published);
                 published.diagnostics = diagnostics;
                 published.views = views;
                 published.images = images;

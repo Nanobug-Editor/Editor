@@ -1,0 +1,11 @@
+{
+  "expect_presented":true,
+  "expected_presented_revisions":[1,2,3,4,5,6],
+  "retained_paragraph_script":true,
+  "visible_colors":[{"rgba":[0,0,0,255],"minimum":120}],
+  "scene":{"identity":81,"revision":1,"roots":[{"kind":"group","id":"content","children":[
+    {"kind":"paragraph","id":"label","layout_key":"label-1","text":"Native 中文缓存",
+     "rect":{"x":20,"y":20,"w":180,"h":80},"style":{"font":{"family":"Segoe UI","size_px":18},"wrap":true}},
+    {"kind":"shape","id":"marker","geometry":{"kind":"rect","rect":{"x":20,"y":130,"w":20,"h":20}},"fill":{"kind":"solid","rgba":863633407}}
+  ]}]}
+}

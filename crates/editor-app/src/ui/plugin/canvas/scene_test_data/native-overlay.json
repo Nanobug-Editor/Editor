@@ -1,0 +1,11 @@
+{
+  "expect_presented": true, "overlay_script": true,
+  "scene": {"identity":61,"revision":1,"roots":[
+    {"kind":"group","id":"node-space","transform":[1,0,0,1,20,20],"children":[]}
+  ],"targets":[{"id":"node","epoch":2,"space":"node-space","focusable":true,
+    "geometry":{"kind":"rect","rect":{"x":0,"y":0,"w":140,"h":90}}}]},
+  "overlays": [{"id":"rename-box","anchor":{"identity":61,"scene_revision":1,
+    "target":{"id":"node","epoch":2},"space":"node-space","rect":{"x":0,"y":0,"w":140,"h":32}},
+    "rect":{"x":0,"y":40,"w":140,"h":32},
+    "child":{"id":"rename","kind":{"type":"input","value":"","value_revision":0,"placeholder":"名称 / Name"}}}]
+}

@@ -1,6 +1,8 @@
-//! Restore editor geometry without racing an asynchronous resize against window placement.
+//! Adapt owned native window geometry and observed focus without changing global desktop settings.
 
 use std::io;
+mod activation;
+pub use activation::reconcile_active_window;
 use windows::Win32::{
     Foundation::{HWND, RECT},
     Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow},

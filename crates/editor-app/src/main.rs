@@ -1210,9 +1210,14 @@ fn main() -> anyhow::Result<()> {
             .ok()
             .map(|workspace| SessionState::load_in_profile(workspace.root(), &profile))
     });
-    gpui_kit::application()
+    let native_platform = gpui_kit::platform::current_platform(false);
+    // Native scene workers share this App's actual font IDs and bounded glyph raster API.
+    let native_fonts = native_platform.text_system();
+    gpui_kit::Application::with_platform(native_platform)
         .with_assets(AppAssets)
         .run(move |cx| {
+            editor_ui::text::paragraph::install_native_raster_fonts(native_fonts, cx)
+                .expect("native paragraph font backend must initialize once");
             gpui_kit::init(cx);
             typography::init(cx);
             apply_theme(&theme::active_theme(false), cx);

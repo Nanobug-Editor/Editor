@@ -20,6 +20,14 @@ SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 
 
 `ui.canvas 1.5` 新增 `Canvas.measure_text`：提交带唯一 ID、字体、字号和粗细的单行样本组，宿主通过 `CanvasEvent::TextMeasured` 返回每组最宽样本的原生字宽，单位为变换前的逻辑像素。相同请求及字体在原生重绘间复用；结果仍受节点、模态和精确场景 revision 校验，不能沿滚动 epoch 越过旧场景。每画布最多 16 组、总计 256 个样本、64 KiB 文本，每样本最多 4096 字节；样本文本同时计入整份 UI 的文本预算。插件可据此安排紧凑列宽，主动覆盖的列宽仍由插件保留；宿主不解释样本的业务含义。
 
+`ui.canvas 1.7` 增加互斥于旧 paint 的结构化场景，提供路径、RGBA/渐变、层级变换/裁剪、受控图片引用和实际显示回执。来源、配额及显示身份义务见[场景契约](src/ui/canvas/scene.rs)与[Canvas 事件](src/ui/canvas.rs)。
+
+`ui.canvas 1.8` 增加宿主原生多行 Paragraph、原文位置查询、稳定目标输入/预编辑和有界语义树。原文偏移始终使用 UTF-8 扩展字素边界；OS 的 UTF-16 转换、原生临时草稿与累积确认不引入编辑器文档或领域 Undo。目标换代、完整确认、原生编辑键的显式启用和回执义务见[文字会话](src/ui/canvas/text_input.rs)、[目标输入](src/ui/canvas/targets.rs)、[位置查询](src/ui/canvas/text_layout.rs)与[语义树](src/ui/canvas/semantics.rs)。真实编辑器文本继续使用既有文档会话。
+
+`ui.canvas 1.9` 增加场景锚定的普通原生子树、现有提示/菜单锚点及目标级拖放声明。原生控件保留普通 UI 身份、IME、键盘与语义；几何移动保留编辑会话，目标 epoch、来源或任一 overlay 祖先换代撤销旧端点。原生层只接受轴对齐等比缩放及矩形祖先裁剪，曲线、路径或非轴对齐的原生裁剪会明确拒绝；组与 VisualViewport 的组合倍率限于 `1/64..8`，OS DPI 独立。用途与失败条件见[原生叠放及锚点](src/ui/canvas/overlay.rs)。
+
+`ui.clipboard 1.1` 与 `ui.transfer 1.0` 提供有界多格式交换：先枚举元数据，再按消费者优先级读取选定的纯文本、惰性 HTML、PNG 或包命名空间数据；已有纯文本剪贴板入口保留。剪贴板沿用 `clipboard` 权限，拖放单独要求 `ui.transfer`，原生真实手势才可发放 offer 或开始拖出。文件列表只由 OS 原生边界提供，客体获得只读导入条目和有界分块读取，不能从数据借用工作区、写入或其他插件权限。offer 的实例/目标/来源/期限和显式关闭共同约束所有读取，HTML 不执行或加载外部内容；接口义务见[传输契约](src/transfer.rs)。
+
 HTTP、密钥、私有状态、计时器、通用树与编辑器装饰分别见 [http](src/http.rs)、[secrets](src/secrets.rs)、[storage](src/storage.rs)、[timers](src/timers.rs)、[tree](src/tree.rs) 与 [decorations](src/decorations.rs)。工作区文件名颜色和顶部入口分别协商 `explorer.decorations 1.0`、`ui.workspace 1.0`，见 [presentation](src/presentation.rs)；共享层次菜单见 [menus](src/ui/menus.rs)。
 
 通用树的 `ui.tree 1.2` 提供 `tree::update`，原子更新缓存节点的显示和禁用状态，保留已加载页、展开、epoch 及未完成请求；结构变化使用 `refresh`，或另行协商下述 1.4 增量能力。清单须明确声明 1.2 最低版本，完整预算与回调约束见 [树契约](src/tree.rs)。

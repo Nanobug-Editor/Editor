@@ -226,6 +226,12 @@ fn active_nodes<'a>(node: &'a ui::Node, out: &mut Vec<&'a ui::Node>) {
                 active_nodes(&action.content, out);
             }
         }
+        Kind::Canvas(canvas) => {
+            // Foreground Editors keep the same source/alignment ownership as ordinary children.
+            for overlay in &canvas.overlays {
+                active_nodes(&overlay.child, out);
+            }
+        }
         _ => {}
     }
 }

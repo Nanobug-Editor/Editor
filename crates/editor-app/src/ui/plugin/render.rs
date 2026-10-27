@@ -14,8 +14,13 @@ impl PluginView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if self.overlays.needs_sync {
+            self.sync_native(window, cx);
+        }
         self.sync_widgets(window, cx);
         self.sync_editor_access(cx);
+        self.reconcile_native_transfers();
+        self.transfers.begin_frame();
         self.sync_code_groups(window, cx);
         self.sync_code_highlighting(cx);
         let viewport_frame = self.begin_viewport_frame();
@@ -32,6 +37,10 @@ impl PluginView {
             .tab_group()
             .track_focus(&self.view_focus)
             .capture_key_down(cx.listener(|view, _, window, cx| {
+                if view.input_backpressure {
+                    cx.stop_propagation();
+                    return;
+                }
                 // Register on the focused root's ancestry; an overlay's paint node may be a sibling.
                 if view.view_focus.contains_focused(window, cx) {
                     view.viewport.manual_input();
@@ -40,7 +49,8 @@ impl PluginView {
             .relative()
             .overflow_hidden()
             .bg(self.colors("container", cx).background)
-            .child(body);
+            .child(body)
+            .children(self.scene_tooltips(cx));
         // Popup anchors use this composed view's native origin, never the containing editor window origin.
         let owner = cx.entity().downgrade();
         let released = cx.entity().downgrade();
@@ -56,6 +66,7 @@ impl PluginView {
                     });
                 },
                 move |_, _, window, cx| {
+                    let _ = viewport.update(cx, |view, _| view.transfers.listen(window));
                     // All source blocks have completed prepaint before this composed view paints.
                     let _ = viewport.update(cx, |view, cx| {
                         view.finish_viewport_frame(viewport_frame, revision, cx);
@@ -203,7 +214,24 @@ impl PluginView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let disabled = node.disabled || parent_disabled;
+        // Scale each ordinary declaration once at its render boundary, preserving guest-owned values.
+        let mut projected;
+        let node = if self.native_scale != 1. {
+            projected = node.clone();
+            let layout = &mut projected.layout;
+            layout.width = layout.width.map(|value| value * self.native_scale);
+            layout.height = layout.height.map(|value| value * self.native_scale);
+            layout.padding *= self.native_scale;
+            layout.gap *= self.native_scale;
+            layout.margin.top *= self.native_scale;
+            layout.margin.right *= self.native_scale;
+            layout.margin.bottom *= self.native_scale;
+            layout.margin.left *= self.native_scale;
+            &projected
+        } else {
+            node
+        };
+        let disabled = node.disabled || parent_disabled || self.input_backpressure;
         // Recursive geometry/editor borrowing stays outside the large leaf control renderer's stack.
         let content = if matches!(
             node.kind,
@@ -243,10 +271,11 @@ impl PluginView {
         let block = node.id.clone();
         let revision = self.document.revision;
         let pressed_node = node.id.clone();
+        let source_node = node.id.clone();
         // Compact icon buttons have a known square extent. Publishing it at the outer layout
         // boundary avoids repeated intrinsic sizing through nested wrapping toolbar groups.
         let icon_extent = (node.button_icon.is_some() && matches!(node.kind, Kind::Button { .. }))
-            .then_some(24. + node.layout.padding * 2.);
+            .then_some(24. * self.native_scale + node.layout.padding * 2.);
         // Source images derive their responsive height from the actual pixel area. Fixing the
         // wrapper height would leave unused space when a narrower container shrinks the bitmap.
         let pixel_image = matches!(node.kind, Kind::Image { .. }) && node.viewport.is_none();
@@ -318,6 +347,16 @@ impl PluginView {
                     v.opacity(0.5)
                 })
                 .child(content)
+                .when(node.drag_source.is_some() && !disabled, |view| {
+                    view.capture_any_mouse_down(cx.listener(move |this, event, _, _| {
+                        this.source_pointer_down(&source_node, revision, event);
+                    }))
+                })
+                .children(self.transfers.probe(
+                    node,
+                    self.native_scale,
+                    self.canvases.get(&node.id),
+                ))
                 .when(
                     self.document.link_events
                         && matches!(node.kind, Kind::RichText { .. })

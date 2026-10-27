@@ -1,17 +1,37 @@
 //! Serialize validated complex layers to inert SVG for the existing bounded background rasterizer.
+use super::bounds::geometry_bounds;
 use super::*;
 use std::fmt::Write as _;
+mod budget;
+use budget::SvgText;
 
 /// Produce one finite SVG and its canvas-space bounds; no user XML or external resource is emitted.
 pub(super) fn encode(
     scene: &CanvasScene,
     photos: &BTreeMap<String, std::sync::Arc<super::super::super::images::Photo>>,
-) -> Result<(String, protocol::Rect), String> {
+    typography: &Typography,
+    pixel_budget: u64,
+    draft: Option<&paragraph::NativeDraft>,
+) -> Result<
+    (
+        String,
+        protocol::Rect,
+        BTreeMap<String, std::sync::Arc<Vec<u8>>>,
+    ),
+    String,
+> {
+    let (defs, body) = SvgText::pair();
     let mut writer = Writer {
-        defs: String::new(),
-        body: String::new(),
+        defs,
+        body,
+        images: BTreeMap::new(),
+        pngs: BTreeMap::new(),
+        image_work: 16 * 1024 * 1024,
         next: 0,
         bounds: None,
+        typography: typography.clone(),
+        pixel_budget,
+        draft,
     };
     for root in &scene.roots {
         writer.node(root, SceneTransform::default(), photos)?;
@@ -38,16 +58,27 @@ pub(super) fn encode(
             h: height,
             ..bounds
         },
+        writer.pngs,
     ))
 }
 /// Own generated numeric IDs and the union of transformed primitive bounds for one compilation.
-struct Writer {
-    defs: String,
-    body: String,
+struct Writer<'a> {
+    typography: Typography,
+    pixel_budget: u64,
+    defs: SvgText,
+    body: SvgText,
+    /// A decoded source is encoded once; placements only reference generated numeric IDs.
+    images: BTreeMap<String, usize>,
+    /// Only generated URIs resolve during parsing; every placement shares its encoded Arc.
+    pngs: BTreeMap<String, std::sync::Arc<Vec<u8>>>,
+    /// Aggregate decode and conservative 2x-density sampling pixels, charged before resvg.
+    image_work: u64,
     next: usize,
     bounds: Option<protocol::Rect>,
+    /// Only this admitted paragraph's native text/decoration may differ from committed source.
+    draft: Option<&'a paragraph::NativeDraft>,
 }
-impl Writer {
+impl Writer<'_> {
     /// Encode one validated node, preserving true group opacity and local clip coordinates.
     fn node(
         &mut self,
@@ -55,6 +86,7 @@ impl Writer {
         parent: SceneTransform,
         photos: &BTreeMap<String, std::sync::Arc<super::super::super::images::Photo>>,
     ) -> Result<(), String> {
+        self.body.check()?;
         match node {
             SceneNode::Group {
                 transform,
@@ -93,8 +125,8 @@ impl Writer {
                 stroke,
                 ..
             } => {
-                let local = geometry_bounds(geometry, SceneTransform::default());
-                let mut bounds = geometry_bounds(geometry, parent);
+                let local = geometry_bounds(geometry, SceneTransform::default(), 1.);
+                let mut bounds = geometry_bounds(geometry, parent, 1.);
                 if let Some(stroke) = stroke {
                     let [a, b, c, d, _, _] = parent.0;
                     // Row sums conservatively bound each projected axis, including shear.
@@ -127,35 +159,51 @@ impl Writer {
                 );
             }
             SceneNode::Image { image, rect, .. } => {
-                self.include(geometry_bounds(
+                let bounds = geometry_bounds(
                     &SceneGeometry::Rect {
                         rect: *rect,
                         radii: [0.; 4],
                     },
                     parent,
-                ));
-                let bytes = photos
+                    1.,
+                );
+                self.include(bounds);
+                let bitmap = photos
                     .get(image)
-                    .filter(|photo| matches!(photo.decoded, Ok(Some(_))))
-                    .and_then(|photo| match &photo.resource.state {
-                        plugin_runtime::ImageState::Ready(bytes) => Some(bytes),
-                        _ => None,
-                    });
-                if let Some(bytes) = bytes {
-                    use base64::Engine as _;
-                    let mime = match image::guess_format(bytes) {
-                        Ok(image::ImageFormat::Png) => "image/png",
-                        Ok(image::ImageFormat::Jpeg) => "image/jpeg",
-                        Ok(image::ImageFormat::Gif) => "image/gif",
-                        Ok(image::ImageFormat::WebP) => "image/webp",
-                        _ => "image/svg+xml",
+                    .and_then(|photo| photo.decoded.as_ref().ok()?.as_ref());
+                if let Some(bitmap) = bitmap {
+                    // resvg decodes PNGs per placement even when the encoded Arc is shared.
+                    // Charge decoding plus projected sampling before parsing or raster allocation.
+                    let work = u64::from(bitmap.width) * u64::from(bitmap.height)
+                        + (f64::from(bounds.w) * f64::from(bounds.h) * 4.).ceil() as u64;
+                    self.image_work = self
+                        .image_work
+                        .checked_sub(work)
+                        .ok_or("Canvas images exceed their raster work budget")?;
+                    let id = if let Some(id) = self.images.get(image) {
+                        *id
+                    } else {
+                        // Reuse only admitted pixels: original SVG filters must never execute again
+                        // under a different transform. PNG stays outside XML: usvg would otherwise
+                        // allocate a new base64 buffer for every <use> placement.
+                        let encoded = budget::png(bitmap, self.defs.remaining())?;
+                        self.defs.charge(encoded.len())?;
+                        let id = self.next;
+                        self.next += 1;
+                        let uri = format!("nanobug-canvas-image:{id}");
+                        self.pngs.insert(uri.clone(), std::sync::Arc::new(encoded));
+                        let _ = write!(
+                            self.defs,
+                            "<image id=\"i{id}\" width=\"1\" height=\"1\" preserveAspectRatio=\"none\" href=\"{uri}\"/>"
+                        );
+                        self.defs.check()?;
+                        self.images.insert(image.clone(), id);
+                        id
                     };
-                    let encoded =
-                        base64::engine::general_purpose::STANDARD.encode(bytes.as_slice());
                     let _ = write!(
                         self.body,
-                        "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" href=\"data:{mime};base64,{encoded}\"/>",
-                        rect.x, rect.y, rect.w, rect.h
+                        "<use href=\"#i{id}\" transform=\"matrix({} 0 0 {} {} {})\"/>",
+                        rect.w, rect.h, rect.x, rect.y
                     );
                 } else {
                     let _ = write!(
@@ -165,8 +213,79 @@ impl Writer {
                     );
                 }
             }
+            SceneNode::Paragraph {
+                id: paragraph,
+                layout_key,
+                text,
+                rect,
+                style,
+            } => {
+                let draft = self.draft.filter(|draft| {
+                    draft.paragraph == *paragraph && draft.layout_key == *layout_key
+                });
+                let mut style = style.clone();
+                if draft.is_some_and(|draft| draft.presentation.transient) {
+                    style.runs.clear();
+                }
+                let font_style = style.font.clone().over(self.typography.font.clone());
+                let mut face = font(font_style.family.unwrap_or_else(|| "Segoe UI".into()));
+                if font_style.bold.unwrap_or(false) {
+                    face = face.bold();
+                }
+                let context = editor_ui::text::paragraph::CanvasTextLayout {
+                    font: face,
+                    font_size: px(font_style.size_px.unwrap_or(14.)),
+                    color: rgb(self.typography.foreground).into(),
+                    bounds: Bounds::new(point(px(0.), px(0.)), size(px(rect.w), px(rect.h))),
+                    style: style.clone(),
+                    projection: None,
+                };
+                let [a, b, c, d, _, _] = parent.0;
+                let density = (2. * (a.abs() + c.abs()).max(b.abs() + d.abs())).clamp(0.25, 4.);
+                let pixels = if let Some(draft) = draft {
+                    editor_ui::text::paragraph::rasterize_native_draft(
+                        &draft.presentation,
+                        &context,
+                        density,
+                        self.pixel_budget,
+                        &mut self.image_work,
+                    )?
+                } else {
+                    editor_ui::text::paragraph::rasterize_native_paragraph(
+                        text.clone().into(),
+                        &context,
+                        density,
+                        self.pixel_budget,
+                        &mut self.image_work,
+                    )?
+                };
+                let png = budget::png_rgba(
+                    &pixels.rgba,
+                    pixels.width,
+                    pixels.height,
+                    self.defs.remaining(),
+                )?;
+                self.defs.charge(png.len())?;
+                let id = self.next;
+                self.next += 1;
+                let uri = format!("native-paragraph-{id}.png");
+                self.pngs.insert(uri.clone(), std::sync::Arc::new(png));
+                self.include(geometry_bounds(
+                    &SceneGeometry::Rect {
+                        rect: *rect,
+                        radii: [0.; 4],
+                    },
+                    parent,
+                    1.,
+                ));
+                let _ = write!(
+                    self.body,
+                    "<image x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" preserveAspectRatio=\"none\" href=\"{}\"/>",
+                    rect.x, rect.y, rect.w, rect.h, uri
+                );
+            }
         }
-        Ok(())
+        self.body.check()
     }
     /// Encode a solid or arbitrary bounded gradient using generated references only.
     fn brush(&mut self, brush: &SceneBrush, attribute: &str, bounds: protocol::Rect) -> String {
@@ -226,7 +345,7 @@ fn path(geometry: &SceneGeometry) -> String {
     let mut out = String::new();
     match geometry {
         SceneGeometry::Rect { rect, radii } => {
-            let [a, b, c, d] = radii.map(|radius| radius.min(rect.w.min(rect.h) * 0.5));
+            let [a, b, c, d] = super::corner_radii(*rect, *radii);
             let (x, y, r, bottom) = (rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
             // Circular arcs share the native PathBuilder radius policy, including zero-radius corners.
             let _ = write!(
@@ -280,53 +399,5 @@ fn rule(geometry: &SceneGeometry) -> &'static str {
             ..
         } => "evenodd",
         _ => "nonzero",
-    }
-}
-/// Control-point hull bounds conservatively enclose Bézier curves under an affine transform.
-fn geometry_bounds(geometry: &SceneGeometry, transform: SceneTransform) -> protocol::Rect {
-    let mut points = Vec::new();
-    match geometry {
-        SceneGeometry::Rect { rect, .. } => points.extend([
-            (rect.x, rect.y),
-            (rect.x + rect.w, rect.y),
-            (rect.x, rect.y + rect.h),
-            (rect.x + rect.w, rect.y + rect.h),
-        ]),
-        SceneGeometry::Path { segments, .. } => {
-            for segment in segments {
-                match *segment {
-                    ScenePathSegment::Move { x, y } | ScenePathSegment::Line { x, y } => {
-                        points.push((x, y))
-                    }
-                    ScenePathSegment::Quadratic { cx, cy, x, y } => {
-                        points.extend([(cx, cy), (x, y)])
-                    }
-                    ScenePathSegment::Cubic {
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                        x,
-                        y,
-                    } => points.extend([(x1, y1), (x2, y2), (x, y)]),
-                    ScenePathSegment::Close => {}
-                }
-            }
-        }
-    }
-    let mut min = (f32::INFINITY, f32::INFINITY);
-    let mut max = (f32::NEG_INFINITY, f32::NEG_INFINITY);
-    for (x, y) in points {
-        let (x, y) = transform.point(x, y);
-        min.0 = min.0.min(x);
-        min.1 = min.1.min(y);
-        max.0 = max.0.max(x);
-        max.1 = max.1.max(y);
-    }
-    protocol::Rect {
-        x: min.0,
-        y: min.1,
-        w: (max.0 - min.0).max(1.),
-        h: (max.1 - min.1).max(1.),
     }
 }

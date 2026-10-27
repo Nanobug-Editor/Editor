@@ -1,0 +1,9 @@
+{
+  "expect_presented":true,"expected_text_hits":[],"expected_rtl_carets":true,"legacy_rtl_reference":true,
+  "text_queries":[{"id":"q1","paragraph":"label","layout_key":"rtl-1","positions":[{"byte":0},{"byte":2},{"byte":4},{"byte":6}]}],
+  "scene":{"identity":45,"revision":1,"roots":[{
+    "kind":"paragraph","id":"label","layout_key":"rtl-1","text":"אבג",
+    "rect":{"x":20,"y":20,"w":180,"h":60},
+    "style":{"font":{"family":"Segoe UI","size_px":18},"line_height":27,"wrap":true}
+  }]}
+}

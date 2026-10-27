@@ -433,6 +433,9 @@ impl Instance {
         };
         anyhow::ensure!(completion.id == id, "Plugin completion ID mismatch");
         let mut output = completion.result?;
+        // Retained artwork rejoins the ordinary atomic UI checks before any live view is changed.
+        self.restore_scene_patches(&mut output)
+            .map_err(super::scene_history::rejected)?;
         // Pure language callbacks cannot acquire view authority through incremental patches.
         anyhow::ensure!(
             !self.store.data().language_pure || output.view_patches.is_empty(),
@@ -568,6 +571,13 @@ impl Instance {
             }
             self.check_tool_authority(&view.panel, &view.document)?;
             for (name, minimum) in view.document.required_capabilities() {
+                if name == "ui.transfer" && !self.store.data().permissions.contains("ui.transfer") {
+                    return Err(Failure::new(
+                        ErrorCode::PermissionDenied,
+                        "Native transfer declarations require ui.transfer consent",
+                    )
+                    .into());
+                }
                 if !self
                     .store
                     .data()
@@ -811,6 +821,8 @@ impl Instance {
             }
         }
         self.validate_scenes(&output.views)
+            .map_err(super::scene_history::rejected)?;
+        self.validate_frame_requests(&output.canvas_frames, &output.views)
             .map_err(super::scene_history::rejected)?;
         Ok(output)
     }

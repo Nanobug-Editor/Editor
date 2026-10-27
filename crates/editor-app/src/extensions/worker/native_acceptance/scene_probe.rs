@@ -242,6 +242,8 @@ fn editor_value_kind(value: &api::EditorValue) -> &'static str {
         api::EditorValue::Opened { .. } => "opened",
         api::EditorValue::ImageSaved { .. } => "image_saved",
         api::EditorValue::Clipboard { .. } => "clipboard",
+        api::EditorValue::ClipboardFormats(_) => "clipboard_formats",
+        api::EditorValue::Transfer(_) => "transfer",
         api::EditorValue::Unit => "unit",
         api::EditorValue::Selection { .. } => "selection",
         api::EditorValue::DocumentSelection { .. } => "document_selection",

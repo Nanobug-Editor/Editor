@@ -9,10 +9,16 @@ impl Manager {
         panel: Option<String>,
         event: api::Notification,
     ) -> anyhow::Result<()> {
-        if matches!(&event, api::Notification::ImageInput { .. }) {
+        if matches!(
+            &event,
+            api::Notification::ImageInput { .. }
+                | api::Notification::Transfer(_)
+                | api::Notification::DragFinished(_)
+                | api::Notification::CanvasFrame { .. }
+        ) {
             return Err(api::Failure::new(
                 api::ErrorCode::InvalidRequest,
-                "Image input must originate from a native owned offer",
+                "Native image/transfer notifications require runtime-owned native offers",
             )
             .into());
         }
@@ -212,13 +218,11 @@ impl Manager {
                 )
                 .into());
             }
-            let document = self
-                .live
-                .get(id)
-                .and_then(|instance| instance.views.get(panel.as_ref().expect("validated panel")))
-                .ok_or_else(|| {
-                    api::Failure::new(api::ErrorCode::InvalidHandle, "UI panel is unavailable")
-                })?;
+            let instance = self.live.get(id).ok_or_else(|| {
+                api::Failure::new(api::ErrorCode::InvalidHandle, "UI panel is unavailable")
+            })?;
+            let document =
+                instance.ui_event_document(panel.as_ref().expect("validated panel"), event)?;
             // Reject stale host callbacks before calling WASM; they are not plugin crashes.
             if let Err(failure) = document.validate_event(event) {
                 if failure.code == api::ErrorCode::StaleRevision
@@ -233,10 +237,14 @@ impl Manager {
                 }
                 return Err(failure.into());
             }
-            self.live
+            if !self
+                .live
                 .get_mut(id)
                 .expect("validated UI owner")
-                .accept_scene_event(panel.as_deref().expect("validated panel"), event)?;
+                .accept_scene_event(panel.as_deref().expect("validated panel"), event)?
+            {
+                return Ok(());
+            }
             if let ui::Action::Tree(tree_event) = &event.action {
                 let instance = self.live.get(id).expect("validated UI owner");
                 instance.validate_tree_event(tree_event)?;

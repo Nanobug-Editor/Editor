@@ -1,5 +1,6 @@
 //! Rasterize clipped plugin vectors off the UI thread and reuse unchanged scene images.
 
+pub(crate) use super::canvas::scene::SceneStatistics;
 use gpui_kit::RenderImage;
 use plugin_runtime::plugin_protocol::{Paint, Rect, ui::Document};
 use resvg::{tiny_skia, usvg};
@@ -9,6 +10,9 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(test)]
+#[path = "images/retained_tests.rs"]
+mod retained_tests;
 #[cfg(test)]
 #[path = "images/scroll_tests.rs"]
 mod scroll_tests;
@@ -23,6 +27,10 @@ pub(crate) struct VectorImage {
 /// Published vectors and images share one immutable owner snapshot, with no native URL/path reads.
 #[derive(Clone, Default)]
 pub(crate) struct SceneImages {
+    /// Weak observations include old presentation snapshots without keeping their pixels alive.
+    residency: Vec<std::sync::Weak<RenderImage>>,
+    /// Cumulative worker work and current residency; native layout work remains queryable on scenes.
+    pub statistics: SceneStatistics,
     vectors: BTreeMap<String, Arc<Vec<Option<VectorImage>>>>,
     /// Structured paths share the worker's publication and keyed retirement with raster resources.
     pub(super) graphics: BTreeMap<String, Arc<super::canvas::scene::PreparedScene>>,
@@ -37,11 +45,31 @@ impl std::ops::Deref for SceneImages {
 }
 
 impl SceneImages {
+    /// Observe cumulative worker preparation work and current structured-scene residency.
+    /// `paragraph_layouts` reads live Canvas-owner counters; `live_*` also includes older published
+    /// snapshots through weak observations, without keeping their pixels alive. Native atlas memory is separate.
+    pub fn statistics(&self) -> SceneStatistics {
+        let mut statistics = self.statistics;
+        statistics.paragraph_layouts = self
+            .graphics
+            .values()
+            .map(|scene| scene.statistics().paragraph_layouts)
+            .sum();
+        (statistics.live_resident_bytes, statistics.live_textures) =
+            live_residency(&self.residency);
+        statistics
+    }
     /// Retiring a worker discards both vector surfaces and asynchronous image results.
     pub fn clear(&mut self) {
         self.vectors.clear();
         self.graphics.clear();
         self.photos.clear();
+        self.statistics.cached_items = 0;
+        self.statistics.resident_bytes = 0;
+        self.statistics.vertices = 0;
+        self.residency.clear();
+        self.statistics.live_resident_bytes = 0;
+        self.statistics.live_textures = 0;
     }
     /// Resource completion can change layout even when the guest document Arc stays unchanged.
     pub fn changed(&self, other: &Self) -> bool {
@@ -72,6 +100,12 @@ pub(crate) struct Photo {
 /// Font discovery and parsing are cached while the worker owns the currently published scenes.
 #[derive(Default)]
 pub(crate) struct VectorRenderer {
+    /// Every structured derived image remains observable while a native frame still owns it.
+    residency: BTreeMap<usize, std::sync::Weak<RenderImage>>,
+    /// Counters advance only when preparation actually runs, never for idle polling.
+    statistics: SceneStatistics,
+    /// Host-owned theme context, shared with ordinary native plugin controls.
+    environment: plugin_runtime::plugin_protocol::Environment,
     /// Equal structured scenes retain tessellation across unrelated native-tree revisions.
     graphics: BTreeMap<String, Arc<super::canvas::scene::PreparedScene>>,
     /// Derived canvas surfaces retain their identities while the owning native document stays unchanged.
@@ -89,6 +123,19 @@ pub(crate) struct VectorRenderer {
 }
 
 impl VectorRenderer {
+    /// Rasterize host-generated numeric SVG with only admitted PNG references and bounded output.
+    pub(super) fn rasterize_generated(
+        source: &str,
+        rect: Rect,
+        images: &BTreeMap<String, Arc<Vec<u8>>>,
+        budget: u64,
+    ) -> Option<VectorImage> {
+        Self::default().rasterize_with_budget(source, rect, rect, budget, Some(images))
+    }
+    /// Font/color updates invalidate only prepared identities that actually change on the next pass.
+    pub fn set_environment(&mut self, environment: plugin_runtime::plugin_protocol::Environment) {
+        self.environment = environment;
+    }
     /// Repaint only changed scene vectors, retaining native image IDs across idle worker polls.
     pub fn prepare(&mut self, documents: &BTreeMap<String, Arc<Document>>) -> SceneImages {
         let mut surfaces = BTreeMap::new();
@@ -103,26 +150,43 @@ impl VectorRenderer {
                     let key = format!("{key}/canvas/{}", node.id);
                     nested_keys.insert(key.clone());
                     if let Some(scene) = &drawing.scene {
+                        let plugin = key.split('/').next().unwrap_or_default();
+                        let typography = super::canvas::scene::Typography {
+                            font: drawing.font.clone().over(self.environment.font_style(
+                                plugin,
+                                node.theme_role(),
+                                drawing.grid,
+                            )),
+                            foreground: self.environment.foreground,
+                        };
                         let photos=scene.image_nodes().into_iter().filter_map(|id|{
                             self.photos.get(&format!("{image_prefix}{id}"))
                                 .filter(|photo|document.source.as_ref().is_some_and(|source|photo.resource.source==*source)||document.file.as_ref().is_some_and(|file|photo.resource.source==plugin_runtime::plugin_protocol::api::ContentVersion::File(file.clone())))
                                 .map(|photo|(id.to_owned(),photo.clone()))
                         }).collect::<BTreeMap<_,_>>();
                         let limits = (scene_pixels, scene_vertices);
-                        if self
-                            .graphics
-                            .get(&key)
-                            .is_none_or(|old| !old.current(scene, document, &photos, limits))
-                        {
-                            let prepared = super::canvas::scene::PreparedScene::new(
+                        if self.graphics.get(&key).is_none_or(|old| {
+                            !old.current(scene, document, &photos, limits, &typography)
+                        }) {
+                            let old = self.graphics.get(&key).cloned();
+                            let prepared = super::canvas::scene::PreparedScene::reuse(
                                 scene.clone(),
                                 document,
                                 photos,
                                 limits,
-                                |source, bounds| {
-                                    self.rasterize_with_budget(source, bounds, bounds, limits.0)
+                                typography,
+                                old.as_deref(),
+                                |source, bounds, images, budget| {
+                                    self.rasterize_with_budget(
+                                        source,
+                                        bounds,
+                                        bounds,
+                                        budget,
+                                        Some(images),
+                                    )
                                 },
                             );
+                            self.statistics.add_work(prepared.statistics());
                             self.graphics.insert(key.clone(), Arc::new(prepared));
                         }
                         if let Some(Ok(drawing)) =
@@ -232,7 +296,35 @@ impl VectorRenderer {
             .iter()
             .map(|(key, (_, images))| (key.clone(), images.clone()))
             .collect();
+        self.statistics.cached_items = 0;
+        self.statistics.resident_bytes = 0;
+        self.statistics.vertices = 0;
+        for prepared in self.graphics.values() {
+            let current = prepared.statistics();
+            self.statistics.cached_items += current.cached_items;
+            self.statistics.resident_bytes = self
+                .statistics
+                .resident_bytes
+                .saturating_add(current.resident_bytes);
+            self.statistics.vertices = self.statistics.vertices.saturating_add(current.vertices);
+        }
+        self.residency.retain(|_, image| image.strong_count() > 0);
+        for prepared in self.graphics.values() {
+            if let Ok(drawing) = &prepared.drawing {
+                for image in drawing.images() {
+                    self.residency
+                        .insert(Arc::as_ptr(&image) as usize, Arc::downgrade(&image));
+                }
+            }
+        }
+        let residency = self.residency.values().cloned().collect::<Vec<_>>();
+        (
+            self.statistics.live_resident_bytes,
+            self.statistics.live_textures,
+        ) = live_residency(&residency);
         SceneImages {
+            residency,
+            statistics: self.statistics,
             vectors,
             graphics: self.graphics.clone(),
             photos: BTreeMap::new(),
@@ -297,7 +389,7 @@ impl VectorRenderer {
 
     /// Preserve SVG alpha, block ambient file reads, and allocate only the visible clipped area.
     fn rasterize(&mut self, source: &str, rect: Rect, clip: Rect) -> Option<VectorImage> {
-        self.rasterize_with_budget(source, rect, clip, 64 * 1024 * 1024)
+        self.rasterize_with_budget(source, rect, clip, 64 * 1024 * 1024, None)
     }
 
     /// Scene fallback checks its shared remaining output capacity before native allocation.
@@ -307,27 +399,54 @@ impl VectorRenderer {
         rect: Rect,
         clip: Rect,
         remaining: u64,
+        scene_images: Option<&BTreeMap<String, Arc<Vec<u8>>>>,
     ) -> Option<VectorImage> {
         let target = intersection(rect, clip)?;
         let digest = <[u8; 32]>::from(Sha256::digest(source.as_bytes()));
-        let tree = if let Some(tree) = self.trees.get(&digest) {
+        let tree = if scene_images.is_none()
+            && let Some(tree) = self.trees.get(&digest)
+        {
             tree.clone()
         } else {
-            let fonts = self
-                .fonts
-                .get_or_insert_with(|| super::svg::fonts())
-                .clone();
+            let fonts = if scene_images.is_some() {
+                Arc::new(usvg::fontdb::Database::new())
+            } else {
+                self.fonts
+                    .get_or_insert_with(|| super::svg::fonts())
+                    .clone()
+            };
             let options = usvg::Options {
                 fontdb: fonts,
-                image_href_resolver: usvg::ImageHrefResolver {
-                    // Embedded data images remain supported; arbitrary filesystem/URL reads do not.
-                    resolve_string: Box::new(|_, _| None),
-                    ..Default::default()
+                image_href_resolver: if let Some(images) = scene_images {
+                    usvg::ImageHrefResolver {
+                        resolve_data: Box::new(|_, _, _| None),
+                        resolve_string: Box::new(move |uri, _| {
+                            images.get(uri).cloned().map(usvg::ImageKind::PNG)
+                        }),
+                    }
+                } else {
+                    usvg::ImageHrefResolver {
+                        // Embedded data images remain supported; arbitrary filesystem/URL reads do not.
+                        resolve_string: Box::new(|_, _| None),
+                        ..Default::default()
+                    }
                 },
                 ..Default::default()
             };
-            let tree = Arc::new(super::svg::parse(source, &options).ok()?);
-            self.trees.insert(digest, tree.clone());
+            // Canvas XML is generated only from validated numeric geometry and bounded PNG
+            // pixels. Guest SVG retains its independent XML/reuse guards; do not put generated
+            // trees into that cache, where a matching guest string could bypass those guards.
+            let tree = Arc::new(if scene_images.is_some() {
+                if source.len() > 4 * 1024 * 1024 {
+                    return None;
+                }
+                usvg::Tree::from_str(source, &options).ok()?
+            } else {
+                super::svg::parse(source, &options).ok()?
+            });
+            if scene_images.is_none() {
+                self.trees.insert(digest, tree.clone());
+            }
             tree
         };
         // Two pixels per logical pixel keep normal high-DPI previews sharp; cap one raster at 16 MiB.
@@ -365,6 +484,24 @@ impl VectorRenderer {
             image: Arc::new(RenderImage::new([image::Frame::new(buffer)])),
         })
     }
+}
+
+/// Only weak references are retained; statistics do not prolong retired image/source ownership.
+fn live_residency(images: &[std::sync::Weak<RenderImage>]) -> (u64, usize) {
+    images
+        .iter()
+        .filter_map(std::sync::Weak::upgrade)
+        .fold((0, 0), |(bytes, count), image| {
+            let size = image.size(0);
+            (
+                bytes.saturating_add(
+                    (size.width.0 as u64)
+                        .saturating_mul(size.height.0 as u64)
+                        .saturating_mul(4),
+                ),
+                count + 1,
+            )
+        })
 }
 
 /// Empty intersections need neither a raster allocation nor a native image draw.

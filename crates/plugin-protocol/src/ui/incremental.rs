@@ -10,6 +10,18 @@ pub struct Reuse {
     pub source_shift: i64,
 }
 
+impl Node {
+    /// Visit ordinary children mutably, including inactive tabs, Editor actions and Canvas overlays.
+    /// A visitor failure stops traversal; stage a clone when atomic mutation is required.
+    pub fn try_visit_mut(
+        &mut self,
+        visitor: &mut impl FnMut(&mut Node) -> Result<(), String>,
+    ) -> Result<(), String> {
+        visitor(self)?;
+        children_mut(self, &mut |child| child.try_visit_mut(visitor))
+    }
+}
+
 /// Shift only derived source coordinates; controls and link destinations remain unchanged.
 pub fn shift_source(node: &mut Node, delta: i64) -> Result<(), String> {
     if let Some(range) = &mut node.source_range {
@@ -113,6 +125,16 @@ fn index<'a>(node: &'a Node, nodes: &mut BTreeMap<String, &'a Node>) {
             }
         }
         Kind::Scroll { content } => index(content, nodes),
+        Kind::Editor(editor) => {
+            for action in editor.left_actions().iter().chain(editor.right_actions()) {
+                index(&action.content, nodes);
+            }
+        }
+        Kind::Canvas(canvas) => {
+            for overlay in &canvas.overlays {
+                index(&overlay.child, nodes);
+            }
+        }
         Kind::Tabs { tabs, .. } => {
             for tab in tabs {
                 index(&tab.content, nodes);
@@ -134,6 +156,18 @@ fn children_mut(
             }
         }
         Kind::Scroll { content } => visit(content)?,
+        Kind::Editor(editor) => {
+            if let Some(actions) = &mut editor.line_actions {
+                for action in actions.left.iter_mut().chain(&mut actions.right) {
+                    visit(&mut action.content)?;
+                }
+            }
+        }
+        Kind::Canvas(canvas) => {
+            for overlay in &mut canvas.overlays {
+                visit(&mut overlay.child)?;
+            }
+        }
         Kind::Tabs { tabs, .. } => {
             for tab in tabs {
                 visit(&mut tab.content)?;

@@ -1,10 +1,10 @@
 # Canvas 协议扩展实施工单
 
-日期：2026-10-24。状态：用户已确认四单拆分、依赖、测试接缝和审查基点；方案 [#127](https://github.com/Nanobug-Editor/Editor/issues/127) 与四单 [#128](https://github.com/Nanobug-Editor/Editor/issues/128)–[#131](https://github.com/Nanobug-Editor/Editor/issues/131) 已发布，原生父子与阻塞关系已读回核对。01 实施中，其余未开始；真实 ID 见[发布记录](publication.json)。
+日期：2026-10-24；状态更新：2026-10-27。用户已确认四单拆分、依赖、测试接缝和审查基点；方案 [#127](https://github.com/Nanobug-Editor/Editor/issues/127) 与四单 [#128](https://github.com/Nanobug-Editor/Editor/issues/128)–[#131](https://github.com/Nanobug-Editor/Editor/issues/131) 已发布，原生父子与阻塞关系已读回核对。01、02、03 已验收关闭；04 源码、固定包和 30 秒基线已验证，完整十分钟实机采样待桌面可用后验收，#131 保持开放；真实 ID 见[发布记录](publication.json)。
 
 来源：[通用 Canvas 协议扩展方案](../../specs/canvas-protocol-extension.md)。采用原方案的四个端到端垂直切片，不再按协议、运行时、宿主和测试拆单。执行方式为顺序 `implement`：这些切片共享画布声明、发布校验和原生视图，线性实施能够保持同一工作区的交互与回归证据。
 
-2026-10-25：01 的协议、实际包、原生图形、宿主回归和独立 workspace 门禁已取得通过证据。用户已确认先单独整理并提交必需的 Canvas 1.4–1.6 前置，再连续完成四单，见[前置基线边界](git-boundary.md)；当前仍未关闭实施议题。具体命令、包摘要及失败入口见[实施记录](../../verification/canvas-protocol-extension-2026-10-24.md)。
+2026-10-25：Canvas 1.4–1.6 前置已独立交付至 main 的 `56cb99ae`，见[前置基线边界](git-boundary.md)。截至 2026-10-27，01/02/03 已验收交付，04 的源码和最终包回归、原生交互及双轴审查已完成；两次十分钟尝试因前台切换提前中止，原始数据已保留，不能据此关闭 #131。用户当前需要桌面，长采样暂不启动。用户要求四单仅在独立 worktree 的 `codex/canvas-protocol-extension` 分支执行，全部完成后统一合回 main；不再逐单同步或快进主工作区。各单仍按验证、审查、普通提交、推送该分支、核对关闭对应 issue 交付。具体命令、包摘要及失败入口见[实施记录](../../verification/canvas-protocol-extension-2026-10-24.md)和[04 当前验收记录](../../verification/canvas-retained-frames-2026-10-26.md)。
 
 | 工单 | 用户可见交付 | 开始前阻塞项 | 关闭门槛 |
 | --- | --- | --- | --- |

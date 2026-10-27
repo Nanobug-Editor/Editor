@@ -135,6 +135,55 @@ pub enum ScenePathSegment {
     Close,
 }
 impl SceneGeometry {
+    /// Bound local contour length with control polygons before any renderer expands dashes.
+    /// Rounded rectangle arcs shorten its perimeter; Bézier curves stay below their control polygon.
+    pub(super) fn length_bound(&self) -> f64 {
+        let distance = |a: (f32, f32), b: (f32, f32)| {
+            (f64::from(a.0) - f64::from(b.0)).hypot(f64::from(a.1) - f64::from(b.1))
+        };
+        match self {
+            Self::Rect { rect, .. } => 2. * (f64::from(rect.w) + f64::from(rect.h)),
+            Self::Path { segments, .. } => {
+                let mut current = (0., 0.);
+                let mut start = current;
+                let mut length = 0.;
+                for segment in segments {
+                    match *segment {
+                        ScenePathSegment::Move { x, y } => {
+                            current = (x, y);
+                            start = current;
+                        }
+                        ScenePathSegment::Line { x, y } => {
+                            length += distance(current, (x, y));
+                            current = (x, y);
+                        }
+                        ScenePathSegment::Quadratic { cx, cy, x, y } => {
+                            length += distance(current, (cx, cy)) + distance((cx, cy), (x, y));
+                            current = (x, y);
+                        }
+                        ScenePathSegment::Cubic {
+                            x1,
+                            y1,
+                            x2,
+                            y2,
+                            x,
+                            y,
+                        } => {
+                            length += distance(current, (x1, y1))
+                                + distance((x1, y1), (x2, y2))
+                                + distance((x2, y2), (x, y));
+                            current = (x, y);
+                        }
+                        ScenePathSegment::Close => {
+                            length += distance(current, start);
+                            current = start;
+                        }
+                    }
+                }
+                length
+            }
+        }
+    }
     /// Charge one rectangle or every explicit path segment to the scene budget.
     pub fn segment_count(&self) -> usize {
         match self {

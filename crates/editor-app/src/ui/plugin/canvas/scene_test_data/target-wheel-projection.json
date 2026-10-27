@@ -1,0 +1,6 @@
+{
+  "expect_presented":true,"pending_viewport_wheel":true,
+  "scene":{"identity":48,"revision":1,"roots":[],"targets":[
+    {"id":"drag","epoch":1,"geometry":{"kind":"rect","rect":{"x":20,"y":20,"w":100,"h":40}}}
+  ]}
+}

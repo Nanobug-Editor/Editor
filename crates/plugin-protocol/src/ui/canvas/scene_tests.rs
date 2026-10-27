@@ -2,6 +2,25 @@
 use crate::ui::{Canvas, Document, Kind, Node};
 use serde_json::json;
 
+/// Tiny dash periods must be rejected before a renderer expands an otherwise bounded path.
+#[test]
+fn canvas_scene_rejects_unbounded_dash_expansion() {
+    for dash in [json!([0.001, 0.001]), json!([1e-30, 1e-30])] {
+        let mut wire = serde_json::to_value(Canvas::default()).unwrap();
+        wire["scene"] = json!({"identity":1,"revision":1,"roots":[{
+            "kind":"shape","id":"dashes","geometry":{"kind":"path","segments":[
+                {"op":"move","x":0,"y":0},{"op":"line","x":500000,"y":0}]},
+            "stroke":{"brush":{"kind":"solid","rgba":4294967295u32},"width":1,"dash":dash}}]});
+        let canvas: Canvas = serde_json::from_value(wire).unwrap();
+        assert!(
+            Document::new(Node::new("drawing", Kind::Canvas(canvas)))
+                .validate()
+                .is_err(),
+            "bounded encoded paths must not expand into unbounded native dash work"
+        );
+    }
+}
+
 /// A previously unknown guest can publish curved artwork through the ordinary UI document.
 #[test]
 fn canvas_scene_admits_paths_and_negotiates_its_version() {
@@ -45,6 +64,8 @@ fn canvas_scene_document_budget_is_shared_across_canvases() {
     let canvases = (1..=5)
         .map(|identity| {
             let scene = CanvasScene {
+                semantics: Vec::new(),
+                targets: Vec::new(),
                 identity,
                 revision: 1,
                 roots: (0..6500)

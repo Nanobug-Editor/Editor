@@ -3,6 +3,57 @@ use super::controls::CollectionModel;
 use super::*;
 
 impl PluginView {
+    /// Ordinary tooltip content/hover behavior follows only live, actually painted scene anchors.
+    pub(super) fn scene_tooltips(&self, cx: &mut Context<Self>) -> Vec<gpui_kit::AnyElement> {
+        use gpui_kit::{
+            InteractiveElement as _, IntoElement as _, StatefulInteractiveElement as _,
+            Styled as _, div, px,
+        };
+        if !self.scene_current.get() || self.document.menu.is_some() {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        let mut visit = |node: &ui::Node| {
+            let (Some(anchor), Some(text)) = (&node.tooltip_anchor, &node.tooltip) else {
+                return;
+            };
+            if self.document.active_node(&node.id).is_none()
+                || anchor.resolve(&self.document).is_none()
+            {
+                return;
+            }
+            let Some(bounds) = self.canvases.get(&anchor.canvas).and_then(|canvas| {
+                canvas
+                    .read(cx)
+                    .anchor_bounds(&anchor.anchor, &self.document)
+            }) else {
+                return;
+            };
+            let text = text.clone();
+            result.push(
+                div()
+                    .id(format!(
+                        "scene-tooltip:{}:{}:{}",
+                        node.id, anchor.anchor.identity, anchor.anchor.target.epoch
+                    ))
+                    .absolute()
+                    .left(bounds.origin.x - self.origin.x)
+                    .top(bounds.origin.y - self.origin.y)
+                    .w(bounds.size.width.max(px(1.)))
+                    .h(bounds.size.height.max(px(1.)))
+                    .tooltip(move |window, cx| {
+                        editor_ui::Tooltip::new(text.clone()).build(window, cx)
+                    })
+                    .into_any_element(),
+            );
+        };
+        self.document.root.visit(&mut visit);
+        if let Some(dialog) = &self.document.dialog {
+            dialog.content.visit(&mut visit);
+        }
+        result
+    }
+
     /// Reconcile stable widget identities; drawing-only revisions never recreate rename inputs or menus.
     pub(super) fn sync_widgets(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let mut models = Vec::new();
@@ -39,17 +90,41 @@ impl PluginView {
             });
         }
         // The ordinary dialog has precedence over a popup; neither borrows another panel's native state.
-        if self.scene_current.get()
-            && self.document.dialog.is_none()
-            && self.document.menu.is_some()
+        // Modal/visibility withdrawal closes old widgets before any unpainted replacement anchor can defer layout.
+        let mut menu = self
+            .document
+            .menu
+            .clone()
+            .filter(|_| self.scene_current.get() && self.document.dialog.is_none());
+        if let Some(model) = &mut menu
+            && let Some(anchor) = &model.anchor
         {
+            let live = anchor.resolve(&self.document).is_some();
+            if !live {
+                let id = model.id.clone();
+                menu = None;
+                self.emit_version_in(&id, self.document.revision, Action::Dismiss, window, cx);
+            } else if let Some(bounds) = self.canvases.get(&anchor.canvas).and_then(|canvas| {
+                canvas
+                    .read(cx)
+                    .anchor_bounds(&anchor.anchor, &self.document)
+            }) {
+                model.x += (bounds.origin.x - self.origin.x) / gpui_kit::px(1.);
+                model.y += (bounds.bottom() - self.origin.y) / gpui_kit::px(1.);
+            } else {
+                // An accepted scene is still waiting to paint. Keep the last native placement
+                // until a successful display supplies geometry; it cannot authorize input below.
+                return;
+            }
+        }
+        if self.scene_current.get() && self.document.dialog.is_none() && menu.is_some() {
             if self.popup.is_none() {
                 self.popup = Some(self.widget(cx));
             }
             let model = CollectionModel {
                 content_colors: self.document.content_colors.clone(),
                 revision: self.document.revision,
-                menu: self.document.menu.clone(),
+                menu,
                 sidebar: None,
             };
             let gesture = self.action_gesture(&self.document.menu.as_ref().unwrap().id);
