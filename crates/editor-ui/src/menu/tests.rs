@@ -4,6 +4,8 @@ use gpui_base::Root;
 use gpui_kit::gpui;
 use gpui_kit::{AppContext as _, TestAppContext};
 use std::cell::RefCell;
+#[cfg(windows)]
+mod text;
 
 /// A title dropdown uses its measured trigger, and follows later dock relocation.
 #[gpui::test]

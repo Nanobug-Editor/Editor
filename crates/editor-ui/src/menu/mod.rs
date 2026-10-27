@@ -93,6 +93,8 @@ impl MenuStyle {
             .items_center()
             .font_family(self.font_family.clone())
             .text_size(px(self.font_size))
+            // Base buttons use a one-em line box; truncated native labels need room for descenders.
+            .line_height(gpui_kit::relative(1.5))
             .font_weight(if self.bold {
                 FontWeight::BOLD
             } else {

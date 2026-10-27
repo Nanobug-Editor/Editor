@@ -133,6 +133,7 @@ impl Render for PopupMenu {
                     Some(MenuRowContent::Icon { icon, tooltip }) => {
                         let tooltip = tooltip.clone();
                         let selector = item.id.clone();
+                        let label_selector = primary_debug.clone();
                         row.tooltip(move |window, cx| {
                             crate::Tooltip::new(tooltip.clone()).build(window, cx)
                         })
@@ -147,6 +148,7 @@ impl Render for PopupMenu {
                                 .child(icon.clone().small())
                                 .child(
                                     div()
+                                        .debug_selector(move || label_selector.clone())
                                         .flex_1()
                                         .min_w_0()
                                         .truncate()

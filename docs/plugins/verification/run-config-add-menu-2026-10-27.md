@@ -4,6 +4,22 @@
 
 用户要求将运行配置窗口 `+` 的模板抽屉改为菜单弹窗。当前要求已同步到[运行配置规格](../specs/run-config-plugin-tree.md)；早期抽屉验收不作为本轮通过证据。
 
+## 同日追加：菜单文字下缘裁切
+
+用户实测截图中 `debug` 的下行字母及部分中文显示不全。通过 Windows DirectWrite 字体引擎配合实际 PopupMenu 的图标文字行，修复前 `popup_menu_icon_labels_keep_native_font_descenders` 明确失败：文字裁切框为 13px，实际排版高度为 17.291016px。
+
+Base 按钮默认一倍行高，菜单文字的 `truncate()` 同时裁掉超出行框的字形。只在本地通用 `MenuStyle::row` 覆盖为 1.5 倍行高，让文字保留上下缘；菜单宽度、29px 行高度、图标和键盘行为保持原规则。修改外层菜单容器的行高无法覆盖按钮自身默认值，负控日志保留。
+
+回归检查从菜单实际文字裁切框取得尺寸，覆盖 `debug_gyp_`、`插件调试 gyp_` 及 100%／125%／150%／200% 缩放；修复后 1 passed。工作区为 `C:/Users/Tmiracle/.codex/worktrees/run-config-add-menu-font/Editor`，独立输出目录为其 `target/`，构建前已核对 metadata 的工作区与输出路径；红灯、负控和绿灯日志分别为 `target/verification/menu-font-{red,probe,green}.log`。
+
+- `cargo test -p editor-ui menu:: --locked --offline -j 6 -- --test-threads=1`：7 passed，包含字形、导航、关闭及长列表检查。
+- `cargo test --workspace --exclude editor-app --locked --offline -j 6`：832 passed、0 failed、441 ignored。
+- `cargo fmt --check`、`git diff --check`、`cargo check --workspace --locked --offline -j 6`、`cargo build -p editor-app --locked --offline -j 6`：通过，保留既有警告。
+- 原生程序使用独立 `profile-native` 受限工作区，检查添加菜单中的中文文字下缘、分组和原有行布局，并以 Esc 关闭菜单、取消配置窗口。英文下行字母和各档缩放由上述 DirectWrite 回归覆盖。
+- 关闭验收主窗口时仍复现本文记录的 AccessKit `HRESULT(0x80070578)` 退出错误；本轮日志为 `target/verification/native-font-stderr.log`，不将退出记为通过。
+
+本次修复沿用同一任务的普通提交、本地合并和临时保存／恢复 main 既有改动授权；不推送或发布。集成回执保存在 Git common directory 的 `task-worktree/tasks/run-config-add-menu-font-merge-receipt.json`。
+
 ## 实现
 
 - 添加按钮按实际绘制边界定位菜单，在按钮下沿显示分组、图标和模板名称；配置树持续挂载，右侧表单不移动。
