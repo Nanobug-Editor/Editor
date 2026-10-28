@@ -6,6 +6,7 @@ use gpui_kit::{ElementId, Role};
 use plugin_runtime::plugin_protocol::ui::Kind;
 
 mod geometry;
+pub(super) mod title_actions;
 
 const DRAFT: &str = "Shared sidebar draft 中😀";
 
@@ -14,6 +15,10 @@ const DRAFT: &str = "Shared sidebar draft 中😀";
 #[ignore = "requires Windows desktop/D3D11, candidate/output and NANOBUG_GIT_NATIVE_SHARED_SIDEBAR"]
 fn git_native_shared_sidebar_peers_drag_and_visibility() {
     assert!(requested());
+    assert!(
+        !title_actions::requested(),
+        "full sidebar acceptance refuses title-actions-only workflow"
+    );
     for flag in [
         "NANOBUG_GIT_NATIVE_CAPTION_CONTROLS",
         "NANOBUG_GIT_NATIVE_IDLE_RETENTION",
@@ -38,13 +43,16 @@ fn git_native_shared_sidebar_peers_drag_and_visibility() {
 
 /// This narrow workflow never satisfies full workbench, caption or keyboard acceptance.
 pub(super) fn requested() -> bool {
-    std::env::var_os("NANOBUG_GIT_NATIVE_SHARED_SIDEBAR").is_some()
+    std::env::var_os("NANOBUG_GIT_NATIVE_SHARED_SIDEBAR").is_some() || title_actions::requested()
 }
 
 /// Start from the ordinary Explorer-visible default, then use current controls and production input routes.
 pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<()> {
     h.activate(cx).await?;
     h.settle(cx).await?;
+    if title_actions::requested() {
+        return title_actions::exercise(h, cx).await;
+    }
     // Keep the actual default pixels even when a too-small staging clip fails the strict checks.
     h.capture(h.main, "sidebar-default.png", cx)?;
     geometry::record_default(h, cx)?;

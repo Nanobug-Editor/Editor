@@ -82,7 +82,7 @@
 
 - [资源管理器预览标签](verification/explorer-preview-tabs.md)：单击共用预览，双击或实际编辑后固定；包含焦点、会话恢复、PNG、IME、无变化输入、双轴审查及原生验证记录。
 
-- [资源管理器标题按钮的焦点淡入淡出](verification/explorer-title-actions-fade-2026-10-24.md)：四个按钮随面板焦点以约 140 ms 淡入淡出，固定标题槽位，并核对减少动画与现有按钮交互。
+- [资源管理器与插件标题按钮显隐](verification/explorer-title-actions-fade-2026-10-24.md)：2026-10-28 扩展为面板聚焦或鼠标移入时显示，共用约 140 ms 过渡、固定槽位与减少动画；本轮检查状态见记录。
 
 - [项目下拉与空启动](specs/project-menu-startup.md)：当前方案，移除独立启动页，将项目管理合并至编辑器左上角下拉；允许空启动，保留全局设置与插件管理，关闭项目关闭窗口，再次启动激活最后使用的窗口；[实施验收](verification/project-menu-startup-2026-10-14.md)记录 40 项项目交互测试、真实包验证、双轴增量审查和 Windows 原生结果，以及完整 UI 的既有失败。
 - [独立欢迎窗口重新设计（历史）](verification/welcome-window-redesign-2026-10-14.md)：保留当时原生截图和验收证据；产品行为已由项目下拉与空启动方案替代。

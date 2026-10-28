@@ -36,7 +36,7 @@ impl Panel for TestPanel {
 
 impl super::Panel for TestPanel {
     /// Test panels need only the local title contract to participate in presentation filtering.
-    fn title(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn title(&mut self, _: bool, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         Empty
     }
 }

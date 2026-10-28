@@ -7,6 +7,7 @@ use gpui_kit::{TestAppContext, gpui};
 mod drag;
 #[cfg(test)]
 mod right_width;
+mod title_actions;
 
 /// A manifest's left hint joins the same visible sidebar as host peers instead of claiming another editor column.
 #[gpui::test]

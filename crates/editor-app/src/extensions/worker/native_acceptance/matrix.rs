@@ -79,6 +79,11 @@ impl Case {
 
 /// Only this returned Child handle can be terminated; there is no process-name or user-window search.
 pub(super) fn run(case: Case) -> anyhow::Result<()> {
+    ensure!(
+        !sidebar::title_actions::requested()
+            || std::env::var_os("NANOBUG_GIT_NATIVE_SHARED_SIDEBAR").is_none(),
+        "title actions and full sidebar workflows are mutually exclusive"
+    );
     // Each narrow receipt has one scope; inherited diagnostic flags cannot shorten another workflow.
     let narrow = [
         commit_panel::requested(),
@@ -245,6 +250,22 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
             "exclusive-open.png",
             "exclusive-shared.png",
             "exclusive-reopened.png",
+        ]
+    } else if sidebar::title_actions::requested() {
+        ensure!(
+            evidence["workflow"] == "title-actions-only"
+                && evidence["observations"]["title_actions_hover_and_focus"]["explorer"] == true
+                && evidence["observations"]["title_actions_hover_and_focus"]["hover_preserves_editor_focus"]
+                    == true
+                && evidence["observations"]["title_actions_hover_and_focus"]["focus_retains_after_pointer_exit"]
+                    == true
+                && evidence["observations"]["title_actions_hover_and_focus"]["hidden_after_both_leave"]
+                    == true,
+            "title actions workflow incomplete or wrong receipt scope"
+        );
+        &[
+            "title-actions-explorer-hover.png",
+            "title-actions-plugin-hover.png",
         ]
     } else if sidebar::requested() {
         ensure!(

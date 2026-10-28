@@ -80,7 +80,7 @@ impl DockPanel for OpenFilesPanel {
         Some(t!("open_files.title").to_string().into())
     }
 
-    fn title(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn title(&mut self, _: bool, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let parent = self.parent.clone();
         h_flex()
             .w_full()

@@ -1458,12 +1458,17 @@ impl DockPanel for ExtensionPanel {
     fn drag_title(&self, _: &App) -> Option<SharedString> {
         Some(self.panel_title.clone().into())
     }
-    /// Native window chrome remains generic; domain functions are drawn from the plugin's live tools.
-    fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Draw generic chrome in `window`/`cx`; Dock's `active` pointer/focus scope reveals the actions.
+    /// An owned open menu keeps its anchor mounted while domain functions stay in the guest's live tools.
+    fn title(
+        &mut self,
+        active: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         use gpui_base::ElementExt as _;
         let title = self.panel_title.clone();
         let icon = self.panel_icon(cx.theme().is_dark());
-        let controls = h_flex().items_center();
         let command_owner = cx.entity().downgrade();
         // A declaration without menu commands must not expose an empty native popup trigger.
         let has_commands = self.entries.iter().any(|entry| {
@@ -1481,64 +1486,73 @@ impl DockPanel for ExtensionPanel {
                     .when_some(icon, |row, icon| row.child(icon))
                     .child(title),
             )
-            .child(
-                controls
-                    .when(has_commands, |controls| {
-                        controls.child(
-                            div()
-                                .id("plugin-command-menu-anchor")
-                                .on_prepaint(move |bounds, _, cx| {
-                                    let _ = command_owner.update(cx, |this, cx| {
-                                        this.bounds = bounds;
-                                        if let Some(popup) = &this.command_popup {
-                                            popup.update(cx, |popup, cx| {
-                                                popup.anchor_to(bounds, cx)
-                                            });
+            .child(dock::title_actions(
+                "plugin-title-actions",
+                if has_commands { 48. } else { 24. },
+                active || self.commands_open,
+                window,
+                cx,
+                |controls, cx| {
+                    controls
+                        .when(has_commands, |controls| {
+                            controls.child(
+                                div()
+                                    .id("plugin-command-menu-anchor")
+                                    .on_prepaint(move |bounds, _, cx| {
+                                        let _ = command_owner.update(cx, |this, cx| {
+                                            this.bounds = bounds;
+                                            if let Some(popup) = &this.command_popup {
+                                                popup.update(cx, |popup, cx| {
+                                                    popup.anchor_to(bounds, cx)
+                                                });
+                                            }
+                                        });
+                                    })
+                                    .child(
+                                        Button::new("plugin-command-menu")
+                                            .debug_selector(|| "plugin-command-menu".into())
+                                            .icon(Icon::default().path("icons/menu.svg"))
+                                            .tooltip(t!("plugins.command_menu").to_string())
+                                            .small()
+                                            .compact()
+                                            .ghost()
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.commands_open = !this.commands_open;
+                                                cx.notify();
+                                            })),
+                                    ),
+                            )
+                        })
+                        .child(
+                            Button::new("plugin-hide")
+                                .debug_selector(|| "plugin-hide".into())
+                                .icon(Icon::default().path("icons/window-minimize.svg"))
+                                .tooltip(t!("plugins.hide_panel").to_string())
+                                .small()
+                                .compact()
+                                .ghost()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    let panel_key = this
+                                        .active
+                                        .as_ref()
+                                        .zip(this.surface_id.as_ref())
+                                        .map(|(id, surface)| format!("{id}/{surface}"));
+                                    this.hide(cx);
+                                    let _ = this.parent.update(cx, |app, cx| {
+                                        // Hiding from the title bar is a saved visibility choice too.
+                                        if let Some(key) = panel_key {
+                                            app.session_state
+                                                .plugin_panel_visibility
+                                                .insert(key, false);
+                                            app.persist_session();
                                         }
+                                        app.dock_area.update(cx, |_, cx| cx.notify());
+                                        cx.notify();
                                     });
-                                })
-                                .child(
-                                    Button::new("plugin-command-menu")
-                                        .icon(Icon::default().path("icons/menu.svg"))
-                                        .tooltip(t!("plugins.command_menu").to_string())
-                                        .small()
-                                        .compact()
-                                        .ghost()
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.commands_open = !this.commands_open;
-                                            cx.notify();
-                                        })),
-                                ),
+                                })),
                         )
-                    })
-                    .child(
-                        Button::new("plugin-hide")
-                            .icon(Icon::default().path("icons/window-minimize.svg"))
-                            .tooltip(t!("plugins.hide_panel").to_string())
-                            .small()
-                            .compact()
-                            .ghost()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let panel_key = this
-                                    .active
-                                    .as_ref()
-                                    .zip(this.surface_id.as_ref())
-                                    .map(|(id, surface)| format!("{id}/{surface}"));
-                                this.hide(cx);
-                                let _ = this.parent.update(cx, |app, cx| {
-                                    // Hiding from the title bar is a saved visibility choice too.
-                                    if let Some(key) = panel_key {
-                                        app.session_state
-                                            .plugin_panel_visibility
-                                            .insert(key, false);
-                                        app.persist_session();
-                                    }
-                                    app.dock_area.update(cx, |_, cx| cx.notify());
-                                    cx.notify();
-                                });
-                            })),
-                    ),
-            )
+                },
+            ))
     }
     fn title_bar(&self, _: &App) -> bool {
         true

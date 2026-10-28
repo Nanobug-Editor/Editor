@@ -8,7 +8,7 @@ use super::*;
 use editor_ui::overlay::WindowExt as _;
 use gpui_base::Root;
 use gpui_kit::gpui;
-use gpui_kit::{TestAppContext, VisualTestContext};
+use gpui_kit::{MouseMoveEvent, TestAppContext, VisualTestContext};
 use std::cell::RefCell;
 
 /// Mount the editor, optionally requesting an initial file instead of the normal session restore.
@@ -281,6 +281,49 @@ fn explorer_title_actions_fade_with_panel_focus(cx: &mut TestAppContext) {
     });
     redraw(visual);
     assert!(visual.debug_bounds("explorer-collapse-all").is_none());
+}
+
+/// Hovering either the tree or its title reveals actions without changing the editor's focus.
+#[gpui::test]
+fn explorer_title_actions_follow_pointer_and_focus(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let workspace = Workspace::open(directory.path()).unwrap();
+    let (app, visual) = mount(cx, workspace, None);
+    let outside = visual
+        .debug_bounds("editor-panel-content")
+        .unwrap()
+        .center();
+    let slot = visual.debug_bounds("explorer-actions").unwrap();
+    for dark in [false, true] {
+        visual.update(|_, cx| apply_theme(builtin_theme(dark), cx));
+        for selector in ["explorer-row-0", "explorer-title"] {
+            visual.update(|window, cx| app.read(cx).editor.focus_handle(cx).focus(window, cx));
+            redraw(visual);
+            let inside = visual.debug_bounds(selector).unwrap().center();
+            visual.simulate_event(MouseMoveEvent {
+                position: inside,
+                pressed_button: None,
+                modifiers: Modifiers::default(),
+            });
+            redraw(visual);
+            assert!(visual.debug_bounds("explorer-collapse-all").is_some());
+            assert_eq!(visual.debug_bounds("explorer-actions").unwrap(), slot);
+            visual.update(|window, cx| {
+                assert!(app.read(cx).editor.focus_handle(cx).is_focused(window));
+            });
+            focus_tree(&app, visual);
+            visual.simulate_event(MouseMoveEvent {
+                position: outside,
+                pressed_button: None,
+                modifiers: Modifiers::default(),
+            });
+            redraw(visual);
+            assert!(visual.debug_bounds("explorer-collapse-all").is_some());
+            visual.update(|window, cx| app.read(cx).editor.focus_handle(cx).focus(window, cx));
+            redraw(visual);
+            assert!(visual.debug_bounds("explorer-collapse-all").is_none());
+        }
+    }
 }
 
 #[gpui::test]
