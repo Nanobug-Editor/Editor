@@ -26,6 +26,7 @@ mod native_selection_formatting_tests;
 mod native_vue_recovery_tests;
 mod preparation;
 mod queued;
+mod resize_delivery;
 pub(super) use queued::WorkSender;
 #[cfg(test)]
 // The cross-feature native regression retains private actor seams without widening production APIs.
@@ -269,6 +270,14 @@ pub enum Work {
     Uninstall(String, bool),
     /// Native callbacks retain the incarnation that created them, even if a replacement reuses node IDs.
     Event(String, u64, Option<String>, api::Notification),
+    /// Native Resize requests actual admission so a stale sample can be measured again locally.
+    CanvasResize {
+        plugin: String,
+        epoch: u64,
+        panel: String,
+        event: ui::UiEvent,
+        reply: futures::channel::oneshot::Sender<bool>,
+    },
     /// Only ordinary form Change requests a delivery receipt; business events are never retried.
     FormChange {
         plugin: String,

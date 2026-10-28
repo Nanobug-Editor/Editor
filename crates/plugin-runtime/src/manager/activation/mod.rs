@@ -15,6 +15,7 @@ mod preparation;
 #[cfg(test)]
 mod reservation_tests;
 mod roles;
+mod scheduling;
 mod types;
 pub use preparation::{DemandPreparation, PreparedDemand};
 pub use types::{ActivationReceipt, Availability, DemandReason, DemandRequest, LanguageRole};

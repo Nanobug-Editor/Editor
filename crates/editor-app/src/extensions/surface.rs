@@ -92,6 +92,9 @@ impl ExtensionPanel {
             let form_changes =
                 self.worker
                     .form_change_sink(plugin.clone(), panel.clone(), epoch, visible.clone());
+            let resizes =
+                self.worker
+                    .resize_sink(plugin.clone(), panel.clone(), epoch, visible.clone());
             self.native_ui = Some(cx.new(|cx| {
                 crate::ui::plugin::PluginView::new(
                     plugin.clone(),
@@ -111,6 +114,7 @@ impl ExtensionPanel {
                     cx,
                 )
                 .with_form_changes(form_changes)
+                .with_resize_receipts(resizes)
             }));
         }
         if transfers

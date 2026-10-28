@@ -68,6 +68,9 @@ impl ExtensionPanel {
             let form_changes =
                 self.worker
                     .form_change_sink(plugin.clone(), panel.clone(), epoch, visible.clone());
+            let resizes =
+                self.worker
+                    .resize_sink(plugin.clone(), panel.clone(), epoch, visible.clone());
             let parent = self.parent.clone();
             let owner = cx.entity().downgrade();
             self.native_toolbar = Some(cx.new(|cx| {
@@ -153,6 +156,7 @@ impl ExtensionPanel {
                     cx,
                 )
                 .with_form_changes(form_changes)
+                .with_resize_receipts(resizes)
                 .content_sized()
             }));
         }

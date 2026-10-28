@@ -29,6 +29,8 @@ mod link_tests;
 mod links;
 mod overlays;
 mod render;
+mod resize_delivery;
+pub(crate) use resize_delivery::{ResizeSink, is_canvas_resize};
 #[cfg(test)]
 mod scrollbar_tests;
 mod svg;
@@ -95,6 +97,8 @@ pub(crate) struct PluginView {
     /// Read-only code requests retain the project that supplied this scene.
     providers: Option<crate::language::providers::Providers>,
     sink: EventSink,
+    /// Actual actor rejection can invalidate a native size sample without replaying old input.
+    resize_sink: Option<ResizeSink>,
     /// Nested canvas/control sinks share the gate; retained readonly trees cannot dispatch stale input.
     scene_current: Rc<Cell<bool>>,
     /// A rejected native input suspends this producer until ordered cancellation is acknowledged.
@@ -387,6 +391,7 @@ impl PluginView {
             overlays: Default::default(),
             transfers: Default::default(),
             forms: Default::default(),
+            resize_sink: None,
             textareas: BTreeMap::new(),
             snapshots: BTreeMap::new(),
             readonly_mount: None,
@@ -943,7 +948,9 @@ impl PluginView {
             self.dismissed_dialog = Some(id.into());
             cx.notify();
         }
-        (self.sink)(event, cx);
+        if !self.deliver_resize(&event, cx) {
+            (self.sink)(event, cx);
+        }
         true
     }
 }

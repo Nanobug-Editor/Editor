@@ -3,25 +3,39 @@ use super::*;
 #[cfg(test)]
 mod tests;
 
+/// Native advances survive drawing-only publications, but a queued reply belongs to one scene.
+/// A newer scene that still requests these samples has not acknowledged their delivery yet.
+pub(super) struct Measurements {
+    requests: Vec<protocol::ui::TextMeasure>,
+    family: Option<String>,
+    widths: Vec<protocol::ui::TextWidth>,
+    reply_revision: Option<u64>,
+}
+
 impl CanvasView {
-    /// Shape requested sample groups in `window` once per request/family, then emit an ordinary
-    /// exact-scene geometry reply through `cx`. Disabled or unrequested canvases do no shaping.
+    /// Shape sample groups once per request/family, reusing their widths for a new scene's reply.
+    /// The actor may reject a queued old reply after publishing; repeating only for new revisions
+    /// keeps pending geometry live without shaping or sending again during ordinary scroll frames.
     pub(super) fn measure_text(&mut self, window: &Window, cx: &mut Context<Self>) {
         if self.drawing.measure_text.is_empty() {
             self.text_measurements = None;
             return;
         }
-        if !self.enabled
-            || self
-                .text_measurements
-                .as_ref()
-                .is_some_and(|(requests, family)| {
-                    requests == &self.drawing.measure_text && family == &self.font.family
-                })
-        {
+        if !self.enabled {
             return;
         }
-        let widths = self
+        if let Some(cached) = &mut self.text_measurements
+            && cached.requests == self.drawing.measure_text
+            && cached.family == self.font.family
+        {
+            if cached.reply_revision != Some(self.revision) {
+                cached.reply_revision = Some(self.revision);
+                let widths = cached.widths.clone();
+                self.emit(CanvasEvent::TextMeasured { widths }, cx);
+            }
+            return;
+        }
+        let widths: Vec<_> = self
             .drawing
             .measure_text
             .iter()
@@ -55,8 +69,12 @@ impl CanvasView {
                 }
             })
             .collect();
-        self.text_measurements =
-            Some((self.drawing.measure_text.clone(), self.font.family.clone()));
+        self.text_measurements = Some(Measurements {
+            requests: self.drawing.measure_text.clone(),
+            family: self.font.family.clone(),
+            widths: widths.clone(),
+            reply_revision: Some(self.revision),
+        });
         self.emit(CanvasEvent::TextMeasured { widths }, cx);
     }
 }

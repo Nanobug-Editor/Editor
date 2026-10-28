@@ -8,6 +8,8 @@ mod files;
 mod pagination;
 #[path = "history/performance.rs"]
 mod performance;
+#[path = "history/startup.rs"]
+mod startup;
 
 /// Import distinct blobs in one Git process, keeping a large-history fixture inexpensive on Windows.
 fn import_history(root: &Path, count: usize) {

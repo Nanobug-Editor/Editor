@@ -337,7 +337,7 @@ fn encoded_bytes(work: &Work) -> usize {
             return usize::MAX;
         }
         count.0.saturating_add(256)
-    } else if let Work::FormChange { event, .. } = work {
+    } else if let Work::FormChange { event, .. } | Work::CanvasResize { event, .. } = work {
         let mut count = Count(0);
         if serde_json::to_writer(&mut count, event).is_err() {
             return usize::MAX;
@@ -359,6 +359,12 @@ fn surface(work: &Work) -> Option<Surface> {
             ..
         } => Some((plugin.clone(), *epoch, Some(panel.clone()))),
         Work::FormChange {
+            plugin,
+            epoch,
+            panel,
+            ..
+        }
+        | Work::CanvasResize {
             plugin,
             epoch,
             panel,

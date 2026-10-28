@@ -2,7 +2,6 @@
 use super::*;
 
 const MAX_WAITERS: usize = 64;
-const MAX_PREPARATIONS: usize = 4;
 
 impl State {
     /// Terminal waits free reservations immediately; running abandoned work still occupies a worker slot.
@@ -294,22 +293,7 @@ impl Manager {
     pub fn take_demand_preparation(&mut self) -> Option<DemandPreparation> {
         self.activation.prune();
         self.resume_deferred_demands();
-        if self
-            .activation
-            .flights
-            .values()
-            .filter(|flight| flight.running)
-            .count()
-            >= MAX_PREPARATIONS
-        {
-            return None;
-        }
-        let token = self
-            .activation
-            .flights
-            .iter()
-            .find(|(_, flight)| !flight.running)
-            .map(|(token, _)| token.clone())?;
+        let token = self.activation.next_preparation()?;
         let flight = self.activation.flights.get_mut(&token).unwrap();
         flight.running = true;
         for waiter in flight.waiters.lock().unwrap().iter() {

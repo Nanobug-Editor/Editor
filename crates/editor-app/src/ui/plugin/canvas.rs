@@ -76,8 +76,8 @@ pub(crate) struct CanvasView {
     focus: FocusHandle,
     bounds: Bounds<Pixels>,
     measured: Option<CanvasEvent>,
-    /// Reuse bounded native sample widths until the request or its inherited family changes.
-    text_measurements: Option<(Vec<protocol::ui::TextMeasure>, Option<String>)>,
+    /// Cache native widths separately from their scene-bound delivery until the guest clears them.
+    text_measurements: Option<text::Measurements>,
     /// Column previews belong to native frames; the guest receives only completed widths.
     columns: editor_ui::column_resize::ColumnResize,
     column_bindings: Vec<Option<usize>>,
@@ -517,6 +517,15 @@ impl CanvasView {
         self.text_layout_result = None;
         self.measured = None;
         self.text_measurements = None;
+    }
+    /// A rejected queued Resize invalidates only the same cached sample. Later geometry must
+    /// keep its own delivery, and the next real layout constructs a fresh scene-bound event.
+    pub(super) fn invalidate_dimensions(&mut self, rejected: &CanvasEvent) -> bool {
+        if self.measured.as_ref() != Some(rejected) {
+            return false;
+        }
+        self.measured = None;
+        true
     }
     fn pointer(
         &self,

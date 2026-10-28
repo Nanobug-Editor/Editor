@@ -2,6 +2,7 @@
 
 - [主分支插件与 Rust 服务修复](verification/plugin-language-repair-2026-10-27.md)：更新旧布局包，修复 Rust 项目发现超时与 Markdown 首开宿主崩溃；831 项非 UI 测试、四项实际包回归、Rust 单测及 Windows 原生复验通过，改动未提交。
 
+- [Git 重启首屏与并行插件启动](verification/git-startup-2026-10-28.md)：修复首屏查询取消、尺寸及字宽回执丢失，通用启动调度保留交互容量；实际包与并行回归通过，宿主和 Git 0.1.47 已打包待手动安装，扩展原生验收的采样及退出限制见记录。
 - [Git 差异主题、相邻文件与视口列布局](verification/git-diff-navigation-layout-2026-10-27.md)：已合入主分支并重新编译打包，保留原有未提交改动；通用语言提示、导航、底部轨道与拖动回归通过，待用户手动安装验证。
 
 - [统一默认 Editor 与插件编辑节点](specs/unified-editor.md)、[验收记录](verification/unified-editor-2026-10-25.md)：默认 Editor 统一文档、只读快照、行边缘控件和同步呈现，完成协议主版本及消费者迁移；功能回归通过，追加发现的横向拖动瓶颈已按授权使用锁定 Base 本地补丁修复，见[真实字体与原生性能验收](../ui/verification/internal-resize-performance-2026-10-25.md)。

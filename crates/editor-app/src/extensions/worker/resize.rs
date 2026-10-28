@@ -1,6 +1,9 @@
 //! Combine queued canvas observations without losing deltas or crossing input/lifecycle boundaries.
 use super::*;
 
+#[cfg(test)]
+mod delivery_tests;
+
 /// Retain the latest resize/absolute offset and sum same-direction scroll deltas before WASM.
 /// Opposite directions remain ordered because clamping at an endpoint is not commutative.
 /// The first nonmatching input/lifecycle message stays queued for the next actor turn.
@@ -81,8 +84,21 @@ fn merge_scroll(work: &mut Work, next: &Work) -> bool {
 }
 
 /// Only absolute Resize events can replace each other; deltas and release gestures are never dropped.
-fn resize_target(work: &Work) -> Option<(&str, u64, &Option<String>, u64, &str)> {
+fn resize_target(work: &Work) -> Option<(&str, u64, Option<&str>, u64, &str)> {
     match work {
+        Work::CanvasResize {
+            plugin,
+            epoch,
+            panel,
+            event,
+            ..
+        } if crate::ui::plugin::is_canvas_resize(&event.action) => Some((
+            plugin,
+            *epoch,
+            Some(panel.as_str()),
+            event.revision,
+            &event.node,
+        )),
         Work::Event(plugin, epoch, panel, api::Notification::Ui(event))
             if matches!(
                 event.action,
@@ -93,7 +109,13 @@ fn resize_target(work: &Work) -> Option<(&str, u64, &Option<String>, u64, &str)>
                     })
             ) =>
         {
-            Some((plugin, *epoch, panel, event.revision, &event.node))
+            Some((
+                plugin,
+                *epoch,
+                panel.as_deref(),
+                event.revision,
+                &event.node,
+            ))
         }
         _ => None,
     }

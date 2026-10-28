@@ -2,6 +2,8 @@
 use super::*;
 use std::collections::BTreeMap;
 
+mod startup;
+
 /// Handles retain the real project and actor; this adapter owns observations, never document text.
 pub(super) struct Harness {
     pub case: Case,
@@ -171,11 +173,14 @@ impl Harness {
     /// Do not enqueue an extra cold command and mistake another demand's view for its completion.
     pub async fn activate(&self, cx: &mut AsyncApp) -> anyhow::Result<()> {
         eprintln!("native {}: wait visible-panel activation", self.case.name);
+        // The ordinary refresh below must never conceal a lost initial history request.
+        self.wait_history_content(true, cx).await?;
         self.settle(cx).await?;
         // Headerless workbenches expose refresh as a registered command/context action.
         // Invoke it only after the real native canvas is current, then observe its completion.
         self.command("refresh", serde_json::json!({}), cx)?;
-        self.settle(cx).await
+        self.settle(cx).await?;
+        self.wait_history_content(false, cx).await
     }
 
     /// Require the current public guest Node and matching host/worker/window. The click adapter

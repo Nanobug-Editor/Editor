@@ -741,6 +741,30 @@ impl Worker {
                             });
                             result
                         }
+                        Some(Work::CanvasResize {
+                            plugin,
+                            epoch,
+                            panel,
+                            event,
+                            reply,
+                        }) => {
+                            let current = output
+                                .lock()
+                                .unwrap()
+                                .instance_epochs
+                                .get(&plugin)
+                                .copied()
+                                .unwrap_or(0);
+                            super::resize_delivery::deliver(
+                                &mut manager,
+                                &plugin,
+                                epoch,
+                                current,
+                                panel,
+                                event,
+                                reply,
+                            )
+                        }
                         Some(Work::FormChange {
                             plugin,
                             epoch,
