@@ -36,4 +36,12 @@
 
 本机证据集中保存在项目外 `C:/Users/Tmiracle/.codex/visualizations/2026/10/28/01a182e9-504a-7f72-84b6-41093f0087be/`，包含原始动图分析、红绿测试、`native-settle-final.log`、`scroll-regressions.log` 和完整检查日志。设置 `NANOBUG_SETTLE_CAPTURE` 为已有的项目外目录可导出原生场景的选定 PNG。
 
+## 差异比较视图的后续补充
+
+用户在首轮合并后反馈 Git 差异比较仍有相同偏移。代码追踪确认，比较视图沿用原生 `Editor` 负责文本和输入，但 [AlignmentPane](../../../crates/editor-ui/src/aligned_editor/pane.rs) 使用独立 `SmoothScroll::new(...).projected(line)` 驱动左右／三方共享的投影坐标；它没有经过首轮已启用像素对齐的 `targets::native` 入口。因此首轮普通编辑器的修复并未覆盖比较视图。
+
+本次在共享投影视口启用同一个 `snap_vertical_to_pixels()`，所有源切片继续跟随同一偏移，不对左右源分别取整；滚轮距离余量和惯性精度沿用前述实现。对齐能力只扩展为 crate 内可复用，未改变 `external_scroll` 的通用画布行为。
+
+按用户要求，本次补充仅核对调用链和 Git 差异，直接本地合并，**未执行测试、构建或原生交互验收**。上面的通过数字属于首轮代码，不能作为本次比较视图补充的实测结果。
+
 返回 [UI 目录](../README.md)。

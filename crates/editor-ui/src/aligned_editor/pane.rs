@@ -897,6 +897,8 @@ impl Render for PaneView {
                 pane,
             )
             .projected(line)
+            // Align the shared viewport once so every native source slice moves together.
+            .snap_vertical_to_pixels()
             .into_any_element()
         }
     }
