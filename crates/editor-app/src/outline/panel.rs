@@ -53,7 +53,7 @@ impl DockPanel for OutlinePanel {
         Some(t!("panel.outline").to_string().into())
     }
 
-    fn title(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn title(&mut self, _: bool, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .w_full()
             .justify_between()

@@ -22,7 +22,7 @@ fn named(node: &ElementSnapshot, id: &str) -> bool {
 }
 
 /// Explorer's title stays painted when its focus-sensitive action buttons fade away.
-fn explorer_title(window: &Window) -> anyhow::Result<ElementSnapshot> {
+pub(super) fn explorer_title(window: &Window) -> anyhow::Result<ElementSnapshot> {
     snapshots(window)
         .into_iter()
         .find(|node| node.visible() && named(node, "explorer-title"))
@@ -30,7 +30,7 @@ fn explorer_title(window: &Window) -> anyhow::Result<ElementSnapshot> {
 }
 
 /// Base observes each group and content frame independently around the project's local renderer.
-fn frame(window: &Window, anchor: &ElementSnapshot) -> anyhow::Result<Frame> {
+pub(super) fn frame(window: &Window, anchor: &ElementSnapshot) -> anyhow::Result<Frame> {
     let nodes = snapshots(window);
     let outer = nodes
         .iter()

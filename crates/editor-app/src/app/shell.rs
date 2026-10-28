@@ -3,6 +3,7 @@
 use crate::*;
 use editor_ui::scroll::ScrollableElement as _;
 pub(super) use editor_ui::window::title_bar_window_control;
+use gpui_base::TestSupportExt as _;
 
 /// Share one document scope between default keys and unbound shortcut metadata.
 /// Embedded native source panes receive document commands without granting surrounding plugin controls that authority.
@@ -100,8 +101,6 @@ pub(crate) struct EditorDockPanel {
     kind: EditorDockPanelKind,
     explorer_visible: Rc<Cell<bool>>,
     focus_handle: FocusHandle,
-    /// Retain native focus observers so the Explorer title repaints on entry and exit.
-    focus_subscriptions: Vec<Subscription>,
 }
 
 impl EditorDockPanel {
@@ -116,22 +115,7 @@ impl EditorDockPanel {
             kind,
             explorer_visible,
             focus_handle: cx.focus_handle(),
-            focus_subscriptions: Vec::new(),
         }
-    }
-
-    /// Watch this panel's focus scope once and retain both repaint subscriptions.
-    fn observe_explorer_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.focus_subscriptions.is_empty() {
-            return;
-        }
-        self.focus_subscriptions
-            .push(cx.on_focus_in(&self.focus_handle, window, |_, _, cx| cx.notify()));
-        self.focus_subscriptions.push(cx.on_focus_out(
-            &self.focus_handle,
-            window,
-            |_, _, _, cx| cx.notify(),
-        ));
     }
 }
 
@@ -176,21 +160,16 @@ impl DockPanel for EditorDockPanel {
         })
     }
 
-    fn title(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Use Dock's `active` pointer/focus scope for this heading's actions in `window`/`cx`.
+    fn title(
+        &mut self,
+        active: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         match self.kind {
             // Order explorer actions as locate, collapse all, expand all, then minimize.
             EditorDockPanelKind::Explorer => {
-                self.observe_explorer_focus(window, cx);
-                let focused = self.focus_handle.contains_focused(window, cx);
-                // Base samples the current opacity, so a focus reversal resumes from the
-                // visible fraction instead of restarting or flashing the whole button group.
-                let opacity = gpui_base::motion::transition(
-                    "explorer-title-actions-opacity",
-                    if focused { 1. } else { 0. },
-                    gpui_base::motion::Transition::new(Duration::from_millis(140)),
-                    window,
-                    cx,
-                );
                 h_flex()
                     .w_full()
                     .items_center()
@@ -200,6 +179,8 @@ impl DockPanel for EditorDockPanel {
                         h_flex()
                             .id("explorer-title")
                             .debug_selector(|| "explorer-title".into())
+                            // Keep the heading observable after all of its action buttons disappear.
+                            .test_support()
                             .flex_1()
                             .min_w(px(0.))
                             .items_center()
@@ -207,98 +188,122 @@ impl DockPanel for EditorDockPanel {
                             .child(explorer_panel_icon(cx).small())
                             .child(div().truncate().child(t!("panel.explorer").to_string())),
                     )
-                    .child(
-                        h_flex()
-                            .id("explorer-actions")
-                            .debug_selector(|| "explorer-actions".into())
-                            // Reserve four compact slots and their height so focus changes never move the title.
-                            .w(px(96.))
-                            .h(px(24.))
-                            .opacity(opacity)
-                            .when(opacity > 0., |actions| {
-                                actions.child(
-                    div()
-                        .id("explorer-reveal-active-file")
-                        .debug_selector(|| "explorer-reveal-active-file".into())
-                        .child(
-                            Button::new("explorer-reveal")
-                                // The custom target inherits the current title-bar text color.
-                                .icon(Icon::default().path("icons/explorer-locate.svg"))
-                                .tooltip(t!("explorer.reveal_active_file").to_string())
-                                .accessibility_label(t!("explorer.reveal_active_file").to_string())
-                                .small()
-                                .compact()
-                                .ghost()
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    // Consume the title action so it cannot start a dock gesture.
-                                    cx.stop_propagation();
-                                    let _ = this.parent.update(cx, |app, cx| {
-                                        app.reveal_active_file_in_explorer(window, cx);
-                                    });
-                                })),
-                        ),
-                )
-                .child(
-                    div()
-                        .id("explorer-collapse-all")
-                        .debug_selector(|| "explorer-collapse-all".into())
-                        .child(
-                            Button::new("explorer-collapse-all-button")
-                                .icon(Icon::default().path("icons/explorer-collapse-all.svg"))
-                                .tooltip(t!("explorer.collapse_all").to_string())
-                                .accessibility_label(t!("explorer.collapse_all").to_string())
-                                .small()
-                                .compact()
-                                .ghost()
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    // Consume header actions so they cannot start a dock gesture.
-                                    cx.stop_propagation();
-                                    let _ = this.parent.update(cx, |app, cx| {
-                                        app.set_all_explorer_directories_expanded(false, cx);
-                                    });
-                                })),
-                        ),
-                )
-                .child(
-                    div()
-                        .id("explorer-expand-all")
-                        .debug_selector(|| "explorer-expand-all".into())
-                        .child(
-                            Button::new("explorer-expand-all-button")
-                                .icon(Icon::default().path("icons/explorer-expand-all.svg"))
-                                .tooltip(t!("explorer.expand_all").to_string())
-                                .accessibility_label(t!("explorer.expand_all").to_string())
-                                .small()
-                                .compact()
-                                .ghost()
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    let _ = this.parent.update(cx, |app, cx| {
-                                        app.set_all_explorer_directories_expanded(true, cx);
-                                    });
-                                })),
-                        ),
-                )
-                .child(
-                    Button::new("explorer-hide")
-                        .icon(Icon::new(IconName::WindowMinimize))
-                        .tooltip(t!("panel.minimize_explorer").to_string())
-                        .accessibility_label(t!("panel.minimize_explorer").to_string())
-                        .small()
-                        .compact()
-                        .ghost()
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            cx.stop_propagation();
-                            let _ = this.parent.update(cx, |app, cx| {
-                                // Use the existing visibility path to persist hiding and update the bottom toggle.
-                                if app.explorer_visible {
-                                    app.toggle_explorer(window, cx);
-                                }
-                            });
-                        })),
-                )
-                            }),
-                    )
+                    .child(dock::title_actions(
+                        "explorer-actions",
+                        96.,
+                        active,
+                        window,
+                        cx,
+                        |actions, cx| {
+                            actions
+                                .child(
+                                    div()
+                                        .id("explorer-reveal-active-file")
+                                        .debug_selector(|| "explorer-reveal-active-file".into())
+                                        .child(
+                                            Button::new("explorer-reveal")
+                                                // The custom target inherits the current title-bar text color.
+                                                .icon(
+                                                    Icon::default()
+                                                        .path("icons/explorer-locate.svg"),
+                                                )
+                                                .tooltip(
+                                                    t!("explorer.reveal_active_file").to_string(),
+                                                )
+                                                .accessibility_label(
+                                                    t!("explorer.reveal_active_file").to_string(),
+                                                )
+                                                .small()
+                                                .compact()
+                                                .ghost()
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    // Consume the title action so it cannot start a dock gesture.
+                                                    cx.stop_propagation();
+                                                    let _ = this.parent.update(cx, |app, cx| {
+                                                        app.reveal_active_file_in_explorer(
+                                                            window, cx,
+                                                        );
+                                                    });
+                                                })),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .id("explorer-collapse-all")
+                                        .debug_selector(|| "explorer-collapse-all".into())
+                                        .child(
+                                            Button::new("explorer-collapse-all-button")
+                                                .icon(
+                                                    Icon::default()
+                                                        .path("icons/explorer-collapse-all.svg"),
+                                                )
+                                                .tooltip(t!("explorer.collapse_all").to_string())
+                                                .accessibility_label(
+                                                    t!("explorer.collapse_all").to_string(),
+                                                )
+                                                .small()
+                                                .compact()
+                                                .ghost()
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    // Consume header actions so they cannot start a dock gesture.
+                                                    cx.stop_propagation();
+                                                    let _ = this.parent.update(cx, |app, cx| {
+                                                        app.set_all_explorer_directories_expanded(
+                                                            false, cx,
+                                                        );
+                                                    });
+                                                })),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .id("explorer-expand-all")
+                                        .debug_selector(|| "explorer-expand-all".into())
+                                        .child(
+                                            Button::new("explorer-expand-all-button")
+                                                .icon(
+                                                    Icon::default()
+                                                        .path("icons/explorer-expand-all.svg"),
+                                                )
+                                                .tooltip(t!("explorer.expand_all").to_string())
+                                                .accessibility_label(
+                                                    t!("explorer.expand_all").to_string(),
+                                                )
+                                                .small()
+                                                .compact()
+                                                .ghost()
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    cx.stop_propagation();
+                                                    let _ = this.parent.update(cx, |app, cx| {
+                                                        app.set_all_explorer_directories_expanded(
+                                                            true, cx,
+                                                        );
+                                                    });
+                                                })),
+                                        ),
+                                )
+                                .child(
+                                    Button::new("explorer-hide")
+                                        .icon(Icon::new(IconName::WindowMinimize))
+                                        .tooltip(t!("panel.minimize_explorer").to_string())
+                                        .accessibility_label(
+                                            t!("panel.minimize_explorer").to_string(),
+                                        )
+                                        .small()
+                                        .compact()
+                                        .ghost()
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            cx.stop_propagation();
+                                            let _ = this.parent.update(cx, |app, cx| {
+                                                // Use the existing visibility path to persist hiding and update the bottom toggle.
+                                                if app.explorer_visible {
+                                                    app.toggle_explorer(window, cx);
+                                                }
+                                            });
+                                        })),
+                                )
+                        },
+                    ))
                     .into_any_element()
             }
             EditorDockPanelKind::Editor => div()

@@ -189,7 +189,7 @@ impl DockPanel for MessagePanel {
         Some(t!("messages.title").to_string().into())
     }
 
-    fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn title(&mut self, _: bool, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .w_full()
             .justify_between()

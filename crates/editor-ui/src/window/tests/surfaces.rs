@@ -35,7 +35,7 @@ impl Panel for Pane {
     }
 }
 impl crate::dock::Panel for Pane {
-    fn title(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn title(&mut self, _: bool, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         "刷新率 / refresh"
     }
 }

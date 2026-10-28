@@ -67,7 +67,7 @@ impl DockPanel for ProblemsPanel {
         Some(t!("problems.title", count = count).to_string().into())
     }
 
-    fn title(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn title(&mut self, _: bool, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let count = self
             .parent
             .upgrade()

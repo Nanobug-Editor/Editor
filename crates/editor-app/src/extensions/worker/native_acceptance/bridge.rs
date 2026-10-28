@@ -43,6 +43,8 @@ impl Harness {
                     "exclusive-full-replacement-only"
                 } else if exclusive::requested() {
                     "exclusive-dock-only"
+                } else if sidebar::title_actions::requested() {
+                    "title-actions-only"
                 } else if sidebar::requested() {
                     "shared-sidebar-only"
                 } else if caption_controls::requested() {

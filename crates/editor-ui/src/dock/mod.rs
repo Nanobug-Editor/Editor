@@ -25,10 +25,10 @@ use gpui_base::dock::{
 use gpui_base::h_flex;
 use gpui_base::{ElementExt as _, HandleEdge, Placement, TestSupportExt as _, resize_handle};
 use gpui_kit::{
-    AnyElement, AnyView, App, AppContext as _, Bounds, Context, Div, Empty, Entity,
+    AnyElement, AnyView, App, AppContext as _, Bounds, Context, Div, Empty, Entity, FocusHandle,
     InteractiveElement as _, IntoElement, MouseMoveEvent, MouseUpEvent, ParentElement as _, Pixels,
-    Render, Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled as _, WeakEntity,
-    Window, canvas, div, prelude::FluentBuilder as _, px, size,
+    Render, Stateful, StatefulInteractiveElement as _, StyleRefinement, Styled as _, Subscription,
+    WeakEntity, Window, canvas, div, prelude::FluentBuilder as _, px, size,
 };
 use plugin_schema::ThemeComponent;
 
@@ -239,11 +239,17 @@ impl DockAreaRenderer for LocalDockRenderer {
             bounds: Rc::new(Cell::new(Bounds::default())),
             frames: self.frames.clone(),
             dragging: self.dragging.clone(),
+            hovered: Rc::new(Cell::new(false)),
+            focus_subscriptions: RefCell::new(None),
         })
     }
 }
 
 struct LocalTabGroupRenderer {
+    /// Each split leaf reveals only its own title actions when the pointer enters its full frame.
+    hovered: Rc<Cell<bool>>,
+    /// Base's original focus scope supplies keyboard reveal; replace listeners on active-panel changes.
+    focus_subscriptions: RefCell<Option<(FocusHandle, [Subscription; 2])>>,
     title_height: f32,
     /// Only hit geometry is local; all lasting panel positions and sizes remain in DockArea.
     area: WeakEntity<DockArea>,
@@ -263,13 +269,15 @@ impl Drop for LocalTabGroupRenderer {
 }
 
 impl LocalTabGroupRenderer {
+    /// Draw `panel`'s live heading in `window`/`cx`, forwarding its pointer-or-focus `active` state.
     fn panel_title(
         panel: &Arc<dyn crate::dock::panel::BasePanelView>,
+        active: bool,
         window: &mut Window,
         cx: &mut App,
     ) -> AnyElement {
         PanelHandle::of(panel)
-            .map(|handle| handle.title(window, cx))
+            .map(|handle| handle.title(active, window, cx))
             .unwrap_or_else(|| {
                 // Keep dock identities stable while translating their visible fallback titles.
                 let title = match panel.panel_name(cx) {
@@ -283,14 +291,33 @@ impl LocalTabGroupRenderer {
 }
 
 impl TabGroupRenderer for LocalTabGroupRenderer {
-    /// Measure the actual outer slot, including its title, through Base's public paint hook.
-    fn frame(&self, group: &TabGroupContext, _: &mut Window, _: &mut App) -> Stateful<Div> {
+    /// Track `group`'s native focus and pointer scope in `window`/`cx`, including title and body.
+    /// Return its measured frame; Base retains focus identity, activation and panel lifecycle.
+    fn frame(&self, group: &TabGroupContext, window: &mut Window, cx: &mut App) -> Stateful<Div> {
         let node = group.node();
         self.node.set(Some(node));
         let frames = self.frames.clone();
-        div().id("tab-group").on_prepaint(move |bounds, _, _| {
-            frames.panels.borrow_mut().insert(node, bounds);
-        })
+        let focus = group.active_panel().map(|panel| panel.focus_handle(cx));
+        let mut subscriptions = self.focus_subscriptions.borrow_mut();
+        if subscriptions.as_ref().map(|(handle, _)| handle) != focus.as_ref() {
+            *subscriptions = focus.map(|focus| {
+                let entered = window.on_focus_in(&focus, cx, |window, _| window.refresh());
+                let exited = window.on_focus_out(&focus, cx, |_, window, _| window.refresh());
+                (focus, [entered, exited])
+            });
+        }
+        let hovered = self.hovered.clone();
+        div()
+            .id("tab-group")
+            .on_hover(move |inside, window, _| {
+                // Pointer reveal never moves keyboard focus or activates a different panel.
+                if hovered.replace(*inside) != *inside {
+                    window.refresh();
+                }
+            })
+            .on_prepaint(move |bounds, _, _| {
+                frames.panels.borrow_mut().insert(node, bounds);
+            })
     }
 
     /// Keep native drag events, rejecting only the central tab-merge zone.
@@ -337,6 +364,7 @@ impl TabGroupRenderer for LocalTabGroupRenderer {
         let panel = panel.clone();
         let node = group.node();
         let drag = group.drag_panel(group.active_ix(), cx);
+        let active = self.hovered.get() || panel.focus_handle(cx).contains_focused(window, cx);
         h_flex()
             .id("local-dock-title-bar")
             .debug_selector(move || format!("local-dock-title-{}", node.as_u64()))
@@ -361,7 +389,7 @@ impl TabGroupRenderer for LocalTabGroupRenderer {
                     .h(px(1.))
                     .bg(style.border.unwrap_or(cx.theme().border)),
             )
-            .child(Self::panel_title(&panel, window, cx))
+            .child(Self::panel_title(&panel, active, window, cx))
             .when_some(
                 drag.filter(|_| {
                     !group.is_locked() && Some(panel.panel_id(cx)) != self.dragging.anchor()
@@ -614,9 +642,11 @@ mod placement;
 mod presentation;
 mod resize;
 mod split_resize;
+mod title_actions;
 pub use placement::stack_axis;
 pub use presentation::PanelPresentation;
 pub use presentation::has_visible_region;
+pub use title_actions::title_actions;
 
 #[cfg(test)]
 mod tests;

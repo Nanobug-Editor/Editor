@@ -13,8 +13,14 @@ pub trait Panel: BasePanel {
     fn drag_title(&self, _: &App) -> Option<gpui_kit::SharedString> {
         None
     }
-    /// Render this panel's title and local toolbar using its original entity context.
-    fn title(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement;
+    /// Render the title in its original `window`/entity context; `active` means pointer or focus
+    /// is inside the panel. Return the native heading, optionally including local title actions.
+    fn title(
+        &mut self,
+        active: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement;
     /// Panels carrying their own header may omit the surrounding dock title bar.
     fn title_bar(&self, _: &App) -> bool {
         true
@@ -27,7 +33,7 @@ pub(crate) struct PanelHandle {
     /// Original entity delegates every behavioral call to Base's public entity implementation.
     base: Arc<dyn BasePanelView>,
     /// Title renderer updates the original entity instead of copying its state.
-    title: Arc<dyn Fn(&mut Window, &mut App) -> AnyElement + Send + Sync>,
+    title: Arc<dyn Fn(bool, &mut Window, &mut App) -> AnyElement + Send + Sync>,
     /// Header visibility is resolved from the live panel.
     title_bar: Arc<dyn Fn(&App) -> bool + Send + Sync>,
     /// Plain display label is independent of the rich native title and toolbar.
@@ -48,9 +54,9 @@ impl PanelHandle {
         }
         panel.as_any().downcast_ref()
     }
-    /// Draw the live panel title.
-    pub(crate) fn title(&self, window: &mut Window, cx: &mut App) -> AnyElement {
-        (self.title)(window, cx)
+    /// Draw the live title in `window`/`cx`, forwarding the panel's pointer-or-focus `active` state.
+    pub(crate) fn title(&self, active: bool, window: &mut Window, cx: &mut App) -> AnyElement {
+        (self.title)(active, window, cx)
     }
     /// Whether this panel requests local dock chrome.
     pub(crate) fn title_bar(&self, cx: &App) -> bool {
@@ -68,8 +74,10 @@ pub fn panel_handle<P: Panel>(panel: Entity<P>) -> Arc<dyn BasePanelView> {
     let label = panel.clone();
     Arc::new(PanelHandle {
         base: Arc::new(panel),
-        title: Arc::new(move |window, cx| {
-            title.update(cx, |panel, cx| panel.title(window, cx).into_any_element())
+        title: Arc::new(move |active, window, cx| {
+            title.update(cx, |panel, cx| {
+                panel.title(active, window, cx).into_any_element()
+            })
         }),
         title_bar: Arc::new(move |cx| header.read(cx).title_bar(cx)),
         drag_title: Arc::new(move |cx| label.read(cx).drag_title(cx)),
