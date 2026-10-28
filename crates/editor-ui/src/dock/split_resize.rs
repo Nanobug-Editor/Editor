@@ -1,6 +1,7 @@
 //! Resize visible neighbors through Base's public tree edit without removing retained hidden slots.
 //! Base 0.8's handle indexes the preceding stored slot, even when that slot is hidden. Only splits
 //! containing hidden children use this local input adapter; ordinary Base split behavior is retained.
+//! Divider paint also follows visible siblings, so hidden leading slots cannot add an outer edge.
 
 use super::*;
 use gpui_base::dock::{PaneNode, PaneRef};
@@ -278,6 +279,77 @@ fn bounds(
             .filter_map(|child| bounds(child, area, frames, cx))
             .reduce(|a, b| a.union(&b)),
     }
+}
+
+/// Skin Base's handle without changing its hitbox, drag state or one-logical-pixel extent.
+/// `area` supplies live visibility; `frames` is read during paint, after all leaves were measured.
+pub(super) fn separator(
+    handle: &gpui_base::ResizeHandleContext,
+    area: WeakEntity<DockArea>,
+    frames: PaintedFrames,
+) -> AnyElement {
+    let axis = handle.axis();
+    let active = handle.is_active();
+    canvas(
+        |_, _, _| (),
+        move |line, _, window, cx| {
+            let Some(area) = area.upgrade() else { return };
+            let area = area.read(cx);
+            let frames = frames.panels.borrow();
+            let mut shared = false;
+            for placement in [
+                DockPlacement::Center,
+                DockPlacement::Left,
+                DockPlacement::Right,
+                DockPlacement::Bottom,
+            ] {
+                if let Some(tree) = area.layout(placement) {
+                    tree.root().walk(&mut |node| {
+                        if let PaneRef::Split {
+                            axis: split_axis,
+                            children,
+                            ..
+                        } = node.kind()
+                            && split_axis == axis
+                        {
+                            let shown: Vec<_> = children
+                                .iter()
+                                .filter_map(|child| bounds(child, area, &frames, cx))
+                                .collect();
+                            shared |= shown.windows(2).any(|pair| {
+                                let following = pair[1];
+                                // Match the entire edge, not just its coordinate: nested splits
+                                // can share an origin while spanning different rows or columns.
+                                (following.origin.x - line.origin.x).abs() < px(0.01)
+                                    && (following.origin.y - line.origin.y).abs() < px(0.01)
+                                    && if axis == Axis::Horizontal {
+                                        (following.size.height - line.size.height).abs() < px(0.01)
+                                    } else {
+                                        (following.size.width - line.size.width).abs() < px(0.01)
+                                    }
+                            });
+                        }
+                    });
+                }
+            }
+            if shared {
+                let theme = gpui_base::Theme::global(cx);
+                let color = if active {
+                    theme
+                        .resizable
+                        .active_handle
+                        .unwrap_or(theme.tokens.colors.ring)
+                } else {
+                    theme.resizable.handle.unwrap_or(theme.tokens.colors.border)
+                };
+                window.paint_quad(gpui_kit::fill(line, color));
+            }
+        },
+    )
+    .flex_none()
+    .when(axis == Axis::Horizontal, |line| line.w(px(1.)).h_full())
+    .when(axis == Axis::Vertical, |line| line.w_full().h(px(1.)))
+    .into_any_element()
 }
 
 /// Paint-time geometry skips hidden slots while retaining their indexes in the public size vector.

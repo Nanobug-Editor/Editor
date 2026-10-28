@@ -100,6 +100,7 @@
 - [宿主消息窗口规格](specs/host-messages.md)：[两张实施工单](tickets/host-messages/README.md)已实现、验收、审查并推送，GitHub #85、#86 已核对关闭；证据见 [实施验收](verification/host-messages.md)。
 - [宿主消息来源盘点](verification/host-messages-sources.md)：已接入来源、插件归属及排除依据。
 - [消息按钮选中状态](verification/messages-button-selection-2026-10-19.md)：选中外观跟随面板实际显隐，记录主题、缩放回归及修复前后共有的四项消息测试失败。
+- [消息顶部隐藏停靠项分隔线修复](verification/message-header-hidden-split-2026-10-27.md)：修正隐藏前驱停靠项给首个可见消息面板叠加的顶线，保留正常分隔与缩放。
 - [运行截图反馈修正](verification/host-messages-feedback.md)：日常消息范围、扫帚按钮、窗口工具组与底部文字移除的后续验收，不改写原始工单证据。
 
 - [快捷键面板与用户绑定规格](specs/keyboard-shortcuts.md)：[三张实施工单 #81–#83](tickets/keyboard-shortcuts/README.md)已交付并核对关闭；实际证据与限制见[验收记录](verification/keyboard-shortcuts.md)。

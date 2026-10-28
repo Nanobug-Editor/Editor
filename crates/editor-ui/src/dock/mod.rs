@@ -197,6 +197,21 @@ impl DockAreaRenderer for LocalDockRenderer {
                 self.frames.clone(),
             )))
     }
+
+    /// Retained hidden slots must not add a divider before the first visible sibling.
+    fn render_split_handle(
+        &self,
+        handle: &gpui_base::ResizeHandleContext,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Option<AnyElement> {
+        Some(split_resize::separator(
+            handle,
+            self.area.clone(),
+            self.frames.clone(),
+        ))
+    }
+
     /// Compose project-owned dock chrome over Base's public resize behavior.
     fn render_dock(
         &self,
