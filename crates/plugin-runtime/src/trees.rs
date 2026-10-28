@@ -2,6 +2,7 @@
 //! Only provider metadata is retained here; text, document selection and tree scrolling stay native.
 use crate::EditorAuthority;
 mod patch;
+mod reveal;
 use plugin_protocol::{
     api::{ErrorCode, Failure, ResourceHandle},
     tree,
@@ -33,7 +34,8 @@ pub struct TreeSnapshot {
     pub branches: BTreeMap<Option<String>, TreeBranch>,
     pub expanded: BTreeSet<String>,
     pub icons: BTreeMap<String, Arc<[u8]>>,
-    /// A one-shot exact ID path; native interaction or successful reveal withdraws it.
+    /// One pending exact ID path (initial default or explicit reveal); native input or delivery
+    /// withdraws it. Explicit requests validate cached ancestry before entering this native seam.
     pub initial_selection: Option<Vec<String>>,
 }
 struct Pending {
@@ -46,6 +48,8 @@ struct State {
     pending: BTreeMap<u64, Pending>,
     /// Defaults cannot be replayed after native input, even if it preceded the provider's first call.
     initialized: bool,
+    /// Explicit navigation belongs to one admitted forest; structural replacement withdraws it.
+    explicit_reveal: bool,
 }
 /// Every node and nested native menu shares one admitted artwork set across update and patch.
 fn artwork_paths<'a>(nodes: impl Iterator<Item = &'a tree::Node>) -> BTreeSet<String> {
@@ -95,6 +99,7 @@ impl TreeResource {
                 next: 1,
                 pending: BTreeMap::new(),
                 initialized: false,
+                explicit_reveal: false,
             }),
         }
     }
@@ -126,6 +131,10 @@ impl TreeResource {
     /// A retained readonly scene loses pending work without discarding its last visible metadata.
     pub fn suspend(&self) {
         let mut state = self.state.lock().unwrap();
+        if state.explicit_reveal {
+            state.snapshot.initial_selection = None;
+            state.explicit_reveal = false;
+        }
         state.snapshot.epoch = state.snapshot.epoch.saturating_add(1);
         state.snapshot.revision = state.snapshot.revision.saturating_add(1);
         state.pending.clear();
@@ -176,6 +185,7 @@ impl TreeResource {
     pub fn dismiss_initial_selection(&self) {
         let mut state = self.state.lock().unwrap();
         state.initialized = true;
+        state.explicit_reveal = false;
         if state.snapshot.initial_selection.take().is_some() {
             state.snapshot.revision += 1;
         }
@@ -325,6 +335,10 @@ impl TreeResource {
     pub(crate) fn refresh(&self) -> Result<(), Failure> {
         self.live()?;
         let mut state = self.state.lock().unwrap();
+        if state.explicit_reveal {
+            state.snapshot.initial_selection = None;
+            state.explicit_reveal = false;
+        }
         state.snapshot = TreeSnapshot {
             epoch: state.snapshot.epoch + 1,
             revision: state.snapshot.revision + 1,

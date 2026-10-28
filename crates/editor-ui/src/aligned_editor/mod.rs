@@ -370,6 +370,14 @@ impl AlignmentGroup {
             .update(cx, |state, cx| state.reveal_offset(index, byte, anchor, cx))
     }
 
+    /// Reveal the shared display's start (`end=false`) or end, including rows absent from some panes.
+    /// Queues against the current source epoch until layout is ready, without changing selection/focus.
+    /// Returns false when retired, disabled or in native/independent fallback, like `reveal_offset_at`.
+    pub fn reveal_content_edge(&self, end: bool, cx: &mut App) -> bool {
+        self.state
+            .update(cx, |state, cx| state.reveal_content_edge(end, cx))
+    }
+
     /// Project a current UTF-8 source range for rails, decorations or source-owned controls.
     /// Hidden/offscreen/stale measurements return `None`, never coordinates from another pane.
     pub fn project_range(

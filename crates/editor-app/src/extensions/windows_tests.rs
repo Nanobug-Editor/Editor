@@ -125,8 +125,18 @@ fn flush_checked(
                 .get("history")
                 .is_some_and(|view| view.active_node("log").is_some())
         });
+        let pending_requests: usize = manager
+            .runtime_observations()
+            .snapshot(Some("git"))
+            .owners
+            .iter()
+            .filter_map(|owner| owner.resources.as_ref())
+            .filter(|resources| !resources.retired)
+            .map(|resources| resources.requests)
+            .sum();
         settled_frames = if !native_changes
             && guest_ready
+            && pending_requests == 0
             && scenes == previous_scenes
             && manager
                 .live
@@ -138,16 +148,16 @@ fn flush_checked(
             0
         };
         previous_scenes = scenes;
-        // The guest's public history canvas stays disabled while its serial work or native editor
-        // acknowledgements are pending. Require two further stable bridge turns, including native
-        // ingress after drawing. Eight arbitrary full UI frames can span its next automatic
-        // refresh even though the user already has an idle, current and actionable scene.
+        // The history canvas remains usable during immutable source reads. Observe actual pending
+        // native requests instead of inferring readiness from control presence or enabled state.
+        // Two stable bridge turns also drain native ingress; callers still await their target
+        // editor/tree state because queued UI work may not have issued its first request yet.
         if settled_frames >= 2 {
             break;
         }
         assert!(
             Instant::now() < deadline,
-            "Git native bridge did not settle: {ingress}; scenes={previous_scenes:?}; ready={guest_ready}; processes={:?}",
+            "Git native bridge did not settle: {ingress}; scenes={previous_scenes:?}; ready={guest_ready}; requests={pending_requests}; processes={:?}",
             manager
                 .live
                 .get("git")

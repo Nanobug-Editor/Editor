@@ -144,6 +144,41 @@ fn source_viewport_centered_location_preserves_native_state_and_clamps(cx: &mut 
     }
 }
 
+/// EOF placement uses measured bottom alignment even when the native input admits extra trailing space.
+#[gpui::test]
+fn source_viewport_bottom_location_reveals_complete_content_without_changing_selection(
+    cx: &mut TestAppContext,
+) {
+    let text = (0..200)
+        .map(|row| format!("row{row:03} 中文😀 {}\n", "context ".repeat(5)))
+        .collect::<String>();
+    for wrap in [false, true] {
+        let (view, changes, ui) = source_window(cx, &text, wrap);
+        let before = ui.update(|_, cx| view.read(cx).editor.read(cx).selected_range());
+        let mut locator = Locator::bottom(text.len());
+        let mut settled = false;
+        for _ in 0..64 {
+            match ui.update(|_, cx| locator.step(view.read(cx).editor.read(cx))) {
+                Step::Settled => {
+                    settled = true;
+                    break;
+                }
+                Step::Scroll(offset) => paint_scroll(&view, offset, ui),
+                Step::Failed => panic!("native EOF placement must settle"),
+            }
+        }
+        assert!(settled);
+        ui.update(|_, cx| {
+            let editor = view.read(cx).editor.read(cx);
+            let bounds = editor.range_to_bounds(&(text.len()..text.len())).unwrap();
+            assert!((bounds.bottom() - editor.input_bounds().bottom()).abs() <= px(0.5));
+            assert_eq!(editor.selected_range(), before);
+            assert_eq!(editor.value().as_ref(), text);
+        });
+        assert_eq!(changes.get(), 0);
+    }
+}
+
 /// A distant CRLF row reaches the real viewport without a selection or Undo side effect.
 #[gpui::test]
 fn source_viewport_distant_location_preserves_text_selection_focus_and_undo(

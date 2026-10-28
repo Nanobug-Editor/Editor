@@ -3,6 +3,7 @@ use super::*;
 use gpui_base::test_support::snapshots;
 use plugin_runtime::plugin_protocol::{api, ui};
 mod navigation;
+mod ownership;
 
 /// Deliver one native log row press through its current public scene, then drain real Git/editor receipts.
 fn select_row(manager: &mut Manager, row: usize) {
@@ -328,7 +329,7 @@ fn git_inline_history_preview_opens_readonly_two_and_three_pane_tabs(cx: &mut Te
                     .find(|view| Some(&view.id) == state.active_comparison.as_ref())
                     .unwrap();
                 assert!(
-                    active.title.starts_with(title),
+                    active.title.ends_with(title),
                     "actual neighboring file: {}; host={}; worker={:?}; guest={guest_error:?}",
                     active.title,
                     state.status,

@@ -376,7 +376,15 @@ impl EditorApp {
                 .size_full()
                 .min_h_0()
                 .child(self.comparison_toolbar(cx))
-                .child(div().flex().flex_1().min_h_0().children(panes))
+                .child(
+                    div()
+                        .relative()
+                        .flex()
+                        .flex_1()
+                        .min_h_0()
+                        .children(panes)
+                        .children(self.comparison_boundary_notice(cx)),
+                )
                 .child(
                     gpui_kit::canvas(
                         |_, _, _| (),

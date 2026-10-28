@@ -673,7 +673,13 @@ fn validate_comparison_navigation(
             "Comparison navigation requires plugin.commands",
         ));
     }
-    for action in navigation.previous.iter().chain(&navigation.next) {
+    for action in navigation
+        .previous
+        .iter()
+        .chain(&navigation.next)
+        .chain(&navigation.previous_boundary)
+        .chain(&navigation.next_boundary)
+    {
         action.validate()?;
         let signature = commands.get(&action.command).ok_or_else(|| {
             Failure::new(
@@ -731,6 +737,7 @@ fn validate_comparison_request(
         third,
         navigation,
         folding,
+        initial_position,
         ..
     } = operation
     else {
@@ -738,7 +745,13 @@ fn validate_comparison_request(
     };
     let minimum = semver::Version::new(
         1,
-        if folding.is_some() {
+        if !initial_position.is_default()
+            || navigation
+                .as_ref()
+                .is_some_and(|nav| nav.previous_boundary.is_some() || nav.next_boundary.is_some())
+        {
+            5
+        } else if folding.is_some() {
             4
         } else if navigation.is_some() {
             3

@@ -1,6 +1,7 @@
 //! Alignment correspondence is rebuilt synchronously from native sources; layout is revision scoped.
 use super::*;
 use std::{cell::Cell, rc::Rc};
+mod location;
 
 pub(super) struct GroupState {
     pub sources: Vec<AlignmentPane>,
@@ -33,6 +34,8 @@ pub(super) struct GroupState {
     native_overlays: bool,
     /// Source pane/byte, membership epoch and viewport anchor survive only until valid geometry.
     pending_location: Option<(usize, usize, u64, f32)>,
+    /// Whole display-edge intent belongs to the same epoch as source locations, including blank slots.
+    pending_edge: Option<(bool, u64)>,
     // Whole physical pane bounds at a disjoint-layout refusal. Fallback removes local rails;
     // comparing these outer bounds avoids treating that internal change as a resize retry.
     disjoint_bounds: Option<Vec<Bounds<Pixels>>>,
@@ -86,6 +89,7 @@ impl Default for GroupState {
             enabled: true,
             native_overlays: false,
             pending_location: None,
+            pending_edge: None,
             disjoint_bounds: None,
         }
     }
@@ -148,6 +152,7 @@ impl GroupState {
         self.frames = vec![None; self.sources.len()];
         self.status = AlignmentStatus::Measuring;
         self.pending_location = None;
+        self.pending_edge = None;
         self.disjoint_bounds = None;
         cx.notify();
     }
@@ -270,6 +275,7 @@ impl GroupState {
         self.reservation.take();
         self.contents.clear();
         self.pending_location = None;
+        self.pending_edge = None;
         self.disjoint_bounds = None;
         self.status = AlignmentStatus::Unavailable(AlignmentError::Retired);
         cx.notify();
@@ -327,86 +333,6 @@ impl GroupState {
             }
         }
         cx.notify();
-    }
-
-    /// Queue a checked source `byte` in pane `index` at viewport `anchor`, scoped to this epoch.
-    pub fn reveal_offset(
-        &mut self,
-        index: usize,
-        byte: usize,
-        anchor: f32,
-        cx: &mut gpui_kit::Context<Self>,
-    ) -> bool {
-        if !anchor.is_finite()
-            || !(0. ..=1.).contains(&anchor)
-            || self.retired
-            || !self.enabled
-            || self.native_overlays
-            || matches!(self.status, AlignmentStatus::Unavailable(_))
-        {
-            return false;
-        }
-        let Some(source) = self.sources.get(index) else {
-            return false;
-        };
-        let text = source.editor.read(cx).text();
-        if byte > text.len() || !text.is_char_boundary(byte) {
-            return false;
-        }
-        if let (Some(folding), Some(rows)) = (&self.folding, &self.rows)
-            && folding.reveal(rows, index, byte)
-        {
-            self.folds_changed(cx);
-        }
-        self.pending_location = Some((index, byte, self.epoch, anchor));
-        self.apply_location(cx);
-        cx.notify();
-        true
-    }
-
-    fn apply_location(&mut self, cx: &mut gpui_kit::Context<Self>) {
-        let Some((index, byte, epoch, anchor)) = self.pending_location else {
-            return;
-        };
-        if epoch != self.epoch {
-            self.pending_location = None;
-            return;
-        }
-        let Some(measurement) = self.measurements.get(index).and_then(Option::as_ref) else {
-            return;
-        };
-        let Some(layout) = self
-            .layout
-            .as_ref()
-            .and_then(|layout| layout.panes.get(index))
-        else {
-            return;
-        };
-        let source = self.sources[index].editor.read(cx);
-        // Base's public range lookup is defined only over laid-out logical lines. A byte before
-        // the visible range can otherwise resolve to its first line through saturating offsets.
-        use gpui_base::input::RopeExt as _;
-        let row = source.text().offset_to_point(byte).row;
-        if source
-            .visible_row_range()
-            .is_none_or(|visible| !visible.contains(&row))
-        {
-            return;
-        }
-        let Some(native) = source.range_to_bounds(&(byte..byte)) else {
-            return;
-        };
-        if let Some(display) = layout.source_to_display(measurement.source_y(native)) {
-            let Some(viewport) = self.display_viewport else {
-                return;
-            };
-            // Use completed content bounds after headers, wrapping and folding; native text
-            // and selections remain untouched, including when the target reaches a scroll clamp.
-            let within_viewport = (viewport.height - native.size.height).max(px(0.)) * anchor;
-            self.scroll.set((px(display) - within_viewport).max(px(0.)));
-            self.clamp_scroll();
-            self.pending_location = None;
-        }
     }
 
     /// Commit the current pane's actual input frame; return whether projected peers need repaint.

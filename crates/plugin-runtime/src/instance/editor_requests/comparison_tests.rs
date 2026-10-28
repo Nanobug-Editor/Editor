@@ -121,6 +121,7 @@ fn comparison(third: Option<api::DocumentVersion>) -> EditorOperation {
         third,
         navigation: None,
         folding: None,
+        initial_position: Default::default(),
         preview: true,
     }
 }
@@ -192,6 +193,64 @@ fn adjacent_actions_require_diff_1_3_without_changing_older_request_admission() 
         );
         validate_comparison_request(&comparison(None), &negotiated).unwrap();
     }
+}
+
+/// Content edges and boundary commands opt into 1.5 and retain ordinary typed-command admission.
+#[test]
+fn boundary_navigation_and_content_edges_require_diff_1_5() {
+    let mut operation = comparison(None);
+    let mut negotiated = api::Negotiated {
+        base: semver::Version::new(1, 0, 0),
+        capabilities: [("editor.diff".into(), semver::Version::new(1, 4, 0))].into(),
+    };
+    for position in [api::ComparisonPosition::Start, api::ComparisonPosition::End] {
+        if let EditorOperation::OpenDocumentComparison {
+            initial_position, ..
+        } = &mut operation
+        {
+            *initial_position = position;
+        }
+        assert_eq!(
+            validate_comparison_request(&operation, &negotiated)
+                .unwrap_err()
+                .code,
+            ErrorCode::CapabilityUnavailable
+        );
+    }
+    if let EditorOperation::OpenDocumentComparison {
+        initial_position,
+        navigation,
+        ..
+    } = &mut operation
+    {
+        *initial_position = Default::default();
+        *navigation = Some(api::ComparisonNavigation {
+            next_boundary: Some(api::ComparisonCommand {
+                command: "neighbor".into(),
+                arguments: serde_json::json!({"landing":"start"}),
+            }),
+            ..Default::default()
+        });
+    }
+    assert_eq!(
+        validate_comparison_request(&operation, &negotiated)
+            .unwrap_err()
+            .code,
+        ErrorCode::CapabilityUnavailable
+    );
+    negotiated
+        .capabilities
+        .insert("editor.diff".into(), semver::Version::new(1, 5, 0));
+    validate_comparison_request(&operation, &negotiated).unwrap();
+    negotiated
+        .capabilities
+        .insert("plugin.commands".into(), semver::Version::new(1, 0, 0));
+    assert_eq!(
+        validate_comparison_navigation(&operation, &negotiated, &BTreeMap::new())
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidRequest
+    );
 }
 
 /// Folding is explicitly negotiated and cannot smuggle host/foreign paths or an unbounded context.

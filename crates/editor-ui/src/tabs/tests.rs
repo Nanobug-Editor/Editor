@@ -28,7 +28,7 @@ impl Render for TitleHarness {
                 "working_changes_gyp.rs".into(),
                 false,
                 Axis::Horizontal,
-                false,
+                true,
                 1,
                 2,
                 |_, _, _| {},
@@ -65,9 +65,22 @@ fn file_tab_title_clip_keeps_font_descenders() {
         ui.simulate_resize(size(px(700.), px(100.)));
         ui.run_until_parked();
         ui.update(|window, cx| window.draw(cx).clear(cx));
+        assert!(ui.debug_bounds("comparison-tab-icon").is_some());
+        assert!(
+            ui.debug_bounds("editor-preview-badge").is_none(),
+            "comparison previews use the difference icon, not an extra eye badge"
+        );
+        assert_eq!(
+            ui.debug_bounds("file-title").unwrap().size.height,
+            ui.debug_bounds("comparison-tab-title-1")
+                .unwrap()
+                .size
+                .height,
+            "ordinary and comparison titles must share their text size and line box"
+        );
         for (selector, content, factor) in [
             ("file-title", "plugin_development.rs", 0.875),
-            ("comparison-tab-title-1", "working_changes_gyp.rs", 1.),
+            ("comparison-tab-title-1", "working_changes_gyp.rs", 0.875),
         ] {
             let title = ui.debug_bounds(selector).unwrap();
             let natural_height = ui.update(|window, cx| {

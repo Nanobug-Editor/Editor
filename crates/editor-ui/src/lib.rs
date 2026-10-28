@@ -4,6 +4,7 @@ pub mod aligned_editor;
 pub mod aligned_pointer;
 pub mod aligned_rows;
 pub mod button;
+pub mod centered_notice;
 pub mod checkbox;
 pub mod column_resize;
 pub mod comparison_header;
@@ -56,6 +57,7 @@ pub fn init(cx: &mut gpui_kit::App) {
 }
 
 pub use button::{Button, ButtonCustomVariant};
+pub use centered_notice::centered_notice;
 pub use checkbox::Checkbox;
 pub use comparison_header::{comparison_header_surface, comparison_source_header};
 pub use definition_popup::definition_popup;

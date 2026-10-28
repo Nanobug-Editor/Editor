@@ -47,6 +47,32 @@ pub struct ComparisonNavigation {
     /// Omit at the end of the sequence; native navigation does not wrap.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<ComparisonCommand>,
+    /// editor.diff 1.5: explicit previous-item command after confirming the first-hunk boundary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_boundary: Option<ComparisonCommand>,
+    /// editor.diff 1.5: explicit next-item command after confirming the last-hunk boundary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_boundary: Option<ComparisonCommand>,
+}
+
+/// editor.diff 1.5: initial viewport placement for a newly opened comparison, without moving selection.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComparisonPosition {
+    /// Ordinary file selection centers the first difference.
+    #[default]
+    FirstDifference,
+    /// Reveal the beginning of the complete document content.
+    Start,
+    /// Reveal the end of the complete document content.
+    End,
+}
+
+impl ComparisonPosition {
+    /// The default has the same wire shape and behavior as earlier comparison requests.
+    pub fn is_default(&self) -> bool {
+        *self == Self::FirstDifference
+    }
 }
 
 /// `editor.diff` 1.4: opt in to synchronized unchanged-region folding with package-owned artwork.

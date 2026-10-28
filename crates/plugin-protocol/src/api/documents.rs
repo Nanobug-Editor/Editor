@@ -128,6 +128,16 @@
 //! visible. Choices survive tab activation; an edited row plan retains choices only if its common
 //! intervals are unchanged, otherwise it follows the last all-regions action. Navigation and real
 //! caret movement reveal hidden targets. Native overlays temporarily show the full native source.
+//! # Difference boundaries (`editor.diff` 1.5)
+//!
+//! Optional `navigation.previous_boundary` and `next_boundary` carry explicit provider commands
+//! for leaving a file after a repeated difference-boundary press. The host first shows a two-second
+//! notice; only another same-direction press before expiry invokes the action. Omitted boundary
+//! actions never wrap. They use the same declaration, argument-schema and ownership checks as file
+//! arrows. A provider can reopen the adjacent comparison with `initial_position: "end"` or "start"
+//! to reveal the complete document edge; omitted/default "first_difference" retains normal centering.
+//! Nondefault position or boundary commands require `editor.diff >=1.5,<2` and grant no extra access.
+//!
 //! Source bytes, line numbers, selection, IME and Undo are never replaced by folding. Omitting the
 //! field retains the older contract, and no provider identity receives a special host code path.
 use super::{DocumentVersion, ErrorCode, Failure, ResourceHandle, TextRange};
@@ -427,10 +437,12 @@ mod tests {
             third: None,
             navigation: None,
             folding: None,
+            initial_position: Default::default(),
             preview: true,
         };
         let encoded = serde_json::to_value(&operation).unwrap();
         assert!(encoded.get("third").is_none());
+        assert!(encoded.get("initial_position").is_none());
         let decoded: super::super::EditorOperation =
             serde_json::from_value(encoded.clone()).unwrap();
         assert!(matches!(

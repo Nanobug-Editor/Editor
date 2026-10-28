@@ -46,7 +46,7 @@ pub fn comparison_tab(
     title: String,
     selected: bool,
     axis: Axis,
-    preview: bool,
+    _preview: bool,
     index: usize,
     count: usize,
     activate: impl Fn(bool, &mut Window, &mut App) + 'static,
@@ -55,6 +55,9 @@ pub fn comparison_tab(
 ) -> Tab {
     let styles = crate::theme::component_styles(cx, plugin_schema::ThemeComponent::EditorTab);
     let accent = styles.selected.border.unwrap_or(cx.theme().primary);
+    let close_styles =
+        crate::theme::component_styles(cx, plugin_schema::ThemeComponent::EditorTabClose);
+    let separator = styles.base.border.unwrap_or(cx.theme().border);
     file_tab(id.clone(), title.clone(), selected, index, count)
         .debug_selector(move || format!("comparison-tab-{index}").into())
         .h_full()
@@ -64,10 +67,18 @@ pub fn comparison_tab(
                 .max_w(relative(1.))
                 .h(px(crate::PANEL_HEADER_HEIGHT))
         })
-        .px_2()
+        .relative()
+        .px(px(styles.base.padding_x_px.unwrap_or(8.)))
         .gap_2()
-        .border_r_1()
-        .border_color(cx.theme().border)
+        .text_size(px(if selected {
+            styles.selected.font_size_px.or(styles.base.font_size_px)
+        } else {
+            styles.base.font_size_px
+        }
+        .unwrap_or(14.)))
+        .when(axis == Axis::Horizontal, |tab| tab.border_r_1())
+        .when(axis == Axis::Vertical, |tab| tab.border_b_1())
+        .border_color(separator)
         .when(selected, |tab| {
             tab.when(axis == Axis::Horizontal, |tab| tab.border_b_1())
                 .border_color(accent)
@@ -80,20 +91,64 @@ pub fn comparison_tab(
         .text_color(if selected {
             accent
         } else {
-            styles.base.foreground.unwrap_or(cx.theme().foreground)
+            styles.base.foreground.unwrap_or(cx.theme().tab_foreground)
         })
-        .hover(|style| style.bg(styles.hover.background.unwrap_or(cx.theme().list_hover)))
+        .hover(|style| {
+            style.bg(styles.hover.background.unwrap_or(if selected {
+                styles.selected.background.unwrap_or(cx.theme().background)
+            } else {
+                styles.base.background.unwrap_or(cx.theme().tab_bar)
+            }))
+        })
+        .child(
+            // Two opposing native arrows identify a comparison independently of replaceable-tab state.
+            div()
+                .debug_selector(|| "comparison-tab-icon".into())
+                .flex()
+                .flex_col()
+                .size(px(16.))
+                .flex_shrink_0()
+                .justify_center()
+                .child(super::Icon::new(gpui_kit::assets::IconName::ArrowLeft).size(px(8.)))
+                .child(super::Icon::new(gpui_kit::assets::IconName::ArrowRight).size(px(8.))),
+        )
+        .when(selected && axis == Axis::Horizontal, |tab| {
+            tab.child(
+                div()
+                    .absolute()
+                    .right_0()
+                    .top_0()
+                    .bottom(px(1.))
+                    .w(px(1.))
+                    .bg(separator),
+            )
+        })
         .child(
             FileTabTitle::new(format!("comparison-tab-title-{index}"), title)
                 .debug_selector(move || format!("comparison-tab-title-{index}").into())
+                .text_sm()
                 .when(axis == Axis::Vertical, |title| title.flex_1()),
         )
         .child(file_tab_actions(
-            preview,
-            super::Button::new(format!("close-{id}"))
-                .compact()
-                .icon(super::Icon::new(gpui_kit::assets::IconName::Close))
-                .accessibility_label(rust_i18n::t!("editor.close_diff").to_string())
+            false,
+            div()
+                .id(format!("close-{id}"))
+                .debug_selector(move || format!("comparison-tab-close-{index}").into())
+                .flex()
+                .items_center()
+                .justify_center()
+                .flex_shrink_0()
+                .rounded(px(close_styles.base.radius_px.unwrap_or(3.)))
+                .p_1()
+                .role(gpui_kit::Role::Button)
+                .aria_label(rust_i18n::t!("editor.close_diff").to_string())
+                .hover(|style| {
+                    style.bg(close_styles
+                        .hover
+                        .background
+                        .unwrap_or(cx.theme().list_hover))
+                })
+                .child(super::Icon::new(gpui_kit::assets::IconName::Close).xsmall())
                 .on_click(move |_, window, cx| {
                     cx.stop_propagation();
                     close(window, cx);

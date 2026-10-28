@@ -1,6 +1,7 @@
 //! Real changed-file selection and toolbar presses reveal measured differences without editing sources.
 use super::*;
 use gpui_kit::px;
+mod boundaries;
 
 /// Long common context separates three known changes and keeps every target away from scroll clamps.
 fn source(version: usize) -> String {
@@ -58,10 +59,67 @@ fn select_subject(manager: &mut Manager, subject: &str) {
             plugin_runtime::plugin_protocol::Paint::Text { text, y, .. } if text == subject => {
                 Some(((y - 5. + canvas.scroll.as_ref().unwrap().offset) / 28.).round() as usize)
             }
+            plugin_runtime::plugin_protocol::Paint::TextBox { text, rect, .. }
+                if text == subject =>
+            {
+                Some(((rect.y + canvas.scroll.as_ref().unwrap().offset) / 28.).floor() as usize)
+            }
             _ => None,
         })
         .expect("fixture subject must be in the loaded history");
     select_row(manager, row);
+}
+
+/// A settled process queue is weaker than complete metadata; wait for this commit's admitted tree.
+fn await_history(
+    manager: &mut Manager,
+    app: &Entity<EditorApp>,
+    visual: &mut VisualTestContext,
+    subject: &str,
+) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        flush(manager, app, visual);
+        let scene = &manager.live["git"].views["history"];
+        let exact = matches!(scene.active_node("history-subject").map(|node| &node.kind), Some(ui::Kind::Text { text }) if text == subject);
+        if exact
+            && scene.active_node("files").is_some()
+            && scene.active_node("history-loading").is_none()
+        {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "commit metadata not admitted; scene={scene:?}"
+        );
+    }
+}
+
+/// Editor admission follows the process receipt, so observe actual source and title before input.
+fn await_comparison(
+    manager: &mut Manager,
+    app: &Entity<EditorApp>,
+    visual: &mut VisualTestContext,
+    file: &str,
+    version: usize,
+) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        flush(manager, app, visual);
+        if visual.update(|_, cx| {
+            let app = app.read(cx);
+            app.comparison_views.iter().any(|view| {
+                Some(&view.id) == app.active_comparison.as_ref() && view.title.ends_with(file)
+            }) && app.editor.read(cx).value().as_ref() == source(version)
+        }) {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "comparison not admitted; scene={:?}",
+            manager.live["git"].views["history"]
+        );
+    }
 }
 
 /// Deliver normal frame callbacks until pending native measurements and viewport requests settle.
@@ -120,6 +178,75 @@ fn sources(
     })
 }
 
+/// Render the existing retained unified mode and press the same toolbar; sources stay read-only owners.
+fn unified_navigation(app: &Entity<EditorApp>, visual: &mut VisualTestContext) {
+    visual.update(|window, cx| {
+        app.update(cx, |app, cx| {
+            let id = app.active_comparison.clone().unwrap();
+            app.comparison_views
+                .iter_mut()
+                .find(|view| view.id == id)
+                .unwrap()
+                .unified = true;
+            app.activate_comparison_view(&id, false, window, cx);
+        })
+    });
+    frames(visual);
+    let source_before = sources(app, visual);
+    let unified_before = visual.update(|_, cx| {
+        app.read(cx)
+            .inspect_unified_comparison(cx, |editor| {
+                (editor.value().to_string(), editor.selected_range())
+            })
+            .unwrap()
+    });
+    for (arrow, marker) in [
+        ("diff-next", "-shared row 180"),
+        ("diff-previous", "-shared row 080"),
+    ] {
+        press(visual, arrow.into(), 1);
+        frames(visual);
+        visual.update(|_, cx| {
+            app.read(cx)
+                .inspect_unified_comparison(cx, |editor| {
+                    let value = editor.value().to_string();
+                    let byte = value.find(marker).expect("known unified hunk start");
+                    let glyph = editor
+                        .range_to_bounds(&(byte..byte))
+                        .expect("unified hunk visible");
+                    let viewport = editor.input_bounds();
+                    assert!(
+                        (glyph.center().y - viewport.center().y).abs() <= px(12.),
+                        "unified {marker}: {glyph:?} in {viewport:?}"
+                    );
+                    assert_eq!(
+                        (value, editor.selected_range()),
+                        unified_before,
+                        "unified navigation must not select or edit derived text"
+                    );
+                })
+                .unwrap()
+        });
+        assert_eq!(
+            sources(app, visual),
+            source_before,
+            "unified navigation must preserve source text and selection"
+        );
+    }
+    visual.update(|window, cx| {
+        app.update(cx, |app, cx| {
+            let id = app.active_comparison.clone().unwrap();
+            app.comparison_views
+                .iter_mut()
+                .find(|view| view.id == id)
+                .unwrap()
+                .unified = false;
+            app.activate_comparison_view(&id, false, window, cx);
+        })
+    });
+    frames(visual);
+}
+
 /// A file tree click initializes the first difference; both arrows center later changes in either layout.
 #[gpui::test]
 #[ignore = "real independent Git ZIP and native comparison; set NANOBUG_GIT_CANDIDATE"]
@@ -154,13 +281,13 @@ fn git_changed_file_and_difference_arrows_center_native_viewports(cx: &mut TestA
             ("main", 2, 2, "main first 中😀", "main third 中😀"),
         ] {
             select_subject(&mut manager, subject);
-            flush(&mut manager, &app, visual);
+            await_history(&mut manager, &app, visual, subject);
             press(
                 visual,
                 format!("plugin-tree-row-{}", changed_file(&manager)),
                 1,
             );
-            flush(&mut manager, &app, visual);
+            await_comparison(&mut manager, &app, visual, "shared.txt", version);
             assert!(
                 visual.update(
                     |_, cx| app.read(cx).editor.read(cx).value().as_ref() == source(version)
@@ -169,6 +296,12 @@ fn git_changed_file_and_difference_arrows_center_native_viewports(cx: &mut TestA
             );
             centered(&app, visual, version, first, panes);
             let before = sources(&app, visual);
+            press(visual, "diff-previous".into(), 1);
+            assert!(
+                visual.debug_bounds("centered-notice").is_some(),
+                "first difference must warn instead of wrapping"
+            );
+            centered(&app, visual, version, first, panes);
             press(visual, "diff-next".into(), 1);
             centered(&app, visual, version, next, panes);
             press(visual, "diff-previous".into(), 1);
@@ -178,17 +311,20 @@ fn git_changed_file_and_difference_arrows_center_native_viewports(cx: &mut TestA
                 before,
                 "navigation must not edit or select source text"
             );
+            if panes == 2 {
+                unified_navigation(&app, visual);
+            }
         }
         // A root commit adds the whole file and has no common region. Both controls remain
         // visible, and native activation of either disabled action must leave source state intact.
         select_subject(&mut manager, "base");
-        flush(&mut manager, &app, visual);
+        await_history(&mut manager, &app, visual, "base");
         press(
             visual,
             format!("plugin-tree-row-{}", changed_file(&manager)),
             1,
         );
-        flush(&mut manager, &app, visual);
+        await_comparison(&mut manager, &app, visual, "shared.txt", 0);
         let before = sources(&app, visual);
         for (id, label) in [
             (

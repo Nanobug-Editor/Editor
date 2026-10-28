@@ -103,6 +103,10 @@ impl TreeResource {
             branch.loading = false;
         }
         state.pending.clear();
+        if state.explicit_reveal {
+            candidate.initial_selection = None;
+            state.explicit_reveal = false;
+        }
         state.snapshot = candidate;
         Ok(())
     }

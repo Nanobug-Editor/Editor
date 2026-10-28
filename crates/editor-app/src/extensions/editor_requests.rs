@@ -296,6 +296,7 @@ impl EditorApp {
                 third,
                 navigation,
                 folding,
+                initial_position,
                 preview,
             } => self.open_comparison_view(
                 key,
@@ -305,6 +306,7 @@ impl EditorApp {
                 third.as_ref(),
                 navigation.as_ref(),
                 folding.as_ref(),
+                *initial_position,
                 *preview,
                 &request,
                 window,

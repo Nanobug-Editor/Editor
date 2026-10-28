@@ -113,6 +113,19 @@ fn git_adjacent_file_arrows_preserve_history_scene_and_cached_sources(cx: &mut T
             )
             .unwrap();
         flush(&mut manager, &app, visual);
+        // Complete metadata admission follows the Git receipt; an idle process list is not enough.
+        let files_deadline = Instant::now() + Duration::from_secs(30);
+        while manager.live["git"].views["history"]
+            .active_node("files")
+            .is_none()
+        {
+            flush(&mut manager, &app, visual);
+            assert!(
+                Instant::now() < files_deadline,
+                "changed files unavailable: {:?}",
+                manager.live["git"].views["history"]
+            );
+        }
         let tree = files(&manager);
         let node = tree
             .snapshot()

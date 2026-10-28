@@ -23,6 +23,8 @@
 //! `set_expanded` for explicit disclosure of cached directories. Checking emits `Event::Checked`
 //! without selecting or expanding a row; providers decide its business effect and publish the result.
 //! `ui.tree >=1.8,<2` adds `Node::muted` for totals and `Options::proportional_labels` for compact UI text.
+//! `ui.tree >=1.9,<2` adds `reveal` for explicit navigation to a fully cached root-to-target path.
+//! It expands ancestors and selects/scrolls silently without focus, activation or Selected callbacks.
 //! `ui.tree >=1.1,<2` adds disabled/separated items and raises the per-node menu from 8 to 32.
 //! Declare that explicit minimum when publishing these features; disabled commands reject invocation.
 //! `ui.tree >=1.2,<2` adds `update` for cached presentation/action availability changes without
@@ -421,6 +423,13 @@ impl Event {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Operation {
     Create,
+    /// Reveal a fully cached root-to-target ID path, at most 64 unique IDs. Requires ui.tree 1.9.
+    /// Every node must be enabled and connected in the current forest; missing paths fail atomically.
+    /// Unlike Initialize this represents explicit navigation and can follow native user selection.
+    Reveal {
+        tree: ResourceHandle,
+        path: Vec<String>,
+    },
     /// Set disclosure for at most MAX_NODES cached branch IDs. Missing IDs are ignored;
     /// expanding loads ordinary bounded pages, while collapsing revokes descendant pending replies.
     /// Requires explicit ui.tree 1.7; no selection, focus or command activation is implied.
@@ -487,6 +496,17 @@ pub fn set_expanded(
 pub fn initialize(tree: ResourceHandle, path: Vec<String>) -> Result<(), Failure> {
     crate::api::guest::request(crate::api::Operation::Tree {
         operation: Operation::Initialize { tree, path },
+    })
+    .map(|_| ())
+}
+
+#[cfg(feature = "guest")]
+/// Select and scroll to the cached root-to-target `path`, expanding ancestors without taking focus.
+/// Requires an owned live tree and explicit ui.tree >=1.9. Invalid, disabled or missing paths fail
+/// without partial disclosure; this never invokes commands or sends a Selected event back to guest.
+pub fn reveal(tree: ResourceHandle, path: Vec<String>) -> Result<(), Failure> {
+    crate::api::guest::request(crate::api::Operation::Tree {
+        operation: Operation::Reveal { tree, path },
     })
     .map(|_| ())
 }

@@ -385,6 +385,7 @@ impl State {
                     | plugin_protocol::tree::Operation::CreateWithOptions { .. } => None,
                     plugin_protocol::tree::Operation::Refresh { tree }
                     | plugin_protocol::tree::Operation::Initialize { tree, .. }
+                    | plugin_protocol::tree::Operation::Reveal { tree, .. }
                     | plugin_protocol::tree::Operation::SetExpanded { tree, .. }
                     | plugin_protocol::tree::Operation::Update { tree, .. }
                     | plugin_protocol::tree::Operation::ApplyPatch { tree, .. } => Some(tree),

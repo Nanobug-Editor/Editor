@@ -8,6 +8,7 @@ use gpui_base::input::{RangeDecoration, RangeDecorationCollection, RangeDecorati
 use gpui_kit::Hsla;
 use plugin_runtime::plugin_protocol::api;
 mod folding;
+mod navigation;
 mod presentation;
 #[cfg(test)]
 mod render_tests;
@@ -472,6 +473,8 @@ impl EditorApp {
                 .any(|view| &view.id == id && view.unified)
         }) {
             if let Some(editor) = &comparison.unified_editor {
+                let navigation = comparison.navigation.clone();
+                let editors = vec![editor.clone()];
                 let body = editor_ui::source_editor::Editor::new(editor)
                     .identity("unified-diff", Some(t!("editor.diff_unified").to_string()))
                     .tools(false)
@@ -483,7 +486,29 @@ impl EditorApp {
                         .size_full()
                         .min_h_0()
                         .child(self.comparison_toolbar(cx))
-                        .child(div().flex_1().min_h_0().child(body))
+                        .child(
+                            div()
+                                .relative()
+                                .flex_1()
+                                .min_h_0()
+                                .child(body)
+                                .child(
+                                    gpui_kit::canvas(
+                                        |_, _, _| (),
+                                        move |_, _, window, cx| {
+                                            presentation::navigate_native_viewports(
+                                                &navigation,
+                                                &editors,
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )
+                                    .absolute()
+                                    .size_full(),
+                                )
+                                .children(self.comparison_boundary_notice(cx)),
+                        )
                         .into_any_element(),
                 );
             }
@@ -524,6 +549,7 @@ impl EditorApp {
                 .child(self.comparison_toolbar(cx))
                 .child(
                     div()
+                        .relative()
                         .flex()
                         .flex_1()
                         .min_h_0()
@@ -595,7 +621,8 @@ impl EditorApp {
                                     cx,
                                 ))
                                 .child(right),
-                        ),
+                        )
+                        .children(self.comparison_boundary_notice(cx)),
                 )
                 .child(
                     gpui_kit::canvas(

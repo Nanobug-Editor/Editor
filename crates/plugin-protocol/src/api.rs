@@ -7,7 +7,9 @@ mod comparisons;
 mod negotiation;
 pub use negotiation::{NegotiationFailure, NegotiationKind};
 mod documents;
-pub use comparisons::{ComparisonCommand, ComparisonFolding, ComparisonNavigation};
+pub use comparisons::{
+    ComparisonCommand, ComparisonFolding, ComparisonNavigation, ComparisonPosition,
+};
 mod edits;
 #[cfg(feature = "guest")]
 pub use edits::apply_edits;
@@ -747,6 +749,9 @@ pub enum EditorOperation {
         /// editor.diff 1.4: synchronized unchanged-region controls and owned theme artwork.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         folding: Option<ComparisonFolding>,
+        /// editor.diff 1.5: an explicit content edge for a confirmed cross-file boundary action.
+        #[serde(default, skip_serializing_if = "ComparisonPosition::is_default")]
+        initial_position: ComparisonPosition,
         #[serde(default)]
         preview: bool,
     },

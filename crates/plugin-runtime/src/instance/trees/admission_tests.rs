@@ -23,6 +23,7 @@ fn tree_interaction_options_require_explicit_floor_and_preserve_owned_lifecycle(
         (">=1.5,<2", true),
         (">=1.7,<2", true),
         (">=1.8,<2", true),
+        (">=1.9,<2", true),
     ] {
         let mut manifest = package.manifest.clone();
         manifest
@@ -72,7 +73,7 @@ fn tree_interaction_options_require_explicit_floor_and_preserve_owned_lifecycle(
             panic!("owned native tree")
         };
         let resource = state.owned_tree(&handle).unwrap();
-        let secondary_allowed = range == ">=1.8,<2";
+        let secondary_allowed = matches!(range, ">=1.8,<2" | ">=1.9,<2");
         let proportional = state.tree_request(tree::Operation::CreateWithOptions {
             options: tree::Options {
                 proportional_labels: true,
@@ -119,6 +120,106 @@ fn tree_interaction_options_require_explicit_floor_and_preserve_owned_lifecycle(
             resource.selection_gesture(),
             tree::SelectionGesture::DoubleClick
         );
+        // Explicit navigation uses the same owned dispatcher and does not revive a retired default.
+        resource.dismiss_initial_selection();
+        let reveal = state.tree_request(tree::Operation::Reveal {
+            tree: handle.clone(),
+            path: vec!["total".into()],
+        });
+        if range == ">=1.9,<2" {
+            reveal.unwrap();
+            assert_eq!(
+                resource.snapshot().initial_selection,
+                Some(vec!["total".into()])
+            );
+            let mut forged = handle.clone();
+            forged.instance = "other-owner".into();
+            assert_eq!(
+                state
+                    .tree_request(tree::Operation::Reveal {
+                        tree: forged,
+                        path: vec!["total".into()],
+                    })
+                    .unwrap_err()
+                    .code,
+                ErrorCode::InvalidHandle
+            );
+            // A complete forest may win the race against an already delivered first-page request.
+            // The public reply must be stale, and every nested folder must remain fully cached.
+            state
+                .tree_request(tree::Operation::Refresh {
+                    tree: handle.clone(),
+                })
+                .unwrap();
+            let pending = resource.request(None, false).unwrap().unwrap();
+            let leaves = (0..220)
+                .map(|index| {
+                    tree::Node::new(format!("file-{index}"), format!("file-{index}.rs"), false)
+                })
+                .collect::<Vec<_>>();
+            let ids = leaves
+                .iter()
+                .map(|node| node.id.clone())
+                .collect::<Vec<_>>();
+            let mut nodes = vec![
+                tree::Node::new("total", "220 files", true),
+                tree::Node::new("src", "src/nested", true),
+            ];
+            nodes.extend(leaves);
+            state
+                .tree_request(tree::Operation::ApplyPatch {
+                    tree: handle.clone(),
+                    patch: tree::Patch {
+                        nodes,
+                        branches: vec![
+                            tree::BranchPatch {
+                                parent: None,
+                                children: vec!["total".into()],
+                                next: None,
+                            },
+                            tree::BranchPatch {
+                                parent: Some("total".into()),
+                                children: vec!["src".into()],
+                                next: None,
+                            },
+                            tree::BranchPatch {
+                                parent: Some("src".into()),
+                                children: ids.clone(),
+                                next: None,
+                            },
+                        ],
+                    },
+                })
+                .unwrap();
+            let snapshot = resource.snapshot();
+            assert!(
+                state
+                    .tree_request(tree::Operation::Reply {
+                        request: pending,
+                        result: Ok(tree::Page {
+                            nodes: vec![tree::Node::new("obsolete", "obsolete", false)],
+                            next: Some("128".into())
+                        }),
+                    })
+                    .is_err()
+            );
+            assert_eq!(resource.snapshot().nodes, snapshot.nodes);
+            assert_eq!(resource.snapshot().branches, snapshot.branches);
+            for parent in ["total", "src"] {
+                assert!(
+                    resource
+                        .request(Some(parent.into()), false)
+                        .unwrap()
+                        .is_none()
+                );
+            }
+            assert_eq!(
+                resource.snapshot().branches[&Some("src".into())].children,
+                ids
+            );
+        } else {
+            assert_eq!(reveal.unwrap_err().code, ErrorCode::CapabilityUnavailable);
+        }
         state
             .tree_request(tree::Operation::Refresh {
                 tree: handle.clone(),

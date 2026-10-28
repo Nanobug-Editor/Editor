@@ -160,6 +160,14 @@ impl Locator {
         }
     }
 
+    /// Align the target visual row's bottom with the content viewport, preserving native selection.
+    pub(crate) fn bottom(offset: usize) -> Self {
+        Self {
+            viewport_anchor: 1.,
+            ..Self::new(offset, 0.)
+        }
+    }
+
     /// Read the latest painted geometry and propose only a vertical scroll offset.
     /// Callers retain ownership of cancellation, source identity and origin suppression.
     pub(crate) fn step(&mut self, editor: &EditorState) -> Step {

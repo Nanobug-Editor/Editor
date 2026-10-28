@@ -31,6 +31,22 @@ impl State {
         }
         match operation {
             tree::Operation::Create => self.allocate_tree(tree::Options::default()),
+            tree::Operation::Reveal { tree, path } => {
+                if !self.tree_reveal_1_9
+                    || !self
+                        .api
+                        .capabilities
+                        .get("ui.tree")
+                        .is_some_and(|version| version >= &semver::Version::new(1, 9, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "Explicit tree reveal requires ui.tree >=1.9",
+                    ));
+                }
+                self.owned_tree(&tree)?.reveal(path)?;
+                Ok(Value::Unit)
+            }
             tree::Operation::SetExpanded {
                 tree,
                 nodes,
@@ -374,12 +390,17 @@ pub(super) fn requires_muted_floor(requirements: Option<&api::Requirements>) -> 
     requires_tree_floor(requirements, 8)
 }
 
+/// Explicit navigation cannot be obtained merely because a newer host advertises it.
+pub(super) fn requires_reveal_floor(requirements: Option<&api::Requirements>) -> bool {
+    requires_tree_floor(requirements, 9)
+}
+
 /// Resolve each feature against the current inventory while rejecting every older minor tail.
 fn requires_tree_floor(requirements: Option<&api::Requirements>, minor: u64) -> bool {
     requirements
         .and_then(|requirements| requirements.required.get("ui.tree"))
         .is_some_and(|range| {
-            range.matches(&semver::Version::new(1, 8, 0))
+            range.matches(&semver::Version::new(1, 9, 0))
                 && (0..minor).all(|old| !range.matches(&semver::Version::new(1, old, u64::MAX)))
         })
 }
@@ -387,6 +408,29 @@ fn requires_tree_floor(requirements: Option<&api::Requirements>, minor: u64) -> 
 #[cfg(test)]
 mod update_tests {
     use super::*;
+
+    /// Broad/optional legacy declarations cannot silently enable explicit navigation.
+    #[test]
+    fn tree_reveal_floor_requires_explicit_minor() {
+        for (range, expected) in [
+            ("^1", false),
+            (">=1.8,<2", false),
+            (">=1.8.999,<2", false),
+            (">=1.9,<2", true),
+        ] {
+            let requirements = api::Requirements {
+                base: "^1".parse().unwrap(),
+                required: [("ui.tree".into(), range.parse().unwrap())].into(),
+                optional: Default::default(),
+            };
+            assert_eq!(
+                requires_reveal_floor(Some(&requirements)),
+                expected,
+                "{range}"
+            );
+            assert!(requires_muted_floor(Some(&requirements)) || !expected);
+        }
+    }
 
     /// An older provider cannot acquire muted rows merely from a newer host inventory.
     #[test]

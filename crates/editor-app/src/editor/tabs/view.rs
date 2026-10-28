@@ -397,6 +397,7 @@ impl EditorApp {
             let close = activate.clone();
             let activate_id = view.id.clone();
             let close_id = view.id.clone();
+            let comparison_tooltip = self.comparison_tooltip(&view.id);
             // Derived views retain their own close/activation semantics and follow file tabs.
             strip = strip.trailing(
                 editor_ui::comparison_tab(
@@ -419,6 +420,10 @@ impl EditorApp {
                     },
                     cx,
                 )
+                .tooltip(move |window, cx| {
+                    Tooltip::new(comparison_tooltip.clone()).build(window, cx)
+                })
+                .tooltip_show_delay(Duration::from_millis(1_200))
                 .when(self.active_comparison.as_ref() == Some(&view.id), |tab| {
                     // Derived views share the same inward-facing selection edge as ordinary files.
                     let tab = tab.border_b_0().border_r_0();

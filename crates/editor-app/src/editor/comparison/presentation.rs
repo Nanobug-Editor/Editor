@@ -220,52 +220,6 @@ impl EditorApp {
             )
             .into_any_element()
     }
-    /// Split navigation reveals source bytes without changing selection/focus or document history.
-    fn navigate_comparison_hunk(
-        &mut self,
-        next: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(comparison) = &self.document_comparison else {
-            return;
-        };
-        let targets = third::navigation_targets(comparison);
-        let count = targets.len();
-        if count == 0 {
-            return;
-        }
-        let mut index = 0;
-        if let Some(id) = &self.active_comparison
-            && let Some(view) = self.comparison_views.iter_mut().find(|view| &view.id == id)
-        {
-            index = if next {
-                (view.hunk + 1) % count
-            } else {
-                (view.hunk + count - 1) % count
-            };
-            view.hunk = index;
-        }
-        if self.active_comparison.as_ref().is_some_and(|id| {
-            self.comparison_views
-                .iter()
-                .any(|view| &view.id == id && view.unified)
-        }) {
-            if let (Some(editor), Some(range)) = (
-                &comparison.unified_editor,
-                comparison.unified_hunks.get(index),
-            ) {
-                editor.update(cx, |editor, cx| {
-                    editor.set_selected_range(range.start..range.start, cx);
-                    editor.focus(window, cx);
-                });
-            }
-            cx.notify();
-            return;
-        }
-        self.reveal_comparison_hunk(index, cx);
-        cx.notify();
-    }
     /// Unified mode is an immutable derived display. Editing resumes in the shared right session.
     pub(super) fn prepare_unified_comparison(
         &mut self,

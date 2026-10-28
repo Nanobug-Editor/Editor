@@ -19,6 +19,10 @@ pub(crate) struct ComparisonView {
     pub(crate) preview: bool,
     pub(crate) unified: bool,
     pub(crate) hunk: usize,
+    /// Confirmation belongs to this exact retained comparison, never another file or tab.
+    pub(super) boundary: Option<navigation::BoundaryPrompt>,
+    /// An explicit content edge has not yet visited the first/last hunk in that direction.
+    pub(super) edge: Option<api::ComparisonPosition>,
 }
 impl ComparisonView {
     /// Enumerate borrowed source identities so revocation and reclamation cover every pane.
@@ -29,6 +33,29 @@ impl ComparisonView {
     }
 }
 impl EditorApp {
+    /// Keep complete provider source titles and recognition paths available without widening the tab.
+    pub(crate) fn comparison_tooltip(&self, id: &str) -> String {
+        let Some(view) = self.comparison_views.iter().find(|view| view.id == id) else {
+            return String::new();
+        };
+        let mut labels = vec![view.title.clone()];
+        for source in view.sources() {
+            if let Some(tab) = self.tabs.iter().enumerate().find_map(|(index, tab)| {
+                self.plugin_document_version(index)
+                    .is_ok_and(|version| version.id == source.id)
+                    .then_some(tab)
+            }) {
+                let path = tab
+                    .virtual_document
+                    .as_ref()
+                    .and_then(|tab| tab.language_path.as_deref())
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| source.path.clone());
+                labels.push(format!("{}\n{}", tab.title(), path));
+            }
+        }
+        labels.join("\n")
+    }
     /// Source reclamation follows all retained panes, including hidden/inactive comparisons.
     pub(crate) fn comparison_holds_source(&self, id: &str) -> bool {
         self.comparison_views
@@ -63,6 +90,20 @@ impl EditorApp {
             .map(|editor| editor.focus_handle(cx))
     }
 
+    /// Readonly native-test observation of the derived control; never exposes a mutable editor handle.
+    #[cfg(test)]
+    pub(crate) fn inspect_unified_comparison<R>(
+        &self,
+        cx: &App,
+        inspect: impl FnOnce(&EditorState) -> R,
+    ) -> Option<R> {
+        self.document_comparison
+            .as_ref()?
+            .unified_editor
+            .as_ref()
+            .map(|editor| inspect(editor.read(cx)))
+    }
+
     /// Resolve the same incarnation at its current revision. No path can substitute a reopened ID.
     fn current_comparison_source(
         &self,
@@ -89,6 +130,7 @@ impl EditorApp {
         third: Option<&api::DocumentVersion>,
         navigation: Option<&api::ComparisonNavigation>,
         folding: Option<&api::ComparisonFolding>,
+        initial_position: api::ComparisonPosition,
         preview: bool,
         request: &plugin_runtime::EditorRequest,
         window: &mut Window,
@@ -145,8 +187,10 @@ impl EditorApp {
             view.third = third.cloned();
             view.navigation = navigation;
             view.folding = folding;
-            // An explicit changed-file open begins at its first difference, even for a reused key.
+            // A reused key resets confirmation before applying this open's explicit landing position.
             view.hunk = 0;
+            view.boundary = None;
+            view.edge = None;
             if third.is_some() {
                 view.unified = false;
             }
@@ -168,12 +212,13 @@ impl EditorApp {
                 preview,
                 unified: false,
                 hunk: 0,
+                boundary: None,
+                edge: None,
             });
         }
         self.active_comparison = Some(id.clone());
         self.document_comparison.as_mut().unwrap().persistent = Some(id);
         self.mount_comparison_folding(cx);
-        self.reveal_comparison_hunk(0, cx);
         if self
             .comparison_views
             .iter()
@@ -181,6 +226,7 @@ impl EditorApp {
         {
             self.prepare_unified_comparison(window, cx);
         }
+        self.reveal_comparison_position(initial_position, cx);
         self.release_comparison_sources(retired, window, cx);
         let count = self.tabs.iter().filter(|tab| tab.is_visible()).count();
         // Reused previews can sit before the last tab; reveal the active view's measured bounds.
@@ -214,7 +260,41 @@ impl EditorApp {
 
     /// Queue a provider-owned adjacent item using its original source/lifetime and frozen arguments.
     pub(super) fn navigate_comparison_file(&mut self, next: bool, cx: &mut Context<Self>) {
-        let Some(action) = self.comparison_file_navigation(next).cloned() else {
+        self.dispatch_comparison_file(next, false, cx);
+    }
+
+    /// Boundary actions carry provider-defined landing arguments without rewriting opaque metadata.
+    pub(super) fn dispatch_comparison_file(
+        &mut self,
+        next: bool,
+        boundary: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let action = if boundary {
+            self.comparison_views
+                .iter()
+                .find(|view| Some(&view.id) == self.active_comparison.as_ref())
+                .filter(|view| view.authority.is_live())
+                .and_then(|view| view.navigation.as_ref())
+                .and_then(|(_, navigation)| {
+                    if next {
+                        navigation.next_boundary.as_ref()
+                    } else {
+                        navigation.previous_boundary.as_ref()
+                    }
+                })
+        } else {
+            self.comparison_file_navigation(next)
+        }
+        .cloned();
+        if let Some(view) = self
+            .comparison_views
+            .iter_mut()
+            .find(|view| Some(&view.id) == self.active_comparison.as_ref())
+        {
+            view.boundary = None;
+        }
+        let Some(action) = action else {
             return;
         };
         let Some(view) = self
@@ -295,6 +375,7 @@ impl EditorApp {
                 self.prepare_unified_comparison(window, cx);
             }
             if let Some(view) = self.comparison_views.iter_mut().find(|view| view.id == id) {
+                view.boundary = None;
                 view.left = left;
                 view.right = right;
                 view.third = third;
