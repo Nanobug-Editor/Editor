@@ -38,6 +38,8 @@
 
 - [通用平滑滚动](verification/smooth-scroll-2026-10-21.md)：统一接入编辑器、文件树、列表与标签；后续[惯性与原生高刷](verification/inertial-scroll-2026-10-21.md)复用上游物理求解器，跟随显示器刷新节奏，记录真实帧率与性能边界。
 
+- [编辑器滚动停止时的文字跳动](verification/editor-scroll-settle-2026-10-28.md)：统一原生文本的竖向物理像素位移，保留惯性精度及连续手势距离；包含动图分析和真实 Windows 图像回归。
+
 - [比较视图的有界原生布局](verification/comparison-viewport-scroll-2026-10-21.md)：进一步限制可见副本与原始输入层的源布局，保留原生编辑、中文 IME 和屏幕外定位；原生测量、回归及剩余完整布局边界见记录。
 
 - [校验慢帧、折叠来源范围与插件平滑滚动](verification/scroll-validation-folds-2026-10-22.md)：合并原生校验与字形准备，限制折叠区的输入包络，插件容器、标签和画布复用通用滚动组件；实际验收状态见记录。
