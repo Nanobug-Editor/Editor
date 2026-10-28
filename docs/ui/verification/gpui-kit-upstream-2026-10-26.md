@@ -1,8 +1,45 @@
-# GPUI Kit 依赖迁移与退出修复 Fork
+# GPUI Kit 依赖迁移与退出修复
 
-创建于 2026-10-26，更新于 2026-10-27。当前状态：依用户要求，在官方退出修复合并前采用个人 Fork 的固定修复提交；GPUI 0.3.10 适配、普通检查与本轮原生退出验收通过。
+创建于 2026-10-26，更新于 2026-10-28。当前来源已切回包含退出修复的官方 main 固定提交；本轮验证与打包结果见下节。后续章节保留历史版本的实际结果。
 
-## 2026-10-27：采用退出修复 Fork
+## 2026-10-28：退出修复合并后切回官方 main
+
+官方 [PR #3697](https://github.com/longbridge/gpui-kit/pull/3697) 已于 2026-10-28 09:44（北京时间）合并，合并提交为 `9d5cd7c41041c9bb500fc3e76f5a71677fcb75bc`。本轮通过 GitHub 元数据及 `git ls-remote` 核对，采用查询时官方 main 最新提交 [`ec89cfc36404667b7947aeb3d40b1c2859d729dd`](https://github.com/longbridge/gpui-kit/commit/ec89cfc36404667b7947aeb3d40b1c2859d729dd)。Kit、Base、Assets 的 Git URL 与完整 SHA 保持一致；继续固定提交以确保构建可复现。
+
+三项包仍为 0.8.1，GPUI Pre 仍为 0.3.10，继续关闭 Kit 默认功能，仅选择 Assets。原任务 worktree 已回收，因此从当前 main `45a39a82d74a23cfdfaf70c873e91364150d3a6b` 重建 `codex/gpui-official-main-20261028`，位于 `C:/Users/Tmiracle/.codex/worktrees/gpui-official-main/Editor`。构建使用该工作区自身的 `target/`；日志与交付物集中在项目外 `C:/Users/Tmiracle/.codex/task-evidence/gpui-official-main-20261028/`。
+
+独立来源审计确认修复提交位于该 main 快照的祖先中，`crates/base/src/text/inline.rs`、上游原生退出回归和三项包清单与此前修复 Fork 逐字节相同。后续 Base 提交涉及光标闪烁配置、可选文本绘制与 Markdown 引用图片；现有主题构造方式兼容，无需修改宿主 Rust 实现。
+
+本轮验证使用最终锁文件；锁文件仅变更三个 Git 来源，其他包版本和依赖边保持原样。
+
+| 检查 | 结果 |
+| --- | --- |
+| `cargo fmt --check`、`git diff --check` | 通过 |
+| `cargo test --workspace --exclude editor-app --locked --offline -j8 --no-fail-fast` | 126 组，838 passed、0 failed、441 ignored |
+| `cargo check --workspace --locked --offline -j8` | 通过，存在既有警告 |
+| `cargo test -p editor-app hover --locked --offline -j8 -- --test-threads=1` | 16 passed、0 failed、2 ignored |
+| `cargo test -p editor-app native_initialized_windows_exit_without_tls_failure --locked --offline -j8 -- --ignored --nocapture --test-threads=1` | 1 passed；Kit Root 与原生编辑器两个独立子进程正常退出，共约 1.14 秒 |
+| 全目标、全部功能的 Cargo 依赖树 | 无 Component／宏库、GPUI Fast 或 Fork 来源 |
+| 文档链接审计 | 82 个相对链接有效 |
+
+原生退出回归使用 debug 测试程序和真实 Windows/D3D11；断言包含实际绘制、原生编辑输入、窗口销毁、`Application.run` 返回及子进程退出码 0。仅执行这一项 ignored 原生回归，其他跳过项不计为通过。未改变退出期限或任何测试断言。
+
+日志为上述项目外目录的 `workspace-test-final.log`、`workspace-check-final.log`、`app-hover.log`、`native-exit.log` 和 `dependency-tree-final.log`。
+
+### Release 便携包
+
+`cargo build -p editor-app --release --locked --offline -j8` 通过，耗时约 3 分 54 秒。产物为真实 AMD64 PE，复制到项目外交付目录后使用新的独立 `--profile` 启动，已查看正常首页；通过标准 Alt+F4 关闭后，进程约 0.29 秒自然退出，退出码 0。记录为 `production-visible-start.json`、`production-visible-result.json` 和 `production-visible.*.log`。初次隐藏窗口启动未进入可见交互，已清理其自有进程，不计为通过；有效验收使用正常窗口和另一个新 profile。
+
+直接使用 7-Zip 生成并执行完整性检查，未调用存档打包脚本。`delivery/Nanobug-Windows-x64.zip` 为 31,784,398 字节，包含 `editor/Nanobug.exe`、品牌 ICO、Apache 许可、`LICENSE-ALACRITTY` 与终端 `NOTICE` 五个文件；无插件包、源码或 PDB。ZIP 内程序的 SHA256 与本次 Release 编译产物完全一致。
+
+| 产物 | SHA256 |
+| --- | --- |
+| `delivery/Nanobug-Windows-x64.zip` | `6d9d9a5bf0045ba5c82e7dc3f3616902a5d237010deee6833e78f1671322fd3b` |
+| ZIP 内 `editor/Nanobug.exe` | `63f0e5e12ba3f152ebaae106de8196ddc4a6e467917477c353580315b7b6cc66` |
+
+同目录 `.zip.sha256` 与上一级 `delivery-manifest.json` 保存校验记录。运行时使用独立 profile，没有替换用户正在运行的旧程序或修改其数据。本机没有 Inno Setup，本轮交付便携包，未生成安装向导、安装工具或发布远程版本。
+
+## 2026-10-27：采用退出修复 Fork（历史）
 
 用户明确要求“目前 gpui-kit 退出死锁的修复还未合并，切换使用我的 Fork 仓库”。本次统一锁定 Kit、Base、Assets 到 [`T-miracle/gpui-kit@1ffc0dd462c88b5dc15f61da453dc6800e862d8f`](https://github.com/T-miracle/gpui-kit/commit/1ffc0dd462c88b5dc15f61da453dc6800e862d8f)，远端分支为 `fix-text-cleanup-shutdown`，对应未合并的官方 [PR #3697](https://github.com/longbridge/gpui-kit/pull/3697)。已通过远端分支和 PR head 核对 SHA；没有使用 Fork 的旧 `main` 分支。
 

@@ -37,12 +37,12 @@ exclude = [
 ]
 resolver = "2"
 
-# Keep Kit, Base and Assets on the same reviewed Fork commit until #3697 merges.
-# This snapshot includes upstream live-wrap reuse and the native shutdown fix.
+# Pin Kit, Base and Assets to the same official main snapshot for reproducible builds.
+# This snapshot includes the merged live-wrap reuse and native shutdown fixes.
 [patch.crates-io]
-gpui-base = { git = "https://github.com/T-miracle/gpui-kit.git", rev = "1ffc0dd462c88b5dc15f61da453dc6800e862d8f" }
-gpui-kit = { git = "https://github.com/T-miracle/gpui-kit.git", rev = "1ffc0dd462c88b5dc15f61da453dc6800e862d8f" }
-gpui-kit-assets = { git = "https://github.com/T-miracle/gpui-kit.git", rev = "1ffc0dd462c88b5dc15f61da453dc6800e862d8f" }
+gpui-base = { git = "https://github.com/longbridge/gpui-kit.git", rev = "ec89cfc36404667b7947aeb3d40b1c2859d729dd" }
+gpui-kit = { git = "https://github.com/longbridge/gpui-kit.git", rev = "ec89cfc36404667b7947aeb3d40b1c2859d729dd" }
+gpui-kit-assets = { git = "https://github.com/longbridge/gpui-kit.git", rev = "ec89cfc36404667b7947aeb3d40b1c2859d729dd" }
 
 [workspace.package]
 version = "0.1.0"

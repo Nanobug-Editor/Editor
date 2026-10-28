@@ -2,7 +2,7 @@
 
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
-- [GPUI Kit 依赖迁移与退出修复 Fork](verification/gpui-kit-upstream-2026-10-26.md)：PR #3691 合并后的接口适配，以及等待 #3697 合并期间锁定个人 Fork 的来源与验证记录。
+- [GPUI Kit 依赖迁移与退出修复](verification/gpui-kit-upstream-2026-10-26.md)：PR #3691 后的接口适配、临时 Fork 验证，以及 #3697 合并后回到官方 main 的记录。
 
 - [警告提示点与消息标题分隔线修正](verification/message-severity-appearance-2026-10-26.md)：依据实际截图纠正偏红的警告橙，以及停靠标题的额外顶部抗锯齿边缘；检查状态见记录。
 

@@ -46,7 +46,7 @@
 - 所有语法高亮通过插件提供的 Tree-sitter WASM grammar 与查询规则动态加载，不重新引入宿主内建 grammar。
 - **所有 UI 组件仅使用 `gpui-kit` 的 GPUI 原语和 `gpui-base` 行为、状态与交互能力，本地通用控件集中在 `crates/editor-ui/src/<组件名>/mod.rs`。** 每个控件的绘制、状态、辅助模块与测试都放在该组件目录内，通过 `mod.rs` 暴露统一入口；宿主调用公开接口，不在 `editor-app` 复制控件实现。`gpui-component` 仅可作为实现参考标准；禁止直接依赖、通过 `gpui_kit::component` 间接调用或以重导出、包装层引入其组件、主题及运行时。图标等静态资源可使用独立的 Kit assets。
 - 修改按钮、输入框、菜单、标签、列表、树、弹窗等控件，先核对上游公开行为接口和项目主题契约，再提供小而稳定的本地接口。调用方不得散落复制绘制逻辑。
-- 编辑器和停靠布局保留上游状态与交互接缝，外观在本地 UI 层组合。缺失行为先查公开接口。GPUI Kit 已获用户授权使用包含退出死锁修复的个人 Fork 固定提交，来源以根 Cargo 清单和锁文件为准；升级时一并对齐 Base、Assets 与 GPUI 测试依赖，修改前先读[依赖迁移与验证记录](docs/ui/verification/gpui-kit-upstream-2026-10-26.md)。宿主仓库不保存依赖源码副本。
+- 编辑器和停靠布局保留上游状态与交互接缝，外观在本地 UI 层组合。缺失行为先查公开接口。GPUI Kit 使用官方 main 的固定提交，来源以根 Cargo 清单和锁文件为准；升级时一并对齐 Base、Assets 与 GPUI 测试依赖，修改前先读[依赖迁移与验证记录](docs/ui/verification/gpui-kit-upstream-2026-10-26.md)。宿主仓库不保存依赖源码副本。
 - Kit 依赖必须关闭默认功能，显式选择不引入 `gpui-component` 的功能；主题、菜单、弹窗、停靠外观及高亮接入同样遵守此边界。GPUI 测试功能直接在锁定版本的 `gpui-base`、`gpui-pre` 和 `gpui-pre-platform` 上启用，不启用 Kit 的 `test-support` 弱引用。迁移后检索全部源码（含测试），检查 Cargo 依赖树与 `Cargo.lock` 均无 `gpui-component` 及其宏库，再验证受影响交互；主题覆盖或重导出不算迁移。
 - 用户可见文本使用现有 i18n 资源，保留中英文；检查深浅主题、焦点、键盘、中文 IME、滚动和缩放中与改动相关的行为。
 

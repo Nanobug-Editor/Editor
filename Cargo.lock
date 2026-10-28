@@ -2529,7 +2529,7 @@ dependencies = [
 [[package]]
 name = "gpui-base"
 version = "0.8.1"
-source = "git+https://github.com/T-miracle/gpui-kit.git?rev=1ffc0dd462c88b5dc15f61da453dc6800e862d8f#1ffc0dd462c88b5dc15f61da453dc6800e862d8f"
+source = "git+https://github.com/longbridge/gpui-kit.git?rev=ec89cfc36404667b7947aeb3d40b1c2859d729dd#ec89cfc36404667b7947aeb3d40b1c2859d729dd"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -2651,7 +2651,7 @@ dependencies = [
 [[package]]
 name = "gpui-kit"
 version = "0.8.1"
-source = "git+https://github.com/T-miracle/gpui-kit.git?rev=1ffc0dd462c88b5dc15f61da453dc6800e862d8f#1ffc0dd462c88b5dc15f61da453dc6800e862d8f"
+source = "git+https://github.com/longbridge/gpui-kit.git?rev=ec89cfc36404667b7947aeb3d40b1c2859d729dd#ec89cfc36404667b7947aeb3d40b1c2859d729dd"
 dependencies = [
  "gpui-base",
  "gpui-kit-assets",
@@ -2664,7 +2664,7 @@ dependencies = [
 [[package]]
 name = "gpui-kit-assets"
 version = "0.8.1"
-source = "git+https://github.com/T-miracle/gpui-kit.git?rev=1ffc0dd462c88b5dc15f61da453dc6800e862d8f#1ffc0dd462c88b5dc15f61da453dc6800e862d8f"
+source = "git+https://github.com/longbridge/gpui-kit.git?rev=ec89cfc36404667b7947aeb3d40b1c2859d729dd#ec89cfc36404667b7947aeb3d40b1c2859d729dd"
 dependencies = [
  "anyhow",
  "gpui-pre",
