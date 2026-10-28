@@ -2,6 +2,45 @@
 use super::*;
 use harness::NativeMarkdown;
 
+/// A source-local toolbar must survive its body's nested native-editor render and later publication.
+/// Exercise real package controls and tab withdrawal so deferred frame routing cannot revive old UI.
+#[gpui::test]
+#[ignore = "opt-in frozen Package/WASM fixtures; see crates/plugin-runtime/tests/fixtures/packages/README.md"]
+fn delivered_markdown_first_open_keeps_toolbar_and_native_body_live(cx: &mut TestAppContext) {
+    let original = "# Nanobug\n\n中文正文\n";
+    let (mut fixture, ui) = NativeMarkdown::mount(
+        cx,
+        &[("README.md", original), ("plain.txt", "ordinary document")],
+    );
+    fixture.open("README.md", ui);
+    assert!(ui.debug_bounds("editor-source-toolbar").is_some());
+    assert!(ui.debug_bounds("plugin-ui-preview-root").is_some());
+    fixture.focus_editor(ui);
+    ui.simulate_keystrokes("ctrl-a");
+    fixture.click("plugin-ui-format-bold", ui);
+    let edited = ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).text().to_string());
+    assert!(
+        edited.contains("**"),
+        "the toolbar must still edit the native document"
+    );
+    fixture.focus_editor(ui);
+    ui.simulate_keystrokes("ctrl-z");
+    fixture.settle(ui);
+    assert_eq!(
+        ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).text().to_string()),
+        original
+    );
+    fixture.open("plain.txt", ui);
+    assert!(ui.debug_bounds("editor-source-toolbar").is_none());
+    assert!(ui.debug_bounds("plugin-ui-preview-root").is_none());
+    fixture.open("README.md", ui);
+    assert!(ui.debug_bounds("editor-source-toolbar").is_some());
+    assert_eq!(
+        ui.update(|_, cx| fixture.app.read(cx).editor.read(cx).text().to_string()),
+        original
+    );
+}
+
 /// Manual preview input during first publication must survive delayed source layout and locate replies.
 /// Drive the real guest/Manager one publication at a time so startup cannot settle before the wheel.
 #[gpui::test]
