@@ -13,6 +13,7 @@ doctest = false
 test-support = []
 
 [dependencies]
+editor-core = { path = "../editor-core" }
 gpui-kit.workspace = true
 gpui-base = "=0.8.1"
 plugin-schema.workspace = true

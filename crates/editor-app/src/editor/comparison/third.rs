@@ -18,10 +18,13 @@ fn source_offset(hunks: &[diff::Hunk], result: usize) -> usize {
     source_end + result.saturating_sub(result_end)
 }
 
-/// Both comparisons share the same bounded matrix budget; each source is capped independently.
+/// Both comparisons charge input rows; each source remains independently bounded.
 fn row_budget_allows(rows: [usize; 3]) -> bool {
-    rows.iter().all(|rows| *rows <= 2000)
-        && rows[1].saturating_mul(rows[0].saturating_add(rows[2])) <= 4_000_000
+    rows.iter().all(|rows| *rows <= diff::MAX_SOURCE_LINES)
+        && rows[0]
+            .saturating_add(rows[1].saturating_mul(2))
+            .saturating_add(rows[2])
+            <= diff::MAX_COMPARISON_ROWS
 }
 
 /// Navigation covers changes against either outer source, ordered by the shared middle result.
@@ -253,13 +256,15 @@ impl EditorApp {
         }
         let texts = [&left_editor, &result_editor, &editor]
             .map(|editor| editor.read(cx).value().to_string());
-        let rows = texts
-            .each_ref()
-            .map(|text| text.split_inclusive('\n').take(2001).count());
+        let rows = texts.each_ref().map(|text| {
+            text.split_inclusive('\n')
+                .take(diff::MAX_SOURCE_LINES + 1)
+                .count()
+        });
         if !row_budget_allows(rows) {
             return Err(api::Failure::new(
                 api::ErrorCode::LimitExceeded,
-                "Three-source comparison exceeds aggregate 4M cells or 2000 lines",
+                "Three-source comparison exceeds 100,000 lines or the shared input-row budget",
             ));
         }
         let hunks = diff::compare(&texts[2], &texts[1]).map_err(|_| {
@@ -413,8 +418,10 @@ mod tests {
     #[test]
     fn three_source_comparison_shares_aggregate_work_budget() {
         assert!(row_budget_allows([1000, 2000, 1000]));
-        assert!(!row_budget_allows([1001, 2000, 1000]));
-        assert!(!row_budget_allows([2001, 0, 0]));
+        assert!(row_budget_allows([10_902, 10_213, 10_213]));
+        assert!(row_budget_allows([diff::MAX_SOURCE_LINES; 3]));
+        assert!(!row_budget_allows([diff::MAX_SOURCE_LINES + 1, 0, 0]));
+        assert!(!row_budget_allows([usize::MAX; 3]));
         assert!(row_budget_allows([0, 2000, 0]));
     }
 

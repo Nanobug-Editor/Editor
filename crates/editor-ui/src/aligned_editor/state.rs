@@ -45,14 +45,13 @@ pub(super) struct GroupState {
 /// including retained old frames; explicit retirement returns it immediately and prevents revival.
 struct Reservation {
     ledger: Rc<Cell<usize>>,
-    cells: usize,
+    rows: usize,
 }
 
 impl Reservation {
     fn release(&mut self) {
-        self.ledger
-            .set(self.ledger.get().saturating_add(self.cells));
-        self.cells = 0;
+        self.ledger.set(self.ledger.get().saturating_add(self.rows));
+        self.rows = 0;
     }
 }
 
@@ -202,7 +201,7 @@ impl GroupState {
             Err(_) => self.status = AlignmentStatus::Unavailable(AlignmentError::Budget),
         }
         reservation.ledger.set(budget);
-        reservation.cells = before - budget;
+        reservation.rows = before - budget;
     }
 
     /// Observe actual native-buffer identity, including same-length preedit replacement/cancel.
@@ -246,7 +245,7 @@ impl GroupState {
         {
             return;
         }
-        self.reservation = Some(Reservation { ledger, cells: 0 });
+        self.reservation = Some(Reservation { ledger, rows: 0 });
     }
 
     pub fn effective_status(&self) -> AlignmentStatus {

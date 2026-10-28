@@ -509,7 +509,7 @@ fn native_code_alignment_withdrawal_releases_drag_before_the_same_source_is_remo
         assert!(mounted.view.read(cx).code_sync.groups.is_empty());
         assert_eq!(
             mounted.view.read(cx).code_sync.alignment_budget.get(),
-            MAX_CELLS
+            MAX_COMPARISON_ROWS
         );
         mounted.view.update(cx, |view, cx| {
             view.set_code_sync_source(Some((mounted.version.clone(), mounted.source.clone())), cx);

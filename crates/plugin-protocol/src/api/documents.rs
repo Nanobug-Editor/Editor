@@ -39,8 +39,8 @@
 //! restoration. A language hint controls presentation only. `RefreshVirtualDocument` requires the
 //! exact owned version and returns a new version without creating user Undo history.
 //!
-//! `CompareDocuments` uses two exact source versions, at most 1 MiB and 2,000 lines each,
-//! with a four-million-cell comparison budget. The left pane is readonly; the right keeps
+//! `CompareDocuments` uses two exact source versions, at most 1 MiB and 100,000 lines each,
+//! using Histogram matching and a shared input-row admission budget. The left pane is readonly; the right keeps
 //! normal editing behavior, and each pane scrolls independently. Views borrow existing
 //! editor state rather than owning another mutable text or Undo stack. A source edit or
 //! close, a changed active right target, or retirement of the owner/delegated caller ends

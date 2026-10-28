@@ -418,7 +418,7 @@ fn aligned_editor_preserves_gap_click_host_input_preedit_undo_and_shared_scroll(
 }
 
 #[gpui::test]
-fn aligned_editor_shared_budget_rebuilds_zero_cost_edits_and_retirement_returns_reservation(
+fn aligned_editor_shared_row_budget_rebuilds_and_retirement_returns_reservation(
     cx: &mut TestAppContext,
 ) {
     let (view, ui) = mount_sources(cx, ["alpha".into(), "alpha".into()]);
@@ -429,7 +429,7 @@ fn aligned_editor_shared_budget_rebuilds_zero_cost_edits_and_retirement_returns_
         };
         assert_eq!(
             group.state.read(cx).ledger().unwrap().get(),
-            super::super::aligned_rows::MAX_LCS_CELLS
+            super::super::aligned_rows::MAX_COMPARISON_ROWS - 2
         );
         editor.update(cx, |editor, cx| {
             editor.replace_text_in_range(Some(0..1), "b", window, cx)
@@ -446,7 +446,7 @@ fn aligned_editor_shared_budget_rebuilds_zero_cost_edits_and_retirement_returns_
                 fixture.group.state.read(cx).sources.clone(),
             )
         };
-        let ledger = Rc::new(Cell::new(1));
+        let ledger = Rc::new(Cell::new(2));
         let mut first = first;
         let mut sources = sources;
         for source in &mut sources {
@@ -465,7 +465,7 @@ fn aligned_editor_shared_budget_rebuilds_zero_cost_edits_and_retirement_returns_
         first.retire(cx);
         assert_eq!(
             ledger.get(),
-            1,
+            2,
             "retirement returns the reservation even with retained old frame/group clones"
         );
         second
@@ -480,7 +480,7 @@ fn aligned_editor_shared_budget_rebuilds_zero_cost_edits_and_retirement_returns_
             "a retained retired view cannot rebuild or spend the returned reservation"
         );
         second.retire(cx);
-        assert_eq!(ledger.get(), 1);
+        assert_eq!(ledger.get(), 2);
     });
 }
 

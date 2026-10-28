@@ -17,8 +17,8 @@ mod mapping;
 #[cfg(test)]
 mod tests;
 
-/// Each scene rebuild admits at most one existing 4M-cell comparison budget across all groups.
-const MAX_CELLS: usize = 4_000_000;
+/// Every scene shares one linear input-row allowance across its comparison groups.
+const MAX_COMPARISON_ROWS: usize = editor_core::comparison::MAX_COMPARISON_ROWS;
 const MAX_SAMPLE_ATTEMPTS: u8 = 48;
 type Changes = Vec<[Range<usize>; 2]>;
 type Scroll = (Entity<EditorState>, Point<Pixels>);
@@ -81,15 +81,22 @@ impl Group {
                 .collect::<Result<Vec<_>, ()>>()?;
             let lines = text
                 .iter()
-                .map(|text| text.split_inclusive('\n').take(2001).count())
+                .map(|text| {
+                    text.split_inclusive('\n')
+                        .take(editor_core::comparison::MAX_SOURCE_LINES + 1)
+                        .count()
+                })
                 .collect::<Vec<_>>();
-            if lines.iter().any(|lines| *lines > 2000) {
+            if lines
+                .iter()
+                .any(|count| *count > editor_core::comparison::MAX_SOURCE_LINES)
+            {
                 return Err(());
             }
             let cost = lines
                 .iter()
                 .skip(1)
-                .map(|count| lines[0] * count)
+                .map(|count| lines[0] + count)
                 .sum::<usize>();
             if cost > *budget {
                 return Err(());
@@ -172,7 +179,7 @@ impl Default for CodeSync {
             source_text: None,
             groups: BTreeMap::new(),
             generation: 0,
-            alignment_budget: Rc::new(Cell::new(MAX_CELLS)),
+            alignment_budget: Rc::new(Cell::new(MAX_COMPARISON_ROWS)),
             alignment_warning: None,
         }
     }
@@ -395,7 +402,7 @@ impl PluginView {
         self.code_sync
             .groups
             .retain(|id, _| grouped.get(id).is_some_and(|panes| panes.len() >= 2));
-        let mut budget = MAX_CELLS;
+        let mut budget = MAX_COMPARISON_ROWS;
         for (id, panes) in grouped {
             if panes.len() < 2 {
                 continue;

@@ -2,14 +2,21 @@
 
 use super::*;
 
-/// Diff boundaries are separate from file capture/recovery limits and reject before allocating an unbounded matrix.
+/// Diff admission is separate from capture/recovery; large line counts need no quadratic matrix.
 #[test]
 fn history_comparison_has_exact_byte_and_line_bounds() {
     let compare = crate::editor::comparison::changed_byte_ranges;
     assert!(compare(&"x".repeat(1024 * 1024), "x").is_ok());
     assert!(compare(&"x".repeat(1024 * 1024 + 1), "x").is_err());
     assert!(compare(&"x\n".repeat(2_000), &"y\n".repeat(2_000)).is_ok());
-    assert!(compare(&"x\n".repeat(2_001), "x").is_err());
+    assert!(compare(&"x\n".repeat(10_500), "x").is_ok());
+    assert!(
+        compare(
+            &"x\n".repeat(editor_core::comparison::MAX_SOURCE_LINES + 1),
+            "x"
+        )
+        .is_err()
+    );
 }
 
 /// Restoring an old version first protects unsaved text, applies one native edit, and leaves disk alone.

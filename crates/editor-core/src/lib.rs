@@ -1,6 +1,7 @@
 //! Product-agnostic editor rules.
 
 mod commands;
+pub mod comparison;
 mod documents;
 mod paths;
 mod run;

@@ -1,6 +1,7 @@
 //! The real Git package navigates immutable files without replacing its history dock or tree pages.
 use super::*;
 use plugin_runtime::plugin_protocol::{api, ui};
+mod large_files;
 
 /// Prepare two exact text versions for every file without using the user's repository or index.
 fn repository(root: &Path) {

@@ -1,6 +1,23 @@
 //! Standalone, observable alignment/geometry regressions; no GPUI runtime or document copy is used.
 use super::*;
 
+/// A real-sized lockfile must retain every native row and align an insertion beyond the old cap.
+#[test]
+fn large_comparison_aligns_ten_thousand_rows_without_matrix_budget() {
+    let before = numbered("package-", 10_500);
+    let after = before.replace("package-8000\n", "package-8000\n新增😀\n");
+    let plan = AlignedRows::new(&[&before, &after]).unwrap();
+    for (pane, slots) in plan.slots.iter().enumerate() {
+        assert_eq!(
+            slots.iter().copied().flatten().collect::<Vec<_>>(),
+            (0..plan.source_rows[pane].len()).collect::<Vec<_>>()
+        );
+    }
+    assert_eq!(plan.slots[0][8001], None);
+    assert_eq!(plan.slots[1][8001], Some(8001));
+    assert_eq!(plan.slots[0][8002], Some(8001));
+}
+
 fn uniform(rows: usize, height: f32) -> Vec<Range<f32>> {
     (0..rows)
         .map(|row| row as f32 * height..(row + 1) as f32 * height)
@@ -228,39 +245,40 @@ fn common_peer_insertions_share_display_rows_without_pivot_anchors() {
     }
 }
 
-/// Peer-only anchors use the caller's remaining cells. Two-pane insertion buckets need no LCS
-/// work because only one peer owns rows there; matching common bucket edges is also free.
+/// Every pivot comparison and three-pane insertion bucket shares one input-row allowance.
 #[test]
 fn peer_insertions_charge_the_shared_budget_only_for_three_panes() {
     let sources = ["a\nz\n", "a\nX\n共同\nz\n", "a\n共同\nY\nz\n"];
-    let mut budget = 4;
+    let mut budget = 20;
     assert!(AlignedRows::new_with_budget(&sources, &mut budget).is_ok());
     assert_eq!(budget, 0);
-    let mut budget = 3;
+    let mut budget = 19;
     assert_eq!(
         AlignedRows::new_with_budget(&sources, &mut budget),
         Err(AlignError::ComparisonBudget),
     );
     assert_eq!(budget, 3);
-    let mut budget = 0;
+    let mut budget = 8;
     assert!(AlignedRows::new_with_budget(&sources[..2], &mut budget).is_ok());
+    assert_eq!(budget, 0);
+    let mut budget = 20;
     assert!(
         AlignedRows::new_with_budget(&[sources[0], sources[1], sources[1]], &mut budget).is_ok()
     );
     assert_eq!(budget, 0);
-    // Differences against the pivot spend six cells first; the peer bucket then needs four.
+    // Two pivot comparisons spend twenty rows first; the peer bucket needs four more.
     let sources = [
         "a\nold\nz\n",
         "a\nchanged\nX\n共同\nz\n",
         "a\nchanged\n共同\nY\nz\n",
     ];
-    let mut budget = 9;
+    let mut budget = 23;
     assert_eq!(
         AlignedRows::new_with_budget(&sources, &mut budget),
         Err(AlignError::ComparisonBudget),
     );
     assert_eq!(budget, 3);
-    let mut budget = 10;
+    let mut budget = 24;
     assert!(AlignedRows::new_with_budget(&sources, &mut budget).is_ok());
     assert_eq!(budget, 0);
 }
@@ -497,27 +515,27 @@ fn byte_and_native_row_limits_include_the_final_empty_eof_row() {
 }
 
 #[test]
-fn lcs_budget_is_shared_across_peers_and_checked_after_common_prefix_suffix() {
+fn histogram_admits_large_changes_and_charges_each_peer_linearly() {
     let pivot = numbered("p", 2001);
     let other = numbered("q", 2001);
-    assert_eq!(
-        AlignedRows::new(&[&pivot, &other]),
-        Err(AlignError::ComparisonBudget)
-    );
+    assert!(AlignedRows::new(&[&pivot, &other]).is_ok());
     let pivot = numbered("p", 1500);
     let left = numbered("q", 1500);
     let right = numbered("r", 1500);
+    assert!(AlignedRows::new(&[&pivot, &left, &right]).is_ok());
+    let mut budget = 5_000;
     assert_eq!(
-        AlignedRows::new(&[&pivot, &left, &right]),
+        AlignedRows::new_with_budget(&[&pivot, &left, &right], &mut budget),
         Err(AlignError::ComparisonBudget)
     );
+    assert_eq!(budget, 2_000);
     let pivot = numbered("p", 2001);
     let changed = pivot.replace("p1000\n", "different\n");
     let trimmed = AlignedRows::new(&[&pivot, &changed, &pivot]).unwrap();
     assert_eq!(trimmed.slots[0].len(), 2001);
     assert_eq!(trimmed.slots[0], trimmed.slots[1]);
     assert_eq!(trimmed.slots[0], trimmed.slots[2]);
-    // Exactly four million middle comparisons are permitted, rather than counting the DP border.
+    // Fully changed sources no longer require a quadratic matrix.
     assert!(AlignedRows::new(&[&numbered("p", 2000), &numbered("q", 2000)]).is_ok());
 }
 
@@ -557,7 +575,7 @@ fn repeated_short_lines_never_drop_duplicate_or_reorder_any_native_row() {
     }
 }
 
-/// Two separately planned groups must charge the same caller ledger rather than each spending 4M.
+/// Separately planned groups charge one input-row ledger, including scans of unchanged sources.
 #[test]
 fn independent_groups_charge_one_explicit_comparison_budget() {
     let mut budget = 5;
@@ -568,7 +586,9 @@ fn independent_groups_charge_one_explicit_comparison_budget() {
         Err(AlignError::ComparisonBudget),
     );
     assert_eq!(budget, 1);
-    // Matching common edges consume no matrix cells, even when another group used the budget.
-    assert!(AlignedRows::new_with_budget(&["same", "same"], &mut budget).is_ok());
+    assert_eq!(
+        AlignedRows::new_with_budget(&["same", "same"], &mut budget),
+        Err(AlignError::ComparisonBudget)
+    );
     assert_eq!(budget, 1);
 }

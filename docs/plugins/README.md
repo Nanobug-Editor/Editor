@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [宿主通用比较迁移到 imara-diff](../ui/verification/imara-diff-2026-10-28.md)：Git 大文件预览、三栏对齐与同步滚动共用 Histogram；验证状态见记录。
+
 - [Git 差异预览、完整文件树与边界导航](verification/git-preview-navigation-2026-10-28.md)：修复失效比较源、完整树导航及差异标签，合并历史内容读取；Git 0.1.48 候选已生成，原生验收及最终检查进行中。
 
 - [主分支插件与 Rust 服务修复](verification/plugin-language-repair-2026-10-27.md)：更新旧布局包，修复 Rust 项目发现超时与 Markdown 首开宿主崩溃；831 项非 UI 测试、四项实际包回归、Rust 单测及 Windows 原生复验通过，改动未提交。

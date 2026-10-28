@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 ignore.workspace = true
+imara-diff.workspace = true
 thiserror.workspace = true
 # Run configurations are versioned host-local data with one validated serialized form.
 plugin-schema.workspace = true

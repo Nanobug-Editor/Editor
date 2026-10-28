@@ -57,6 +57,8 @@ dirs = "6.0"
 # Base 0.8 exposes the original input display map, avoiding hidden full-source validation paints.
 gpui-kit = { version = "=0.8.1", default-features = false, features = ["assets"] }
 ignore = "0.4"
+# Shared native comparison uses the version measured on this project's real source/lock files.
+imara-diff = { version = "=0.2.0", default-features = false }
 # Native ReadDirectoryChangesW, FSEvents, and inotify backends watch the workspace.
 notify = "8.2"
 # Sorting the explorer by Chinese pronunciation needs a real reading, not a

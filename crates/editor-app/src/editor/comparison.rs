@@ -22,7 +22,7 @@ pub(crate) fn changed_byte_ranges(
     left: &str,
     right: &str,
 ) -> Result<Vec<[std::ops::Range<usize>; 2]>, ()> {
-    diff::compare(left, right).map(|hunks| {
+    diff::compare(left, right).map_err(|_| ()).map(|hunks| {
         hunks
             .into_iter()
             .map(|hunk| [hunk.left, hunk.right])
@@ -243,7 +243,7 @@ impl EditorApp {
         .map_err(|_| {
             api::Failure::new(
                 api::ErrorCode::LimitExceeded,
-                "Comparison exceeds 2000 lines or 4M cells",
+                "Comparison exceeds 1 MiB or 100,000 lines",
             )
         })?;
         // Expensive pure comparison is cancellable until native focus/decorations actually change.
@@ -645,160 +645,5 @@ impl EditorApp {
 }
 
 /// Compute byte ranges for line changes without retaining a second document model.
-mod diff {
-    use std::ops::Range;
-
-    /// A paired hunk is a modification; a one-sided hunk is an insertion or deletion.
-    #[derive(Debug, PartialEq)]
-    pub(super) struct Hunk {
-        pub left: Range<usize>,
-        pub right: Range<usize>,
-    }
-
-    /// Ignore platform line separators while keeping a missing final newline significant.
-    /// Only comparison keys are normalized; hunk offsets still use the original UTF-8 strings.
-    fn line_key(line: &str) -> (&str, bool) {
-        match line.strip_suffix('\n') {
-            Some(content) => (content.strip_suffix('\r').unwrap_or(content), true),
-            None => (line, false),
-        }
-    }
-
-    /// Reject excessive input before allocating the bounded LCS matrix.
-    pub(super) fn compare(left: &str, right: &str) -> Result<Vec<Hunk>, ()> {
-        if left.len() > 1024 * 1024 || right.len() > 1024 * 1024 {
-            return Err(());
-        }
-        // Count with an early stop before allocating per-line references for hostile input.
-        if left.split_inclusive('\n').take(2001).count() > 2000
-            || right.split_inclusive('\n').take(2001).count() > 2000
-        {
-            return Err(());
-        }
-        let a = left.split_inclusive('\n').collect::<Vec<_>>();
-        let b = right.split_inclusive('\n').collect::<Vec<_>>();
-        let a_keys = a.iter().map(|line| line_key(line)).collect::<Vec<_>>();
-        let b_keys = b.iter().map(|line| line_key(line)).collect::<Vec<_>>();
-        if a.len() > 2000 || b.len() > 2000 || a.len() * b.len() > 4_000_000 {
-            return Err(());
-        }
-        // The final row/column are implicit zeroes; u16 holds at most 2000 matched lines.
-        let mut table = vec![0u16; a.len() * b.len()];
-        let cell = |table: &[u16], i: usize, j: usize| {
-            if i < a.len() && j < b.len() {
-                table[i * b.len() + j]
-            } else {
-                0
-            }
-        };
-        for i in (0..a.len()).rev() {
-            for j in (0..b.len()).rev() {
-                table[i * b.len() + j] = if a_keys[i] == b_keys[j] {
-                    1 + cell(&table, i + 1, j + 1)
-                } else {
-                    cell(&table, i + 1, j).max(cell(&table, i, j + 1))
-                };
-            }
-        }
-        let (mut i, mut j, mut left_offset, mut right_offset) = (0, 0, 0, 0);
-        let mut hunks = Vec::new();
-        while i < a.len() || j < b.len() {
-            if i < a.len() && j < b.len() && a_keys[i] == b_keys[j] {
-                left_offset += a[i].len();
-                right_offset += b[j].len();
-                i += 1;
-                j += 1;
-                continue;
-            }
-            let (start_left, start_right) = (left_offset, right_offset);
-            while i < a.len() || j < b.len() {
-                if i < a.len() && j < b.len() && a_keys[i] == b_keys[j] {
-                    break;
-                }
-                if i < a.len() && (j == b.len() || cell(&table, i + 1, j) >= cell(&table, i, j + 1))
-                {
-                    left_offset += a[i].len();
-                    i += 1;
-                } else {
-                    right_offset += b[j].len();
-                    j += 1;
-                }
-            }
-            hunks.push(Hunk {
-                left: start_left..left_offset,
-                right: start_right..right_offset,
-            });
-        }
-        Ok(hunks)
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        /// Guard limits and empty-side differences must not require an unbounded matrix.
-        #[test]
-        fn bounds_work_and_handles_empty_and_identical_documents() {
-            assert!(compare(&"x".repeat(1024 * 1024 + 1), "").is_err());
-            assert!(compare(&"x\n".repeat(2001), "").is_err());
-            assert!(
-                compare(&"x\n".repeat(2000), &"x\n".repeat(2000))
-                    .unwrap()
-                    .is_empty()
-            );
-            assert!(compare("", "").unwrap().is_empty());
-            assert_eq!(
-                compare("", "新").unwrap(),
-                vec![Hunk {
-                    left: 0..0,
-                    right: 0..3
-                }]
-            );
-            assert_eq!(
-                compare("旧", "").unwrap(),
-                vec![Hunk {
-                    left: 0..3,
-                    right: 0..0
-                }]
-            );
-        }
-
-        #[test]
-        fn preserves_unicode_crlf_and_classifies_changed_lines() {
-            assert_eq!(
-                compare("同\r\n旧\r\n尾", "同\r\n新\r\n尾").unwrap(),
-                vec![Hunk {
-                    left: 5..10,
-                    right: 5..10
-                }]
-            );
-            assert_eq!(
-                compare("a\n", "a\nb\n").unwrap(),
-                vec![Hunk {
-                    left: 2..2,
-                    right: 2..4
-                }]
-            );
-        }
-
-        /// Git blobs use LF while a Windows worktree may use CRLF; offsets stay source-native.
-        #[test]
-        fn mixed_line_endings_do_not_turn_unchanged_context_into_changes() {
-            assert!(
-                compare("same\nlast\n", "same\r\nlast\r\n")
-                    .unwrap()
-                    .is_empty()
-            );
-            assert_eq!(
-                compare("same\nold\nlast\n", "same\r\nnew\r\nlast\r\n").unwrap(),
-                vec![Hunk {
-                    left: 5..9,
-                    right: 6..11
-                }]
-            );
-            // The absence of a final newline is a real content change.
-            assert!(!compare("same\n", "same").unwrap().is_empty());
-            assert!(!compare("same\r", "same").unwrap().is_empty());
-        }
-    }
-}
+// Shared Histogram matching and normalization also serve native row alignment.
+use editor_core::comparison as diff;

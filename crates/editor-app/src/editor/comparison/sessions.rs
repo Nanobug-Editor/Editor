@@ -521,7 +521,7 @@ impl EditorApp {
         let oversized = comparison.left_editor.read(cx).text().len() > 1024 * 1024
             || comparison.right_editor.read(cx).text().len() > 1024 * 1024;
         let hunks = if oversized {
-            Err(())
+            Err(diff::ComparisonError::SourceBytes)
         } else {
             diff::compare(
                 &comparison.left_editor.read(cx).value().to_string(),

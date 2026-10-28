@@ -132,11 +132,11 @@ impl AlignmentGroup {
             .state
             .read(cx)
             .ledger()
-            .unwrap_or_else(|| Rc::new(Cell::new(super::aligned_rows::MAX_LCS_CELLS)));
+            .unwrap_or_else(|| Rc::new(Cell::new(super::aligned_rows::MAX_COMPARISON_ROWS)));
         self.configure_shared(panes, router, ledger, cx)
     }
 
-    /// Shares a scene's remaining diff-cell budget with other groups. Unchanged cached source
+    /// Shares a scene's remaining input-row budget with other groups. Unchanged cached source
     /// revisions do not charge again; a native Change invalidates that cache before rebuilding.
     pub fn configure_bounded(
         &mut self,
@@ -425,7 +425,9 @@ impl AlignmentGroup {
     }
 }
 
-/// Limit full native layout independently from the line-diff matrix and raw source-byte budgets.
-/// The owner receives an explicit fallback when a source cannot be measured within this envelope.
-const MAX_LAYOUT_HEIGHT: f32 = 240_000.;
+/// Limit full native layout independently from line correspondence and raw source-byte budgets.
+/// The old 240,000 px ceiling rejected ordinary 10k-line lockfiles after comparison admission.
+/// Stay below 2^23 so f32 coordinates retain at least half-pixel precision; byte/row limits still
+/// bound metadata independently. Excessive wrapping/zoom receives the existing explicit fallback.
+const MAX_LAYOUT_HEIGHT: f32 = 8_000_000.;
 const MAX_SOURCE_BYTES: usize = 1024 * 1024;

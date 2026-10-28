@@ -3,14 +3,14 @@
 //! This module owns no document text, editor state, selection or undo history. Callers discard a
 //! plan when its source revisions change and remeasure after native width/font/wrapping changes.
 
-use std::{collections::BTreeMap, ops::Range};
+use std::ops::Range;
 
 /// Maximum UTF-8 bytes inspected from each borrowed native source.
-pub(crate) const MAX_SOURCE_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_SOURCE_BYTES: usize = editor_core::comparison::MAX_SOURCE_BYTES;
 /// Includes the empty EOF logical row after a trailing LF, even in an otherwise empty source.
-pub(crate) const MAX_SOURCE_ROWS: usize = 2001;
-/// Pivot and peer insertion comparisons share this budget; common edges do not consume it.
-pub(crate) const MAX_LCS_CELLS: usize = 4_000_000;
+pub(crate) const MAX_SOURCE_ROWS: usize = editor_core::comparison::MAX_SOURCE_LINES + 1;
+/// Pivot and peer insertion comparisons share one linear input-row allowance.
+pub(crate) const MAX_COMPARISON_ROWS: usize = editor_core::comparison::MAX_COMPARISON_ROWS;
 
 /// Planning/layout failures request an explicit independent-layout fallback from the UI owner.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,9 +72,9 @@ pub struct AlignedLayout {
 
 impl AlignedRows {
     /// Align two or three borrowed UTF-8 sources around pane zero. The returned value retains only
-    /// byte ranges/row indices; byte, row and shared LCS limits fail before unbounded work is done.
+    /// byte ranges/row indices; byte, row and shared input-row limits fail before unbounded work is done.
     pub fn new(sources: &[&str]) -> Result<Self, AlignError> {
-        let mut budget = MAX_LCS_CELLS;
+        let mut budget = MAX_COMPARISON_ROWS;
         Self::new_with_budget(sources, &mut budget)
     }
 
@@ -89,9 +89,8 @@ impl AlignedRows {
             .enumerate()
             .map(|(pane, source)| native_rows(source, pane))
             .collect::<Result<Vec<_>, _>>()?;
-        // Intern borrowed line bodies once. LCS then compares bounded integer symbols instead of
-        // repeatedly scanning long, nearly identical lines inside its quadratic work budget.
-        let mut symbols = BTreeMap::<&str, u16>::new();
+        // Borrow native line bodies; shared matching interns them with u32 symbols.
+        // EOF remains a real caret row, so only alignment omits line terminators.
         let rows = sources
             .iter()
             .zip(&source_rows)
@@ -100,11 +99,9 @@ impl AlignedRows {
                     .iter()
                     .map(|range| {
                         let original = &source[range.clone()];
-                        let content = original
+                        original
                             .strip_suffix('\n')
-                            .map_or(original, |line| line.strip_suffix('\r').unwrap_or(line));
-                        let next = symbols.len() as u16;
-                        *symbols.entry(content).or_insert(next)
+                            .map_or(original, |line| line.strip_suffix('\r').unwrap_or(line))
                     })
                     .collect::<Vec<_>>()
             })
@@ -383,53 +380,19 @@ struct PairRows {
     before: Vec<Vec<usize>>,
 }
 impl PairRows {
-    fn new(pivot: &[u16], other: &[u16], budget: &mut usize) -> Result<Self, AlignError> {
-        let mut prefix = 0;
-        while prefix < pivot.len().min(other.len()) && pivot[prefix] == other[prefix] {
-            prefix += 1;
+    /// Turn Histogram unchanged intervals in borrowed row bodies into monotonic native anchors.
+    /// Every pivot/peer row charges the shared input-row budget, including insertion buckets.
+    fn new(pivot: &[&str], other: &[&str], budget: &mut usize) -> Result<Self, AlignError> {
+        let hunks = editor_core::comparison::line_changes(pivot, other, budget)
+            .map_err(|_| AlignError::ComparisonBudget)?;
+        let mut anchors = Vec::new();
+        let (mut left, mut right) = (0, 0);
+        for hunk in hunks {
+            anchors.extend((0..hunk.left.start - left).map(|row| (left + row, right + row)));
+            left = hunk.left.end;
+            right = hunk.right.end;
         }
-        let mut suffix = 0;
-        while suffix < (pivot.len() - prefix).min(other.len() - prefix)
-            && pivot[pivot.len() - suffix - 1] == other[other.len() - suffix - 1]
-        {
-            suffix += 1;
-        }
-        let a = &pivot[prefix..pivot.len() - suffix];
-        let b = &other[prefix..other.len() - suffix];
-        let cells = a.len() * b.len();
-        if cells > *budget {
-            return Err(AlignError::ComparisonBudget);
-        }
-        *budget -= cells;
-        let mut anchors = (0..prefix).map(|row| (row, row)).collect::<Vec<_>>();
-        if !a.is_empty() && !b.is_empty() {
-            let stride = b.len() + 1;
-            let mut lengths = vec![0_u16; (a.len() + 1) * stride];
-            for i in (0..a.len()).rev() {
-                for j in (0..b.len()).rev() {
-                    lengths[i * stride + j] = if a[i] == b[j] {
-                        lengths[(i + 1) * stride + j + 1] + 1
-                    } else {
-                        lengths[(i + 1) * stride + j].max(lengths[i * stride + j + 1])
-                    };
-                }
-            }
-            let (mut i, mut j) = (0, 0);
-            while i < a.len() && j < b.len() {
-                if a[i] == b[j] {
-                    anchors.push((prefix + i, prefix + j));
-                    i += 1;
-                    j += 1;
-                } else if lengths[(i + 1) * stride + j] >= lengths[i * stride + j + 1] {
-                    i += 1;
-                } else {
-                    j += 1;
-                }
-            }
-        }
-        anchors.extend(
-            (0..suffix).map(|row| (pivot.len() - suffix + row, other.len() - suffix + row)),
-        );
+        anchors.extend((0..pivot.len() - left).map(|row| (left + row, right + row)));
         // A sentinel flushes trailing insertions into the bucket after the final pivot row.
         anchors.push((pivot.len(), other.len()));
         let mut pair = Self {
