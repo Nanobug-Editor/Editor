@@ -112,8 +112,8 @@ impl SmoothScroll {
         self
     }
 
-    /// Keep native text row spacing stable while the spring retains full subpixel precision.
-    pub(super) fn snap_vertical_to_pixels(mut self) -> Self {
+    /// Align native or projected text motion to physical pixels while retaining spring precision.
+    pub(crate) fn snap_vertical_to_pixels(mut self) -> Self {
         self.snap_vertical = true;
         self
     }
