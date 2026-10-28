@@ -15,6 +15,8 @@ use std::{
 mod frame_probe;
 mod inertia;
 #[cfg(target_os = "windows")]
+mod native_settle;
+#[cfg(target_os = "windows")]
 mod native_windows;
 
 /// Select the actual native surface used by the production adapters.

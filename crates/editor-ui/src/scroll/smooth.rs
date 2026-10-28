@@ -57,6 +57,8 @@ pub struct SmoothScroll {
     line_height: Option<Pixels>,
     /// External surfaces can reserve domain-specific wheel gestures for their original handler.
     wheel_filter: Option<Rc<dyn Fn(&ScrollEvent) -> bool>>,
+    /// Native glyph rows must share a physical-pixel translation during vertical wheel motion.
+    snap_vertical: bool,
 }
 
 impl SmoothScroll {
@@ -85,6 +87,7 @@ impl SmoothScroll {
             projected: false,
             line_height: None,
             wheel_filter: None,
+            snap_vertical: false,
         }
     }
 
@@ -108,6 +111,12 @@ impl SmoothScroll {
         self.wheel_filter = Some(Rc::new(accept));
         self
     }
+
+    /// Keep native text row spacing stable while the spring retains full subpixel precision.
+    pub(super) fn snap_vertical_to_pixels(mut self) -> Self {
+        self.snap_vertical = true;
+        self
+    }
 }
 
 impl RenderOnce for SmoothScroll {
@@ -124,6 +133,7 @@ impl RenderOnce for SmoothScroll {
             projected: self.projected,
             line_height: self.line_height,
             wheel_filter: self.wheel_filter,
+            snap_vertical: self.snap_vertical,
             state,
             owner: window.current_view(),
         }
@@ -151,8 +161,18 @@ impl Motion {
     }
 
     /// Merge `delta` at the physical event time while respecting the observed native `metrics`.
-    pub(super) fn push(&mut self, metrics: Metrics, delta: Point<Pixels>, now: Instant) -> bool {
+    pub(super) fn push(
+        &mut self,
+        mut metrics: Metrics,
+        delta: Point<Pixels>,
+        now: Instant,
+    ) -> bool {
         self.observe(metrics.offset);
+        if !self.inertia.active() && self.written == Some(metrics.offset) {
+            // Reuse our exact endpoint only while native state still matches our last write.
+            // Starting every separate gesture from rounded pixels would accumulate DPI drift.
+            metrics.offset = self.inertia.position();
+        }
         self.inertia.push(metrics, delta, now)
     }
 
@@ -180,6 +200,8 @@ struct Surface {
     line_height: Option<Pixels>,
     /// Reserved domain gestures must reach the original native content handler.
     wheel_filter: Option<Rc<dyn Fn(&ScrollEvent) -> bool>>,
+    /// Quantize only the displayed vertical coordinate, never the spring or horizontal movement.
+    snap_vertical: bool,
     /// Per-surface endpoint and last applied animation coordinate.
     state: Entity<Motion>,
     /// Existing rendered view to notify on a physical wheel event.
@@ -231,7 +253,15 @@ impl Element for Surface {
                 if !state.inertia.active() {
                     return None;
                 }
-                let next = state.inertia.advance(metrics, now);
+                let mut next = state.inertia.advance(metrics, now);
+                if self.snap_vertical {
+                    // Fractional translations let glyph rows cross raster rounding thresholds
+                    // on different frames, briefly changing line spacing as the tail settles.
+                    // Record the displayed offset so native observation does not cancel motion.
+                    let scale = window.scale_factor();
+                    next.y = px((f32::from(next.y) * scale).round() / scale);
+                    next = metrics.clamp(next);
+                }
                 state.written = Some(next);
                 Some(next)
             });

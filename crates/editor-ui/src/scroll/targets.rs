@@ -114,5 +114,6 @@ pub(crate) fn textarea(textarea: &Entity<TextareaState>, content: AnyElement) ->
 /// Keep each native entity's animation independent of other editors mounted in the window.
 fn native(id: EntityId, target: Target, content: AnyElement) -> AnyElement {
     super::SmoothScroll::custom(("native-wheel", id), target, ScrollAxis::Both, content)
+        .snap_vertical_to_pixels()
         .into_any_element()
 }

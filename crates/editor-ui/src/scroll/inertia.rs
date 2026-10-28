@@ -97,8 +97,8 @@ impl Inertia {
         bounded
     }
 
-    /// Native translations use pixels while the upstream solver integrates scalar coordinates.
-    fn position(&self) -> Point<Pixels> {
+    /// Exact spring position before native presentation aligns its vertical offset to pixels.
+    pub(super) fn position(&self) -> Point<Pixels> {
         point(px(self.x.position), px(self.y.position))
     }
 
