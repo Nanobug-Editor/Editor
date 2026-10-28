@@ -10,6 +10,7 @@
 | [验收范围](verification/acceptance-plan.md) | H01–H38 功能、故障、原生交互和性能通过条件 |
 | [实施记录](verification/implementation-2026-10-22.md) | 实际结果、逐项证据、双轴审查及剩余格式门禁；不把 ignored 计为通过 |
 | [产品性能实测](verification/performance-2026-10-22.md) | 实际 Rust 存储、原生保存/预览/分页、空间与峰值；记录大文件界面延迟限制 |
+| [启动与监测突发任务修复](verification/history-worker-burst-2026-10-27.md) | 修正普通批量观察耗尽 16 个 worker 槽导致的 Busy 与历史遗漏；包含恢复、顺序、关闭屏障和真实失败回归 |
 | [存储方法调研](research/storage-methods-sources-2026-10-22.md) | 一手机制依据与比较边界 |
 | [编码微基准](research/storage-benchmark-2026-10-22.md) | 全量、去重和参考版本编码的原型实验 |
 | [完整快照与旧内容日志比较](research/history-models-benchmark-2026-10-22.md) | 统一后端的结构操作、压缩、去重和历史定位实验，附原始数据与程序 |

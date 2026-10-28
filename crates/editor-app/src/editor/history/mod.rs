@@ -1,6 +1,7 @@
 //! Native history integration owns metadata and immutable jobs, never another editable document.
 
 mod profiles;
+mod recording;
 pub(crate) use profiles::{State, load_policy};
 mod saves;
 pub(crate) use saves::disk_digest;
@@ -99,61 +100,6 @@ impl EditorApp {
         self.history.local_saves.remove(path);
     }
 
-    /// Reliable removal events distinguish known path recreation from this app's own atomic saves.
-    pub(crate) fn observe_history_removal(
-        &mut self,
-        path: PathBuf,
-        known_event: bool,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(worker) = self.history.worker.clone() else {
-            return;
-        };
-        let local = self.history.local_saves.get(&path).cloned();
-        let root = self.workspace.root().to_owned();
-        let observed = worker.call(0, move |history| {
-            if !history.policy()?.enabled {
-                return Ok(());
-            }
-            let current = platform_windows::history::FileStamp::read(&path);
-            if !known_event && current.as_ref().is_ok_and(Option::is_some) {
-                return Ok(());
-            }
-            if known_event
-                && local.is_some()
-                && current.as_ref().ok().and_then(Option::as_ref) == local.as_ref()
-            {
-                return Ok(());
-            }
-            for (file, path) in history.bindings_under(&path)? {
-                let location = history.location(file)?;
-                history.change(editor_history::Change {
-                    file,
-                    path,
-                    workspace: location.workspace,
-                    reason: Reason::Deleted,
-                    present: false,
-                    at_ms: now_ms(),
-                })?;
-            }
-            if path.is_file() {
-                observe_disk(
-                    history,
-                    &path,
-                    path.starts_with(&root).then_some(root.as_path()),
-                    Reason::External,
-                )?;
-            }
-            Ok(())
-        });
-        cx.spawn(async move |app, cx| {
-            if let Err(error) = observed.await {
-                let _ = app.update(cx, |app, cx| app.history_failure(error.to_string(), cx));
-            }
-        })
-        .detach();
-    }
-
     /// A corrected profile/directory can be retried without restarting or discarding the current view.
     pub(super) fn reconnect_history(&mut self, cx: &mut Context<Self>) {
         let retry = self.history.worker.as_ref().is_none_or(|worker| {
@@ -183,6 +129,8 @@ impl EditorApp {
 
     /// Drain accepted history writes before project teardown; failed history cannot trap a normal close.
     pub(crate) fn shutdown_history(&mut self, cx: &mut Context<Self>) -> gpui_kit::Task<()> {
+        // Flush the synchronous observation scope before submitting its shutdown barrier.
+        self.finish_history_batch(true, cx);
         self.history.saves_sealed = true;
         self.history.save_generation = self.history.save_generation.wrapping_add(1);
         let deletion = self.history_delete_cleanup();
@@ -214,28 +162,6 @@ impl EditorApp {
     pub(crate) fn resume_history_saves(&mut self, cx: &mut Context<Self>) {
         self.history.saves_sealed = false;
         cx.notify();
-    }
-
-    /// Reliable native rename pairs and successful host moves transfer retained logical identities.
-    pub(crate) fn record_history_move(
-        &mut self,
-        old: PathBuf,
-        new: PathBuf,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(worker) = self.history.worker.clone() else {
-            return;
-        };
-        let root = self.workspace.root().to_owned();
-        let changed = worker.call(0, move |history| {
-            observations::record_move(history, &old, &new, &root)
-        });
-        cx.spawn(async move |app, cx| {
-            if let Err(error) = changed.await {
-                let _ = app.update(cx, |app, cx| app.history_failure(error.to_string(), cx));
-            }
-        })
-        .detach();
     }
 
     /// Surface initialization failure after the app exists; a failed history never disables Save.
@@ -288,144 +214,5 @@ impl EditorApp {
         }
         self.report_host_message(MessageLevel::Info, message, cx);
         cx.notify();
-    }
-
-    /// Existing watcher/open observations stay immutable and never replace an unsaved native buffer.
-    pub(crate) fn observe_history_path(
-        &mut self,
-        path: PathBuf,
-        reason: Reason,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(worker) = self.history.worker.clone() else {
-            return;
-        };
-        let workspace = path
-            .starts_with(self.workspace.root())
-            .then(|| self.workspace.root().to_owned());
-        let target = path.clone();
-        let observed = worker.call(0, move |history| {
-            observe_disk(history, &path, workspace.as_deref(), reason)
-        });
-        cx.spawn(async move |app, cx| {
-            let result = observed.await;
-            let _ = app.update(cx, |app, cx| match result {
-                Err(error) => app.history_failure(error.to_string(), cx),
-                Ok(Some(reason)) => app.history_skipped(target, reason, cx),
-                Ok(None) => {}
-            });
-        })
-        .detach();
-    }
-
-    /// Enqueue the exact successfully saved bytes immediately, before the next file observation.
-    pub(crate) fn record_history_save(
-        &mut self,
-        path: PathBuf,
-        value: String,
-        cx: &mut Context<Self>,
-    ) {
-        if let Ok(Some(stamp)) = platform_windows::history::FileStamp::read(&path) {
-            self.history.local_saves.insert(path.clone(), stamp);
-        }
-        if let Some(file) = self.tabs.iter().find(|file| file.path() == path) {
-            if let Some(recovery) = self.history.pending_create.get_mut(&file.file_id) {
-                recovery.needs_create = false;
-            }
-        }
-        self.record_history_observation(path, value, Reason::Saved, cx);
-    }
-
-    /// Immutable save/watcher results preserve the state actually observed, even if disk changes again.
-    pub(crate) fn record_history_observation(
-        &mut self,
-        path: PathBuf,
-        value: String,
-        reason: Reason,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(worker) = self.history.worker.clone() else {
-            return;
-        };
-        if value.len() > 32 * 1024 * 1024 {
-            self.history_skipped(path, editor_history::SkipReason::TooLarge, cx);
-            return;
-        }
-        let workspace = path
-            .starts_with(self.workspace.root())
-            .then(|| self.workspace.root().to_owned());
-        let document = self
-            .tabs
-            .iter()
-            .find(|file| file.path() == path)
-            .map(|file| file.file_id);
-        let recovery = document.and_then(|id| self.history.pending_create.get(&id));
-        let identity = if reason == Reason::Saved {
-            recovery
-                .and_then(|recovery| recovery.file)
-                .or_else(|| document.and_then(|id| self.history.identities.get(&id).copied()))
-        } else {
-            None
-        };
-        let origin = recovery
-            .filter(|recovery| recovery.file.is_none() && reason == Reason::Saved)
-            .map(|recovery| recovery.origin);
-        let target = path.clone();
-        let recorded = worker.call(value.len(), move |history| {
-            history.import_known(&path, workspace.as_deref())?;
-            let capture = Capture {
-                file: identity,
-                path: path.clone(),
-                workspace,
-                contents: value.into_bytes(),
-                reason,
-                at_ms: now_ms(),
-            };
-            let outcome = match origin {
-                Some(origin) => history.capture_copy(capture, origin)?,
-                None => history.capture(capture)?,
-            };
-            Ok((
-                history.file_at(&path)?,
-                match outcome {
-                    editor_history::CaptureOutcome::Skipped(reason) => Some(reason),
-                    _ => None,
-                },
-            ))
-        });
-        cx.spawn(async move |app, cx| {
-            let _ = app.update(cx, |app, cx| {
-                let maintenance = worker.status().error;
-                if let Some(error) = maintenance {
-                    app.history_failure(error, cx);
-                }
-            });
-            let result = recorded.await;
-            let _ = app.update(cx, |app, cx| match result {
-                Ok((identity, skipped)) => {
-                    if let Some(reason) = skipped {
-                        app.history_skipped(target.clone(), reason, cx);
-                    } else if app
-                        .history
-                        .skipped
-                        .as_ref()
-                        .is_some_and(|(path, _)| *path == target)
-                    {
-                        app.history.skipped = None;
-                    }
-                    if let Some((identity, id)) = identity.zip(document.filter(|id| {
-                        app.tabs
-                            .iter()
-                            .any(|file| file.file_id == *id && file.path() == target)
-                    })) {
-                        if reason == Reason::Saved || !app.history.identities.contains_key(&id) {
-                            app.history.identities.insert(id, identity);
-                        }
-                    }
-                }
-                Err(error) => app.history_failure(error.to_string(), cx),
-            });
-        })
-        .detach();
     }
 }

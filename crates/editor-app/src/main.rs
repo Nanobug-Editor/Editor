@@ -830,6 +830,8 @@ impl EditorApp {
         this.ensure_open_files_dock(window, cx);
         this.refresh_files(cx);
 
+        // Restored observations share one worker slot before the background executor can drain.
+        let history_batch = this.begin_history_batch();
         let mut restored_any = false;
         for path in saved_tabs
             .into_iter()
@@ -882,6 +884,7 @@ impl EditorApp {
             }
         })
         .detach();
+        this.finish_history_batch(history_batch, cx);
         this.initialize_history(cx);
         if let Some(error) = terminal_upgrade_error {
             // File restoration can replace ordinary status text; retain the startup diagnostic in

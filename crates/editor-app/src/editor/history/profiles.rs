@@ -18,6 +18,8 @@ impl gpui_kit::Global for ProfileWorkers {}
 /// Local view state and background access for the selected user profile.
 #[derive(Default)]
 pub(crate) struct State {
+    /// One synchronous restore/watcher scope shares a bounded worker submission, never editable text.
+    pub(super) batch: Option<super::recording::Batch>,
     /// Missing worker means thread/profile resolution failed and saves must still remain usable.
     pub(crate) worker: Option<Worker>,
     /// Policy location belongs exclusively to the selected user profile.

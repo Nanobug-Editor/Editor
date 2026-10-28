@@ -10,6 +10,8 @@ mod capture;
 mod late_results;
 #[path = "history/observations.rs"]
 mod observations;
+#[path = "history/queueing.rs"]
+mod queueing;
 #[path = "history/recovery.rs"]
 mod recovery;
 

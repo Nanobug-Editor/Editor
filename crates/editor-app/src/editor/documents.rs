@@ -83,6 +83,8 @@ impl EditorApp {
         let Some(update) = self.defer_workspace_reconciliation(update) else {
             return;
         };
+        // A native event burst must not consume one bounded history queue slot per file.
+        let history_batch = self.begin_history_batch();
         self.publish_workspace_file_events(update.file_events.clone(), cx);
         for (old, new) in &update.renames {
             self.record_history_move(old.clone(), new.clone(), cx);
@@ -285,6 +287,7 @@ impl EditorApp {
             self.status = t!("status.workspace_refreshed", count = count).to_string();
             cx.notify();
         }
+        self.finish_history_batch(history_batch, cx);
     }
 
     /// A parent directory is watched for each document outside the workspace.
