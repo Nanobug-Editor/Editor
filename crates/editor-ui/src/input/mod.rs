@@ -17,6 +17,8 @@ pub struct Input {
     appearance: bool,
     bordered: bool,
     focus_bordered: bool,
+    /// Compact single-line geometry for dense panels, independent of display scaling.
+    small: bool,
     /// Uniform scale of control-owned defaults; explicit Styled refinements retain precedence.
     scale: f32,
     /// The native input publishes its semantic name independently of the placeholder text.
@@ -34,6 +36,7 @@ impl Input {
             appearance: true,
             bordered: true,
             focus_bordered: true,
+            small: false,
             scale: 1.,
             accessibility_label: None,
             prefix: None,
@@ -43,6 +46,12 @@ impl Input {
     /// Choose whether to apply the local input background and default visual frame.
     pub fn appearance(mut self, appearance: bool) -> Self {
         self.appearance = appearance;
+        self
+    }
+
+    /// Use a 24 logical-pixel frame while retaining the shared text, focus and IME state.
+    pub fn small(mut self) -> Self {
+        self.small = true;
         self
     }
     /// Scale the frame's default geometry and text by finite positive `scale`, excluding OS DPI.
@@ -89,17 +98,21 @@ impl Styled for Input {
 impl RenderOnce for Input {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = cx.theme();
+        let height = if self.small { 24. } else { 28. } * self.scale;
         div()
             .w_full()
             // Base's single-line engine fills its frame. A minimum height alone leaves its
             // percentage-height hit region at zero, so painted fields cannot receive pointer/IME input.
-            .h(px(28. * self.scale))
-            .min_h(px(28. * self.scale))
+            .h(px(height))
+            .min_h(px(height))
             .flex()
             .items_center()
             .text_color(palette.foreground)
             // Rem-based text follows the single global typography size, including form zoom.
             .text_sm()
+            // Base's single-line minimum follows inherited line height. Keep large root fonts
+            // inside the compact frame so its text/IME hit region cannot grow past the border.
+            .when(self.small, |this| this.line_height(px(22. * self.scale)))
             .when(self.scale != 1., |this| {
                 this.text_size(rems(0.875 * self.scale))
             })

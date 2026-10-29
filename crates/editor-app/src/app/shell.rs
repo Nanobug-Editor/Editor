@@ -178,7 +178,7 @@ impl DockPanel for EditorDockPanel {
 
     fn title(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         match self.kind {
-            // Order explorer actions as locate, collapse all, expand all, then minimize.
+            // Keep filtering next to locate, collapse, expand and minimize in the compact toolbar.
             EditorDockPanelKind::Explorer => {
                 self.observe_explorer_focus(window, cx);
                 let focused = self.focus_handle.contains_focused(window, cx);
@@ -192,6 +192,12 @@ impl DockPanel for EditorDockPanel {
                     cx,
                 );
                 h_flex()
+                    .id("explorer-header")
+                    .on_hover(cx.listener(|panel, hovered, _, cx| {
+                        let _ = panel.parent.update(cx, |app, _| {
+                            app.explorer_filter.title_hovered = *hovered;
+                        });
+                    }))
                     .w_full()
                     .items_center()
                     .justify_between()
@@ -211,12 +217,32 @@ impl DockPanel for EditorDockPanel {
                         h_flex()
                             .id("explorer-actions")
                             .debug_selector(|| "explorer-actions".into())
-                            // Reserve four compact slots and their height so focus changes never move the title.
-                            .w(px(96.))
+                            // Reserve five compact slots so focus changes never move the title.
+                            .w(px(120.))
                             .h(px(24.))
                             .opacity(opacity)
                             .when(opacity > 0., |actions| {
                                 actions.child(
+                    div()
+                        .id("explorer-toggle-filter")
+                        .debug_selector(|| "explorer-toggle-filter".into())
+                        .child(
+                            Button::new("explorer-toggle-filter-button")
+                                .icon(Icon::new(IconName::Search))
+                                .tooltip(t!("explorer.toggle_filter").to_string())
+                                .accessibility_label(t!("explorer.toggle_filter").to_string())
+                                .small()
+                                .compact()
+                                .ghost()
+                                .on_click(cx.listener(|panel, _, window, cx| {
+                                    cx.stop_propagation();
+                                    let _ = panel.parent.update(cx, |app, cx| {
+                                        app.toggle_explorer_filter(window, cx);
+                                    });
+                                })),
+                        ),
+                )
+                .child(
                     div()
                         .id("explorer-reveal-active-file")
                         .debug_selector(|| "explorer-reveal-active-file".into())

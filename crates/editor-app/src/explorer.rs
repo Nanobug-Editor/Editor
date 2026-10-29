@@ -3,6 +3,7 @@
 // sort.rs remains unregistered until its collation rules replace the live tree ordering.
 pub(crate) mod drag;
 mod files;
+pub(crate) mod filter;
 /// Destructive explorer operations protect eligible local history before filesystem removal.
 mod history;
 mod interaction;

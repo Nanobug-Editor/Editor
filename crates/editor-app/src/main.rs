@@ -164,6 +164,8 @@ struct EditorApp {
     /// Repaint the host when the upstream editor publishes a hover or completion.
     _editor_observer: Subscription,
     tree_state: Entity<TreeState>,
+    /// Transient name filtering shares the live tree without persisting its expansion changes.
+    explorer_filter: explorer::filter::ExplorerFilter,
     /// The active document's readonly structure and native tree interaction state.
     outline: outline::OutlineState,
     outline_panel: Entity<outline::OutlinePanel>,
@@ -465,7 +467,13 @@ impl EditorApp {
             run_controls.block_persistence(error.clone());
         }
         let tree_state = cx.new(|cx| TreeState::new(cx));
+        let explorer_filter = explorer::filter::ExplorerFilter::new(window, cx);
         let tree_subscription = cx.subscribe(&tree_state, |this, _, event: &TreeEvent, cx| {
+            // Filtered ancestors are temporary; they must not replace the saved browsing layout.
+            if this.explorer_filter.is_active() {
+                cx.notify();
+                return;
+            }
             let id = match event {
                 TreeEvent::Expanded(id) => Some((id.to_string(), true)),
                 TreeEvent::Collapsed(id) => Some((id.to_string(), false)),
@@ -720,6 +728,7 @@ impl EditorApp {
             pointer_hover_suppressed: None,
             _editor_observer: editor_observer,
             tree_state,
+            explorer_filter,
             outline,
             outline_panel,
             open_files_panel,
@@ -919,6 +928,10 @@ impl EditorApp {
         self.explorer_visible = !local_dock::panel_visible(self.dock_area.read(cx), id, cx);
         if self.explorer_visible {
             self.dock_presentation.activate(id);
+        } else {
+            // Removing a hover surface need not emit a leave event; do not retain shortcut admission.
+            self.explorer_filter.body_hovered = false;
+            self.explorer_filter.title_hovered = false;
         }
         self.explorer_visibility.set(self.explorer_visible);
         self.dock_area.update(cx, |area, cx| {
