@@ -11,6 +11,7 @@ use std::{cell::RefCell, fs};
 mod bridge;
 mod caption_controls;
 mod commit_panel;
+mod comparison_timing;
 mod exclusive;
 mod exit_tests;
 mod fixture;
@@ -152,6 +153,17 @@ fn git_native_history_files_probe() {
 #[ignore = "requires Windows desktop, candidate/output and NANOBUG_GIT_NATIVE_COMPARISON_ONLY"]
 fn git_native_comparison_probe() {
     assert!(std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_some());
+    for case in [Case::SMOKE, Case::ALL[7]] {
+        matrix::run(case).unwrap();
+    }
+}
+
+/// Measure real painted file navigation separately from guest startup and session persistence.
+#[test]
+#[ignore = "requires Windows desktop, candidate/output, HISTORY_ONLY and DIFF_TIMING"]
+fn git_native_diff_switch_timing_probe() {
+    assert!(comparison_timing::requested());
+    assert!(std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some());
     for case in [Case::SMOKE, Case::ALL[7]] {
         matrix::run(case).unwrap();
     }

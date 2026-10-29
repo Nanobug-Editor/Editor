@@ -16,6 +16,82 @@ use std::{cell::RefCell, rc::Rc};
 
 mod sidebar;
 
+/// Identical logical saves must leave the existing durable file untouched.
+#[test]
+fn unchanged_session_save_preserves_existing_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let profile = directory.path().join("profile");
+    let workspace = directory.path().join("workspace");
+    let state = SessionState::load_in_profile(&workspace, &profile);
+    state.try_save().unwrap();
+    let path = SessionState::file_in_profile(&workspace, &profile);
+    // A fixed old timestamp distinguishes replacement from an equal timestamp on a fast disk.
+    let modified = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(fs::FileTimes::new().set_modified(modified))
+        .unwrap();
+    state.try_save().unwrap();
+    assert_eq!(fs::metadata(path).unwrap().modified().unwrap(), modified);
+    assert!(SessionState::load_in_profile(&workspace, &profile).workspace_trusted);
+}
+
+/// Equal serialized lengths must not hide a real settings change.
+#[test]
+fn changed_session_with_same_length_is_restored() {
+    let directory = tempfile::tempdir().unwrap();
+    let profile = directory.path().join("profile");
+    let workspace = directory.path().join("workspace");
+    let mut state = SessionState::load_in_profile(&workspace, &profile);
+    state.window_width = 1400.;
+    state.try_save().unwrap();
+    state.window_width = 1600.;
+    state.try_save().unwrap();
+    assert_eq!(
+        SessionState::load_in_profile(&workspace, &profile).window_width,
+        1600.
+    );
+}
+
+/// An explicit save recreates a removed profile instead of trusting a stale successful save.
+#[test]
+fn removed_session_file_is_recreated() {
+    let directory = tempfile::tempdir().unwrap();
+    let profile = directory.path().join("profile");
+    let workspace = directory.path().join("workspace");
+    let mut state = SessionState::load_in_profile(&workspace, &profile);
+    state.window_height = 777.;
+    state.try_save().unwrap();
+    fs::remove_file(SessionState::file_in_profile(&workspace, &profile)).unwrap();
+    state.try_save().unwrap();
+    assert_eq!(
+        SessionState::load_in_profile(&workspace, &profile).window_height,
+        777.
+    );
+}
+
+/// A failed atomic replacement remains retryable after its filesystem obstruction is removed.
+#[test]
+fn failed_session_replacement_can_be_retried() {
+    let directory = tempfile::tempdir().unwrap();
+    let profile = directory.path().join("profile");
+    let workspace = directory.path().join("workspace");
+    let mut state = SessionState::load_in_profile(&workspace, &profile);
+    state.window_width = 1700.;
+    let path = SessionState::file_in_profile(&workspace, &profile);
+    // This owned empty directory occupies the final filename, not the temporary write location.
+    fs::create_dir_all(&path).unwrap();
+    assert!(state.try_save().is_err());
+    fs::remove_dir(path).unwrap();
+    state.try_save().unwrap();
+    assert_eq!(
+        SessionState::load_in_profile(&workspace, &profile).window_width,
+        1700.
+    );
+}
+
 /// Remove only the isolated workspace's generated session file, including on assertion failure.
 struct SessionFile(PathBuf);
 

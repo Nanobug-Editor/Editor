@@ -142,6 +142,12 @@ impl Fixture {
             },
         )?;
         manager.install(&package, package.manifest.permissions.clone())?;
+        if comparison_timing::requested() {
+            // Exercise real dynamic grammar initialization in both measured binaries.
+            let language =
+                crate::extensions::language_tests::packages::language_package("snapshot-language");
+            manager.install(&language, Default::default())?;
+        }
         manager.shutdown_checked()?;
         drop(manager);
         Ok(Self {

@@ -35,6 +35,9 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         return review(h, cx).await;
     }
     if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
+        if comparison_timing::requested() {
+            return comparison_timing::exercise(h, cx).await;
+        }
         if history_files::requested() {
             return history_files::exercise(h, cx).await;
         }

@@ -106,6 +106,14 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
     );
     let candidate = std::env::var_os("NANOBUG_GIT_CANDIDATE").context("candidate required")?;
     ensure!(
+        !comparison_timing::requested()
+            || (std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some()
+                && !history_files::requested()
+                && std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_none()
+                && std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_PHASES").is_none()),
+        "diff timing requires its own history-only receipt"
+    );
+    ensure!(
         !history_files::requested()
             || (std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some()
                 && std::env::var_os("NANOBUG_GIT_NATIVE_SCROLL_ONLY").is_none()
@@ -316,6 +324,25 @@ pub(super) fn run(case: Case) -> anyhow::Result<()> {
             "native comparison review did not finish"
         );
         &["workbench.png", "workbench-ime.png"]
+    } else if comparison_timing::requested() {
+        let receipt = &evidence["observations"]["diff_switch_timing"];
+        ensure!(
+            evidence["workflow"] == "diff-switch-timing-only"
+                && receipt["case"] == case.name
+                && receipt["samples"].as_array().is_some_and(|samples| {
+                    samples.len() == 34
+                        && samples
+                            .iter()
+                            .filter(|sample| sample["warm"] == true)
+                            .count()
+                            == 32
+                        && samples
+                            .iter()
+                            .all(|sample| sample["session_saves"]["failures"] == 0)
+                }),
+            "file-switch timing receipt is incomplete or has a persistence failure"
+        );
+        &["diff-switch-timing.png"]
     } else if history_files::requested() {
         let receipt = &evidence["observations"]["history_files"];
         ensure!(

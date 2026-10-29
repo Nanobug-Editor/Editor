@@ -11,6 +11,10 @@ use std::{
 #[cfg(test)]
 mod tests;
 
+mod timing;
+#[cfg(test)]
+pub(crate) use timing::save_timings;
+
 /// Version 2 distinguishes editor-local columns from historical center-tree sidebar bands.
 pub(crate) const DOCK_LAYOUT_VERSION: u32 = 2;
 
@@ -318,8 +322,17 @@ impl SessionState {
         let _ = self.try_save();
     }
 
-    /// Persist the logical session or return an error without replacing damaged/migrating data.
+    /// Persist changed logical state atomically; identical saved bytes are left untouched.
+    /// Storage failures remain errors, and damaged/migrating data is never replaced.
     pub(crate) fn try_save(&self) -> anyhow::Result<()> {
+        let started = std::time::Instant::now();
+        let result = self.write_snapshot();
+        timing::record(started.elapsed(), &result);
+        result.map(|_| ())
+    }
+
+    /// Atomically write this session's serialized snapshot and report whether storage changed.
+    fn write_snapshot(&self) -> anyhow::Result<timing::SaveOutcome> {
         if self.persistence_blocked {
             anyhow::bail!("Workspace session is protected after a failed load or migration");
         }
@@ -330,18 +343,43 @@ impl SessionState {
         let parent = path
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Invalid session path"))?;
+        let snapshot = serde_json::to_vec_pretty(self)?;
+        if stored_snapshot_matches(&path, &snapshot) {
+            return Ok(timing::SaveOutcome::Unchanged);
+        }
         fs::create_dir_all(parent)?;
         let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-        temporary.write_all(&serde_json::to_vec_pretty(self)?)?;
+        temporary.write_all(&snapshot)?;
         temporary.as_file().sync_all()?;
         temporary.persist(path).map_err(|error| error.error)?;
-        Ok(())
+        Ok(timing::SaveOutcome::Written)
     }
 
     /// Keep automatic layout saves away from a failed import until the next successful startup.
     pub(crate) fn block_persistence(&mut self) {
         self.persistence_blocked = true;
     }
+}
+
+/// Compare `path` with serialized `snapshot` using a bounded read. Missing, changed or unreadable
+/// files take the normal atomic-save path, so an earlier failure never suppresses a later retry.
+fn stored_snapshot_matches(path: &Path, snapshot: &[u8]) -> bool {
+    use std::io::Read as _;
+    let Ok(file) = fs::File::open(path) else {
+        return false;
+    };
+    if !file
+        .metadata()
+        .is_ok_and(|metadata| metadata.is_file() && metadata.len() == snapshot.len() as u64)
+    {
+        return false;
+    }
+    // One extra byte detects growth after metadata without reading an unbounded external file.
+    let mut stored = Vec::with_capacity(snapshot.len().saturating_add(1));
+    file.take(snapshot.len() as u64 + 1)
+        .read_to_end(&mut stored)
+        .is_ok()
+        && stored == snapshot
 }
 
 /// Only the owner portion of a persisted panel key changes; the declared panel ID stays intact.

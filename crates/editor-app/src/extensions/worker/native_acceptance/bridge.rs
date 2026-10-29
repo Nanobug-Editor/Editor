@@ -54,7 +54,9 @@ impl Harness {
                 } else if std::env::var_os("NANOBUG_GIT_NATIVE_COMPARISON_ONLY").is_some() {
                     "comparison-only"
                 } else if std::env::var_os("NANOBUG_GIT_NATIVE_HISTORY_ONLY").is_some() {
-                    if history_files::requested() { "history-files-only" } else { "history-keyboard-only" }
+                    if comparison_timing::requested() { "diff-switch-timing-only" }
+                    else if history_files::requested() { "history-files-only" }
+                    else { "history-keyboard-only" }
                 } else {
                     "complete-workbench"
                 },
