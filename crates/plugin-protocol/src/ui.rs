@@ -2,6 +2,7 @@
 //! Protocol 7 composes canvases with native controls through independently negotiated capabilities.
 //! No GPUI objects cross this interface.
 //!
+//! `ui.native` 1.3 adds plugin-owned split proportions and release-only resize receipts.
 //! `ui.native` 1.2 adds [`Node::textarea_rows`]: a Textarea can grow between bounded native
 //! visual-row counts while keeping its original draft, IME, selection, Undo and internal scrolling.
 //! Omitted row bounds retain the default policy; fixed pixel heights cannot be combined with them.
@@ -214,6 +215,10 @@ impl Document {
         let mut required =
             std::collections::BTreeMap::from([("ui.native", semver::Version::new(1, 0, 0))]);
         let mut visit = |node: &Node| {
+            if node.layout.split_proportions.is_some() {
+                let native = required.get_mut("ui.native").unwrap();
+                *native = native.clone().max(semver::Version::new(1, 3, 0));
+            }
             if node.drop_target.is_some() || node.drag_source.is_some() {
                 required.insert("ui.transfer", semver::Version::new(1, 0, 0));
             }
@@ -636,6 +641,10 @@ pub struct Layout {
     /// Native adjustable panes on a Row/Column, requiring `ui.native >=1.1`; cannot combine with wrap.
     #[serde(default)]
     pub resizable: bool,
+    /// Opt into `ui.native >=1.3` resize receipts. Empty means no initial override; otherwise one
+    /// positive finite weight per child, summing to one, restores axis sizes. Plugins persist values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split_proportions: Option<Vec<f32>>,
     pub width: Option<f32>,
     pub height: Option<f32>,
     #[serde(default)]
@@ -856,6 +865,9 @@ pub enum Action {
         to: String,
     },
     Resize(f32),
+    /// Final normalized positive child weights after a native split gesture, never viewport resize.
+    /// Requires a resizable Row/Column opting in through Layout.split_proportions (ui.native 1.3).
+    SplitResized(Vec<f32>),
     /// Pointer coordinates relative to the side tab list's top-left corner.
     Context {
         id: String,
@@ -1022,6 +1034,14 @@ impl Node {
     /// Request native pane handles for this Row/Column without handing scroll or document state to the guest.
     pub fn resizable(mut self) -> Self {
         self.layout.resizable = true;
+        self
+    }
+
+    /// Restore relative child `weights` and receive final SplitResized gestures (ui.native 1.3).
+    /// An empty vector requests feedback while preserving declared initial widths/heights.
+    pub fn split_proportions(mut self, weights: Vec<f32>) -> Self {
+        self.layout.resizable = true;
+        self.layout.split_proportions = Some(weights);
         self
     }
 

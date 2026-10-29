@@ -195,7 +195,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         .ok_or_else(|| anyhow::anyhow!("Missing API requirements"))?;
     let available = [
         ("package.assets".into(), Version::new(1, 0, 0)),
-        ("ui.native".into(), Version::new(1, 2, 0)),
+        ("ui.native".into(), Version::new(1, 3, 0)),
         ("ui.windows".into(), Version::new(1, 0, 0)),
         ("ui.visibility".into(), Version::new(1, 0, 0)),
         ("ui.code_editor".into(), Version::new(2, 0, 0)),

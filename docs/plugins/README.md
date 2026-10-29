@@ -1,5 +1,9 @@
 # 插件系统文档目录
 
+- [Git 0.1.49 宿主支持与安装](verification/git-0.1.49-host-support-2026-10-29.md)：在当前主线补齐 ui.native 1.3，核对固定包、拖动回执、冷恢复及实际安装。
+
+- [Git 布局比例持久化](verification/git-layout-persistence-2026-10-28.md)：通用分割比例与松手回执、工作区私有保存及冷启动恢复；验证状态见记录。
+
 - [宿主通用比较迁移到 imara-diff](../ui/verification/imara-diff-2026-10-28.md)：Git 大文件预览、三栏对齐与同步滚动共用 Histogram；验证状态见记录。
 
 - [Git 差异预览、完整文件树与边界导航](verification/git-preview-navigation-2026-10-28.md)：修复失效比较源、完整树导航及差异标签，合并历史内容读取；Git 0.1.48 候选已生成，原生验收及最终检查进行中。

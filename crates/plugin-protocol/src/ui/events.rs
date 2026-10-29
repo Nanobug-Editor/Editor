@@ -187,6 +187,13 @@ impl Document {
             )
         })?;
         let valid = match (&node.kind, &event.action) {
+            (Kind::Row { children } | Kind::Column { children }, Action::SplitResized(weights)) => {
+                node.layout.resizable
+                    && node.layout.split_proportions.is_some()
+                    && weights.len() == children.len()
+                    && weights.iter().all(|v| v.is_finite() && *v > 0. && *v <= 1.)
+                    && (weights.iter().sum::<f32>() - 1.).abs() <= 0.001
+            }
             (Kind::Tree { handle }, Action::Tree(event)) => handle == event.handle(),
             (
                 Kind::Canvas(_) | Kind::Image { .. } | Kind::FileImage { .. },

@@ -1,5 +1,7 @@
 //! Native opt-in alignment integration regressions through a real Base Root and PluginView.
 use super::*;
+
+mod split_receipts;
 use editor_ui::{
     self as controls,
     aligned_editor::{AlignmentGroup, AlignmentStatus},

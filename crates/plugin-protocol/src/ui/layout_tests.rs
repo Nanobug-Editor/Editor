@@ -1,6 +1,67 @@
 //! Exercise complete file layouts at the public serialized guest boundary.
 use super::*;
 
+/// A plugin must receive the same proportions after a serialized cold-start document roundtrip.
+#[test]
+fn cold_start_split_proportions_survive_the_public_document() {
+    let wire = serde_json::json!({"version":1,"revision":1,"root":{"id":"panes","layout":{"resizable":true,"split_proportions":[0.2,0.5,0.3]},"kind":{"type":"row","children":[{"id":"left","kind":{"type":"text","text":"A"}},{"id":"middle","kind":{"type":"text","text":"B"}},{"id":"right","kind":{"type":"text","text":"C"}}]}}});
+    let document: Document = serde_json::from_value(wire).unwrap();
+    document.validate().unwrap();
+    let value = serde_json::to_value(document).unwrap();
+    let weights: Vec<f32> =
+        serde_json::from_value(value["root"]["layout"]["split_proportions"].clone()).unwrap();
+    assert_eq!(weights, vec![0.2, 0.5, 0.3]);
+}
+
+/// Malformed, disabled, stale or unsolicited split receipts never become plugin persistence intent.
+#[test]
+fn split_proportions_require_opt_in_and_current_normalized_geometry() {
+    let mut document = Document::new(
+        Node::row(
+            "panes",
+            vec![Node::text("left", "A"), Node::text("right", "B")],
+        )
+        .split_proportions(vec![0.4, 0.6]),
+    );
+    assert_eq!(
+        document.required_capabilities()["ui.native"],
+        semver::Version::new(1, 3, 0)
+    );
+    let mut event = UiEvent {
+        revision: document.revision,
+        node: "panes".into(),
+        action: Action::SplitResized(vec![0.3, 0.7]),
+    };
+    document.validate_event(&event).unwrap();
+    for weights in [
+        vec![],
+        vec![0.2, 0.3],
+        vec![-0.1, 1.1],
+        vec![0.2, 0.3, 0.5],
+        vec![f32::NAN, 0.5],
+    ] {
+        event.action = Action::SplitResized(weights.clone());
+        assert!(document.validate_event(&event).is_err());
+        if !weights.is_empty() {
+            document.root.layout.split_proportions = Some(weights);
+            assert!(document.validate().is_err());
+        }
+    }
+    document.root.layout.split_proportions = Some(vec![0.4, 0.6]);
+    event.action = Action::SplitResized(vec![0.3, 0.7]);
+    document.root.disabled = true;
+    assert!(document.validate_event(&event).is_err());
+    document.root.disabled = false;
+    document.revision += 1;
+    assert!(document.validate_event(&event).is_err());
+    event.revision = document.revision;
+    document.root.layout.split_proportions = None;
+    assert!(document.validate_event(&event).is_err());
+    document.root.layout.split_proportions = Some(vec![]);
+    document.validate().unwrap();
+    document.validate_event(&event).unwrap();
+}
+
 /// Pane resizing is explicit portable geometry; wrapping or scalar controls cannot claim it.
 #[test]
 fn serialized_resizable_containers_keep_their_geometry_contract() {

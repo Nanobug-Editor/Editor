@@ -6,6 +6,8 @@
 
 SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 或其他仓库读者资料。
 
+`ui.native 1.3` 的 `Node::split_proportions(weights)` 为可拖动 Row/Column 声明恢复比例；空数组保留初始尺寸并启用松手回执，非空数组必须与子项数量相同、正数且总和为 1。只有用户松手产生 `Action::SplitResized`，普通窗口缩放和恢复不会产生持久化意图；插件通过 `storage.private` 保存自己的工作区偏好。详见[原生 UI](src/ui.rs)。
+
 `ui.native 1.2` 的 `Node::textarea_rows(min, max)` 为所有插件提供按原生可视行数自动增长的多行输入框（`1 <= min <= max <= 64`）。超过最大行数在原输入框内滚动，保留草稿 revision、IME、选择与 Undo；不得与固定像素高度并用。普通／主操作按钮复用本地公共 `Button`，主操作与插件管理安装按钮使用相同的 primary outline 样式，显式颜色和字体角色覆盖仍有效。详见[原生 UI](src/ui.rs)。
 
 `workspace.files 1.4` 的 `Plan.conditions` 为预览和提交附加只读文档版本条件；它不授予读取权限，也不将辅助输入加入分组撤销。跨文件重命名与选中时解析的补全使用既有原生文档会话；主补全和附加导入共同校验、一次应用。契约和限额见 [workspace](src/workspace.rs) 与 [language](src/language.rs)。

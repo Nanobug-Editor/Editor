@@ -330,6 +330,21 @@ impl Validator {
                 "Resizable panes require 2..16 Row/Column children without wrapping".into(),
             );
         }
+        if let Some(weights) = &node.layout.split_proportions {
+            let children = match &node.kind {
+                Kind::Row { children } | Kind::Column { children } if node.layout.resizable => {
+                    children
+                }
+                _ => return Err("Split proportions require a resizable Row/Column".into()),
+            };
+            if !weights.is_empty()
+                && (weights.len() != children.len()
+                    || !weights.iter().all(|v| v.is_finite() && *v > 0. && *v <= 1.)
+                    || (weights.iter().sum::<f32>() - 1.).abs() > 0.001)
+            {
+                return Err("Split proportions require normalized positive child weights".into());
+            }
+        }
         if !node.links.is_empty() {
             if !matches!(
                 node.kind,

@@ -85,6 +85,31 @@ impl PluginView {
                     .map(|n| self.node(n, disabled, window, cx))
                     .collect();
                 if node.layout.resizable {
+                    if let Some(weights) = &node.layout.split_proportions {
+                        let owner = cx.entity().downgrade();
+                        let id = node.id.clone();
+                        let revision = self.document.revision;
+                        return editor_ui::split::split_container_with_layout(
+                            node.id.clone().into(),
+                            matches!(node.kind, Kind::Column { .. }),
+                            initial_sizes.into_iter().zip(children).collect(),
+                            weights,
+                            move |weights, window, cx| {
+                                let _ = owner.update(cx, |view, cx| {
+                                    // Source-editor rails retain native IME and document authority.
+                                    view.emit_version_in(
+                                        &id,
+                                        revision,
+                                        Action::SplitResized(weights),
+                                        window,
+                                        cx,
+                                    );
+                                });
+                            },
+                            window,
+                            cx,
+                        );
+                    }
                     editor_ui::split_container(
                         SharedString::from(node.id.clone()),
                         matches!(node.kind, Kind::Column { .. }),

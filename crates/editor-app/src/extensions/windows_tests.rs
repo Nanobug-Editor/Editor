@@ -10,6 +10,7 @@ mod comparison_chrome;
 mod comparisons;
 mod history_preview;
 mod incremental_review;
+mod layout_preferences;
 mod merge;
 mod shutdown;
 
