@@ -37,11 +37,11 @@ impl EditorApp {
     /// A retained request must still own every virtual target when it reaches the UI thread.
     pub(crate) fn check_virtual_request(&self, request: &EditorRequest) -> Result<(), Failure> {
         let check = |document: &api::DocumentVersion| {
-            if let Some(tab) = self.tabs.iter().find(|tab| {
-                tab.text
-                    .as_ref()
-                    .is_some_and(|text| format!("{:?}", text.editor.entity_id()) == document.id)
-            }) {
+            if let Some(tab) = self
+                .tabs
+                .iter()
+                .find(|tab| tab.text_document_id().as_ref() == Some(&document.id))
+            {
                 if let Some(virtual_tab) = &tab.virtual_document {
                     let handle = virtual_tab.resource.handle();
                     if !virtual_tab.resource.is_live() {
@@ -195,11 +195,6 @@ impl EditorApp {
                 .map(Value::DocumentOpened);
         }
         let path = PathBuf::from(resource.uri());
-        let native = self.create_native_text_tab(
-            DocumentSession::readonly_resource(&path, text.to_owned()),
-            window,
-            cx,
-        );
         // The resource URI is opaque and has no source extension. Keep recognition separate from
         // identity, without reading that path or attaching language servers to a readonly snapshot.
         let language_path = match request.operation() {
@@ -214,9 +209,37 @@ impl EditorApp {
                 |path| self.language_for_path(Path::new(path)),
             )
         });
-        native.editor.update(cx, |editor, cx| {
-            editor.set_highlighter(language.clone(), cx)
-        });
+        let cached = matches!(request.operation(), Op::OpenVirtualSource { .. })
+            .then(|| {
+                self.comparison_source_cache.take(
+                    request.authority(),
+                    self.providers.feature_generation(),
+                    &language,
+                    text,
+                    cx,
+                )
+            })
+            .flatten();
+        let native = if let Some(mut native) = cached {
+            // A fresh document identity owns the existing readonly buffer; old handles remain revoked.
+            native.session = DocumentSession::readonly_resource(&path, text.to_owned()).session;
+            native.capability_revision = 0;
+            native.editor.update(cx, |editor, cx| {
+                editor.set_selected_range(0..0, cx);
+                editor.set_scroll_offset(point(px(0.), px(0.)), cx);
+            });
+            native
+        } else {
+            let native = self.create_native_text_tab(
+                DocumentSession::readonly_resource(&path, text.to_owned()),
+                window,
+                cx,
+            );
+            native.editor.update(cx, |editor, cx| {
+                editor.set_highlighter(language.clone(), cx)
+            });
+            native
+        };
         self.tabs.push(OpenTab {
             preview: false,
             source_only: None,
@@ -228,6 +251,7 @@ impl EditorApp {
             text: Some(native),
             file_error: None,
             virtual_document: Some(VirtualTab {
+                owner: request.authority().clone(),
                 hidden: matches!(request.operation(), Op::OpenVirtualSource { .. }),
                 resource: resource.clone(),
                 title: title.into(),
@@ -281,8 +305,11 @@ impl EditorApp {
             }
             let tab = self.tabs[index].text.as_mut().unwrap();
             // Base clears the readonly display's IME/selection/undo state, without emitting a user edit.
-            tab.editor
-                .update(cx, |editor, cx| editor.set_value(text, window, cx));
+            // The refresh still returns a new capability version, but equal bytes keep layout and grammar.
+            if !tab.editor.read(cx).text().chars().eq(text.chars()) {
+                tab.editor
+                    .update(cx, |editor, cx| editor.set_value(text, window, cx));
+            }
             tab.capability_revision = tab.capability_revision.saturating_add(1);
             // Publish one stable version for this silent refresh before its observer runs.
             tab.capability_content =
@@ -304,6 +331,8 @@ impl EditorApp {
 
     /// Runtime retirement revokes retained authority immediately; the next native frame removes its tab.
     pub(crate) fn sync_virtual_documents(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.comparison_source_cache
+            .prune(self.providers.feature_generation());
         let revoked = self
             .tabs
             .iter()

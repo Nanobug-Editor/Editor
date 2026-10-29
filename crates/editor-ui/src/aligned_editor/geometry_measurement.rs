@@ -13,6 +13,10 @@ const BATCH: usize = 128;
 thread_local! {
     /// Observe real batch planning work without asserting elapsed time on the test platform.
     pub(super) static PLANNED_ROWS: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
+    /// Count actual native windows; logical row counts alone hide byte-budget over-allocation.
+    pub(super) static PLANNED_BATCHES: Cell<[usize; 3]> = const { Cell::new([0; 3]) };
+    /// Full admission must reject stale hints with missing rows; glyph prefetch is not admission.
+    pub(super) static INCOMPLETE_BATCHES: Cell<[usize; 3]> = const { Cell::new([0; 3]) };
 }
 /// One-frame output contains only measured rows, never another text buffer or editing state.
 pub(super) type Output = Rc<RefCell<Option<Measurement>>>;
@@ -128,9 +132,19 @@ impl Element for Batches {
             rows.set(counts);
         });
         let mut spans = Vec::new();
-        if let Some(hint) = &self.hint
-            && hint.len() == count
-        {
+        // A remounted source can retain its native map while its new comparison has no measured
+        // hint. That map only plans windows: paint below still requires every real row and EOF.
+        let hint = self
+            .hint
+            .clone()
+            .filter(|hint| hint.len() == count)
+            .or_else(|| {
+                native_planning_hint(
+                    self.source.editor.read(cx),
+                    &self.rows.source_rows[self.index],
+                )
+            });
+        if let Some(hint) = hint {
             let scope = self.prefetch.clone().unwrap_or(0..count);
             for first in (scope.start.min(count)..scope.end.min(count)).step_by(BATCH) {
                 let end = (first + BATCH + 1).min(scope.end).min(count);
@@ -148,6 +162,12 @@ impl Element for Batches {
                 top += step;
             }
         }
+        #[cfg(test)]
+        PLANNED_BATCHES.with(|batches| {
+            let mut counts = batches.get();
+            counts[self.index] += spans.len();
+            batches.set(counts);
+        });
         let mut elements = Vec::with_capacity(spans.len());
         for (piece, (top, height)) in spans.into_iter().enumerate() {
             let element = crate::row_backgrounds::with_geometry_only(window, cx, |window, cx| {
@@ -291,8 +311,46 @@ impl Element for Batches {
         })();
         #[cfg(test)]
         geometry::MEASURE_NANOS.with(|time| time.set(time.get() + started.elapsed().as_nanos()));
+        #[cfg(test)]
+        if measured.is_none() && self.prefetch.is_none() {
+            INCOMPLETE_BATCHES.with(|batches| {
+                let mut counts = batches.get();
+                counts[self.index] += 1;
+                batches.set(counts);
+            });
+        }
         *self.output.borrow_mut() = measured;
     }
+}
+
+/// Reuse native row metadata only to allocate measurement windows, never to publish coordinates.
+/// Width/font changes can make this map stale; incomplete paint returns None and the pane retries
+/// full native layout. Unsupported or partial maps retain the conservative unhinted planner.
+fn native_planning_hint(
+    editor: &EditorState,
+    source_rows: &[Range<usize>],
+) -> Option<Rc<[Range<f32>]>> {
+    if !geometry_display_map::supported_rows(editor, source_rows) {
+        return None;
+    }
+    let line = f32::from(editor.line_height()?);
+    let map = editor.display_map();
+    let count = map.display_row_count();
+    let height = count as f32 * line;
+    if !line.is_finite() || line <= 0. || !height.is_finite() || height > MAX_LAYOUT_HEIGHT {
+        return None;
+    }
+    let mut rows = Vec::with_capacity(source_rows.len());
+    let mut end = 0;
+    for row in 0..source_rows.len() {
+        let range = map.buffer_line_to_display_row_range(row)?;
+        if range.start != end || range.end <= range.start || range.end > count {
+            return None;
+        }
+        rows.push(range.start as f32 * line..range.end as f32 * line);
+        end = range.end;
+    }
+    (end == count).then(|| rows.into())
 }
 
 /// Query EOF only when the native window actually laid out its logical row.

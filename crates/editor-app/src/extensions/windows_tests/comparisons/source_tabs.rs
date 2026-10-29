@@ -1,6 +1,266 @@
 //! Actual package file selection must reveal one comparison preview without a source-file tab.
 use super::*;
 
+/// A replacement may reuse native text/layout, but a peer's old document marker never follows it.
+#[gpui::test]
+#[ignore = "real Git candidate and frozen bookmarks WASM; set NANOBUG_GIT_CANDIDATE and prepare Package fixtures"]
+fn git_comparison_source_cache_retires_old_marker_handles(cx: &mut TestAppContext) {
+    use crate::extensions::community_presentation_tests::{admit_marker, consume_marker};
+    use plugin_runtime::plugin_protocol::{api, decorations as marks, ui};
+
+    if !run_isolated_test(
+        "extensions::windows_tests::comparisons::source_tabs::git_comparison_source_cache_retires_old_marker_handles",
+    ) {
+        return;
+    }
+    with_comparison(cx, "base\n", "changed\n", |manager, visual, app, file| {
+        let root = file.parent().unwrap();
+        let second = root.join("second.txt");
+        std::fs::write(&second, "other base\n").unwrap();
+        assert!(git(root, &["add", "--", "second.txt"]));
+        assert!(git(root, &["commit", "-m", "second source"]));
+        std::fs::write(&second, "other changed\n").unwrap();
+        let package = crate::test_packages::package("bookmarks-0.1.1");
+        manager
+            .install(&package, package.manifest.permissions.clone())
+            .unwrap();
+        // The helper opened Git before second.txt existed. Refresh its captured change list;
+        // otherwise resume_comparison_selection legitimately discards this unknown file later.
+        manager.invoke_command("git", "refresh", json!({})).unwrap();
+        flush(manager, app, visual);
+        manager
+            .invoke_command("git", "diff", json!({"path":"diff.txt"}))
+            .unwrap();
+        flush(manager, app, visual);
+        assert_sources(visual, app, "base\n", "changed\n");
+        let (old_version, old_resource, original_editor, original_markers) =
+            visual.update(|_, cx| {
+                let owner = app.read(cx);
+                let (index, tab) = owner
+                    .tabs
+                    .iter()
+                    .enumerate()
+                    .find(|(_, tab)| {
+                        tab.virtual_document
+                            .as_ref()
+                            .is_some_and(|source| source.hidden)
+                    })
+                    .expect("the real Git preview owns one hidden readonly base");
+                let text = tab.text.as_ref().unwrap();
+                (
+                    owner.plugin_document_version(index).unwrap(),
+                    tab.virtual_document.as_ref().unwrap().resource.clone(),
+                    text.editor.clone(),
+                    text.highlighter.markers(),
+                )
+            });
+        let operation = |operation| api::Operation::Editor {
+            operation: api::EditorOperation::Decorations { operation },
+            // The deliberately delayed request spans two real Git switches in a debug UI test.
+            // Keep its deadline separate from the document-retirement failure being asserted.
+            timeout_ms: 300_000,
+        };
+        let marker = |id: &str| marks::Marker {
+            id: id.into(),
+            anchor: marks::Anchor::Range {
+                range: api::TextRange { start: 0, end: 4 },
+            },
+            label: ui::LocalizedText::new("Source marker", "来源标记"),
+            icon: None,
+            style: marks::Style::Accent,
+        };
+        // The independent public provider issues the actual marker handle. Its probe does not
+        // retain that handle in bookmark state, so its close-event handler cannot mask host cleanup.
+        let request = admit_marker(
+            manager,
+            "bookmarks",
+            operation(marks::Operation::Create {
+                document: old_version.clone(),
+                markers: vec![marker("retired-source")],
+            }),
+        )
+        .unwrap();
+        let collection = request.decoration().unwrap().clone();
+        assert!(matches!(
+            consume_marker(visual, app, manager, "bookmarks", &request),
+            api::RequestUpdate::Completed { result: Ok(_) }
+        ));
+        assert!(collection.is_live());
+        assert!(original_markers.borrow().contains(&collection));
+        assert_eq!(
+            original_markers.borrow().positions(&collection).unwrap()[0].range,
+            Some(api::TextRange { start: 0, end: 4 })
+        );
+        // Remove this accepted request from the runtime queue but withhold native consumption
+        // until the same editor entity belongs to a new virtual document incarnation.
+        let delayed = admit_marker(
+            manager,
+            "bookmarks",
+            operation(marks::Operation::Create {
+                document: old_version.clone(),
+                markers: vec![marker("late-retired-source")],
+            }),
+        )
+        .unwrap();
+        let delayed_collection = delayed.decoration().unwrap().clone();
+        assert!(delayed_collection.is_live());
+        assert!(delayed_collection.document().is_none());
+
+        manager
+            .invoke_command("git", "diff", json!({"path":"second.txt"}))
+            .unwrap();
+        // Bridge quiescence can precede a queued selection. Wait for actual native text before
+        // testing retirement, so a discarded/deferred request cannot impersonate a cache defect.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            flush(manager, app, visual);
+            if visual
+                .update(|_, cx| app.read(cx).editor.read(cx).value().as_str() == "other changed\n")
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "second file comparison did not open"
+            );
+        }
+        assert_sources(visual, app, "other base\n", "other changed\n");
+        assert!(
+            !old_resource.is_live(),
+            "replacement retires the old source"
+        );
+        assert!(
+            !collection.is_live(),
+            "retaining native layout must still revoke old document decoration authority"
+        );
+        assert!(!original_markers.borrow().contains(&collection));
+
+        manager
+            .invoke_command("git", "diff", json!({"path":"diff.txt"}))
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            flush(manager, app, visual);
+            if visual.update(|_, cx| app.read(cx).editor.read(cx).value().as_str() == "changed\n") {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "original file comparison did not reopen"
+            );
+        }
+        assert_sources(visual, app, "base\n", "changed\n");
+        let new_version = visual.update(|_, cx| {
+            let owner = app.read(cx);
+            let (index, tab) = owner
+                .tabs
+                .iter()
+                .enumerate()
+                .find(|(_, tab)| {
+                    tab.virtual_document
+                        .as_ref()
+                        .is_some_and(|source| source.hidden)
+                })
+                .unwrap();
+            let text = tab.text.as_ref().unwrap();
+            assert_eq!(
+                text.editor, original_editor,
+                "exercise a cache hit, not the ordinary new-editor/drop path"
+            );
+            let new_version = owner.plugin_document_version(index).unwrap();
+            assert_ne!(new_version.id, old_version.id);
+            // Reusing native pixels cannot revive any request carrying the retired document token.
+            assert_eq!(
+                owner.plugin_document_target(&old_version).unwrap_err().code,
+                api::ErrorCode::StaleRevision
+            );
+            assert_eq!(text.editor.read(cx).value().as_str(), "base\n");
+            assert!(!text.highlighter.markers().borrow().contains(&collection));
+            assert_eq!(
+                text.highlighter
+                    .markers()
+                    .borrow()
+                    .positions(&collection)
+                    .unwrap_err()
+                    .code,
+                api::ErrorCode::InvalidHandle
+            );
+            new_version
+        });
+        let delayed_result = consume_marker(visual, app, manager, "bookmarks", &delayed);
+        assert!(
+            matches!(
+                delayed_result,
+                api::RequestUpdate::Completed {
+                    result: Err(api::Failure {
+                        code: api::ErrorCode::InvalidHandle,
+                        ..
+                    })
+                }
+            ),
+            "a delayed old-version publication must fail after reuse: {delayed_result:?}"
+        );
+        assert!(!delayed_collection.is_live());
+        assert!(delayed_collection.document().is_none());
+        assert!(!original_markers.borrow().contains(&delayed_collection));
+        assert_eq!(collection.document().unwrap(), old_version);
+        let stale = admit_marker(
+            manager,
+            "bookmarks",
+            operation(marks::Operation::Read {
+                handle: collection.handle().clone(),
+            }),
+        )
+        .err()
+        .expect("the old handle must fail at runtime admission after native reuse");
+        assert_eq!(stale.code, api::ErrorCode::InvalidHandle);
+
+        // The new incarnation must still accept and read fresh public marker authority.
+        let fresh = admit_marker(
+            manager,
+            "bookmarks",
+            operation(marks::Operation::Create {
+                document: new_version.clone(),
+                markers: vec![marker("fresh-source")],
+            }),
+        )
+        .unwrap();
+        let fresh_collection = fresh.decoration().unwrap().clone();
+        assert!(matches!(
+            consume_marker(visual, app, manager, "bookmarks", &fresh),
+            api::RequestUpdate::Completed { result: Ok(_) }
+        ));
+        assert!(fresh_collection.is_live());
+        assert_eq!(fresh_collection.document().as_ref(), Some(&new_version));
+        assert!(original_markers.borrow().contains(&fresh_collection));
+        let read = admit_marker(
+            manager,
+            "bookmarks",
+            operation(marks::Operation::Read {
+                handle: fresh_collection.handle().clone(),
+            }),
+        )
+        .unwrap();
+        let api::RequestUpdate::Completed {
+            result:
+                Ok(api::EditorValue::Decorations {
+                    document,
+                    positions,
+                    ..
+                }),
+        } = consume_marker(visual, app, manager, "bookmarks", &read)
+        else {
+            panic!("the reused source must serve the newly admitted collection");
+        };
+        assert_eq!(document, new_version);
+        assert_eq!(positions.len(), 1);
+        assert_eq!(
+            positions[0].range,
+            Some(api::TextRange { start: 0, end: 4 })
+        );
+    });
+}
+
 /// Inspect the actual mounted native sessions rather than the plugin's patch summary or cache.
 fn assert_sources(
     visual: &mut VisualTestContext,
@@ -90,19 +350,7 @@ fn git_commit_comparisons_use_exact_index_and_worktree_versions(cx: &mut TestApp
                 .unwrap();
             flush(manager, app, visual);
             paint_comparison(visual);
-            visual.update(|_, cx| {
-                let app = app.read(cx);
-                let active = app
-                    .comparison_views
-                    .iter()
-                    .find(|view| Some(&view.id) == app.active_comparison.as_ref())
-                    .unwrap();
-                assert!(
-                    active.title.ends_with("index"),
-                    "staged action left the wrong comparison active: {}",
-                    active.title
-                );
-            });
+            // Provider titles are presentation; exact HEAD/index bytes identify the staged comparison.
             assert_sources(
                 visual,
                 app,

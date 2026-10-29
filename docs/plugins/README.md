@@ -102,6 +102,7 @@
 - [通用画布连续滚动与绘制复用](verification/canvas-scroll-2026-10-21.md)：公开 `ui.canvas 1.2` 内容 epoch、原生连续滚轮、16ms 同步与矢量平移复用；独立 Git 0.1.21 的实际验证及候选状态见记录。
 
 - [Git 分支查询白屏与增量刷新](verification/git-incremental-refresh-2026-10-20.md)：保留完整日志／预览与缓存目录，公开 `ui.tree 1.4` 结构增量及比较单按钮切换；0.1.21 冻结候选与最终验证状态见记录。
+- [Git 差异文件切换剩余优化](verification/git-diff-switch-remaining-2026-10-29.md)：减少重复排版、后台高亮、共享比较、只读视图复用及相邻预读；同包2000行切换平均减少约47%，两项扩展检查失败另行记录。
 
 - [比较区单滚动条、等宽换行与顶部背景](../ui/verification/comparison-chrome-2026-10-20.md)：通用原生比较控件的轨道、占宽与顶部呈现修正；独立 Git 0.1.19 和公开契约不变，实际状态见记录。
 

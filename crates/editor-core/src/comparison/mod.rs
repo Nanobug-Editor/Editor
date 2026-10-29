@@ -3,6 +3,7 @@
 
 use imara_diff::{Algorithm, Diff, InternedInput, Interner};
 use std::ops::Range;
+mod cache;
 
 /// Maximum original UTF-8 bytes per source, preserving the existing virtual-document bound.
 pub const MAX_SOURCE_BYTES: usize = 1024 * 1024;
@@ -121,6 +122,11 @@ pub fn line_changes(
 /// LF and CRLF are equivalent; missing final LF and lone CR are changes. Each source admits up to
 /// 1 MiB / 100,000 lines, without allocating an N×M matrix or retaining a second mutable document.
 pub fn compare(left: &str, right: &str) -> Result<Vec<Hunk>, ComparisonError> {
+    cache::compare(left, right)
+}
+
+/// Compute one admitted source pair; the cache retains only content digests and immutable ranges.
+fn compare_uncached(left: &str, right: &str) -> Result<Vec<Hunk>, ComparisonError> {
     if left.len() > MAX_SOURCE_BYTES || right.len() > MAX_SOURCE_BYTES {
         return Err(ComparisonError::SourceBytes);
     }

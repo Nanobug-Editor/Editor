@@ -1,6 +1,8 @@
 //! File identities and optional native text sessions shared by document lifecycle operations.
 mod panel;
+mod source_cache;
 mod view;
+pub(crate) use source_cache::SourceCache;
 
 pub(crate) use panel::OpenFilesPanel;
 
@@ -74,6 +76,16 @@ impl OpenTab {
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
+    /// Text capability identity belongs to the open document, not reusable native paint state.
+    /// Virtual resource URIs include a unique issuer/resource pair; local documents retain their
+    /// native entity identity. Binary tabs return None, and callers still check resource liveness.
+    pub(crate) fn text_document_id(&self) -> Option<String> {
+        let text = self.text.as_ref()?;
+        Some(self.virtual_document.as_ref().map_or_else(
+            || format!("{:?}", text.editor.entity_id()),
+            |source| source.resource.uri(),
+        ))
+    }
     /// Read-only files never acquire a dirty text revision or a text save obligation.
     pub(crate) fn is_dirty(&self) -> bool {
         self.text
@@ -96,6 +108,8 @@ impl OpenTab {
 
 /// Provider metadata contains authority and display hints, never a second mutable document value.
 pub(crate) struct VirtualTab {
+    /// Issuer lifetime scopes resource-free reuse after a hidden preview is replaced.
+    pub(crate) owner: plugin_runtime::EditorAuthority,
     /// Hidden readonly sources participate in document APIs without adding standalone chrome.
     pub(crate) hidden: bool,
     pub(crate) resource: std::sync::Arc<plugin_runtime::VirtualDocumentResource>,

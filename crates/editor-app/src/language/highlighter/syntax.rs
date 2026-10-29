@@ -108,6 +108,40 @@ pub(crate) struct SyntaxHighlighter {
     source: Rope,
 }
 impl SyntaxHighlighter {
+    /// Create an inert reader without loading WASM or compiling queries on the UI thread.
+    pub(crate) fn deferred(language: &str) -> Self {
+        Self {
+            language: language.to_owned().into(),
+            root: None,
+            layers: Vec::new(),
+            source: Rope::new(),
+        }
+    }
+
+    /// Only an already prepared current grammar may enter the foreground parse budget.
+    pub(crate) fn is_prepared(&self) -> bool {
+        let current = LanguageRegistry::singleton().entry(&self.language);
+        match current {
+            None => self.root.is_none(),
+            Some(entry) if entry.factory.is_none() || entry.config.highlights.is_empty() => true,
+            Some(entry) => self
+                .root
+                .as_ref()
+                .is_some_and(|root| root.generation == entry.generation),
+        }
+    }
+
+    /// Prepare the selected grammar on a background worker before starting its parse deadline.
+    pub(crate) fn prepare(&mut self) {
+        let current = LanguageRegistry::singleton().entry(&self.language);
+        if self.root.as_ref().map(|layer| layer.generation)
+            != current.as_ref().map(|entry| entry.generation)
+        {
+            self.root = current.and_then(|entry| Layer::new(&self.language, entry));
+            self.layers.clear();
+        }
+    }
+
     /// Unknown, disabled or failed plugin languages are inert and never select a native grammar.
     pub(crate) fn new(language: &str) -> Self {
         Self {
@@ -186,6 +220,10 @@ impl SyntaxHighlighter {
             });
             let mut layer = if let Some(index) = cached {
                 old.swap_remove(index)
+            } else if timeout.is_some_and(|limit| limit <= Duration::from_millis(2)) {
+                // Cold injection stores/queries cannot obey a foreground parse deadline.
+                // Return to the adapter's background path before creating any of them.
+                return false;
             } else if let Some(layer) = Layer::new(&language, entry) {
                 layer
             } else {

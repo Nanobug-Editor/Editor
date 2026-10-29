@@ -1,6 +1,31 @@
 //! Standalone, observable alignment/geometry regressions; no GPUI runtime or document copy is used.
 use super::*;
 
+/// Cached byte hunks must project every native caret row once, including asymmetric EOF/empty sources.
+#[test]
+fn shared_byte_comparisons_preserve_all_native_rows() {
+    let sources = ["", "a", "a\n", "a\r\n", "\n", "a\nb", "a\nb\n", "新😀\na\n"];
+    for left in sources {
+        for right in sources {
+            for third in sources {
+                let plan = AlignedRows::new(&[left, right, third]).unwrap();
+                for (pane, slots) in plan.slots.iter().enumerate() {
+                    assert_eq!(
+                        slots.iter().copied().flatten().collect::<Vec<_>>(),
+                        (0..plan.source_rows[pane].len()).collect::<Vec<_>>(),
+                        "missing/duplicate row for {left:?}, {right:?}, {third:?}, pane {pane}"
+                    );
+                }
+                assert!(
+                    plan.slots
+                        .iter()
+                        .all(|slots| slots.len() == plan.slots[0].len())
+                );
+            }
+        }
+    }
+}
+
 /// A real-sized lockfile must retain every native row and align an insertion beyond the old cap.
 #[test]
 fn large_comparison_aligns_ten_thousand_rows_without_matrix_budget() {

@@ -36,14 +36,13 @@ impl Render for WorkWindow {
                 }
                 let _ = this.parent.update(cx, |app, cx| {
                     if let Some(index) = app.tabs.iter().position(|tab| {
-                        tab.text.as_ref().is_some_and(|text| {
-                            format!("{:?}", text.editor.entity_id()) == source
-                                && text
-                                    .editor
+                        tab.text_document_id().as_ref() == Some(&source)
+                            && tab.text.as_ref().is_some_and(|text| {
+                                text.editor
                                     .read(cx)
                                     .focus_handle(cx)
                                     .contains_focused(window, cx)
-                        })
+                            })
                     }) {
                         app.save_text_tab(index, cx);
                         this.feedback = app.status.clone();
@@ -243,11 +242,10 @@ impl EditorApp {
                     .current_document()?
                     .active_native_editor()?
                     .clone();
-                let index = self.tabs.iter().position(|tab| {
-                    tab.text
-                        .as_ref()
-                        .is_some_and(|text| format!("{:?}", text.editor.entity_id()) == target.id)
-                })?;
+                let index = self
+                    .tabs
+                    .iter()
+                    .position(|tab| tab.text_document_id().as_ref() == Some(&target.id))?;
                 let current = self.plugin_document_version(index).ok()?;
                 if current.path != target.path || current.revision < target.revision {
                     return None;

@@ -104,7 +104,7 @@ impl EditorApp {
         self.plugin_documents = current;
     }
 
-    /// Tokens use the open entity identity, not merely a path that may later be reopened.
+    /// Tokens use the document incarnation; virtual resources may reuse native editors after close.
     pub(crate) fn plugin_document_version(&self, index: usize) -> Result<DocumentVersion, Failure> {
         let tab = &self.tabs[index];
         let text = tab.text.as_ref().ok_or_else(|| {
@@ -113,6 +113,7 @@ impl EditorApp {
                 "File has no text editing capability",
             )
         })?;
+        let id = tab.text_document_id().expect("validated text capability");
         if let Some(virtual_tab) = &tab.virtual_document {
             if !virtual_tab.resource.is_live() {
                 return Err(Failure::new(
@@ -121,7 +122,7 @@ impl EditorApp {
                 ));
             }
             return Ok(DocumentVersion {
-                id: format!("{:?}", text.editor.entity_id()),
+                id,
                 path: virtual_tab.resource.uri(),
                 revision: text.capability_revision,
             });
@@ -137,7 +138,7 @@ impl EditorApp {
                 )
             })?;
         Ok(DocumentVersion {
-            id: format!("{:?}", text.editor.entity_id()),
+            id,
             path: path.to_string_lossy().replace('\\', "/"),
             revision: text.capability_revision,
         })

@@ -293,6 +293,8 @@ struct EditorApp {
     document_comparison: Option<editor::comparison::DocumentComparison>,
     /// File-bound comparison views retain identities and display choices, never editable text.
     comparison_views: Vec<editor::comparison::ComparisonView>,
+    /// Bounded resource-free readonly sources preserve their native layout between previews.
+    comparison_source_cache: editor::tabs::SourceCache,
     active_comparison: Option<String>,
     /// Comparison commands capture their own target through the existing local popup control.
     document_command_menu: Option<extensions::command_menus::DocumentCommandMenu>,
@@ -800,6 +802,7 @@ impl EditorApp {
             language_server_demands: Default::default(),
             document_comparison: None,
             comparison_views: Vec::new(),
+            comparison_source_cache: Default::default(),
             active_comparison: None,
             document_command_menu: None,
             plugin_popup: None,

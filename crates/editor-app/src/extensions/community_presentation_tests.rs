@@ -294,7 +294,7 @@ pub(super) fn positions(
 }
 
 /// An ordinary guest SDK diagnostic call exposes an accepted task; production polling performs it.
-fn admit_marker(
+pub(super) fn admit_marker(
     manager: &mut Manager,
     id: &str,
     operation: api::Operation,
@@ -322,7 +322,7 @@ fn admit_marker(
 }
 
 /// Failed and cancelled tasks use exactly the same native request consumer as successful publication.
-fn consume_marker(
+pub(super) fn consume_marker(
     visual: &mut VisualTestContext,
     app: &Entity<EditorApp>,
     manager: &mut Manager,

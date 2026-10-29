@@ -330,12 +330,12 @@ impl EditorApp {
     }
 }
 
+/// Plan conditions may include readonly virtual origins as well as native disk edit targets.
 fn native_version(tab: &OpenTab) -> NativeVersion {
     NativeVersion {
-        id: tab.text.as_ref().map_or_else(
-            || format!("file-{}", tab.file_id),
-            |text| format!("{:?}", text.editor.entity_id()),
-        ),
+        id: tab
+            .text_document_id()
+            .unwrap_or_else(|| format!("file-{}", tab.file_id)),
         path: tab.path().to_owned(),
         revision: tab
             .text

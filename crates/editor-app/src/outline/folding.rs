@@ -52,6 +52,11 @@ impl Controller {
         self.markers.clone()
     }
 
+    /// Provider-owned fold candidates belong to the old document and cannot enter the native reuse pool.
+    pub(crate) fn has_structure_folds(&self) -> bool {
+        self.folds.borrow().is_some()
+    }
+
     /// A revision change revokes old structure candidates before another native frame can fold them.
     pub(super) fn replace(
         &self,
@@ -135,7 +140,9 @@ impl InputHighlighter for Adapter {
                 edit.new_end_position.column,
             ),
         });
-        if !self.parser_cancelled.get()
+        let cold = !self.syntax.borrow().is_prepared();
+        if !cold
+            && !self.parser_cancelled.get()
             && self
                 .syntax
                 .borrow_mut()
@@ -157,14 +164,18 @@ impl InputHighlighter for Adapter {
         let current_providers = providers.clone();
         let grammar_epoch = providers.feature_generation();
         self.pending = Some(cx.spawn_in(window, async move |editor, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(150))
-                .await;
+            // Opening a source should start immediately; only repeated slow edits are debounced.
+            if !cold {
+                cx.background_executor()
+                    .timer(Duration::from_millis(150))
+                    .await;
+            }
             let source = text.clone();
             let parsed = cx
                 .background_executor()
                 .spawn(async move {
                     let mut parsed = plugin_syntax_in(&providers, &language);
+                    parsed.prepare();
                     // A timed-out candidate owns the same resumable state and must never become the live parser.
                     parsed
                         .update(None, &source, Some(Duration::from_millis(100)))
@@ -220,7 +231,7 @@ fn plugin_syntax_in(
         .grammars()
         .iter()
         .any(|provider| provider.declaration.language == language);
-    SyntaxHighlighter::new(&if selected {
+    SyntaxHighlighter::deferred(&if selected {
         providers.parser_key(language)
     } else {
         "text".into()
@@ -269,6 +280,9 @@ fn grammar_folds(syntax: &SyntaxHighlighter) -> Vec<FoldRange> {
 
 #[cfg(test)]
 mod cancellation;
+
+#[cfg(test)]
+mod initial;
 
 #[cfg(test)]
 mod tests {

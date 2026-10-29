@@ -227,7 +227,7 @@ impl EditorApp {
             self.prepare_unified_comparison(window, cx);
         }
         self.reveal_comparison_position(initial_position, cx);
-        self.release_comparison_sources(retired, window, cx);
+        self.release_comparison_sources(retired, true, window, cx);
         let count = self.tabs.iter().filter(|tab| tab.is_visible()).count();
         // Reused previews can sit before the last tab; reveal the active view's measured bounds.
         if let Some(index) = self
@@ -413,7 +413,7 @@ impl EditorApp {
                 self.active_path = None;
             }
         }
-        self.release_comparison_sources(retired, window, cx);
+        self.release_comparison_sources(retired, false, window, cx);
         cx.notify();
     }
     /// Only snapshots belonging to a retired view are eligible. A just-created hidden source must
@@ -422,6 +422,7 @@ impl EditorApp {
     fn release_comparison_sources(
         &mut self,
         retired: Vec<api::DocumentVersion>,
+        recycle: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -451,6 +452,9 @@ impl EditorApp {
                         .plugin_document_version(*index)
                         .is_ok_and(|version| version.id == source.id)
             }) {
+                if recycle {
+                    self.recycle_comparison_source(index, cx);
+                }
                 self.close_tab(self.tabs[index].path().to_path_buf(), window, cx);
             }
         }
@@ -484,7 +488,7 @@ impl EditorApp {
             self.active_comparison = None;
             self.close_document_comparison(cx);
         }
-        self.release_comparison_sources(retired, window, cx);
+        self.release_comparison_sources(retired, false, window, cx);
     }
     /// A local edit advances the same session; only decorations and immutable diff ranges change.
     pub(super) fn refresh_persistent_comparison(

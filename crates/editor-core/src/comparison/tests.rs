@@ -1,6 +1,22 @@
 //! Byte projection, admission and real project-sized inputs exercise the shared production path.
 use super::*;
 
+/// Repeated comparisons must keep direction, exact byte offsets and same-length replacements distinct.
+#[test]
+fn reused_comparisons_do_not_confuse_versions_or_line_endings() {
+    for _ in 0..3 {
+        for (before, after) in [
+            ("α\nold\n", "α\nnew\n"),
+            ("α\nnew\n", "α\nold\n"),
+            ("α\nnew\n", "α\nNEW\n"),
+            ("α\nnew\n", "α\nnew"),
+            ("α\r\nold\r\n", "α\r\nnew\r\n"),
+        ] {
+            assert_reconstructs(before, after);
+        }
+    }
+}
+
 /// Apply original-byte hunks and verify unchanged context without assuming a particular edit script.
 fn assert_reconstructs(before: &str, after: &str) {
     let hunks = compare(before, after).unwrap();

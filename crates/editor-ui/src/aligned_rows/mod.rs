@@ -89,8 +89,8 @@ impl AlignedRows {
             .enumerate()
             .map(|(pane, source)| native_rows(source, pane))
             .collect::<Result<Vec<_>, _>>()?;
-        // Borrow native line bodies; shared matching interns them with u32 symbols.
-        // EOF remains a real caret row, so only alignment omits line terminators.
+        // Borrow bodies for three-pane insertion buckets; pivot pairs reuse exact byte hunks.
+        // EOF remains a real caret row even when the byte comparison has no corresponding line.
         let rows = sources
             .iter()
             .zip(&source_rows)
@@ -106,9 +106,16 @@ impl AlignedRows {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
-        let pairs = rows[1..]
-            .iter()
-            .map(|other| PairRows::new(&rows[0], other, budget))
+        let pairs = (1..sources.len())
+            .map(|pane| {
+                PairRows::sources(
+                    sources[0],
+                    sources[pane],
+                    &source_rows[0],
+                    &source_rows[pane],
+                    budget,
+                )
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let mut slots = vec![Vec::new(); sources.len()];
         // Pivot anchors bound each insertion bucket. In a three-pane group the peers can share
@@ -380,11 +387,52 @@ struct PairRows {
     before: Vec<Vec<usize>>,
 }
 impl PairRows {
+    /// Reuse the host's exact byte comparison, then project ranges onto native rows including EOF.
+    /// Cache hits still reserve the same scene rows; cached work never bypasses admission quotas.
+    fn sources(
+        left: &str,
+        right: &str,
+        left_rows: &[Range<usize>],
+        right_rows: &[Range<usize>],
+        budget: &mut usize,
+    ) -> Result<Self, AlignError> {
+        let cost = left_rows.len() + right_rows.len();
+        if cost > *budget {
+            return Err(AlignError::ComparisonBudget);
+        }
+        let hunks = editor_core::comparison::compare(left, right)
+            .map_err(|_| AlignError::ComparisonBudget)?;
+        *budget -= cost;
+        let changes = hunks
+            .into_iter()
+            .map(|hunk| editor_core::comparison::LineHunk {
+                left: left_rows.partition_point(|row| row.start < hunk.left.start)
+                    ..left_rows.partition_point(|row| row.start < hunk.left.end),
+                right: right_rows.partition_point(|row| row.start < hunk.right.start)
+                    ..right_rows.partition_point(|row| row.start < hunk.right.end),
+            })
+            .collect::<Vec<_>>();
+        Ok(Self::from_changes(
+            left_rows.len(),
+            right_rows.len(),
+            changes,
+        ))
+    }
+
     /// Turn Histogram unchanged intervals in borrowed row bodies into monotonic native anchors.
     /// Every pivot/peer row charges the shared input-row budget, including insertion buckets.
     fn new(pivot: &[&str], other: &[&str], budget: &mut usize) -> Result<Self, AlignError> {
         let hunks = editor_core::comparison::line_changes(pivot, other, budget)
             .map_err(|_| AlignError::ComparisonBudget)?;
+        Ok(Self::from_changes(pivot.len(), other.len(), hunks))
+    }
+
+    /// Native EOF is a caret row; match only available tails when just one source ends with LF.
+    fn from_changes(
+        left_count: usize,
+        right_count: usize,
+        hunks: Vec<editor_core::comparison::LineHunk>,
+    ) -> Self {
         let mut anchors = Vec::new();
         let (mut left, mut right) = (0, 0);
         for hunk in hunks {
@@ -392,12 +440,14 @@ impl PairRows {
             left = hunk.left.end;
             right = hunk.right.end;
         }
-        anchors.extend((0..pivot.len() - left).map(|row| (left + row, right + row)));
+        anchors.extend(
+            (0..(left_count - left).min(right_count - right)).map(|row| (left + row, right + row)),
+        );
         // A sentinel flushes trailing insertions into the bucket after the final pivot row.
-        anchors.push((pivot.len(), other.len()));
+        anchors.push((left_count, right_count));
         let mut pair = Self {
-            at: vec![None; pivot.len()],
-            before: vec![Vec::new(); pivot.len() + 1],
+            at: vec![None; left_count],
+            before: vec![Vec::new(); left_count + 1],
         };
         let (mut a_start, mut b_start) = (0, 0);
         for (a_end, b_end) in anchors {
@@ -406,13 +456,13 @@ impl PairRows {
                 pair.at[a_start + row] = Some(b_start + row);
             }
             pair.before[a_end].extend(b_start + paired..b_end);
-            if a_end < pivot.len() {
+            if a_end < left_count {
                 pair.at[a_end] = Some(b_end);
             }
             a_start = a_end + 1;
             b_start = b_end + 1;
         }
-        Ok(pair)
+        pair
     }
 }
 

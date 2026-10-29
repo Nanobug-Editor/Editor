@@ -51,6 +51,133 @@ fn fractional_diff_scroll_retains_row_geometry(cx: &mut TestAppContext) {
     exercise_scroll_delta(cx, 120, 2, false, px(-48.375));
 }
 
+/// A fresh comparison must reuse native rows to plan work without copying its old geometry cache.
+#[gpui::test]
+fn remounted_short_line_diff_batches_follow_rows_instead_of_bytes(cx: &mut TestAppContext) {
+    let original = (0..2000)
+        .map(|row| format!("row{row:04} 中文\n"))
+        .collect::<String>();
+    let changed = original.replace("row1000", "rev1000");
+    let (view, ui) = mount_sources(cx, [original.clone(), changed.clone()]);
+    geometry_measurement::PLANNED_BATCHES.with(|count| count.set([0; 3]));
+    geometry_measurement::INCOMPLETE_BATCHES.with(|count| count.set([0; 3]));
+    remount_native_sources(&view, ui, None);
+    settle(ui);
+    let batches = geometry_measurement::PLANNED_BATCHES.with(|count| count.get());
+    assert_eq!(
+        geometry_measurement::INCOMPLETE_BATCHES.with(|count| count.get()),
+        [0; 3],
+        "an unchanged native map must cover both remounted sources"
+    );
+    ui.update(|_, cx| {
+        assert_complete_native_map(&view, cx);
+        let fixture = view.read(cx);
+        for (index, expected) in [original, changed].into_iter().enumerate() {
+            let native = fixture.editors[index].read(cx);
+            assert_eq!(native.value().as_ref(), expected);
+            assert_eq!(native.display_map().buffer_line_count(), 2001);
+            assert_eq!(native.display_map().display_row_count(), 2001);
+            // Admission and a retained glyph lease can each mount batches. A byte-derived
+            // upper bound would need hundreds of windows for these same 2,001 short rows.
+            let groups = 2001_usize.div_ceil(128);
+            assert!(
+                batches[index] > 0 && batches[index] <= groups * 3,
+                "source {index} planned {} native windows for {groups} row groups",
+                batches[index]
+            );
+        }
+    });
+}
+
+/// A remembered wide map is only a planner: narrower native paint must reject missing EOF rows.
+#[gpui::test]
+fn remounted_diff_rejects_stale_width_hint_and_recovers_full_geometry(cx: &mut TestAppContext) {
+    let text = (0..360)
+        .map(|row| format!("row{row:04} native source\n"))
+        .collect::<String>();
+    let (view, ui) = mount_sources(cx, [text.clone(), text.clone()]);
+    ui.update(|_, cx| {
+        for source in &view.read(cx).editors {
+            let map = source.read(cx).display_map();
+            assert_eq!(map.display_row_count(), map.buffer_line_count());
+        }
+    });
+    geometry_measurement::INCOMPLETE_BATCHES.with(|count| count.set([0; 3]));
+    let narrow: AlignmentNativeFactory = Rc::new(|editor, _, cx| {
+        div()
+            .w(px(72.))
+            .child(crate::row_backgrounds::native_editor(editor, cx))
+            .into_any_element()
+    });
+    remount_native_sources(&view, ui, Some(narrow));
+    settle(ui);
+    let incomplete = geometry_measurement::INCOMPLETE_BATCHES.with(|count| count.get());
+    assert!(
+        incomplete[0] > 0 && incomplete[1] > 0,
+        "stale wide-map batches must fail complete native coverage: {incomplete:?}"
+    );
+    ui.update(|_, cx| {
+        assert_complete_native_map(&view, cx);
+        for source in &view.read(cx).editors {
+            let native = source.read(cx);
+            assert_eq!(native.value().as_ref(), text);
+            assert!(native.display_map().display_row_count() > 361);
+        }
+    });
+}
+
+/// Replace only the comparison owner, retaining exact source identities and their prepared maps.
+fn remount_native_sources(
+    view: &Entity<Fixture>,
+    ui: &mut VisualTestContext,
+    factory: Option<AlignmentNativeFactory>,
+) {
+    view.update(ui, |fixture, cx| {
+        let mut sources = fixture.group.state.read(cx).sources.clone();
+        for source in &mut sources {
+            source.native_authority_factory = factory.clone();
+        }
+        fixture.group.retire(cx);
+        let mut group = AlignmentGroup::new(cx);
+        group.configure(sources, &fixture.router, cx).unwrap();
+        assert!(
+            group
+                .state
+                .read(cx)
+                .measurements
+                .iter()
+                .all(Option::is_none)
+        );
+        fixture.group = group;
+        cx.notify();
+    });
+}
+
+/// Check every admitted logical row and EOF against the completed original native map.
+fn assert_complete_native_map(view: &Entity<Fixture>, cx: &App) {
+    let fixture = view.read(cx);
+    let group = fixture.group.state.read(cx);
+    assert_eq!(group.effective_status(), AlignmentStatus::Ready);
+    for (index, source) in fixture.editors.iter().enumerate() {
+        let native = source.read(cx);
+        let map = native.display_map();
+        let line = f32::from(native.line_height().unwrap());
+        let measured = group.measurements[index].as_ref().unwrap();
+        assert_eq!(measured.text_len, native.text().len());
+        assert_eq!(measured.logical_rows.len(), map.buffer_line_count());
+        for (row, measured) in measured.logical_rows.iter().enumerate() {
+            let actual = map.buffer_line_to_display_row_range(row).unwrap();
+            assert!((measured.start - actual.start as f32 * line).abs() < 0.5);
+            assert!((measured.end - actual.end as f32 * line).abs() < 0.5);
+        }
+        assert!(
+            (measured.logical_rows.last().unwrap().end - map.display_row_count() as f32 * line)
+                .abs()
+                < 0.5
+        );
+    }
+}
+
 /// Attach real full-row background owners for every seventh changed source line.
 fn attach_bands(
     view: &Entity<Fixture>,

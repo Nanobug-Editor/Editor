@@ -50,8 +50,11 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
         if self
-            .plugin_window_mounts
-            .contains_key(&format!("{:?}", self.editor.entity_id()))
+            .tabs
+            .iter()
+            .find(|tab| tab.owns_editor(&self.editor))
+            .and_then(OpenTab::text_document_id)
+            .is_some_and(|id| self.plugin_window_mounts.contains_key(&id))
         {
             return div()
                 .size_full()

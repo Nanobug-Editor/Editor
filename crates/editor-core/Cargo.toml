@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 ignore.workspace = true
 imara-diff.workspace = true
+# Content identities let decorations and alignment share immutable comparison results.
+sha2 = "0.10"
 thiserror.workspace = true
 # Run configurations are versioned host-local data with one validated serialized form.
 plugin-schema.workspace = true

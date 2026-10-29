@@ -7,10 +7,20 @@ pub(super) fn requested() -> bool {
     std::env::var_os("NANOBUG_GIT_NATIVE_DIFF_TIMING").is_some()
 }
 
-/// Exact two-line snapshots keep algorithm and large-file layout work outside this first experiment.
+/// Exact snapshots use two lines by default, with an optional bounded size for layout measurements.
 fn content(name: &str, version: &str) -> String {
     let answer = if version == "base" { 41 } else { 42 };
-    format!("# {name} {version}\nanswer = {answer}\n")
+    let mut text = format!("# {name} {version}\nanswer = {answer}\n");
+    // Use the same real grammar and navigation for bounded large-source measurements.
+    let lines = std::env::var("NANOBUG_DIFF_TIMING_LINES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(2)
+        .clamp(2, 8000);
+    for line in 2..lines {
+        text.push_str(&format!("key_{line:05} = {line}\n"));
+    }
+    text
 }
 
 /// Commit only the owned timing files; existing fixture review changes remain uncommitted.
@@ -122,6 +132,7 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
     let mut samples = Vec::new();
     for (action, name, warm) in targets {
         let before = cx.update(|_| crate::session_state::save_timings());
+        let reuse_before = cx.update(|cx| h.app.read(cx).comparison_source_cache.hits());
         let start = Instant::now();
         h.main
             .update(cx, |_, window, cx| click(action, name, window, cx))??;
@@ -147,9 +158,11 @@ pub(super) async fn exercise(h: &Harness, cx: &mut AsyncApp) -> anyhow::Result<(
         .await?;
         let elapsed_ms = start.elapsed().as_secs_f64() * 1000.;
         let saves = cx.update(|_| crate::session_state::save_timings().since(before));
+        let reused = cx.update(|cx| h.app.read(cx).comparison_source_cache.hits() - reuse_before);
         let sample = serde_json::json!({
             "action": action, "file": name, "warm": warm,
             "elapsed_ms": elapsed_ms, "session_saves": saves, "git_process_observed": saw_git,
+            "native_sources_reused": reused,
         });
         eprintln!("native diff switch: {sample}");
         samples.push(sample);
