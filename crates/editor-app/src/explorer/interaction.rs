@@ -121,7 +121,7 @@ impl EditorApp {
         }
     }
 
-    /// Single presses select rows while suppressing the base tree's automatic folder toggle.
+    /// Select `index` and focus its tree in `window` through `cx`, leaving activation to the click handler.
     pub(crate) fn select_explorer_row(
         &self,
         index: usize,
