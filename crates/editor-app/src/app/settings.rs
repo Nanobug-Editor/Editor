@@ -349,6 +349,7 @@ fn render_workspace_appearance(view: &Entity<EditorApp>, cx: &mut App) -> AnyEle
                         .text_color(cx.theme().muted_foreground)
                         .child(t!("settings.resize_hint").to_string()),
                 )
+                .child(render_explorer_directory_click(view, cx))
                 .child(
                     div()
                         .id("settings-explorer-reveal")
@@ -368,6 +369,41 @@ fn render_workspace_appearance(view: &Entity<EditorApp>, cx: &mut App) -> AnyEle
                                 }),
                         ),
                 ),
+        )
+        .into_any_element()
+}
+
+/// Render mutually exclusive directory gestures for `view`, applying and saving choices through `cx`.
+fn render_explorer_directory_click(view: &Entity<EditorApp>, cx: &App) -> AnyElement {
+    let double_click = view.read(cx).session_state.explorer_expand_on_double_click;
+    h_flex()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .child(div().child(t!("settings.explorer_directory_click").to_string()))
+        .child(
+            h_flex().gap_2().children(
+                [
+                    (false, "single", "settings.explorer_single_click"),
+                    (true, "double", "settings.explorer_double_click"),
+                ]
+                .into_iter()
+                .map(|(enabled, id, label)| {
+                    let view = view.clone();
+                    Button::new(format!("settings-explorer-{id}-click"))
+                        .debug_selector(move || format!("settings-explorer-{id}-click"))
+                        .label(t!(label).to_string())
+                        .selected(double_click == enabled)
+                        .on_click(move |_, _, cx| {
+                            view.update(cx, |app, cx| {
+                                app.session_state.explorer_expand_on_double_click = enabled;
+                                app.persist_session();
+                                app.refresh_dialog(cx);
+                                cx.notify();
+                            });
+                        })
+                }),
+            ),
         )
         .into_any_element()
 }

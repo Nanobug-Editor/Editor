@@ -130,6 +130,33 @@ mod settings_dialog_tests {
             .debug_bounds("app-dialog-title-bar")
             .expect("the dialog must render a title bar");
         assert_eq!(title.size.height, px(PANEL_HEADER_HEIGHT));
+        // The actual settings buttons apply immediately and save either directory gesture.
+        assert!(!dialog_cx.update(|_, cx| {
+            editor_view
+                .read(cx)
+                .session_state
+                .explorer_expand_on_double_click
+        }));
+        for (selector, double_click) in [
+            ("settings-explorer-double-click", true),
+            ("settings-explorer-single-click", false),
+        ] {
+            let button = dialog_cx.debug_bounds(selector).unwrap().center();
+            dialog_cx.simulate_click(button, Default::default());
+            dialog_cx.run_until_parked();
+            dialog_cx.update(|window, cx| window.draw(cx).clear(cx));
+            dialog_cx.update(|_, cx| {
+                let app = editor_view.read(cx);
+                assert_eq!(
+                    app.session_state.explorer_expand_on_double_click,
+                    double_click
+                );
+                assert_eq!(
+                    crate::SessionState::load(app.workspace.root()).explorer_expand_on_double_click,
+                    double_click
+                );
+            });
+        }
         let keymap = dialog_cx
             .debug_bounds("settings-nav-keymap")
             .expect("the settings sidebar must show Keymap");
