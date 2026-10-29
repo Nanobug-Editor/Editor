@@ -71,6 +71,10 @@ pub struct SessionState {
     /// Tab switches leave the explorer untouched unless this workspace preference is enabled.
     #[serde(default)]
     pub explorer_reveal_on_tab_switch: bool,
+    /// Directory rows use a single click unless this workspace explicitly selects double click.
+    /// Missing fields in older sessions adopt the same single-click default as new workspaces.
+    #[serde(default)]
+    pub explorer_expand_on_double_click: bool,
     /// Generic plugin-manager dock dimensions persist independently of plugin-owned state.
     #[serde(default = "default_extension_height", alias = "terminal_height")]
     pub extension_height: f32,
@@ -182,6 +186,7 @@ impl SessionState {
             problems_visible: false,
             explorer_root_expanded: true,
             explorer_reveal_on_tab_switch: false,
+            explorer_expand_on_double_click: false,
             extension_height: default_extension_height(),
             extensions_visible: true,
             native_terminal_visible: false,

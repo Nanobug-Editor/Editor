@@ -1,5 +1,6 @@
 //! Exercises pointer gestures through real tree rows rather than calling handlers directly.
 
+mod click_mode;
 mod drag;
 mod filter;
 mod history;
@@ -674,7 +675,7 @@ fn file_single_click_previews_and_double_click_keeps_existing_tab(cx: &mut TestA
 }
 
 #[gpui::test]
-fn folder_gestures_collapse_all_descendants(cx: &mut TestAppContext) {
+fn folder_double_click_gestures_collapse_all_descendants(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(directory.path().join("a-dir/b-sub")).unwrap();
     std::fs::write(directory.path().join("a-dir/b-sub/child.txt"), "child").unwrap();
@@ -684,6 +685,12 @@ fn folder_gestures_collapse_all_descendants(cx: &mut TestAppContext) {
     let parent = workspace.root().join("a-dir");
     let child = parent.join("b-sub");
     let (app, window_cx) = mount(cx, workspace, initial);
+    // This regression deliberately exercises the optional historical double-click mode.
+    window_cx.update(|_, cx| {
+        app.update(cx, |app, _| {
+            app.session_state.explorer_expand_on_double_click = true;
+        });
+    });
     let parent_position = window_cx.debug_bounds("explorer-row-1").unwrap().center();
     window_cx.simulate_click(parent_position, Modifiers::default());
     redraw(window_cx);

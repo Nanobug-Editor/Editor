@@ -1604,6 +1604,15 @@ settings.workspace_trusted:
 settings.file_explorer:
   en: "File explorer"
   zh-CN: "文件资源管理器"
+settings.explorer_directory_click:
+  en: "Expand/collapse directories with"
+  zh-CN: "目录展开/折叠方式"
+settings.explorer_single_click:
+  en: "Single click"
+  zh-CN: "单击"
+settings.explorer_double_click:
+  en: "Double click"
+  zh-CN: "双击"
 settings.explorer_reveal_on_tab_switch:
   en: "Reveal files in Explorer when switching tabs"
   zh-CN: "切换标签页时定位到资源管理器"

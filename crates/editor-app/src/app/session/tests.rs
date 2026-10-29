@@ -16,6 +16,31 @@ use std::{cell::RefCell, rc::Rc};
 
 mod sidebar;
 
+/// Fresh and legacy sessions use single click; each explicit choice survives an isolated reload.
+#[test]
+fn directory_click_mode_defaults_and_saved_choices_survive_reload() {
+    let directory = tempfile::tempdir().unwrap();
+    let profile = directory.path().join("profile");
+    let workspace = directory.path().join("workspace");
+    let mut state = SessionState::load_in_profile(&workspace, &profile);
+    assert!(!state.explorer_expand_on_double_click);
+    let mut legacy = serde_json::to_value(&state).unwrap();
+    legacy
+        .as_object_mut()
+        .unwrap()
+        .remove("explorer_expand_on_double_click");
+    let migrated: SessionState = serde_json::from_value(legacy).unwrap();
+    assert!(!migrated.explorer_expand_on_double_click);
+    for double_click in [true, false] {
+        state.explorer_expand_on_double_click = double_click;
+        state.try_save().unwrap();
+        assert_eq!(
+            SessionState::load_in_profile(&workspace, &profile).explorer_expand_on_double_click,
+            double_click
+        );
+    }
+}
+
 /// Identical logical saves must leave the existing durable file untouched.
 #[test]
 fn unchanged_session_save_preserves_existing_file() {

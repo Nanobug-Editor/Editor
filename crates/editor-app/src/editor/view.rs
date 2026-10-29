@@ -82,7 +82,7 @@ impl EditorApp {
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, _, window, cx| {
-                                // Prevent the base tree from expanding folders on mouse down.
+                                // Select on press; expansion waits for a full click so dragging stays inert.
                                 cx.stop_propagation();
                                 this.select_explorer_row(index, window, cx);
                             }),
@@ -213,8 +213,17 @@ impl EditorApp {
                         .on_click(cx.listener({
                             let item = item.clone();
                             move |this, event: &ClickEvent, window, cx| {
+                                // The host owns activation; Base's parent click must not toggle again.
+                                cx.stop_propagation();
                                 if is_folder {
-                                    if event.click_count() == 2 {
+                                    let click_count =
+                                        if this.session_state.explorer_expand_on_double_click {
+                                            2
+                                        } else {
+                                            1
+                                        };
+                                    // Ignore the second press in single-click mode instead of undoing the first.
+                                    if event.click_count() == click_count {
                                         this.toggle_explorer_directory(
                                             Path::new(item.id.as_str()),
                                             cx,

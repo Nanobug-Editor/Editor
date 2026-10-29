@@ -151,6 +151,14 @@ fn explorer_filter_button_matches_hidden_files_and_hides_after_file_selection(
     visual.simulate_click(folder, Modifiers::default());
     redraw(visual);
     assert!(visual.debug_bounds("explorer-filter").is_some());
+    // Default activation resets descendants when collapsing; reopening each ancestor keeps filtering.
+    visual.simulate_click(folder, Modifiers::default());
+    redraw(visual);
+    assert!(visual.debug_bounds("explorer-filter").is_some());
+    let nested = visual.debug_bounds("explorer-row-2").unwrap().center();
+    visual.simulate_click(nested, Modifiers::default());
+    redraw(visual);
+    assert!(visual.debug_bounds("explorer-filter").is_some());
     let file = visual.debug_bounds("explorer-row-3").unwrap().center();
     visual.simulate_click(file, Modifiers::default());
     redraw(visual);
