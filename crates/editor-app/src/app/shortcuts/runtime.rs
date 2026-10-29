@@ -256,9 +256,6 @@ impl ShortcutRuntime {
 
     /// Resolve against real handlers, original predicates and live plugin admission checks.
     fn on_key(&mut self, event: &KeystrokeEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if !cx.has_global::<BindingEngine>() {
-            return;
-        }
         let contexts = window.context_stack();
         let owner = cx
             .global::<Registry>()
@@ -279,6 +276,22 @@ impl ShortcutRuntime {
         });
         if recording {
             self.cancel(cx);
+            return;
+        }
+        // Hover can give Explorer Ctrl+F priority while a document still owns keyboard focus.
+        // Resolve it before the document Find action so one chord cannot open both surfaces.
+        if !modal
+            && owner.as_ref().is_some_and(|owner| {
+                owner.update(cx, |app, cx| {
+                    app.handle_explorer_filter_shortcut(&event.keystroke, window, cx)
+                })
+            })
+        {
+            self.cancel(cx);
+            cx.stop_propagation();
+            return;
+        }
+        if !cx.has_global::<BindingEngine>() {
             return;
         }
         // Copy the owner read into a separate update: no editor is mutably borrowed here.

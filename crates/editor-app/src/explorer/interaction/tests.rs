@@ -1,6 +1,7 @@
 //! Exercises pointer gestures through real tree rows rather than calling handlers directly.
 
 mod drag;
+mod filter;
 mod history;
 mod transfer;
 
@@ -247,7 +248,7 @@ fn explorer_title_actions_fade_with_panel_focus(cx: &mut TestAppContext) {
     visual.update(|_, cx| cx.set_reduce_motion(false));
     redraw(visual);
     let hidden_slot = visual.debug_bounds("explorer-actions").unwrap();
-    assert_eq!(hidden_slot.size.width, px(96.));
+    assert_eq!(hidden_slot.size.width, px(120.));
     assert!(visual.debug_bounds("explorer-collapse-all").is_none());
 
     focus_tree(&app, visual);

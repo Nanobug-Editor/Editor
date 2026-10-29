@@ -99,6 +99,9 @@ impl EditorApp {
 
     /// Save the live hierarchy at exit even if its latest expansion event has not been delivered.
     pub(crate) fn capture_explorer_state(&mut self, cx: &App) {
+        if self.explorer_filter.is_active() {
+            return;
+        }
         fn collect_expanded(items: &[TreeItem], expanded: &mut Vec<String>) {
             for item in items {
                 if item.is_expanded() {

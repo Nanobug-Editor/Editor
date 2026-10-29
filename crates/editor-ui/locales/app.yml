@@ -1115,6 +1115,12 @@ panel.minimize_explorer:
 explorer.reveal_active_file:
   en: "Locate active file"
   zh-CN: "定位当前文件"
+explorer.toggle_filter:
+  en: "Filter files and folders (Ctrl+F)"
+  zh-CN: "筛选目录和文件（Ctrl+F）"
+explorer.filter_placeholder:
+  en: "Filter files and folders"
+  zh-CN: "筛选目录和文件"
 explorer.collapse_all:
   en: "Collapse all"
   zh-CN: "全部折叠"

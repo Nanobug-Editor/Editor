@@ -59,6 +59,7 @@ impl EditorApp {
                 .selected_item()
                 .map(|item| PathBuf::from(item.id.as_str()))
         };
+        let items = self.explorer_filter.project(items);
         let selected_item = selected_path
             .as_ref()
             .and_then(|path| find_tree_item(&items, path))

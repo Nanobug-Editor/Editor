@@ -220,15 +220,18 @@ impl EditorApp {
                                             cx,
                                         );
                                     }
-                                } else if event.click_count() == 2 {
-                                    this.open_file(PathBuf::from(item.id.as_str()), window, cx);
                                 } else {
-                                    // Browsing keeps the tree's focus and reuses one disposable tab.
-                                    this.open_preview_file(
-                                        PathBuf::from(item.id.as_str()),
-                                        window,
-                                        cx,
-                                    );
+                                    let path = PathBuf::from(item.id.as_str());
+                                    if this.explorer_filter.visible {
+                                        this.hide_explorer_filter(window, cx);
+                                        this.select_file_in_tree(&path, cx);
+                                    }
+                                    if event.click_count() == 2 {
+                                        this.open_file(path, window, cx);
+                                    } else {
+                                        // Browsing keeps the tree's focus and reuses one disposable tab.
+                                        this.open_preview_file(path, window, cx);
+                                    }
                                 }
                             }
                         }))
@@ -259,9 +262,30 @@ impl EditorApp {
             .min_h_0()
             .bg(tree_style.background.unwrap_or(cx.theme().background))
             .relative()
+            .on_hover(cx.listener(|app, hovered, _, _| {
+                app.explorer_filter.body_hovered = *hovered;
+            }))
             .on_drag_move(cx.listener(Self::tree_drag_move))
             .on_drag_move(cx.listener(Self::external_tree_drag_move))
             .capture_key_down(cx.listener(Self::cancel_explorer_drag))
+            .capture_key_down(
+                cx.listener(|app, event: &gpui_kit::KeyDownEvent, window, cx| {
+                    if event.keystroke.key == "enter" && app.explorer_filter.visible {
+                        let path = app
+                            .tree_state
+                            .read(cx)
+                            .selected_item()
+                            .map(|item| PathBuf::from(item.id.as_str()));
+                        if let Some(path) =
+                            path.filter(|path| !app.workspace_directories.contains(path))
+                        {
+                            app.hide_explorer_filter(window, cx);
+                            app.open_file(path, window, cx);
+                            cx.stop_propagation();
+                        }
+                    }
+                }),
+            )
             .on_action(cx.listener(
                 |app, _: &explorer::transfer::shortcuts::UndoFiles, window, cx| {
                     app.undo_file_transfer(window, cx)
@@ -282,23 +306,30 @@ impl EditorApp {
                     app.paste_file_offer(selected.as_deref(), window, cx);
                 },
             ))
-            .child(self.render_tree_geometry_start(cx))
-            .child(tree)
+            .children(self.render_explorer_filter(cx))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .relative()
+                    .child(self.render_tree_geometry_start(cx))
+                    .child(tree)
+                    .child(
+                        div()
+                            .absolute()
+                            .right_0()
+                            .top_0()
+                            .bottom_0()
+                            .w(px(8.))
+                            .child(editor_ui::vertical_scrollbar(&tree_scroll, cx)),
+                    ),
+            )
             .child(self.render_tree_drag_events(cx))
             .when_some(self.explorer_drag.intent(), |root, copy| {
                 root.child(div().absolute().bottom_0().left_0().child(
                     editor_ui::file_operation::drag_preview(String::new(), copy, cx),
                 ))
             })
-            .child(
-                div()
-                    .absolute()
-                    .right_0()
-                    .top_0()
-                    .bottom_0()
-                    .w(px(8.))
-                    .child(editor_ui::vertical_scrollbar(&tree_scroll, cx)),
-            )
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {

@@ -168,9 +168,15 @@ impl DockPanel for EditorDockPanel {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         match self.kind {
-            // Order explorer actions as locate, collapse all, expand all, then minimize.
+            // Keep filtering next to locate, collapse, expand and minimize in the compact toolbar.
             EditorDockPanelKind::Explorer => {
                 h_flex()
+                    .id("explorer-header")
+                    .on_hover(cx.listener(|panel, hovered, _, cx| {
+                        let _ = panel.parent.update(cx, |app, _| {
+                            app.explorer_filter.title_hovered = *hovered;
+                        });
+                    }))
                     .w_full()
                     .items_center()
                     .justify_between()
@@ -190,12 +196,35 @@ impl DockPanel for EditorDockPanel {
                     )
                     .child(dock::title_actions(
                         "explorer-actions",
-                        96.,
+                        // Five actions retain Dock's existing focus/hover transition.
+                        120.,
                         active,
                         window,
                         cx,
                         |actions, cx| {
                             actions
+                                .child(
+                                    div()
+                                        .id("explorer-toggle-filter")
+                                        .debug_selector(|| "explorer-toggle-filter".into())
+                                        .child(
+                                            Button::new("explorer-toggle-filter-button")
+                                                .icon(Icon::new(IconName::Search))
+                                                .tooltip(t!("explorer.toggle_filter").to_string())
+                                                .accessibility_label(
+                                                    t!("explorer.toggle_filter").to_string(),
+                                                )
+                                                .small()
+                                                .compact()
+                                                .ghost()
+                                                .on_click(cx.listener(|panel, _, window, cx| {
+                                                    cx.stop_propagation();
+                                                    let _ = panel.parent.update(cx, |app, cx| {
+                                                        app.toggle_explorer_filter(window, cx);
+                                                    });
+                                                })),
+                                        ),
+                                )
                                 .child(
                                     div()
                                         .id("explorer-reveal-active-file")
