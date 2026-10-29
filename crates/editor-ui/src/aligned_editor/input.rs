@@ -79,7 +79,34 @@ impl InputHandler for AlignedInputHandler {
         if self.suppress_geometry {
             return None;
         }
-        let native = self.delegate.bounds_for_range(range, window, cx)?;
+        let delegated = self.delegate.bounds_for_range(range.clone(), window, cx);
+        let editor = self.editor.read(cx);
+        if self
+            .projection
+            .as_ref()
+            .is_some_and(|projection| !projection.ranges.matches(editor))
+        {
+            return None;
+        }
+        let text = editor.text();
+        if range.start > range.end || range.end > text.len_utf16() {
+            return None;
+        }
+        let bytes =
+            text.offset_utf16_to_offset(range.start)..text.offset_utf16_to_offset(range.end);
+        // Base's last input window covers one source interval. Other painted pieces still own
+        // exact native geometry, rather than the saturating offscreen lookup of that window.
+        let outside = editor.visible_row_range().is_none_or(|visible| {
+            !visible.contains(&text.offset_to_point(bytes.start).row)
+                || !visible.contains(&text.offset_to_point(bytes.end).row)
+        });
+        let native = if let Some(projection) = self.projection.as_ref().filter(|_| outside) {
+            projection
+                .ranges
+                .bounds(&bytes, &projection.measured, editor)
+        } else {
+            delegated
+        }?;
         let projected = self
             .projection
             .as_ref()
@@ -109,6 +136,9 @@ impl InputHandler for AlignedInputHandler {
         };
         let native = projection.native_point(physical)?;
         let editor = self.editor.read(cx);
+        if !projection.ranges.matches(editor) {
+            return None;
+        }
         let text = editor.text();
         let line = projection.measured.line_height;
         let first_y = projection.measured.source_origin.y;
@@ -116,6 +146,12 @@ impl InputHandler for AlignedInputHandler {
         // Public caret geometry is monotone in source y. Binary search reaches the visual row
         // without scanning a megabyte-long wrapped logical line or copying Base hit-testing.
         let visible = editor.visible_row_range()?;
+        if native.y < editor.input_bounds().top() || native.y >= editor.input_bounds().bottom() {
+            return projection
+                .ranges
+                .byte_for_point(native, &projection.measured, editor)
+                .map(|byte| text.offset_to_offset_utf16(byte));
+        }
         // Offscreen bytes are outside Base's range lookup contract. Restrict the search to its
         // laid-out logical lines, including the complete wrapped line crossing either clip edge.
         let first_byte = text.line_start_offset(visible.start);

@@ -21,7 +21,7 @@ pub(super) struct PaneView {
     authority_fence: notifications::AuthorityFence,
     /// Native wrapping is unchanged by scrolling; only completed row geometry is retained here.
     geometry_cache: Rc<std::cell::RefCell<geometry_cache::GeometryCache>>,
-    /// Folded source intervals may need a different invisible native pointer origin.
+    /// Folded source intervals may need a different bounded native input window.
     authority_position: geometry_authority::Position,
     /// A root-owned weak mount retains upstream glyphs between private native remeasurements.
     glyphs: geometry_glyphs::Lease,
@@ -50,6 +50,7 @@ impl PaneView {
         let band_group = group.downgrade();
         let row_geometry = super::super::row_backgrounds::RowGeometryProvider::new(
             &editor,
+            cx.entity_id(),
             move |editor, window, cx| {
                 let group = band_group.upgrade()?;
                 let state = group.read(cx);
@@ -174,6 +175,11 @@ impl Render for PaneView {
             let changed = self.group.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(changed));
         }
+        let input_editor = self.group.read(cx).sources[self.index].editor.clone();
+        // The public native delegate owns composition; only its readonly range scopes a probe.
+        let marked = input_editor.update(cx, |native, cx| {
+            gpui_kit::EntityInputHandler::marked_text_range(native, window, cx)
+        });
         let group = self.group.read(cx);
         let source = group.sources[self.index].clone();
         let epoch = group.epoch;
@@ -192,6 +198,32 @@ impl Render for PaneView {
             .as_ref()
             .is_some_and(|rows| rows.source_rows[self.index].len() > 64);
         let ready = self.geometry_cache.borrow().ready(epoch);
+        // Folded plain sources can validate all native rows using an exact horizontal clamp,
+        // without painting hidden glyphs. New selections and custom factories keep full admission.
+        let can_probe_width = source.native_authority_factory.is_none()
+            && !self.region.is_captured()
+            && group
+                .layout
+                .as_ref()
+                .is_some_and(|layout| !layout.folds.is_empty())
+            && group
+                .frames
+                .get(self.index)
+                .and_then(Option::as_ref)
+                .is_some_and(|frame| frame.ranges.stable_input(source.editor.read(cx), &marked))
+            && source_rows.as_ref().is_some_and(|rows| {
+                geometry_display_map::supported_rows(
+                    source.editor.read(cx),
+                    &rows.source_rows[self.index],
+                ) && !geometry_display_map::supported(
+                    source.editor.read(cx),
+                    &rows.source_rows[self.index],
+                )
+            });
+        // Native scrolling can discover a wider styled line. Sample its current clamp even when
+        // vertical rows remain cached, so the shared rail follows the original input's range.
+        let probe_width = can_probe_width;
+        let native_width: native_viewport::WidthOutput = Rc::new(Cell::new(None));
         // Only a hint here: the final native paint rechecks the map after width/font/wrap changes.
         let mapped = !self.geometry_cache.borrow().full_required()
             && source_rows.as_ref().is_some_and(|rows| {
@@ -200,6 +232,7 @@ impl Render for PaneView {
                 // strategy. Its unprepared map cannot yet prove wrapping or horizontal extent.
                 native.line_height().is_none()
                     || geometry_display_map::supported(native, &rows.source_rows[self.index])
+                    || can_probe_width
             });
         let batch_measure = large
             && !ready
@@ -209,6 +242,7 @@ impl Render for PaneView {
         let measure_hint = group.measurements[self.index]
             .as_ref()
             .map(|measured| measured.logical_rows.clone());
+        let caret_measurement = group.measurements[self.index].clone();
         let bounded = (ready || batch_measure || mapped)
             && !group.needs_location_geometry(self.index)
             // Complete layout is cheap for small sources and retains their native query envelope.
@@ -238,15 +272,19 @@ impl Render for PaneView {
             .unwrap_or(window.line_height());
         let full_height = ((editor.read(cx).text().len() + 2) as f32 * f32::from(line))
             .clamp(f32::from(line), MAX_LAYOUT_HEIGHT);
-        let authority_height = geometry_authority::height(
+        let authority_height = geometry_authority::height(pane_viewport, line);
+        let input_scroll = geometry_authority::caret_scroll(
             pane_layout.as_ref(),
             pane_viewport,
+            caret_measurement
+                .as_ref()
+                .filter(|measured| measured.cursor == editor.read(cx).cursor()),
             scroll,
             native_scroll,
-            line,
         );
-        let authority_top = self.authority_position.read(epoch, scroll, native_scroll);
+        let authority_scroll = self.authority_position.read(epoch, scroll, input_scroll);
         let authority_position = self.authority_position.clone();
+        let ranges = native_ranges::NativeRanges::new(editor.read(cx), marked);
         // Horizontal scrolling remains native. Each mount applies its own public scroll request
         // immediately before Base chooses visible lines; the last mount owns actual input state.
         let requested_x = self.scroll.take_horizontal();
@@ -354,7 +392,7 @@ impl Render for PaneView {
                 body = body.child(native);
             }
         } else {
-            if !bounded || batch_measure {
+            if !bounded || batch_measure || probe_width {
                 // Consume pending native scrolling before visual copies issue their own y.
                 // Base's public scrollbar prepaint applies the deferred offset; subsequent
                 // mounts preserve that actual x, including caller requests and diagonal wheels.
@@ -367,6 +405,21 @@ impl Render for PaneView {
                         .h(pane_viewport.map_or(line * 2., |view| view.height + view.inset_y))
                         .opacity(0.)
                         .child(native_viewport::NativeViewport::primer(&editor)),
+                );
+            }
+            if probe_width {
+                body = body.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .w_full()
+                        .h(line * 2.)
+                        .opacity(0.)
+                        .child(native_viewport::NativeViewport::width_probe(
+                            &editor,
+                            native_width.clone(),
+                        )),
                 );
             }
             if let (Some(layout), Some(view)) = (pane_layout, pane_viewport) {
@@ -386,6 +439,10 @@ impl Render for PaneView {
                     let clipped_top = top.max(px(0.));
                     let clipped_height = (top + height).min(view.height) - clipped_top;
                     let source_top = px(slice.source.start) + clipped_top - top;
+                    let retain_ranges = bounded
+                        && (source_top < authority_scroll
+                            || source_top + clipped_height
+                                > authority_scroll + authority_height - view.native_inset_y);
                     // Native scrolling bounds layout to this visible interval, including deep
                     // source locations. Neither the source prefix nor an offscreen gutter copy
                     // is shaped again; wrapping and glyphs still come from the original editor.
@@ -417,6 +474,7 @@ impl Render for PaneView {
                                                 &editor, cx,
                                             ),
                                         )
+                                        .capture(retain_ranges.then_some(&ranges))
                                         .into_any_element()
                                     },
                                 ),
@@ -449,11 +507,7 @@ impl Render for PaneView {
                 div()
                     .id("aligned-source-authority")
                     .absolute()
-                    .top(if bounded {
-                        authority_top
-                    } else {
-                        -native_scroll + authority_top
-                    })
+                    .top(if bounded { px(0.) } else { -native_scroll })
                     .left_0()
                     .w_full()
                     .h(if bounded {
@@ -465,7 +519,7 @@ impl Render for PaneView {
                     .child(native_viewport::NativeViewport::new(
                         &editor,
                         requested_x,
-                        if bounded { -native_scroll } else { px(0.) },
+                        if bounded { -authority_scroll } else { px(0.) },
                         native,
                     )),
             );
@@ -510,9 +564,9 @@ impl Render for PaneView {
                             if unavailable {
                                 px(0.)
                             } else if bounded {
-                                authority_top
+                                px(0.)
                             } else {
-                                -native_scroll + authority_top
+                                -native_scroll
                             },
                             gutter_metrics.get(),
                         );
@@ -583,13 +637,14 @@ impl Render for PaneView {
                         // Base clamps its own y before paint; cancel that actual translation so
                         // the difference cannot masquerade as thousands of pixels of padding.
                         if bounded {
-                            -native.scroll_offset().y - authority_top
+                            -native.scroll_offset().y
                         } else {
-                            native_scroll - authority_top
+                            native_scroll
                         },
                         epoch,
                         bounded,
                         acquired,
+                        native_width.get(),
                         window,
                     );
                     let Some(measured) = measured else {
@@ -651,7 +706,8 @@ impl Render for PaneView {
                         ),
                         native.scroll_offset().x,
                     );
-                    let mapped = geometry_display_map::supported(native, rows);
+                    let mapped = geometry_display_map::supported(native, rows)
+                        || (can_probe_width && geometry_display_map::supported_rows(native, rows));
                     // This skips only the extra observer relay of a state already drawn above.
                     // The native Entity remains mounted: any later private native-state change
                     // still directly invalidates its window/ancestors through GPUI as usual.
@@ -680,6 +736,7 @@ impl Render for PaneView {
                             pane,
                             scroll,
                             viewport: view.bounds(viewport),
+                            ranges,
                         }
                     });
                     let redraw = measure_group.update(cx, |group, cx| {
@@ -731,14 +788,14 @@ impl Render for PaneView {
                             return;
                         }
                         // A folded viewport can place distant source intervals side by side.
-                        // Move only the transparent original input mount so Base receives the
-                        // pointer inside its actual hitbox. Repaint after physical capture has
-                        // unwound; the router then reads the new map and dispatches normally.
+                        // Scroll only the transparent original input mount so Base receives the
+                        // pointer in a bounded, genuinely laid-out source window. Repaint after
+                        // capture unwinds; the router then reads the new map and dispatches normally.
                         authority_position.set(
                             epoch,
                             scroll,
-                            native_scroll,
-                            authority_top + physical.y - native.y,
+                            input_scroll,
+                            authority_scroll + native.y - physical.y,
                         );
                         cx.notify(owner);
                         window.draw(cx).clear(cx);

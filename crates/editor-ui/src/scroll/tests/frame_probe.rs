@@ -133,6 +133,16 @@ pub(super) fn verify(samples: &[Sample]) {
         "the native test must observe enough actual moving frames"
     );
     let active_count = moving.iter().filter(|sample| sample.active).count();
+    let native_rows = moving.iter().filter_map(|sample| sample.native_rows).max();
+    eprintln!(
+        "native scroll ownership: moving_frames={}, active_frames={active_count}, native_rows_max={native_rows:?}",
+        moving.len()
+    );
+    // Hidden-row work is observable independently of foreground ownership. Keep this sparse
+    // lockfile regression strict even when the following hardware FPS validity gate refuses a run.
+    if std::env::var_os("NANOBUG_DIFF_NATIVE_SPARSE").is_some() {
+        assert!(native_rows.is_some_and(|rows| rows <= 32));
+    }
     let mut intervals: Vec<_> = moving
         .windows(2)
         .filter(|pair| pair[0].active && pair[1].active)

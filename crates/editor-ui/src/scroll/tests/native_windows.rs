@@ -40,14 +40,18 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
     let different = std::env::var_os("NANOBUG_DIFF_NATIVE_DIFFERENT").is_some();
     // Collapsed unchanged intervals must exercise the same original native input authority.
     let collapsed = std::env::var_os("NANOBUG_DIFF_NATIVE_COLLAPSED").is_some();
+    // Sparse lockfiles can place thousands of hidden source rows inside one physical viewport.
+    let sparse = std::env::var_os("NANOBUG_DIFF_NATIVE_SPARSE").is_some();
+    let source_rows = if sparse { 7200 } else { 1800 };
     // Production comparisons retain readonly snapshots beside their original editable source.
     let readonly_peers = std::env::var_os("NANOBUG_DIFF_NATIVE_READONLY_PEERS").is_some();
+    let dark = std::env::var_os("NANOBUG_SCROLL_DARK").is_some();
     // Cross several disclosures instead of measuring only inside the first expanded diff hunk.
     let wheel_lines = if collapsed { -6. } else { -2. };
-    assert!((2..=3).contains(&panes) && start_row < 1700);
+    assert!((2..=3).contains(&panes) && start_row < source_rows - 100);
     if matches!(kind, Kind::Comparison) {
         eprintln!(
-            "native comparison: panes={panes}, focused={focused}, wrapped={wrapped}, marked={marked}, decorated={decorated}, different={different}, collapsed={collapsed}, readonly_peers={readonly_peers}, source_row={start_row}"
+            "native comparison: panes={panes}, focused={focused}, wrapped={wrapped}, marked={marked}, decorated={decorated}, different={different}, collapsed={collapsed}, sparse={sparse}, readonly_peers={readonly_peers}, source_row={start_row}"
         );
     }
     gpui_kit::application()
@@ -55,9 +59,9 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
         .run(move |cx| {
             gpui_kit::init(cx);
             crate::typography::init(cx);
-            crate::theme::apply_theme(crate::theme::builtin_theme(false), cx);
+            crate::theme::apply_theme(crate::theme::builtin_theme(dark), cx);
             crate::init(cx);
-            let text = (0..1800)
+            let text = (0..source_rows)
                 .map(|i| {
                     if wrapped {
                         format!(
@@ -127,6 +131,7 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
                                                 index,
                                                 start_row,
                                                 collapsed,
+                                                sparse,
                                             )
                                         } else {
                                             source_text.clone()
@@ -140,6 +145,13 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
                                     }
                                 })
                                 .collect::<Vec<_>>();
+                            // Exercise the selected native wrapping policy on every pane, rather
+                            // than relying on short text to happen to fit Base's default wrapping.
+                            for source in &sources {
+                                source.update(cx, |source, cx| {
+                                    source.set_soft_wrap(wrapped, window, cx);
+                                });
+                            }
                             if marked {
                                 for source in &sources {
                                     let mut start = 0;
@@ -337,6 +349,14 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
                 // Release the real platform input delegate and blink task before App's leak
                 // audit drops its entity map. Only this isolated acceptance window is closed.
                 let _ = window.update(cx, |_, window, cx| {
+                    if let Ok(path) = std::env::var("NANOBUG_SCROLL_CAPTURE") {
+                        window.draw(cx).clear(cx);
+                        window
+                            .render_to_image()
+                            .expect("capture the actual native comparison scene")
+                            .save(path)
+                            .expect("save the explicitly requested native evidence image");
+                    }
                     window.blur(cx);
                     window.refresh();
                 });
@@ -354,9 +374,11 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
         });
     let samples = samples.borrow();
     eprintln!(
-        "real Windows wheel samples (logical distance, first visible row, unchanged text): first={:?}, last={:?}",
+        "real Windows wheel samples (logical distance, first visible row, unchanged text): first={:?}, last={:?}, tail80={:?}, tail85={:?}",
         samples.first(),
-        samples.last()
+        samples.last(),
+        samples.get(80),
+        samples.get(85)
     );
     assert_eq!(samples.len(), 110);
     let last = samples.last().unwrap().0;
@@ -368,6 +390,7 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
         "the real native window must paint an intermediate position"
     );
     assert!(samples.windows(2).all(|pair| pair[1].0 + 0.5 >= pair[0].0));
+    super::frame_probe::verify(&frames.borrow());
     assert!(
         samples[85].0 > samples[80].0 + 0.5,
         "native scrolling must retain a decelerating tail after the last physical wheel"
@@ -383,19 +406,29 @@ fn smooth_scroll_real_windows_paints_intermediate_native_positions() {
             "native layout must expose later source rows"
         );
     }
-    super::frame_probe::verify(&frames.borrow());
 }
 
 /// Add two real alignment gaps and a changed line near `anchor` for peer `index`, retaining a
-/// small diff window within the shared admission budget even in three-column native acceptance.
-fn comparison_peer(text: &str, index: usize, anchor: usize, collapsed: bool) -> String {
+/// small diff window for ordinary cases. `sparse` supplies distant hunks across a longer lockfile.
+fn comparison_peer(
+    text: &str,
+    index: usize,
+    anchor: usize,
+    collapsed: bool,
+    sparse: bool,
+) -> String {
     text.split_inclusive('\n')
         .enumerate()
         .map(|(row, line)| {
             if row == anchor + index * 2 + 1 || row == anchor + index * 2 + 5 {
                 format!("inserted peer {index} 中文😀\n{line}")
             } else if row == anchor + 1
-                || (collapsed && row > anchor && row < anchor + 400 && row % 40 == 0)
+                || (collapsed
+                    && if sparse {
+                        row >= anchor + 1700 && row % 220 == 0
+                    } else {
+                        row > anchor && row < anchor + 400 && row % 40 == 0
+                    })
             {
                 line.replace("alpha", &format!("variant{index}"))
             } else {

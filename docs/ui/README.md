@@ -2,6 +2,8 @@
 
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
+- [Git 差异折叠后的滚动修复](verification/folded-diff-scroll-2026-10-28.md)：修复折叠条拦截滚轮、隐藏行过量布局及底色补绘循环；859 项 workspace 测试与四组约 144 FPS 原生验收通过，范围与限制见记录。
+
 - [本地比较迁移到 imara-diff](verification/imara-diff-2026-10-28.md)：统一差异标记和原生行对齐，解除旧矩阵限制；验证状态见记录。
 
 - [GPUI Kit 依赖迁移与退出修复](verification/gpui-kit-upstream-2026-10-26.md)：PR #3691 后的接口适配、临时 Fork 验证，以及 #3697 合并后回到官方 main 的记录。
