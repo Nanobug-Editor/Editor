@@ -401,7 +401,7 @@ fn reveal_external_file_shows_nonmodal_notification(cx: &mut TestAppContext) {
         .center();
     visual.simulate_click(button, Modifiers::default());
     redraw(visual);
-    assert!(visual.debug_bounds("local-notification").is_some());
+    assert!(visual.debug_bounds("host-message-toast").is_some());
     assert!(!visual.update(|window, cx| window.has_active_dialog(cx)));
     visual.update(|_, cx| assert_eq!(expansion_state(app.read(cx), cx), before));
 
@@ -418,15 +418,15 @@ fn reveal_external_file_shows_nonmodal_notification(cx: &mut TestAppContext) {
         assert_ne!(expansion_state(app, cx), before);
     });
     let confirm = visual
-        .debug_bounds("local-notification-close")
+        .debug_bounds("host-message-toast-close")
         .unwrap()
         .center();
     visual.simulate_click(confirm, Modifiers::default());
     redraw(visual);
-    assert!(visual.debug_bounds("local-notification").is_none());
+    assert!(visual.debug_bounds("host-message-toast").is_none());
     assert!(!visual.update(|window, cx| window.has_active_dialog(cx)));
 
-    // A replacement card must survive the old card's timeout and expire on its own timer.
+    // Repeated warnings share one visible card and remain available until explicitly dismissed.
     visual.simulate_click(button, Modifiers::default());
     redraw(visual);
     visual
@@ -439,12 +439,16 @@ fn reveal_external_file_shows_nonmodal_notification(cx: &mut TestAppContext) {
         .executor()
         .advance_clock(std::time::Duration::from_millis(600));
     redraw(visual);
-    assert!(visual.debug_bounds("local-notification").is_some());
+    assert!(visual.debug_bounds("host-message-toast").is_some());
     visual
         .executor()
         .advance_clock(std::time::Duration::from_millis(600));
     redraw(visual);
-    assert!(visual.debug_bounds("local-notification").is_none());
+    assert!(visual.debug_bounds("host-message-toast").is_some());
+    let close = visual.debug_bounds("host-message-toast-close").unwrap();
+    visual.simulate_click(close.center(), Modifiers::default());
+    redraw(visual);
+    assert!(visual.debug_bounds("host-message-toast").is_none());
 }
 
 #[gpui::test]

@@ -1,5 +1,75 @@
 //! Repeated real package selections retain valid readonly source ownership after preview replacement.
 use super::*;
+mod stress;
+
+/// A stream diagnostic belongs to host messages; unrelated loading/status text remains valid.
+fn assert_no_inline_stream_failure(manager: &Manager) {
+    for id in ["history-error", "history-status"] {
+        let text = manager.live["git"].views["history"]
+            .active_node(id)
+            .and_then(|node| match &node.kind {
+                ui::Kind::Text { text } => Some(text.as_str()),
+                _ => None,
+            });
+        assert!(
+            !text.is_some_and(|text| text.contains("Document stream overflow")),
+            "document stream failure must be handled by host messages, not {id}: {text:?}"
+        );
+    }
+}
+
+/// A real guest publication must end its request after host retention, independently of its alert.
+fn assert_stream_warning_published(
+    manager: &Manager,
+    app: &Entity<EditorApp>,
+    visual: &mut VisualTestContext,
+) {
+    let expected = "Git\nLimitExceeded: Document stream overflow; enumerate and resubscribe";
+    let notices = manager
+        .runtime_logs()
+        .records("git")
+        .into_iter()
+        .filter(|record| record.source == "host.message" && record.message == expected)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        notices.len(),
+        1,
+        "stream failure must have one exact host receipt: {notices:?}"
+    );
+    assert_eq!(notices[0].level, plugin_runtime::LogLevel::Warning);
+    assert_eq!(
+        manager.live["git"].resource_counts().requests,
+        0,
+        "message retention must complete its public request before alert dismissal"
+    );
+    visual.update(|_, cx| {
+        let state = app.read(cx);
+        assert_eq!(
+            state.messages.read(cx).pending_level(),
+            Some(crate::app::messages::MessageLevel::Warning)
+        );
+        assert_eq!(state.message_delivery.notifications(cx).count(), 1);
+        assert!(
+            state.plugin_interactions.is_empty(),
+            "message publication must not create a pending Notify interaction"
+        );
+        assert!(
+            state
+                .extensions
+                .read(cx)
+                .worker
+                .state
+                .lock()
+                .unwrap()
+                .editor_requests
+                .is_empty()
+        );
+    });
+    assert!(
+        visual.debug_bounds("host-message-toast").is_some(),
+        "the host warning must have a visible native alert"
+    );
+}
 
 /// Native comparison admission can outlive a quiet scene; wait for the requested actual editor.
 fn await_file_preview(
@@ -24,6 +94,7 @@ fn await_file_preview(
             )
         });
         if count == 1 && text == expected {
+            assert_no_inline_stream_failure(manager);
             return;
         }
         let guest = manager.live["git"].views["history"]
@@ -85,6 +156,17 @@ fn git_history_repeated_file_selection_keeps_preview_sources_owned(cx: &mut Test
         let profile = tempfile::tempdir().unwrap();
         let env = visual.update(|_, cx| environment(root, cx));
         let mut manager = Manager::open(profile.path().into(), env).unwrap();
+        // Match the production actor's shared log publication before the guest can emit a message.
+        visual.update(|_, cx| {
+            app.read(cx)
+                .extensions
+                .read(cx)
+                .worker
+                .state
+                .lock()
+                .unwrap()
+                .logs = manager.runtime_logs();
+        });
         manager
             .install(&package, package.manifest.permissions.clone())
             .unwrap();
@@ -155,6 +237,10 @@ fn git_history_repeated_file_selection_keeps_preview_sources_owned(cx: &mut Test
             "Document stream overflow; enumerate and resubscribe",
         ));
         flush(&mut manager, &app, visual);
+        // The former regression only inspected history-error. The screenshot's warning lived
+        // in history-status and survived recovery, even while every native source assertion passed.
+        assert_no_inline_stream_failure(&manager);
+        assert_stream_warning_published(&manager, &app, visual);
         for file in ["second.txt", "first.txt", "third.txt", "second.txt"] {
             let node = manager.live["git"]
                 .tree_resources()

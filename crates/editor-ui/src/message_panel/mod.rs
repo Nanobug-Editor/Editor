@@ -52,6 +52,8 @@ struct Message {
     id: u64,
     level: MessageLevel,
     text: String,
+    /// Captured caller attribution remains readable after a plugin is disabled or removed.
+    source: Option<String>,
 }
 
 /// Owns one bounded history for the main window; session persistence stores only its presentation.
@@ -85,6 +87,17 @@ impl MessagePanel {
 
     /// Append a user-facing host result, evicting only the oldest receipt above the global cap.
     pub fn push(&mut self, level: MessageLevel, text: String, cx: &mut Context<Self>) {
+        self.push_attributed(level, text, None, cx);
+    }
+
+    /// Append `text` at `level` with optional immutable `source`, preserving the same global history cap.
+    pub fn push_attributed(
+        &mut self,
+        level: MessageLevel,
+        text: String,
+        source: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         // Retain the highest receipt even after history eviction; lower levels cannot acknowledge it.
         self.pending_alert = self.pending_alert.max(Some(level));
         self.next_id = self
@@ -95,6 +108,7 @@ impl MessagePanel {
             id: self.next_id,
             level,
             text,
+            source,
         });
         if self.records.len() > HISTORY_LIMIT {
             self.records.pop_front();
@@ -124,7 +138,7 @@ impl MessagePanel {
     }
 
     /// Clear this window's receipts and reminder synchronously; identities remain monotonic for later results.
-    /// Plugin log storage is never accessed, and only current history participates in this action.
+    /// Original plugin log storage and its import cursor remain untouched by this presentation action.
     fn clear(&mut self, cx: &mut Context<Self>) {
         self.records.clear();
         self.display_limit = DISPLAY_BATCH;
@@ -302,6 +316,15 @@ impl Render for MessagePanel {
                             .when_some(badge, |row, badge| row.child(badge.icon(cx)))
                             .child(div().debug_selector(move || selector.into()).child(label)),
                     )
+                    .when_some(message.source.as_ref(), |row, source| {
+                        row.child(
+                            div()
+                                .debug_selector(move || format!("host-message-source-{id}"))
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(source.clone()),
+                        )
+                    })
                     .child(
                         div()
                             .text_sm()

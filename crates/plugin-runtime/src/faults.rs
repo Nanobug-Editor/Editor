@@ -103,6 +103,10 @@ impl NativeDiagnostics {
             ..Default::default()
         }
     }
+    /// Change only this producer's log attribution; older reporters keep their captured scope.
+    pub(crate) fn set_log_sink(&mut self, logs: crate::RuntimeLogs) {
+        self.logs = logs;
+    }
     pub(crate) fn reporter(&self, plugin: &str, scope: &str) -> NativeReporter {
         NativeReporter {
             sink: self.clone(),

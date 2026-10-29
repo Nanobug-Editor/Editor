@@ -194,10 +194,13 @@ impl ExtensionPanel {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if result.is_err() {
-                    this.status = Some(worker::OperationStatus {
-                        plugin: this.manager_selected.clone(),
-                        message: t!("plugins.diagnostics_export_failed").to_string(),
-                    });
+                    this.accept_operation_status(
+                        worker::OperationStatus {
+                            plugin: this.manager_selected.clone(),
+                            message: t!("plugins.diagnostics_export_failed").to_string(),
+                        },
+                        cx,
+                    );
                 }
                 cx.notify();
             });

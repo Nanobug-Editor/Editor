@@ -8,6 +8,31 @@ use std::collections::BTreeMap;
 #[cfg(test)]
 mod comparison_tests;
 
+#[cfg(test)]
+mod interaction_tests;
+
+/// New message publication keeps a minor capability gate while ordinary notices retain 1.0 semantics.
+fn validate_interaction_request(
+    operation: &plugin_protocol::interaction::Operation,
+    negotiated: &api::Negotiated,
+) -> Result<(), Failure> {
+    operation.validate()?;
+    if matches!(
+        operation,
+        plugin_protocol::interaction::Operation::PublishMessage { .. }
+    ) && negotiated
+        .capabilities
+        .get("ui.interaction")
+        .is_none_or(|version| *version < semver::Version::new(1, 1, 0))
+    {
+        return Err(Failure::new(
+            ErrorCode::CapabilityUnavailable,
+            "Message publication requires ui.interaction 1.1",
+        ));
+    }
+    Ok(())
+}
+
 /// Return the target's required grant for direct and delegated navigation alike.
 /// Callers also require editor.read; sharing this mapping prevents stronger provider grants leaking.
 pub(super) fn navigation_permission(target: &api::NavigationTarget) -> &'static str {
@@ -178,7 +203,7 @@ impl State {
                 ("editor.documents", "editor.read")
             }
             EditorOperation::Interaction { operation } => {
-                operation.validate()?;
+                validate_interaction_request(operation, &self.api)?;
                 if matches!(
                     operation,
                     plugin_protocol::interaction::Operation::SelectWithAccess { .. }

@@ -3,7 +3,7 @@
 use super::*;
 use crate::app::messages::MessageLevel;
 
-/// Host-reported plugin errors remain plugin-owned; viewing and clearing host history cannot read them.
+/// Unified history includes plugin receipts; viewing and clearing it cannot change their original logs.
 #[gpui::test]
 fn host_messages_confirmation_and_clear_preserve_plugin_logs(cx: &mut TestAppContext) {
     with_status(cx, 2, "en", false, |form, app, manager| {
@@ -42,12 +42,20 @@ fn host_messages_confirmation_and_clear_preserve_plugin_logs(cx: &mut TestAppCon
             assert!(form.debug_bounds("plugin-error-indicator").is_some());
             assert!(form.debug_bounds("plugin-status-popup").is_none());
         };
-        publish(form, app);
-        // Fresh workspaces keep messages closed. Open explicitly before inspecting their empty history.
+        form.update(|_, cx| {
+            app.read(cx)
+                .extensions
+                .clone()
+                .update(cx, |_, cx| cx.notify());
+        });
+        draw(form);
+        // Fresh workspaces keep messages closed. Opening now reveals the two attributed plugin receipts.
         assert!(form.debug_bounds("host-messages-panel").is_none());
         click(form, "host-messages-toggle");
-        assert!(form.debug_bounds("host-messages-empty").is_some());
-        assert!(form.debug_bounds("host-message-1").is_none());
+        assert!(form.debug_bounds("host-messages-empty").is_none());
+        assert!(form.debug_bounds("host-message-1").is_some());
+        assert!(form.debug_bounds("host-message-2").is_some());
+        assert!(form.debug_bounds("host-message-source-1").is_some());
         assert!(form.debug_bounds("host-messages-dot").is_none());
         assert_plugins_unchanged(form);
 
@@ -57,7 +65,7 @@ fn host_messages_confirmation_and_clear_preserve_plugin_logs(cx: &mut TestAppCon
             });
         });
         draw(form);
-        assert!(form.debug_bounds("host-message-1").is_some());
+        assert!(form.debug_bounds("host-message-3").is_some());
         assert!(form.debug_bounds("host-message-error").is_some());
         assert!(form.debug_bounds("host-messages-dot").is_some());
         assert_plugins_unchanged(form);
@@ -69,7 +77,7 @@ fn host_messages_confirmation_and_clear_preserve_plugin_logs(cx: &mut TestAppCon
         assert!(form.debug_bounds("host-messages-dot").is_some());
         assert_plugins_unchanged(form);
         click(form, "host-messages-toggle");
-        assert!(form.debug_bounds("host-message-1").is_some());
+        assert!(form.debug_bounds("host-message-3").is_some());
         assert!(form.debug_bounds("host-messages-dot").is_none());
         assert_plugins_unchanged(form);
 
@@ -86,7 +94,7 @@ fn host_messages_confirmation_and_clear_preserve_plugin_logs(cx: &mut TestAppCon
             });
         });
         draw(form);
-        assert!(form.debug_bounds("host-message-2").is_some());
+        assert!(form.debug_bounds("host-message-4").is_some());
         assert!(form.debug_bounds("host-message-warning").is_some());
         assert!(form.debug_bounds("host-messages-dot").is_some());
         assert_plugins_unchanged(form);

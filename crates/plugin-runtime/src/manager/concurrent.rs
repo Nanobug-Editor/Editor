@@ -3,6 +3,9 @@
 use super::*;
 use std::sync::{Arc, atomic::AtomicBool};
 
+#[cfg(test)]
+mod log_tests;
+
 /// Only inactive routing projections reside here; ownership moves, and no instance or mutable state is copied.
 pub(super) struct ProjectResources {
     diagnostic_history: BTreeMap<String, Vec<crate::faults::Diagnostic>>,
@@ -256,6 +259,13 @@ impl Manager {
         next.resources = Some(resources);
         std::mem::swap(&mut next.environment, &mut self.environment);
         std::mem::swap(&mut next.trusted, &mut self.trusted);
+        // Delayed workers retain their cloned origin while the manager routes new work here.
+        self.host_resources.logs = self
+            .host_resources
+            .logs
+            .for_workspace(&self.environment.workspace);
+        self.native_diagnostics
+            .set_log_sink(self.host_resources.logs.clone());
         if self.workspace_open {
             self.parked.insert(old_key, next);
         }

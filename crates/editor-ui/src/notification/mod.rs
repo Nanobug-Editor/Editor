@@ -1,6 +1,8 @@
 //! Local notification cards own their appearance, dismissal and lifetime without modal focus.
 
 use super::{Button, Icon};
+use crate::message_panel::MessageLevel;
+use crate::scroll::ScrollableElement as _;
 use crate::theme::ActiveTheme as _;
 use gpui_base::{StyledExt as _, v_flex};
 use gpui_kit::assets::IconName;
@@ -35,11 +37,13 @@ pub fn message_card(
         .on_scroll(|_, _, cx| cx.stop_propagation())
 }
 
-/// One replaceable informational card; it never takes focus from the editor or blocks other panels.
+/// One dismissible nonmodal card; its owner chooses placement and the bounded visible collection.
 pub struct Notification {
     title: SharedString,
     message: SharedString,
     dismissed: bool,
+    /// Alert cards use severity artwork; ordinary transient notices retain their informational style.
+    level: Option<MessageLevel>,
 }
 
 impl Notification {
@@ -49,7 +53,25 @@ impl Notification {
             title: title.into(),
             message: message.into(),
             dismissed: false,
+            level: None,
         }
+    }
+
+    /// Retain an attributed warning or error until dismissal; `level` controls only its native appearance.
+    pub fn alert(
+        level: MessageLevel,
+        title: impl Into<SharedString>,
+        message: impl Into<SharedString>,
+    ) -> Self {
+        Self {
+            level: Some(level),
+            ..Self::persistent(title, message)
+        }
+    }
+
+    /// Let the bounded owner discard closed cards without treating dismissal as history acknowledgement.
+    pub fn is_dismissed(&self) -> bool {
+        self.dismissed
     }
 
     /// Display a message for 1.2 seconds; replacing the entity also replaces its expiration timer.
@@ -73,6 +95,7 @@ impl Notification {
             title: title.into(),
             message: message.into(),
             dismissed: false,
+            level: None,
         }
     }
 }
@@ -82,26 +105,59 @@ impl Render for Notification {
         if self.dismissed {
             return div().into_any_element();
         }
+        let alert = self.level.is_some();
+        let icon = match self.level {
+            Some(MessageLevel::Warning) => super::StatusIcon::Warning.icon(cx),
+            Some(MessageLevel::Error) => super::StatusIcon::Error.icon(cx),
+            _ => Icon::new(IconName::Info)
+                .small()
+                .text_color(cx.theme().primary),
+        };
         message_card("local-notification", cx)
             .flex()
-            .debug_selector(|| "local-notification".into())
-            .child(
-                Icon::new(IconName::Info)
-                    .small()
-                    .text_color(cx.theme().primary),
-            )
+            .flex_shrink_0()
+            .debug_selector(move || {
+                if alert {
+                    "host-message-toast"
+                } else {
+                    "local-notification"
+                }
+                .into()
+            })
+            .child(icon)
             .child(
                 v_flex()
                     .flex_1()
                     .min_w(px(0.))
                     .gap_1()
-                    .child(div().font_semibold().text_sm().child(self.title.clone()))
-                    .child(div().text_sm().child(self.message.clone())),
+                    .child(
+                        div()
+                            .font_semibold()
+                            .text_sm()
+                            .truncate()
+                            .child(self.title.clone()),
+                    )
+                    // Long diagnostic bodies keep the close button reachable and remain readable by scrolling.
+                    .child(
+                        div()
+                            .id("notification-message-body")
+                            .text_sm()
+                            .max_h(px(80.))
+                            .overflow_y_scrollbar()
+                            .child(self.message.clone()),
+                    ),
             )
             .child(
                 div()
                     .id("local-notification-close")
-                    .debug_selector(|| "local-notification-close".into())
+                    .debug_selector(move || {
+                        if alert {
+                            "host-message-toast-close"
+                        } else {
+                            "local-notification-close"
+                        }
+                        .into()
+                    })
                     .flex_shrink_0()
                     .child(
                         Button::new("dismiss-local-notification")

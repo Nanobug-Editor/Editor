@@ -7,7 +7,29 @@ use editor_ui::overlay::WindowExt as _;
 use gpui_base::DialogClose;
 use gpui_kit::rgb;
 impl ExtensionPanel {
-    /// A store recovery failure has no plugin log owner and remains a separate manager diagnostic.
+    /// Consume one new status receipt. Ownerless failures belong to host history, never a fabricated plugin.
+    /// Polling consumes the worker slot once; retaining or acknowledging the displayed status cannot replay it.
+    pub(super) fn accept_operation_status(
+        &mut self,
+        status: worker::OperationStatus,
+        cx: &mut Context<Self>,
+    ) {
+        if status.plugin.is_none() {
+            let parent = self.parent.clone();
+            let message = status.message.clone();
+            // Defer across the panel/worker borrow. Each accepted publication owns exactly one host receipt,
+            // including a later operation that happens to fail with identical diagnostic text.
+            cx.defer(move |cx| {
+                let _ = parent.update(cx, |app, cx| {
+                    app.record_host_message(crate::app::messages::MessageLevel::Error, message, cx);
+                });
+            });
+        }
+        self.manager_error_confirmed.set(false);
+        self.status = Some(status);
+    }
+
+    /// Manager details retain their original acknowledgement independently of unified host history.
     pub(crate) fn unowned_manager_error(&self) -> Option<&str> {
         if self.manager_error_confirmed.get() {
             return None;

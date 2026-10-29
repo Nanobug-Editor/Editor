@@ -43,6 +43,9 @@ impl Manager {
             );
         }
         self.environment = environment;
+        self.host_resources.logs = self.host_resources.logs.for_workspace("");
+        self.native_diagnostics
+            .set_log_sink(self.host_resources.logs.clone());
         self.workspace_open = false;
         self.trusted = true;
         self.host_alive

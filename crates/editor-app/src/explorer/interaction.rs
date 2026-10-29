@@ -78,12 +78,9 @@ impl EditorApp {
             Some(_) => None,
         };
         if let Some(message) = error {
-            // A rejected locate action needs attention but its nonmodal card still leaves focus alone.
+            // Rejected locate actions use the same history and lower-right alert as other warnings.
             let title = t!("explorer.reveal_failed").to_string();
-            // The replaceable card may expire, but its user-facing result remains in host history.
             self.record_host_message(MessageLevel::Warning, format!("{title}: {message}"), cx);
-            self.notification = Some(cx.new(|cx| editor_ui::Notification::new(title, message, cx)));
-            cx.notify();
             return;
         }
         if let Some(path) = self.active_path.clone() {

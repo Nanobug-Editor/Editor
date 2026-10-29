@@ -8,17 +8,26 @@
 //! trusted workspace. Native selection is implemented on Windows; unsupported platforms
 //! return `UnsupportedOperation`, independently of user cancellation.
 //!
+//! Declare `ui.interaction >=1.1,<2` to publish user-facing logs with [`Operation::PublishMessage`].
+//! Its [`Value::Published`] receipt means the host retained the attributed message, not that the
+//! user read it. Warnings and errors also enter the host's bounded, dismissible alert stack;
+//! information only enters history. Publication owns no prompt waiting for user dismissal.
+//!
 //! The `start` guest helper returns an accepted editor request, not a user decision. Consume its
 //! [`crate::api::Notification::Request`] updates and expect [`crate::api::EditorValue::Interaction`]
 //! only on successful completion: a picked ID, bounded input string, confirmation, dismissed
-//! notice, explicitly finished progress, or selected resource list. Password input masks
+//! notice, published message receipt, explicitly finished progress, or selected resource list. Password input masks
 //! presentation; callers must never log the returned secret. Escape, window closure, request
 //! cancellation, timeout or retirement produces a `Cancelled` or `Completed { result: Err(..) }`
 //! terminal update rather
 //! than an empty string or false success. The first terminal result wins; late picks issue no grants.
 //!
 //! Modals use one FIFO queue per window and restore focus only while owning it. Attributed
-//! notices and progress are nonmodal, preserve editor focus and are not persistent history.
+//! notices and progress are nonmodal and preserve editor focus. Accepted notices also enter
+//! the host's bounded current-run message history with their original plugin attribution;
+//! progress updates remain transient. Clearing history does not complete a notice request.
+//! Cancellation before host admission leaves no message. Once the host begins retaining a message,
+//! cancellation stops waiting and reports that side effects may have occurred; it does not erase history.
 //! The `update` helper coalesces changes into the same progress request; percentages are optional and
 //! range from 0 to 100. The `finish` helper completes only an owned pending task. Cancellation prevents
 //! subsequent updates or finish from reviving it.
@@ -130,10 +139,21 @@ pub enum Operation {
         title: String,
         message: String,
     },
-    /// Nonmodal attributed notice. Its result is delivered when the user dismisses it.
+    /// Nonmodal attributed notice retained in host message history. Its result is delivered when
+    /// the user dismisses its card; cancellation, expiry and retirement keep their ordinary semantics.
     Notify {
         title: String,
         message: String,
+        severity: Severity,
+    },
+    /// Requires ui.interaction 1.1. Publish one bounded message and complete when the host records it.
+    /// Warning/error floating cards have host-owned lifetimes, independent of this request handle.
+    PublishMessage {
+        /// Brief user-facing context, between 1 and 256 UTF-8 bytes.
+        title: String,
+        /// User-facing text, at most 4,096 UTF-8 bytes; never include secrets.
+        message: String,
+        /// Explicit level controls history and alert presentation, never inferred from wording.
         severity: Severity,
     },
     /// A nonmodal live task retains its pending request until finish, cancel or expiry.
@@ -171,6 +191,8 @@ pub enum Value {
     Selected(Vec<SelectedResource>),
     Confirmed,
     Dismissed,
+    /// The host recorded a PublishMessage receipt; this does not acknowledge it on the user's behalf.
+    Published,
     Finished,
     Picked(String),
     Input(String),
@@ -249,6 +271,7 @@ impl Operation {
             }
             Self::Confirm { title, message }
             | Self::Notify { title, message, .. }
+            | Self::PublishMessage { title, message, .. }
             | Self::Progress { title, message, .. } => {
                 if title.is_empty() || title.len() > 256 || message.len() > 4096 {
                     return Err(Failure::new(
@@ -331,6 +354,27 @@ pub fn start(operation: Operation, timeout_ms: u32) -> Result<crate::api::Resour
         timeout_ms,
     )
 }
+
+#[cfg(feature = "guest")]
+/// Publish `title` and `message` at the supplied `severity` through ui.interaction 1.1.
+/// Retain the accepted handle until its `Published` or failure update; it never waits for a user click.
+pub fn publish_message(
+    title: impl Into<String>,
+    message: impl Into<String>,
+    severity: Severity,
+) -> Result<crate::api::ResourceHandle, Failure> {
+    start(
+        Operation::PublishMessage {
+            title: title.into(),
+            message: message.into(),
+            severity,
+        },
+        30000,
+    )
+}
+
+#[cfg(test)]
+mod tests;
 
 #[cfg(feature = "guest")]
 /// Replace the visible progress under an owned pending task; updates coalesce without new UI slots.

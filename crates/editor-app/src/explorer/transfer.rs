@@ -588,11 +588,7 @@ impl EditorApp {
     }
 
     pub(crate) fn file_transfer_error(&mut self, message: String, cx: &mut Context<Self>) {
-        // Transfer failures retain the existing recovery card and the shared host history destination.
-        self.report_host_message(MessageLevel::Error, message.clone(), cx);
-        self.notification = Some(cx.new(|_| {
-            editor_ui::Notification::persistent(t!("transfer.title").to_string(), message)
-        }));
-        cx.notify();
+        // The shared publication owns both history and the persistent lower-right error card.
+        self.report_host_message(MessageLevel::Error, message, cx);
     }
 }

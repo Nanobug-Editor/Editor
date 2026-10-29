@@ -200,7 +200,8 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("ui.visibility".into(), Version::new(1, 0, 0)),
         ("ui.code_editor".into(), Version::new(2, 0, 0)),
         ("editor.actions".into(), Version::new(1, 0, 0)),
-        ("ui.interaction".into(), Version::new(1, 0, 0)),
+        // 1.1 publishes attributed messages without retaining a user-dismissed interaction request.
+        ("ui.interaction".into(), Version::new(1, 1, 0)),
         ("files.selection".into(), Version::new(1, 1, 0)),
         ("plugin.commands".into(), Version::new(1, 0, 0)),
         ("network.http".into(), Version::new(1, 0, 0)),

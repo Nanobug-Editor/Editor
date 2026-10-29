@@ -2,6 +2,7 @@
 use super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 use std::io::{Cursor, Write};
+mod host_messages;
 #[path = "../tests/plugin_manager_progress.rs"]
 mod progress;
 

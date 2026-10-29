@@ -234,6 +234,7 @@ impl Manager {
     ) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&root)?;
         let workspace_open = !environment.workspace.is_empty();
+        host_resources.logs = host_resources.logs.for_workspace(&environment.workspace);
         let canonical_root = root.canonicalize()?;
         // Stable profile identity keeps secrets out of data copies while isolating development hosts.
         if host_resources.secret_namespace.is_empty() {

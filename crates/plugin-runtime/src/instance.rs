@@ -394,6 +394,9 @@ impl Instance {
         if application {
             environment.workspace.clear();
         }
+        // Application guests have no project; every asynchronous output clone keeps this origin.
+        let mut host_resources = host_resources;
+        host_resources.logs = host_resources.logs.for_workspace(&environment.workspace);
         anyhow::ensure!(
             manifest.permissions.is_subset(grants),
             "Plugin needs additional permission consent"
@@ -796,7 +799,11 @@ impl Instance {
         Ok(())
     }
     /// Attach before activation so native retirement reports survive this particular incarnation.
-    pub(crate) fn connect_diagnostics(&mut self, diagnostics: crate::faults::NativeDiagnostics) {
+    pub(crate) fn connect_diagnostics(
+        &mut self,
+        mut diagnostics: crate::faults::NativeDiagnostics,
+    ) {
+        diagnostics.set_log_sink(self.store.data().host_resources.logs.clone());
         self.store.data_mut().native_diagnostics = diagnostics;
     }
     /// Preparation always supplies this instance's negotiated interfaces, including on rollback.

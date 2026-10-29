@@ -249,8 +249,8 @@ struct EditorApp {
     restoring_documents: bool,
     status: String,
     definition_notice: Option<DefinitionNotice>,
-    /// A local nonmodal card replaces informational dialogs and never owns the editor's focus.
-    notification: Option<Entity<editor_ui::Notification>>,
+    /// Unified message imports and bounded alerts are owned by this workspace window.
+    message_delivery: app::messages::MessageDelivery,
     definition_request_id: u64,
     /// LSP readiness is tracked by declared language, independently from grammar loading.
     language_service_states: HashMap<String, app::language_servers::ServiceLoadState>,
@@ -589,7 +589,10 @@ impl EditorApp {
                 cx,
             )
         });
-        let extensions_observer = cx.observe(&extensions, |_, _, cx| cx.notify());
+        let extensions_observer = cx.observe(&extensions, |this, _, cx| {
+            this.sync_plugin_messages(cx);
+            cx.notify();
+        });
         let messages =
             cx.new(|cx| ui::messages::MessagePanel::new(session_state.messages_visible, cx));
         let terminal = cx.new(|cx| {
@@ -779,7 +782,7 @@ impl EditorApp {
             restoring_documents: true,
             status: t!("status.ready").to_string(),
             definition_notice: None,
-            notification: None,
+            message_delivery: Default::default(),
             definition_request_id: 0,
             language_service_states: HashMap::new(),
             plugin_loading_generation: 0,

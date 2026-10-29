@@ -1075,9 +1075,7 @@ impl ExtensionPanel {
             if self.surface_id.is_none() {
                 if let Some(status) = state.status.take() {
                     changed = true;
-                    // Equal messages from a new publication still represent a fresh viewing round.
-                    self.manager_error_confirmed.set(false);
-                    self.status = Some(status);
+                    self.accept_operation_status(status, cx);
                 }
             }
             if self.surface_id.is_none() {

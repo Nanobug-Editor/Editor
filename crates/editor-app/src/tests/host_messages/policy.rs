@@ -20,7 +20,7 @@ fn host_messages_failed_file_transfer_reaches_history(cx: &mut TestAppContext) {
         draw(form);
         assert!(form.debug_bounds("host-message-error").is_some());
         assert!(form.debug_bounds("host-messages-dot").is_some());
-        assert!(form.debug_bounds("local-notification").is_some());
+        assert!(form.debug_bounds("host-message-toast").is_some());
         assert!(!root.join("missing-transfer.txt").exists());
     });
 }

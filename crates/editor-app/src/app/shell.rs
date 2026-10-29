@@ -677,14 +677,17 @@ impl Render for EditorApp {
             .child(
                 div()
                     .id("plugin-notice-stack")
+                    .debug_selector(|| "host-message-notice-stack".into())
                     .absolute()
                     .bottom(px(36.))
                     .right(px(12.))
-                    .max_h(px(420.))
+                    .w(px(380.).min((window.viewport_size().width - px(24.)).max(px(0.))))
+                    .max_h(px(420.).min((window.viewport_size().height - px(60.)).max(px(0.))))
                     .overflow_y_scrollbar()
                     .flex()
                     .flex_col()
                     .gap_2()
+                    .children(self.message_delivery.notifications(cx))
                     .children(
                         self.plugin_interactions
                             .iter()
@@ -698,18 +701,6 @@ impl Render for EditorApp {
                     .filter(|prompt| prompt.read(cx).is_modal())
                     .cloned(),
             )
-            .when_some(self.notification.as_ref(), |this, notification| {
-                // Center the card near the top, keeping a margin when the window is narrow.
-                let width = px(380.).min((window.viewport_size().width - px(24.)).max(px(0.)));
-                this.child(
-                    div()
-                        .absolute()
-                        .left((window.viewport_size().width - width) / 2.)
-                        .top(px(64.))
-                        .w(width)
-                        .child(notification.clone()),
-                )
-            })
             .when_some(self.definition_notice, |this, notice| {
                 let left = px((notice.position.x / px(1.) - 28.).max(4.));
                 let top = px((notice.position.y / px(1.) - 38.).max(4.));

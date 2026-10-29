@@ -1,6 +1,82 @@
 //! Observable history, reads and reminder boundaries exercise the shared sink without its containers.
 use super::*;
 
+/// Import checkpoints advance across peer projects, while reads and clears cannot replay old receipts.
+#[test]
+fn unified_messages_log_checkpoints_keep_original_workspace_and_application_sources() {
+    let logs = RuntimeLogs::default();
+    let first = logs.for_workspace("project-a");
+    let second = logs.for_workspace("project-b");
+    let a = first.append("shared-plugin", LogLevel::Warning, "worker", "A warning");
+    let b = second.append("shared-plugin", LogLevel::Error, "worker", "B failure");
+    let (through, records) = logs.records_since(0, "project-a");
+    assert_eq!(through, b);
+    assert_eq!(
+        records.iter().map(|record| record.id).collect::<Vec<_>>(),
+        vec![a]
+    );
+    assert_eq!(records[0].workspace.as_deref(), Some("project-a"));
+    logs.mark_read("shared-plugin", &[a]);
+    assert!(logs.records_since(through, "project-a").1.is_empty());
+    let global = logs.append("installer", LogLevel::Info, "package", "Installed");
+    let late = std::thread::spawn(move || {
+        first.append(
+            "shared-plugin",
+            LogLevel::Error,
+            "retired-worker",
+            "Late A failure",
+        )
+    })
+    .join()
+    .unwrap();
+    assert_eq!(
+        logs.records_since(through, "project-a")
+            .1
+            .iter()
+            .map(|record| record.id)
+            .collect::<Vec<_>>(),
+        vec![global, late]
+    );
+    let (checkpoint, records) = logs.records_since(through, "project-b");
+    assert_eq!(checkpoint, late);
+    assert_eq!(
+        records.iter().map(|record| record.id).collect::<Vec<_>>(),
+        vec![global]
+    );
+    assert!(records[0].workspace.is_none());
+}
+
+/// Slow consumers still see the bounded pending anomaly, without duplicate delivery or read mutation.
+#[test]
+fn unified_messages_log_import_keeps_evicted_anomalies_and_does_not_acknowledge() {
+    let logs = RuntimeLogs::default();
+    let error = logs.append(
+        "plugin",
+        LogLevel::Error,
+        "host.operation",
+        "Original error",
+    );
+    for index in 0..RECORDS_PER_PLUGIN {
+        logs.append(
+            "plugin",
+            LogLevel::Info,
+            "wasi/stdout",
+            format!("line {index}"),
+        );
+    }
+    let generation = logs.generation();
+    let (through, records) = logs.records_since(0, "project");
+    assert_eq!(records.len(), RECORDS_PER_PLUGIN + 1);
+    assert_eq!(records[0].id, error);
+    assert!(records.windows(2).all(|pair| pair[0].id < pair[1].id));
+    assert_eq!(logs.generation(), generation);
+    assert_eq!(
+        logs.pending_reminders(),
+        vec![("plugin".into(), LogLevel::Error)]
+    );
+    assert!(logs.records_since(through, "project").1.is_empty());
+}
+
 /// Stable IDs and one shared run survive window changes, while ordinary output never raises an alert.
 #[test]
 fn cloned_sources_retain_attribution_and_ignore_ordinary_records() {

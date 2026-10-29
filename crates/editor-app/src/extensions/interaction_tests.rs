@@ -526,6 +526,22 @@ fn native_plugin_input_confirms_unicode_and_restores_editor_focus(cx: &mut TestA
         cx.update(|window, cx| app.read(cx).editor.focus_handle(cx).is_focused(window)),
         "nonmodal messages must retain editor focus"
     );
+    let notice_records = cx.update(|_, cx| {
+        app.read(cx)
+            .extensions
+            .read(cx)
+            .runtime_logs()
+            .records(&second.manifest.id)
+    });
+    assert_eq!(
+        notice_records
+            .iter()
+            .filter(|record| record.source == "host.notification")
+            .count(),
+        1,
+        "the accepted public notice must enter the attributed host history once"
+    );
+    assert!(cx.debug_bounds("host-message-toast").is_none());
     let button = cx.debug_bounds("plugin-notice-dismiss").unwrap();
     cx.simulate_click(button.center(), Default::default());
     cx.run_until_parked();

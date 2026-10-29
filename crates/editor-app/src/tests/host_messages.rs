@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 mod button;
 mod chrome;
+mod notifications;
 mod policy;
 mod severity;
 

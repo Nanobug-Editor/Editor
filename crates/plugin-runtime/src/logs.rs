@@ -32,6 +32,8 @@ pub struct LogRecord {
     pub id: u64,
     /// Manifest identity captured at the originating operation, never the current UI selection.
     pub plugin: String,
+    /// Canonical originating workspace; application-owned records are visible to every project.
+    pub workspace: Option<String>,
     /// Host receipt time; the ID breaks ties when multiple sources arrive simultaneously.
     pub time: SystemTime,
     /// Ordinary output, warning or error; reading a record never changes its recorded severity.
@@ -105,9 +107,54 @@ struct State {
 
 /// Cloneable in-memory sink. Dropping every owner clears history; no data is written to disk.
 #[derive(Clone, Debug, Default)]
-pub struct RuntimeLogs(Arc<Mutex<State>>);
+pub struct RuntimeLogs(Arc<Mutex<State>>, Option<String>);
 
 impl RuntimeLogs {
+    /// Bind future appends to `workspace` without changing already cloned producers or stored records.
+    /// An empty workspace denotes application activity; canonicalization happens only when binding.
+    pub fn for_workspace(&self, workspace: &str) -> Self {
+        let workspace = (!workspace.is_empty()).then(|| {
+            std::path::Path::new(workspace)
+                .canonicalize()
+                .unwrap_or_else(|_| std::path::PathBuf::from(workspace))
+                .to_string_lossy()
+                .into_owned()
+        });
+        Self(self.0.clone(), workspace)
+    }
+
+    /// Read new retained records for a canonical `workspace`, plus application records, in receipt order.
+    /// The returned global checkpoint advances even across other projects and evictions. Reading
+    /// never acknowledges logs; bounded evicted warning/error representatives remain observable.
+    pub fn records_since(&self, after: u64, workspace: &str) -> (u64, Vec<LogRecord>) {
+        let state = self.0.lock().unwrap();
+        // Extension publications also carry ordinary UI changes; those must not rescan retained history.
+        if after == state.next_id {
+            return (state.next_id, Vec::new());
+        }
+        let mut records: Vec<_> = state
+            .plugins
+            .values()
+            .flat_map(|history| {
+                history
+                    .records
+                    .iter()
+                    .map(|entry| &entry.record)
+                    .chain(history.evicted_anomalies.values())
+            })
+            .filter(|record| {
+                record.id > after
+                    && record
+                        .workspace
+                        .as_deref()
+                        .is_none_or(|origin| origin == workspace)
+            })
+            .cloned()
+            .collect();
+        records.sort_by_key(|record| record.id);
+        (state.next_id, records)
+    }
+
     /// Append a host-attributed message and return its stable ID; no plugin permissions are granted.
     pub fn append(
         &self,
@@ -128,6 +175,7 @@ impl RuntimeLogs {
             record: LogRecord {
                 id,
                 plugin: plugin.into(),
+                workspace: self.1.clone(),
                 time: SystemTime::now(),
                 level,
                 source: source.into(),

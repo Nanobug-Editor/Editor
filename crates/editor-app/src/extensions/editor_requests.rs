@@ -206,7 +206,7 @@ impl EditorApp {
             self.save_plugin_document(document.clone(), request, cx);
             return;
         }
-        if let Op::Interaction { .. } = request.operation() {
+        if let Op::Interaction { operation } = request.operation() {
             if matches!(
                 request.operation(),
                 Op::Interaction {
@@ -215,6 +215,27 @@ impl EditorApp {
                 }
             ) {
                 self.select_plugin_resource(plugin, request, window, cx);
+                return;
+            }
+            if matches!(
+                operation,
+                plugin_runtime::plugin_protocol::interaction::Operation::PublishMessage { .. }
+                    | plugin_runtime::plugin_protocol::interaction::Operation::Notify { .. }
+            ) && !request.enter_side_effect()
+            {
+                // A cancellation that already won cannot append irreversible history. Once admitted,
+                // later cancellation stops waiting but must not claim that publication never happened.
+                return;
+            }
+            self.record_plugin_notice(plugin, operation, cx);
+            if matches!(
+                operation,
+                plugin_runtime::plugin_protocol::interaction::Operation::PublishMessage { .. }
+            ) {
+                // Receipt lifetime ends after retention; floating-card dismissal is purely host presentation.
+                request.finish(Ok(Value::Interaction(
+                    plugin_runtime::plugin_protocol::interaction::Value::Published,
+                )));
                 return;
             }
             self.plugin_interactions.push(cx.new(|cx| {

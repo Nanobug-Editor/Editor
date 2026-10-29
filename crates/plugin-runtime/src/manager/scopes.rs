@@ -211,6 +211,12 @@ impl Manager {
             );
         }
         self.environment = environment;
+        self.host_resources.logs = self
+            .host_resources
+            .logs
+            .for_workspace(&self.environment.workspace);
+        self.native_diagnostics
+            .set_log_sink(self.host_resources.logs.clone());
         self.activation.select_scope(&next_key);
         self.host_resources.terminals.select_scope(next_key.clone());
         self.trusted = trusted;

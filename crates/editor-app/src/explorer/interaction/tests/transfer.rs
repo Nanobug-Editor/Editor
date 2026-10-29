@@ -344,7 +344,7 @@ fn explorer_transfer_failure_and_cancel_retain_only_completed_results(cx: &mut T
         visual.executor().advance_clock(Duration::from_secs(3));
         redraw(visual);
         assert!(
-            visual.debug_bounds("local-notification").is_some(),
+            visual.debug_bounds("host-message-toast").is_some(),
             "operation errors wait for explicit dismissal"
         );
         assert!(!std::fs::read_dir(project.path()).unwrap().any(|entry| {
@@ -422,7 +422,7 @@ fn explorer_transfer_skips_windows_junction_and_continues(cx: &mut TestAppContex
     );
     assert!(!project.path().join("folder/junction").exists());
     assert!(linked.path().join("secret.txt").exists());
-    assert!(visual.debug_bounds("local-notification").is_some());
+    assert!(visual.debug_bounds("host-message-toast").is_some());
 }
 
 #[cfg(windows)]
@@ -446,7 +446,7 @@ fn explorer_transfer_failed_move_preserves_source_and_cleans_current_target(
     paste_item(visual, ClipboardItem::new_string(format!("cut\n{uri}")), 0);
     assert_eq!(std::fs::read_to_string(&source).unwrap(), "locked source");
     assert!(!project.path().join("locked.txt").exists());
-    assert!(visual.debug_bounds("local-notification").is_some());
+    assert!(visual.debug_bounds("host-message-toast").is_some());
 }
 
 /// The originally canonical workspace cannot be redirected by replacing one of its parent directories.
@@ -479,5 +479,5 @@ fn explorer_transfer_rejects_replaced_workspace_ancestor(cx: &mut TestAppContext
     std::fs::remove_dir(&parent).unwrap();
     std::fs::rename(&parked, &parent).unwrap();
     assert!(!wrote_outside);
-    assert!(ui.debug_bounds("local-notification").is_some());
+    assert!(ui.debug_bounds("host-message-toast").is_some());
 }
