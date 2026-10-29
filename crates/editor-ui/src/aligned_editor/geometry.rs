@@ -91,6 +91,8 @@ pub(super) struct Projection {
     pub scroll: Pixels,
     pub inset_y: Pixels,
     pub viewport: Bounds<Pixels>,
+    /// Native geometry from every actually visible slice, including pieces beyond a distant fold.
+    pub ranges: native_ranges::NativeRanges,
 }
 
 impl Projection {

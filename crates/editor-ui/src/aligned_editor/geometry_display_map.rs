@@ -1,23 +1,35 @@
-//! Read complete wrapped-row metadata from the original native editor after its authority paint.
+//! Validate complete native row metadata with wrapping or an exact native horizontal boundary.
 use super::*;
 use gpui_kit::{Point, TextAlign};
 
 /// A planning hint before paint; admission must repeat this check after native layout finishes.
 /// Actual wrapping proves Base uses a bounded horizontal content width. Without that proof,
-/// hidden glyph measurements still supply the exact horizontal extent of unwrapped sources.
+/// unwrapped sources additionally need a native boundary probe or complete glyph measurement.
 pub(super) fn supported(editor: &EditorState, source_rows: &[Range<usize>]) -> bool {
+    supported_rows(editor, source_rows)
+        && editor.display_map().wrap_row_count() > editor.display_map().buffer_line_count()
+}
+
+/// Complete native rows are also sufficient without wrapping when a native x clamp supplies width.
+pub(super) fn supported_rows(editor: &EditorState, source_rows: &[Range<usize>]) -> bool {
     let map = editor.display_map();
     !editor.presentation().is_masked()
         && editor.presentation().text_align() == TextAlign::Left
         && map.folded_ranges().is_empty()
         && map.buffer_line_count() == source_rows.len()
         && map.text().len() == editor.text().len()
-        && map.wrap_row_count() > map.buffer_line_count()
         && map.display_row_count() == map.wrap_row_count()
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Count complete metadata validation separately from native glyph-range queries.
+    pub(super) static VALIDATED_ROWS: Cell<usize> = const { Cell::new(0) };
+}
+
 /// Consume the completed native map for `source_rows`, retaining only immutable pixel rows.
-/// `origin`, `viewport` and `native_scroll` belong to that same final authority paint; no text,
+/// `origin`, `viewport` and `native_scroll` belong to that same final authority paint; `minimum_x`
+/// is an optional current-frame native clamp, already restored before that paint. No text,
 /// cursor, selection, composition or native scrolling is changed. Unsupported maps return None.
 pub(super) fn read(
     editor: &EditorState,
@@ -25,8 +37,11 @@ pub(super) fn read(
     origin: Point<Pixels>,
     viewport: Bounds<Pixels>,
     native_scroll: Pixels,
+    minimum_x: Option<Pixels>,
 ) -> Option<Measurement> {
-    if !supported(editor, source_rows) {
+    if !supported_rows(editor, source_rows)
+        || (minimum_x.is_none() && !supported(editor, source_rows))
+    {
         return None;
     }
     let line_height = editor.line_height()?;
@@ -52,6 +67,8 @@ pub(super) fn read(
     if end != count {
         return None;
     }
+    #[cfg(test)]
+    VALIDATED_ROWS.with(|rows| rows.set(rows.get() + source_rows.len()));
     Some(Measurement {
         native: editor.input_bounds(),
         viewport,
@@ -60,9 +77,9 @@ pub(super) fn read(
         logical_rows: logical_rows.into(),
         visual_rows: (0..count).map(|row| row as f32 * line).collect(),
         line_height,
-        // Base's wrapped input uses its available wrap width even with inline tokens. Alignment
-        // therefore has no horizontal overflow; right/center caret clearance is excluded above.
-        source_width: viewport.size.width,
+        // Wrapping bounds width; otherwise the original native clamp supplies its exact scroll
+        // range, including native caret clearance. No glyph or longest-line estimate is used.
+        source_width: viewport.size.width - minimum_x.unwrap_or(px(0.)),
         cursor: editor.cursor(),
         caret: geometry::painted_caret(editor),
         text_len: editor.text().len(),

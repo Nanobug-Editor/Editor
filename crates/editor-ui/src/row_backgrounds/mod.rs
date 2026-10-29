@@ -55,8 +55,25 @@ pub(super) struct RowGeometry {
     pub rows: Rc<[std::ops::Range<f32>]>,
 }
 
-/// Readers validate the original editor's layout in the supplied window/application context.
-type GeometryReader = dyn Fn(&EditorState, &Window, &App) -> Option<RowGeometry>;
+/// Read native rows without extending the source lifetime or confusing a band repaint with editing.
+struct GeometryReader {
+    /// The owning presentation validates the original layout in this window/application context.
+    read: Box<dyn Fn(&EditorState, &Window, &App) -> Option<RowGeometry>>,
+    /// Missing bands invalidate this presentation, preserving its already validated source rows.
+    owner: EntityId,
+    /// Old painted elements cannot read geometry or repaint an owner after its lease is dropped.
+    active: Rc<std::cell::Cell<bool>>,
+}
+
+impl GeometryReader {
+    /// Return the owner's current validated rows, or None after retirement or a native change.
+    fn read(&self, editor: &EditorState, window: &Window, cx: &App) -> Option<RowGeometry> {
+        self.active
+            .get()
+            .then(|| (self.read)(editor, window, cx))
+            .flatten()
+    }
+}
 
 /// The presentation owner holds this lease; registry entries are weak and cannot retain a source.
 pub(super) struct RowGeometryProvider {
@@ -67,17 +84,20 @@ pub(super) struct RowGeometryProvider {
 }
 
 impl RowGeometryProvider {
-    /// Attach a validated `read` callback to `editor` for any native factory of that same entity.
-    /// Dropping the lease withdraws it; stale/retired readers return None and use native lookup.
+    /// Attach validated `read` geometry and its repaint `owner` to native factories of `editor`.
+    /// Band follow-ups notify the presentation, not the editor's private-state observers.
+    /// Dropping the lease withdraws both capabilities; stale readers use native lookup.
     pub fn new(
         editor: &Entity<EditorState>,
+        owner: EntityId,
         read: impl Fn(&EditorState, &Window, &App) -> Option<RowGeometry> + 'static,
         cx: &mut App,
     ) -> Self {
         let active = Rc::new(std::cell::Cell::new(true));
-        let current = active.clone();
-        let reader: Rc<GeometryReader> = Rc::new(move |editor, window, cx| {
-            current.get().then(|| read(editor, window, cx)).flatten()
+        let reader = Rc::new(GeometryReader {
+            read: Box::new(read),
+            owner,
+            active: active.clone(),
         });
         let registry = cx.default_global::<Registry>();
         registry.1.retain(|_, readers| {
@@ -281,7 +301,7 @@ fn paint_bands(
     let clip = bounds.intersect(&window.content_mask().bounds);
     let geometry = readers
         .iter()
-        .find_map(|read| read(editor.read(cx), window, cx));
+        .find_map(|reader| reader.read(editor.read(cx), window, cx));
     let visible = visible_bytes(editor.read(cx), geometry.as_ref(), clip, px(0.));
     let missing = marks.iter().any(|mark| {
         intersects_bytes(mark, &visible)
@@ -290,10 +310,27 @@ fn paint_bands(
             && !pieces.iter().any(|(admitted, _)| admitted == mark)
     });
     if missing {
-        // A first native paint or a scroll can expose geometry unavailable during prepaint.
-        // Notify by identity only: the callback must not retain a closed document.
+        // Native paint can expose a band absent during prepaint. Repaint its presentation:
+        // notifying the source here would revoke that owner's geometry again, creating an
+        // endless complete-validation loop after a blink or another private native change.
         let id = editor.entity_id();
-        window.on_next_frame(move |_, cx| cx.notify(id));
+        let owners = readers
+            .iter()
+            .filter(|reader| reader.active.get())
+            .cloned()
+            .collect::<Vec<_>>();
+        window.on_next_frame(move |_, cx| {
+            if owners.is_empty() {
+                // Ordinary native editors have no independent geometry/presentation owner.
+                cx.notify(id);
+            } else {
+                for reader in owners {
+                    if reader.active.get() {
+                        cx.notify(reader.owner);
+                    }
+                }
+            }
+        });
     }
     for (mark, native) in &mut pieces {
         let Some(row) = row_bounds(editor.read(cx), mark.range(), geometry.as_ref()) else {
@@ -354,7 +391,9 @@ pub fn native_editor(editor: &Entity<EditorState>, cx: &App) -> AnyElement {
                     // Admission uses the preceding native frame; paint rechecks current geometry
                     // and schedules a finite follow-up if the new native viewport exposes a band.
                     let previous = source.read(cx);
-                    let geometry = readers.iter().find_map(|read| read(previous, window, cx));
+                    let geometry = readers
+                        .iter()
+                        .find_map(|reader| reader.read(previous, window, cx));
                     let clip = bounds.intersect(&window.content_mask().bounds);
                     // Native scrollbar prepaint has applied this copy's requested offset, while
                     // text_bounds still describes the preceding paint. Include that difference

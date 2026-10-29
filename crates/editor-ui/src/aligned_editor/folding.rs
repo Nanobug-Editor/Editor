@@ -183,8 +183,9 @@ pub(super) fn disclosures(
             Some(
                 div()
                     .absolute()
-                    // A disclosure must occlude the source hitbox beneath it before root capture.
-                    .occlude()
+                    // Protect native text clicks while retaining the shared viewport's wheel
+                    // hitbox; full occlusion would trap scrolling whenever a bar passes the mouse.
+                    .block_mouse_except_scroll()
                     .top(inset + top)
                     .left_0()
                     .right(right_inset)

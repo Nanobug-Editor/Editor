@@ -132,16 +132,22 @@ impl PointerRegion {
         }
     }
 
-    /// Revokes an idle region. Returns false during its drag: the caller must use `retire`, since
-    /// discarding a native MouseUp can leave the original editor selecting after it is remounted.
-    pub fn clear(&self) -> bool {
-        if self.0.router.upgrade().is_some_and(|router| {
+    /// Whether this region owns a native pointer sequence, including deferred preparation.
+    /// Geometry consumers must preserve the original native mount throughout that sequence.
+    pub(crate) fn is_captured(&self) -> bool {
+        self.0.router.upgrade().is_some_and(|router| {
             router
                 .drag
                 .borrow()
                 .as_ref()
                 .is_some_and(|drag| drag.region.ptr_eq(&Rc::downgrade(&self.0)))
-        }) {
+        })
+    }
+
+    /// Revokes an idle region. Returns false during its drag: the caller must use `retire`, since
+    /// discarding a native MouseUp can leave the original editor selecting after it is remounted.
+    pub fn clear(&self) -> bool {
+        if self.is_captured() {
             return false;
         }
         self.invalidate();

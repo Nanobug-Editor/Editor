@@ -1,5 +1,6 @@
 //! Deep native viewports must preserve exact location, host input, Unicode preedit and Undo.
 use super::*;
+use gpui_base::input::RopeExt as _;
 
 /// Rebuild the same host input chain with the actual last painted vertical/horizontal projection.
 fn handler(
@@ -81,6 +82,21 @@ fn collapsed_viewport_clicks_both_sides_of_a_distant_source_interval(cx: &mut Te
         [pair[1], pair[0]]
     });
     for (_, byte, position) in targets {
+        ui.update(|window, cx| {
+            let utf16 = view.read(cx).editors[0]
+                .read(cx)
+                .text()
+                .offset_to_offset_utf16(byte);
+            let mut input = handler(&view, window, cx);
+            let bounds = input
+                .bounds_for_range(utf16..utf16, window, cx)
+                .expect("visible native text must retain platform range geometry across folds");
+            assert!((bounds.center().y - position.y).abs() < px(0.5));
+            assert_eq!(
+                input.character_index_for_point(position, window, cx),
+                Some(utf16)
+            );
+        });
         ui.simulate_click(position, Default::default());
         settle(ui);
         ui.update(|_, cx| assert_eq!(view.read(cx).editors[0].read(cx).cursor(), byte));
@@ -109,6 +125,21 @@ fn collapsed_viewport_clicks_both_sides_of_a_distant_source_interval(cx: &mut Te
             "native dragging includes the original hidden source bytes"
         );
         painted_caret(&view, window, cx);
+    });
+    ui.update(|window, cx| {
+        let editor = view.read(cx).editors[0].clone();
+        let utf16 = editor.read(cx).text().offset_to_offset_utf16(targets[0].1);
+        let mut input = handler(&view, window, cx);
+        // Query the already-painted platform handler before the same-length edit can repaint.
+        editor.update(cx, |editor, cx| {
+            editor.replace_text_in_range(Some(0..1), "R", window, cx)
+        });
+        assert!(input.bounds_for_range(utf16..utf16, window, cx).is_none());
+        assert!(
+            input
+                .character_index_for_point(targets[0].2, window, cx)
+                .is_none()
+        );
     });
 }
 

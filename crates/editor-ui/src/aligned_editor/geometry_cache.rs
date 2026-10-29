@@ -92,6 +92,7 @@ impl GeometryCache {
         epoch: u64,
         bounded: bool,
         acquired: Option<Measurement>,
+        minimum_x: Option<Pixels>,
         window: &Window,
     ) -> Option<Measurement> {
         let origin = self.origin(editor)?;
@@ -115,6 +116,7 @@ impl GeometryCache {
                 epoch,
                 bounded,
                 None,
+                minimum_x,
                 window,
             );
         }
@@ -122,6 +124,12 @@ impl GeometryCache {
             && *old == key
         {
             let mut current = measured.clone();
+            if let Some(minimum_x) = minimum_x {
+                current.source_width = viewport.size.width - minimum_x;
+                // Width growth discovered by native visible-line shaping also survives a
+                // captured pointer sequence, during which boundary sampling is suspended.
+                self.measured.as_mut()?.1.source_width = current.source_width;
+            }
             current.native = input;
             current.viewport = viewport;
             current.source_origin = origin;
@@ -135,9 +143,14 @@ impl GeometryCache {
         // Reading those rows avoids hidden whole-source glyph work after cursor blink/private
         // notifications while preserving unconditional invalidation of unknown native changes.
         self.invalidate();
-        if let Some(measured) =
-            geometry_display_map::read(editor, source_rows, origin, viewport, native_scroll)
-        {
+        if let Some(measured) = geometry_display_map::read(
+            editor,
+            source_rows,
+            origin,
+            viewport,
+            native_scroll,
+            minimum_x,
+        ) {
             self.measured = Some((key, measured.clone()));
             self.force_full = false;
             return Some(measured);

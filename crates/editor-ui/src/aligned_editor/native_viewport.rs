@@ -1,6 +1,13 @@
 //! Apply each clipped copy's public native scroll request before Base chooses its visible rows.
 use super::*;
-use gpui_kit::{Element, ElementId, GlobalElementId, InspectorElementId, LayoutId, Window};
+use gpui_kit::InteractiveElement as _;
+use gpui_kit::{
+    Element, ElementId, GlobalElementId, InspectorElementId, LayoutId, ParentElement as _,
+    Styled as _, Window, div, point, size,
+};
+
+/// Current-frame native minimum x, or None if the finite probe did not reach the native boundary.
+pub(super) type WidthOutput = Rc<Cell<Option<Pixels>>>;
 
 /// A layout-transparent native mount; all text, input and wrapping still belong to `editor`.
 pub(super) struct NativeViewport {
@@ -12,6 +19,10 @@ pub(super) struct NativeViewport {
     horizontal: Option<Pixels>,
     /// Original control, including source-owned atomic factories and row backgrounds.
     content: AnyElement,
+    /// Present only on visible copies; the final input window must not admit hidden source rows.
+    ranges: Option<native_ranges::NativeRanges>,
+    /// Invisible width sampling restores native scrolling through a second original control.
+    extent: Option<(WidthOutput, AnyElement)>,
 }
 
 impl NativeViewport {
@@ -28,6 +39,8 @@ impl NativeViewport {
             y: Some(y),
             horizontal,
             content,
+            ranges: None,
+            extent: None,
         }
     }
 
@@ -38,7 +51,39 @@ impl NativeViewport {
             y: None,
             horizontal: None,
             content: crate::scrollbar::native_editor(editor),
+            ranges: None,
+            extent: None,
         }
+    }
+
+    /// After a primer consumes caller scrolling, sample native x clamping and restore it before
+    /// visible copies prepaint. Only plain native factories with an unchanged selection use this.
+    pub fn width_probe(editor: &Entity<EditorState>, output: WidthOutput) -> Self {
+        Self {
+            editor: editor.clone(),
+            y: None,
+            horizontal: None,
+            content: div()
+                .id("native-width-sample")
+                .size_full()
+                .child(crate::scrollbar::native_editor(editor))
+                .into_any_element(),
+            ranges: None,
+            extent: Some((
+                output,
+                div()
+                    .id("native-width-restore")
+                    .size_full()
+                    .child(crate::scrollbar::native_editor(editor))
+                    .into_any_element(),
+            )),
+        }
+    }
+
+    /// Retain native carets in `ranges` only when this visible copy lies outside the input window.
+    pub fn capture(mut self, ranges: Option<&native_ranges::NativeRanges>) -> Self {
+        self.ranges = ranges.cloned();
+        self
     }
 }
 
@@ -71,11 +116,39 @@ impl Element for NativeViewport {
         &mut self,
         _: Option<&GlobalElementId>,
         _: Option<&InspectorElementId>,
-        _: Bounds<Pixels>,
+        bounds: Bounds<Pixels>,
         _: &mut (),
         window: &mut Window,
         cx: &mut App,
     ) {
+        if let Some((output, restore)) = &mut self.extent {
+            let original = self.editor.read(cx).scroll_offset();
+            let request = px(-MAX_LAYOUT_HEIGHT);
+            self.editor.update(cx, |editor, cx| {
+                editor.set_scroll_offset(point(request, original.y), cx)
+            });
+            crate::scrollbar::with_external_scrollbars(window, cx, |window, cx| {
+                self.content.prepaint(window, cx)
+            });
+            // Base's scrollbar prepaint applies the current frame's exact native clamp. A source
+            // wider than our finite request uses complete validation instead of guessed width.
+            let minimum = self.editor.read(cx).scroll_offset().x;
+            output.set(
+                (minimum > request + px(1.) && minimum <= px(0.) && f32::from(minimum).is_finite())
+                    .then_some(minimum),
+            );
+            self.editor
+                .update(cx, |editor, cx| editor.set_scroll_offset(original, cx));
+            crate::scrollbar::with_external_scrollbars(window, cx, |window, cx| {
+                restore.prepaint_as_root(
+                    bounds.origin,
+                    size(bounds.size.width.into(), bounds.size.height.into()),
+                    window,
+                    cx,
+                );
+            });
+            return;
+        }
         // Base reads deferred scrolling when selecting visible logical lines. Prepainting all
         // copies first is safe: each retains its own native layout and applied offset for paint.
         if let Some(y) = self.y {
@@ -98,6 +171,12 @@ impl Element for NativeViewport {
         window: &mut Window,
         cx: &mut App,
     ) {
+        if self.extent.is_some() {
+            return;
+        }
         self.content.paint(window, cx);
+        if let Some(ranges) = &self.ranges {
+            ranges.capture(self.editor.read(cx), window);
+        }
     }
 }

@@ -19,6 +19,7 @@ mod gutter;
 #[cfg(test)]
 mod gutter_tests;
 mod input;
+mod native_ranges;
 mod native_viewport;
 mod notifications;
 mod pane;
@@ -389,6 +390,14 @@ impl AlignmentGroup {
         let group = self.state.read(cx);
         let source = group.sources.get(index)?;
         let native = source.editor.read(cx);
+        if group
+            .frames
+            .get(index)
+            .and_then(Option::as_ref)
+            .is_some_and(|frame| !frame.ranges.matches(native))
+        {
+            return None;
+        }
         if range.end > native.text().len()
             || range.start > range.end
             || !native.text().is_char_boundary(range.start)
@@ -398,12 +407,14 @@ impl AlignmentGroup {
         }
         use gpui_base::input::RopeExt as _;
         let visible = native.visible_row_range()?;
-        if !visible.contains(&native.text().offset_to_point(range.start).row)
-            || !visible.contains(&native.text().offset_to_point(range.end).row)
-        {
-            return None;
-        }
-        let bounds = native.range_to_bounds(&range)?;
+        let laid_out = visible.contains(&native.text().offset_to_point(range.start).row)
+            && visible.contains(&native.text().offset_to_point(range.end).row);
+        let bounds = if laid_out {
+            native.range_to_bounds(&range)
+        } else {
+            let frame = group.frames.get(index)?.as_ref()?;
+            frame.ranges.bounds(&range, &frame.measured, native)
+        }?;
         let projected = group.project(index, bounds)?;
         let viewport = if matches!(group.effective_status(), AlignmentStatus::Ready) {
             // Headers/native padding can leave zero-byte space above or below the shared source

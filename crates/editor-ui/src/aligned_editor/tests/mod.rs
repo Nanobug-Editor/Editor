@@ -579,6 +579,7 @@ fn aligned_editor_budget_fallback_preserves_host_input_and_native_overlays_pause
 }
 
 mod content_edges;
+mod folded_scroll;
 mod ime;
 mod native_map;
 mod origins;
