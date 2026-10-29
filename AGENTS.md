@@ -85,7 +85,8 @@
 
 ## 验证与交付
 
-- 新修改任务默认在独立 worktree 中执行，同一任务继续使用原 worktree；用户明确指定当前工作区时按其要求执行。每个 worktree 使用自身的 `target/`，同一任务的构建、测试和重试复用该目录。
+- 工作区选择与本地合并方式统一由 `task-worktree` Skill 管理。
+- 每个 worktree 使用自身的 `target/`，同一任务的构建、测试和重试复用该目录。
 - 主项目的 `target/` 仅用于主项目构建和合并后的验证，不再按任务新增输出目录；其他 worktree 或不同源码快照不得通过 `CARGO_TARGET_DIR`、`--target-dir` 或 Cargo 配置共用主项目输出。构建前用 `cargo metadata --no-deps --format-version 1` 核对 `workspace_root`、`target_directory`，并检查命令行覆盖。源码中接口存在但编译报缺失时，先按[缓存诊断记录](docs/project/verification/build-cache-2026-10-18.md)核对产物来源。
 - 截图、日志和验收证据集中保存到项目外的本机任务资料目录；回收 worktree 前保留必要交付物和证据，再清理该任务的临时产物。各 worktree 沿用本机共享的 Cargo 下载缓存，源码下载缓存与各自的编译输出分别管理。
 - 构建或启动报错先核对 IDE 的实际命令和 profile，修复后重复同一入口；按包清理默认 profile 不覆盖 Release，需显式加 `--release`，见 [Release 复查](docs/project/verification/build-cache-release-2026-10-18.md)。
