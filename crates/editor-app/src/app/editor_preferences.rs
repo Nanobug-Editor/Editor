@@ -30,6 +30,9 @@ pub(crate) enum TabPlacement {
 struct StoredPreferences {
     /// Missing settings retain the current top-strip presentation.
     tab_placement: TabPlacement,
+    /// Absent in older profiles: comparisons initially collapse unchanged regions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    comparison_collapsed: Option<bool>,
     /// Unknown keys belong to other preferences and must survive this writer unchanged.
     #[serde(flatten)]
     extra: serde_json::Map<String, serde_json::Value>,
@@ -64,6 +67,8 @@ impl StoredPreferences {
 struct ProfileState {
     /// Last successfully loaded or saved presentation; malformed first loads retain Top.
     placement: TabPlacement,
+    /// Last explicit global comparison fold choice; None retains the collapsed default.
+    comparison_collapsed: Option<bool>,
     /// The latest storage failure is visible until a successful retry.
     error: Option<String>,
 }
@@ -91,6 +96,7 @@ pub(crate) fn ensure_profile(profile: &Path, cx: &mut App) -> anyhow::Result<()>
     let state = match &loaded {
         Ok(value) => ProfileState {
             placement: value.tab_placement,
+            comparison_collapsed: value.comparison_collapsed,
             error: None,
         },
         Err(error) => ProfileState {
@@ -109,6 +115,43 @@ pub(crate) fn placement(profile: &Path, cx: &App) -> TabPlacement {
     cx.try_global::<EditorPreferences>()
         .and_then(|preferences| preferences.profiles.get(profile))
         .map_or(TabPlacement::Top, |state| state.placement)
+}
+
+/// Return the last all-regions choice, defaulting to collapsed without touching profile storage.
+pub(crate) fn comparison_collapsed(profile: &Path, cx: &App) -> bool {
+    cx.try_global::<EditorPreferences>()
+        .and_then(|preferences| preferences.profiles.get(profile))
+        .and_then(|state| state.comparison_collapsed)
+        .unwrap_or(true)
+}
+
+/// Save only an explicit changed fold choice; file/tab activation never writes this preference.
+/// A malformed record or write failure preserves existing data and the last published choice.
+pub(crate) fn set_comparison_collapsed(
+    profile: &Path,
+    value: bool,
+    cx: &mut App,
+) -> anyhow::Result<()> {
+    let _ = ensure_profile(profile, cx);
+    if comparison_collapsed(profile, cx) == value && error(profile, cx).is_none() {
+        return Ok(());
+    }
+    let saved = (|| {
+        let mut preferences = StoredPreferences::load(profile)?;
+        preferences.comparison_collapsed = Some(value);
+        preferences.save(profile)
+    })();
+    cx.update_global::<EditorPreferences, _>(|preferences, _| {
+        let state = preferences.profiles.entry(profile.to_owned()).or_default();
+        match &saved {
+            Ok(()) => {
+                state.comparison_collapsed = Some(value);
+                state.error = None;
+            }
+            Err(error) => state.error = Some(error.to_string()),
+        }
+    });
+    saved
 }
 
 /// Return the latest storage error for `profile` in `cx`, without initiating filesystem work.
@@ -149,6 +192,43 @@ pub(crate) fn set_placement(
 mod tests {
     use super::*;
     use gpui_kit::{TestAppContext, gpui};
+
+    /// Old profiles default to collapsed; explicit choices survive reload without losing other settings.
+    #[gpui::test]
+    fn comparison_fold_choice_defaults_collapsed_and_survives_restart(cx: &mut TestAppContext) {
+        let profile = tempfile::tempdir().unwrap();
+        cx.update(|cx| {
+            ensure_profile(profile.path(), cx).unwrap();
+            assert!(comparison_collapsed(profile.path(), cx));
+            set_comparison_collapsed(profile.path(), true, cx).unwrap();
+        });
+        assert!(!profile.path().join("editor.json").exists());
+        cx.update(|cx| {
+            set_placement(profile.path(), TabPlacement::Left, cx).unwrap();
+            set_comparison_collapsed(profile.path(), false, cx).unwrap();
+            cx.set_global(EditorPreferences::default());
+            ensure_profile(profile.path(), cx).unwrap();
+            assert!(!comparison_collapsed(profile.path(), cx));
+            assert_eq!(placement(profile.path(), cx), TabPlacement::Left);
+            set_comparison_collapsed(profile.path(), true, cx).unwrap();
+        });
+        assert_eq!(
+            StoredPreferences::load(profile.path())
+                .unwrap()
+                .comparison_collapsed,
+            Some(true)
+        );
+        let damaged = b"{damaged";
+        std::fs::write(profile.path().join("editor.json"), damaged).unwrap();
+        cx.update(|cx| {
+            assert!(set_comparison_collapsed(profile.path(), false, cx).is_err());
+            assert!(comparison_collapsed(profile.path(), cx));
+        });
+        assert_eq!(
+            std::fs::read(profile.path().join("editor.json")).unwrap(),
+            damaged
+        );
+    }
 
     /// Missing records and older empty records use Top without eagerly creating profile files.
     #[test]

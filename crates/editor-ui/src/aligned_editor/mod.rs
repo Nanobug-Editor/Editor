@@ -174,10 +174,10 @@ impl AlignmentGroup {
         }
         let same_members = self.state.read(cx).same_members(&panes);
         if same_members
-            && self.state.read(cx).same_revisions(&panes)
+            && (self.state.read(cx).same_revisions(&panes) || self.state.read(cx).same_contents(cx))
             && self.state.read(cx).rows.is_some()
         {
-            // Session bridges can change while the document content revision stays the same.
+            // Session bridges/capabilities can change while exact native text stays the same.
             self.state.update(cx, |state, _| {
                 state.sources = panes;
                 state.adopt_ledger(ledger);
@@ -433,6 +433,13 @@ impl AlignmentGroup {
     /// Shared positive vertical viewport position; Base's original source ScrollHandle stays native.
     pub fn scroll_offset(&self, cx: &App) -> Pixels {
         self.state.read(cx).scroll.get()
+    }
+
+    /// Restore a retained positive vertical `offset` when the current native layout is ready.
+    /// Returns false for invalid offsets or inactive groups; later source changes cancel restoration.
+    pub fn restore_scroll_offset(&self, offset: Pixels, cx: &mut App) -> bool {
+        self.state
+            .update(cx, |state, cx| state.restore_scroll_offset(offset, cx))
     }
 }
 

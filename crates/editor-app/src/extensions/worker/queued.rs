@@ -2,6 +2,8 @@
 use super::*;
 use plugin_runtime::observability::{Observation, Outcome, Owner, Stage};
 mod mailbox;
+#[cfg(test)]
+mod wake_tests;
 
 /// The admission clock travels with the actual message, never in a shadow keyed queue.
 pub(in crate::extensions) struct Envelope {
@@ -21,6 +23,15 @@ pub(in crate::extensions) enum WorkSender {
     Recorded(mpsc::Sender<Work>),
 }
 impl WorkSender {
+    /// Resume the runtime after native effects commit; no queued input or guest event is added.
+    pub(in crate::extensions) fn wake(&self) {
+        match self {
+            Self::Timed { sender, .. } => sender.wake(),
+            #[cfg(test)]
+            Self::Recorded(_) => {}
+        }
+    }
+
     /// Preserve the existing recorded UI-message adapter without starting any runtime work.
     #[cfg(test)]
     pub(super) fn recording(sender: mpsc::Sender<Work>) -> Self {

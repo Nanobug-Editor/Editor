@@ -220,6 +220,11 @@ impl EditorApp {
                 )
             })
             .flatten();
+        let _timing = super::comparison::timing::Span::new(if cached.is_some() {
+            "source-reused"
+        } else {
+            "source-new"
+        });
         let native = if let Some(mut native) = cached {
             // A fresh document identity owns the existing readonly buffer; old handles remain revoked.
             native.session = DocumentSession::readonly_resource(&path, text.to_owned()).session;

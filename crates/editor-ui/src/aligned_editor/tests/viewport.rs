@@ -2,6 +2,38 @@
 use super::*;
 use gpui_base::input::RopeExt as _;
 
+/// Tab restoration waits for fresh native layout; explicit navigation supersedes queued restoration.
+#[gpui::test]
+fn retained_viewport_restores_after_measurement_and_yields_to_navigation(cx: &mut TestAppContext) {
+    let text = (0..2000)
+        .map(|row| format!("row {row} 中文\n"))
+        .collect::<String>();
+    let (view, ui) = mount_sources(cx, [text.clone(), text.clone()]);
+    let group = ui.update(|_, cx| view.read(cx).group.clone());
+    ui.update(|_, cx| {
+        group.state.update(cx, |state, cx| state.invalidate(cx));
+        assert!(group.restore_scroll_offset(px(12_345.), cx));
+    });
+    settle(ui);
+    ui.update(|_, cx| {
+        assert!((group.scroll_offset(cx) - px(12_345.)).abs() < px(0.5));
+        for editor in &view.read(cx).editors {
+            assert_eq!(editor.read(cx).value().as_ref(), text);
+            assert_eq!(editor.read(cx).selected_range(), 0..0);
+        }
+        group.state.update(cx, |state, cx| state.invalidate(cx));
+        assert!(group.restore_scroll_offset(px(20_000.), cx));
+        assert!(group.reveal_offset(1, 0, cx));
+    });
+    settle(ui);
+    ui.update(|_, cx| {
+        assert_eq!(group.scroll_offset(cx), px(0.));
+        assert!(group.project_range(1, 0..0, cx).is_some());
+        assert!(!group.restore_scroll_offset(px(f32::NAN), cx));
+        assert!(!group.restore_scroll_offset(px(-1.), cx));
+    });
+}
+
 /// Rebuild the same host input chain with the actual last painted vertical/horizontal projection.
 fn handler(
     view: &Entity<Fixture>,
@@ -370,7 +402,7 @@ fn bounded_comparison_paints_only_the_shared_vertical_scrollbar(cx: &mut TestApp
     });
 }
 
-/// A nowrap notify-only repaint retains complete bounded validation and native horizontal extent.
+/// A nowrap notify-only repaint revalidates native metadata and exact horizontal extent without hidden glyph work.
 #[gpui::test]
 fn private_native_notifications_remeasure_all_rows_without_a_whole_source_lookup(
     cx: &mut TestAppContext,
@@ -393,8 +425,8 @@ fn private_native_notifications_remeasure_all_rows_without_a_whole_source_lookup
     settle(ui);
     assert_eq!(
         geometry::MEASURED_ROWS.with(|count| count.get()),
-        361,
-        "private notifications must revalidate every source row exactly once"
+        0,
+        "private notifications validate native row metadata without offscreen glyph queries"
     );
     assert!(
         geometry::MAX_LOOKUP_ROWS.with(|count| count.get()) <= 140,
@@ -404,8 +436,7 @@ fn private_native_notifications_remeasure_all_rows_without_a_whole_source_lookup
     ui.update(|_, cx| assert_visible_native_rows(&view, cx));
 }
 
-/// A nowrap redraw warms a bounded readonly snapshot; private notifications still validate all
-/// rows because native display mapping does not expose its complete horizontal content extent.
+/// A nowrap redraw and private notifications reuse validated rows plus the actual native width clamp.
 #[gpui::test]
 fn global_refresh_bounds_snapshot_glyph_work_and_preserves_full_native_validation(
     cx: &mut TestAppContext,
@@ -427,25 +458,21 @@ fn global_refresh_bounds_snapshot_glyph_work_and_preserves_full_native_validatio
     });
     let planned = geometry_measurement::PLANNED_ROWS.with(|rows| rows.get());
     assert_eq!(
-        planned[0], 361,
-        "the editable source must retain its complete native glyph cache"
-    );
-    assert!(
-        planned[1] > 0 && planned[1] < 180,
-        "a forced refresh must bound background snapshot glyph work: {planned:?}"
+        planned, [0; 3],
+        "both source maps avoid hidden native glyph windows"
     );
     geometry::MEASURED_ROWS.with(|rows| rows.set(0));
     ui.update(|_, cx| cx.notify(view.read(cx).editors[1].entity_id()));
     settle(ui);
     assert_eq!(
         geometry::MEASURED_ROWS.with(|rows| rows.get()),
-        361,
-        "readonly snapshots still require complete native validation after private changes"
+        0,
+        "readonly snapshots validate the full native map without hidden glyph work"
     );
     ui.update(|_, cx| assert_visible_native_rows(&view, cx));
 }
 
-/// A retained glyph lease must not leave hidden native key actions or platform text input alive.
+/// Retiring a focused bounded authority must withdraw native key actions and platform text input.
 #[gpui::test]
 fn retiring_focused_comparison_withdraws_glyphs_actions_and_input(cx: &mut TestAppContext) {
     let text = (0..160)
@@ -463,8 +490,8 @@ fn retiring_focused_comparison_withdraws_glyphs_actions_and_input(cx: &mut TestA
     ui.update(|window, cx| {
         assert_eq!(
             geometry_glyphs::live_count(window, cx),
-            2,
-            "exercise actually retained native glyph views"
+            0,
+            "complete native maps need no hidden glyph views"
         );
         view.read(cx).group.clone().retire(cx);
     });

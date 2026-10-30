@@ -9,6 +9,30 @@ use gpui_kit::{
 /// Current-frame native minimum x, or None if the finite probe did not reach the native boundary.
 pub(super) type WidthOutput = Rc<Cell<Option<Pixels>>>;
 
+/// Optional per-mount diagnostics show native preparation cost without exposing source contents.
+struct PaintTiming(Option<std::time::Instant>, bool);
+impl PaintTiming {
+    fn new(probe: bool) -> Self {
+        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        Self(
+            ENABLED
+                .get_or_init(|| std::env::var_os("NANOBUG_TRACE_DIFF").is_some())
+                .then(std::time::Instant::now),
+            probe,
+        )
+    }
+}
+impl Drop for PaintTiming {
+    fn drop(&mut self) {
+        if let Some(started) = self.0 {
+            let ms = started.elapsed().as_secs_f64() * 1000.;
+            if ms >= 1. {
+                eprintln!("diff-stage native-prepaint probe={} {ms:.3}ms", self.1);
+            }
+        }
+    }
+}
+
 /// A layout-transparent native mount; all text, input and wrapping still belong to `editor`.
 pub(super) struct NativeViewport {
     /// The original source identity shared by visual copies and the last input authority.
@@ -57,8 +81,21 @@ impl NativeViewport {
     }
 
     /// After a primer consumes caller scrolling, sample native x clamping and restore it before
-    /// visible copies prepaint. Only plain native factories with an unchanged selection use this.
-    pub fn width_probe(editor: &Entity<EditorState>, output: WidthOutput) -> Self {
+    /// visible copies prepaint. `factory` preserves the source's exact native typography and
+    /// padding. Cold sources are safe; an existing captured/changed selection is excluded upstream.
+    pub fn width_probe(
+        editor: &Entity<EditorState>,
+        output: WidthOutput,
+        factory: Option<&AlignmentNativeFactory>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self {
+        let mut native = || {
+            factory.map_or_else(
+                || crate::scrollbar::native_editor(editor),
+                |factory| factory(editor, window, cx),
+            )
+        };
         Self {
             editor: editor.clone(),
             y: None,
@@ -66,7 +103,7 @@ impl NativeViewport {
             content: div()
                 .id("native-width-sample")
                 .size_full()
-                .child(crate::scrollbar::native_editor(editor))
+                .child(native())
                 .into_any_element(),
             ranges: None,
             extent: Some((
@@ -74,7 +111,7 @@ impl NativeViewport {
                 div()
                     .id("native-width-restore")
                     .size_full()
-                    .child(crate::scrollbar::native_editor(editor))
+                    .child(native())
                     .into_any_element(),
             )),
         }
@@ -121,6 +158,7 @@ impl Element for NativeViewport {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let _timing = PaintTiming::new(self.extent.is_some());
         if let Some((output, restore)) = &mut self.extent {
             let original = self.editor.read(cx).scroll_offset();
             let request = px(-MAX_LAYOUT_HEIGHT);

@@ -436,7 +436,7 @@ fn aligned_editor_shared_row_budget_rebuilds_and_retirement_returns_reservation(
         });
     });
     settle(ui);
-    ui.update(|_, cx| {
+    ui.update(|window, cx| {
         let (first, router, sources) = {
             let fixture = view.read(cx);
             assert_eq!(fixture.group.status(cx), AlignmentStatus::Ready);
@@ -449,6 +449,11 @@ fn aligned_editor_shared_row_budget_rebuilds_and_retirement_returns_reservation(
         let ledger = Rc::new(Cell::new(2));
         let mut first = first;
         let mut sources = sources;
+        // A capability-only revision now reuses its row plan. Change native text to exercise an
+        // actual rebuild and prove the new ledger still owns and releases the resulting reservation.
+        sources[0].editor.update(cx, |editor, cx| {
+            editor.replace_text_in_range(Some(0..1), "c", window, cx)
+        });
         for source in &mut sources {
             source.revision += 1;
         }

@@ -78,6 +78,84 @@ fn native_map_cold_admission_avoids_hidden_source_layout(cx: &mut TestAppContext
     ui.update(|_, cx| assert_wrapped_native_geometry(&view, cx));
 }
 
+/// Ordinary short lines also have complete native row metadata, even with no wrapped rows.
+#[gpui::test]
+fn native_map_short_lines_admit_without_hidden_source_layout(cx: &mut TestAppContext) {
+    reset_hidden_work();
+    let text = (0..2000)
+        .map(|row| format!("row {row}\n"))
+        .collect::<String>();
+    let (view, ui) = mount_sources(cx, [text.clone(), text.clone()]);
+    assert_no_hidden_work();
+    ui.update(|_, cx| {
+        let fixture = view.read(cx);
+        let mut group = fixture.group.clone();
+        let router = fixture.router.clone();
+        let panes = fixture
+            .editors
+            .iter()
+            .enumerate()
+            .map(|(index, editor)| AlignmentPane::new(editor.clone(), 2, format!("source {index}")))
+            .collect();
+        let epoch = group.state.read(cx).epoch;
+        group.configure(panes, &router, cx).unwrap();
+        assert_eq!(
+            group.state.read(cx).epoch,
+            epoch,
+            "identical text must keep its row plan after a capability refresh"
+        );
+    });
+    ui.update(|_, cx| {
+        let fixture = view.read(cx);
+        let group = fixture.group.state.read(cx);
+        assert_eq!(group.effective_status(), AlignmentStatus::Ready);
+        for (index, editor) in fixture.editors.iter().enumerate() {
+            let native = editor.read(cx);
+            let map = native.display_map();
+            assert_eq!(map.wrap_row_count(), map.buffer_line_count());
+            let measured = group.measurements[index].as_ref().unwrap();
+            let line = f32::from(native.line_height().unwrap());
+            assert_eq!(measured.logical_rows.len(), map.buffer_line_count());
+            for (row, actual) in measured.logical_rows.iter().enumerate() {
+                assert!((actual.start - row as f32 * line).abs() < 0.5);
+                assert!((actual.end - (row + 1) as f32 * line).abs() < 0.5);
+            }
+            assert_eq!(native.value().as_ref(), text);
+            assert_eq!(native.selected_range(), 0..0);
+        }
+    });
+}
+
+/// A distant initial difference must land on real native glyphs without expanding the input to all rows.
+#[gpui::test]
+fn native_map_reveals_distant_short_line_from_a_bounded_native_window(cx: &mut TestAppContext) {
+    let text = (0..2000)
+        .map(|row| format!("row {row}\n"))
+        .collect::<String>();
+    let byte = text.find("row 1500\n").unwrap();
+    let (view, ui) = mount_sources(cx, [text.clone(), text]);
+    reset_hidden_work();
+    ui.update(|_, cx| {
+        let group = view.read(cx).group.clone();
+        assert!(group.reveal_offset(1, byte, cx));
+    });
+    settle(ui);
+    assert_no_hidden_work();
+    ui.update(|_, cx| {
+        let fixture = view.read(cx);
+        assert!(fixture.group.project_range(1, byte..byte, cx).is_some());
+        assert!(fixture.group.scroll_offset(cx) > px(20_000.));
+        assert!(
+            fixture.editors[1]
+                .read(cx)
+                .visible_row_range()
+                .unwrap()
+                .len()
+                < 64
+        );
+    });
+}
+
 /// Blink-like notifications and full-window refresh must preserve native geometry at deep scroll.
 #[gpui::test]
 fn native_map_revalidates_unknown_notifications_without_hidden_source_layout(
@@ -129,8 +207,7 @@ fn native_map_nowrap_transition_preserves_horizontal_scroll_and_reenters_wrapped
         }
     });
     settle(ui);
-    assert!(geometry::MEASURED_ROWS.with(|rows| rows.get()) > 0);
-    assert!(geometry_measurement::PLANNED_ROWS.with(|rows| rows.get()[0]) > 0);
+    assert_no_hidden_work();
     let position = ui.update(|_, cx| {
         let fixture = view.read(cx);
         let group = fixture.group.state.read(cx);

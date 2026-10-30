@@ -53,7 +53,7 @@ fn fractional_diff_scroll_retains_row_geometry(cx: &mut TestAppContext) {
 
 /// A fresh comparison must reuse native rows to plan work without copying its old geometry cache.
 #[gpui::test]
-fn remounted_short_line_diff_batches_follow_rows_instead_of_bytes(cx: &mut TestAppContext) {
+fn remounted_short_line_diff_uses_complete_native_map_without_batches(cx: &mut TestAppContext) {
     let original = (0..2000)
         .map(|row| format!("row{row:04} 中文\n"))
         .collect::<String>();
@@ -77,19 +77,15 @@ fn remounted_short_line_diff_batches_follow_rows_instead_of_bytes(cx: &mut TestA
             assert_eq!(native.value().as_ref(), expected);
             assert_eq!(native.display_map().buffer_line_count(), 2001);
             assert_eq!(native.display_map().display_row_count(), 2001);
-            // Admission and a retained glyph lease can each mount batches. A byte-derived
-            // upper bound would need hundreds of windows for these same 2,001 short rows.
-            let groups = 2001_usize.div_ceil(128);
-            assert!(
-                batches[index] > 0 && batches[index] <= groups * 3,
-                "source {index} planned {} native windows for {groups} row groups",
-                batches[index]
+            assert_eq!(
+                batches[index], 0,
+                "a complete native map needs no hidden windows"
             );
         }
     });
 }
 
-/// A remembered wide map is only a planner: narrower native paint must reject missing EOF rows.
+/// A remembered wide map is only a planner: narrower native paint must learn complete new EOF rows.
 #[gpui::test]
 fn remounted_diff_rejects_stale_width_hint_and_recovers_full_geometry(cx: &mut TestAppContext) {
     let text = (0..360)
@@ -112,9 +108,9 @@ fn remounted_diff_rejects_stale_width_hint_and_recovers_full_geometry(cx: &mut T
     remount_native_sources(&view, ui, Some(narrow));
     settle(ui);
     let incomplete = geometry_measurement::INCOMPLETE_BATCHES.with(|count| count.get());
-    assert!(
-        incomplete[0] > 0 && incomplete[1] > 0,
-        "stale wide-map batches must fail complete native coverage: {incomplete:?}"
+    assert_eq!(
+        incomplete, [0; 3],
+        "the actual narrow native map needs no stale wide batches"
     );
     ui.update(|_, cx| {
         assert_complete_native_map(&view, cx);
@@ -425,9 +421,10 @@ fn geometry_cache_remeasures_wrap_font_padding_and_scale_changes(cx: &mut TestAp
     geometry::MEASURED_ROWS.with(|count| count.set(0));
     ui.simulate_scale_factor_change(1.5);
     settle(ui);
-    assert!(
-        geometry::MEASURED_ROWS.with(|count| count.get()) > 0,
-        "DPI change must revoke the geometry cache"
+    assert_eq!(
+        geometry::MEASURED_ROWS.with(|count| count.get()),
+        0,
+        "DPI changes revalidate native metadata without querying offscreen glyphs"
     );
     ui.update(|_, cx| assert_native_rows(&view, cx));
 }

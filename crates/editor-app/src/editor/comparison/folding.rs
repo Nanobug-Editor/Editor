@@ -13,13 +13,21 @@ pub(super) struct FoldControls {
     expand: [Arc<[u8]>; 2],
     /// The aligned display shares only slot ranges and these choices, never an editable buffer.
     model: UnchangedFolds,
+    /// Last global all-regions choice applied to this model; individual disclosures do not alter it.
+    collapsed: bool,
 }
 
 impl FoldControls {
+    /// Identical provider controls can retain their already mounted row/folding plan.
+    pub(super) fn same_descriptor(&self, other: &Self) -> bool {
+        self.descriptor == other.descriptor && self.collapsed == other.collapsed
+    }
+
     /// Freeze validated request artwork, failing before replacing an existing comparison.
     pub(super) fn admit(
         descriptor: &api::ComparisonFolding,
         request: &plugin_runtime::EditorRequest,
+        collapsed: bool,
     ) -> Result<Self, api::Failure> {
         let resolve = |icon: &plugin_runtime::plugin_protocol::ui::ToolIcon| -> Result<[Arc<[u8]>; 2], api::Failure> {
             let bytes = |path: &String| request.comparison_icons().get(path).cloned().ok_or_else(|| {
@@ -31,7 +39,9 @@ impl FoldControls {
         Ok(Self {
             descriptor: descriptor.clone(),
             collapse: resolve(&descriptor.collapse)?,
-            model: UnchangedFolds::new(descriptor.context_lines, expand.clone()),
+            model: UnchangedFolds::new(descriptor.context_lines, expand.clone())
+                .initially_collapsed(collapsed),
+            collapsed,
             expand,
         })
     }
@@ -49,6 +59,19 @@ impl FoldControls {
 }
 
 impl EditorApp {
+    /// Apply a successful profile preference change to this window's active comparison.
+    pub(crate) fn apply_comparison_fold_preference(
+        &mut self,
+        collapsed: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.comparison_collapsed != collapsed {
+            self.comparison_collapsed = collapsed;
+            self.mount_comparison_folding(cx);
+            cx.notify();
+        }
+    }
+
     /// Resolve controls only from the current live retained comparison owner.
     pub(super) fn comparison_folding(&self) -> Option<&FoldControls> {
         let id = self.active_comparison.as_ref()?;
@@ -60,7 +83,19 @@ impl EditorApp {
     }
 
     /// Attach choices after exact source admission; switching tabs restores the same view model.
-    pub(super) fn mount_comparison_folding(&self, cx: &mut App) {
+    pub(super) fn mount_comparison_folding(&mut self, cx: &mut App) {
+        if let Some(controls) = self
+            .comparison_views
+            .iter_mut()
+            .find(|view| Some(&view.id) == self.active_comparison.as_ref())
+            .and_then(|view| view.folding.as_mut())
+            && controls.collapsed != self.comparison_collapsed
+        {
+            controls.collapsed = self.comparison_collapsed;
+            controls.model =
+                UnchangedFolds::new(controls.descriptor.context_lines, controls.expand.clone())
+                    .initially_collapsed(controls.collapsed);
+        }
         if let (Some(controls), Some(comparison)) =
             (self.comparison_folding(), &self.document_comparison)
         {
@@ -73,8 +108,33 @@ impl EditorApp {
         if self.comparison_folding().is_some_and(|controls| {
             let (collapse, expand) = controls.model.available();
             if collapsed { collapse } else { expand }
-        }) && let Some(comparison) = &self.document_comparison
+        }) && self.document_comparison.is_some()
         {
+            if self.comparison_collapsed != collapsed
+                && let Some(profile) = self
+                    .session_state
+                    .file_path()
+                    .and_then(|path| path.parent().map(Path::to_owned))
+                && let Err(error) =
+                    app::editor_preferences::set_comparison_collapsed(&profile, collapsed, cx)
+            {
+                self.report_host_message(
+                    app::messages::MessageLevel::Warning,
+                    error.to_string(),
+                    cx,
+                );
+                return;
+            }
+            self.comparison_collapsed = collapsed;
+            if let Some(controls) = self
+                .comparison_views
+                .iter_mut()
+                .find(|view| Some(&view.id) == self.active_comparison.as_ref())
+                .and_then(|view| view.folding.as_mut())
+            {
+                controls.collapsed = collapsed;
+            }
+            let comparison = self.document_comparison.as_ref().unwrap();
             comparison.alignment.fold_unchanged(collapsed, cx);
             cx.notify();
         }
@@ -124,7 +184,7 @@ pub(super) fn retain_choices(
     prior: Option<&FoldControls>,
     mut admitted: FoldControls,
 ) -> FoldControls {
-    if let Some(prior) = prior.filter(|prior| prior.descriptor == admitted.descriptor) {
+    if let Some(prior) = prior.filter(|prior| prior.same_descriptor(&admitted)) {
         admitted.model = prior.model.clone();
     }
     admitted

@@ -26,6 +26,12 @@ struct Choices {
 }
 
 impl UnchangedFolds {
+    /// Choose the initial all-regions policy before mounting; this does not change native source text.
+    pub fn initially_collapsed(self, collapsed: bool) -> Self {
+        self.set_all(collapsed);
+        self
+    }
+
     /// Retain checked package artwork and an initially expanded comparison, without copying text.
     pub fn new(context: u8, expand_icons: [Arc<[u8]>; 2]) -> Self {
         Self {

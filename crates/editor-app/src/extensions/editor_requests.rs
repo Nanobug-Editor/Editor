@@ -53,6 +53,9 @@ impl EditorApp {
         // request completion were queued above; the next request observes their committed version.
         cx.defer_in(window, |this, window, cx| {
             this.editor_request_dispatch_scheduled = false;
+            // Replies are ready after native Change effects. Wake the actor now instead of adding
+            // its 30 ms idle poll interval to every round trip in a multi-step editor operation.
+            this.extensions.read(cx).worker.tx.wake();
             this.dispatch_editor_requests(window, cx);
         });
     }
