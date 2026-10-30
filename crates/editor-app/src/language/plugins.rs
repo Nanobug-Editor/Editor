@@ -1,6 +1,8 @@
 //! Loads selected plugin grammars into the local Tree-sitter registry.
 
 #[cfg(test)]
+mod rust_package_tests;
+#[cfg(test)]
 mod vue_editor_tests;
 #[cfg(test)]
 mod vue_package_tests;

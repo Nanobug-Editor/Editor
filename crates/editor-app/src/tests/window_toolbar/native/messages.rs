@@ -83,5 +83,78 @@ pub(super) async fn exercise(
         !messages_visible(handle, app, cx)?,
         "reminder scenario left messages open"
     );
+    timestamped_stderr(handle, app, output, label, cx).await?;
+    Ok(())
+}
+
+/// Replay timestamped stderr on `handle`, capture one card under `output`/`label`, then dismiss by input.
+/// `app` keeps the original runtime history while `cx` drives the actual Windows message loop.
+async fn timestamped_stderr(
+    handle: AnyWindowHandle,
+    app: &Entity<EditorApp>,
+    output: &Path,
+    label: &str,
+    cx: &mut AsyncApp,
+) -> anyhow::Result<()> {
+    // Earlier palette checks leave warning/error cards; close them through their actual native controls.
+    while handle.update(cx, |_, _, cx| {
+        app.read(cx).message_delivery.notifications(cx).count() > 0
+    })? {
+        let close = button_bounds(handle, "dismiss-local-notification", cx)?.center();
+        dispatch(handle, down(close), cx)?;
+        dispatch(handle, up(close), cx)?;
+        frame(handle, cx).await?;
+    }
+    let logs = handle.update(cx, |_, _, cx| {
+        app.read(cx).extensions.read(cx).runtime_logs()
+    })?;
+    for index in 0..3 {
+        logs.append(
+            "language-plugin",
+            plugin_runtime::LogLevel::Warning,
+            "lsp/analysis/stderr",
+            format!(
+                "2026-10-30T21:43:0{index}.4372163+08:00  WARN notify error: Input watch path is neither a file nor a directory."
+            ),
+        );
+        handle.update(cx, |_, _, cx| {
+            app.read(cx)
+                .extensions
+                .clone()
+                .update(cx, |_, cx| cx.notify());
+        })?;
+        frame(handle, cx).await?;
+    }
+    ensure!(
+        handle.update(cx, |_, _, cx| app
+            .read(cx)
+            .message_delivery
+            .notifications(cx)
+            .count())?
+            == 1,
+        "timestamped stderr created duplicate native cards"
+    );
+    ensure!(
+        logs.records("language-plugin").len() == 3,
+        "stderr history was lost"
+    );
+    let close = button_bounds(handle, "dismiss-local-notification", cx)?.center();
+    capture(
+        handle,
+        &output.join(format!("{label}-stderr-coalesced.png")),
+        cx,
+    )?;
+    dispatch(handle, down(close), cx)?;
+    dispatch(handle, up(close), cx)?;
+    frame(handle, cx).await?;
+    ensure!(
+        handle.update(cx, |_, _, cx| app
+            .read(cx)
+            .message_delivery
+            .notifications(cx)
+            .count())?
+            == 0,
+        "one native dismissal must close the repeated warning"
+    );
     Ok(())
 }

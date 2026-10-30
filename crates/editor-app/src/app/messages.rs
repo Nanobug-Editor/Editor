@@ -20,11 +20,15 @@ pub(crate) struct MessageDelivery {
     alerts: std::collections::VecDeque<Alert>,
 }
 
-/// Exact origin, level and text identify a still-visible alert without parsing translated messages.
+/// Origin, level and diagnostic identity identify a still-visible alert; displayed text stays intact.
 struct Alert {
+    /// Receipt severity remains part of identity, so an escalation cannot be hidden by a warning.
     level: MessageLevel,
+    /// The captured plugin/transport origin, or the translated host alert title.
     title: String,
-    message: String,
+    /// Comparison-only text; stderr timestamps do not distinguish repeated diagnostics.
+    key: String,
+    /// The native card owns the original message and its independent dismissal state.
     view: Entity<editor_ui::Notification>,
 }
 
@@ -40,29 +44,53 @@ impl MessageDelivery {
             .map(|alert| alert.view.clone())
     }
 
-    /// Bound and deduplicate automatic alerts from the supplied immutable receipt.
-    fn push(&mut self, level: MessageLevel, title: String, message: String, cx: &mut App) {
+    /// Bound alerts by `level`, `title` and `key`, while `message` remains the original display text.
+    /// `cx` creates the local card without moving keyboard focus.
+    fn push(
+        &mut self,
+        level: MessageLevel,
+        title: String,
+        message: String,
+        key: String,
+        cx: &mut App,
+    ) {
         self.alerts
             .retain(|alert| !alert.view.read(cx).is_dismissed());
         if self
             .alerts
             .iter()
-            .any(|alert| alert.level == level && alert.title == title && alert.message == message)
+            .any(|alert| alert.level == level && alert.title == title && alert.key == key)
         {
             return;
         }
-        let view =
-            cx.new(|_| editor_ui::Notification::alert(level, title.clone(), message.clone()));
+        let view = cx.new(|_| editor_ui::Notification::alert(level, title.clone(), message));
         self.alerts.push_back(Alert {
             level,
             title,
-            message,
+            key,
             view,
         });
         while self.alerts.len() > ALERT_LIMIT {
             self.alerts.pop_front();
         }
     }
+}
+
+/// Return a comparison key for `message` from the host-owned transport `source`.
+/// Only stderr's valid leading RFC 3339 timestamp is metadata; all remaining text and severity stay exact.
+fn plugin_alert_key<'a>(source: &str, message: &'a str) -> &'a str {
+    let stderr =
+        source == "wasi/stderr" || (source.starts_with("lsp/") && source.ends_with("/stderr"));
+    if stderr
+        && let Some((timestamp, body)) = message.split_once([' ', '\t'])
+        && chrono::DateTime::parse_from_rfc3339(timestamp).is_ok()
+    {
+        let body = body.trim_start_matches([' ', '\t']);
+        if !body.is_empty() {
+            return body;
+        }
+    }
+    message
 }
 
 impl EditorApp {
@@ -74,22 +102,27 @@ impl EditorApp {
         message: impl Into<String>,
         cx: &mut Context<Self>,
     ) {
-        self.record_message(level, message.into(), None, true, cx);
+        let message = message.into();
+        let alert_key = Some(message.clone());
+        self.record_message(level, message, None, alert_key, cx);
     }
 
-    /// Publish one receipt; explicit plugin notices already have a request-owned floating card.
+    /// Publish `message` with its `level` and optional `source`; `alert_key` opts into a deduplicated card.
+    /// Explicit plugin notices pass no key because they already have a request-owned floating card.
     fn record_message(
         &mut self,
         level: MessageLevel,
         message: String,
         source: Option<String>,
-        automatic_alert: bool,
+        alert_key: Option<String>,
         cx: &mut Context<Self>,
     ) {
         self.messages.update(cx, |panel, cx| {
             panel.push_attributed(level, message.clone(), source.clone(), cx)
         });
-        if automatic_alert && level > MessageLevel::Info {
+        if let Some(key) = alert_key
+            && level > MessageLevel::Info
+        {
             let title = source.unwrap_or_else(|| {
                 t!(if level == MessageLevel::Error {
                     "messages.error"
@@ -98,7 +131,7 @@ impl EditorApp {
                 })
                 .to_string()
             });
-            self.message_delivery.push(level, title, message, cx);
+            self.message_delivery.push(level, title, message, key, cx);
         }
         cx.notify();
     }
@@ -123,12 +156,14 @@ impl EditorApp {
             LogLevel::Warning => MessageLevel::Warning,
             LogLevel::Error => MessageLevel::Error,
         };
-        let automatic_alert = record.source != NOTIFICATION_SOURCE;
+        // Normalize only the comparison key: both histories and the first visible card keep the raw log.
+        let alert_key = (record.source != NOTIFICATION_SOURCE)
+            .then(|| plugin_alert_key(&record.source, &record.message).to_owned());
         self.record_message(
             level,
             record.message,
             Some(format!("{} · {}", record.plugin, record.source)),
-            automatic_alert,
+            alert_key,
             cx,
         );
     }
@@ -205,6 +240,56 @@ impl EditorApp {
                 local_dock::reveal_panel(area, id, window, cx);
                 cx.notify();
             });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plugin_alert_key;
+
+    /// Both host-owned stderr transports ignore timestamp metadata without parsing diagnostic wording.
+    #[test]
+    fn unified_messages_stderr_keys_keep_severity_and_diagnostic_text() {
+        for source in [
+            "lsp/analysis/stderr",
+            "lsp/another-provider/stderr",
+            "wasi/stderr",
+        ] {
+            for timestamp in ["2026-10-30T21:43:07.4372163+08:00", "2026-10-30T13:43:08Z"] {
+                for body in [
+                    "WARN notify error: 中文",
+                    "ERROR failure at 2026-10-30T13:00:00Z",
+                ] {
+                    let message = format!("{timestamp}  {body}");
+                    assert_eq!(plugin_alert_key(source, &message), body);
+                }
+            }
+        }
+    }
+
+    /// Unrecognized prefixes and timestamps that belong to a message retain their exact identity.
+    #[test]
+    fn unified_messages_stderr_keys_preserve_unstructured_or_non_stderr_messages() {
+        let timestamped = "2026-10-30T21:43:07+08:00 WARN notify error";
+        for source in [
+            "lsp/analysis",
+            "host.message",
+            "wasi/stdout",
+            "other/stderr",
+        ] {
+            assert_eq!(plugin_alert_key(source, timestamped), timestamped);
+        }
+        for message in [
+            "2026-02-30T21:43:07+08:00 WARN invalid date",
+            "2026-10-30T21:43:07+08:00 ",
+            "2026-10-30T21:43:07+08:00\nWARN separate line",
+            "WARN notify error at 2026-10-30T21:43:07+08:00",
+            "[2026-10-30T21:43:07+08:00] WARN other format",
+            "中文警告",
+            "",
+        ] {
+            assert_eq!(plugin_alert_key("lsp/analysis/stderr", message), message);
         }
     }
 }

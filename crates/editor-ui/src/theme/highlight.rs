@@ -70,7 +70,8 @@ impl SyntaxColors {
                     0x795e26
                 }
             }
-            "type" | "enum" | "variant" => {
+            // Module/namespace captures share the type-path palette across all plugin grammars.
+            "type" | "enum" | "variant" | "namespace" => {
                 if self.dark {
                     0x4ec9b0
                 } else {
@@ -169,5 +170,26 @@ impl HighlightTheme {
 impl HighlightStyleResolver for HighlightTheme {
     fn style(&self, name: &str) -> Option<HighlightStyle> {
         self.style.syntax.style(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Rust's declared module capture must remain visible in both native palettes.
+    #[test]
+    fn namespace_capture_has_a_visible_color_in_both_themes() {
+        for theme in [
+            HighlightTheme::default_light(),
+            HighlightTheme::default_dark(),
+        ] {
+            assert!(
+                theme
+                    .style("namespace")
+                    .and_then(|style| style.color)
+                    .is_some()
+            );
+        }
     }
 }

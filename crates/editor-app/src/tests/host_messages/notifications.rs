@@ -176,6 +176,92 @@ fn unified_messages_alerts_are_bounded_and_repeat_after_dismissal(cx: &mut TestA
     });
 }
 
+/// Repeated stderr diagnostics differ only in their transport timestamp, not in the warning to act on.
+#[gpui::test]
+fn unified_messages_timestamped_stderr_coalesces_without_losing_history(cx: &mut TestAppContext) {
+    with_messages(cx, |form, app, _| {
+        let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
+        let messages = [
+            "2026-10-30T21:43:07.4372163+08:00  WARN notify error: Input watch path is neither a file nor a directory.",
+            "2026-10-30T21:43:08.4750824+08:00  WARN notify error: Input watch path is neither a file nor a directory.",
+            "2026-10-30T21:43:08.4751162+08:00  WARN notify error: Input watch path is neither a file nor a directory.",
+        ];
+        for message in messages {
+            logs.append(
+                "language-plugin",
+                LogLevel::Warning,
+                "lsp/analysis/stderr",
+                message,
+            );
+            notify_extensions(form, &app);
+        }
+        assert_eq!(
+            form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
+            1,
+            "timestamps must not multiply the same visible stderr warning"
+        );
+        assert_eq!(
+            logs.records("language-plugin")
+                .iter()
+                .map(|record| record.message.as_str())
+                .collect::<Vec<_>>(),
+            messages,
+            "diagnostic history must keep each original timestamp and message"
+        );
+        assert!(form.debug_bounds("host-message-3").is_some());
+        click(form, "host-message-toast-close");
+        assert!(form.debug_bounds("host-message-toast").is_none());
+        logs.append(
+            "language-plugin",
+            LogLevel::Warning,
+            "lsp/analysis/stderr",
+            messages[2],
+        );
+        notify_extensions(form, &app);
+        assert!(form.debug_bounds("host-message-toast").is_some());
+        logs.append(
+            "language-plugin",
+            LogLevel::Warning,
+            "lsp/analysis/stderr",
+            "2026-10-30T21:43:09.4751162+08:00  WARN permission denied while watching source",
+        );
+        notify_extensions(form, &app);
+        assert_eq!(
+            form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
+            2,
+            "different diagnostics still need independent alerts"
+        );
+    });
+}
+
+/// Matching diagnostic bodies must not merge independent producers or severity escalations.
+#[gpui::test]
+fn unified_messages_timestamped_stderr_keeps_origin_and_severity(cx: &mut TestAppContext) {
+    with_messages(cx, |form, app, _| {
+        let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
+        for (index, (plugin, level, source)) in [
+            ("one", LogLevel::Warning, "lsp/analysis/stderr"),
+            ("two", LogLevel::Warning, "lsp/analysis/stderr"),
+            ("one", LogLevel::Error, "lsp/analysis/stderr"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            logs.append(
+                plugin,
+                level,
+                source,
+                format!("2026-10-30T13:43:0{index}Z Watch failed"),
+            );
+            notify_extensions(form, &app);
+            assert_eq!(
+                form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
+                index + 1
+            );
+        }
+    });
+}
+
 /// Full diagnostic text is retained, while long automatic cards keep every dismissal within the viewport.
 #[gpui::test]
 fn unified_messages_publication_preserves_source_and_bounded_long_cards(cx: &mut TestAppContext) {
