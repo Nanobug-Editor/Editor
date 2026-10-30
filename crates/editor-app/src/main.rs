@@ -210,6 +210,8 @@ struct EditorApp {
     tabs_drag: editor_ui::tabs::FileTabDragState,
     /// The user-profile preference selects exactly one mounted tab presentation.
     tab_placement: app::editor_preferences::TabPlacement,
+    /// Last whole-comparison fold choice, shared across files and persisted in the user profile.
+    comparison_collapsed: bool,
     /// Propagates successful user preference writes to every window in this profile.
     _tab_preferences_observer: Subscription,
     titlebar_should_move: bool,
@@ -564,6 +566,8 @@ impl EditorApp {
                     return;
                 };
                 let placement = app::editor_preferences::placement(profile, cx);
+                let collapsed = app::editor_preferences::comparison_collapsed(profile, cx);
+                app.apply_comparison_fold_preference(collapsed, cx);
                 if placement == app.tab_placement {
                     return;
                 }
@@ -760,6 +764,9 @@ impl EditorApp {
             tabs_scroll: ScrollHandle::new(),
             tabs_drag: Default::default(),
             tab_placement,
+            comparison_collapsed: resource_profile.as_deref().map_or(true, |profile| {
+                app::editor_preferences::comparison_collapsed(profile, cx)
+            }),
             _tab_preferences_observer: tab_preferences_observer,
             titlebar_should_move: false,
             dialog: None,

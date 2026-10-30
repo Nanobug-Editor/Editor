@@ -198,19 +198,15 @@ impl Render for PaneView {
             .as_ref()
             .is_some_and(|rows| rows.source_rows[self.index].len() > 64);
         let ready = self.geometry_cache.borrow().ready(epoch);
-        // Folded plain sources can validate all native rows using an exact horizontal clamp,
-        // without painting hidden glyphs. New selections and custom factories keep full admission.
-        let can_probe_width = source.native_authority_factory.is_none()
-            && !self.region.is_captured()
-            && group
-                .layout
-                .as_ref()
-                .is_some_and(|layout| !layout.folds.is_empty())
+        // Complete native row metadata also covers ordinary short lines. Obtain width from
+        // the same native control's clamp instead of painting every offscreen source row.
+        // A captured gesture or changed selection keeps the established full-admission path.
+        let can_probe_width = !self.region.is_captured()
             && group
                 .frames
                 .get(self.index)
                 .and_then(Option::as_ref)
-                .is_some_and(|frame| frame.ranges.stable_input(source.editor.read(cx), &marked))
+                .is_none_or(|frame| frame.ranges.stable_input(source.editor.read(cx), &marked))
             && source_rows.as_ref().is_some_and(|rows| {
                 geometry_display_map::supported_rows(
                     source.editor.read(cx),
@@ -243,8 +239,9 @@ impl Render for PaneView {
             .as_ref()
             .map(|measured| measured.logical_rows.clone());
         let caret_measurement = group.measurements[self.index].clone();
+        let location_hint = group.location_scroll_hint(self.index, cx);
         let bounded = (ready || batch_measure || mapped)
-            && !group.needs_location_geometry(self.index)
+            && (!group.needs_location_geometry(self.index) || mapped || location_hint.is_some())
             // Complete layout is cheap for small sources and retains their native query envelope.
             && large;
         let inner_gutter = group.inner_gutters && self.index == 0;
@@ -282,7 +279,9 @@ impl Render for PaneView {
             scroll,
             native_scroll,
         );
-        let authority_scroll = self.authority_position.read(epoch, scroll, input_scroll);
+        let authority_scroll =
+            self.authority_position
+                .read(epoch, scroll, location_hint.unwrap_or(input_scroll));
         let authority_position = self.authority_position.clone();
         let ranges = native_ranges::NativeRanges::new(editor.read(cx), marked);
         // Horizontal scrolling remains native. Each mount applies its own public scroll request
@@ -419,6 +418,9 @@ impl Render for PaneView {
                         .child(native_viewport::NativeViewport::width_probe(
                             &editor,
                             native_width.clone(),
+                            source.native_authority_factory.as_ref(),
+                            window,
+                            cx,
                         )),
                 );
             }

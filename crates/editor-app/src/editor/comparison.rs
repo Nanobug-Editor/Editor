@@ -14,6 +14,8 @@ mod presentation;
 mod render_tests;
 mod sessions;
 mod third;
+pub(super) mod timing;
+mod viewport;
 pub(crate) use sessions::ComparisonView;
 
 /// Share only bounded immutable byte intervals with native comparison consumers. Editor ownership,
@@ -157,6 +159,7 @@ impl EditorApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<api::EditorValue, api::Failure> {
+        let _timing = timing::Span::new("install-comparison");
         let locate = |target: &api::DocumentVersion| {
             (0..self.tabs.len()).find(|index| {
                 self.plugin_document_version(*index)
@@ -411,6 +414,7 @@ impl EditorApp {
 
     /// Dispose only our owners; diagnostics and other editor decorations survive closure.
     pub(crate) fn close_document_comparison(&mut self, cx: &mut Context<Self>) {
+        self.remember_comparison_viewport(cx);
         if let Some(comparison) = self.document_comparison.take() {
             // A closed comparison cannot be revived by retained paint/input callbacks. Retirement
             // releases its row budget immediately while the pointer router finishes old gestures.

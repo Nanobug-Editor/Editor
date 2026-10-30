@@ -37,6 +37,7 @@ fn assert_fold_action(visual: &mut VisualTestContext, any_hidden: bool) {
 }
 
 /// Pointer activation exercises Base tab selection and the local preview-pinning callback.
+#[track_caller]
 fn click_count(visual: &mut VisualTestContext, selector: &str, count: usize) {
     // GPUI debug lookups require static names; these bounded test names live for the test process.
     let selector: &'static str = Box::leak(selector.to_owned().into_boxed_str());
@@ -85,14 +86,18 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
             .map(|index| format!("line {index}\n"))
             .collect::<String>();
         std::fs::write(&file, &base).unwrap();
-        std::fs::write(root.join("second.txt"), "base\n").unwrap();
+        std::fs::write(root.join("second.txt"), &base).unwrap();
         assert!(git(root, &["add", "--", "diff.txt", "second.txt"]));
         assert!(git(root, &["commit", "-m", "base"]));
         let changed = base
             .replace("line 1\n", "first 中😀\n")
             .replace("line 55\n", "last change\n");
         std::fs::write(&file, &changed).unwrap();
-        std::fs::write(root.join("second.txt"), "second change\n").unwrap();
+        std::fs::write(
+            root.join("second.txt"),
+            base.replace("line 1\n", "second change\n"),
+        )
+        .unwrap();
         let package = Package::read(Path::new(
             &std::env::var_os("NANOBUG_GIT_CANDIDATE").expect("candidate required"),
         ))
@@ -148,11 +153,10 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
         assert!(collapse.left() >= down.right() && expand.left() >= collapse.right());
         assert_eq!(collapse.top(), down.top());
         assert_eq!(expand.top(), down.top());
-        assert_fold_action(visual, false);
+        assert_fold_action(visual, true);
         let unchanged = changed.find("line 30\n").unwrap();
         let original_selection = visual.update(|_, cx| source.read(cx).selected_range());
-        click_count(visual, "diff-collapse-unchanged", 1);
-        paint_comparison(visual);
+        // A fresh profile starts collapsed without requiring a toolbar click.
         assert_fold_action(visual, true);
         visual.update(|_, cx| {
             let group = app.read(cx).comparison_alignment().unwrap();
@@ -207,6 +211,47 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
                 .count()
         });
         let comparison_selector = format!("comparison-tab-{normal_count}");
+        // Changing tabs must restore the shared display viewport, not only each native source.
+        visual.update(|_, cx| {
+            let alignment = app.read(cx).comparison_alignment().unwrap().clone();
+            alignment.reveal_content_edge(true, cx);
+        });
+        paint_comparison(visual);
+        let previous_scroll = visual.update(|_, cx| {
+            app.read(cx)
+                .comparison_alignment()
+                .unwrap()
+                .scroll_offset(cx)
+        });
+        assert!(previous_scroll > gpui_kit::px(20.));
+        click_count(visual, &format!("editor-tab-{index}"), 1);
+        click_count(visual, &comparison_selector, 1);
+        paint_comparison(visual);
+        visual.update(|_, cx| {
+            let restored = app
+                .read(cx)
+                .comparison_alignment()
+                .unwrap()
+                .scroll_offset(cx);
+            assert!(
+                (restored - previous_scroll).abs() < gpui_kit::px(1.),
+                "comparison tab reset its scroll: {previous_scroll:?} -> {restored:?}"
+            );
+        });
+        let retained_group =
+            visual.update(|_, cx| app.read(cx).comparison_alignment().unwrap().clone());
+        manager
+            .invoke_command("git", "diff", json!({"path":"diff.txt"}))
+            .unwrap();
+        flush(&mut manager, &app, visual);
+        visual.update(|_, cx| {
+            assert_eq!(
+                retained_group.status(cx),
+                editor_ui::aligned_editor::AlignmentStatus::Ready,
+                "repeated worktree selection must keep its live comparison"
+            );
+            assert!((retained_group.scroll_offset(cx) - previous_scroll).abs() < px(1.));
+        });
         click_count(visual, &comparison_selector, 2);
         paint_comparison(visual);
         // Pinning and activating an ordinary file cannot reset this view's manual fold choices.
@@ -307,6 +352,7 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
             visual.update(|_, cx| source.read(cx).value().to_string()),
             draft
         );
+        let first_view = visual.update(|_, cx| app.read(cx).active_comparison.clone().unwrap());
         manager
             .invoke_command("git", "diff", json!({"path":"second.txt"}))
             .unwrap();
@@ -320,6 +366,27 @@ fn git_comparison_tabs_keep_unsaved_source_edits_and_hide_snapshot_tabs(cx: &mut
             visual.update(|_, cx| source.read(cx).value().to_string()),
             draft
         );
+        // The explicit Expand choice follows a new file; Collapse then also updates retained files.
+        assert_fold_action(visual, false);
+        click_count(visual, "diff-collapse-unchanged", 1);
+        paint_comparison(visual);
+        assert_fold_action(visual, true);
+        let first_selector = visual.update(|_, cx| {
+            let owner = app.read(cx);
+            let visible = owner.tabs.iter().filter(|tab| tab.is_visible()).count();
+            let position = owner
+                .comparison_views
+                .iter()
+                .position(|view| view.id == first_view)
+                .unwrap();
+            owner.tabs_scroll.scroll_to_item(visible + position);
+            format!("comparison-tab-{}", visible + position)
+        });
+        // The other preview can scroll this tab outside the strip's virtualized viewport.
+        paint_comparison(visual);
+        click_count(visual, &first_selector, 1);
+        paint_comparison(visual);
+        assert_fold_action(visual, true);
         let hidden_indices = visual.update(|_, cx| {
             app.read(cx)
                 .tabs

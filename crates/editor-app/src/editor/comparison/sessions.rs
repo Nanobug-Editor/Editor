@@ -1,5 +1,6 @@
 //! Retained comparison tabs share ordinary document sessions and release only derived presentation.
 use super::*;
+mod activation;
 
 /// A view owns identities, authorization and native display choices; EditorState owns all text.
 #[derive(Clone)]
@@ -23,6 +24,8 @@ pub(crate) struct ComparisonView {
     pub(super) boundary: Option<navigation::BoundaryPrompt>,
     /// An explicit content edge has not yet visited the first/last hunk in that direction.
     pub(super) edge: Option<api::ComparisonPosition>,
+    /// The display viewport belongs to this tab, independently of its native right-hand source.
+    pub(super) viewport: Option<viewport::Viewport>,
 }
 impl ComparisonView {
     /// Enumerate borrowed source identities so revocation and reclamation cover every pane.
@@ -142,7 +145,8 @@ impl EditorApp {
             navigation.map(|navigation| (request.handle().instance.clone(), navigation.clone()));
         let folding = folding
             .map(|descriptor| {
-                let admitted = folding::FoldControls::admit(descriptor, request)?;
+                let admitted =
+                    folding::FoldControls::admit(descriptor, request, self.comparison_collapsed)?;
                 Ok(folding::retain_choices(
                     self.comparison_views
                         .iter()
@@ -153,6 +157,63 @@ impl EditorApp {
             })
             .transpose()?;
         self.sync_comparison_views(window, cx);
+        // A preceding readonly refresh may advance a capability while preserving the same text.
+        // Bring retained versions current before deciding whether this exact view can stay mounted.
+        self.refresh_persistent_comparison(window, cx);
+        let unchanged = self
+            .comparison_views
+            .iter()
+            .find(|view| view.id == id)
+            .filter(|view| {
+                // A different delegated caller may share the key, but must establish its own
+                // lifetime instead of inheriting this mounted view's authorization guards.
+                view.authority.same_owner(&request.authority())
+                    && view.left == *left
+                    && view.right == *right
+                    && view.third.as_ref() == third
+                    && match (&view.folding, &folding) {
+                        (Some(old), Some(new)) => old.same_descriptor(new),
+                        (None, None) => true,
+                        _ => false,
+                    }
+            });
+        let retained_viewport = unchanged.and_then(|view| view.viewport.clone());
+        // Reopening the same exact, live comparison is an activation, not a new row plan.
+        // Permission/version admission still happened through this ordinary public request.
+        if unchanged.is_some()
+            && self.active_comparison.as_ref() == Some(&id)
+            && self.document_comparison_is_current()
+            && self
+                .document_comparison
+                .as_ref()
+                .is_some_and(|view| view.persistent.as_ref() == Some(&id))
+        {
+            if !request.authority().is_live() || !request.enter_side_effect() {
+                return Err(api::Failure::new(
+                    api::ErrorCode::Cancelled,
+                    "Comparison did not execute",
+                ));
+            }
+            let view = self
+                .comparison_views
+                .iter_mut()
+                .find(|view| view.id == id)
+                .unwrap();
+            view.title = title.into();
+            view.navigation = navigation;
+            view.folding = folding;
+            if !preview {
+                view.preview = false;
+            }
+            if !initial_position.is_default() {
+                self.reveal_comparison_position(initial_position, cx);
+            }
+            cx.notify();
+            return Ok(api::EditorValue::DocumentsCompared {
+                left: left.clone(),
+                right: right.clone(),
+            });
+        }
         if self.comparison_views.len() >= 32
             && !self.comparison_views.iter().any(|view| view.id == id)
         {
@@ -187,10 +248,13 @@ impl EditorApp {
             view.third = third.cloned();
             view.navigation = navigation;
             view.folding = folding;
-            // A reused key resets confirmation before applying this open's explicit landing position.
-            view.hunk = 0;
-            view.boundary = None;
-            view.edge = None;
+            // New sources/explicit navigation reset the landing state; retained tabs keep it.
+            if retained_viewport.is_none() || !initial_position.is_default() {
+                view.hunk = 0;
+                view.boundary = None;
+                view.edge = None;
+            }
+            view.viewport = retained_viewport.clone();
             if third.is_some() {
                 view.unified = false;
             }
@@ -214,6 +278,7 @@ impl EditorApp {
                 hunk: 0,
                 boundary: None,
                 edge: None,
+                viewport: None,
             });
         }
         self.active_comparison = Some(id.clone());
@@ -226,7 +291,13 @@ impl EditorApp {
         {
             self.prepare_unified_comparison(window, cx);
         }
-        self.reveal_comparison_position(initial_position, cx);
+        if initial_position.is_default()
+            && let Some(viewport) = retained_viewport
+        {
+            self.restore_comparison_viewport(&viewport, cx);
+        } else {
+            self.reveal_comparison_position(initial_position, cx);
+        }
         self.release_comparison_sources(retired, true, window, cx);
         let count = self.tabs.iter().filter(|tab| tab.is_visible()).count();
         // Reused previews can sit before the last tab; reveal the active view's measured bounds.
@@ -323,72 +394,6 @@ impl EditorApp {
         if let Err(message) = result {
             self.report_host_message(app::messages::MessageLevel::Warning, message, cx);
         }
-    }
-    /// Reopening a retained tab reacquires current versions of the same native sessions.
-    pub(crate) fn activate_comparison_view(
-        &mut self,
-        id: &str,
-        pin: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(view) = self
-            .comparison_views
-            .iter()
-            .find(|view| view.id == id)
-            .cloned()
-        else {
-            return;
-        };
-        let result = (|| {
-            let left = self.current_comparison_source(&view.left).ok_or_else(|| {
-                api::Failure::new(api::ErrorCode::StaleRevision, "Comparison source closed")
-            })?;
-            let right = self.current_comparison_source(&view.right).ok_or_else(|| {
-                api::Failure::new(api::ErrorCode::StaleRevision, "Comparison source closed")
-            })?;
-            let third = view
-                .third
-                .as_ref()
-                .map(|source| {
-                    self.current_comparison_source(source).ok_or_else(|| {
-                        api::Failure::new(
-                            api::ErrorCode::StaleRevision,
-                            "Third comparison source closed",
-                        )
-                    })
-                })
-                .transpose()?;
-            self.install_document_comparison(
-                &left,
-                &right,
-                third.as_ref(),
-                view.authority.clone(),
-                None,
-                window,
-                cx,
-            )?;
-            self.active_comparison = Some(id.into());
-            self.document_comparison.as_mut().unwrap().persistent = Some(id.into());
-            self.mount_comparison_folding(cx);
-            if view.unified {
-                self.prepare_unified_comparison(window, cx);
-            }
-            if let Some(view) = self.comparison_views.iter_mut().find(|view| view.id == id) {
-                view.boundary = None;
-                view.left = left;
-                view.right = right;
-                view.third = third;
-                if pin {
-                    view.preview = false;
-                }
-            }
-            Ok::<_, api::Failure>(())
-        })();
-        if let Err(error) = result {
-            self.report_host_message(app::messages::MessageLevel::Warning, error.to_string(), cx);
-        }
-        cx.notify();
     }
     /// Closing a derived view does not discard a local source or its unsaved Undo state.
     pub(crate) fn close_comparison_view(

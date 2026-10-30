@@ -36,6 +36,8 @@ pub(super) struct GroupState {
     pending_location: Option<(usize, usize, u64, f32)>,
     /// Whole display-edge intent belongs to the same epoch as source locations, including blank slots.
     pending_edge: Option<(bool, u64)>,
+    /// A retained viewport waits for complete current-epoch geometry before applying its clamp.
+    pending_scroll: Option<(Pixels, u64)>,
     // Whole physical pane bounds at a disjoint-layout refusal. Fallback removes local rails;
     // comparing these outer bounds avoids treating that internal change as a resize retry.
     disjoint_bounds: Option<Vec<Bounds<Pixels>>>,
@@ -89,13 +91,14 @@ impl Default for GroupState {
             native_overlays: false,
             pending_location: None,
             pending_edge: None,
+            pending_scroll: None,
             disjoint_bounds: None,
         }
     }
 }
 
 impl GroupState {
-    /// Offscreen locations need one complete native measurement before exact byte projection.
+    /// Offscreen locations need a native target window, or complete measurement if its map is unsupported.
     pub(super) fn needs_location_geometry(&self, index: usize) -> bool {
         self.pending_location
             .is_some_and(|(pane, _, _, _)| pane == index)
@@ -152,6 +155,7 @@ impl GroupState {
         self.status = AlignmentStatus::Measuring;
         self.pending_location = None;
         self.pending_edge = None;
+        self.pending_scroll = None;
         self.disjoint_bounds = None;
         cx.notify();
     }
@@ -231,6 +235,16 @@ impl GroupState {
             .collect();
     }
 
+    /// A refreshed capability may reuse rows only while every original native buffer is unchanged.
+    pub(super) fn same_contents(&self, cx: &App) -> bool {
+        self.contents.len() == self.sources.len()
+            && self
+                .sources
+                .iter()
+                .zip(&self.contents)
+                .all(|(source, previous)| previous.matches(source.editor.read(cx).text()))
+    }
+
     pub fn ledger(&self) -> Option<Rc<Cell<usize>>> {
         self.reservation
             .as_ref()
@@ -275,6 +289,7 @@ impl GroupState {
         self.contents.clear();
         self.pending_location = None;
         self.pending_edge = None;
+        self.pending_scroll = None;
         self.disjoint_bounds = None;
         self.status = AlignmentStatus::Unavailable(AlignmentError::Retired);
         cx.notify();
@@ -515,6 +530,7 @@ impl GroupState {
     }
 
     pub fn scroll_by(&mut self, delta: Pixels, cx: &mut gpui_kit::Context<Self>) {
+        self.pending_scroll = None;
         self.scroll
             .set((self.scroll.get() + delta).clamp(px(0.), self.max_scroll()));
         self.observed_scroll = self.scroll.get();

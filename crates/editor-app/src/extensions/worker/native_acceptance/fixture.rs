@@ -144,9 +144,12 @@ impl Fixture {
         manager.install(&package, package.manifest.permissions.clone())?;
         if comparison_timing::requested() {
             // Exercise real dynamic grammar initialization in both measured binaries.
-            let language =
-                crate::extensions::language_tests::packages::language_package("snapshot-language");
-            manager.install(&language, Default::default())?;
+            let language = if let Some(path) = std::env::var_os("NANOBUG_DIFF_TIMING_LANGUAGE") {
+                Package::read(Path::new(&path))?
+            } else {
+                crate::extensions::language_tests::packages::language_package("snapshot-language")
+            };
+            manager.install(&language, language.manifest.permissions.clone())?;
         }
         manager.shutdown_checked()?;
         drop(manager);

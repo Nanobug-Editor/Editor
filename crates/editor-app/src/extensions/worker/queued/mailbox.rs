@@ -32,6 +32,8 @@ struct State {
     fatal: bool,
     fatal_reported: bool,
     shutdown: Option<Envelope>,
+    /// Native completions can request one early runtime poll without occupying input capacity.
+    poll_requested: bool,
 }
 /// A single consumer waits on readiness; native producers never wait for capacity.
 struct Mailbox {
@@ -58,6 +60,7 @@ pub(super) fn channel() -> (Sender, Receiver) {
             fatal: false,
             fatal_reported: false,
             shutdown: None,
+            poll_requested: false,
         }),
         ready: Condvar::new(),
     });
@@ -67,6 +70,16 @@ impl Clone for Sender {
     fn clone(&self) -> Self {
         self.0.state.lock().unwrap().senders += 1;
         Self(self.0.clone())
+    }
+}
+impl Sender {
+    /// Wake a sleeping actor after a native reply; repeated notifications coalesce into one poll.
+    pub(super) fn wake(&self) {
+        let mut state = self.0.state.lock().unwrap();
+        if state.receiver && !state.fatal {
+            state.poll_requested = true;
+            self.0.ready.notify_one();
+        }
     }
 }
 impl Drop for Sender {
@@ -248,7 +261,8 @@ impl Receiver {
             mpsc::TryRecvError::Empty
         })
     }
-    /// Wait only for readiness or disconnect, preserving the actor's business-timer deadline.
+    /// Wait for input, disconnect or a native completion. An early timeout requests the same
+    /// runtime poll as the business timer, without inventing a guest input event.
     pub(super) fn recv_timeout(
         &self,
         timeout: Duration,
@@ -257,10 +271,14 @@ impl Receiver {
         let mut state = self.0.state.lock().unwrap();
         loop {
             if let Some(envelope) = take(&mut state) {
+                state.poll_requested = false;
                 return Ok(envelope);
             }
             if state.senders == 0 {
                 return Err(mpsc::RecvTimeoutError::Disconnected);
+            }
+            if std::mem::take(&mut state.poll_requested) {
+                return Err(mpsc::RecvTimeoutError::Timeout);
             }
             let now = Instant::now();
             if now >= deadline {
