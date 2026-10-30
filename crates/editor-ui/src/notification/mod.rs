@@ -7,10 +7,12 @@ use crate::theme::ActiveTheme as _;
 use gpui_base::{StyledExt as _, v_flex};
 use gpui_kit::assets::IconName;
 use gpui_kit::{
-    Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement, Render,
-    SharedString, StatefulInteractiveElement as _, Styled, Window, div, px,
+    App, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement,
+    Render, SharedString, StatefulInteractiveElement as _, Styled, Window, div,
+    prelude::FluentBuilder as _, px,
 };
 use rust_i18n::t;
+use std::rc::Rc;
 use std::time::Duration;
 
 /// Host and plugin-attributed notices share appearance and pointer boundaries; owners keep their lifetimes.
@@ -44,6 +46,8 @@ pub struct Notification {
     dismissed: bool,
     /// Alert cards use severity artwork; ordinary transient notices retain their informational style.
     level: Option<MessageLevel>,
+    /// The owner routes explicit activation without giving this control access to message history.
+    on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
 }
 
 impl Notification {
@@ -54,6 +58,7 @@ impl Notification {
             message: message.into(),
             dismissed: false,
             level: None,
+            on_click: None,
         }
     }
 
@@ -72,6 +77,15 @@ impl Notification {
     /// Let the bounded owner discard closed cards without treating dismissal as history acknowledgement.
     pub fn is_dismissed(&self) -> bool {
         self.dismissed
+    }
+
+    /// Route a body click to `handler` with the original event, owning window and app; closing stays separate.
+    pub fn on_click(
+        mut self,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_click = Some(Rc::new(handler));
+        self
     }
 
     /// Display a message for 1.2 seconds; replacing the entity also replaces its expiration timer.
@@ -96,6 +110,7 @@ impl Notification {
             message: message.into(),
             dismissed: false,
             level: None,
+            on_click: None,
         }
     }
 }
@@ -113,9 +128,28 @@ impl Render for Notification {
                 .small()
                 .text_color(cx.theme().primary),
         };
+        // History-backed alerts use a two-line preview; standalone notices retain their own body.
+        let body = div()
+            .id("notification-message-body")
+            .debug_selector(|| "notification-message-body".into())
+            .text_sm()
+            .child(self.message.clone());
+        let body = if alert {
+            body.line_clamp(2).text_ellipsis().into_any_element()
+        } else {
+            body.max_h(px(80.))
+                .overflow_y_scrollbar()
+                .into_any_element()
+        };
         message_card("local-notification", cx)
             .flex()
             .flex_shrink_0()
+            .when_some(self.on_click.clone(), |card, handler| {
+                card.cursor_pointer().on_click(move |event, window, cx| {
+                    cx.stop_propagation();
+                    handler(event, window, cx);
+                })
+            })
             .debug_selector(move || {
                 if alert {
                     "host-message-toast"
@@ -137,15 +171,7 @@ impl Render for Notification {
                             .truncate()
                             .child(self.title.clone()),
                     )
-                    // Long diagnostic bodies keep the close button reachable and remain readable by scrolling.
-                    .child(
-                        div()
-                            .id("notification-message-body")
-                            .text_sm()
-                            .max_h(px(80.))
-                            .overflow_y_scrollbar()
-                            .child(self.message.clone()),
-                    ),
+                    .child(body),
             )
             .child(
                 div()

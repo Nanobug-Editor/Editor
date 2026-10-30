@@ -83,7 +83,73 @@ pub(super) async fn exercise(
         !messages_visible(handle, app, cx)?,
         "reminder scenario left messages open"
     );
+    navigation(handle, app, output, label, cx).await?;
     timestamped_stderr(handle, app, output, label, cx).await?;
+    Ok(())
+}
+
+/// Real font/D3D readback verifies the compact preview and the older target revealed by native card input.
+async fn navigation(
+    handle: AnyWindowHandle,
+    app: &Entity<EditorApp>,
+    output: &Path,
+    label: &str,
+    cx: &mut AsyncApp,
+) -> anyhow::Result<()> {
+    // Reminder checks leave automatic cards alive; remove only this owned window's cards first.
+    while let Ok(close) = button_bounds(handle, "dismiss-local-notification", cx) {
+        dispatch(handle, down(close.center()), cx)?;
+        dispatch(handle, up(close.center()), cx)?;
+        frame(handle, cx).await?;
+    }
+    handle.update(cx, |_, _, cx| {
+        app.update(cx, |app, cx| {
+            app.record_host_message(
+                MessageLevel::Error,
+                "目标消息 / Target receipt\n第二行预览 / Second preview line\n完整详情第三行 / Full third line\n完整详情第四行 / Full fourth line",
+                cx,
+            );
+            for index in 0..45 {
+                app.record_host_message(MessageLevel::Info, format!("Later receipt {index}"), cx);
+            }
+        });
+    })?;
+    frame(handle, cx).await?;
+    capture(
+        handle,
+        &output.join(format!("{label}-message-preview.png")),
+        cx,
+    )?;
+    let close = button_bounds(handle, "dismiss-local-notification", cx)?;
+    let body = point(close.left() - px(100.), close.center().y + px(18.));
+    dispatch(handle, down(body), cx)?;
+    dispatch(handle, up(body), cx)?;
+    frame(handle, cx).await?;
+    frame(handle, cx).await?;
+    ensure!(
+        messages_visible(handle, app, cx)?,
+        "native card click did not open history"
+    );
+    dispatch(handle, down(close.center()), cx)?;
+    dispatch(handle, up(close.center()), cx)?;
+    frame(handle, cx).await?;
+    ensure!(
+        messages_visible(handle, app, cx)?,
+        "closing the card toggled history"
+    );
+    capture(
+        handle,
+        &output.join(format!("{label}-message-revealed.png")),
+        cx,
+    )?;
+    let clear = button_bounds(handle, "clear-host-messages", cx)?.center();
+    dispatch(handle, down(clear), cx)?;
+    dispatch(handle, up(clear), cx)?;
+    frame(handle, cx).await?;
+    let toggle = button_bounds(handle, "host-messages-toggle", cx)?.center();
+    dispatch(handle, down(toggle), cx)?;
+    dispatch(handle, up(toggle), cx)?;
+    frame(handle, cx).await?;
     Ok(())
 }
 

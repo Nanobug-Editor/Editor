@@ -6,6 +6,8 @@
 
 - [Rust 真实包高亮覆盖检查](verification/rust-highlighting-2026-10-30.md)：文档注释标记、语法遗漏、通用 namespace 色板及只读代码区回归，记录原生操作停止后的验证边界。
 
+- [消息浮窗两行预览与历史定位](verification/message-toast-navigation-2026-10-30.md)：右下角描述最多两行，点击打开消息窗口并展开、滚动到对应记录；实际检查与原生截图见记录。
+
 - [统一消息与右下角浮窗](verification/unified-messages-2026-10-29.md)：宿主及插件日志统一呈现、保留来源与增量消费，警告和错误显示非模态浮窗；实际验证状态见记录。
 
 - [资源管理器目录点击方式](verification/explorer-directory-click-2026-10-29.md)：默认单击展开或折叠，可在设置切换双击；当前工作区即时应用与保存，验证状态见记录。

@@ -234,6 +234,49 @@ fn unified_messages_timestamped_stderr_coalesces_without_losing_history(cx: &mut
     });
 }
 
+/// Timestamp coalescing retains the newer receipt as the native card's history-navigation target.
+#[gpui::test]
+fn unified_messages_timestamped_stderr_click_reveals_latest(cx: &mut TestAppContext) {
+    with_messages(cx, |form, app, _| {
+        click(form, "host-messages-hide");
+        let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
+        for (timestamp, following) in [("13:43:01", 30), ("13:43:02", 25)] {
+            logs.append(
+                "language-plugin",
+                LogLevel::Warning,
+                "lsp/analysis/stderr",
+                format!("2026-10-30T{timestamp}Z WARN Watch failed"),
+            );
+            notify_extensions(form, &app);
+            form.update(|_, cx| {
+                app.update(cx, |app, cx| {
+                    for _ in 0..following {
+                        app.record_host_message(MessageLevel::Info, "Intermediate receipt", cx);
+                    }
+                })
+            });
+        }
+        draw(form);
+        assert_eq!(
+            form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
+            1
+        );
+        click(form, "host-message-toast");
+        form.update(|window, cx| window.simulate_next_frame(cx));
+        draw(form);
+        let viewport = form.debug_bounds("host-message-list").unwrap();
+        let latest = form
+            .debug_bounds("host-message-32")
+            .expect("latest timestamped receipt is disclosed");
+        assert!(latest.top() >= viewport.top() - px(1.));
+        assert!(latest.bottom() <= viewport.bottom() + px(1.));
+        assert!(
+            form.debug_bounds("host-message-1").is_none(),
+            "card must follow the newer timestamped duplicate"
+        );
+    });
+}
+
 /// Matching diagnostic bodies must not merge independent producers or severity escalations.
 #[gpui::test]
 fn unified_messages_timestamped_stderr_keeps_origin_and_severity(cx: &mut TestAppContext) {

@@ -19,7 +19,7 @@ $env:NANOBUG_TEST_PACKAGE_INPUTS = 'C:/Users/Tmiracle/.codex/task-artifacts/rust
 cargo test -p editor-app --bin editor-app rust_package_ -j 2 -- --ignored --nocapture --test-threads=1
 ```
 
-上述包测试因需要独立构建的候选 ZIP 而默认 ignored，本轮显式执行后为 3 passed / 0 failed / 0 ignored。账本通过既有 SHA-256 夹具入口指定候选，不修改仓库内不可变历史 ZIP，也不增加测试专用生产 API。
+上述包测试因需要独立构建的候选 ZIP 而默认 ignored，本轮显式执行后为 3 passed / 0 failed / 0 ignored；整合主分支 `be27a3ce` 后再次执行，结果相同，见 `highlights-integrated.log`。账本通过既有 SHA-256 夹具入口指定候选，不修改仓库内不可变历史 ZIP，也不增加测试专用生产 API。
 
 ## 原生范围与限制
 
