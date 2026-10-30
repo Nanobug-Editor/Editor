@@ -5,9 +5,9 @@ use crate::theme::ActiveTheme as _;
 use gpui_base::StyledExt as _;
 use gpui_base::input::{InputEvent, InputState, MoveDown, MoveEnd, MoveHome, MoveUp};
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, EntityInputHandler as _, FocusHandle, Focusable as _,
-    InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement, Render, ScrollHandle,
-    SharedString, Styled, Subscription, Window,
+    App, AppContext as _, ClickEvent, Context, Entity, EntityInputHandler as _, FocusHandle,
+    Focusable as _, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement, Render,
+    ScrollHandle, SharedString, StatefulInteractiveElement as _, Styled, Subscription, Window,
 };
 use gpui_kit::{div, prelude::FluentBuilder as _, px};
 use plugin_runtime::{
@@ -18,6 +18,7 @@ use plugin_runtime::{
     },
 };
 use rust_i18n::t;
+use std::rc::Rc;
 
 #[cfg(test)]
 mod tests;
@@ -35,6 +36,8 @@ pub struct HostInteraction {
     choices_scroll: ScrollHandle,
     closed: bool,
     _subscription: Subscription,
+    /// Optional host routing for retained notification text; it never completes the plugin request.
+    on_open_message: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
 }
 
 impl HostInteraction {
@@ -122,7 +125,17 @@ impl HostInteraction {
             choices_scroll: ScrollHandle::new(),
             closed: false,
             _subscription: subscription,
+            on_open_message: None,
         }
+    }
+
+    /// Route a Notify body click to `handler` with its original event/window/app, preserving request lifetime.
+    pub fn on_open_message(
+        mut self,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_open_message = Some(Rc::new(handler));
+        self
     }
 
     /// Modal input is serialized globally; notices and progress never steal editor focus.
@@ -320,8 +333,17 @@ impl HostInteraction {
                 },
             );
         match &self.operation {
-            Operation::Confirm { message, .. } | Operation::Notify { message, .. } => {
+            Operation::Confirm { message, .. } => {
                 content = content.child(div().child(message.clone()))
+            }
+            Operation::Notify { message, .. } => {
+                content = content.child(
+                    div()
+                        .debug_selector(|| "plugin-notice-body".into())
+                        .line_clamp(2)
+                        .text_ellipsis()
+                        .child(message.clone()),
+                )
             }
             Operation::Progress { message, .. } => {
                 let (latest, percent) = self.request.progress();
@@ -393,6 +415,7 @@ impl HostInteraction {
                         .accessibility_label(t!("interaction.dismiss").to_string())
                         .debug_selector(|| "plugin-notice-dismiss".into())
                         .on_click(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
                             this.confirm(window, cx);
                         })),
                 ),
@@ -408,6 +431,12 @@ impl HostInteraction {
             _ => content,
         };
         super::notification::message_card("plugin-message", cx)
+            .when_some(self.on_open_message.clone(), |card, handler| {
+                card.cursor_pointer().on_click(move |event, window, cx| {
+                    cx.stop_propagation();
+                    handler(event, window, cx);
+                })
+            })
             .w(px(380.))
             .flex()
             .flex_col()

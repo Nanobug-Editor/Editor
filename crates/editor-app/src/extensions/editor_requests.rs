@@ -227,7 +227,7 @@ impl EditorApp {
                 // later cancellation stops waiting but must not claim that publication never happened.
                 return;
             }
-            self.record_plugin_notice(plugin, operation, cx);
+            let message_id = self.record_plugin_notice(plugin, operation, cx);
             if matches!(
                 operation,
                 plugin_runtime::plugin_protocol::interaction::Operation::PublishMessage { .. }
@@ -238,8 +238,21 @@ impl EditorApp {
                 )));
                 return;
             }
+            let on_open = message_id.map(|id| {
+                cx.listener(move |this, _, window, cx| this.reveal_host_message(id, window, cx))
+            });
             self.plugin_interactions.push(cx.new(|cx| {
-                editor_ui::interaction::HostInteraction::new(plugin.to_owned(), request, window, cx)
+                let prompt = editor_ui::interaction::HostInteraction::new(
+                    plugin.to_owned(),
+                    request,
+                    window,
+                    cx,
+                );
+                if let Some(on_open) = on_open {
+                    prompt.on_open_message(on_open)
+                } else {
+                    prompt
+                }
             }));
             cx.notify();
             return;

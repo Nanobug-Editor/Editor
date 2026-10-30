@@ -517,7 +517,7 @@ fn native_plugin_input_confirms_unicode_and_restores_editor_focus(cx: &mut TestA
         &mut manager,
         protocol::interaction::Operation::Notify {
             title: "Notice".into(),
-            message: "Second plugin".into(),
+            message: "Second plugin\n第二行\nThird line\nFourth line".into(),
             severity: protocol::interaction::Severity::Information,
         },
         cx,
@@ -542,6 +542,23 @@ fn native_plugin_input_confirms_unicode_and_restores_editor_focus(cx: &mut TestA
         "the accepted public notice must enter the attributed host history once"
     );
     assert!(cx.debug_bounds("host-message-toast").is_none());
+    let body = cx.debug_bounds("plugin-notice-body").unwrap();
+    assert!(
+        body.size.height <= px(50.),
+        "explicit notices also use two-line previews"
+    );
+    cx.simulate_click(body.center(), Default::default());
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.simulate_next_frame(cx);
+    });
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    assert!(cx.update(|_, cx| app.read(cx).messages_visible(cx)));
+    assert!(
+        !notice.status().is_terminal(),
+        "viewing history must not complete Notify"
+    );
+    assert!(cx.debug_bounds("host-message-source-1").is_some());
     let button = cx.debug_bounds("plugin-notice-dismiss").unwrap();
     cx.simulate_click(button.center(), Default::default());
     cx.run_until_parked();

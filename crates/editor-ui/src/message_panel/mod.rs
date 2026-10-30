@@ -66,6 +66,8 @@ pub struct MessagePanel {
     next_id: u64,
     display_limit: usize,
     scroll: ScrollHandle,
+    /// A receipt identity survives incoming rows until the expanded list has current layout bounds.
+    reveal_target: Option<u64>,
     /// Base provides the current group through its lifecycle hook; hidden views otherwise lose render dependencies.
     group: Option<WeakEntity<gpui_base::dock::TabGroup>>,
 }
@@ -81,6 +83,7 @@ impl MessagePanel {
             next_id: 0,
             display_limit: DISPLAY_BATCH,
             scroll: ScrollHandle::new(),
+            reveal_target: None,
             group: None,
         }
     }
@@ -90,14 +93,15 @@ impl MessagePanel {
         self.push_attributed(level, text, None, cx);
     }
 
-    /// Append `text` at `level` with optional immutable `source`, preserving the same global history cap.
+    /// Append `text` at `level` with optional immutable `source`, returning its stable identity within this panel.
+    /// Eviction follows the same global cap; callers must tolerate an identity no longer being retained.
     pub fn push_attributed(
         &mut self,
         level: MessageLevel,
         text: String,
         source: Option<String>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> u64 {
         // Retain the highest receipt even after history eviction; lower levels cannot acknowledge it.
         self.pending_alert = self.pending_alert.max(Some(level));
         self.next_id = self
@@ -114,6 +118,26 @@ impl MessagePanel {
             self.records.pop_front();
         }
         cx.notify();
+        self.next_id
+    }
+
+    /// Disclose the batch containing `id` and queue scrolling after layout; return false for cleared or evicted IDs.
+    pub fn reveal_message(&mut self, id: u64, cx: &mut Context<Self>) -> bool {
+        let Some(index) = self
+            .records
+            .iter()
+            .rev()
+            .position(|message| message.id == id)
+        else {
+            return false;
+        };
+        self.display_limit = self
+            .display_limit
+            .max((index + 1).div_ceil(DISPLAY_BATCH) * DISPLAY_BATCH)
+            .min(HISTORY_LIMIT);
+        self.reveal_target = Some(id);
+        cx.notify();
+        true
     }
 
     /// Expose host-panel visibility to the dock and session, without exposing the mutable history.
@@ -143,6 +167,7 @@ impl MessagePanel {
         self.records.clear();
         self.display_limit = DISPLAY_BATCH;
         self.scroll.set_offset(Default::default());
+        self.reveal_target = None;
         self.pending_alert = None;
         cx.notify();
     }
@@ -264,9 +289,33 @@ impl DockPanel for MessagePanel {
     }
 }
 impl Render for MessagePanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(id) = self.reveal_target.take() {
+            // Base consumes scroll requests before refreshing viewport state. Wait until the newly
+            // opened/expanded list has painted, then resolve identity again in case new receipts arrived.
+            let panel = cx.entity().downgrade();
+            window.on_next_frame(move |_, cx| {
+                let _ = panel.update(cx, |this, cx| {
+                    let Some(index) = this
+                        .records
+                        .iter()
+                        .rev()
+                        .position(|message| message.id == id)
+                    else {
+                        return;
+                    };
+                    if index >= this.display_limit {
+                        this.reveal_message(id, cx);
+                        return;
+                    }
+                    this.scroll.scroll_to_top_of_item(index);
+                    cx.notify();
+                });
+            });
+        }
         let mut list = v_flex()
             .id("host-message-list")
+            .debug_selector(|| "host-message-list".into())
             .flex_1()
             .min_h_0()
             .min_w_0()
