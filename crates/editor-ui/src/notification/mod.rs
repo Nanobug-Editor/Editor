@@ -79,7 +79,8 @@ impl Notification {
         self.dismissed
     }
 
-    /// Route a body click to `handler` with the original event, owning window and app; closing stays separate.
+    /// Dismiss on body activation, then call `handler` with its event/window/app to reveal retained history.
+    /// The close button dismisses independently and never invokes this navigation callback.
     pub fn on_click(
         mut self,
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -145,10 +146,13 @@ impl Render for Notification {
             .flex()
             .flex_shrink_0()
             .when_some(self.on_click.clone(), |card, handler| {
-                card.cursor_pointer().on_click(move |event, window, cx| {
-                    cx.stop_propagation();
-                    handler(event, window, cx);
-                })
+                card.cursor_pointer()
+                    .on_click(cx.listener(move |this, event, window, cx| {
+                        cx.stop_propagation();
+                        this.dismissed = true;
+                        cx.notify();
+                        handler(event, window, cx);
+                    }))
             })
             .debug_selector(move || {
                 if alert {

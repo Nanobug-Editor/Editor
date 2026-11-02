@@ -1,4 +1,4 @@
-//! Unified receipts retain source attribution while the original runtime log owns its diagnostic history.
+//! Explicit plugin messages retain attribution; service and implementation output stay in plugin logs.
 
 use crate::*;
 
@@ -26,7 +26,7 @@ struct Alert {
     level: MessageLevel,
     /// The captured plugin/transport origin, or the translated host alert title.
     title: String,
-    /// Comparison-only text; stderr timestamps do not distinguish repeated diagnostics.
+    /// Exact message text identifies repeated explicit publications without interpreting their content.
     key: String,
     /// The native card owns the original message and its independent dismissal state.
     view: Entity<editor_ui::Notification>,
@@ -88,23 +88,6 @@ impl MessageDelivery {
     }
 }
 
-/// Return a comparison key for `message` from the host-owned transport `source`.
-/// Only stderr's valid leading RFC 3339 timestamp is metadata; all remaining text and severity stay exact.
-fn plugin_alert_key<'a>(source: &str, message: &'a str) -> &'a str {
-    let stderr =
-        source == "wasi/stderr" || (source.starts_with("lsp/") && source.ends_with("/stderr"));
-    if stderr
-        && let Some((timestamp, body)) = message.split_once([' ', '\t'])
-        && chrono::DateTime::parse_from_rfc3339(timestamp).is_ok()
-    {
-        let body = body.trim_start_matches([' ', '\t']);
-        if !body.is_empty() {
-            return body;
-        }
-    }
-    message
-}
-
 impl EditorApp {
     /// Retain an important host result and surface warning/error receipts without taking focus.
     /// Routine file, tree, theme and configuration successes do not call this publication boundary.
@@ -151,12 +134,13 @@ impl EditorApp {
         id
     }
 
-    /// Consume runtime receipts only on extension publication, independently of rendering and log reads.
+    /// Consume explicit plugin messages, leaving service and implementation logs in their existing UI.
     pub(crate) fn sync_plugin_messages(&mut self, cx: &mut Context<Self>) {
         self.import_plugin_messages(None, cx);
     }
 
-    /// Import each runtime receipt once; return the panel identity corresponding to optional runtime `target`.
+    /// Import each explicit message once; return the panel identity for optional runtime `target`.
+    /// The cursor also consumes excluded logs without changing plugin status reminders or log history.
     fn import_plugin_messages(
         &mut self,
         target: Option<u64>,
@@ -170,6 +154,11 @@ impl EditorApp {
         self.message_delivery.through = through;
         let mut target_id = None;
         for record in records {
+            // Sources are assigned by host producers, never inferred from message text or plugin IDs.
+            // Only explicit public messages enter this panel, regardless of service log severity.
+            if !matches!(record.source.as_str(), "host.message" | NOTIFICATION_SOURCE) {
+                continue;
+            }
             let matched = Some(record.id) == target;
             let id = self.record_plugin_message(record, cx);
             if matched {
@@ -186,9 +175,8 @@ impl EditorApp {
             LogLevel::Warning => MessageLevel::Warning,
             LogLevel::Error => MessageLevel::Error,
         };
-        // Normalize only the comparison key: both histories and the first visible card keep the raw log.
-        let alert_key = (record.source != NOTIFICATION_SOURCE)
-            .then(|| plugin_alert_key(&record.source, &record.message).to_owned());
+        // Explicit Notify owns its card; PublishMessage deduplicates only identical visible messages.
+        let alert_key = (record.source != NOTIFICATION_SOURCE).then(|| record.message.clone());
         self.record_message(
             level,
             record.message,
@@ -298,56 +286,6 @@ impl EditorApp {
                 local_dock::reveal_panel(area, id, window, cx);
                 cx.notify();
             });
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::plugin_alert_key;
-
-    /// Both host-owned stderr transports ignore timestamp metadata without parsing diagnostic wording.
-    #[test]
-    fn unified_messages_stderr_keys_keep_severity_and_diagnostic_text() {
-        for source in [
-            "lsp/analysis/stderr",
-            "lsp/another-provider/stderr",
-            "wasi/stderr",
-        ] {
-            for timestamp in ["2026-10-30T21:43:07.4372163+08:00", "2026-10-30T13:43:08Z"] {
-                for body in [
-                    "WARN notify error: 中文",
-                    "ERROR failure at 2026-10-30T13:00:00Z",
-                ] {
-                    let message = format!("{timestamp}  {body}");
-                    assert_eq!(plugin_alert_key(source, &message), body);
-                }
-            }
-        }
-    }
-
-    /// Unrecognized prefixes and timestamps that belong to a message retain their exact identity.
-    #[test]
-    fn unified_messages_stderr_keys_preserve_unstructured_or_non_stderr_messages() {
-        let timestamped = "2026-10-30T21:43:07+08:00 WARN notify error";
-        for source in [
-            "lsp/analysis",
-            "host.message",
-            "wasi/stdout",
-            "other/stderr",
-        ] {
-            assert_eq!(plugin_alert_key(source, timestamped), timestamped);
-        }
-        for message in [
-            "2026-02-30T21:43:07+08:00 WARN invalid date",
-            "2026-10-30T21:43:07+08:00 ",
-            "2026-10-30T21:43:07+08:00\nWARN separate line",
-            "WARN notify error at 2026-10-30T21:43:07+08:00",
-            "[2026-10-30T21:43:07+08:00] WARN other format",
-            "中文警告",
-            "",
-        ] {
-            assert_eq!(plugin_alert_key("lsp/analysis/stderr", message), message);
         }
     }
 }

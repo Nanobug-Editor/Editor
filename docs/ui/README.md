@@ -4,7 +4,9 @@
 
 - [文件加载时正文闪烁](verification/editor-file-loading-flicker-2026-11-02.md)：补齐后台解析等待期间的普通文字样式，记录录屏复现、红绿回归及深浅主题的原生像素检查。
 
-- [带时间戳 stderr 警告的浮窗去重](verification/stderr-warning-coalescing-2026-10-30.md)：重复语言服务日志共用一张在场浮窗，完整原文和来源、等级仍保留；实际验证范围见记录。
+- [插件日志分流与消息浮窗点击关闭](verification/plugin-message-routing-2026-11-02.md)：插件及语言服务日志留在底栏插件状态和插件管理，只有显式发布的消息进入消息窗口；点击浮窗关闭并定位历史，检查状态见记录。
+
+- [带时间戳 stderr 警告的浮窗去重](verification/stderr-warning-coalescing-2026-10-30.md)：历史验收；2026-11-02 起语言服务日志不再生成宿主浮窗，完整原文和来源、等级留在插件日志。
 
 - [Rust 真实包高亮覆盖检查](verification/rust-highlighting-2026-10-30.md)：文档注释标记、语法遗漏、通用 namespace 色板及只读代码区回归，记录原生操作停止后的验证边界。
 
