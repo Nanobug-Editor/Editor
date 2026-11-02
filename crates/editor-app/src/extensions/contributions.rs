@@ -95,7 +95,7 @@ pub fn refresh_for_project(
     Ok(())
 }
 
-/// Project errors mask executable/effective declarations; immutable user resources follow global installation authority.
+/// Project errors mask executable roles; validated static resources follow enabled installation authority.
 pub fn refresh_project_entries(
     providers: &crate::language::providers::Providers,
     root: &Path,
@@ -106,7 +106,9 @@ pub fn refresh_project_entries(
     let mut user_catalog = publish_user_resources.then(Catalog::default);
     for installed in installed {
         let id = &installed.manifest.id;
-        let project_enabled = installed.enabled && installed.error.is_none();
+        // Runtime failure revokes executable roles below, not already validated immutable syntax.
+        // Keep recognition, grammars and icons until disable, removal or compatibility rejection.
+        let project_enabled = installed.enabled;
         let user_enabled =
             publish_user_resources && installed.global_enabled.unwrap_or(installed.enabled);
         if (!project_enabled && !user_enabled)

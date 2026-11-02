@@ -65,6 +65,8 @@
 
 - [Git 提交列表列宽与排版](verification/git-history-columns-2026-10-22.md)：Git 0.1.30 的紧凑元数据列、三条透明拖动边界、加粗提交者及标准时间格式；沿用通用画布接口，实际验证状态见记录。
 
+- [Vue2 / JavaScript 独立导航](verification/vue-javascript-navigation-2026-11-02.md)：JavaScript 与 Vue 各自拥有原生分析，修复未启用 TypeScript 时的激活、import 定义、Vue2 data 推断、高亮保留与图标；当前验证和交付状态见记录。
+
 - [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
 
 - [Vue/TypeScript 旧工单功能核对与关闭](verification/vue-typescript-legacy-closure-2026-10-20.md)：用户补充授权后，64 项旧要求逐项核对完成；#108–#118 已读回 completed，原正文和失败历史保留，父 #107 继续开放。

@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
 mod cached_hover;
+mod standalone;
 
 /// Load the candidate's actual grammar and queries through the production WasmStore and parser.
 /// Keeping this independent of guest activation distinguishes parser startup from control routing.
@@ -57,7 +58,7 @@ fn independent_vue_candidate_grammar_uses_the_native_loader() {
     );
 }
 
-/// Vue 2.6/2.7/3 coexist under one workspace, share their TS owner's exact connection, and retain
+/// Vue 2.6/2.7/3 coexist under one workspace with Vue-owned project connections, and retain
 /// unsaved source through an actual Base navigation request instead of reading source from disk.
 #[gpui::test]
 #[ignore = "set NANOBUG_TYPESCRIPT_PACKAGE, NANOBUG_VUE_PACKAGE and NANOBUG_VUE_FIXTURES to built independent candidates"]
@@ -404,7 +405,7 @@ fn independent_vue_typescript_packages_analyze_native_mixed_project_tabs(cx: &mu
         .collect::<Vec<_>>();
     assert_eq!(plans.len(), 3);
     for (index, plan) in plans.iter().enumerate() {
-        assert_eq!(plan.owner, "typescript");
+        assert_eq!(plan.owner, "vue");
         assert_eq!(plan.process_count(), 1);
         assert!(plans[..index].iter().all(|other| !Arc::ptr_eq(other, plan)));
     }

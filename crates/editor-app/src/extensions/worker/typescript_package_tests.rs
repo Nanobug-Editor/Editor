@@ -21,7 +21,7 @@ fn typescript_package_serves_configured_and_inferred_sources_after_vue_disabled(
     )
     .unwrap();
     let disk = "const saved = true;\n";
-    for name in ["configured/main.ts", "loose/main.js"] {
+    for name in ["configured/main.ts", "loose/main.ts"] {
         std::fs::write(workspace.path().join(name), disk).unwrap();
     }
     let (fixture, visual) = setup_for_workspace(
@@ -53,7 +53,7 @@ fn typescript_package_serves_configured_and_inferred_sources_after_vue_disabled(
         },
     );
     let source = "// unsaved 中文😀\nconst value=1;\nvalue.toUpperCase();\nconst answer=value+2;\n";
-    let paths = ["configured/main.ts", "loose/main.js"]
+    let paths = ["configured/main.ts", "loose/main.ts"]
         .map(|name| fixture.workspace.join(name).canonicalize().unwrap());
     for path in &paths {
         wait(
