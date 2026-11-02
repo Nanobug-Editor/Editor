@@ -36,6 +36,8 @@ cargo run --release
 
 Windows MSVC builds statically link the C/C++ runtime through the repository's target-specific Cargo configuration. Installed builds do not require a separate Visual C++ Redistributable. Verify the final executable's imports before packaging, as described in [native packaging](installer/README.md).
 
+Windows releases use the GUI subsystem: open the installed shortcut or portable `Nanobug.exe` directly. Public CLI commands retain redirected output and can reuse an existing terminal; desktop launches do not create a console window.
+
 Prepare the executable, icon and host licenses as described in [native packaging](installer/README.md). Then compile the prepared Windows payload directly from the repository root:
 
 ```powershell

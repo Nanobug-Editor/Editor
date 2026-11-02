@@ -1,4 +1,7 @@
-//! Protect a running GUI from installer replacement; plugin resources remain in the private store.
+//! Windows distributions launch as native GUI applications and protect running editors from replacement.
+
+#[cfg(target_os = "windows")]
+pub(crate) use windows::attach_parent_console;
 
 /// Retain the Windows installer mutex until the last GUI process exits.
 /// This guard signals installation safety, and does not impose a single-instance application policy.
@@ -28,10 +31,19 @@ mod windows {
     // Kernel object handles are process-owned. Keeping this tiny binding local avoids a new dependency.
     #[link(name = "kernel32")]
     unsafe extern "system" {
+        fn AttachConsole(process: u32) -> i32;
         fn CreateMutexW(attributes: *const c_void, owner: i32, name: *const u16) -> *mut c_void;
         fn CloseHandle(handle: *mut c_void) -> i32;
         #[cfg(test)]
         fn OpenMutexW(access: u32, inherit: i32, name: *const u16) -> *mut c_void;
+    }
+
+    /// Reuse a terminal caller's existing console before CLI I/O, without allocating a console window.
+    /// Explorer/installer launches have no parent console; failure (or an existing attachment) is expected.
+    /// Caller-supplied redirected standard handles remain governed by Windows' STARTF_USESTDHANDLES.
+    pub(crate) fn attach_parent_console() {
+        // ATTACH_PARENT_PROCESS is a process-id sentinel; no pointers or owned handles cross this call.
+        let _ = unsafe { AttachConsole(u32::MAX) };
     }
 
     /// Open or create a named mutex without taking ownership; its existence is the installer signal.

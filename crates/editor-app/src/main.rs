@@ -1,3 +1,9 @@
+// Desktop releases open the native editor without allocating a console; debug/test runners keep theirs.
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions), not(test)),
+    windows_subsystem = "windows"
+)]
+
 // Kit 0.8's compatibility namespace names the facade itself. Give GPUI test macro output the
 // same crate identity, including in nested modules that inherit the namespace through a glob.
 #[cfg(test)]
@@ -1177,6 +1183,9 @@ impl EditorApp {
 }
 
 fn main() -> anyhow::Result<()> {
+    // A terminal caller can still use the public CLI; desktop launchers never gain a new console.
+    #[cfg(target_os = "windows")]
+    app::distribution::attach_parent_console();
     if plugin_development::run_cli()? {
         return Ok(());
     }

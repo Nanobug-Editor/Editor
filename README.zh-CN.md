@@ -36,6 +36,8 @@ cargo run --release
 
 Windows MSVC 构建通过仓库的目标专用 Cargo 配置静态链接 C/C++ 运行库，安装后无需另外安装 Visual C++ 运行库。发行前按[原生打包说明](installer/README.md)核对最终 EXE 的导入表。
 
+Windows Release 使用 GUI 子系统，直接打开安装快捷方式或便携版 `Nanobug.exe` 即可启动。公开 CLI 保留重定向输出，并可复用已有终端；桌面启动不会新建命令行窗口。
+
 按[原生打包说明](installer/README.md)准备程序、图标与宿主许可文件，然后从仓库根直接编译 Windows 安装器：
 
 ```powershell

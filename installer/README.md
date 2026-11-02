@@ -13,6 +13,17 @@ Visual C++ 运行库。此配置也覆盖 C/C++ 构建脚本按目标功能选�
 在 Visual Studio 开发者终端检查最终载荷；出现可再发行运行库 DLL 时停止打包，先修复
 对应原生依赖的静态链接。Windows 自带的系统 DLL 继续由操作系统提供。
 
+Windows Release 必须使用 GUI 子系统；同时检查实际 PE，不能只检查源代码中的配置。
+下列发行回归会验证 GUI 子系统、CLI JSON 重定向，以及错误退出码和 stderr。显式传入
+最终发行 EXE 与已构建的插件包；不使用测试运行器自身作为受检程序。
+
+```powershell
+$env:NANOBUG_WINDOWS_DISTRIBUTION_EXE = (Resolve-Path .\dist\editor\Nanobug.exe).Path
+$env:NANOBUG_WINDOWS_SMOKE_PACKAGE = (Resolve-Path .\dist\toml\toml-0.2.4.zip).Path
+cargo test -p editor-app --test windows_distribution -- --ignored --test-threads=1
+if ($LASTEXITCODE -ne 0) { throw 'Windows distribution regression failed' }
+```
+
 ```powershell
 $imports = dumpbin.exe /dependents .\dist\editor\Nanobug.exe | Out-String
 if ($LASTEXITCODE -ne 0) { throw 'Executable import inspection failed' }
@@ -60,7 +71,9 @@ Inno Setup 需事先准备，未加入 PATH 时直接指定 ISCC.exe 完整路�
 
 内部测试版可向 ISCC 追加 `/DBuildLabel=0.1.0-internal.20261102.2`。`AppVersion` 仍取
 Cargo 数字版本；标签仅用于向导显示、卸载显示和产物命名，不改变稳定安装身份。发布时
-同时保留最终 ZIP／安装器的完整 SHA-256、源码提交和构建信息；不替换已发布的同版本附件。
+同时保留最终 ZIP／安装器的完整 SHA-256、源码提交和构建信息；默认不替换已发布的同版本附件。
+用户明确要求修复并替换现有发行时，先备份原附件和 Release/标签来源，再同步替换完整载荷、
+校验文件与构建信息，并将标签和发行说明对齐到修复提交。
 
 安装向导的资源管理器集成选项首次默认勾选，同时添加文件夹对象和目录空白处的“使用 Nanobug 打开”
 （英文为 “Open with Nanobug”）。升级保留该选项；明确取消时撤销本产品原有入口，卸载核对归属后只移除
