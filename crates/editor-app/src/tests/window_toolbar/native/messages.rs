@@ -84,7 +84,7 @@ pub(super) async fn exercise(
         "reminder scenario left messages open"
     );
     navigation(handle, app, output, label, cx).await?;
-    timestamped_stderr(handle, app, output, label, cx).await?;
+    plugin_logs(handle, app, output, label, cx).await?;
     Ok(())
 }
 
@@ -155,9 +155,9 @@ async fn navigation(
     Ok(())
 }
 
-/// Replay timestamped stderr on `handle`, capture one card under `output`/`label`, then dismiss by input.
-/// `app` keeps the original runtime history while `cx` drives the actual Windows message loop.
-async fn timestamped_stderr(
+/// Publish service and implementation logs on `handle`, capturing the empty host panel under `output`/`label`.
+/// `app` retains plugin history while `cx` drives real Windows input and notification painting.
+async fn plugin_logs(
     handle: AnyWindowHandle,
     app: &Entity<EditorApp>,
     output: &Path,
@@ -188,6 +188,21 @@ async fn timestamped_stderr(
         "wasi/stderr",
         "Plugin diagnostic",
     );
+    for (level, source) in [
+        (plugin_runtime::LogLevel::Warning, "dependencies/prepare"),
+        (
+            plugin_runtime::LogLevel::Error,
+            "language.prepare:language-plugin/analysis",
+        ),
+        (plugin_runtime::LogLevel::Info, "lsp/analysis"),
+    ] {
+        logs.append(
+            "language-plugin",
+            level,
+            source,
+            "Service runtime diagnostic",
+        );
+    }
     handle.update(cx, |_, _, cx| {
         app.read(cx)
             .extensions
@@ -202,7 +217,7 @@ async fn timestamped_stderr(
             .notifications(cx)
             .count())?
             == 0,
-        "plugin implementation output raised a native message card"
+        "plugin service or implementation output raised a native message card"
     );
     for index in 0..3 {
         logs.append(
@@ -227,30 +242,37 @@ async fn timestamped_stderr(
             .message_delivery
             .notifications(cx)
             .count())?
-            == 1,
-        "timestamped stderr created duplicate native cards"
+            == 0,
+        "service stderr created a native host message card"
     );
     ensure!(
-        logs.records("language-plugin").len() == 5,
-        "stderr history was lost"
+        logs.records("language-plugin").len() == 8,
+        "plugin service history was lost"
     );
-    let close = button_bounds(handle, "dismiss-local-notification", cx)?.center();
-    capture(
-        handle,
-        &output.join(format!("{label}-stderr-coalesced.png")),
-        cx,
-    )?;
-    dispatch(handle, down(close), cx)?;
-    dispatch(handle, up(close), cx)?;
-    frame(handle, cx).await?;
     ensure!(
         handle.update(cx, |_, _, cx| app
             .read(cx)
-            .message_delivery
-            .notifications(cx)
-            .count())?
-            == 0,
-        "one native dismissal must close the repeated warning"
+            .messages
+            .read(cx)
+            .pending_level()
+            .is_none())?,
+        "plugin logs raised a host message reminder"
     );
+    ensure!(
+        button_bounds(handle, "dismiss-local-notification", cx).is_err(),
+        "a filtered service log left a visible native notification"
+    );
+    let toggle = button_bounds(handle, "host-messages-toggle", cx)?.center();
+    dispatch(handle, down(toggle), cx)?;
+    dispatch(handle, up(toggle), cx)?;
+    frame(handle, cx).await?;
+    capture(
+        handle,
+        &output.join(format!("{label}-service-logs-excluded.png")),
+        cx,
+    )?;
+    dispatch(handle, down(toggle), cx)?;
+    dispatch(handle, up(toggle), cx)?;
+    frame(handle, cx).await?;
     Ok(())
 }

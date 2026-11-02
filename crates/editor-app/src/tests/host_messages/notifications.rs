@@ -3,6 +3,7 @@
 use super::*;
 use crate::app::messages::MessageLevel;
 use plugin_runtime::LogLevel;
+use plugin_runtime::plugin_protocol::interaction::{Operation, Severity};
 
 /// Publish a worker change through the same entity notification observed by the main window.
 fn notify_extensions(form: &mut VisualTestContext, app: &Entity<EditorApp>) {
@@ -15,19 +16,25 @@ fn notify_extensions(form: &mut VisualTestContext, app: &Entity<EditorApp>) {
     draw(form);
 }
 
-/// Plugin implementation output stays in management logs; service receipts still reach the host panel.
+/// Every severity of service and implementation log stays out of host history, alerts and unread dots.
 #[gpui::test]
-fn unified_messages_route_plugin_internals_only_to_management_logs(cx: &mut TestAppContext) {
+fn unified_messages_route_plugin_logs_only_to_plugin_ui(cx: &mut TestAppContext) {
     with_messages(cx, |form, app, _| {
         let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
-        for (level, source) in [
-            (LogLevel::Info, "wasm/compile"),
-            (LogLevel::Info, "wasi/stdout"),
-            (LogLevel::Warning, "wasi/stderr"),
-            (LogLevel::Error, "host.operation"),
-            (LogLevel::Info, "host.ui.stale"),
+        for source in [
+            "wasm/compile",
+            "wasi/stdout",
+            "wasi/stderr",
+            "host.operation",
+            "host.ui.stale",
+            "dependencies/prepare",
+            "language.prepare:provider/engine",
+            "lsp/engine",
+            "lsp/engine/stderr",
         ] {
-            logs.append("provider", level, source, "Plugin implementation detail");
+            for level in [LogLevel::Info, LogLevel::Warning, LogLevel::Error] {
+                logs.append("provider", level, source, "Plugin runtime detail");
+            }
         }
         let original = logs.records("provider");
         let generation = logs.generation();
@@ -39,22 +46,27 @@ fn unified_messages_route_plugin_internals_only_to_management_logs(cx: &mut Test
         assert_eq!(logs.generation(), generation);
         assert_eq!(logs.unread_severity("provider"), Some(LogLevel::Error));
 
-        for source in [
-            "dependencies/prepare",
-            "language.prepare:provider/engine",
-            "lsp/engine",
-            "lsp/engine/stderr",
-        ] {
-            logs.append("provider", LogLevel::Warning, source, "Service receipt");
-        }
+        form.update(|_, cx| {
+            app.update(cx, |app, cx| {
+                app.record_plugin_notice(
+                    "provider",
+                    &Operation::PublishMessage {
+                        title: "Published result".into(),
+                        message: "User-facing message".into(),
+                        severity: Severity::Warning,
+                    },
+                    cx,
+                );
+            });
+        });
         notify_extensions(form, &app);
-        assert!(form.debug_bounds("host-message-4").is_some());
-        assert!(form.debug_bounds("host-message-5").is_none());
+        assert!(form.debug_bounds("host-message-1").is_some());
+        assert!(form.debug_bounds("host-message-2").is_none());
         assert!(form.debug_bounds("host-message-toast").is_some());
         click(form, "host-messages-clear");
         notify_extensions(form, &app);
         assert!(form.debug_bounds("host-messages-empty").is_some());
-        assert_eq!(logs.records("provider").len(), 9);
+        assert_eq!(logs.records("provider").len(), original.len() + 1);
     });
 }
 
@@ -108,13 +120,18 @@ fn unified_messages_host_alerts_are_nonmodal_and_bottom_right(cx: &mut TestAppCo
 
 /// The extension observer imports each owned receipt once; clearing history never rewinds its cursor.
 #[gpui::test]
-fn unified_messages_import_service_receipts_once_and_do_not_replay_after_clear(
+fn unified_messages_import_explicit_receipts_once_and_do_not_replay_after_clear(
     cx: &mut TestAppContext,
 ) {
     with_messages(cx, |form, app, _| {
         let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
         logs.append("git", LogLevel::Info, "host.message", "Git ready");
-        logs.append("other", LogLevel::Warning, "lsp/engine", "Service warning");
+        logs.append(
+            "other",
+            LogLevel::Warning,
+            "host.message",
+            "Published warning",
+        );
         let error = logs.append("git", LogLevel::Error, "host.message", "Git error");
         let generation = logs.generation();
         notify_extensions(form, &app);
@@ -152,7 +169,7 @@ fn unified_messages_filter_shared_runtime_receipts_by_workspace(cx: &mut TestApp
         logs.for_workspace(&peer.path().to_string_lossy()).append(
             "same-plugin",
             LogLevel::Error,
-            "lsp/engine",
+            "host.message",
             "Other workspace error",
         );
         notify_extensions(form, &app);
@@ -161,7 +178,7 @@ fn unified_messages_filter_shared_runtime_receipts_by_workspace(cx: &mut TestApp
         logs.for_workspace(&root.to_string_lossy()).append(
             "same-plugin",
             LogLevel::Warning,
-            "lsp/engine",
+            "host.message",
             "Current workspace warning",
         );
         logs.for_workspace("").append(
@@ -216,9 +233,9 @@ fn unified_messages_alerts_are_bounded_and_repeat_after_dismissal(cx: &mut TestA
     });
 }
 
-/// Repeated stderr diagnostics differ only in their transport timestamp, not in the warning to act on.
+/// A stream of timestamped service diagnostics remains intact without creating any host receipts.
 #[gpui::test]
-fn unified_messages_timestamped_stderr_coalesces_without_losing_history(cx: &mut TestAppContext) {
+fn unified_messages_timestamped_stderr_stays_in_plugin_logs(cx: &mut TestAppContext) {
     with_messages(cx, |form, app, _| {
         let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
         let messages = [
@@ -237,8 +254,8 @@ fn unified_messages_timestamped_stderr_coalesces_without_losing_history(cx: &mut
         }
         assert_eq!(
             form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
-            1,
-            "timestamps must not multiply the same visible stderr warning"
+            0,
+            "service stderr must not create host notification cards"
         );
         assert_eq!(
             logs.records("language-plugin")
@@ -248,8 +265,7 @@ fn unified_messages_timestamped_stderr_coalesces_without_losing_history(cx: &mut
             messages,
             "diagnostic history must keep each original timestamp and message"
         );
-        assert!(form.debug_bounds("host-message-3").is_some());
-        click(form, "host-message-toast-close");
+        assert!(form.debug_bounds("host-messages-empty").is_some());
         assert!(form.debug_bounds("host-message-toast").is_none());
         logs.append(
             "language-plugin",
@@ -258,7 +274,7 @@ fn unified_messages_timestamped_stderr_coalesces_without_losing_history(cx: &mut
             messages[2],
         );
         notify_extensions(form, &app);
-        assert!(form.debug_bounds("host-message-toast").is_some());
+        assert!(form.debug_bounds("host-message-toast").is_none());
         logs.append(
             "language-plugin",
             LogLevel::Warning,
@@ -268,28 +284,35 @@ fn unified_messages_timestamped_stderr_coalesces_without_losing_history(cx: &mut
         notify_extensions(form, &app);
         assert_eq!(
             form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
-            2,
-            "different diagnostics still need independent alerts"
+            0,
+            "new service diagnostics still belong to plugin status and logs"
+        );
+        assert!(form.debug_bounds("host-messages-empty").is_some());
+        assert_eq!(logs.records("language-plugin").len(), 5);
+        assert_eq!(
+            logs.unread_severity("language-plugin"),
+            Some(LogLevel::Warning)
         );
     });
 }
 
-/// Timestamp coalescing retains the newer receipt as the native card's history-navigation target.
+/// Duplicate explicit publications retain the newer receipt as the native card's history target.
 #[gpui::test]
-fn unified_messages_timestamped_stderr_click_reveals_latest(cx: &mut TestAppContext) {
+fn unified_messages_publication_click_reveals_latest(cx: &mut TestAppContext) {
     with_messages(cx, |form, app, _| {
         click(form, "host-messages-hide");
-        let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
-        for (timestamp, following) in [("13:43:01", 30), ("13:43:02", 25)] {
-            logs.append(
-                "language-plugin",
-                LogLevel::Warning,
-                "lsp/analysis/stderr",
-                format!("2026-10-30T{timestamp}Z WARN Watch failed"),
-            );
-            notify_extensions(form, &app);
+        for following in [30, 25] {
             form.update(|_, cx| {
                 app.update(cx, |app, cx| {
+                    app.record_plugin_notice(
+                        "publisher",
+                        &Operation::PublishMessage {
+                            title: "Published warning".into(),
+                            message: "Repeated user-facing message".into(),
+                            severity: Severity::Warning,
+                        },
+                        cx,
+                    );
                     for _ in 0..following {
                         app.record_host_message(MessageLevel::Info, "Intermediate receipt", cx);
                     }
@@ -308,35 +331,41 @@ fn unified_messages_timestamped_stderr_click_reveals_latest(cx: &mut TestAppCont
         let viewport = form.debug_bounds("host-message-list").unwrap();
         let latest = form
             .debug_bounds("host-message-32")
-            .expect("latest timestamped receipt is disclosed");
+            .expect("latest explicit receipt is disclosed");
         assert!(latest.top() >= viewport.top() - px(1.));
         assert!(latest.bottom() <= viewport.bottom() + px(1.));
         assert!(
             form.debug_bounds("host-message-1").is_none(),
-            "card must follow the newer timestamped duplicate"
+            "card must follow the newer explicit duplicate"
         );
     });
 }
 
 /// Matching diagnostic bodies must not merge independent producers or severity escalations.
 #[gpui::test]
-fn unified_messages_timestamped_stderr_keeps_origin_and_severity(cx: &mut TestAppContext) {
+fn unified_messages_publication_keeps_origin_and_severity(cx: &mut TestAppContext) {
     with_messages(cx, |form, app, _| {
-        let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
-        for (index, (plugin, level, source)) in [
-            ("one", LogLevel::Warning, "lsp/analysis/stderr"),
-            ("two", LogLevel::Warning, "lsp/analysis/stderr"),
-            ("one", LogLevel::Error, "lsp/analysis/stderr"),
+        for (index, (plugin, severity)) in [
+            ("one", Severity::Warning),
+            ("two", Severity::Warning),
+            ("one", Severity::Error),
         ]
         .into_iter()
         .enumerate()
         {
-            logs.append(
-                plugin,
-                level,
-                source,
-                format!("2026-10-30T13:43:0{index}Z Watch failed"),
-            );
+            form.update(|_, cx| {
+                app.update(cx, |app, cx| {
+                    app.record_plugin_notice(
+                        plugin,
+                        &Operation::PublishMessage {
+                            title: "Published result".into(),
+                            message: "Same user-facing content".into(),
+                            severity,
+                        },
+                        cx,
+                    );
+                });
+            });
             notify_extensions(form, &app);
             assert_eq!(
                 form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
@@ -349,7 +378,6 @@ fn unified_messages_timestamped_stderr_keeps_origin_and_severity(cx: &mut TestAp
 /// Full diagnostic text is retained, while long automatic cards keep every dismissal within the viewport.
 #[gpui::test]
 fn unified_messages_publication_preserves_source_and_bounded_long_cards(cx: &mut TestAppContext) {
-    use plugin_runtime::plugin_protocol::interaction::{Operation, Severity};
     with_messages(cx, |form, app, _| {
         form.update(|_, cx| {
             app.update(cx, |app, cx| {
