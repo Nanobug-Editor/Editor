@@ -1,4 +1,6 @@
 //! The shipped XML component supplies structure through public Manager, without a native LSP.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
@@ -57,6 +59,16 @@ fn xml_structure_is_independent_and_preserves_definition_ranges() {
     assert!(
         manager.language_services().is_empty(),
         "structure alone must not manufacture an LSP"
+    );
+    // A structure consumer must demand its declared role instead of relying on eager installation.
+    assert!(manager.structure_providers().is_empty());
+    demand_support::ready(
+        &mut manager,
+        "xml",
+        plugin_runtime::DemandReason::Language {
+            provider: "xml/structure".into(),
+            role: plugin_runtime::LanguageRole::Structure,
+        },
     );
     let provider = manager.structure_providers()["xml/structure"]
         .as_ref()

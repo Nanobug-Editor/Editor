@@ -1,4 +1,6 @@
 //! Delivered incremental scenes use the public installed-package and revision admission boundary.
+#[path = "support/demand.rs"]
+mod demand_support;
 /// Read fixed, hash-checked Package inputs without depending on removed plugin source or distribution payloads.
 #[path = "support/packages.rs"]
 mod test_packages;
@@ -59,6 +61,13 @@ fn delivered_incremental_scene_restores_content_and_suspends_hidden_derivation()
     manager
         .install(&package, package.manifest.permissions.clone())
         .unwrap();
+    // Installation publishes metadata; an actual preview request owns first activation.
+    assert!(manager.live.is_empty());
+    demand_support::ready(
+        &mut manager,
+        "markdown",
+        plugin_runtime::DemandReason::View("preview".into()),
+    );
     let original = (0..100)
         .map(|index| format!("段落 {index} 正文。\n\n"))
         .collect::<String>();
