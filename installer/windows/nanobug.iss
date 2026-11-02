@@ -8,12 +8,18 @@
 #ifndef AppVersion
   #error AppVersion must match Cargo.toml
 #endif
+; Release labels can identify internal builds without changing the numeric upgrade version.
+#ifndef BuildLabel
+  #define BuildLabel AppVersion
+#endif
 
 [Setup]
 ; Keep this identity stable so subsequent versions upgrade the same per-user application.
 AppId=Nanobug.Editor
 AppName=Nanobug
 AppVersion={#AppVersion}
+AppVerName=Nanobug {#BuildLabel}
+VersionInfoVersion={#AppVersion}
 AppPublisher=Nanobug contributors
 AppPublisherURL=https://github.com/Nanobug-Editor/Editor
 DefaultDirName={localappdata}\Programs\Nanobug
@@ -22,10 +28,10 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#InstallerDir}
-OutputBaseFilename=Nanobug-Setup-{#AppVersion}-x64
+OutputBaseFilename=Nanobug-Setup-{#BuildLabel}-x64
 SetupIconFile={#PayloadDir}\Nanobug.ico
 UninstallDisplayIcon={app}\Nanobug.exe
-UninstallDisplayName=Nanobug
+UninstallDisplayName=Nanobug {#BuildLabel}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -76,6 +82,9 @@ Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\Nanobug\command
 [Files]
 Source: "{#PayloadDir}\Nanobug.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\Nanobug.ico"; DestDir: "{app}"; Flags: ignoreversion
+; Carry optional build identity and internal-test instructions with the installed payload.
+Source: "{#PayloadDir}\build-info.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#PayloadDir}\INTERNAL-TEST.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 ; Plugins live in the private user store and are acquired explicitly from the reviewed marketplace.
 Source: "{#PayloadDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 

@@ -34,6 +34,8 @@ cargo build -p editor-app --release
 cargo run --release
 ```
 
+Windows MSVC builds statically link the C/C++ runtime through the repository's target-specific Cargo configuration. Installed builds do not require a separate Visual C++ Redistributable. Verify the final executable's imports before packaging, as described in [native packaging](installer/README.md).
+
 Prepare the executable, icon and host licenses as described in [native packaging](installer/README.md). Then compile the prepared Windows payload directly from the repository root:
 
 ```powershell

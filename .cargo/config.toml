@@ -1,0 +1,4 @@
+# Windows distributions embed the CRT so users do not install a separate VC++ runtime.
+# Scope this to native MSVC targets; WASI plugin components keep their own target settings.
+[target.'cfg(all(target_os = "windows", target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -6,6 +6,21 @@ PowerShell/Python 脚本只在本机 Codex 工作区存档，打包不得调用�
 
 ## Windows
 
+仓库 `.cargo/config.toml` 对 Windows MSVC 目标启用静态 CRT；安装后无需另外安装
+Visual C++ 运行库。此配置也覆盖 C/C++ 构建脚本按目标功能选择的运行库，但最终 EXE 的
+导入表仍是交付依据。不要通过全局 `RUSTFLAGS` 覆盖该目标配置后直接发行。
+
+在 Visual Studio 开发者终端检查最终载荷；出现可再发行运行库 DLL 时停止打包，先修复
+对应原生依赖的静态链接。Windows 自带的系统 DLL 继续由操作系统提供。
+
+```powershell
+$imports = dumpbin.exe /dependents .\dist\editor\Nanobug.exe | Out-String
+if ($LASTEXITCODE -ne 0) { throw 'Executable import inspection failed' }
+if ($imports -match '(?im)^\s*(?:vcruntime\w*|msvcp\w*|concrt\w*|ucrtbased?)\.dll\s*$') {
+    throw 'The distribution still imports an external Visual C++ runtime'
+}
+```
+
 运行 `cargo build -p editor-app --release` 后，将 `target/release/editor-app.exe` 复制为
 `dist/editor/Nanobug.exe`；复制品牌 ICO 到 `dist/editor/Nanobug.ico`，宿主依赖许可到
 `dist/editor/licenses/`。安装器和便携包均不携带插件 ZIP、源码或首次提供索引；运行不依赖同级
@@ -42,6 +57,10 @@ $digest = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvar
 Inno Setup 需事先准备，未加入 PATH 时直接指定 ISCC.exe 完整路径。x64 是第一期验收架构；
 检查原生 EXE 架构、载荷清单和最终安装器/便携 ZIP 摘要后再发行。安装配置保留按用户安装、运行中 mutex
 保护、双语向导与用户数据保留行为，不包含外部程序或脚本执行项。
+
+内部测试版可向 ISCC 追加 `/DBuildLabel=0.1.0-internal.20261102.2`。`AppVersion` 仍取
+Cargo 数字版本；标签仅用于向导显示、卸载显示和产物命名，不改变稳定安装身份。发布时
+同时保留最终 ZIP／安装器的完整 SHA-256、源码提交和构建信息；不替换已发布的同版本附件。
 
 安装向导的资源管理器集成选项首次默认勾选，同时添加文件夹对象和目录空白处的“使用 Nanobug 打开”
 （英文为 “Open with Nanobug”）。升级保留该选项；明确取消时撤销本产品原有入口，卸载核对归属后只移除

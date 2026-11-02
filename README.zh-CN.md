@@ -34,6 +34,8 @@ cargo build -p editor-app --release
 cargo run --release
 ```
 
+Windows MSVC 构建通过仓库的目标专用 Cargo 配置静态链接 C/C++ 运行库，安装后无需另外安装 Visual C++ 运行库。发行前按[原生打包说明](installer/README.md)核对最终 EXE 的导入表。
+
 按[原生打包说明](installer/README.md)准备程序、图标与宿主许可文件，然后从仓库根直接编译 Windows 安装器：
 
 ```powershell
