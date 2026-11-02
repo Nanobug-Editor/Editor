@@ -3,5 +3,7 @@
 mod registry;
 mod source;
 mod syntax;
+#[cfg(test)]
+mod tests;
 pub(crate) use registry::{GrammarConfig, LanguageParserFactory, LanguageRegistry};
 pub(crate) use syntax::SyntaxHighlighter;

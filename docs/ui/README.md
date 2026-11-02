@@ -2,6 +2,8 @@
 
 本目录保存原生 UI 方案，以及 GPUI 控件、输入与布局相关调研。方案和调研按各自状态、日期与依赖版本理解，不代表相关功能已实现或验收。
 
+- [文件加载时正文闪烁](verification/editor-file-loading-flicker-2026-11-02.md)：补齐后台解析等待期间的普通文字样式，记录录屏复现、红绿回归及深浅主题的原生像素检查。
+
 - [带时间戳 stderr 警告的浮窗去重](verification/stderr-warning-coalescing-2026-10-30.md)：重复语言服务日志共用一张在场浮窗，完整原文和来源、等级仍保留；实际验证范围见记录。
 
 - [Rust 真实包高亮覆盖检查](verification/rust-highlighting-2026-10-30.md)：文档注释标记、语法遗漏、通用 namespace 色板及只读代码区回归，记录原生操作停止后的验证边界。
