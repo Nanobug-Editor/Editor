@@ -15,6 +15,49 @@ fn notify_extensions(form: &mut VisualTestContext, app: &Entity<EditorApp>) {
     draw(form);
 }
 
+/// Plugin implementation output stays in management logs; service receipts still reach the host panel.
+#[gpui::test]
+fn unified_messages_route_plugin_internals_only_to_management_logs(cx: &mut TestAppContext) {
+    with_messages(cx, |form, app, _| {
+        let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
+        for (level, source) in [
+            (LogLevel::Info, "wasm/compile"),
+            (LogLevel::Info, "wasi/stdout"),
+            (LogLevel::Warning, "wasi/stderr"),
+            (LogLevel::Error, "host.operation"),
+            (LogLevel::Info, "host.ui.stale"),
+        ] {
+            logs.append("provider", level, source, "Plugin implementation detail");
+        }
+        let original = logs.records("provider");
+        let generation = logs.generation();
+        notify_extensions(form, &app);
+        assert!(form.debug_bounds("host-messages-empty").is_some());
+        assert!(form.debug_bounds("host-message-toast").is_none());
+        assert!(form.debug_bounds("host-messages-dot").is_none());
+        assert_eq!(logs.records("provider"), original);
+        assert_eq!(logs.generation(), generation);
+        assert_eq!(logs.unread_severity("provider"), Some(LogLevel::Error));
+
+        for source in [
+            "dependencies/prepare",
+            "language.prepare:provider/engine",
+            "lsp/engine",
+            "lsp/engine/stderr",
+        ] {
+            logs.append("provider", LogLevel::Warning, source, "Service receipt");
+        }
+        notify_extensions(form, &app);
+        assert!(form.debug_bounds("host-message-4").is_some());
+        assert!(form.debug_bounds("host-message-5").is_none());
+        assert!(form.debug_bounds("host-message-toast").is_some());
+        click(form, "host-messages-clear");
+        notify_extensions(form, &app);
+        assert!(form.debug_bounds("host-messages-empty").is_some());
+        assert_eq!(logs.records("provider").len(), 9);
+    });
+}
+
 /// Errors and warnings retain focus, use the lower-right corner and dismiss independently of history.
 #[gpui::test]
 fn unified_messages_host_alerts_are_nonmodal_and_bottom_right(cx: &mut TestAppContext) {
@@ -65,17 +108,14 @@ fn unified_messages_host_alerts_are_nonmodal_and_bottom_right(cx: &mut TestAppCo
 
 /// The extension observer imports each owned receipt once; clearing history never rewinds its cursor.
 #[gpui::test]
-fn unified_messages_import_plugin_logs_once_and_do_not_replay_after_clear(cx: &mut TestAppContext) {
+fn unified_messages_import_service_receipts_once_and_do_not_replay_after_clear(
+    cx: &mut TestAppContext,
+) {
     with_messages(cx, |form, app, _| {
         let logs = form.update(|_, cx| app.read(cx).extensions.read(cx).runtime_logs());
-        logs.append("git", LogLevel::Info, "wasi/stdout", "Git ready");
-        logs.append(
-            "other",
-            LogLevel::Warning,
-            "language/status",
-            "Service warning",
-        );
-        let error = logs.append("git", LogLevel::Error, "host.operation", "Git error");
+        logs.append("git", LogLevel::Info, "host.message", "Git ready");
+        logs.append("other", LogLevel::Warning, "lsp/engine", "Service warning");
+        let error = logs.append("git", LogLevel::Error, "host.message", "Git error");
         let generation = logs.generation();
         notify_extensions(form, &app);
         assert!(form.debug_bounds("host-message-1").is_some());
@@ -95,7 +135,7 @@ fn unified_messages_import_plugin_logs_once_and_do_not_replay_after_clear(cx: &m
         notify_extensions(form, &app);
         assert!(form.debug_bounds("host-messages-empty").is_some());
         assert!(form.debug_bounds("host-message-4").is_none());
-        logs.append("git", LogLevel::Error, "host.operation", "Later Git error");
+        logs.append("git", LogLevel::Error, "host.message", "Later Git error");
         notify_extensions(form, &app);
         assert!(form.debug_bounds("host-message-4").is_some());
         assert!(form.debug_bounds("host-message-source-4").is_some());
@@ -112,7 +152,7 @@ fn unified_messages_filter_shared_runtime_receipts_by_workspace(cx: &mut TestApp
         logs.for_workspace(&peer.path().to_string_lossy()).append(
             "same-plugin",
             LogLevel::Error,
-            "language",
+            "lsp/engine",
             "Other workspace error",
         );
         notify_extensions(form, &app);
@@ -121,13 +161,13 @@ fn unified_messages_filter_shared_runtime_receipts_by_workspace(cx: &mut TestApp
         logs.for_workspace(&root.to_string_lossy()).append(
             "same-plugin",
             LogLevel::Warning,
-            "language",
+            "lsp/engine",
             "Current workspace warning",
         );
         logs.for_workspace("").append(
             "installer",
             LogLevel::Info,
-            "package",
+            "host.message",
             "Application receipt",
         );
         notify_extensions(form, &app);
@@ -264,6 +304,7 @@ fn unified_messages_timestamped_stderr_click_reveals_latest(cx: &mut TestAppCont
         click(form, "host-message-toast");
         form.update(|window, cx| window.simulate_next_frame(cx));
         draw(form);
+        assert!(form.debug_bounds("host-message-toast").is_none());
         let viewport = form.debug_bounds("host-message-list").unwrap();
         let latest = form
             .debug_bounds("host-message-32")

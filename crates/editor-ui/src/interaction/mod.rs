@@ -36,7 +36,7 @@ pub struct HostInteraction {
     choices_scroll: ScrollHandle,
     closed: bool,
     _subscription: Subscription,
-    /// Optional host routing for retained notification text; it never completes the plugin request.
+    /// Optional host routing for retained text, invoked after body activation dismisses the notification.
     on_open_message: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
 }
 
@@ -129,7 +129,8 @@ impl HostInteraction {
         }
     }
 
-    /// Route a Notify body click to `handler` with its original event/window/app, preserving request lifetime.
+    /// Dismiss Notify on body activation, then call `handler` with its event/window/app to reveal history.
+    /// Dismissal completes the request normally; progress cards retain their separate cancellation flow.
     pub fn on_open_message(
         mut self,
         handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -432,10 +433,12 @@ impl HostInteraction {
         };
         super::notification::message_card("plugin-message", cx)
             .when_some(self.on_open_message.clone(), |card, handler| {
-                card.cursor_pointer().on_click(move |event, window, cx| {
-                    cx.stop_propagation();
-                    handler(event, window, cx);
-                })
+                card.cursor_pointer()
+                    .on_click(cx.listener(move |this, event, window, cx| {
+                        cx.stop_propagation();
+                        this.confirm(window, cx);
+                        handler(event, window, cx);
+                    }))
             })
             .w(px(380.))
             .flex()

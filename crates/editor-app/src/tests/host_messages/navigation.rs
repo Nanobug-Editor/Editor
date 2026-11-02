@@ -86,10 +86,14 @@ fn host_messages_toast_reveals_undisclosed_receipt(cx: &mut TestAppContext) {
         draw(form);
         assert_visible(form, 1);
         assert!(form.debug_bounds("host-messages-dot").is_none());
-        // Clicking again while already open must reveal the same row instead of toggling the panel shut.
-        click(form, "host-message-toast");
-        draw(form);
-        assert_visible(form, 1);
+        assert!(
+            form.debug_bounds("host-message-toast").is_none(),
+            "opening history must dismiss the activated card"
+        );
+        assert_eq!(
+            form.update(|_, cx| app.read(cx).message_delivery.notifications(cx).count()),
+            0
+        );
     });
 }
 
@@ -118,12 +122,28 @@ fn host_messages_toast_coalescing_and_stale_targets(cx: &mut TestAppContext) {
             form.debug_bounds(row(1)).is_none(),
             "the coalesced card must target the newer duplicate"
         );
+        assert!(form.debug_bounds("host-message-toast").is_none());
+        // A later identical receipt creates a fresh card after the previous one was activated.
+        form.update(|_, cx| {
+            app.update(cx, |app, cx| {
+                app.record_host_message(MessageLevel::Error, "Repeated error", cx);
+            });
+        });
+        draw(form);
+        assert!(form.debug_bounds("host-message-toast").is_some());
         click(form, "host-messages-clear");
         click(form, "host-messages-hide");
         click(form, "host-message-toast");
         assert!(form.debug_bounds("host-messages-empty").is_some());
         assert!(form.debug_bounds(row(32)).is_none());
+        assert!(form.debug_bounds("host-message-toast").is_none());
         click(form, "host-messages-hide");
+        form.update(|_, cx| {
+            app.update(cx, |app, cx| {
+                app.record_host_message(MessageLevel::Error, "Close without opening", cx);
+            });
+        });
+        draw(form);
         click(form, "host-message-toast-close");
         assert!(
             form.debug_bounds("host-messages-panel").is_none(),
@@ -141,8 +161,9 @@ fn host_messages_toast_coalescing_and_stale_targets(cx: &mut TestAppContext) {
         click(form, "host-message-toast");
         assert!(form.debug_bounds("host-messages-panel").is_some());
         assert!(
-            form.debug_bounds(row(58)).is_none(),
+            form.debug_bounds(row(60)).is_none(),
             "capacity eviction must remain effective"
         );
+        assert!(form.debug_bounds("host-message-toast").is_none());
     });
 }

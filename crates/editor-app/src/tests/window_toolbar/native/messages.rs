@@ -130,12 +130,14 @@ async fn navigation(
         messages_visible(handle, app, cx)?,
         "native card click did not open history"
     );
-    dispatch(handle, down(close.center()), cx)?;
-    dispatch(handle, up(close.center()), cx)?;
-    frame(handle, cx).await?;
     ensure!(
-        messages_visible(handle, app, cx)?,
-        "closing the card toggled history"
+        handle.update(cx, |_, _, cx| app
+            .read(cx)
+            .message_delivery
+            .notifications(cx)
+            .count())?
+            == 0,
+        "native card activation did not dismiss the card"
     );
     capture(
         handle,
@@ -174,6 +176,34 @@ async fn timestamped_stderr(
     let logs = handle.update(cx, |_, _, cx| {
         app.read(cx).extensions.read(cx).runtime_logs()
     })?;
+    logs.append(
+        "language-plugin",
+        plugin_runtime::LogLevel::Info,
+        "wasm/compile",
+        "Reusing compiled component",
+    );
+    logs.append(
+        "language-plugin",
+        plugin_runtime::LogLevel::Warning,
+        "wasi/stderr",
+        "Plugin diagnostic",
+    );
+    handle.update(cx, |_, _, cx| {
+        app.read(cx)
+            .extensions
+            .clone()
+            .update(cx, |_, cx| cx.notify());
+    })?;
+    frame(handle, cx).await?;
+    ensure!(
+        handle.update(cx, |_, _, cx| app
+            .read(cx)
+            .message_delivery
+            .notifications(cx)
+            .count())?
+            == 0,
+        "plugin implementation output raised a native message card"
+    );
     for index in 0..3 {
         logs.append(
             "language-plugin",
@@ -201,7 +231,7 @@ async fn timestamped_stderr(
         "timestamped stderr created duplicate native cards"
     );
     ensure!(
-        logs.records("language-plugin").len() == 3,
+        logs.records("language-plugin").len() == 5,
         "stderr history was lost"
     );
     let close = button_bounds(handle, "dismiss-local-notification", cx)?.center();

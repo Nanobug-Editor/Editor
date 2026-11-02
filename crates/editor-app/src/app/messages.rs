@@ -1,4 +1,4 @@
-//! Unified receipts retain source attribution while the original runtime log owns its diagnostic history.
+//! User-facing plugin service receipts retain attribution; implementation output stays in runtime logs.
 
 use crate::*;
 
@@ -151,12 +151,13 @@ impl EditorApp {
         id
     }
 
-    /// Consume runtime receipts only on extension publication, independently of rendering and log reads.
+    /// Consume service/public receipts on extension publication, leaving implementation logs in management.
     pub(crate) fn sync_plugin_messages(&mut self, cx: &mut Context<Self>) {
         self.import_plugin_messages(None, cx);
     }
 
-    /// Import each runtime receipt once; return the panel identity corresponding to optional runtime `target`.
+    /// Import each service/public receipt once; return the panel identity for optional runtime `target`.
+    /// The cursor also consumes excluded implementation logs, without acknowledging or deleting them.
     fn import_plugin_messages(
         &mut self,
         target: Option<u64>,
@@ -170,6 +171,16 @@ impl EditorApp {
         self.message_delivery.through = through;
         let mut target_id = None;
         for record in records {
+            // Sources are assigned by host producers, never inferred from message text or plugin IDs.
+            // Unknown implementation sources remain available in plugin management by default.
+            if !matches!(
+                record.source.as_str(),
+                "host.message" | NOTIFICATION_SOURCE | "dependencies/prepare"
+            ) && !record.source.starts_with("lsp/")
+                && !record.source.starts_with("language.prepare:")
+            {
+                continue;
+            }
             let matched = Some(record.id) == target;
             let id = self.record_plugin_message(record, cx);
             if matched {

@@ -90,7 +90,7 @@ fn with_manager(
             state.logs.append(
                 "manager-first",
                 plugin_runtime::logs::LogLevel::Info,
-                "language.status:manager-first/analysis",
+                "lsp/analysis",
                 "Ready",
             );
             state.logs.append(
