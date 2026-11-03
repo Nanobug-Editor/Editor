@@ -263,17 +263,32 @@ impl Processes {
         );
         Ok(self.next)
     }
+    /// Admit one bounded write; plugin callers retain an explicit busy error when the queue is full.
     pub fn write(&mut self, id: u64, bytes: &[u8]) -> anyhow::Result<()> {
         anyhow::ensure!(bytes.len() <= 1024 * 1024, "Input quota exceeded");
-        self.items
+        anyhow::ensure!(
+            self.try_write(id, bytes.to_vec())?.is_none(),
+            "Process input is unavailable: sending on a full channel"
+        );
+        Ok(())
+    }
+
+    /// Return an unaccepted buffer on temporary backpressure so an owning supervisor can retry it.
+    /// Closed handles and quota violations remain errors; no bytes are copied or admitted on retry.
+    pub(crate) fn try_write(&mut self, id: u64, bytes: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
+        anyhow::ensure!(bytes.len() <= 1024 * 1024, "Input quota exceeded");
+        let input = self
+            .items
             .get_mut(&id)
             .ok_or_else(|| anyhow::anyhow!("Unknown process handle"))?
             .input
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Process has exited"))?
-            .try_send(bytes.to_vec())
-            .map_err(|e| anyhow::anyhow!("Process input is unavailable: {e}"))?;
-        Ok(())
+            .ok_or_else(|| anyhow::anyhow!("Process has exited"))?;
+        match input.try_send(bytes) {
+            Ok(()) => Ok(None),
+            Err(mpsc::TrySendError::Full(bytes)) => Ok(Some(bytes)),
+            Err(error) => Err(anyhow::anyhow!("Process input is unavailable: {error}")),
+        }
     }
     /// Disconnecting the only sender drains its bounded queue before the writer drops the pipe.
     /// Do not enqueue a close sentinel: a full input queue must not make EOF admission race writes.

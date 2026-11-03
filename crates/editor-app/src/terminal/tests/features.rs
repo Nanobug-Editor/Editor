@@ -27,10 +27,12 @@ fn pane_text(app: &Entity<EditorApp>, id: u64, visual: &mut VisualTestContext) -
 
 /// Use the configured Shell's normal input path for test markers, never a parser-only output injection.
 fn output(visual: &mut VisualTestContext, marker: &str) {
+    // Keep the complete marker out of echoed input so waits observe real command output.
+    let (prefix, suffix) = marker.split_once('-').unwrap();
     visual.simulate_input(&if cfg!(windows) {
-        format!("Write-Output ('{marker}')")
+        format!("Write-Output ('{prefix}-' + '{suffix}')")
     } else {
-        format!("printf '{marker}\\n'")
+        format!("printf '%s%s\\n' '{prefix}-' '{suffix}'")
     });
     visual.simulate_keystrokes("enter");
 }
@@ -53,7 +55,11 @@ fn native_find_vi_and_split_panes_keep_session_ownership(cx: &mut TestAppContext
     });
     output(visual, "find-中文-needle");
     wait(visual, &app, |visual| {
-        painted(&app, visual).contains("find-中文-needle")
+        // The new prompt must be painted before Vi selects its row; late Shell output can move it.
+        let text = painted(&app, visual);
+        let marker = text.rfind("find-中文-needle");
+        let prompt = text.rfind(if cfg!(windows) { "PS" } else { "$" });
+        matches!((marker, prompt), (Some(marker), Some(prompt)) if prompt > marker)
     });
     let find = visual.debug_bounds("native-terminal-find").unwrap();
     visual.simulate_click(find.center(), Default::default());

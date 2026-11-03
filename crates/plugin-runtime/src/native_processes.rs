@@ -260,6 +260,13 @@ impl NativeProcessGroup {
     }
 }
 
+impl Drop for NativeProcessGroup {
+    fn drop(&mut self) {
+        // A writer retry must also observe owner loss without waiting to receive another command.
+        let _ = self.set_trusted(false);
+    }
+}
+
 /// Native resources stay on this thread; control gates are independent from data backpressure.
 fn supervise(
     input: mpsc::Receiver<Command>,
@@ -275,6 +282,9 @@ fn supervise(
     // At most one bounded native poll plus queued diagnostics are retained. A full view queue
     // pauses further reads, but never stops us from revoking or joining native resources.
     let mut pending = VecDeque::new();
+    // Retain only the oldest admitted input while the child writer is busy. The bounded command
+    // queue supplies backpressure; later input cannot overtake this buffer or silently lose bytes.
+    let mut blocked_write = None;
     'supervisor: loop {
         if let Ok(acknowledge) = close_gate.try_recv() {
             if processes.clear_checked().is_ok() {
@@ -316,10 +326,17 @@ fn supervise(
             }
         }
         let command = if pending.len() < 512 {
-            match input.recv_timeout(Duration::from_millis(10)) {
-                Ok(command) => Some(command),
-                Err(mpsc::RecvTimeoutError::Timeout) => None,
-                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            if let Some(command) = blocked_write.take() {
+                // Poll output and the independent retirement gates between retries, never block
+                // this supervisor on a child that stopped reading its pipe or PTY.
+                std::thread::park_timeout(Duration::from_millis(1));
+                Some(command)
+            } else {
+                match input.recv_timeout(Duration::from_millis(10)) {
+                    Ok(command) => Some(command),
+                    Err(mpsc::RecvTimeoutError::Timeout) => None,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
             }
         } else {
             std::thread::park_timeout(Duration::from_millis(10));
@@ -396,7 +413,13 @@ fn supervise(
                                     && lease.retirement.load(Ordering::Acquire) == 0
                             })
                             .ok_or_else(|| anyhow::anyhow!("Session has no process"))
-                            .and_then(|lease| processes.write(lease.id, &bytes))
+                            .and_then(|lease| processes.try_write(lease.id, bytes))
+                            .map(|retry| {
+                                if let Some(bytes) = retry {
+                                    blocked_write =
+                                        Some(Command::Write(session, generation, bytes));
+                                }
+                            })
                     }),
                 ),
                 Command::Resize(session, generation, columns, rows) => (

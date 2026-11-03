@@ -2,6 +2,8 @@
 
 use super::*;
 
+mod input;
+
 /// A trusted literal launch resolves its explicitly supplied PATH for both transports without
 /// changing the host environment; the normal trust gate still rejects the same request first.
 #[test]
