@@ -1,6 +1,11 @@
 //! Embeds Windows product resources and reserves the native dock layout's stack.
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=NANOBUG_RELEASE_VERSION");
+    if let Ok(version) = std::env::var("NANOBUG_RELEASE_VERSION") {
+        // Preserve the full GitHub release SemVer separately from Windows' numeric file version.
+        println!("cargo:rustc-env=NANOBUG_RELEASE_VERSION={version}");
+    }
     println!("cargo:rerun-if-changed=assets/branding/nanobug.rc");
     println!("cargo:rerun-if-changed=assets/branding/nanobug.ico");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {

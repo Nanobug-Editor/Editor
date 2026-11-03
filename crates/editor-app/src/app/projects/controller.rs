@@ -104,6 +104,7 @@ pub(super) fn cancel_quit(cx: &mut App) {
         return;
     }
     cx.global_mut::<Windows>().quit = None;
+    app::updates::cancel_install(cx);
     let entries = cx
         .global::<Windows>()
         .entries
@@ -252,6 +253,7 @@ pub(super) fn cleaned(handle: AnyWindowHandle, result: Result<(), String>, cx: &
     }
     if round.failed {
         round.phase = QuitPhase::Failed;
+        app::updates::cancel_install(cx);
         let entries = cx
             .global::<Windows>()
             .entries
@@ -278,47 +280,50 @@ pub(super) fn cleaned(handle: AnyWindowHandle, result: Result<(), String>, cx: &
             .background_executor()
             .spawn(async move { pool.shutdown() })
             .await;
-        cx.update(move |cx| match result {
-            Ok(()) => {
-                // Persist only after every project and the shared runtime have acknowledged exit.
-                startup::remember_exit(cx);
-                let entries = cx
-                    .global::<Windows>()
-                    .entries
-                    .values()
-                    .cloned()
-                    .collect::<Vec<_>>();
-                cx.global_mut::<Windows>().quit = None;
-                for entry in entries {
-                    unregister(entry.handle, cx);
-                    let _ = entry
-                        .handle
-                        .update(cx, |_, window, _| window.remove_window());
+        cx.update(
+            move |cx| match result.and_then(|()| app::updates::finish_exit(cx)) {
+                Ok(()) => {
+                    // Persist only after every project and the shared runtime have acknowledged exit.
+                    startup::remember_exit(cx);
+                    let entries = cx
+                        .global::<Windows>()
+                        .entries
+                        .values()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    cx.global_mut::<Windows>().quit = None;
+                    for entry in entries {
+                        unregister(entry.handle, cx);
+                        let _ = entry
+                            .handle
+                            .update(cx, |_, window, _| window.remove_window());
+                    }
+                    cx.quit();
                 }
-                cx.quit();
-            }
-            Err(error) => {
-                if let Some(round) = cx.global_mut::<Windows>().quit.as_mut() {
-                    round.phase = QuitPhase::Failed;
+                Err(error) => {
+                    app::updates::cancel_install(cx);
+                    if let Some(round) = cx.global_mut::<Windows>().quit.as_mut() {
+                        round.phase = QuitPhase::Failed;
+                    }
+                    let entries = cx
+                        .global::<Windows>()
+                        .entries
+                        .values()
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    for entry in entries {
+                        let _ = entry.host.update(cx, |host, cx| {
+                            host.close_state = CloseState::Failed;
+                            if let Some(editor) = &host.editor {
+                                editor.update(cx, |app, cx| app.resume_history_saves(cx));
+                            }
+                            host.error = Some(error.clone());
+                            cx.notify();
+                        });
+                    }
                 }
-                let entries = cx
-                    .global::<Windows>()
-                    .entries
-                    .values()
-                    .cloned()
-                    .collect::<Vec<_>>();
-                for entry in entries {
-                    let _ = entry.host.update(cx, |host, cx| {
-                        host.close_state = CloseState::Failed;
-                        if let Some(editor) = &host.editor {
-                            editor.update(cx, |app, cx| app.resume_history_saves(cx));
-                        }
-                        host.error = Some(error.clone());
-                        cx.notify();
-                    });
-                }
-            }
-        });
+            },
+        );
     })
     .detach();
 }

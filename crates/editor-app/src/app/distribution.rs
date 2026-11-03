@@ -15,12 +15,20 @@ pub(crate) struct InstallationGuard {
 pub(crate) fn installation_guard() -> std::io::Result<InstallationGuard> {
     #[cfg(target_os = "windows")]
     {
-        windows::guard("Local\\Nanobug.Installer.Running")
+        let guard = windows::guard("Local\\Nanobug.Installer.Running")?;
+        windows::ensure_absent("Local\\Nanobug.Update.Applying")?;
+        Ok(guard)
     }
     #[cfg(not(target_os = "windows"))]
     {
         Ok(InstallationGuard {})
     }
+}
+
+/// Hold a separate update lease while replacing files; GUI admission rejects this active lease.
+#[cfg(windows)]
+pub(crate) fn update_guard() -> std::io::Result<InstallationGuard> {
+    windows::exclusive_guard("Local\\Nanobug.Update.Applying")
 }
 
 #[cfg(target_os = "windows")]
@@ -34,7 +42,6 @@ mod windows {
         fn AttachConsole(process: u32) -> i32;
         fn CreateMutexW(attributes: *const c_void, owner: i32, name: *const u16) -> *mut c_void;
         fn CloseHandle(handle: *mut c_void) -> i32;
-        #[cfg(test)]
         fn OpenMutexW(access: u32, inherit: i32, name: *const u16) -> *mut c_void;
     }
 
@@ -56,6 +63,44 @@ mod windows {
         } else {
             Ok(InstallationGuard { handle })
         }
+    }
+
+    /// Create a presence lease only if no updater already holds one; existing owners are untouched.
+    pub(super) fn exclusive_guard(name: &str) -> std::io::Result<InstallationGuard> {
+        let wide: Vec<_> = name.encode_utf16().chain([0]).collect();
+        let handle = unsafe { CreateMutexW(std::ptr::null(), 0, wide.as_ptr()) };
+        // Read GetLastError before freeing allocations or calling any other native function.
+        let error = std::io::Error::last_os_error();
+        if handle.is_null() {
+            return Err(error);
+        }
+        let guard = InstallationGuard { handle };
+        if error.raw_os_error() == Some(183) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "A Nanobug update is already running",
+            ));
+        }
+        Ok(guard)
+    }
+
+    /// Test a presence lease without acquiring ownership or keeping it alive after this check.
+    pub(super) fn ensure_absent(name: &str) -> std::io::Result<()> {
+        let wide: Vec<_> = name.encode_utf16().chain([0]).collect();
+        let handle = unsafe { OpenMutexW(0x00100000, 0, wide.as_ptr()) };
+        if handle.is_null() {
+            let error = std::io::Error::last_os_error();
+            return if error.raw_os_error() == Some(2) {
+                Ok(())
+            } else {
+                Err(error)
+            };
+        }
+        unsafe { CloseHandle(handle) };
+        Err(std::io::Error::new(
+            std::io::ErrorKind::WouldBlock,
+            "Nanobug is applying an update; retry after installation finishes",
+        ))
     }
 
     impl Drop for InstallationGuard {
@@ -92,6 +137,17 @@ mod windows {
             assert!(exists(&name));
             drop(second);
             assert!(!exists(&name));
+        }
+
+        /// A second updater and new GUI admission cannot cross an active replacement lease.
+        #[test]
+        fn host_update_lease_blocks_other_updaters_and_admission() {
+            let name = format!("Local\\Nanobug.Update.Test.{}", std::process::id());
+            let lease = exclusive_guard(&name).unwrap();
+            assert!(exclusive_guard(&name).is_err());
+            assert!(ensure_absent(&name).is_err());
+            drop(lease);
+            ensure_absent(&name).unwrap();
         }
     }
 }

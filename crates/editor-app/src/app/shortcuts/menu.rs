@@ -35,6 +35,18 @@ impl EditorApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let anchor = self.application_menu.anchor.clone();
+        let profile = self
+            .session_state
+            .file_path()
+            .and_then(|path| path.parent().map(Path::to_owned));
+        let indicator = profile
+            .as_ref()
+            .and_then(|profile| app::updates::indicator(profile, cx));
+        let label = if indicator.is_some() {
+            t!("updates.menu_notification").to_string()
+        } else {
+            t!("shortcut_menu.application").to_string()
+        };
         div()
             .relative()
             .h_full()
@@ -51,8 +63,8 @@ impl EditorApp {
                     .debug_selector(|| "application-menu-trigger".into())
                     // The selected catalog SVG uses local icon sizing and the current theme's foreground.
                     .icon(Icon::default().path("icons/menu.svg"))
-                    .accessibility_label(t!("shortcut_menu.application").to_string())
-                    .tooltip(t!("shortcut_menu.application").to_string())
+                    .accessibility_label(label.clone())
+                    .tooltip(label)
                     .expanded(self.application_menu.popup.is_some())
                     .small()
                     .compact()
@@ -69,6 +81,7 @@ impl EditorApp {
                         app.open_application_menu_from(origin, anchor, window, cx);
                     })),
             )
+            .when_some(indicator, |trigger, indicator| trigger.child(indicator))
             // Anchor to measured geometry so window scaling or label translation cannot move
             // the popup over its trigger. The canvas adds no independent hit target.
             .child(
@@ -89,9 +102,9 @@ impl EditorApp {
 
     /// Keep project, keyboard lookup and application-exit groups in one translated identity list.
     /// Standalone embedded shells cannot operate a project owner, so those rows remain disabled.
-    fn application_menu_items(&self) -> Vec<MenuItem> {
+    fn application_menu_items(&self, cx: &App) -> Vec<MenuItem> {
         let has_project = self.project_window.is_some();
-        [
+        let mut items: Vec<_> = [
             (
                 "project-open-another",
                 "projects.open_folder",
@@ -115,7 +128,14 @@ impl EditorApp {
             disabled,
             separator_before,
         })
-        .collect()
+        .collect();
+        let profile = self
+            .session_state
+            .file_path()
+            .and_then(|path| path.parent().map(Path::to_owned))
+            .unwrap_or_default();
+        items.insert(items.len() - 1, app::updates::menu_item(&profile, cx));
+        items
     }
 
     /// Open one native dropdown with the original panel retained across menu and lookup transitions.
@@ -134,7 +154,7 @@ impl EditorApp {
         self.application_menu.origin = Some(origin);
         let generation = self.application_menu.generation;
         let owner = cx.entity().downgrade();
-        let items = self.application_menu_items();
+        let items = self.application_menu_items(cx);
         self.application_menu.popup = Some(cx.new(|cx| {
             PopupMenu::new(
                 items,
@@ -156,6 +176,12 @@ impl EditorApp {
                             let origin = app.application_menu.origin.take();
                             app.application_menu.clear();
                             match selected.as_deref() {
+                                Some("item-host-update") => {
+                                    let view = cx.entity();
+                                    cx.defer(move |cx| {
+                                        app::settings::updates::open_project(view, cx)
+                                    });
+                                }
                                 Some("item-history") => app.open_workspace_history(window, cx),
                                 Some("item-shortcuts") => {
                                     if let Some(origin) = origin {

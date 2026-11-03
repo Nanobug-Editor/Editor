@@ -1725,6 +1725,7 @@ dependencies = [
  "tracing",
  "tree-sitter",
  "unicode-segmentation",
+ "ureq",
  "url",
  "wasmtime",
  "windows 0.62.2",

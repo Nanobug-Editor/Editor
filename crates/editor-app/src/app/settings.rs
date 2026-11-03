@@ -4,6 +4,7 @@ use crate::*;
 use editor_ui::{Checkbox, DialogContent};
 mod history;
 mod owner;
+pub(in crate::app) mod updates;
 use editor_ui::scroll::ScrollableElement;
 use gpui_kit::{AnyElement, App, Entity};
 use owner::SettingsOwner;
@@ -18,6 +19,8 @@ pub(crate) enum SettingsSection {
     Languages,
     /// Profile-wide local history applies even before a workspace is open.
     History,
+    /// Application version, release notes and user-controlled host updates.
+    Updates,
 }
 
 impl SettingsSection {
@@ -30,6 +33,7 @@ impl SettingsSection {
             Self::Plugins => t!("settings.plugins").to_string(),
             Self::Languages => t!("settings.languages").to_string(),
             Self::History => t!("history.title").to_string(),
+            Self::Updates => t!("updates.title").to_string(),
         }
     }
 
@@ -42,6 +46,7 @@ impl SettingsSection {
             Self::Plugins => "settings-nav-plugins",
             Self::Languages => "settings-nav-languages",
             Self::History => "settings-nav-history",
+            Self::Updates => "settings-nav-updates",
         }
     }
 }
@@ -93,6 +98,7 @@ fn render_settings_content(
         SettingsSection::Plugins,
         SettingsSection::Languages,
         SettingsSection::History,
+        SettingsSection::Updates,
     ]
     .into_iter()
     .filter(|section| view.project().is_some() || *section != SettingsSection::Languages)
@@ -189,6 +195,7 @@ fn render_section(
             .unwrap_or_else(|| div().into_any_element()),
         SettingsSection::Plugins => view.plugin_form(cx).into_any_element(),
         SettingsSection::History => history::render(view, window, cx),
+        SettingsSection::Updates => updates::render(view, window, cx),
     }
 }
 

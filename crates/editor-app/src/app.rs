@@ -20,6 +20,8 @@ mod shell;
 pub(crate) mod shortcuts;
 /// Ordinary GUI admission and external requests share one profile-scoped application owner.
 pub(crate) mod startup;
+/// User-profile host discovery, verified staging and consent-gated native installation.
+pub(crate) mod updates;
 
 pub(crate) use settings::SettingsSection;
 
