@@ -811,6 +811,23 @@
       "scope": "Test-only consumer actually rebuilt through the merged host --plugin-package --release; historical same-version archives remain separate and unchanged."
     },
     {
+      "id": "capability-example",
+      "version": "0.19.2",
+      "archive": "capability-example-0.19.2.zip",
+      "sha256": "8455fdebe7e4ef9523aba9891abd8658deb5e5dc7fe922482fc562a1b86e5418",
+      "repository": "Nanobug-Editor/Editor",
+      "source_commit": null,
+      "source_directory": "../community/capability-example",
+      "source_tree_sha256": "eb1c02bb62b62fcc15903769624e3aa062f4a3021e0ccf4211560655ed3a95e8",
+      "source_files": 16,
+      "source_hash_rule": "SHA256 of slash relative paths ordered case-insensitively, original UTF-8 spelling, NUL, then raw file bytes; excludes target, ZIP and log files",
+      "host_revision": "60412e95cc339b42d3289d4636d0b4e7a4be8cdc",
+      "host_exe_sha256": "2f21777a83589a5eecf62f4c6acf88cbb732b687243682c8a9926570dd42c9cc",
+      "sdk_sha256": "d5128a04bb5b83c61feffc3a9b4ec2fc1d738ea6822cebad147616062ad45f71",
+      "toolchain": "Rust 1.98.1 / wasm32-wasip2 / windows-x86_64",
+      "scope": "Test-only current Editor 2 decoder. Built via public --plugin-cargo in this worktree's target, then staged through --plugin-package and verified by Package/Manager/native independent viewport acceptance. Only explicit 0.19.2 consumers change; historical archives and bare-ID selection remain unchanged."
+    },
+    {
       "id": "cloud-translation",
       "version": "0.1.2",
       "archive": "cloud-translation-0.1.2-main-sdk.zip",

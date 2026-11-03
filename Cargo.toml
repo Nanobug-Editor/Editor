@@ -50,6 +50,12 @@ edition = "2024"
 rust-version = "1.95"
 license = "MIT"
 
+# Native layout and Wasmtime compilation run on user-visible paths even during development.
+# Optimize third-party dependencies while keeping workspace code unoptimized and debuggable.
+# The test profile inherits this setting; release behavior and dependency versions are unchanged.
+[profile.dev.package."*"]
+opt-level = 2
+
 [workspace.dependencies]
 anyhow = "1.0"
 dirs = "6.0"

@@ -52,7 +52,8 @@ fn viewport_virtual_blocks_materialize_navigation_target(cx: &mut TestAppContext
                     .source_range(index * 20..index * 20 + 20)
                 })
                 .collect(),
-        ),
+        )
+        .gap(7.),
     )
     .height(120.);
     let (view, _, cx) = mount(cx, document, true);
@@ -60,6 +61,10 @@ fn viewport_virtual_blocks_materialize_navigation_target(cx: &mut TestAppContext
     assert!(
         cx.debug_bounds("plugin-ui-leaf-90").is_none(),
         "offscreen rich descendants should not receive layout"
+    );
+    assert!(
+        cx.debug_bounds("plugin-ui-block-90").is_none(),
+        "consecutive offscreen blocks must share a spacer instead of retaining one layout per block"
     );
     cx.update(|_, cx| view.update(cx, |view, cx| view.reveal_node("leaf-90", 0, cx).unwrap()));
     settle(cx);

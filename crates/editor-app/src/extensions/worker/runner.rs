@@ -790,6 +790,18 @@ impl Worker {
                             )
                         }
                         Some(Work::Event(id, epoch, panel, event)) => {
+                            // Viewports and native toolbar controls capture a displayed scene.
+                            // Replacement can overtake them in the actor queue; reject the old
+                            // input quietly, while malformed input and other failures still report.
+                            let transient_callback = matches!(
+                                &event,
+                                api::Notification::SourceViewport(_)
+                                    | api::Notification::Tool(_)
+                                    | api::Notification::Ui(ui::UiEvent {
+                                        action: ui::Action::Viewport(_),
+                                        ..
+                                    })
+                            );
                             let current = output
                                 .lock()
                                 .unwrap()
@@ -809,6 +821,7 @@ impl Worker {
                                 let native_callback = matches!(
                                     event,
                                     api::Notification::Ui(_)
+                                        | api::Notification::Tool(_)
                                         | api::Notification::Preview { .. }
                                         | api::Notification::FilePreview { .. }
                                         | api::Notification::SourceViewport(_)
@@ -874,24 +887,28 @@ impl Worker {
                                         // rejection continue through the ordinary diagnostic/error path.
                                         // Source positions are sampled from the displayed frame and can
                                         // legitimately arrive after a newer preview has replaced its scene.
-                                        output.lock().unwrap().logs.append(
-                                            &id,
-                                            plugin_runtime::logs::LogLevel::Info,
-                                            "host.ui.stale",
-                                            format!("{error:#}"),
-                                        );
+                                        if !transient_callback {
+                                            output.lock().unwrap().logs.append(
+                                                &id,
+                                                plugin_runtime::logs::LogLevel::Info,
+                                                "host.ui.stale",
+                                                format!("{error:#}"),
+                                            );
+                                        }
                                         Ok(())
                                     }
                                     other => other,
                                 }
                             } else {
                                 // Late native callbacks belong to an older surface, never to its replacement.
-                                output.lock().unwrap().logs.append(
-                                    &id,
-                                    plugin_runtime::logs::LogLevel::Info,
-                                    "host.ui.retired",
-                                    t!("plugins.log_retired_callback").to_string(),
-                                );
+                                if !transient_callback {
+                                    output.lock().unwrap().logs.append(
+                                        &id,
+                                        plugin_runtime::logs::LogLevel::Info,
+                                        "host.ui.retired",
+                                        t!("plugins.log_retired_callback").to_string(),
+                                    );
+                                }
                                 Ok(())
                             }
                         }

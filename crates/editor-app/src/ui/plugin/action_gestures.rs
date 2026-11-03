@@ -213,21 +213,23 @@ impl PluginView {
     /// Source controls capture their UI revision. Once retained across hiding, ordinary controls
     /// also capture the shared nonce, with a distinct kind even when a source's revision is zero.
     pub(super) fn action_gesture(&self, id: &str) -> Option<ActionGesture> {
+        // This publication's rail index rules out ordinary content without walking the full tree
+        // for every leaf on every frame. Indexed actions still pass the active modal/tab and source
+        // checks below; membership alone never grants a source credential.
+        let editor_action = self.editor_action_nodes.contains(id);
         if let Some(scope) = self.overlays.scopes.get(id) {
             return Some(ActionGesture::Overlay {
                 incarnation: scope.generation,
-                revision: self
-                    .document
-                    .is_editor_action(id)
+                revision: (editor_action && self.document.is_editor_action(id))
                     .then_some(self.document.revision),
             });
         }
-        if self.document.editor_action_source(id).is_some() {
+        if editor_action && self.document.editor_action_source(id).is_some() {
             Some(ActionGesture::Source {
                 incarnation: self.action_gestures.incarnation,
                 revision: self.document.revision,
             })
-        } else if self.document.is_editor_action(id) {
+        } else if editor_action && self.document.is_editor_action(id) {
             Some(ActionGesture::Snapshot {
                 incarnation: self.action_gestures.incarnation,
                 revision: self.document.revision,

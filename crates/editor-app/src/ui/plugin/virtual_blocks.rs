@@ -21,13 +21,19 @@ impl VirtualBlocks {
     /// Preserve known heights for unchanged content, including a shifted source range.
     pub fn height(&self, node: &Node, width: Pixels) -> Option<Pixels> {
         let (old, measured_width, height) = self.heights.get(&node.id)?;
+        if (*measured_width - width).abs() >= px(0.5) {
+            return None;
+        }
+        if old == node {
+            return Some(*height);
+        }
         let mut old = old.clone();
         let shift = match (old.source_range, node.source_range) {
             (Some(old), Some(new)) => new.start as i64 - old.start as i64,
             _ => 0,
         };
         protocol::ui::incremental::shift_source(&mut old, shift).ok()?;
-        (old == *node && (*measured_width - width).abs() < px(0.5)).then_some(*height)
+        (old == *node).then_some(*height)
     }
 
     /// Capture original block data before any measurement callbacks run.
@@ -111,7 +117,9 @@ impl PluginView {
             }
         }
         let mut anchor = None;
-        for (node, height) in children.iter_mut().zip(heights) {
+        let mut rendered = Vec::new();
+        let mut spacer: Option<Node> = None;
+        for (node, height) in std::mem::take(children).into_iter().zip(heights) {
             if anchor.is_none() && y + height > top {
                 anchor = Some((node.id.clone(), top - y, handle.offset()));
             }
@@ -141,22 +149,29 @@ impl PluginView {
             });
             let skip =
                 !needed && !interactive && (y + height < top - margin || y > top + margin * 2.);
-            self.virtual_blocks.track(node, width, skip);
+            self.virtual_blocks.track(&node, width, skip);
             if skip {
-                // The public mapped identity still supplies geometry, but no rich text/control is laid out.
-                let mut placeholder = Node::text(node.id.clone(), "").height(f32::from(height));
-                // Preserve margins while storing only the measured content extent in the spacer.
-                placeholder.layout.height = Some(
-                    (f32::from(height) - node.layout.margin.top - node.layout.margin.bottom)
-                        .max(0.),
-                );
-                placeholder.layout.margin = node.layout.margin;
-                placeholder.source_range = node.source_range;
-                placeholder.role = node.role.clone();
-                *node = placeholder;
+                // Adjacent offscreen blocks need one layout box, not one empty text/control and
+                // measurement callback per source node. Internal gaps and margins remain in its
+                // extent; a requested target is materialized above before it can report geometry.
+                if let Some(spacer) = &mut spacer {
+                    *spacer.layout.height.as_mut().unwrap() +=
+                        f32::from(height) + content.layout.gap;
+                } else {
+                    spacer = Some(Node::column(node.id, Vec::new()).height(f32::from(height)));
+                }
+            } else {
+                if let Some(spacer) = spacer.take() {
+                    rendered.push(spacer);
+                }
+                rendered.push(node);
             }
             y += height + px(content.layout.gap);
         }
+        if let Some(spacer) = spacer {
+            rendered.push(spacer);
+        }
+        *children = rendered;
         if let Some(anchor) = anchor {
             self.virtual_blocks.anchors.insert(scroll_id.into(), anchor);
         }

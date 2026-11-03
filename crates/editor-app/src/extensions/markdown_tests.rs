@@ -15,6 +15,7 @@ mod image_import;
 mod image_preview;
 mod input_latency;
 mod link_navigation;
+mod long_document;
 mod migration;
 mod modes;
 mod navigation_safety;

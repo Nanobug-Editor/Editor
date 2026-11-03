@@ -28,6 +28,8 @@ mod leaf;
 mod link_tests;
 mod links;
 mod overlays;
+#[cfg(test)]
+mod performance_tests;
 mod render;
 mod resize_delivery;
 pub(crate) use resize_delivery::{ResizeSink, is_canvas_resize};
@@ -610,7 +612,6 @@ impl PluginView {
         self.scene_layout.reset(&self.document);
         self.viewport.reset_scene();
         self.sync_link_focus(window, cx);
-        self.sync_tree_action_gestures(cx);
         let mut nodes = vec![];
         self.document
             .root
@@ -628,6 +629,8 @@ impl PluginView {
                 }
             }
         }
+        // Retained trees must sample the new publication's rail membership, never its predecessor's.
+        self.sync_tree_action_gestures(cx);
         let input_ids: BTreeSet<_> = nodes
             .iter()
             .filter(|n| matches!(n.kind, Kind::Input(_)))

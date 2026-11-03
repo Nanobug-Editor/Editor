@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [Markdown 滚动与通用插件 UI 性能](verification/markdown-scroll-ui-performance-2026-11-02.md)：过期回调静默丢弃、通用绘制优化及长文档双向滚动；专项与深浅主题 Windows 拖窗验收通过，改动保留供审阅。
+
 - [大文件差异加载、重复选择与标签视口保持](verification/git-diff-viewport-loading-2026-10-30.md)：默认折叠并记住跨文件选择；原任务长 Rust 文件回访 72–76 ms，首次打开仍约 135–157 ms；2026-10-31 集成与原验证范围见记录。
 
 - [Git 历史树重载、文档流与统一消息](verification/git-events-messages-2026-10-29.md)：隐藏正文重复序列化、文档回执空耗与宿主消息统一；修复和实际包验收进行中。

@@ -113,7 +113,10 @@ fn wheel(ui: &mut gpui_kit::VisualTestContext, selector: &'static str, delta: f3
 }
 
 /// Identify the actual visible preview paragraph, then require that its source row is visible too.
-fn assert_source_matches_preview(fixture: &NativeMarkdown, ui: &mut gpui_kit::VisualTestContext) {
+pub(super) fn assert_source_matches_preview(
+    fixture: &NativeMarkdown,
+    ui: &mut gpui_kit::VisualTestContext,
+) {
     let viewport = ui.debug_bounds("plugin-ui-preview-scroll").unwrap();
     let mut candidates = Vec::new();
     fixture.manager.live["markdown"].views["preview"]
@@ -369,7 +372,9 @@ fn delivered_markdown_sync_scroll_refreshes_image_table_wrap_and_divider_geometr
 #[ignore = "opt-in real WASM/native integration; uses fixed reviewed test packages and required pinned native tools"]
 fn independent_viewport_without_tools_adds_no_host_functions(cx: &mut TestAppContext) {
     use serde_json::json;
-    let package = Package::read(&crate::test_packages::archive("capability-example")).unwrap();
+    // Editor 2 requires the current SDK decoder, not the historical bare-ID input.
+    let package =
+        Package::read(&crate::test_packages::archive("capability-example-0.19.2")).unwrap();
     let mut files = package.files;
     let mut manifest: serde_json::Value = serde_json::from_slice(&files["manifest.json"]).unwrap();
     manifest["id"] = json!("independent-viewport");
@@ -378,6 +383,8 @@ fn independent_viewport_without_tools_adds_no_host_functions(cx: &mut TestAppCon
         "editor.viewport":"^1", "editor.documents":"^1", "editor.layout":"^2", "ui.code_editor":"^2", "configuration":"^1"});
     manifest["api"]["optional"] = json!({});
     manifest["permissions"] = json!(["assets.read", "editor.read"]);
+    // This minimal viewport fixture intentionally has no command/menu capability or contribution.
+    manifest["commands"] = json!([]);
     manifest["settings_hook"] = json!(false);
     manifest["settings"] = json!({"label":{"title":"UI", "value_type":{"kind":"string","max_length":120},
         "default":"composable-ui", "scope":"user", "apply":"restart_instance"}});

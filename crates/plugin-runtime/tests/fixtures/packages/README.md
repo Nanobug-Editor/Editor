@@ -8,6 +8,12 @@ contract inputs. Exact archive names continue to select immutable historical byt
 capability majors are rejection/migration inputs. Published marketplace catalog snapshots remain
 unchanged. See [the Editor verification record](../../../../../docs/plugins/verification/unified-editor-2026-10-25.md).
 
+`capability-example-0.19.2.zip` supplies the current SDK decoder to the independent native viewport
+acceptance test. Its historical bare-ID selection remains unchanged. This test-only rebuild uses
+the public `--plugin-cargo` entry and the owning worktree's `target/` to avoid Windows deep-path
+linker failures. The compiled component and declared assets are then staged with `--plugin-package`;
+the new ZIP, source digest and SDK provenance are recorded after Package/Manager/native validation.
+
 `canvas-flow-1.0.0.zip` is the independent public `ui.canvas 1.7` scene consumer in `../canvas-flow`.
 It covers curved edges, rounded nodes, viewport input and selected-node repaint, plus rejected-scene
 recovery through the public Manager. It is an acceptance fixture, excluded from distribution and SDK.

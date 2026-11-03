@@ -15,12 +15,12 @@ use windows::Win32::{
 };
 
 /// Bound a single native test process; forward diagnostics and fail if it cannot cleanly exit.
-pub(super) fn child(marker: &str) {
+pub(super) fn child(marker: &str, test_name: &str) {
     let mut log = tempfile::tempfile().unwrap();
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "window::tests::native_window_drag_tracks_display_refresh",
+            test_name,
             "--ignored",
             "--nocapture",
             "--test-threads=1",

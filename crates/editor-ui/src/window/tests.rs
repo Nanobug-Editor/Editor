@@ -99,7 +99,10 @@ impl Render for Probe {
 fn native_window_drag_tracks_display_refresh() {
     const CHILD: &str = "NANOBUG_DRAG_ACCEPTANCE_CHILD";
     if std::env::var_os(CHILD).is_none() {
-        driver::child(CHILD);
+        driver::child(
+            CHILD,
+            "window::tests::native_window_drag_tracks_display_refresh",
+        );
         return;
     }
     let kind = std::env::var("NANOBUG_DRAG_SURFACE").unwrap_or_else(|_| "main".into());
