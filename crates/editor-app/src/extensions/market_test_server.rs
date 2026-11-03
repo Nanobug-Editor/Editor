@@ -14,6 +14,8 @@ pub(crate) struct Server {
     pub(crate) downloads: Arc<AtomicUsize>,
     pub(crate) requests: Arc<AtomicUsize>,
     pub(crate) offline: Arc<AtomicBool>,
+    /// Fail package requests after catalog admission, independently of discovery availability.
+    pub(crate) fail_downloads: Arc<AtomicBool>,
     pub(crate) pause: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
     task: Option<std::thread::JoinHandle<()>>,
@@ -48,6 +50,8 @@ impl Server {
         let requests = Arc::new(AtomicUsize::new(0));
         let request_count = requests.clone();
         let offline = Arc::new(AtomicBool::new(false));
+        let fail_downloads = Arc::new(AtomicBool::new(false));
+        let downloads_failed = fail_downloads.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let pause = Arc::new(AtomicBool::new(false));
         let paused = pause.clone();
@@ -75,7 +79,9 @@ impl Server {
                         } else {
                             &catalog
                         };
-                        let status = if !zip && failed.load(Ordering::Acquire) {
+                        let status = if (!zip && failed.load(Ordering::Acquire))
+                            || (zip && downloads_failed.load(Ordering::Acquire))
+                        {
                             "503 Unavailable"
                         } else {
                             "200 OK"
@@ -105,6 +111,7 @@ impl Server {
             downloads,
             requests,
             offline,
+            fail_downloads,
             pause,
             stop,
             task: Some(task),

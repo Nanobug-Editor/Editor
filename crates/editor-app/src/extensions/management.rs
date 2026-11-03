@@ -136,8 +136,11 @@ impl ExtensionPanel {
             self.manager_search = Some(input);
         }
         let busy = self.progress.is_some();
-        if self.installation.is_some() && !self.installation_dialog_open {
-            self.installation_dialog_open = true;
+        if let Some(report) = &self.installation
+            && self.installation_dialog_generation != Some(report.generation)
+        {
+            // Repaints keep one window, but every new transaction (including a retry) gets feedback.
+            self.installation_dialog_generation = Some(report.generation);
             cx.defer_in(window, |this, window, cx| {
                 this.open_installation_progress(window, cx)
             });
