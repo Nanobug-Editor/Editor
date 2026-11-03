@@ -481,10 +481,7 @@ pub(crate) fn descriptor() -> anyhow::Result<plugin_runtime::plugin_protocol::ap
 
 /// Keep Cargo configuration beside the host cache, shared by metadata, checks and builds.
 pub(crate) fn cargo_config() -> anyhow::Result<PathBuf> {
-    let cache_root = dirs::cache_dir()
-        .context("no user cache directory available")?
-        .join("MeEditor")
-        .join("plugin-sdk");
+    let cache_root = editor_core::storage::cache_root()?.join("plugin-sdk");
     let sdk = prepare_cache(&cache_root)?;
     // JSON string quoting also escapes Windows paths in TOML configuration values.
     let contents = format!(

@@ -25,15 +25,13 @@ impl Project {
         check_cancel(options)?;
         let platform = options.platform.clone().unwrap_or_else(super::platform);
         let profile = if options.release { "release" } else { "debug" };
-        // Keep compiler paths short on Windows: deeply nested worktrees can exceed MSVC's
-        // response-file/object path limit even when the filesystem accepts extended paths.
+        // A compact source identity limits nesting beneath the selected portable build cache.
         let key = format!(
             "{:x}",
             Sha256::digest(self.root.to_string_lossy().as_bytes())
         );
-        let build = dirs::cache_dir()
-            .context("Build cache directory unavailable")?
-            .join("MeEditor/plugin-build")
+        let build = editor_core::storage::cache_root()?
+            .join("plugin-build")
             .join(&key[..16])
             .join(&platform)
             .join(profile);

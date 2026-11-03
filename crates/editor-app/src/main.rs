@@ -450,8 +450,8 @@ impl EditorApp {
             })
             .err()
             .map(|error| format!("{error:#}"));
-        // Keep normal users' established LocalAppData history. A host-selected isolated profile
-        // owns its history alongside its other data instead of writing through the ambient user.
+        // File history follows the same installation-local or explicitly selected profile as
+        // settings, plugins and terminal snapshots; the workspace never supplies a data root.
         let history =
             editor::history::State::new(resource_profile.as_deref(), Some(workspace.root()), cx);
         let mut session_state =
@@ -1207,9 +1207,28 @@ fn main() -> anyhow::Result<()> {
             return Err(error);
         }
     };
-    if launch.explicit_profile {
-        // Only ordinary GUI parsing can reach here: prior CLI probes were synchronous and no threads exist yet.
-        // Existing profile readers therefore observe one selection before GPUI or the request worker starts.
+    let profile_override = std::env::var_os("ME_EDITOR_PROFILE_HOME")
+        .filter(|value| !value.is_empty())
+        .is_some();
+    let import_legacy = !launch.explicit_profile
+        && !profile_override
+        && plugin_development::instance::context().is_none();
+    if let Err(error) = platform_windows::portable_data::prepare(
+        &launch.profile,
+        import_legacy.then(platform_windows::portable_data::LegacyLocations::current_user),
+    ) {
+        let details = t!(
+            "storage.prepare_failed",
+            path = launch.profile.display(),
+            details = error
+        )
+        .to_string();
+        app::startup::show_error(details.clone());
+        return Err(anyhow::anyhow!(details));
+    }
+    if launch.explicit_profile || profile_override {
+        // Pin explicit selections before any threads start. Ordinary launches keep the environment
+        // unset so another installation launched from a terminal resolves its own executable-local data.
         unsafe {
             std::env::set_var("ME_EDITOR_PROFILE_HOME", &launch.profile);
         }

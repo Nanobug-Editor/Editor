@@ -25,6 +25,8 @@ pub mod drag;
 pub mod file_picker;
 /// User-profile paths and guarded parent creation for native history recovery.
 pub mod history;
+/// Retryable migration from legacy user stores to installation-local data.
+pub mod portable_data;
 /// Native window placement uses physical outer bounds and the current monitor's work area.
 #[cfg(windows)]
 pub mod window;

@@ -1,5 +1,5 @@
 //! Ambient native observations belong to a live incarnation, never to cold plugin metadata.
-use super::*;
+use super::super::*;
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
 const PLUGIN: &str = "cold-observation.fixture";
@@ -104,6 +104,68 @@ fn draw(visual: &mut VisualTestContext) {
     visual.run_until_parked();
 }
 
+/// A retirement counter survives cold installation; it cannot stand in for a live callback owner.
+#[gpui::test]
+fn cold_native_observations_ignore_retirement_epochs_without_a_live_owner(cx: &mut TestAppContext) {
+    crate::tests::with_shortcut_editor(cx, false, Vec::new(), |visual, app, _| {
+        visual.update(|_, cx| {
+            let panel = surface(&app, cx);
+            let worker = panel.read(cx).worker.clone();
+            worker
+                .state
+                .lock()
+                .unwrap()
+                .instance_epochs
+                .insert(PLUGIN.into(), 41);
+            panel.update(cx, |panel, cx| panel.poll(cx));
+            let _ = take_observations(&worker);
+            let theme = environment(&panel.read(cx).workspace, cx);
+            panel
+                .read(cx)
+                .send_to(PLUGIN, None, PluginEvent::Theme(theme.clone()));
+            panel
+                .read(cx)
+                .send_to(PLUGIN, Some(PANEL.into()), PluginEvent::Focus(true));
+            let owner = app.read(cx).extensions.read(cx);
+            owner.send_to(PLUGIN, Some(PANEL.into()), PluginEvent::Focus(false));
+            owner.send_to(PLUGIN, None, PluginEvent::Theme(theme));
+            panel.update(cx, |panel, cx| {
+                panel.native_environment(cx);
+            });
+            let observed = take_observations(&worker);
+            let directory = tempfile::tempdir().unwrap();
+            let mut manager = plugin_runtime::Manager::open(
+                directory.path().join("runtime"),
+                protocol::Environment {
+                    workspace: directory.path().display().to_string(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let entry = worker.state.lock().unwrap().entries[0].clone();
+            manager.installed.insert(PLUGIN.into(), entry);
+            let mut errors = Vec::new();
+            for (_, panel, theme) in observed.themes {
+                if let Err(error) = manager.event(PLUGIN, panel, PluginEvent::Theme(theme)) {
+                    errors.push(format!("{error:#}"));
+                }
+            }
+            for (_, panel, focused) in observed.focus {
+                if let Err(error) = manager.event(PLUGIN, panel, PluginEvent::Focus(focused)) {
+                    errors.push(format!("{error:#}"));
+                }
+            }
+            assert!(
+                errors.is_empty(),
+                "cold ambient callbacks produced host errors: {errors:?}"
+            );
+            assert_eq!(observed.demands, 0);
+            assert!(manager.live.is_empty());
+            assert!(panel.read(cx).last_theme.is_none());
+        });
+    });
+}
+
 /// Cold render/focus stays inert. Each live owner gets one current theme even when its predecessor
 /// had the same theme, while retained real focus callbacks cannot borrow a replacement's epoch.
 #[gpui::test]
@@ -166,12 +228,13 @@ fn cold_native_observations_follow_live_incarnations_without_starting_a_guest(
         let _cold_callbacks = native
             .update(|_, cx| panel.update(cx, |panel, _| std::mem::take(&mut panel._focus_events)));
         native.update(|_, cx| {
-            worker
-                .state
-                .lock()
-                .unwrap()
-                .instance_epochs
-                .insert(PLUGIN.into(), 41);
+            let mut state = worker.state.lock().unwrap();
+            // A live publication includes its owner identity; the counter alone also survives retirement.
+            state.instance_epochs.insert(PLUGIN.into(), 41);
+            state
+                .instance_ids
+                .insert(PLUGIN.into(), "first-owner".into());
+            drop(state);
             panel.update(cx, |panel, cx| panel.poll(cx));
         });
         draw(&mut native);
@@ -185,12 +248,12 @@ fn cold_native_observations_follow_live_incarnations_without_starting_a_guest(
         let _first_callbacks = native
             .update(|_, cx| panel.update(cx, |panel, _| std::mem::take(&mut panel._focus_events)));
         let replacement_cached = native.update(|_, cx| {
-            worker
-                .state
-                .lock()
-                .unwrap()
-                .instance_epochs
-                .insert(PLUGIN.into(), 42);
+            let mut state = worker.state.lock().unwrap();
+            state.instance_epochs.insert(PLUGIN.into(), 42);
+            state
+                .instance_ids
+                .insert(PLUGIN.into(), "replacement-owner".into());
+            drop(state);
             panel.update(cx, |panel, cx| {
                 panel.poll(cx);
                 // Observe retirement before update exits: GPUI can draw the replacement as soon

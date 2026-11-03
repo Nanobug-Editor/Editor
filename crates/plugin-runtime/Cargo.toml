@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# Plugin build caches use the same host-selected portable data layout as the application.
+editor-core = { path = "../editor-core" }
 anyhow.workspace = true
 # WASI's public output traits name bytes::Bytes and tokio::io::AsyncWrite; direct dependencies
 # implement bounded nonblocking admission without blocking OutputFile or copied upstream code.

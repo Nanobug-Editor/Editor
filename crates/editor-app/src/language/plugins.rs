@@ -25,8 +25,7 @@ use tree_sitter::{
     wasmtime::{Cache, CacheConfig, Config, Engine},
 };
 
-/// Compiled grammar artifacts live beside the editor's other cache files, never in the workspace.
-const GRAMMAR_CACHE_DIRECTORY: &str = "MeEditor";
+/// Compiled grammar artifacts belong to the selected profile's rebuildable cache.
 const GRAMMAR_CACHE_SUBDIRECTORY: &str = "grammars";
 
 /// The one engine every plugin grammar is loaded and parsed on.
@@ -74,13 +73,7 @@ fn build_grammar_engine(cache: anyhow::Result<Cache>) -> Engine {
 /// recompiling rather than failing plugin loading.
 fn grammar_cache() -> anyhow::Result<Cache> {
     let mut config = CacheConfig::new();
-    if let Some(directory) = dirs::cache_dir() {
-        config.with_directory(
-            directory
-                .join(GRAMMAR_CACHE_DIRECTORY)
-                .join(GRAMMAR_CACHE_SUBDIRECTORY),
-        );
-    }
+    config.with_directory(editor_core::storage::cache_root()?.join(GRAMMAR_CACHE_SUBDIRECTORY));
     Cache::new(config).context("create plugin grammar cache")
 }
 

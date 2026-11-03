@@ -1,0 +1,5 @@
+# Portable data initialization errors remain visible before any project or plugin is loaded.
+_version: 2
+storage.prepare_failed:
+  en: "Could not prepare editor data at %{path}. Close other editors and check that the installation directory is writable, then retry. Existing data has been retained. Details: %{details}"
+  zh-CN: "无法准备编辑器数据目录 %{path}。请退出其他编辑器实例，确认安装目录可写后重试。已有数据已保留。详情：%{details}"

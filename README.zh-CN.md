@@ -24,7 +24,9 @@ XML 插件提供 Schema 辅助、补全、格式化、配对标签编辑与文�
 
 项目仍在开发中。Windows 用户运行 `Nanobug-Setup-<版本>-x64.exe`，按当前用户安装。安装器创建开始菜单入口，提供可选桌面快捷方式，并注册卸载程序。另一个首次默认勾选的选项在文件夹对象及文件夹空白处添加**使用 Nanobug 打开**，升级保留该选择；Windows 11 中入口可能位于**显示更多选项**。程序、图标和宿主许可证安装到 `%LOCALAPPDATA%\Programs\Nanobug`，使用时无需 Rust/Cargo。
 
-更新或卸载前先正常退出 Nanobug。既有 `MeEditor` 目录中的设置、历史与已安装插件数据会保留。Windows 安装界面提供英文和简体中文。
+Nanobug 将设置、会话、终端、已安装插件及其依赖、文件历史和缓存统一保存在**可执行文件所在目录**。复制应用时一并复制安装目录中的数据即可保留数据。首次普通启动会导入旧 `MeEditor` 目录中的设置、插件和历史，原目录保留为备份；可重建缓存在新位置重新生成。迁移前需退出旧编辑器实例，安装目录须可写。显式 `--profile`、`ME_EDITOR_PROFILE_HOME` 和 `ME_EDITOR_PLUGIN_HOME` 仍保留隔离语义。
+
+更新或卸载前先正常退出 Nanobug。更新保留运行数据，卸载仅删除安装器拥有的文件，保留用户数据。Windows 安装界面提供英文和简体中文。目录与迁移规则见[安装根目录的数据存储](docs/project/portable-data.md)。
 
 准备下节所列开发环境及 [Inno Setup](https://jrsoftware.org/isdl.php) 后，直接构建宿主：
 
@@ -49,7 +51,7 @@ $output = Join-Path $PWD 'dist/installers'
 ISCC.exe "/DPayloadDir=$payload" "/DInstallerDir=$output" "/DAppVersion=$version" .\installer\windows\nanobug.iss
 ```
 
-安装器输出到 `dist/installers/`，准备好的运行文件保留在 `dist/editor/`。ISCC 未加入 PATH 时指定编译工具的完整路径；便携复制时保留同级 `licenses/` 目录；发行载荷不包含插件 ZIP 或首次提供索引，插件仍安装到既有用户私有目录。
+安装器输出到 `dist/installers/`，准备好的运行文件保留在 `dist/editor/`。ISCC 未加入 PATH 时指定编译工具的完整路径；便携复制时保留同级 `licenses/` 目录；发行载荷不包含插件 ZIP、首次提供索引或个人运行数据，已安装插件位于 `runtime-plugins/`。
 
 仓库不保留辅助脚本目录。打包直接调用 Cargo、宿主公开 CLI、归档工具和原生安装器工具；禁止调用移入 Codex 工作区的旧脚本，包括通过包装器间接调用。
 
@@ -84,7 +86,7 @@ Debug 构建未经优化，窗口拖动与编辑响应可能较慢，日常体�
 
 源码按职责组织为编辑器应用、文档核心、平台适配、插件格式、公开协议与插件运行时六个 crate。官方插件源码位于[Nanobug 组织中的独立插件仓库](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/registry)，固定 Package 测试输入位于 `crates/plugin-runtime/tests/fixtures/packages/`，原生打包配置与步骤位于 `installer/`。详细入口见[维护者文档目录](docs/README.md)。
 
-Cargo 包名保留为 `editor-app`。为保留设置、历史和已安装插件，继续使用既有 `MeEditor` 数据目录、`ME_EDITOR_*` 环境变量和已保存的命令标识。
+Cargo 包名保留为 `editor-app`。既有 `MeEditor` 数据导入安装根目录；继续支持 `ME_EDITOR_*` 环境变量和已保存的命令标识。
 
 ## 插件开发
 

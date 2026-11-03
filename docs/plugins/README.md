@@ -2,6 +2,12 @@
 
 - [Markdown 滚动与通用插件 UI 性能](verification/markdown-scroll-ui-performance-2026-11-02.md)：过期回调静默丢弃、通用绘制优化及长文档双向滚动；专项与深浅主题 Windows 拖窗验收通过，改动保留供审阅。
 
+- [安装根目录的数据存储](../project/portable-data.md)：插件、依赖与私有数据统一到所选 profile；默认位于可执行文件所在目录，旧数据迁移与验证状态见记录。
+
+- [插件日志分流与消息浮窗点击关闭](../ui/verification/plugin-message-routing-2026-11-02.md)：插件及语言服务日志留在底栏插件状态和运行日志，只有显式发布的消息进入消息窗口；实际验证状态见记录。
+
+- [插件安装授权与项目启用回归](verification/plugin-install-authority-2026-11-02.md)：安装中界面刷新误撤回授权、项目启用的显隐权限及冷实例通知修复；实际包与最终检查状态见记录。
+
 - [大文件差异加载、重复选择与标签视口保持](verification/git-diff-viewport-loading-2026-10-30.md)：默认折叠并记住跨文件选择；原任务长 Rust 文件回访 72–76 ms，首次打开仍约 135–157 ms；2026-10-31 集成与原验证范围见记录。
 
 - [Git 历史树重载、文档流与统一消息](verification/git-events-messages-2026-10-29.md)：隐藏正文重复序列化、文档回执空耗与宿主消息统一；修复和实际包验收进行中。
@@ -64,6 +70,8 @@
 - [Git 拓扑图分支配色](verification/git-topology-colors-2026-10-23.md)：Git 0.1.31 使用深浅主题调色板区分轨道，线条与节点同色，普通提交实心、合并提交空心；分页、轨道压缩与滚动保持既有颜色，实际验证状态见记录。
 
 - [Git 提交列表列宽与排版](verification/git-history-columns-2026-10-22.md)：Git 0.1.30 的紧凑元数据列、三条透明拖动边界、加粗提交者及标准时间格式；沿用通用画布接口，实际验证状态见记录。
+
+- [Vue2 / JavaScript 独立导航](verification/vue-javascript-navigation-2026-11-02.md)：JavaScript 与 Vue 各自拥有原生分析，修复未启用 TypeScript 时的激活、import 定义、Vue2 data 推断、高亮保留与图标；当前验证和交付状态见记录。
 
 - [父 #107 剩余范围与 Vue 历史版本适配计划](specs/vue-legacy-adaptation-plan-2026-10-21.md)：2026-10-21 核对已知 17 张实施工单均 completed；整理 2.5→2.0→1.x→0.x、HTML/CDN 与持续适配的分批计划。附[历史一手资料调研](specs/vue-legacy-research-2026-10-21.md)和[官方标签快照](specs/vue-legacy-version-inventory-2026-10-21.json)，不代表新增版本已实现或验收。
 

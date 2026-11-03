@@ -13,7 +13,7 @@ pub(crate) use transport::Server;
 pub(crate) struct Launch {
     pub(crate) profile: PathBuf,
     pub(crate) target: Option<PathBuf>,
-    /// Only main, before starting any threads, applies an explicitly selected GUI profile to legacy readers.
+    /// Explicit GUI profiles bypass automatic import from the previous user's default stores.
     pub(crate) explicit_profile: bool,
 }
 

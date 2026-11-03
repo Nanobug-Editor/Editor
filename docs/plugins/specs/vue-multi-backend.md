@@ -1,5 +1,7 @@
 # Vue 多版本插件与 TypeScript 协作方案
 
+> **2026-11-02 原生语言归属调整。** 用户明确要求 JavaScript 插件负责 `.js` 的 import 解析、定义与悬浮，Vue 插件负责 `.vue`，二者不得要求启用 TypeScript 插件。当前实现因此改为各插件拥有自己的受管分析进程，复用固定工具代码；TypeScript 原生主角色限定 TS/TSX，显式跨插件服务继续兼容。本要求替代本文关于 TypeScript 独占全部原生 JS/Vue 分析进程的旧约定；版本判定、封印模块、通用公开 API、信任和快照约束不变。当前验证见[独立导航记录](../verification/vue-javascript-navigation-2026-11-02.md)。
+
 > **2026-10-20 首批六场景交付完成。** 新 #122–#126 的实际双包、Windows 交互和仓库门禁均已通过，三仓推送与 completed 关闭均已读回，#121 既有交付保留。精确范围和已知平台限制见[交付记录](../verification/vue-typescript-remaining-delivery-2026-10-20.md)。旧工单及父议题不变，未创建 Release；下列恢复／暂停段落为历史。长期覆盖目标不等于所有版本现已支持。
 
 > **2026-10-20 15:00 用户已要求继续执行新 #122–#126。** 按[恢复记录](../verification/vue-typescript-resumed-2026-10-20.md)推进，既有范围、测试接缝和交付授权不变。以下暂停记录保留其历史时点。

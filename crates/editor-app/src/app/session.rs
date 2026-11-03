@@ -212,12 +212,7 @@ impl SessionState {
         let profile = self
             .profile_directory
             .clone()
-            .or_else(|| {
-                std::env::var_os("ME_EDITOR_PROFILE_HOME")
-                    .filter(|root| !root.is_empty())
-                    .map(PathBuf::from)
-            })
-            .or_else(|| dirs::config_dir().map(|root| root.join("MeEditor")))?;
+            .or_else(|| editor_core::storage::profile_root().ok())?;
         Some(Self::file_in_profile(Path::new(&self.workspace), &profile))
     }
 

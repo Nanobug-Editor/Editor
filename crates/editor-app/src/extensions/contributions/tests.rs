@@ -1,6 +1,69 @@
 //! Packaged declarations enter through the same bounded immutable loader as native views.
 use super::*;
 
+/// A real optional language engine failure must leave independently declared syntax resources usable.
+#[test]
+#[ignore = "set NANOBUG_VUE_WITH_REQUIRED_PROVIDER_PACKAGE to the original Vue 0.1.13 archive"]
+fn missing_analysis_dependency_preserves_recognition_and_highlighting() {
+    let archive =
+        PathBuf::from(std::env::var_os("NANOBUG_VUE_WITH_REQUIRED_PROVIDER_PACKAGE").unwrap());
+    let package = plugin_runtime::Package::read(&archive).unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let mut manager = Manager::open(
+        store.path().into(),
+        plugin_runtime::plugin_protocol::Environment {
+            workspace: workspace
+                .path()
+                .canonicalize()
+                .unwrap()
+                .display()
+                .to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    manager
+        .install(&package, package.manifest.permissions.clone())
+        .unwrap();
+    let providers = crate::language::providers::Providers::new(store.path(), workspace.path());
+    refresh_project_entries(&providers, store.path(), &manager.published_entries(), true);
+    let path = workspace.path().join("App.vue");
+    assert_eq!(providers.language_for_path(&path).as_deref(), Some("vue"));
+    assert!(crate::language::code_highlighting::selected_in(&providers, "vue").is_some());
+
+    let failure = crate::extensions::demand_plugin_fixture(
+        &mut manager,
+        "vue",
+        plugin_runtime::DemandReason::LanguageDocument {
+            provider: "vue/vue".into(),
+            role: plugin_runtime::LanguageRole::Lsp,
+            document: plugin_runtime::plugin_protocol::language::DocumentContext {
+                path: "App.vue".into(),
+                generation: 1,
+            },
+        },
+    )
+    .expect_err("the original package needs an absent analysis provider");
+    assert_eq!(
+        failure.code,
+        plugin_runtime::plugin_protocol::api::ErrorCode::CapabilityUnavailable
+    );
+    assert!(
+        failure.message.contains("0 compatible providers"),
+        "{failure:?}"
+    );
+    refresh_project_entries(&providers, store.path(), &manager.published_entries(), true);
+    assert_eq!(
+        providers.language_for_path(&path).as_deref(),
+        Some("vue"),
+        "a failed definition service must not turn an already recognized SFC into plain text"
+    );
+    assert!(crate::language::code_highlighting::selected_in(&providers, "vue").is_some());
+    assert!(manager.instance_id("vue").is_none());
+    manager.shutdown();
+}
+
 /// A project's service failure cannot withdraw a globally installed user's immutable theme from another project.
 #[gpui_kit::gpui::test]
 fn a_project_failure_preserves_the_shared_user_theme(cx: &mut gpui_kit::TestAppContext) {
@@ -45,10 +108,11 @@ fn a_project_failure_preserves_the_shared_user_theme(cx: &mut gpui_kit::TestAppC
     entries[0].error = Some("A workspace provider failed".into());
     refresh_project_entries(&first, store.path(), &entries, true);
     assert_eq!(theme(false).unwrap().name, "Shared user palette");
-    assert!(
+    assert_eq!(
         first
             .language_for_path(&a.path().join("source.novel"))
-            .is_none()
+            .as_deref(),
+        Some("novel")
     );
     assert_eq!(
         second
@@ -133,8 +197,8 @@ fn a_mismatched_discovery_identity_is_refused() {
     assert!(!failures[0].error.trim().is_empty());
 }
 /// Startup resource loading must reject old protocols before opening their grammar/theme/icon assets.
-#[test]
-fn incompatible_resource_records_do_not_publish_contributions() {
+#[gpui_kit::gpui::test]
+fn incompatible_resource_records_do_not_publish_contributions(cx: &mut gpui_kit::TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
     let package =
@@ -150,16 +214,24 @@ fn incompatible_resource_records_do_not_publish_contributions() {
     .unwrap();
     manager.install(&package, Default::default()).unwrap();
     let mut entries = manager.published_entries();
-    refresh_entries(directory.path(), &entries);
+    let providers = crate::language::providers::Providers::new(directory.path(), project.path());
+    let _catalog = cx.update(|cx| CatalogView::new(&providers, cx));
+    refresh_project_entries(&providers, directory.path(), &entries, true);
     assert!(
-        plugin_root("me.custom-language").is_some(),
+        project_catalog(&providers)
+            .plugins
+            .contains_key("me.custom-language"),
         "current author ID must remain exact"
     );
     entries[0].manifest.protocol = 1;
     entries[0].manifest.api = None;
-    refresh_entries(directory.path(), &entries);
-    assert!(plugin_root("me.custom-language").is_none());
-    assert!(icon_rules().is_empty());
+    refresh_project_entries(&providers, directory.path(), &entries, true);
+    assert!(
+        !project_catalog(&providers)
+            .plugins
+            .contains_key("me.custom-language")
+    );
+    assert!(project_icon_rules(&providers).is_empty());
     assert!(
         entries[0].enabled,
         "filtering must not clear the persisted preference"

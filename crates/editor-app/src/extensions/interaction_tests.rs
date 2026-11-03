@@ -554,14 +554,9 @@ fn native_plugin_input_confirms_unicode_and_restores_editor_focus(cx: &mut TestA
     });
     cx.update(|window, cx| window.draw(cx).clear(cx));
     assert!(cx.update(|_, cx| app.read(cx).messages_visible(cx)));
-    assert!(
-        !notice.status().is_terminal(),
-        "viewing history must not complete Notify"
-    );
     assert!(cx.debug_bounds("host-message-source-1").is_some());
-    let button = cx.debug_bounds("plugin-notice-dismiss").unwrap();
-    cx.simulate_click(button.center(), Default::default());
-    cx.run_until_parked();
+    assert!(cx.debug_bounds("plugin-notice-body").is_none());
+    assert!(cx.debug_bounds("plugin-notice-dismiss").is_none());
     assert!(matches!(
         notice.status(),
         RequestUpdate::Completed {

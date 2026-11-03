@@ -1736,7 +1736,6 @@ dependencies = [
 name = "editor-core"
 version = "0.1.0"
 dependencies = [
- "dirs 6.0.0",
  "ignore",
  "imara-diff",
  "plugin-schema",
@@ -5340,6 +5339,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "dirs 6.0.0",
+ "editor-core",
  "glob",
  "globset",
  "ignore",

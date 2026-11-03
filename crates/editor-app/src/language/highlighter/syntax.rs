@@ -247,14 +247,18 @@ impl SyntaxHighlighter {
         true
     }
 
-    /// Resolve non-overlapping UTF-8 style runs covering the requested source range.
+    /// Resolve non-overlapping UTF-8 style runs covering the live viewport's requested range.
+    /// `resolver` styles matched captures; bytes awaiting a snapshot keep the ordinary foreground.
     /// Deeper injected captures win, then shorter captures and later query patterns.
     pub(crate) fn styles(
         &self,
         range: &Range<usize>,
         resolver: &dyn HighlightStyleResolver,
     ) -> Vec<(Range<usize>, HighlightStyle)> {
-        let end = range.end.min(self.source.len());
+        // The viewport belongs to EditorState; this immutable parser snapshot may still be empty
+        // or shorter while background preparation runs. Base needs runs for every requested byte
+        // to shape the body, so uncovered bytes must remain plain instead of disappearing.
+        let end = range.end;
         let start = range.start.min(end);
         if start == end {
             return Vec::new();

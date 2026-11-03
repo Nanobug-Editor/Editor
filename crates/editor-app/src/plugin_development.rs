@@ -12,12 +12,11 @@ mod tests;
 pub(crate) use cli::run_cli;
 use std::path::{Path, PathBuf};
 
-/// One stable, private profile per workspace/configuration; never stores data in the project.
+/// One stable development profile per workspace/configuration beneath the selected editor data root.
 pub(crate) fn profile(workspace: &str, configuration: &str) -> anyhow::Result<PathBuf> {
     use sha2::{Digest, Sha256};
     let key = serde_json::to_vec(&(workspace, configuration))?;
-    Ok(dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("User configuration directory unavailable"))?
-        .join("MeEditor/plugin-development")
+    Ok(editor_core::storage::profile_root()?
+        .join("plugin-development")
         .join(format!("{:x}", Sha256::digest(key))))
 }

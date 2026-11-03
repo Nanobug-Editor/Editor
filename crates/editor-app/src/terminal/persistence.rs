@@ -27,10 +27,11 @@ pub(super) struct Saved {
     pub(super) panes: Option<panes::PaneLayout>,
 }
 
+/// Resolve `workspace` snapshots in the startup-validated profile; never fall back to system temp.
 pub(super) fn directory(workspace: &Path) -> PathBuf {
     at_run_root(
         workspace,
-        &editor_core::default_root().unwrap_or_else(std::env::temp_dir),
+        &editor_core::default_root().expect("startup must resolve the editor data directory"),
     )
 }
 

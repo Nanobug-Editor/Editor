@@ -94,7 +94,13 @@ impl ExtensionPanel {
     }
 
     /// Startup, the six-hour scheduler, manager freshness and explicit refresh share this operation.
+    /// An active installation keeps its confirmed catalog; an overdue check retries after completion.
     pub(super) fn refresh_online_market(&mut self) {
+        // Refreshing advances the catalog generation and revokes the install's captured consent.
+        // Keep the check due instead of cancelling an unrelated in-flight package transaction.
+        if self.worker.state.lock().unwrap().install_control.is_some() {
+            return;
+        }
         self.market_view.mark_check(std::time::Instant::now());
         self.worker.refresh_market(
             self.root.join("marketplace/catalog.json"),
