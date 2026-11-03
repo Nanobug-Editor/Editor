@@ -35,8 +35,8 @@ if ($imports -match '(?im)^\s*(?:vcruntime\w*|msvcp\w*|concrt\w*|ucrtbased?)\.dl
 运行 `cargo build -p editor-app --release` 后，将 `target/release/editor-app.exe` 复制为
 `dist/editor/Nanobug.exe`；复制品牌 ICO 到 `dist/editor/Nanobug.ico`，宿主依赖许可到
 `dist/editor/licenses/`。安装器和便携包均不携带插件 ZIP、源码或首次提供索引；运行不依赖同级
-`plugins/` 目录。官方插件由独立仓库发布，经市场审核后由用户主动安装到既有私有目录。
-不要把编译器、宿主源码或脚本放入运行目录；旧的用户安装、设置与私有数据继续保留。
+`plugins/` 目录或个人运行数据。官方插件由独立仓库发布，经市场审核后由用户主动安装到可执行文件旁的 `runtime-plugins/`。
+不要把编译器、宿主源码或脚本放入运行目录。首次普通启动按[迁移规则](../docs/project/portable-data.md)将旧设置、插件和历史复制到安装根目录，保留旧目录备份；缓存在新位置重建。运行目录必须可写。安装清单只覆盖程序、图标和许可，更新及卸载保留运行时生成的数据文件和目录。
 
 终端、上游 Alacritty 核心及默认主题编译进宿主，无独立终端 ZIP 或 WASM。旧终端安装记录仅用于有限数据导入，原始数据和备份保留。
 

@@ -33,6 +33,7 @@ impl Manager {
                 target,
                 self.trusted,
                 self.workspace_open,
+                &self.environment.workspace,
             )?;
             // Observation cannot demand a cold instance or restart one that retired after sampling.
             let instance = self.live.get(id).ok_or_else(|| {
@@ -345,6 +346,7 @@ fn validate_panel_visibility(
     target: &str,
     trusted: bool,
     workspace_open: bool,
+    workspace: &str,
 ) -> Result<(), api::Failure> {
     if routed_panel != Some(target) {
         return Err(api::Failure::new(
@@ -352,7 +354,10 @@ fn validate_panel_visibility(
             "Visibility requires its exact routed panel",
         ));
     }
-    if !entry.enabled
+    // The persisted flag is the global default; a workspace override admits the same owned UI.
+    if !(entry.enabled
+        || (entry.manifest.scope == api::InstanceScope::Workspace
+            && entry.project_enabled_in(workspace)))
         || entry.error.is_some()
         || !entry.grants.contains("ui.panels")
         || !entry.manifest.panels.iter().any(|panel| panel.id == target)

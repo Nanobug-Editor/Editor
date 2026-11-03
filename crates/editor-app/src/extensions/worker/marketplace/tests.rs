@@ -4,6 +4,7 @@ use crate::extensions::market_test_server::Server;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 mod delivery;
+mod installation_authority;
 mod layout;
 mod official;
 mod updates;

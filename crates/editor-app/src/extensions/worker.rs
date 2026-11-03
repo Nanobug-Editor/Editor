@@ -4,6 +4,10 @@ use rust_i18n::t;
 mod admission;
 #[cfg(test)]
 mod bundled_tests;
+#[cfg(test)]
+// Native observation fixtures share publication identity without exposing actor internals to production.
+#[path = "cold_observation_tests.rs"]
+mod cold_observation_tests;
 mod command_epochs;
 pub(super) mod configurations;
 pub(crate) mod demands;

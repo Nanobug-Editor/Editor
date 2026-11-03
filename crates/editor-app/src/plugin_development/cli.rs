@@ -253,6 +253,12 @@ fn develop(
     );
     std::fs::create_dir_all(&profile)?;
     let profile = profile.canonicalize()?;
+    if let Ok(personal) = editor_core::storage::default_profile_root()?.canonicalize() {
+        anyhow::ensure!(
+            profile != personal,
+            "Choose a separate development profile, not the editor's installation data root"
+        );
+    }
     // Never let an explicit CLI profile adopt the main editor's settings/history directories.
     for root in [dirs::config_dir(), dirs::data_local_dir()]
         .into_iter()

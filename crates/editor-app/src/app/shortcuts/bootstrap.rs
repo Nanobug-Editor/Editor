@@ -9,17 +9,12 @@ use std::path::PathBuf;
 struct ProfilePath(PathBuf);
 impl Global for ProfilePath {}
 
-/// Resolve only the shortcut profile, never the workspace, plugin registry or other settings.
-/// ME_EDITOR_PROFILE_HOME is an optional directory for isolated runs and application tests.
+/// Resolve shortcuts in the installation's data directory or the explicitly isolated profile.
+/// Path selection never creates files or falls back to an operating-system user directory.
 pub(crate) fn default_path() -> Result<PathBuf, String> {
-    if let Some(directory) =
-        std::env::var_os("ME_EDITOR_PROFILE_HOME").filter(|directory| !directory.is_empty())
-    {
-        return Ok(PathBuf::from(directory).join("shortcuts.json"));
-    }
-    dirs::config_dir()
-        .map(|directory| directory.join("MeEditor").join("shortcuts.json"))
-        .ok_or_else(|| "The user configuration directory is unavailable".to_owned())
+    editor_core::storage::profile_root()
+        .map(|directory| directory.join("shortcuts.json"))
+        .map_err(|error| error.to_string())
 }
 
 /// Load and apply all native overrides before opening a window, including Input Copy bindings.

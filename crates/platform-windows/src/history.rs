@@ -90,7 +90,7 @@ fn file_identity(path: &Path) -> io::Result<(u64, [u8; 16])> {
 /// Resolved policy destination and established history location for one selected application profile.
 #[derive(Clone, Debug)]
 pub struct HistoryPaths {
-    /// Normal users retain LocalAppData/MeEditor/history; isolated profiles use their own history.
+    /// History lives under the selected profile, including the default installation-local data root.
     pub root: PathBuf,
     /// User-only configuration; project settings never override this file.
     pub settings: PathBuf,
@@ -126,7 +126,19 @@ impl HistoryPaths {
             for name in missing.into_iter().rev() {
                 resolved.push(name);
             }
-            if resolved.starts_with(&workspace) {
+            // A portable installation may itself sit in a checked-out source tree (cargo run).
+            // Only its fixed data root may share that ancestor; arbitrary project profiles remain invalid.
+            let portable = editor_core::storage::default_profile_root()?;
+            let portable_path = if path == &self.root {
+                portable.join("history")
+            } else {
+                portable.join("history.json")
+            };
+            let is_portable = path == &portable_path
+                || portable_path
+                    .canonicalize()
+                    .is_ok_and(|portable| portable == resolved);
+            if resolved.starts_with(&workspace) && !is_portable {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
                     "History and its user settings must be stored outside the workspace",
@@ -138,36 +150,12 @@ impl HistoryPaths {
 
     /// Select paths without creating directories. A selected profile takes precedence over environment.
     pub fn for_profile(profile: Option<&Path>) -> io::Result<Self> {
-        let normal = dirs::config_dir().map(|root| root.join("MeEditor"));
         let selected = profile
             .map(Path::to_path_buf)
-            .or_else(|| {
-                std::env::var_os("ME_EDITOR_PROFILE_HOME")
-                    .filter(|value| !value.is_empty())
-                    .map(PathBuf::from)
-            })
-            .or_else(|| normal.clone())
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "Application profile directory unavailable",
-                )
-            })?;
-        let root = if normal.as_ref() == Some(&selected) {
-            dirs::data_local_dir()
-                .ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::NotFound,
-                        "Local application data directory unavailable",
-                    )
-                })?
-                .join("MeEditor")
-                .join("history")
-        } else {
-            selected.join("history")
-        };
+            .map(Ok)
+            .unwrap_or_else(editor_core::storage::profile_root)?;
         Ok(Self {
-            root,
+            root: selected.join("history"),
             settings: selected.join("history.json"),
         })
     }

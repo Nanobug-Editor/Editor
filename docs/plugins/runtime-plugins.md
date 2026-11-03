@@ -78,7 +78,7 @@ WASM 不继承宿主目录、环境、输入输出或网络访问。每次调用
 
 WASM 指令、时间和内存有独立预算；队列、进程、文件、绘图和事件均有上限。超限定位到插件/作用域/操作；插件可独立重启，LSP 有限重试。停用与卸载结清请求、撤销订阅和租约并回收进程树。
 
-默认数据根为 %APPDATA%/MeEditor/runtime-plugins，ME_EDITOR_PLUGIN_HOME 可指定隔离测试根。registry.json 保存安装与启用偏好，packages 保存不可变代码，scope 私有数据由宿主管理。历史 ID/目录只执行有限导入并保留备份。协议 1–6 的安装记录可展示更新、卸载及保留的偏好，但不运行旧代码；重装新版可导入保留数据。
+默认数据根为可执行文件旁的 `runtime-plugins`；显式 profile 使用其下的 `runtime-plugins`，`ME_EDITOR_PLUGIN_HOME` 可覆盖插件根。首次普通启动导入旧 `%APPDATA%/MeEditor/runtime-plugins` 并保留原始备份，详见[数据迁移](../project/portable-data.md)。`registry.json` 保存安装与启用偏好，`packages` 保存不可变代码，scope 私有数据由宿主管理。历史 ID/目录只执行有限导入并保留备份。协议 1–6 的安装记录可展示更新、卸载及保留的偏好，但不运行旧代码；重装新版可导入保留数据。
 
 ## 构建与验证
 

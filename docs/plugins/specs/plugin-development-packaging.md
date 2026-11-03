@@ -19,7 +19,7 @@
 
 `plugin-runtime::development::Project` 封装项目读取、构建、资源收集、包准入和原子 ZIP。目录候选与 ZIP 使用相同 `Package` 校验；宿主 GUI、CLI 均调用此公开通用模块，无插件 ID／语言特判。
 
-Rust 访客由 Cargo compiler-artifact 消息定位 `cdylib` 产物，使用宿主内嵌 SDK 缓存及 `wasm32-wasip2`；原生工具按可执行程序和 argv 调用，明确平台。编译缓存使用用户缓存目录下的短路径，避免 Windows MSVC 路径长度问题。
+Rust 访客由 Cargo compiler-artifact 消息定位 `cdylib` 产物，使用宿主内嵌 SDK 缓存及 `wasm32-wasip2`；原生工具按可执行程序和 argv 调用，明确平台。2026-11-03 起，SDK 与插件编译缓存使用所选 profile 下的 `cache/plugin-sdk`、`cache/plugin-build`；默认位于可执行文件所在目录。工作区身份仍采用短摘要，详见[统一数据目录](../../project/portable-data.md)。
 
 开发控制器持有独立 GPUI 进程树，用不可变目录和会话标识交付重载。现有管理器 actor 执行后台准备和事务切换，不另设可变文档或私有数据所有者。宿主运行记录复用已有运行控制，输出有界；信任撤销、停止、强制停止和窗口退出撤销本任务进程。
 

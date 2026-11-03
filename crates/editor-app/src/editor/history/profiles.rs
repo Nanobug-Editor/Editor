@@ -54,7 +54,7 @@ impl State {
         }
         #[cfg(test)]
         let test_profile = {
-            let normal = dirs::config_dir().map(|root| root.join("MeEditor"));
+            let normal = editor_core::storage::default_profile_root().ok();
             if profile.is_none() || profile == normal.as_deref() {
                 let profiles = cx.global_mut::<ProfileWorkers>();
                 let directory = profiles.test_profile.get_or_insert_with(|| {

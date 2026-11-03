@@ -36,11 +36,7 @@ impl std::error::Error for RunStoreError {}
 
 /// Base directory for host-local run configurations, shared with other editor state.
 pub fn default_root() -> Option<PathBuf> {
-    // Isolated development processes supply their host-local profile before GUI initialization.
-    if let Some(root) = std::env::var_os("ME_EDITOR_PROFILE_HOME").filter(|root| !root.is_empty()) {
-        return Some(PathBuf::from(root).join("run"));
-    }
-    Some(dirs::config_dir()?.join("MeEditor").join("run"))
+    Some(crate::storage::profile_root().ok()?.join("run"))
 }
 
 /// File holding the configurations for one workspace, addressed by a non-reversible digest.
@@ -48,7 +44,7 @@ pub fn file_for(base: &Path, workspace: &str) -> PathBuf {
     base.join(format!("{}.json", short_digest(workspace)))
 }
 
-/// File the editor reads and writes for one workspace, under the platform configuration directory.
+/// File the editor reads and writes for one workspace, under the selected portable profile.
 ///
 /// Callers outside this crate address configurations by workspace rather than by path, so the
 /// storage layout stays one decision in one place.

@@ -85,14 +85,14 @@ Source: "{#PayloadDir}\Nanobug.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; Carry optional build identity and internal-test instructions with the installed payload.
 Source: "{#PayloadDir}\build-info.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 Source: "{#PayloadDir}\INTERNAL-TEST.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
-; Plugins live in the private user store and are acquired explicitly from the reviewed marketplace.
+; Plugins are acquired explicitly into {app}/runtime-plugins; personal data is never packaged.
 Source: "{#PayloadDir}\licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{userprograms}\Nanobug"; Filename: "{app}\Nanobug.exe"; WorkingDir: "{userdocs}"
 Name: "{userdesktop}\Nanobug"; Filename: "{app}\Nanobug.exe"; WorkingDir: "{userdocs}"; Tasks: desktopicon
 
-; User settings, installed plugins, history and caches remain outside {app} and survive uninstall.
+; Runtime-created files and directories in {app} are not installer-owned; upgrades/uninstall retain them.
 
 [Code]
 const

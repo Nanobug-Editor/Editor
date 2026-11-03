@@ -5,6 +5,7 @@ pub mod comparison;
 mod documents;
 mod paths;
 mod run;
+pub mod storage;
 mod workspace;
 
 pub use commands::{CommandDescriptor, CommandId, CommandRegistry, KeyBindingDescriptor};

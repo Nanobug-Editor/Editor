@@ -153,7 +153,9 @@ impl Worker {
         let backup = Arc::new(
             tempfile::Builder::new()
                 .prefix("me-editor-files-")
-                .tempdir()
+                .tempdir_in(
+                    editor_core::storage::temporary_root().map_err(|error| error.to_string())?,
+                )
                 .map_err(|error| error.to_string())?,
         );
         let lifetime = resources.register(backup.path().to_path_buf(), &cancelled);

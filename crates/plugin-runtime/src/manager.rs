@@ -31,6 +31,8 @@ mod transfer;
 pub use native_execution::NativeExecutionUpdate;
 mod direct;
 mod plugin_services;
+#[cfg(test)]
+mod portable_data_tests;
 mod preferences;
 mod preparation;
 mod recovery;

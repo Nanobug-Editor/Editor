@@ -24,7 +24,9 @@ Build the current source to use the organization's marketplace endpoint. Binarie
 
 Nanobug is under active development. On Windows, run `Nanobug-Setup-<version>-x64.exe` to install for your user account. The installer creates a Start menu entry, offers an optional desktop shortcut, and registers an uninstaller. A separate option, checked on first installation, adds **Open with Nanobug** to folder and folder background menus; upgrades retain your choice. On Windows 11, these entries may appear under **Show more options**. It installs the program, icon and host licenses under `%LOCALAPPDATA%\Programs\Nanobug`; Rust and Cargo are not required to use them.
 
-Exit Nanobug before installing an update or uninstalling. Settings, history, and installed plugin data in the existing `MeEditor` directories are preserved. Windows installers include English and Simplified Chinese.
+Nanobug keeps settings, sessions, terminals, installed plugins and their dependencies, file history, and caches in **the executable directory itself**. Copy the complete installation directory to retain its data. The first ordinary launch imports the previous `MeEditor` settings, plugins and history, retaining the originals as backups; rebuildable caches are recreated locally. Close old editor instances before migration. The installation directory must be writable. Explicit `--profile`, `ME_EDITOR_PROFILE_HOME` and `ME_EDITOR_PLUGIN_HOME` selections retain their isolation.
+
+Exit Nanobug before installing an update or uninstalling. Updates preserve runtime data, and uninstall removes only installer-owned files, leaving your data available. Windows installers include English and Simplified Chinese. See [the data layout and migration rules](docs/project/portable-data.md).
 
 With the development prerequisites below and [Inno Setup](https://jrsoftware.org/isdl.php) prepared, build the host directly:
 
@@ -49,7 +51,7 @@ $output = Join-Path $PWD 'dist/installers'
 ISCC.exe "/DPayloadDir=$payload" "/DInstallerDir=$output" "/DAppVersion=$version" .\installer\windows\nanobug.iss
 ```
 
-Installers are written to `dist/installers/`; prepared runtime files remain in `dist/editor/`. Specify the compiler's full path if ISCC is not on PATH. Keep the adjacent `licenses/` directory for a portable copy. Plugin ZIPs and first-use catalogs do not belong in the payload; plugins are installed into the existing private user store.
+Installers are written to `dist/installers/`; prepared runtime files remain in `dist/editor/`. Specify the compiler's full path if ISCC is not on PATH. Keep the adjacent `licenses/` directory for a portable copy. Plugin ZIPs, first-use catalogs and personal runtime data do not belong in the distribution payload; installed plugins live in `runtime-plugins/`.
 
 The repository contains no helper-script directory. Packaging must call Cargo, the host's public CLI, archive tools, and native installer tools directly; it must not invoke archived Codex helper scripts, including through wrappers.
 
@@ -84,7 +86,7 @@ Opening another project keeps the current project running in its own window; ope
 
 The six workspace crates cover the application, document core, platform integration, plugin schema, public protocol, and plugin runtime. Official plugin sources live in the independent [plugin repositories in the Nanobug organization](https://github.com/Nanobug-Editor/Plugin-Marketplace/tree/main/registry); fixed test-only Package inputs live in `crates/plugin-runtime/tests/fixtures/packages/`; native packaging configuration and instructions live in `installer/`. See the [maintainer documentation index](docs/README.md) for details.
 
-The Cargo package remains `editor-app`. Existing `MeEditor` data directories, `ME_EDITOR_*` environment variables, and persisted command identifiers are retained to preserve settings, history, and installed plugins.
+The Cargo package remains `editor-app`. Legacy `MeEditor` data is imported into the installation root directory; `ME_EDITOR_*` environment variables and persisted command identifiers remain supported.
 
 ## Plugin development
 

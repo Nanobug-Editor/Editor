@@ -2,6 +2,8 @@
 
 日期：2026-10-08。
 
+2026-11-03 后续决定：用户要求所有宿主管理的数据随安装目录保存，默认根改为可执行文件所在目录。旧 `MeEditor` 设置、插件与历史按[迁移规则](portable-data.md)导入并保留备份；下文的旧目录保留约定仅记录品牌改名当时的策略。
+
 产品名称由 Me Editor 改为 Nanobug。编辑器标题栏、原生窗口标题、LSP 客户端标识、Windows 文件属性、文档站点和根 README 使用新名称。打包脚本生成 `dist/editor/Nanobug.exe`；Cargo 包及开发构建仍为 `editor-app`，以保留现有开发和 SDK 构建入口。
 
 原始图标保存在 `crates/editor-app/assets/branding/nanobug.png`，与用户提供的 PNG 字节一致。相邻 ICO 保留透明度并包含 16、24、32、48、64、128、256 像素图层；Windows 资源 ID 1 与 GPUI 上游的原生图标加载接口对应。站点头部及 favicon 使用同图的缩小版本与 ICO。

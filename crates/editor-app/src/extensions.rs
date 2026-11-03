@@ -8,8 +8,6 @@ mod activation_combination_tests;
 mod activation_tests;
 #[cfg(test)]
 mod capability_tests;
-#[cfg(test)]
-mod cold_observation_tests;
 pub(crate) mod command_intents;
 pub(crate) mod command_menus;
 mod commands;
@@ -161,11 +159,12 @@ pub(crate) fn runtime_root(workspace: &Path) -> PathBuf {
     {
         let _ = workspace;
         std::env::var_os("ME_EDITOR_PLUGIN_HOME")
+            .filter(|root| !root.is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| {
-                dirs::config_dir()
-                    .unwrap_or_else(std::env::temp_dir)
-                    .join("MeEditor/runtime-plugins")
+                editor_core::storage::profile_root()
+                    .expect("startup must resolve the editor data directory")
+                    .join("runtime-plugins")
             })
     }
 }
@@ -329,7 +328,7 @@ pub struct ExtensionPanel {
     _task: gpui_kit::Task<()>,
     last_theme: Option<protocol::Environment>,
     last_size: (f32, f32, f32, f32),
-    /// Last plugin instance generation measured against this panel's native canvas.
+    /// Last live generation sampled for this panel; zero stays cold despite retained retirement counters.
     instance_epoch: u64,
     /// Paint/show demand is independent of default visibility and survives only its original wait.
     view_demand: RefCell<activation::ViewDemand>,
@@ -1004,7 +1003,7 @@ impl ExtensionPanel {
             }
             self.entries = state.entries.clone();
             if let Some(id) = &self.active {
-                let epoch = state.instance_epochs.get(id).copied().unwrap_or(0);
+                let epoch = state.live_instance_epoch(id).unwrap_or(0);
                 if self.instance_epoch != epoch {
                     // The replacement guest starts at its default size; force one native measure.
                     self.instance_epoch = epoch;
@@ -1181,6 +1180,8 @@ impl ExtensionPanel {
             }
         }
     }
+    /// Route `event` to plugin `id` and its owning `panel`, retaining this surface's captured incarnation.
+    /// Ambient observations have no recipient while the published owner is cold.
     fn send_to(&self, id: &str, panel: Option<String>, event: PluginEvent) {
         // Surface state belongs to its last observed publication, never the worker's newer incarnation.
         let epoch = if self.active.as_deref() == Some(id) {
@@ -1190,9 +1191,7 @@ impl ExtensionPanel {
                 .state
                 .lock()
                 .unwrap()
-                .instance_epochs
-                .get(id)
-                .copied()
+                .live_instance_epoch(id)
                 .unwrap_or(0)
         };
         // Ambient observations have no cold callback owner and must not demand or fault a guest.
