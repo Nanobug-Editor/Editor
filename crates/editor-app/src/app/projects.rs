@@ -167,6 +167,7 @@ impl ProjectWindow {
         let recent = controller::recent(&profile, cx);
         let error = recent.borrow().error.clone();
         let handle = window.window_handle();
+        app::updates::ensure(&profile, cx);
         controller::register(cx.entity().downgrade(), handle, profile.clone(), cx);
         cx.on_release(move |_, cx| controller::unregister(handle, cx))
             .detach();

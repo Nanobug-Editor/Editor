@@ -1,0 +1,82 @@
+_version: 2
+updates.title:
+  en: About and updates
+  zh-CN: 关于与更新
+updates.menu_check:
+  en: Check for updates…
+  zh-CN: 检查更新…
+updates.menu_available:
+  en: Update Nanobug…
+  zh-CN: 更新 Nanobug…
+updates.menu_ready:
+  en: Restart and update Nanobug…
+  zh-CN: 重启并更新 Nanobug…
+updates.menu_notification:
+  en: Application menu — a Nanobug update is available
+  zh-CN: 应用菜单 · Nanobug 有可用更新
+updates.current_version:
+  en: "Current version: %{version}"
+  zh-CN: "当前版本：%{version}"
+updates.edition_installed:
+  en: Installed edition · Windows x64
+  zh-CN: 安装版 · Windows x64
+updates.edition_portable:
+  en: Portable edition · Windows x64
+  zh-CN: 便携版 · Windows x64
+updates.edition_development:
+  en: This build uses the release page to download a new version.
+  zh-CN: 此构建通过发行页面下载新版本。
+updates.loading:
+  en: Loading update information…
+  zh-CN: 正在读取更新信息…
+updates.checking:
+  en: Checking GitHub Releases…
+  zh-CN: 正在检查 GitHub Releases…
+updates.downloading:
+  en: "Downloading update · %{percent}%"
+  zh-CN: "正在下载更新 · %{percent}%"
+updates.ready:
+  en: The update is verified and ready to install.
+  zh-CN: 更新已校验，可以安装。
+updates.exiting:
+  en: Waiting for all windows to finish closing…
+  zh-CN: 正在等待所有窗口完成退出确认…
+updates.available:
+  en: "New version available: %{version}"
+  zh-CN: "发现新版本：%{version}"
+updates.up_to_date:
+  en: No newer version is available on the selected channel.
+  zh-CN: 当前更新通道暂无更新版本。
+updates.not_checked:
+  en: Updates have not been checked yet.
+  zh-CN: 尚未检查更新。
+updates.check:
+  en: Check for updates
+  zh-CN: 检查更新
+updates.download:
+  en: Download update
+  zh-CN: 下载更新
+updates.cancel:
+  en: Cancel download
+  zh-CN: 取消下载
+updates.restart:
+  en: Restart and update
+  zh-CN: 重启并更新
+updates.release_page:
+  en: Open release page
+  zh-CN: 打开发行页面
+updates.automatic:
+  en: Check automatically at startup and every six hours
+  zh-CN: 启动后及每六小时自动检查更新
+updates.preview:
+  en: Include prerelease versions
+  zh-CN: 接收预发布版本
+updates.policy_hint:
+  en: Updates come from Nanobug-Editor/Editor on GitHub. Downloading and installing require your action; unsaved files are confirmed before restarting.
+  zh-CN: 更新来自 GitHub 的 Nanobug-Editor/Editor。下载和安装由你主动操作；重启前会确认未保存文件。
+updates.error:
+  en: "The update could not be completed: %{detail}"
+  zh-CN: "未能完成更新操作：%{detail}"
+updates.no_notes:
+  en: This release has no additional notes.
+  zh-CN: 此版本未提供补充说明。

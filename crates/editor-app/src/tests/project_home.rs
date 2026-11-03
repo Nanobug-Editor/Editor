@@ -39,6 +39,10 @@ mod geometry;
 #[path = "project_windows/startup_restore.rs"]
 mod native_startup_restore;
 
+#[cfg(windows)]
+#[path = "project_windows/host_updates.rs"]
+mod native_host_updates;
+
 /// Use the production window and platform picker in an isolated profile for each behavioral scenario.
 fn with_home(
     cx: &mut TestAppContext,

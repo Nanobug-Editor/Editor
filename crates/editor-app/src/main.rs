@@ -1186,6 +1186,9 @@ fn main() -> anyhow::Result<()> {
     // A terminal caller can still use the public CLI; desktop launchers never gain a new console.
     #[cfg(target_os = "windows")]
     app::distribution::attach_parent_console();
+    if app::updates::run_cli()? {
+        return Ok(());
+    }
     if plugin_development::run_cli()? {
         return Ok(());
     }
@@ -1196,7 +1199,13 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     // Installers must wait for a normal GUI exit; CLI tooling remains independently usable.
-    let _installation_guard = app::distribution::installation_guard()?;
+    let _installation_guard = match app::distribution::installation_guard() {
+        Ok(guard) => guard,
+        Err(error) => {
+            app::startup::show_error(error.to_string());
+            return Err(error.into());
+        }
+    };
     // Use Simplified Chinese by default while keeping locale changes centralized.
     rust_i18n::set_locale("zh-CN");
 
@@ -1266,6 +1275,7 @@ fn main() -> anyhow::Result<()> {
             }
             // Keep pointer projection outside the complete native Root and its other decorators.
             editor_ui::init(cx);
+            app::updates::ensure(&profile, cx);
             if let Some(server) = incoming {
                 app::startup::attach(server, profile.clone(), cx);
             }

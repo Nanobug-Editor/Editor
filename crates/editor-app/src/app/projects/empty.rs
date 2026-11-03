@@ -137,6 +137,12 @@ impl ProjectWindow {
     /// Application-only menu commands never dispatch document or workspace actions.
     fn empty_application_trigger(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let anchor = self.application_anchor.clone();
+        let indicator = app::updates::indicator(&self.profile, cx);
+        let label = if indicator.is_some() {
+            t!("updates.menu_notification").to_string()
+        } else {
+            t!("shortcut_menu.application").to_string()
+        };
         div()
             .relative()
             .h_full()
@@ -149,11 +155,12 @@ impl ProjectWindow {
                     .small()
                     .compact()
                     .ghost()
-                    .tooltip(t!("shortcut_menu.application").to_string())
+                    .accessibility_label(label.clone())
+                    .tooltip(label)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.project_menu.clear();
                         let owner = cx.entity().downgrade();
-                        let items = [
+                        let mut items: Vec<_> = [
                             ("project-open-another", "projects.open_folder"),
                             ("project-show-home", "projects.home"),
                             ("project-quit-application", "projects.quit_application"),
@@ -166,6 +173,7 @@ impl ProjectWindow {
                             separator_before: id == "project-quit-application",
                         })
                         .collect();
+                        items.insert(items.len() - 1, app::updates::menu_item(&this.profile, cx));
                         let anchor = this.application_anchor.get();
                         this.application_popup = Some(cx.new(|cx| {
                             PopupMenu::new(
@@ -178,6 +186,14 @@ impl ProjectWindow {
                                         let _ = owner.update(cx, |this, cx| {
                                             this.application_popup = None;
                                             match action {
+                                                MenuAction::Select(id)
+                                                    if id == "item-host-update" =>
+                                                {
+                                                    let view = cx.entity();
+                                                    cx.defer(move |cx| {
+                                                        app::settings::updates::open_empty(view, cx)
+                                                    });
+                                                }
                                                 MenuAction::Select(id)
                                                     if id == "project-open-another" =>
                                                 {
@@ -207,6 +223,7 @@ impl ProjectWindow {
                         cx.notify();
                     })),
             )
+            .when_some(indicator, |trigger, indicator| trigger.child(indicator))
             .child(
                 gpui_kit::canvas(
                     move |bounds, _, _| anchor.set(bounds.bottom_left()),
