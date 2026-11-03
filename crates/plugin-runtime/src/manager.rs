@@ -865,9 +865,10 @@ impl Manager {
                 .live
                 .get_mut(&id)
                 .unwrap()
-                .snapshot()
-                .and_then(|snapshot| self.save_snapshot(&id, &snapshot))
-            {
+                .checkpoint_snapshot()
+                .and_then(|snapshot| {
+                    snapshot.map_or(Ok(()), |snapshot| self.save_snapshot(&id, &snapshot))
+                }) {
                 Ok(()) => {}
                 Err(error) => failures.push(format!("{id}: {error:#}")),
             }

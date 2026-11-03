@@ -72,6 +72,22 @@ pub fn read_file(handle: &ResourceHandle, path: impl Into<String>) -> Result<Vec
     }
 }
 
+/// Read UTF-8 disk text at `path` beneath the owned workspace `handle` using workspace.files 1.5.
+/// Returns at most 1 MiB; missing, invalid UTF-8, oversized or unauthorized input is a typed failure.
+/// Unlike document reads this does not return unsaved editor text or a document revision.
+pub fn read_workspace_text(
+    handle: &ResourceHandle,
+    path: impl Into<String>,
+) -> Result<String, Failure> {
+    match request(Operation::ReadWorkspaceText {
+        handle: handle.clone(),
+        path: path.into(),
+    })? {
+        Value::Text(text) => Ok(text),
+        _ => Err(wire_error("Unexpected workspace text result")),
+    }
+}
+
 /// Writes are available only to private-data handles, never workspace handles.
 pub fn write_file(
     handle: &ResourceHandle,

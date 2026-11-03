@@ -242,12 +242,10 @@ pub(crate) trait ProjectMenuHost: Sized + 'static {
                                 let _ = host.update(cx, |host, cx| {
                                     if removing {
                                         if let Some(path) = path {
-                                            host.error = host
-                                                .recent
-                                                .borrow_mut()
-                                                .remove(&path)
-                                                .err()
-                                                .map(|error| error.to_string());
+                                            host.error =
+                                                host.recent.borrow_mut().remove(&path).err().map(
+                                                    |error| ProjectWindow::error_notice(error, cx),
+                                                );
                                             cx.refresh_windows();
                                         }
                                     } else if let Some(path) = path {

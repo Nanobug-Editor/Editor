@@ -3,6 +3,31 @@ use super::*;
 use api::{ErrorCode, Failure};
 use std::{collections::BTreeMap, io::Read};
 
+/// Decode bounded disk bytes at `relative` within the authorized `root`; never replace invalid UTF-8.
+/// Escaped transport size is checked on the host before any guest spends fuel decoding the response.
+pub(super) fn read_text(root: &Path, relative: &str) -> Result<String, Failure> {
+    let text = String::from_utf8(read(root, relative, &None)?).map_err(|_| {
+        Failure::new(
+            ErrorCode::InvalidRequest,
+            "Workspace file is not valid UTF-8",
+        )
+    })?;
+    let encoded = serde_json::to_string(&text)
+        .map_err(|_| Failure::new(ErrorCode::InvalidRequest, "Invalid workspace text"))?;
+    // Reserve room for the tagged value, correlated response, and the largest request ID.
+    if encoded.len() > api::MAX_REQUEST_BYTES.saturating_sub(128) {
+        return Err(Failure::new(
+            ErrorCode::LimitExceeded,
+            "Workspace text exceeds transport quota",
+        ));
+    }
+    Ok(text)
+}
+
+#[cfg(test)]
+#[path = "data_files/text_tests.rs"]
+mod text_tests;
+
 /// Read only within an already authorized root, including uncommitted private migration writes.
 pub(super) fn read(
     root: &Path,

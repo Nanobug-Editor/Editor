@@ -234,7 +234,7 @@ fn startup_restore_failed_cleanup_keeps_previous_exit(cx: &mut TestAppContext) {
             .open(session)
             .unwrap();
         request_close_project(visual);
-        assert!(visual.debug_bounds("project-error").is_some());
+        assert!(visual.debug_bounds("project-error-popup").is_some());
         assert_eq!(
             preferences::target(profile.path(), None),
             Some(previous.path().to_owned())

@@ -440,7 +440,9 @@ impl State {
             | api::Operation::DescribeSdk => return Ok(()),
             api::Operation::OpenWorkspace => "workspace.read",
             api::Operation::SubscribeWorkspaceFiles { .. } => "workspace.read",
-            api::Operation::ReadFile { handle, .. } | api::Operation::FindFiles { handle, .. }
+            api::Operation::ReadFile { handle, .. }
+            | api::Operation::ReadWorkspaceText { handle, .. }
+            | api::Operation::FindFiles { handle, .. }
                 if matches!(self.roots.resolve(handle)?, RootKind::Workspace) =>
             {
                 "workspace.read"

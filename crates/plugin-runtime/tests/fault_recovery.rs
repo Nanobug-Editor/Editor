@@ -12,6 +12,92 @@ use serde_json::json;
 #[path = "support/service_packages.rs"]
 mod service_packages;
 
+/// A trapped guest cannot checkpoint again; all close routes retain its last good snapshot and release ownership.
+#[test]
+#[ignore = "requires the frozen capability-example-0.19.0.zip input and its ledger hash"]
+fn paused_guest_does_not_block_checked_close() {
+    let package = Package::read(&test_packages::archive("capability-example-0.19.0")).unwrap();
+    for route in ["project", "application", "parked"] {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = directory.path().join("workspace");
+        let peer = directory.path().join("peer");
+        std::fs::create_dir(&workspace).unwrap();
+        std::fs::create_dir(&peer).unwrap();
+        std::fs::write(workspace.join("source.txt"), "workspace").unwrap();
+        let root = directory.path().join("plugins");
+        let environment = Environment {
+            workspace: workspace.display().to_string(),
+            ..Default::default()
+        };
+        let mut manager = Manager::open(root.clone(), environment.clone()).unwrap();
+        manager
+            .install(&package, package.manifest.permissions.clone())
+            .unwrap();
+        demand_support::ready(
+            &mut manager,
+            "capability-example",
+            DemandReason::Command("scope-write".into()),
+        );
+        manager
+            .invoke_command(
+                "capability-example",
+                "scope-write",
+                json!({"text":"last good state"}),
+            )
+            .unwrap();
+        manager.checkpoint().unwrap();
+        let snapshot = manager
+            .data_directory("capability-example")
+            .parent()
+            .unwrap()
+            .join("state.json");
+        let saved = std::fs::read(&snapshot).unwrap();
+        assert!(
+            manager
+                .invoke_command("capability-example", "fault-spin", json!(null))
+                .is_err()
+        );
+        assert!(
+            format!(
+                "{:#}",
+                manager
+                    .live
+                    .get_mut("capability-example")
+                    .unwrap()
+                    .snapshot()
+                    .unwrap_err()
+            )
+            .contains("Plugin is paused")
+        );
+        match route {
+            "project" => {
+                manager.close_selected_workspace_checked().unwrap();
+                assert!(!manager.workspace_is_open(&environment.workspace));
+            }
+            "parked" => manager
+                .select_workspace(
+                    Environment {
+                        workspace: peer.display().to_string(),
+                        ..Default::default()
+                    },
+                    true,
+                )
+                .unwrap(),
+            _ => {}
+        }
+        manager.shutdown_checked().unwrap();
+        assert_eq!(
+            std::fs::read(&snapshot).unwrap(),
+            saved,
+            "{route}: retained checkpoint"
+        );
+        assert!(manager.live.is_empty());
+        // The checked shutdown must release the store lock even while its Manager remains allocated.
+        let mut reopened = Manager::open(root, environment).unwrap();
+        reopened.shutdown_checked().unwrap();
+    }
+}
+
 /// Recover one faulting instance without restarting the manager or disturbing a healthy installed peer.
 #[test]
 #[ignore = "requires the frozen capability-example-0.19.0.zip input and its ledger hash"]

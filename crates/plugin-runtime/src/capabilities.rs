@@ -228,7 +228,7 @@ pub(crate) fn negotiate(manifest: &Manifest) -> anyhow::Result<api::Negotiated> 
         ("explorer.decorations".into(), Version::new(1, 0, 0)),
         ("ui.grid".into(), Version::new(1, 0, 0)),
         ("plugin.services".into(), Version::new(1, 2, 0)),
-        ("workspace.files".into(), Version::new(1, 4, 0)),
+        ("workspace.files".into(), Version::new(1, 5, 0)),
         ("host.sdk".into(), Version::new(1, 0, 0)),
         ("storage.private".into(), Version::new(1, 2, 0)),
         ("storage.editor".into(), Version::new(1, 0, 0)),

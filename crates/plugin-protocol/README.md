@@ -12,6 +12,8 @@ SDK 只导出源码、Cargo、WIT 与 JSON 构建输入，不包含此 Markdown 
 
 `workspace.files 1.4` 的 `Plan.conditions` 为预览和提交附加只读文档版本条件；它不授予读取权限，也不将辅助输入加入分组撤销。跨文件重命名与选中时解析的补全使用既有原生文档会话；主补全和附加导入共同校验、一次应用。契约和限额见 [workspace](src/workspace.rs) 与 [language](src/language.rs)。
 
+`workspace.files 1.5` 的 `ReadWorkspaceText` / `guest::read_workspace_text` 以 UTF-8 字符串读取磁盘元数据，避免将每个字节编码为 JSON 整数。它要求有效的工作区根句柄和 `workspace.read`，沿用 1 MiB 文件限制、路径边界与实例撤销校验，另检查转义后的响应预算；无效 UTF-8 明确拒绝。此接口不读取未保存文档、不授予写权限，也不提高 WASM 执行预算。
+
 `ui.canvas 1.2` 提供内容 epoch 与 `CanvasEvent::ScrollInput`：同一滚动内容的增量／绝对位置可跨越纯绘制 revision，替换内容必须更换非零 epoch。旧点击、键盘、普通滚轮和源绑定动作继续使用精确场景校验；公开使用义务见[画布契约](src/ui/canvas.rs)和[事件校验](src/ui/events.rs)。宿主可合并连续同方向增量，反向输入保留边界裁剪顺序。
 
 `ui.canvas 1.3` 新增可选 `scroll_buffer`，插件声明已完整绘制的内容区间与上下缓冲。宿主在原生帧中平移现有画面，回包前也可滚动，并把点击坐标映射回对应绘图。缓冲耗尽时等待下一次绘图；不改变文档与滚动内容的权威来源，不适用于 grid/IME 画布或 `VisualViewport` 变换。所有插件均可协商使用。

@@ -19,7 +19,7 @@ impl ProjectWindow {
                 let _ = cancel.update(cx, |this, cx| this.cancel_decision(window, cx));
             }),
         });
-        let (title, mut details) = match decision {
+        let (title, details) = match decision {
             Decision::Trust { workspace, .. } => {
                 for (id, label, trusted) in [
                     ("project-trust-restricted", "projects.restricted", false),
@@ -97,9 +97,6 @@ impl ProjectWindow {
                 (t!("projects.close_question").to_string(), details)
             }
         };
-        if let Some(error) = &self.error {
-            details.push(t!("projects.failure", details = error).to_string());
-        }
         Some(conflict_prompt(
             self.modal_focus.clone(),
             title,
@@ -158,21 +155,6 @@ impl Render for ProjectWindow {
                     }
                 }),
             )
-            .when(self.error.is_some() && self.decision.is_none(), |root| {
-                root.child(
-                    div()
-                        .debug_selector(|| "project-error".into())
-                        .p_2()
-                        .text_color(cx.theme().danger)
-                        .child(
-                            t!(
-                                "projects.failure",
-                                details = self.error.as_deref().unwrap_or_default()
-                            )
-                            .to_string(),
-                        ),
-                )
-            })
             .child(div().flex_1().min_h_0().child(content))
             .when(self.close_state == CloseState::Cleaning, |root| {
                 root.child(
@@ -189,5 +171,23 @@ impl Render for ProjectWindow {
             })
             .children(consent)
             .children(clone)
+            .when_some(
+                self.error
+                    .clone()
+                    .filter(|notice| !notice.read(cx).is_dismissed()),
+                |root, notice| {
+                    // The popup sits above pending consent and never takes a row from the editor's layout.
+                    root.child(
+                        div()
+                            .id("project-error-popup")
+                            .debug_selector(|| "project-error-popup".into())
+                            .absolute()
+                            .bottom(px(36.))
+                            .right(px(12.))
+                            .w(px(380.).min((window.viewport_size().width - px(24.)).max(px(0.))))
+                            .child(notice),
+                    )
+                },
+            )
     }
 }

@@ -1048,6 +1048,20 @@ impl Instance {
         }
         Ok(changed)
     }
+    /// Checkpoint only a callable guest, preserving the last good disk state after irreversible retirement.
+    /// A trap during this call already records diagnostics and revokes authority; it cannot be retried.
+    /// Typed guest rejections remain errors so healthy instances and failed disk writes stay retryable.
+    pub(crate) fn checkpoint_snapshot(&mut self) -> anyhow::Result<Option<Snapshot>> {
+        if self.store.data().roots.retired {
+            return Ok(None);
+        }
+        match self.snapshot() {
+            Ok(snapshot) => Ok(Some(snapshot)),
+            Err(_) if self.store.data().roots.retired => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
     pub fn snapshot(&mut self) -> anyhow::Result<Snapshot> {
         self.call(api::Input::Snapshot)?
             .snapshot

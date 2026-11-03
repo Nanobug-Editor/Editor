@@ -286,7 +286,8 @@ impl Manager {
     }
 
     /// Checkpoint and retire only the currently routed project, leaving application and other project owners alive.
-    /// Snapshot errors retain live instances for retry; native cleanup errors retain their same supervisor.
+    /// Retryable snapshot errors retain live instances; faulted guests keep their last saved state.
+    /// Native cleanup errors retain their same supervisor.
     pub fn close_selected_workspace_checked(&mut self) -> anyhow::Result<()> {
         if !self.workspace_open {
             return Ok(());
@@ -303,8 +304,10 @@ impl Manager {
                 .live
                 .get_mut(id)
                 .unwrap()
-                .snapshot()
-                .and_then(|snapshot| self.save_snapshot(id, &snapshot))
+                .checkpoint_snapshot()
+                .and_then(|snapshot| {
+                    snapshot.map_or(Ok(()), |snapshot| self.save_snapshot(id, &snapshot))
+                })
             {
                 failures.push(format!("{id}: {error:#}"));
             }

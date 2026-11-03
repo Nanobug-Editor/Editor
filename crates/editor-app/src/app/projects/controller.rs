@@ -317,7 +317,7 @@ pub(super) fn cleaned(handle: AnyWindowHandle, result: Result<(), String>, cx: &
                             if let Some(editor) = &host.editor {
                                 editor.update(cx, |app, cx| app.resume_history_saves(cx));
                             }
-                            host.error = Some(error.clone());
+                            host.error = Some(ProjectWindow::error_notice(&error, cx));
                             cx.notify();
                         });
                     }

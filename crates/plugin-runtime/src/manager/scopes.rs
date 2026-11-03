@@ -319,10 +319,11 @@ impl Manager {
                 instance.stop();
                 continue;
             }
-            if let Err(error) = instance
-                .snapshot()
-                .and_then(|snapshot| self.save_scope_snapshot(id, &environment, &snapshot))
-            {
+            if let Err(error) = instance.checkpoint_snapshot().and_then(|snapshot| {
+                snapshot.map_or(Ok(()), |snapshot| {
+                    self.save_scope_snapshot(id, &environment, &snapshot)
+                })
+            }) {
                 failures.push(format!("{id}: {error:#}"));
             }
             // Cleanup is unconditional even if the guest traps while checkpointing.
@@ -395,7 +396,8 @@ impl Manager {
     }
 
     /// Checkpoint private state and release all owned scopes, returning observable close failures.
-    /// Checkpoint errors retain live instances for retry; native cleanup errors retain their supervisor.
+    /// Retryable checkpoint errors retain live instances; retired guests keep their last saved state.
+    /// Native cleanup errors retain their supervisor.
     pub fn shutdown_checked(&mut self) -> anyhow::Result<()> {
         let mut failures = Vec::new();
         if let Err(error) = self.checkpoint() {
@@ -412,12 +414,14 @@ impl Manager {
                 let scope = self.parked.get_mut(&key).unwrap();
                 (
                     scope.environment.clone(),
-                    scope.live.get_mut(&id).unwrap().snapshot(),
+                    scope.live.get_mut(&id).unwrap().checkpoint_snapshot(),
                 )
             };
-            if let Err(error) =
-                snapshot.and_then(|snapshot| self.save_scope_snapshot(&id, &environment, &snapshot))
-            {
+            if let Err(error) = snapshot.and_then(|snapshot| {
+                snapshot.map_or(Ok(()), |snapshot| {
+                    self.save_scope_snapshot(&id, &environment, &snapshot)
+                })
+            }) {
                 failures.push(format!("{id}: {error:#}"));
             }
         }

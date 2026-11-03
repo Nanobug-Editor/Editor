@@ -56,6 +56,7 @@ impl State {
                 "read_preference",
                 "write_preference",
                 "read_file",
+                "read_workspace_text",
                 "write_file",
                 "close_resource",
                 "editor",
@@ -146,6 +147,7 @@ impl State {
                         | api::Operation::ReadPreference { watch: false, .. }
                         | api::Operation::ReadFile { .. }
                         | api::Operation::FindFiles { .. }
+                        | api::Operation::ReadWorkspaceText { .. }
                         | api::Operation::DescribeSdk
                         | api::Operation::Process {
                             operation: plugin_protocol::process::Operation::InspectTool { .. },

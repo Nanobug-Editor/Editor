@@ -189,7 +189,7 @@ impl ProjectWindow {
                 .is_some_and(|bridge| bridge.read(cx).has_pending())
         {
             self.decision = None;
-            self.error = Some(t!("projects.changed_before_close").to_string());
+            self.error = Some(Self::error_notice(t!("projects.changed_before_close"), cx));
             self.review_close(intent, None, window, cx);
             return;
         }
@@ -206,7 +206,10 @@ impl ProjectWindow {
                 (!unchanged).then(|| editor_core::display_path(&tab.path()).to_string())
             });
             if let Some(path) = conflict {
-                self.error = Some(t!("projects.disk_conflict", path = path).to_string());
+                self.error = Some(Self::error_notice(
+                    t!("projects.disk_conflict", path = path),
+                    cx,
+                ));
                 cx.notify();
                 return;
             }
@@ -303,7 +306,7 @@ impl ProjectWindow {
                 if let Some(editor) = &self.editor {
                     editor.update(cx, |app, cx| app.resume_history_saves(cx));
                 }
-                self.error = Some(error.clone());
+                self.error = Some(Self::error_notice(&error, cx));
                 cx.notify();
                 if matches!(intent, CloseIntent::Application) {
                     controller::cleaned(window.window_handle(), Err(error), cx);
@@ -343,7 +346,7 @@ impl ProjectWindow {
                     if let Some(editor) = &this.editor {
                         editor.update(cx, |app, cx| app.resume_history_saves(cx));
                     }
-                    this.error = Some(error.clone());
+                    this.error = Some(Self::error_notice(&error, cx));
                     cx.notify();
                     if matches!(intent, CloseIntent::Application) {
                         controller::cleaned(window.window_handle(), Err(error), cx);

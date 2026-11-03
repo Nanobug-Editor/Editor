@@ -253,7 +253,7 @@ fn project_windows_quit_cancel_retains_every_editor_and_revalidates_new_input(
                 2,
                 "a late cleanup failure retains every native window"
             );
-            assert!(second.debug_bounds("project-error").is_some());
+            assert!(second.debug_bounds("project-error-popup").is_some());
             drop(lock);
         }
         // A final successful retry saves A explicitly and discards B only after both decisions have been accepted.

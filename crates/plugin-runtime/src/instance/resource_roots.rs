@@ -272,6 +272,28 @@ impl State {
                 }
                 data_files::read(root, &path, &self.staged_writes).map(Value::Bytes)
             }
+            api::Operation::ReadWorkspaceText { handle, path } => {
+                if !self
+                    .api
+                    .capabilities
+                    .get("workspace.files")
+                    .is_some_and(|version| *version >= semver::Version::new(1, 5, 0))
+                {
+                    return Err(Failure::new(
+                        ErrorCode::CapabilityUnavailable,
+                        "UTF-8 workspace reads require workspace.files 1.5",
+                    ));
+                }
+                let kind = self.roots.resolve(&handle)?;
+                if !matches!(kind, RootKind::Workspace) {
+                    return Err(Failure::new(
+                        ErrorCode::InvalidHandle,
+                        "UTF-8 workspace reads require a workspace handle",
+                    ));
+                }
+                let root = self.file_authority(kind, false)?;
+                data_files::read_text(root, &path).map(Value::Text)
+            }
             api::Operation::WriteFile {
                 handle,
                 path,
