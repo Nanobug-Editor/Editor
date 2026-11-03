@@ -1,6 +1,6 @@
 # 安装根目录的数据存储
 
-日期：2026-11-03。存储路径、迁移与回归实现已落到当前 `main` 工作区，未提交；格式、workspace 和相关宿主测试通过。原生保存／恢复已验证，完整原生矩阵受下述既有断言不匹配阻断，不能标为全量验收通过。
+日期：2026-11-03。存储路径、迁移与回归实现已提交并集成到 `main`；格式、workspace 和相关宿主测试通过。后续 Release 安装、重装、卸载与发行状态见[统一发行验收](../distribution/verification/release-all-2026-11-03.md)。原生保存／恢复已验证，完整原生矩阵受下述既有断言不匹配阻断，不能标为全量验收通过。
 
 ## 路径契约
 
@@ -60,4 +60,4 @@ workspace 中的新增回归覆盖真实历史内容迁移、实际资源插件�
 
 该矩阵随后在 `diff limit changed for 2001-lines` 失败，未继续浅色／缩放和最终正常关闭流程。任务起点 `11c11cca` 已同时包含核心 `MAX_SOURCE_LINES = 100_000` 与旧原生夹具的“2001 行必须拒绝”断言；两文件均无本次改动，故保留原失败证据，不扩展为修复差异限额任务。
 
-本机证据：`C:/Users/Tmiracle/.codex/task-evidence/nanobug-portable-data-20261103/`，含首次失败、单任务重跑、宿主定向日志及 `native-history/dark-zh-CN-100/evidence.json` 和 PNG。最终 Debug 程序位于 `C:/Projects/RustProjects/Editor/target/debug/editor-app.exe`。未替换用户已安装的程序，也未主动迁移用户真实数据；运行新版的普通 GUI 入口才执行旧数据导入。未构建 Release 安装包或验收 macOS/Linux。
+本专项证据：`C:/Users/Tmiracle/.codex/task-evidence/nanobug-portable-data-20261103/`，含首次失败、单任务重跑、宿主定向日志及 `native-history/dark-zh-CN-100/evidence.json` 和 PNG。专项 Debug 程序位于 `C:/Projects/RustProjects/Editor/target/debug/editor-app.exe`。未替换用户已安装的程序，也未主动迁移用户真实数据；运行新版的普通 GUI 入口才执行旧数据导入。上述专项没有构建 Release 安装包；后续统一发行已补充实际安装生命周期验证，未验收 macOS/Linux。
