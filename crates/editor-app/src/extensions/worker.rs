@@ -449,6 +449,8 @@ pub(super) struct OperationProgress {
 /// Installation success and language-service readiness are separate user-visible states.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct InstallationProgress {
+    /// Distinguish consecutive attempts, including retries of the same package, for native window ownership.
+    pub generation: u64,
     pub id: String,
     pub message: String,
     pub cancellable: bool,
@@ -841,7 +843,12 @@ impl Worker {
             _ => None,
         };
         if let Some((package, global_enabled)) = installation {
+            let generation = state
+                .installation
+                .as_ref()
+                .map_or(1, |report| report.generation + 1);
             state.installation = Some(InstallationProgress {
+                generation,
                 id: package.manifest.id.clone(),
                 message: t!("plugins.install_progress.queued").to_string(),
                 cancellable: true,

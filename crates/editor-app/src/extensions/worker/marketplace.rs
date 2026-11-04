@@ -226,7 +226,12 @@ impl Worker {
                 })
         });
         state.install_control = Some(control.clone());
+        let installation_generation = state
+            .installation
+            .as_ref()
+            .map_or(1, |report| report.generation + 1);
         state.installation = Some(InstallationProgress {
+            generation: installation_generation,
             id: id.clone(),
             message: t!("plugins.market_downloading", bytes = 0).to_string(),
             cancellable: true,
@@ -255,7 +260,17 @@ impl Worker {
             if let Err(error) = result {
                 let mut state = output.lock().unwrap();
                 state.progress = None;
-                state.installation = None;
+                // Preserve a terminal report even when download fails before the installation actor runs.
+                // A fast failure must still open feedback, while clearing the operation permits manual retry.
+                if let Some(report) = &mut state.installation {
+                    report.message = t!(
+                        "plugins.install_progress.failed",
+                        error = format!("{error:#}")
+                    )
+                    .to_string();
+                    report.cancellable = false;
+                    report.installed = false;
+                }
                 state.install_control = None;
                 state.status = Some(OperationStatus {
                     plugin: Some(id),

@@ -24,6 +24,8 @@ pub(super) fn global_enable_option(selected: Rc<Cell<bool>>) -> impl IntoElement
 /// Observe the manager's publications while the native modal window owns its local controls and focus.
 struct InstallationView {
     worker: Arc<Worker>,
+    /// This window can observe and cancel only the attempt that created it.
+    generation: u64,
     control: Option<plugin_runtime::InstallControl>,
     /// SDK consent is local to one displayed prompt, never carried into another installer step.
     sdk_prompt: Option<u64>,
@@ -42,7 +44,7 @@ impl Drop for InstallationView {
             .unwrap()
             .installation
             .as_ref()
-            .is_some_and(|report| report.cancellable)
+            .is_some_and(|report| report.generation == self.generation && report.cancellable)
         {
             if let Some(control) = &self.control {
                 control.cancel();
@@ -53,11 +55,13 @@ impl Drop for InstallationView {
 impl Render for InstallationView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let report = self.worker.state.lock().unwrap().installation.clone();
-        let message = report
-            .as_ref()
-            .map(|report| report.message.clone())
-            .unwrap_or_else(|| t!("plugin_installation.finished").to_string());
-        let cancellable = report.is_some_and(|report| report.cancellable);
+        let Some(report) = report.filter(|report| report.generation == self.generation) else {
+            // A retained completion window must not display a later attempt with its old cancel token.
+            window.remove_window();
+            return v_flex().into_any_element();
+        };
+        let message = report.message;
+        let cancellable = report.cancellable;
         let prompt = self
             .control
             .as_ref()
@@ -214,15 +218,26 @@ impl Render for InstallationView {
                         ),
                 ),
             )
+            .into_any_element()
     }
 }
 
 impl ExtensionPanel {
+    /// Open feedback for the current published attempt; capture its control and identity atomically.
     pub(super) fn open_installation_progress(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let worker = self.worker.clone();
+        let (generation, control) = {
+            let state = worker.state.lock().unwrap();
+            let Some(report) = &state.installation else {
+                return;
+            };
+            (report.generation, state.install_control.clone())
+        };
+        self.installation_dialog_generation = Some(generation);
         let owner = cx.entity();
         let view = cx.new(|cx| InstallationView {
-            control: worker.state.lock().unwrap().install_control.clone(),
+            generation,
+            control,
             sdk_prompt: None,
             sdk_selected: false,
             consent_expanded: false,

@@ -300,7 +300,8 @@ pub struct ExtensionPanel {
     pending_dialog_open: bool,
     /// Explicit installations publish preparation and cutover progress to the native manager.
     installation: Option<worker::InstallationProgress>,
-    installation_dialog_open: bool,
+    /// The last displayed attempt, shared by local imports and online installations.
+    installation_dialog_generation: Option<u64>,
     /// Search and selection belong to the manager window, not a plugin surface.
     manager_search: Option<Entity<InputState>>,
     manager_search_subscription: Option<Subscription>,
@@ -749,7 +750,7 @@ impl ExtensionPanel {
             pending: None,
             pending_dialog_open: false,
             installation: None,
-            installation_dialog_open: false,
+            installation_dialog_generation: None,
             manager_search: None,
             manager_search_subscription: None,
             manager_market: false,
@@ -869,7 +870,7 @@ impl ExtensionPanel {
             pending: None,
             pending_dialog_open: false,
             installation: None,
-            installation_dialog_open: false,
+            installation_dialog_generation: None,
             manager_search: None,
             manager_search_subscription: None,
             manager_market: false,
@@ -1211,11 +1212,7 @@ impl ExtensionPanel {
     }
     /// Queue a plugin lifecycle operation and expose its waiting state on this frame.
     fn queue_lifecycle(&mut self, work: Work) -> bool {
-        let installing = matches!(&work, Work::Install(..));
         if self.worker.queue_lifecycle(work) {
-            if installing {
-                self.installation_dialog_open = false;
-            }
             self.status = None;
             self.progress = self.worker.state.lock().unwrap().progress.clone();
             true

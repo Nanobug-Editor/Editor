@@ -7,6 +7,7 @@ mod delivery;
 mod installation_authority;
 mod layout;
 mod official;
+mod progress;
 mod updates;
 mod wasm_updates;
 
