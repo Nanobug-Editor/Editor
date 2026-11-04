@@ -3,6 +3,8 @@ use super::*;
 use gpui_base::dock::{DockPlacement, InsertTarget, PanelId};
 use gpui_kit::{TestAppContext, VisualTestContext, gpui};
 
+mod package_defaults;
+
 /// Static declarations can exercise native placement without executing any guest code.
 fn publish_panels(app: &Entity<EditorApp>, panels: serde_json::Value, cx: &mut App) {
     let manifest: protocol::Manifest = serde_json::from_value(serde_json::json!({

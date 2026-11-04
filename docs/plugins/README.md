@@ -1,5 +1,7 @@
 # 插件系统文档目录
 
+- [Git 新项目默认关闭窗口](verification/git-panel-defaults-2026-11-03.md)：独立插件声明 Git 与提交面板默认隐藏，保留手动入口及各项目已有选择；实际验证状态见记录。
+
 - [Markdown 滚动与通用插件 UI 性能](verification/markdown-scroll-ui-performance-2026-11-02.md)：过期回调静默丢弃、通用绘制优化及长文档双向滚动；专项与深浅主题 Windows 拖窗验收通过，改动保留供审阅。
 
 - [安装根目录的数据存储](../project/portable-data.md)：插件、依赖与私有数据统一到所选 profile；默认位于可执行文件所在目录，旧数据迁移与验证状态见记录。
