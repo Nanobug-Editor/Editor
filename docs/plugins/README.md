@@ -291,6 +291,7 @@ Markdown 插件：[总方案](https://github.com/Nanobug-Editor/Markdown/blob/31
 
 ## 插件包说明
 
+- [Vue 大项目启动、定义跳转与故障后关闭](verification/vue-startup-2026-11-03.md)：Vue 0.2.1 与 `workspace.files 1.5`；实际 Vue 2.6.10 项目、空诊断缓存、暂停实例退役及宿主消息弹窗，交付状态以记录为准。
 - [内置终端、运行与调试](specs/builtin-terminal-run-debug.md)：终端不再独立发行插件包；语言规则和调试器仍通过通用插件接口接入。
 - [Image for Nanobug](https://github.com/Nanobug-Editor/Image)（安装 ID 为 `svg`）
 - [Rust for Nanobug](https://github.com/Nanobug-Editor/Rust)

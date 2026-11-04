@@ -1,4 +1,5 @@
-//! Stable workspace.files 1.4 extends 1.3 readonly origins with bounded readonly input vectors.
+//! Stable workspace.files 1.5 adds bounded UTF-8 disk reads through api::guest::read_workspace_text.
+//! Version 1.4 extends 1.3 readonly origins with bounded readonly input vectors.
 //! Cancellation stops further work;
 //! receipts describe actual effects and current-session recovery, without global atomic rollback.
 //! The native implementation is verified on Windows; other hosts are compilation-only targets.

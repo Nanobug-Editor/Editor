@@ -2,6 +2,33 @@
 
 use super::*;
 
+/// Project failures are dismissible messages and must never consume a row above the native editor.
+#[gpui::test]
+fn project_failure_uses_message_popup_without_moving_editor(cx: &mut TestAppContext) {
+    let project = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    with_home(cx, profile.path(), |visual, host| {
+        pick_restricted_project(visual, project.path());
+        let before = visual.debug_bounds("editor-shell").unwrap();
+        visual.update(|window, cx| {
+            host.update(cx, |host, cx| {
+                host.open_path(project.path().join("missing"), window, cx)
+            });
+        });
+        visual.run_until_parked();
+        assert!(
+            visual.debug_bounds("project-error").is_none(),
+            "no inline host error banner"
+        );
+        assert!(visual.debug_bounds("project-error-popup").is_some());
+        assert_eq!(visual.debug_bounds("editor-shell").unwrap(), before);
+        click(visual, "local-notification-close");
+        assert!(visual.debug_bounds("local-notification").is_none());
+        request_close_project(visual);
+        assert_eq!(window_count(visual), 0);
+    });
+}
+
 /// Cleanup persistence errors leave an editable project, with a successful close after the lock is released.
 #[cfg(windows)]
 #[gpui::test]
@@ -27,7 +54,7 @@ fn project_home_cleanup_persistence_failure_allows_retry(cx: &mut TestAppContext
             .open(session)
             .unwrap();
         request_close_project(visual);
-        assert!(visual.debug_bounds("project-error").is_some());
+        assert!(visual.debug_bounds("project-error-popup").is_some());
         assert!(visual.debug_bounds("editor-shell").is_some());
         drop(locked);
         request_close_project(visual);

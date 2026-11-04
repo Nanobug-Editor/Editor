@@ -43,6 +43,11 @@ pub(super) fn setup_for_workspace<'a>(
     let workspace = workspace.canonicalize().unwrap();
     let profile = tempfile::tempdir().unwrap();
     let root = profile.path().join("runtime-plugins");
+    // Explicit, previously prepared immutable inputs avoid a fresh CDN download for every native
+    // acceptance profile. Registry, grants, instances and all writable state remain isolated.
+    if let Some(seed) = std::env::var_os("NANOBUG_TEST_DEPENDENCY_SEED") {
+        copy_dependency_seed(Path::new(&seed), &root.join("dependencies/versions"));
+    }
     let environment = Environment {
         workspace: workspace.display().to_string(),
         ..Default::default()
@@ -94,6 +99,29 @@ pub(super) fn setup_for_workspace<'a>(
         },
         visual,
     )
+}
+
+/// Copy only ordinary cache files/directories into a newly allocated test profile; never follow links.
+fn copy_dependency_seed(source: &Path, target: &Path) {
+    std::fs::create_dir_all(target).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let kind = entry.file_type().unwrap();
+        assert!(
+            !kind.is_symlink(),
+            "dependency fixture cannot contain links"
+        );
+        let destination = target.join(entry.file_name());
+        if kind.is_dir() {
+            copy_dependency_seed(&entry.path(), &destination);
+        } else {
+            assert!(
+                kind.is_file(),
+                "dependency fixture must contain ordinary files"
+            );
+            std::fs::copy(entry.path(), destination).unwrap();
+        }
+    }
 }
 
 /// Real actor clocks and deterministic UI clocks are distinct; drive publication and frames.

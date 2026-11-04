@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
 mod cached_hover;
+mod project_navigation;
 mod standalone;
 
 /// Load the candidate's actual grammar and queries through the production WasmStore and parser.

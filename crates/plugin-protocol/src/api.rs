@@ -286,6 +286,12 @@ pub enum Operation {
         handle: ResourceHandle,
         path: String,
     },
+    /// workspace.files 1.5: bounded UTF-8 disk text under an owned workspace root.
+    /// Uses the same read grant, path checks and 1 MiB limit as ReadFile, without JSON byte arrays.
+    ReadWorkspaceText {
+        handle: ResourceHandle,
+        path: String,
+    },
     WriteFile {
         handle: ResourceHandle,
         path: String,
@@ -341,6 +347,8 @@ pub enum Value {
     },
     Resource(ResourceHandle),
     Bytes(Vec<u8>),
+    /// UTF-8 file contents; text is data and never grants a native path or execution authority.
+    Text(String),
     Unit,
 }
 impl std::fmt::Debug for Value {
@@ -383,6 +391,7 @@ impl std::fmt::Debug for Value {
                 .field("count", &bytes.len())
                 .finish(),
             Self::Unit => f.write_str("Unit"),
+            Self::Text(text) => f.debug_struct("Text").field("bytes", &text.len()).finish(),
         }
     }
 }

@@ -289,7 +289,7 @@ fn project_home_cancel_trust_and_invalid_folder_keep_home(cx: &mut TestAppContex
         let missing = project.path().join("missing-folder");
         visual.simulate_path_prompt_response(move |_| Some(vec![missing]));
         visual.run_until_parked();
-        assert!(visual.debug_bounds("project-error").is_some());
+        assert!(visual.debug_bounds("project-error-popup").is_some());
         assert!(visual.update(|_, cx| host.read(cx).editor.is_none()));
         let vanished = project.path().join("vanished");
         std::fs::create_dir(&vanished).unwrap();
@@ -299,7 +299,7 @@ fn project_home_cancel_trust_and_invalid_folder_keep_home(cx: &mut TestAppContex
         visual.run_until_parked();
         std::fs::remove_dir(&vanished).unwrap();
         click(visual, "project-trust-restricted");
-        assert!(visual.debug_bounds("project-error").is_some());
+        assert!(visual.debug_bounds("project-error-popup").is_some());
         assert!(visual.update(|_, cx| host.read(cx).editor.is_none()));
     });
 }
@@ -317,7 +317,7 @@ fn project_home_recent_record_survives_missing_directory(cx: &mut TestAppContext
     project.close().unwrap();
     with_home(cx, profile.path(), |visual, _| {
         click(visual, "project-recent-0");
-        assert!(visual.debug_bounds("project-error").is_some());
+        assert!(visual.debug_bounds("project-error-popup").is_some());
         click(visual, "project-switcher-trigger");
         assert!(recent_bounds(visual, 0).is_some());
         click(visual, "project-remove-0");

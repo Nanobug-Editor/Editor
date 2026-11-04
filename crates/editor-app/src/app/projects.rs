@@ -113,7 +113,8 @@ pub(crate) struct ProjectWindow {
     profile: PathBuf,
     recent: Rc<std::cell::RefCell<RecentProjects>>,
     decision: Option<Decision>,
-    error: Option<String>,
+    /// Project failures use the shared dismissible message control, never an inline shell row.
+    error: Option<Entity<editor_ui::Notification>>,
     choosing: bool,
     close_state: CloseState,
     focus: FocusHandle,
@@ -139,6 +140,15 @@ pub(crate) struct ProjectWindow {
 }
 
 impl ProjectWindow {
+    /// Keep the full failure readable in a message popup without taking focus or resizing the editor.
+    fn error_notice(
+        error: impl std::fmt::Display,
+        cx: &mut Context<Self>,
+    ) -> Entity<editor_ui::Notification> {
+        let message = t!("projects.failure", details = error.to_string()).to_string();
+        cx.new(|_| editor_ui::Notification::persistent(t!("messages.error").to_string(), message))
+    }
+
     /// The legacy project-management command now opens this window's project dropdown.
     pub(super) fn show_home(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if controller::is_quitting(cx) {
@@ -165,7 +175,11 @@ impl ProjectWindow {
     pub(crate) fn new(profile: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
         app::bind_editor_shell_keys(cx);
         let recent = controller::recent(&profile, cx);
-        let error = recent.borrow().error.clone();
+        let error = recent
+            .borrow()
+            .error
+            .as_ref()
+            .map(|error| Self::error_notice(error, cx));
         let handle = window.window_handle();
         app::updates::ensure(&profile, cx);
         controller::register(cx.entity().downgrade(), handle, profile.clone(), cx);
@@ -230,7 +244,7 @@ impl ProjectWindow {
         let workspace = match Workspace::open(root) {
             Ok(workspace) => workspace,
             Err(error) => {
-                self.error = Some(error.to_string());
+                self.error = Some(Self::error_notice(error, cx));
                 cx.notify();
                 return;
             }
@@ -239,7 +253,7 @@ impl ProjectWindow {
             match platform_windows::directory_identity::DirectoryIdentity::open(workspace.root()) {
                 Ok(identity) => identity,
                 Err(error) => {
-                    self.error = Some(error.to_string());
+                    self.error = Some(Self::error_notice(error, cx));
                     cx.notify();
                     return;
                 }
@@ -259,7 +273,7 @@ impl ProjectWindow {
             let path = file.unwrap_or_else(|| workspace.root().to_owned());
             self.error = controller::open(self.profile.clone(), Some(path), cx)
                 .err()
-                .map(|error| error.to_string());
+                .map(|error| Self::error_notice(error, cx));
             cx.notify();
             return;
         }
@@ -295,12 +309,12 @@ impl ProjectWindow {
             let workspace = match Workspace::open(workspace.root()) {
                 Ok(current) if current.root() == workspace.root() => current,
                 Ok(_) => {
-                    self.error = Some(t!("projects.changed_before_open").to_string());
+                    self.error = Some(Self::error_notice(t!("projects.changed_before_open"), cx));
                     cx.notify();
                     return;
                 }
                 Err(error) => {
-                    self.error = Some(error.to_string());
+                    self.error = Some(Self::error_notice(error, cx));
                     cx.notify();
                     return;
                 }
@@ -308,20 +322,20 @@ impl ProjectWindow {
             let identity =
                 platform_windows::directory_identity::DirectoryIdentity::open(workspace.root());
             if identity.as_ref().ok() != controller::reserved(window.window_handle(), cx).as_ref() {
-                self.error = Some(t!("projects.changed_before_open").to_string());
+                self.error = Some(Self::error_notice(t!("projects.changed_before_open"), cx));
                 cx.notify();
                 return;
             }
             // Finish the established finite data import before writing any new trust/session decision.
             if let Err(error) = terminal::upgrade::prepare(workspace.root(), &self.profile) {
-                self.error = Some(error.to_string());
+                self.error = Some(Self::error_notice(error, cx));
                 cx.notify();
                 return;
             }
             let mut session = SessionState::load_in_profile(workspace.root(), &self.profile);
             session.workspace_trusted = trusted;
             if let Err(error) = session.try_save() {
-                self.error = Some(error.to_string());
+                self.error = Some(Self::error_notice(error, cx));
                 cx.notify();
                 return;
             }
@@ -346,7 +360,7 @@ impl ProjectWindow {
                 app::APP_NAME
             ));
             if let Err(error) = self.recent.borrow_mut().opened(&root) {
-                self.error = Some(error.to_string());
+                self.error = Some(Self::error_notice(error, cx));
             }
             cx.notify();
             cx.refresh_windows();
@@ -383,7 +397,7 @@ impl ProjectWindow {
                             this.open_path(path, window, cx);
                         }
                     }
-                    Ok(Err(error)) => this.error = Some(error.to_string()),
+                    Ok(Err(error)) => this.error = Some(Self::error_notice(error, cx)),
                     _ => {}
                 }
                 cx.notify();

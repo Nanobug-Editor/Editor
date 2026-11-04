@@ -334,6 +334,79 @@ fn context_and_link_boundaries(manager: &mut Manager, root: &Path) {
     }
 }
 
+/// A large owning lockfile must preserve version evidence without exhausting the guest event budget.
+#[test]
+#[ignore = "set NANOBUG_VUE_PACKAGE and both NANOBUG_VUE_POLICY_{PROVIDER,CONSUMER}_PACKAGE"]
+fn real_vue_large_lockfile_preserves_candidate_and_conflict_evidence() {
+    let workspace = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let root = workspace.path().canonicalize().unwrap();
+    std::fs::create_dir_all(root.join("node_modules/vue")).unwrap();
+    std::fs::write(
+        root.join("App.vue"),
+        "<template><p>large lock</p></template>",
+    )
+    .unwrap();
+    let mut manager = Manager::open(
+        profile.path().into(),
+        Environment {
+            workspace: root.display().to_string(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    for variable in [
+        "NANOBUG_VUE_POLICY_PROVIDER_PACKAGE",
+        "NANOBUG_VUE_PACKAGE",
+        "NANOBUG_VUE_POLICY_CONSUMER_PACKAGE",
+    ] {
+        let package = Package::read(&input(variable)).unwrap();
+        manager
+            .install(&package, package.manifest.permissions.clone())
+            .unwrap();
+    }
+    activate(&mut manager, "controlled-typescript-context", "set-context");
+    set_context(&mut manager, &root, "5.9.3");
+    activate(&mut manager, "unknown-vue-policy-consumer", "run");
+    for (installed, locked, expected) in [
+        ("2.7.16", "2.7.16", "candidate"),
+        ("2.6.10", "2.6.10", "candidate"),
+        ("2.6.10", "2.7.16", "conflict"),
+    ] {
+        std::fs::write(
+            root.join("package.json"),
+            json!({"dependencies":{"vue":installed}}).to_string(),
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("node_modules/vue/package.json"),
+            json!({"name":"vue","version":installed}).to_string(),
+        )
+        .unwrap();
+        let lock = json!({"lockfileVersion":1, "dependencies":{"vue":{"version":locked}},
+            "unrelatedMetadata":"x".repeat(706_000)})
+        .to_string();
+        std::fs::write(root.join("package-lock.json"), &lock).unwrap();
+        let decision = query_decision(&mut manager);
+        assert_eq!(
+            decision["state"], expected,
+            "version evidence must survive large input"
+        );
+        assert!(
+            decision["evidence"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["kind"] == "lock" && item["version"] == locked)
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join("package-lock.json")).unwrap(),
+            lock
+        );
+    }
+    manager.shutdown();
+}
+
 /// A controlled provider reports only policy metadata; this command does not start a TS engine.
 fn set_context(manager: &mut Manager, root: &Path, engine: &str) {
     manager.invoke_command("controlled-typescript-context", "set-context", json!({

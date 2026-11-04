@@ -44,6 +44,8 @@ WIT 世界 `editor:plugin/plugin@0.1.0` 提供 host.request 导入与 dispatch �
 
 `workspace.files 1.4` 的只读文档条件与全部编辑目标一起校验，辅助来源变化会拒绝整份未提交计划。纯文本多文档提案统一预览、取消及分组撤销，经各自原生 DocumentSession 应用并保持未保存；不会建立第二份可变文本或撤销栈。选择补全时的 resolve 与导入编辑使用同一来源校验，非法尾部不应用合法前缀。见[工作区事务契约](../../crates/plugin-protocol/src/workspace.rs)。
 
+`workspace.files 1.5` 增加通用磁盘 UTF-8 文本读取 `ReadWorkspaceText`，适合 package/lock 等元数据；它使用字符串响应，保留原 1 MiB 文件、权限、根句柄与路径校验，不提高执行预算。无效 UTF-8 和转义后超过传输预算的结果明确失败。未保存文档仍使用文档接口。实际大项目与暂停实例关闭回归见 [Vue 启动修复验收](verification/vue-startup-2026-11-03.md)。
+
 ## 权限与原生执行
 
 WASM 不继承宿主目录、环境、输入输出或网络访问。每次调用检查协商能力、安装授权、实例作用域与活句柄。包资源只读；工作区与私有数据使用受限根句柄，拒绝越界路径、设备路径、备用数据流与链接逃逸。工作区受限时撤销运行资源。
